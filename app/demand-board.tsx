@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Status = "available" | "in_progress" | "waiting" | "done";
 type Priority = "low" | "medium" | "high" | "urgent";
@@ -8,6 +8,13 @@ type View = "overview" | "demands" | "mine" | "reports" | "settings";
 
 type User = {
   name: string;
+  email: string;
+  role: "admin" | "analyst";
+};
+
+type ManagedUser = {
+  id: number;
+  displayName: string;
   email: string;
   role: "admin" | "analyst";
 };
@@ -88,7 +95,8 @@ function initials(name: string) {
 function dueLabel(dueDate: string, status: Status) {
   if (status === "done") return { text: "Concluída", className: "ok" };
   if (status === "waiting") return { text: "Aguardando", className: "warn" };
-  const today = new Date("2026-07-17T12:00:00");
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
   const due = new Date(`${dueDate}T12:00:00`);
   const diff = Math.ceil((due.getTime() - today.getTime()) / 86400000);
   if (diff < 0) return { text: `Atrasada ${Math.abs(diff)}d`, className: "late" };
@@ -98,6 +106,10 @@ function dueLabel(dueDate: string, status: Status) {
 
 export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [demands, setDemands] = useState(initialDemands);
+  const [activeUser, setActiveUser] = useState(currentUser);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [view, setView] = useState<View>("demands");
   const [query, setQuery] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -106,15 +118,40 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadData() {
+      try {
+        const demandResponse = await fetch("/api/demands", { cache: "no-store" });
+        const demandData = await demandResponse.json() as { demands?: Demand[]; user?: User; error?: string };
+        if (!demandResponse.ok) throw new Error(demandData.error ?? "Não foi possível carregar as demandas.");
+        if (!cancelled) {
+          setDemands(demandData.demands ?? []);
+          if (demandData.user) setActiveUser(demandData.user);
+        }
+
+        const userResponse = await fetch("/api/users", { cache: "no-store" });
+        const userData = await userResponse.json() as { users?: ManagedUser[] };
+        if (!cancelled && userResponse.ok) setUsers(userData.users ?? []);
+      } catch (error) {
+        if (!cancelled) flash(error instanceof Error ? error.message : "Não foi possível sincronizar os dados.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    loadData();
+    return () => { cancelled = true; };
+  }, []);
+
   const filtered = useMemo(() => {
     return demands.filter((demand) => {
       const haystack = `${demand.title} ${demand.company} ${demand.category} ${demand.assignee ?? ""}`.toLowerCase();
       const matchesSearch = haystack.includes(query.toLowerCase());
       const matchesPriority = priority === "all" || demand.priority === priority;
-      const matchesMine = view !== "mine" || demand.assigneeEmail === currentUser.email;
+      const matchesMine = view !== "mine" || demand.assigneeEmail === activeUser.email;
       return matchesSearch && matchesPriority && matchesMine;
     });
-  }, [demands, priority, query, view, currentUser.email]);
+  }, [demands, priority, query, view, activeUser.email]);
 
   const counts = useMemo(() => ({
     available: demands.filter((d) => d.status === "available").length,
@@ -127,48 +164,69 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     window.setTimeout(() => setNotice(""), 2400);
   }
 
-  function claimDemand(id: number) {
-    setDemands((current) => current.map((demand) => demand.id === id && !demand.assignee
-      ? { ...demand, status: "in_progress", assignee: currentUser.name, assigneeEmail: currentUser.email }
-      : demand));
-    flash("Demanda assumida com sucesso.");
+  async function claimDemand(id: number) {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/demands/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "claim" }) });
+      const data = await response.json() as { demand?: Demand; error?: string };
+      if (!response.ok || !data.demand) throw new Error(data.error ?? "Não foi possível assumir a demanda.");
+      setDemands((current) => current.map((demand) => demand.id === id ? data.demand! : demand));
+      flash("Demanda assumida com sucesso.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Não foi possível assumir a demanda.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function moveDemand(id: number, status: Status) {
-    setDemands((current) => current.map((demand) => {
-      if (demand.id !== id) return demand;
-      if (status === "available") return { ...demand, status, assignee: undefined, assigneeEmail: undefined };
-      return {
-        ...demand,
-        status,
-        assignee: demand.assignee ?? currentUser.name,
-        assigneeEmail: demand.assigneeEmail ?? currentUser.email,
-      };
-    }));
-    flash("Status da demanda atualizado.");
+  async function moveDemand(id: number, status: Status) {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/demands/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "move", status }) });
+      const data = await response.json() as { demand?: Demand; error?: string };
+      if (!response.ok || !data.demand) throw new Error(data.error ?? "Não foi possível atualizar a demanda.");
+      setDemands((current) => current.map((demand) => demand.id === id ? data.demand! : demand));
+      flash("Status da demanda atualizado.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Não foi possível atualizar a demanda.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function createDemand(event: FormEvent<HTMLFormElement>) {
+  async function createDemand(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const category = String(data.get("category"));
-    const employee = String(data.get("employee") ?? "").trim();
-    const title = `${category} – ${employee || String(data.get("company"))}`;
-    setDemands((current) => [{
-      id: Math.max(...current.map((d) => d.id)) + 1,
-      title,
-      category,
-      company: String(data.get("company")),
-      employee: employee || undefined,
-      requester: String(data.get("requester")),
-      source: String(data.get("source")),
-      priority: String(data.get("priority")) as Priority,
-      dueDate: String(data.get("dueDate")),
-      status: "available",
-    }, ...current]);
-    setModalOpen(false);
-    setView("demands");
-    flash("Nova demanda adicionada à fila.");
+    const payload = Object.fromEntries(data.entries());
+    setSaving(true);
+    try {
+      const response = await fetch("/api/demands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const result = await response.json() as { demand?: Demand; error?: string };
+      if (!response.ok || !result.demand) throw new Error(result.error ?? "Não foi possível cadastrar a demanda.");
+      setDemands((current) => [result.demand!, ...current]);
+      setModalOpen(false);
+      setView("demands");
+      flash("Nova demanda adicionada à fila.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Não foi possível cadastrar a demanda.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changeUserRole(id: number, role: "admin" | "analyst") {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
+      const data = await response.json() as { user?: ManagedUser; error?: string };
+      if (!response.ok || !data.user) throw new Error(data.error ?? "Não foi possível alterar a permissão.");
+      setUsers((current) => current.map((user) => user.id === id ? data.user! : user));
+      flash("Permissão atualizada.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Não foi possível alterar a permissão.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const navItems: Array<{ id: View; label: string; icon: string }> = [
@@ -191,8 +249,8 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
           ))}
         </nav>
         <div className="profile">
-          <span className="avatar large">{initials(currentUser.name)}</span>
-          <div><strong>{currentUser.name}</strong><small>{currentUser.role === "admin" ? "Administrador" : "Analista de DP"}</small></div>
+          <span className="avatar large">{initials(activeUser.name)}</span>
+          <div><strong>{activeUser.name}</strong><small>{activeUser.role === "admin" ? "Administrador" : "Analista de DP"}</small></div>
           <span className="chevron">⌄</span>
         </div>
       </aside>
@@ -217,6 +275,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
                 {filterOpen && <div className="filter-menu"><strong>Prioridade</strong>{["all", "urgent", "high", "medium", "low"].map((item) => <button key={item} onClick={() => { setPriority(item as Priority | "all"); setFilterOpen(false); }} className={priority === item ? "selected" : ""}>{({ all: "Todas", urgent: "Urgente", high: "Alta", medium: "Média", low: "Baixa" } as Record<string,string>)[item]}</button>)}</div>}
               </div>
               {priority !== "all" && <button className="filter-chip" onClick={() => setPriority("all")}>Prioridade: {priority} ×</button>}
+              {(loading || saving) && <span className="sync-state">{loading ? "Carregando..." : "Salvando..."}</span>}
               <span className="result-count">{filtered.length} demandas</span>
             </div>
 
@@ -227,7 +286,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
                   <section className="column" key={column.id} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedId) moveDemand(draggedId, column.id); setDraggedId(null); }}>
                     <header><div><span className="grip">⠿</span><strong>{column.label}</strong></div><span className={`count ${column.id}`}>{items.length}</span></header>
                     <div className="card-list">
-                      {items.map((demand) => <DemandCard key={demand.id} demand={demand} currentUser={currentUser} onClaim={claimDemand} onDragStart={setDraggedId} />)}
+                      {items.map((demand) => <DemandCard key={demand.id} demand={demand} currentUser={activeUser} onClaim={claimDemand} onDragStart={setDraggedId} />)}
                       {items.length === 0 && <div className="empty-column">Nenhuma demanda nesta etapa</div>}
                     </div>
                   </section>
@@ -237,9 +296,9 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
           </>
         )}
 
-        {view === "overview" && <Overview demands={demands} currentUser={currentUser} onOpenBoard={() => setView("demands")} />}
+        {view === "overview" && <Overview demands={demands} currentUser={activeUser} onOpenBoard={() => setView("demands")} />}
         {view === "reports" && <Reports demands={demands} />}
-        {view === "settings" && <Settings currentUser={currentUser} />}
+        {view === "settings" && <Settings currentUser={activeUser} users={users} onRoleChange={changeUserRole} />}
       </section>
 
       {modalOpen && <NewDemandModal onClose={() => setModalOpen(false)} onSubmit={createDemand} />}
@@ -286,10 +345,11 @@ function Reports({ demands }: { demands: Demand[] }) {
   </div>;
 }
 
-function Settings({ currentUser }: { currentUser: User }) {
+function Settings({ currentUser, users, onRoleChange }: { currentUser: User; users: ManagedUser[]; onRoleChange: (id: number, role: "admin" | "analyst") => void }) {
   return <div className="settings-grid">
     <section className="panel"><span className="panel-kicker">Conta</span><h2>Seu perfil</h2><div className="profile-card"><span className="avatar xlarge">{initials(currentUser.name)}</span><div><strong>{currentUser.name}</strong><span>{currentUser.email}</span><small>{currentUser.role === "admin" ? "Administrador" : "Analista de DP"}</small></div></div></section>
     <section className="panel"><span className="panel-kicker">Tipos de demanda</span><h2>Categorias ativas</h2><div className="category-cloud">{Object.keys(CATEGORY_COLORS).map((category) => <span className={`tag ${CATEGORY_COLORS[category]}`} key={category}>{category}</span>)}</div><button className="secondary disabled" disabled>Gerenciar categorias</button></section>
+    <section className="panel wide"><div className="panel-header"><div><span className="panel-kicker">Equipe</span><h2>Usuários e permissões</h2></div><span className="muted">{users.length} usuário{users.length === 1 ? "" : "s"}</span></div><div className="user-table">{users.map((user) => <div key={user.id}><span className="avatar">{initials(user.displayName)}</span><div><strong>{user.displayName}</strong><small>{user.email}</small></div>{currentUser.role === "admin" ? <select aria-label={`Permissão de ${user.displayName}`} value={user.role} onChange={(event) => onRoleChange(user.id, event.target.value as "admin" | "analyst")} disabled={user.email === currentUser.email}><option value="analyst">Analista</option><option value="admin">Administrador</option></select> : <span className="role-badge">{user.role === "admin" ? "Administrador" : "Analista"}</span>}</div>)}</div></section>
     <section className="panel wide"><span className="panel-kicker">Regras da fila</span><h2>Distribuição e segurança</h2><div className="rule-list"><div><span>✓</span><div><strong>Primeiro analista a assumir</strong><small>A demanda fica bloqueada para os demais analistas.</small></div></div><div><span>✓</span><div><strong>Histórico de movimentações</strong><small>Todas as alterações são vinculadas ao usuário.</small></div></div><div><span>✓</span><div><strong>Redistribuição administrativa</strong><small>Administradores podem devolver demandas para a fila.</small></div></div></div></section>
   </div>;
 }
