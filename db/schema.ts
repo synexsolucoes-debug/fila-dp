@@ -6,7 +6,11 @@ export const users = sqliteTable("users", {
   email: text("email").notNull(),
   displayName: text("display_name").notNull(),
   role: text("role", { enum: ["admin", "analyst"] }).notNull().default("analyst"),
+  status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdById: integer("created_by_id"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastAccessAt: text("last_access_at"),
 }, (table) => [uniqueIndex("users_email_idx").on(table.email)]);
 
 export const demands = sqliteTable("demands", {
@@ -26,6 +30,8 @@ export const demands = sqliteTable("demands", {
   createdByEmail: text("created_by_email").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  version: integer("version").notNull().default(1),
+  updatedById: integer("updated_by_id"),
 });
 
 export const demandHistory = sqliteTable("demand_history", {
@@ -35,6 +41,22 @@ export const demandHistory = sqliteTable("demand_history", {
   details: text("details").notNull().default(""),
   userEmail: text("user_email").notNull(),
   userName: text("user_name").notNull(),
+  userId: integer("user_id"),
+  fieldChanged: text("field_changed"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  justification: text("justification"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const userHistory = sqliteTable("user_history", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  targetUserId: integer("target_user_id").notNull().references(() => users.id),
+  actorUserId: integer("actor_user_id").notNull().references(() => users.id),
+  action: text("action").notNull(),
+  fieldChanged: text("field_changed"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
