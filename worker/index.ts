@@ -142,8 +142,8 @@ async function ensureUser(request: Request, env: Env): Promise<AppUser> {
   return { ...user, lastAccessAt: new Date().toISOString() };
 }
 
-function requireAdmin(user: AppUser) {
-  if (user.role !== "admin") throw new Error("ADMIN_REQUIRED");
+function requireFullAccess(user: AppUser) {
+  if (user.status !== "active") throw new Error("USUARIO_INATIVO: seu acesso está inativo.");
 }
 
 async function addDemandHistory(
@@ -181,10 +181,7 @@ async function getDemand(env: Env, id: number) {
 }
 
 function canEditDemand(user: AppUser, demand: DemandRow) {
-  if (user.role === "admin") return true;
-  if (demand.status === "available") return true;
-  if (demand.status === "done") return false;
-  return demand.assigneeEmail === user.email;
+  return user.status === "active" && Boolean(demand);
 }
 
 async function activeTeam(env: Env) {
@@ -367,7 +364,7 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
   if (!existing) return json({ error: "Demanda não encontrada." }, 404);
 
   if (request.method === "GET") {
-    return json({ demand: existing, canEdit: canEditDemand(user, existing), editableStructuralFields: user.role === "admin" });
+    return json({ demand: existing, canEdit: canEditDemand(user, existing), editableStructuralFields: true });
   }
 
   if (request.method === "PUT") {
@@ -376,13 +373,12 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
     if (receivedVersion !== existing.version) return json({ error: "CONFLITO_VERSAO", message: "Esta demanda foi alterada por outro usuário. Recarregue os dados antes de editar.", currentVersion: existing.version }, 409);
     if (!canEditDemand(user, existing)) return json({ error: "Você não tem permissão para editar esta demanda." }, 403);
     const justification = String(payload.justification ?? "").trim();
-    if (existing.status === "done" && user.role === "admin" && !justification) return json({ error: "JUSTIFICATIVA_OBRIGATORIA", message: "É necessário informar o motivo para editar uma demanda concluída." }, 422);
+    if (existing.status === "done" && !justification) return json({ error: "JUSTIFICATIVA_OBRIGATORIA", message: "É necessário informar o motivo para editar uma demanda concluída." }, 422);
 
     const changes: Array<{ key: string; column: string; label: string; oldValue: unknown; newValue: unknown; historyOld?: unknown; historyNew?: unknown }> = [];
     for (const key of Object.keys(editableFields) as Array<keyof typeof editableFields>) {
       if (!(key in payload)) continue;
       const config = editableFields[key];
-      if (config.structural && user.role !== "admin") return json({ error: "CAMPO_NAO_EDITAVEL", message: `Apenas administradores podem editar o campo '${config.label}'.` }, 403);
       const newValue = key === "employee" ? (String(payload[key] ?? "").trim() || null) : String(payload[key] ?? "").trim();
       const oldValue = existing[key];
       if (String(oldValue ?? "") !== String(newValue ?? "")) changes.push({ key, column: config.column, label: config.label, oldValue, newValue });
@@ -390,7 +386,6 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
 
     let selectedCompany: Awaited<ReturnType<typeof activeCompany>> | null = null;
     if ("companyId" in payload) {
-      if (user.role !== "admin") return json({ error: "Apenas administradores podem alterar a empresa." }, 403);
       const companyId = Number(payload.companyId);
       selectedCompany = await activeCompany(env, companyId);
       if (!selectedCompany) return json({ error: "Selecione uma empresa ativa." }, 400);
@@ -461,7 +456,7 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
     }
 
     if ("assigneeEmail" in payload) {
-      requireAdmin(user);
+      requireFullAccess(user);
       const email = String(payload.assigneeEmail ?? "").trim();
       const assignee = email ? await env.DB.prepare("SELECT email, display_name AS name FROM users WHERE email = ? AND status = 'active' LIMIT 1").bind(email).first<{ email: string; name: string }>() : null;
       if (email && !assignee) return json({ error: "Responsável inválido ou inativo." }, 400);
@@ -502,11 +497,9 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
   }
 
   if (payload.action === "move" && payload.status && statuses.has(payload.status as DemandStatus)) {
-    if (existing.assigneeEmail && existing.assigneeEmail !== user.email && user.role !== "admin") return json({ error: "Somente o responsável ou um administrador pode movimentar esta demanda." }, 403);
     const status = payload.status as DemandStatus;
     const justification = String(payload.justification ?? "").trim();
     if (existing.status === "done" && status !== "done") {
-      if (user.role !== "admin") return json({ error: "Somente administradores podem reabrir demandas concluídas." }, 403);
       if (!justification) return json({ error: "JUSTIFICATIVA_OBRIGATORIA", message: "Informe o motivo para reabrir a demanda." }, 422);
     }
     const assigneeEmail = status === "available" ? null : (existing.assigneeEmail ?? user.email);
@@ -527,7 +520,7 @@ async function handleCompanies(request: Request, env: Env, url: URL): Promise<Re
   if (!url.pathname.startsWith("/api/companies")) return null;
   const user = await ensureUser(request, env);
   if (url.pathname === "/api/companies" && request.method === "GET") {
-    const all = user.role === "admin" && url.searchParams.get("status") === "all";
+    const all = url.searchParams.get("status") === "all";
     const result = await env.DB.prepare(`
       SELECT c.id, c.legal_name AS legalName, c.trade_name AS tradeName, c.cnpj, c.status,
         c.created_at AS createdAt, c.updated_at AS updatedAt,
@@ -536,7 +529,7 @@ async function handleCompanies(request: Request, env: Env, url: URL): Promise<Re
     return json({ companies: result.results });
   }
   if (url.pathname === "/api/companies" && request.method === "POST") {
-    requireAdmin(user);
+    requireFullAccess(user);
     const payload = await request.json<{ legalName?: string; tradeName?: string; cnpj?: string }>();
     const legalName = payload.legalName?.trim() ?? "";
     const tradeName = payload.tradeName?.trim() ?? "";
@@ -555,7 +548,7 @@ async function handleCompanies(request: Request, env: Env, url: URL): Promise<Re
   }
   const match = url.pathname.match(/^\/api\/companies\/(\d+)$/);
   if (!match || request.method !== "PUT") return null;
-  requireAdmin(user);
+  requireFullAccess(user);
   const id = Number(match[1]);
   const existing = await env.DB.prepare("SELECT id, legal_name AS legalName, trade_name AS tradeName, cnpj, status FROM companies WHERE id = ?")
     .bind(id).first<{ id: number; legalName: string; tradeName: string; cnpj: string | null; status: UserStatus }>();
@@ -583,12 +576,12 @@ async function handleLabels(request: Request, env: Env, url: URL): Promise<Respo
   if (!url.pathname.startsWith("/api/labels")) return null;
   const user = await ensureUser(request, env);
   if (url.pathname === "/api/labels" && request.method === "GET") {
-    const all = user.role === "admin" && url.searchParams.get("status") === "all";
+    const all = url.searchParams.get("status") === "all";
     const result = await env.DB.prepare(`SELECT id, name, color, status, created_at AS createdAt, updated_at AS updatedAt FROM labels ${all ? "" : "WHERE status = 'active'"} ORDER BY name`).all();
     return json({ labels: result.results });
   }
   if (url.pathname === "/api/labels" && request.method === "POST") {
-    requireAdmin(user);
+    requireFullAccess(user);
     const payload = await request.json<{ name?: string; color?: string }>();
     const name = payload.name?.trim() ?? "";
     const color = payload.color?.trim() ?? "";
@@ -604,7 +597,7 @@ async function handleLabels(request: Request, env: Env, url: URL): Promise<Respo
   }
   const match = url.pathname.match(/^\/api\/labels\/(\d+)$/);
   if (!match || request.method !== "PUT") return null;
-  requireAdmin(user);
+  requireFullAccess(user);
   const id = Number(match[1]);
   const existing = await env.DB.prepare("SELECT id, name, color, status FROM labels WHERE id = ?").bind(id).first<{ id: number; name: string; color: string; status: UserStatus }>();
   if (!existing) return json({ error: "Etiqueta não encontrada." }, 404);
@@ -621,12 +614,12 @@ async function handleTemplates(request: Request, env: Env, url: URL): Promise<Re
   if (!url.pathname.startsWith("/api/checklist-templates")) return null;
   const user = await ensureUser(request, env);
   if (url.pathname === "/api/checklist-templates" && request.method === "GET") {
-    const all = user.role === "admin" && url.searchParams.get("status") === "all";
+    const all = url.searchParams.get("status") === "all";
     const result = await env.DB.prepare(`SELECT id, category, item_text AS text, sort_order AS sortOrder, status FROM checklist_templates ${all ? "" : "WHERE status = 'active'"} ORDER BY category, sort_order, id`).all();
     return json({ templates: result.results });
   }
   if (url.pathname === "/api/checklist-templates" && request.method === "POST") {
-    requireAdmin(user);
+    requireFullAccess(user);
     const payload = await request.json<{ category?: string; text?: string }>();
     const category = payload.category?.trim() ?? "";
     const text = payload.text?.trim() ?? "";
@@ -643,7 +636,7 @@ async function handleTemplates(request: Request, env: Env, url: URL): Promise<Re
   }
   const match = url.pathname.match(/^\/api\/checklist-templates\/(\d+)$/);
   if (!match || request.method !== "PUT") return null;
-  requireAdmin(user);
+  requireFullAccess(user);
   const id = Number(match[1]);
   const existing = await env.DB.prepare("SELECT id, category, item_text AS text, sort_order AS sortOrder, status FROM checklist_templates WHERE id = ?")
     .bind(id).first<{ id: number; category: string; text: string; sortOrder: number; status: UserStatus }>();
@@ -666,7 +659,7 @@ async function handleUsers(request: Request, env: Env, url: URL): Promise<Respon
   if (!url.pathname.startsWith("/api/users")) return null;
   if (url.pathname === "/api/users" && request.method === "GET") {
     const currentUser = await ensureUser(request, env);
-    requireAdmin(currentUser);
+    requireFullAccess(currentUser);
     const search = url.searchParams.get("search")?.trim() ?? "";
     const role = url.searchParams.get("role") ?? "all";
     const status = url.searchParams.get("status") ?? "all";
@@ -682,7 +675,7 @@ async function handleUsers(request: Request, env: Env, url: URL): Promise<Respon
 
   if (url.pathname === "/api/users" && request.method === "POST") {
     const actor = await ensureUser(request, env);
-    requireAdmin(actor);
+    requireFullAccess(actor);
     const payload = await request.json<{ name?: string; email?: string; role?: string }>();
     const name = payload.name?.trim() ?? "";
     const email = payload.email?.trim().toLowerCase() ?? "";
@@ -702,7 +695,7 @@ async function handleUsers(request: Request, env: Env, url: URL): Promise<Respon
   const historyMatch = url.pathname.match(/^\/api\/users\/(\d+)\/history$/);
   if (historyMatch && request.method === "GET") {
     const actor = await ensureUser(request, env);
-    requireAdmin(actor);
+    requireFullAccess(actor);
     const result = await env.DB.prepare(`
       SELECT h.id, h.action, h.field_changed AS fieldChanged, h.old_value AS oldValue,
         h.new_value AS newValue, h.created_at AS createdAt, u.display_name AS actorName
@@ -716,7 +709,7 @@ async function handleUsers(request: Request, env: Env, url: URL): Promise<Respon
   if (!statusMatch && !match) return null;
   const id = Number((statusMatch ?? match)![1]);
   const actor = await ensureUser(request, env);
-  requireAdmin(actor);
+  requireFullAccess(actor);
   const existing = await env.DB.prepare(`${userSelect} WHERE id = ? LIMIT 1`).bind(id).first<AppUser>();
   if (!existing) return json({ error: "Usuário não encontrado." }, 404);
   if (request.method === "GET") return json({ user: existing, activeDemandCount: await activeDemandCount(env, existing.email) });

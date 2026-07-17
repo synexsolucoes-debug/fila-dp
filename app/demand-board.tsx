@@ -211,8 +211,8 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     if (response.ok) setUsers(data.users ?? []);
   }, []);
 
-  const loadConfiguration = useCallback(async (role: User["role"]) => {
-    const suffix = role === "admin" ? "?status=all" : "";
+  const loadConfiguration = useCallback(async () => {
+    const suffix = "?status=all";
     const [companiesResponse, labelsResponse, templatesResponse] = await Promise.all([
       fetch(`/api/companies${suffix}`, { cache: "no-store" }),
       fetch(`/api/labels${suffix}`, { cache: "no-store" }),
@@ -238,8 +238,8 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
         setDemands(data.demands ?? []);
         setTeam(data.team ?? []);
         setActiveUser(user);
-        await loadConfiguration(user.role);
-        if (user.role === "admin") await loadUsers();
+        await loadConfiguration();
+        await loadUsers();
       } catch (error) {
         if (!cancelled) flash(error instanceof Error ? error.message : "Erro ao carregar os dados.");
       } finally {
@@ -379,7 +379,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
       priority: data.get("priority"), dueDate: data.get("dueDate"), description: data.get("description"),
       justification: data.get("justification"),
     };
-    if (activeUser.role === "admin") Object.assign(payload, {
+    Object.assign(payload, {
       category: data.get("category"), source: data.get("source"), companyId: Number(data.get("companyId")),
       employee: data.get("employee"), requester: data.get("requester"),
     });
@@ -592,10 +592,8 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     { id: "mine", label: "Minha fila", icon: "user" },
     { id: "reports", label: "Relatórios", icon: "chart" },
     { id: "settings", label: "Configurações", icon: "gear" },
-    ...(activeUser.role === "admin" ? [
-      { id: "companies" as View, label: "Empresas", icon: "building" },
-      { id: "users" as View, label: "Usuários", icon: "user" },
-    ] : []),
+    { id: "companies" as View, label: "Empresas", icon: "building" },
+    { id: "users" as View, label: "Usuários", icon: "user" },
   ];
 
   const title = ({ mine: "Minha fila", overview: "Visão geral", reports: "Relatórios", settings: "Configurações", users: "Gestão de usuários", companies: "Gestão de empresas", demands: "Fila DP" } as Record<View, string>)[view];
@@ -606,7 +604,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
       <nav aria-label="Navegação principal">
         {navItems.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon}/><span>{item.label}</span></button>)}
       </nav>
-      <div className="profile"><span className="avatar large">{initials(activeUser.name)}</span><div><strong>{activeUser.name}</strong><small>{activeUser.role === "admin" ? "Administrador" : "Analista de DP"}</small></div><span className="chevron">⌄</span></div>
+      <div className="profile"><span className="avatar large">{initials(activeUser.name)}</span><div><strong>{activeUser.name}</strong><small>{activeUser.role === "admin" ? "Administrador" : "Analista · acesso completo"}</small></div><span className="chevron">⌄</span></div>
     </aside>
 
     <section className="workspace">
@@ -662,7 +660,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     </section>
 
     {newDemandOpen && <NewDemandModal companies={companies.filter((company) => company.status === "active")} labels={labels.filter((label) => label.status === "active")} templates={templates.filter((template) => template.status === "active")} onClose={() => setNewDemandOpen(false)} onSubmit={createDemand}/>} 
-    {selectedDemand && <DemandDetailModal demand={selectedDemand} timeline={timeline} checklist={checklist} labels={labels.filter((label) => label.status === "active" || selectedDemand.labels.some((item) => item.id === label.id))} companies={companies.filter((company) => company.status === "active" || company.id === selectedDemand.companyId)} canEdit={demandCanEdit} editMode={demandEditMode} currentUser={activeUser} saving={saving} error={demandModalError} onEdit={() => setDemandEditMode(true)} onCancelEdit={() => { setDemandEditMode(false); setDemandModalError(""); }} onClose={() => setSelectedDemand(null)} onSubmit={saveDemand} onReload={() => openDemand(selectedDemand.id)} onToggleChecklist={toggleChecklistItem} onAddChecklist={addChecklistItem} onComment={addComment}/>} 
+    {selectedDemand && <DemandDetailModal demand={selectedDemand} timeline={timeline} checklist={checklist} labels={labels.filter((label) => label.status === "active" || selectedDemand.labels.some((item) => item.id === label.id))} companies={companies.filter((company) => company.status === "active" || company.id === selectedDemand.companyId)} canEdit={demandCanEdit} editMode={demandEditMode} saving={saving} error={demandModalError} onEdit={() => setDemandEditMode(true)} onCancelEdit={() => { setDemandEditMode(false); setDemandModalError(""); }} onClose={() => setSelectedDemand(null)} onSubmit={saveDemand} onReload={() => openDemand(selectedDemand.id)} onToggleChecklist={toggleChecklistItem} onAddChecklist={addChecklistItem} onComment={addComment}/>} 
     {userModal && <UserModal user={userModal} history={userHistory} saving={saving} onClose={() => setUserModal(null)} onSubmit={submitUser}/>} 
     {inactiveConfirm && <ConfirmInactive count={inactiveConfirm.count} onCancel={() => setInactiveConfirm(null)} onConfirm={() => persistUser(inactiveConfirm.payload, true)}/>} 
     {companyModal && <CompanyModal company={companyModal} saving={saving} onClose={() => setCompanyModal(null)} onSubmit={persistCompany}/>} 
@@ -686,7 +684,7 @@ function DemandCard({ demand, currentUser, team, availableLabels, labelsExpanded
   onDragStart: (id: number) => void;
 }) {
   const due = dueLabel(demand.dueDate, demand.status);
-  const canQuickEdit = demand.status !== "done" && (currentUser.role === "admin" || demand.status === "available" || demand.assigneeEmail === currentUser.email);
+  const canQuickEdit = demand.status !== "done";
   const claim = (event: MouseEvent) => { event.stopPropagation(); onClaim(demand.id); };
   const aged = isAged(demand);
   return <article className={`demand-card ${aged ? "aged" : ""}`} draggable onDragStart={() => onDragStart(demand.id)} onClick={() => onOpen(demand.id)}>
@@ -694,7 +692,7 @@ function DemandCard({ demand, currentUser, team, availableLabels, labelsExpanded
       {demand.labels.map((label) => <button key={label.id} style={{ "--label-color": label.color } as React.CSSProperties} title={label.name} onClick={(event) => { event.stopPropagation(); onToggleLabels(); }}>{labelsExpanded ? label.name : ""}</button>)}
     </div>}
     <div className="card-title"><span className="drag-handle">⠿</span><strong>{demand.title}</strong>{canQuickEdit && <button className="quick-trigger" aria-label={`Ações rápidas de ${demand.title}`} onClick={(event) => { event.stopPropagation(); onQuickOpen(); }}><Icon name="edit"/></button>}</div>
-    {quickOpen && <QuickActions demand={demand} currentUser={currentUser} team={team} labels={availableLabels} onClose={onQuickOpen} onSave={onQuickSave}/>} 
+    {quickOpen && <QuickActions demand={demand} team={team} labels={availableLabels} onClose={onQuickOpen} onSave={onQuickSave}/>} 
     <div className="card-tags"><span className={`tag ${CATEGORY_COLORS[demand.category] ?? "gray"}`}>{demand.category}</span><span className={`priority ${demand.priority}`}>{({ low: "Baixa", medium: "Média", high: "Alta", urgent: "Urgente" } as Record<Priority, string>)[demand.priority]}</span></div>
     <p className="company"><Icon name="building"/>{demand.company}</p>
     <div className="card-meta-row">
@@ -706,16 +704,16 @@ function DemandCard({ demand, currentUser, team, availableLabels, labelsExpanded
   </article>;
 }
 
-function QuickActions({ demand, currentUser, team, labels, onClose, onSave }: { demand: Demand; currentUser: User; team: TeamMember[]; labels: Label[]; onClose: () => void; onSave: (changes: { dueDate?: string; assigneeEmail?: string; labelIds?: number[] }) => void }) {
+function QuickActions({ demand, team, labels, onClose, onSave }: { demand: Demand; team: TeamMember[]; labels: Label[]; onClose: () => void; onSave: (changes: { dueDate?: string; assigneeEmail?: string; labelIds?: number[] }) => void }) {
   const [dueDate, setDueDate] = useState(demand.dueDate);
   const [assigneeEmail, setAssigneeEmail] = useState(demand.assigneeEmail ?? "");
   const [labelIds, setLabelIds] = useState(demand.labels.map((label) => label.id));
   return <div className="quick-actions" onClick={(event) => event.stopPropagation()}>
     <header><strong>Ações rápidas</strong><button onClick={onClose} aria-label="Fechar"><Icon name="close"/></button></header>
     <label>Prazo<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)}/></label>
-    {currentUser.role === "admin" && <label>Responsável<select value={assigneeEmail} onChange={(event) => setAssigneeEmail(event.target.value)}><option value="">Sem responsável</option>{team.map((member) => <option key={member.id} value={member.email}>{member.name}</option>)}</select></label>}
+    <label>Responsável<select value={assigneeEmail} onChange={(event) => setAssigneeEmail(event.target.value)}><option value="">Sem responsável</option>{team.map((member) => <option key={member.id} value={member.email}>{member.name}</option>)}</select></label>
     <fieldset><legend>Etiquetas</legend>{labels.map((label) => <label key={label.id}><input type="checkbox" checked={labelIds.includes(label.id)} onChange={(event) => setLabelIds((list) => event.target.checked ? [...list, label.id] : list.filter((id) => id !== label.id))}/><i style={{ background: label.color }}/><span>{label.name}</span></label>)}</fieldset>
-    <button className="primary compact-button" onClick={() => onSave({ dueDate, labelIds, ...(currentUser.role === "admin" ? { assigneeEmail } : {}) })}>Aplicar agora</button>
+    <button className="primary compact-button" onClick={() => onSave({ dueDate, labelIds, assigneeEmail })}>Aplicar agora</button>
   </div>;
 }
 
@@ -757,13 +755,13 @@ function Settings({ currentUser, labels, templates, onManageUsers, onManageCompa
   const [templateCategory, setTemplateCategory] = useState("Admissão");
   const [templateText, setTemplateText] = useState("");
   return <div className="settings-grid">
-    <section className="panel"><span className="panel-kicker">Conta</span><h2>Seu perfil</h2><div className="profile-card"><span className="avatar xlarge">{initials(currentUser.name)}</span><div><strong>{currentUser.name}</strong><span>{currentUser.email}</span><small>{currentUser.role === "admin" ? "Administrador" : "Analista de DP"}</small></div></div></section>
+    <section className="panel"><span className="panel-kicker">Conta</span><h2>Seu perfil</h2><div className="profile-card"><span className="avatar xlarge">{initials(currentUser.name)}</span><div><strong>{currentUser.name}</strong><span>{currentUser.email}</span><small>{currentUser.role === "admin" ? "Administrador" : "Analista com acesso completo"}</small></div></div></section>
     <section className="panel"><span className="panel-kicker">Tipos de demanda</span><h2>Categorias ativas</h2><div className="category-cloud">{CATEGORIES.map((category) => <span className={`tag ${CATEGORY_COLORS[category]}`} key={category}>{category}</span>)}</div></section>
-    {currentUser.role === "admin" && <>
+    <>
       <section className="panel wide admin-links"><div><span className="panel-kicker">Cadastros mestres</span><h2>Equipe e empresas</h2><p>Controle quem acessa o sistema e mantenha a lista de empresas usada nas demandas.</p></div><div><button className="secondary" onClick={onManageCompanies}>Gerenciar empresas</button><button className="primary" onClick={onManageUsers}>Gerenciar usuários</button></div></section>
       <section className="panel wide config-section"><div className="panel-header"><div><span className="panel-kicker">Contexto visual</span><h2>Etiquetas configuráveis</h2></div><button className="secondary" onClick={onNewLabel}><Icon name="plus"/>Nova etiqueta</button></div><div className="label-admin-grid">{labels.map((label) => <button key={label.id} className={label.status} onClick={() => onEditLabel(label)}><i style={{ background: label.color }}/><span><strong>{label.name}</strong><small>{label.status === "active" ? "Ativa" : "Inativa"}</small></span><Icon name="edit"/></button>)}</div></section>
       <section className="panel wide config-section"><div className="panel-header"><div><span className="panel-kicker">Padronização</span><h2>Modelos automáticos de checklist</h2></div></div><form className="template-add" onSubmit={(event) => { event.preventDefault(); if (templateText.trim()) { onAddTemplate(templateCategory, templateText.trim()); setTemplateText(""); } }}><select value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select><input value={templateText} onChange={(event) => setTemplateText(event.target.value)} placeholder="Nova etapa do processo..." maxLength={240}/><button className="primary compact-button">Adicionar etapa</button></form><div className="template-groups">{CATEGORIES.filter((category) => templates.some((template) => template.category === category)).map((category) => <section key={category}><h3><span className={`tag ${CATEGORY_COLORS[category]}`}>{category}</span><small>{templates.filter((template) => template.category === category && template.status === "active").length} etapas ativas</small></h3>{templates.filter((template) => template.category === category).map((template) => <div className={template.status} key={template.id}><span>{template.text}</span><button onClick={() => onToggleTemplate(template)}>{template.status === "active" ? "Desativar" : "Reativar"}</button></div>)}</section>)}</div></section>
-    </>}
+    </>
   </div>;
 }
 
@@ -775,7 +773,7 @@ function CompaniesView({ companies, search, statusFilter, setSearch, setStatusFi
   return <section className="panel users-panel"><div className="users-toolbar"><label className="search"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar empresa, razão social ou CNPJ..."/></label><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">Todos os status</option><option value="active">Ativas</option><option value="inactive">Inativas</option></select><span className="result-count">{companies.length} empresas</span></div>{companies.length ? <div className="companies-table"><div className="company-head"><span>Nome fantasia</span><span>Razão social</span><span>CNPJ</span><span>Demandas</span><span>Status</span><span>Ações</span></div>{companies.map((company) => <div className="company-row" key={company.id}><div className="user-identity"><span className="company-avatar"><Icon name="building"/></span><strong>{company.tradeName}</strong></div><span>{company.legalName}</span><span>{formatCnpj(company.cnpj)}</span><span>{company.demandCount ?? 0}</span><span className={`status-badge ${company.status}`}>{company.status === "active" ? "Ativa" : "Inativa"}</span><button className="table-action" onClick={() => onEdit(company)}>Editar</button></div>)}</div> : <EmptyState title="Nenhuma empresa encontrada" text="Cadastre a primeira empresa para abrir novas demandas."/>}</section>;
 }
 
-function DemandDetailModal({ demand, timeline, checklist, labels, companies, canEdit, editMode, currentUser, saving, error, onEdit, onCancelEdit, onClose, onSubmit, onReload, onToggleChecklist, onAddChecklist, onComment }: {
+function DemandDetailModal({ demand, timeline, checklist, labels, companies, canEdit, editMode, saving, error, onEdit, onCancelEdit, onClose, onSubmit, onReload, onToggleChecklist, onAddChecklist, onComment }: {
   demand: Demand;
   timeline: TimelineEvent[];
   checklist: ChecklistItem[];
@@ -783,7 +781,6 @@ function DemandDetailModal({ demand, timeline, checklist, labels, companies, can
   companies: Company[];
   canEdit: boolean;
   editMode: boolean;
-  currentUser: User;
   saving: boolean;
   error: string;
   onEdit: () => void;
@@ -796,22 +793,21 @@ function DemandDetailModal({ demand, timeline, checklist, labels, companies, can
   onComment: (text: string) => void;
 }) {
   const [tab, setTab] = useState<"details" | "activity">("details");
-  const admin = currentUser.role === "admin";
   return <div className="modal-backdrop"><section className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="demand-detail-title">
     <header><div><span className="panel-kicker">Demanda #{demand.id} · versão {demand.version}</span><h2 id="demand-detail-title">{demand.title}</h2><p>{demand.company}</p></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><Icon name="close"/></button></header>
     <div className="modal-tabs"><button className={tab === "details" ? "active" : ""} onClick={() => setTab("details")}>Detalhes e checklist</button><button className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Atividade <span>{timeline.length}</span></button></div>
     {tab === "details" ? <form onSubmit={onSubmit} className="detail-form">
       <div className="form-grid">
-        <label><span>Tipo</span><select name="category" defaultValue={demand.category} disabled={!editMode || !admin}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label>
-        <label><span>Canal de origem</span><select name="source" defaultValue={demand.source} disabled={!editMode || !admin}><option>E-mail</option><option>WhatsApp</option><option>Verbal</option></select></label>
-        <label className="full"><span>Empresa</span><select name="companyId" defaultValue={demand.companyId ?? ""} disabled={!editMode || !admin}><option value="">Selecione</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName}{company.status === "inactive" ? " (inativa)" : ""}</option>)}</select></label>
-        <label><span>Funcionário</span><input name="employee" defaultValue={demand.employee ?? ""} disabled={!editMode || !admin}/></label>
-        <label><span>Solicitante</span><input name="requester" defaultValue={demand.requester} disabled={!editMode || !admin}/></label>
+        <label><span>Tipo</span><select name="category" defaultValue={demand.category} disabled={!editMode}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label>
+        <label><span>Canal de origem</span><select name="source" defaultValue={demand.source} disabled={!editMode}><option>E-mail</option><option>WhatsApp</option><option>Verbal</option></select></label>
+        <label className="full"><span>Empresa</span><select name="companyId" defaultValue={demand.companyId ?? ""} disabled={!editMode}><option value="">Selecione</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName}{company.status === "inactive" ? " (inativa)" : ""}</option>)}</select></label>
+        <label><span>Funcionário</span><input name="employee" defaultValue={demand.employee ?? ""} disabled={!editMode}/></label>
+        <label><span>Solicitante</span><input name="requester" defaultValue={demand.requester} disabled={!editMode}/></label>
         <label><span>Prioridade</span><select name="priority" defaultValue={demand.priority} disabled={!editMode}><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
         <label><span>Prazo</span><input name="dueDate" type="date" defaultValue={demand.dueDate} disabled={!editMode}/></label>
         <label className="full"><span>Descrição</span><textarea name="description" rows={4} defaultValue={demand.description} disabled={!editMode}/></label>
         <fieldset className="label-picker full"><legend>Etiquetas visuais</legend>{labels.map((label) => <label key={label.id}><input name="labelIds" value={label.id} type="checkbox" defaultChecked={demand.labels.some((item) => item.id === label.id)} disabled={!editMode}/><i style={{ background: label.color }}/><span>{label.name}</span></label>)}</fieldset>
-        {editMode && demand.status === "done" && admin && <label className="full justification"><span>Motivo da edição *</span><textarea name="justification" rows={3} required placeholder="Explique por que uma demanda concluída precisa ser alterada..."/></label>}
+        {editMode && demand.status === "done" && <label className="full justification"><span>Motivo da edição *</span><textarea name="justification" rows={3} required placeholder="Explique por que uma demanda concluída precisa ser alterada..."/></label>}
       </div>
       {error && <div className="form-error"><span>{error}</span>{error.includes("alterada por outro usuário") && <button type="button" onClick={onReload}>Recarregar dados</button>}</div>}
       <ChecklistPanel checklist={checklist} canEdit={canEdit} saving={saving} onToggle={onToggleChecklist} onAdd={onAddChecklist}/>
