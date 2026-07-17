@@ -144,6 +144,15 @@ export const integrationChannels = sqliteTable("integration_channels", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("integration_channels_channel_idx").on(table.channel)]);
 
+export const integrationCredentials = sqliteTable("integration_credentials", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  channel: text("channel", { enum: ["whatsapp"] }).notNull(),
+  encryptedConfig: text("encrypted_config").notNull(),
+  iv: text("iv").notNull(),
+  updatedById: integer("updated_by_id").notNull().references(() => users.id),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("integration_credentials_channel_idx").on(table.channel)]);
+
 export const demandAttachments = sqliteTable("demand_attachments", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   demandId: integer("demand_id").notNull().references(() => demands.id, { onDelete: "cascade" }),

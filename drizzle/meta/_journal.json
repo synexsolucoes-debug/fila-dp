@@ -29,6 +29,13 @@
       "when": 1784318834464,
       "tag": "0003_first_spencer_smythe",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784320044449,
+      "tag": "0004_smart_roughhouse",
+      "breakpoints": true
     }
   ]
 }

@@ -39,6 +39,7 @@ type IntegrationChannel = { id: number; channel: "email" | "teams" | "whatsapp";
 type SlaRule = { id: number; category: string; businessDays: number; defaultPriority: Priority; status: ActiveStatus };
 type NotificationItem = { id: number; type: string; title: string; message: string; demandId: number | null; inboxItemId: number | null; read: number | boolean; createdAt: string };
 type Attachment = { id: number; fileName: string; contentType: string; size: number; uploader: string; createdAt: string };
+type WhatsappSetup = { callbackUrl: string; verifyToken: string; configured: boolean; phoneNumberId: string | null; businessAccountId: string | null; canSend: boolean };
 
 type Demand = {
   id: number;
@@ -215,6 +216,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
   const [convertItem, setConvertItem] = useState<InboxItem | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [whatsappSetup, setWhatsappSetup] = useState<WhatsappSetup | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   function flash(message: string) {
@@ -637,6 +639,27 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     } catch (error) { flash(error instanceof Error ? error.message : "Erro na preparação da conexão."); }
   }
 
+  async function openWhatsappSetup() {
+    try {
+      const response = await fetch("/api/integrations/whatsapp/setup", { cache: "no-store" });
+      const data = await response.json() as WhatsappSetup & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível abrir a configuração.");
+      setWhatsappSetup(data);
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro ao abrir a configuração."); }
+  }
+
+  async function saveWhatsappSetup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true);
+    try {
+      const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const response = await fetch("/api/integrations/whatsapp/setup", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await response.json() as { message?: string; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível salvar a configuração.");
+      setWhatsappSetup(null); await loadOperations(); flash(data.message ?? "Configuração salva.");
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro ao salvar a configuração."); }
+    finally { setSaving(false); }
+  }
+
   async function createInboxItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true);
     try {
@@ -768,7 +791,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
       </>}
 
       {view === "overview" && <Overview demands={demands} currentUser={activeUser} onOpenBoard={() => setView("demands")}/>} 
-      {view === "inbox" && <InboxView items={inboxItems} integrations={integrations} onPrepare={prepareIntegration} onReview={(item) => updateInboxStatus(item, "reviewing")} onArchive={(item) => updateInboxStatus(item, "archived")} onConvert={setConvertItem}/>}
+      {view === "inbox" && <InboxView items={inboxItems} integrations={integrations} onPrepare={prepareIntegration} onConfigureWhatsapp={openWhatsappSetup} onReview={(item) => updateInboxStatus(item, "reviewing")} onArchive={(item) => updateInboxStatus(item, "archived")} onConvert={setConvertItem}/>}
       {view === "reports" && <Reports demands={demands} team={team}/>}
       {view === "settings" && <Settings currentUser={activeUser} labels={labels} templates={templates} slaRules={slaRules} onSaveSla={saveSlaRule} onManageUsers={() => setView("users")} onManageCompanies={() => setView("companies")} onNewLabel={() => setLabelModal("new")} onEditLabel={setLabelModal} onAddTemplate={addTemplate} onToggleTemplate={toggleTemplate}/>}
       {view === "users" && <UsersView users={filteredUsers} search={userSearch} roleFilter={userRoleFilter} statusFilter={userStatusFilter} setSearch={setUserSearch} setRoleFilter={setUserRoleFilter} setStatusFilter={setUserStatusFilter} onEdit={openUser}/>} 
@@ -778,6 +801,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     {newDemandOpen && <NewDemandModal companies={companies.filter((company) => company.status === "active")} labels={labels.filter((label) => label.status === "active")} templates={templates.filter((template) => template.status === "active")} slaRules={slaRules} onClose={() => setNewDemandOpen(false)} onSubmit={createDemand}/>}
     {inboxModalOpen && <InboxEntryModal companies={companies.filter((company) => company.status === "active")} saving={saving} onClose={() => setInboxModalOpen(false)} onSubmit={createInboxItem}/>}
     {convertItem && <ConvertInboxModal item={convertItem} companies={companies.filter((company) => company.status === "active")} slaRules={slaRules} team={team} saving={saving} onClose={() => setConvertItem(null)} onSubmit={convertInbox}/>}
+    {whatsappSetup && <WhatsappSetupModal setup={whatsappSetup} saving={saving} onClose={() => setWhatsappSetup(null)} onSubmit={saveWhatsappSetup}/>}
     {selectedDemand && <DemandDetailModal demand={selectedDemand} timeline={timeline} checklist={checklist} attachments={attachments} labels={labels.filter((label) => label.status === "active" || selectedDemand.labels.some((item) => item.id === label.id))} companies={companies.filter((company) => company.status === "active" || company.id === selectedDemand.companyId)} canEdit={demandCanEdit} editMode={demandEditMode} saving={saving} error={demandModalError} onEdit={() => setDemandEditMode(true)} onCancelEdit={() => { setDemandEditMode(false); setDemandModalError(""); }} onClose={() => setSelectedDemand(null)} onSubmit={saveDemand} onReload={() => openDemand(selectedDemand.id)} onToggleChecklist={toggleChecklistItem} onAddChecklist={addChecklistItem} onComment={addComment} onUpload={uploadAttachment}/>}
     {userModal && <UserModal user={userModal} history={userHistory} saving={saving} onClose={() => setUserModal(null)} onSubmit={submitUser}/>} 
     {inactiveConfirm && <ConfirmInactive count={inactiveConfirm.count} onCancel={() => setInactiveConfirm(null)} onConfirm={() => persistUser(inactiveConfirm.payload, true)}/>} 
@@ -835,13 +859,13 @@ function QuickActions({ demand, team, labels, onClose, onSave }: { demand: Deman
   </div>;
 }
 
-function InboxView({ items, integrations, onPrepare, onReview, onArchive, onConvert }: { items: InboxItem[]; integrations: IntegrationChannel[]; onPrepare: (channel: IntegrationChannel["channel"]) => void; onReview: (item: InboxItem) => void; onArchive: (item: InboxItem) => void; onConvert: (item: InboxItem) => void }) {
+function InboxView({ items, integrations, onPrepare, onConfigureWhatsapp, onReview, onArchive, onConvert }: { items: InboxItem[]; integrations: IntegrationChannel[]; onPrepare: (channel: IntegrationChannel["channel"]) => void; onConfigureWhatsapp: () => void; onReview: (item: InboxItem) => void; onArchive: (item: InboxItem) => void; onConvert: (item: InboxItem) => void }) {
   const [query, setQuery] = useState("");
   const [channel, setChannel] = useState("all");
   const filtered = items.filter((item) => (channel === "all" || item.channel === channel) && `${item.sender} ${item.subject} ${item.body} ${item.company ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const channelNames = { email: "E-mail", teams: "Teams", whatsapp: "WhatsApp" };
   return <div className="inbox-shell">
-    <section className="integration-grid">{integrations.map((item) => <article className="integration-card" key={item.id}><div className={`channel-logo ${item.channel}`}>{item.channel === "email" ? "@" : item.channel === "teams" ? "T" : "W"}</div><div><span className="panel-kicker">{channelNames[item.channel]}</span><h2>{item.provider}</h2><p>{item.status === "connected" ? "Conectado e recebendo mensagens." : item.status === "pending_credentials" ? "Preparado · aguardando credenciais oficiais." : "Estrutura disponível para configuração."}</p></div><button className="secondary" disabled={item.status === "pending_credentials" || item.status === "connected"} onClick={() => onPrepare(item.channel)}>{item.status === "setup_required" ? "Preparar conexão" : item.status === "pending_credentials" ? "Aguardando credenciais" : "Conectado"}</button></article>)}</section>
+    <section className="integration-grid">{integrations.map((item) => <article className="integration-card" key={item.id}><div className={`channel-logo ${item.channel}`}>{item.channel === "email" ? "@" : item.channel === "teams" ? "T" : "W"}</div><div><span className="panel-kicker">{channelNames[item.channel]}</span><h2>{item.provider}</h2><p>{item.status === "connected" ? "Conectado e recebendo mensagens." : item.status === "pending_credentials" ? "Preparado · aguardando validação oficial." : "Estrutura disponível para configuração."}</p></div>{item.channel === "whatsapp" ? <button className="secondary" onClick={onConfigureWhatsapp}>{item.status === "connected" ? "Revisar conexão" : "Configurar WhatsApp"}</button> : <button className="secondary" disabled={item.status === "pending_credentials" || item.status === "connected"} onClick={() => onPrepare(item.channel)}>{item.status === "setup_required" ? "Preparar conexão" : item.status === "pending_credentials" ? "Aguardando credenciais" : "Conectado"}</button>}</article>)}</section>
     <section className="panel inbox-panel"><div className="inbox-toolbar"><div><span className="panel-kicker">Triagem antes da fila</span><h2>Mensagens recebidas</h2></div><label className="search"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar remetente ou assunto..."/></label><select value={channel} onChange={(event) => setChannel(event.target.value)}><option value="all">Todos os canais</option><option value="email">E-mail</option><option value="teams">Teams</option><option value="whatsapp">WhatsApp</option><option value="manual">Manual</option></select></div>
       <div className="inbox-list">{filtered.length ? filtered.map((item) => <article key={item.id} className={item.status}><span className={`channel-pill ${item.channel}`}>{item.channel === "manual" ? "Manual" : channelNames[item.channel]}</span><div><header><strong>{item.subject}</strong><small>{formatDateTime(item.receivedAt)}</small></header><p><b>{item.sender}</b>{item.company ? ` · ${item.company}` : ""}</p><blockquote>{item.body || "Sem mensagem adicional."}</blockquote></div><div className="inbox-actions">{item.status !== "converted" && item.status !== "archived" && <><button className="primary compact-button" onClick={() => onConvert(item)}>Criar demanda</button>{item.status === "new" && <button onClick={() => onReview(item)}>Revisar</button>}<button onClick={() => onArchive(item)}>Arquivar</button></>}{item.status === "converted" && <span className="status-badge active">Convertida #{item.demandId}</span>}{item.status === "archived" && <span className="status-badge inactive">Arquivada</span>}</div></article>) : <EmptyState title="Nenhuma entrada encontrada" text="As mensagens dos canais configurados e os registros manuais aparecerão aqui."/>}</div>
     </section>
@@ -999,6 +1023,11 @@ function LabelModal({ label, saving, onClose, onSubmit }: { label: Label | "new"
 
 function ConfirmInactive({ count, onCancel, onConfirm }: { count: number; onCancel: () => void; onConfirm: () => void }) {
   return <div className="modal-backdrop confirm-layer"><section className="confirm-modal"><span className="confirm-icon">!</span><h2>Inativar usuário com demandas ativas</h2><p>Este usuário possui <strong>{count} demanda(s)</strong> em andamento. Elas continuarão atribuídas até serem reatribuídas manualmente.</p><footer><button className="secondary" onClick={onCancel}>Cancelar</button><button className="danger-button" onClick={onConfirm}>Confirmar inativação</button></footer></section></div>;
+}
+
+function WhatsappSetupModal({ setup, saving, onClose, onSubmit }: { setup: WhatsappSetup; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const copy = (value: string) => navigator.clipboard.writeText(value);
+  return <div className="modal-backdrop"><section className="modal"><header><div><span className="panel-kicker">WhatsApp Business Cloud API</span><h2>Conectar com a Meta</h2><p>Faça esta configuração no painel privado; não envie os códigos por e-mail ou chat.</p></div><button className="icon-button" onClick={onClose}><Icon name="close"/></button></header><form onSubmit={onSubmit}><div className="setup-steps"><div><b>1</b><span><strong>Na Meta, informe o endereço do webhook</strong><small>WhatsApp → Configuração → Webhook</small></span></div><label><span>URL de callback</span><div><input readOnly value={setup.callbackUrl}/><button type="button" onClick={() => copy(setup.callbackUrl)}>Copiar</button></div></label><label><span>Token de verificação</span><div><input readOnly value={setup.verifyToken}/><button type="button" onClick={() => copy(setup.verifyToken)}>Copiar</button></div></label><div><b>2</b><span><strong>Cole abaixo as credenciais exibidas pela Meta</strong><small>Os valores sensíveis são criptografados antes de serem armazenados.</small></span></div></div><div className="form-grid"><label className="full"><span>App Secret *</span><input name="appSecret" type="password" minLength={16} required autoComplete="off" placeholder={setup.configured ? "Informe novamente para atualizar" : "Configurações do app → Básico"}/></label><label className="full"><span>Token de acesso temporário</span><input name="accessToken" type="password" autoComplete="off" placeholder="Opcional nesta primeira etapa"/></label><label><span>Identificação do número</span><input name="phoneNumberId" inputMode="numeric" placeholder={setup.phoneNumberId ?? "Phone Number ID"}/></label><label><span>Identificação da conta</span><input name="businessAccountId" inputMode="numeric" placeholder={setup.businessAccountId ?? "WABA ID"}/></label></div><div className="access-note"><strong>Primeiro teste</strong><p>Depois de salvar, volte à Meta, clique em “Verificar e salvar” e assine o campo <b>messages</b>. Uma mensagem enviada ao número de teste aparecerá em Entradas.</p></div><footer><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}>Salvar configuração segura</button></footer></form></section></div>;
 }
 
 function InboxEntryModal({ companies, saving, onClose, onSubmit }: { companies: Company[]; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

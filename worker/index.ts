@@ -6,6 +6,9 @@ interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   BUCKET: R2Bucket;
+  WHATSAPP_CONFIG_KEY: string;
+  WHATSAPP_CALLBACK_URL: string;
+  WHATSAPP_VERIFY_TOKEN: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -64,6 +67,7 @@ type DemandRaw = {
 };
 
 type DemandRow = Omit<DemandRaw, "labelsJson"> & { labels: DemandLabel[] };
+type MetaWebhook = { entry?: Array<{ changes?: Array<{ value?: { contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>; messages?: Array<{ id?: string; from?: string; timestamp?: string; type?: string; text?: { body?: string }; button?: { text?: string }; interactive?: { button_reply?: { title?: string; id?: string }; list_reply?: { title?: string; id?: string } } }> } }> }> };
 
 const demandSelect = `
   SELECT d.id, d.title, d.description, d.category,
@@ -195,6 +199,53 @@ async function activeTeam(env: Env) {
 
 function channelSource(channel: string) {
   return channel === "email" ? "E-mail" : channel === "whatsapp" ? "WhatsApp" : "Verbal";
+}
+
+const encoder = new TextEncoder();
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function hexToBytes(value: string) {
+  if (!/^[0-9a-f]{64}$/i.test(value)) throw new Error("CONFIGURACAO_WHATSAPP_INDISPONIVEL");
+  return Uint8Array.from(value.match(/.{2}/g) ?? [], (pair) => Number.parseInt(pair, 16));
+}
+
+async function whatsappKey(env: Env) {
+  return crypto.subtle.importKey("raw", hexToBytes(env.WHATSAPP_CONFIG_KEY), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+async function encryptWhatsappConfig(env: Env, config: Record<string, string>) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await whatsappKey(env), encoder.encode(JSON.stringify(config)));
+  return { encryptedConfig: bytesToBase64(new Uint8Array(ciphertext)), iv: bytesToBase64(iv) };
+}
+
+async function decryptWhatsappConfig(env: Env) {
+  const row = await env.DB.prepare("SELECT encrypted_config AS encryptedConfig, iv FROM integration_credentials WHERE channel = 'whatsapp' LIMIT 1")
+    .first<{ encryptedConfig: string; iv: string }>();
+  if (!row) return null;
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64ToBytes(row.iv) }, await whatsappKey(env), base64ToBytes(row.encryptedConfig));
+  return JSON.parse(new TextDecoder().decode(plaintext)) as { appSecret: string; accessToken?: string; phoneNumberId?: string; businessAccountId?: string };
+}
+
+async function verifyMetaSignature(secret: string, rawBody: string, signature: string | null) {
+  if (!signature?.startsWith("sha256=")) return false;
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody)));
+  const expected = `sha256=${Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  if (expected.length !== signature.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < expected.length; index += 1) mismatch |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
+  return mismatch === 0;
 }
 
 function addBusinessDays(days: number) {
@@ -775,6 +826,76 @@ async function handleUsers(request: Request, env: Env, url: URL): Promise<Respon
 }
 
 async function handleOperations(request: Request, env: Env, url: URL): Promise<Response | null> {
+  if (url.pathname === "/api/webhooks/whatsapp/ingest" && request.method === "POST") {
+    const rawBody = await request.text();
+    if (!rawBody || rawBody.length > 2 * 1024 * 1024) return json({ error: "Payload inválido." }, 400);
+    const config = await decryptWhatsappConfig(env);
+    if (!config?.appSecret) return json({ error: "WhatsApp ainda não foi configurado no Fila DP." }, 503);
+    if (!await verifyMetaSignature(config.appSecret, rawBody, request.headers.get("x-hub-signature-256"))) return json({ error: "Assinatura da Meta inválida." }, 401);
+    let payload: MetaWebhook;
+    try { payload = JSON.parse(rawBody) as MetaWebhook; } catch { return json({ error: "JSON inválido." }, 400); }
+    let received = 0;
+    for (const entry of payload.entry ?? []) for (const change of entry.changes ?? []) {
+      const value = change.value;
+      const contact = value?.contacts?.[0];
+      for (const message of value?.messages ?? []) {
+        if (!message.id || !message.from) continue;
+        const body = message.text?.body
+          ?? message.button?.text
+          ?? message.interactive?.button_reply?.title
+          ?? message.interactive?.list_reply?.title
+          ?? `[${({ image: "Imagem", document: "Documento", audio: "Áudio", video: "Vídeo", sticker: "Figurinha", location: "Localização" } as Record<string, string>)[message.type ?? ""] ?? "Mensagem"} recebida pelo WhatsApp]`;
+        const senderName = contact?.profile?.name?.trim() || message.from;
+        const receivedAt = message.timestamp && /^\d+$/.test(message.timestamp) ? new Date(Number(message.timestamp) * 1000).toISOString() : new Date().toISOString();
+        const inserted = await env.DB.prepare(`
+          INSERT OR IGNORE INTO inbox_items (channel, sender, subject, body, external_id, priority_hint, received_at)
+          VALUES ('whatsapp', ?, ?, ?, ?, 'medium', ?) RETURNING id`).bind(
+            `${senderName} · +${message.from}`, `WhatsApp de ${senderName}`, body.slice(0, 10000), message.id, receivedAt,
+          ).first<{ id: number }>();
+        if (inserted) {
+          received += 1;
+          await createNotification(env, { type: "new_inbox", title: "Nova mensagem do WhatsApp", message: `${senderName}: ${body.slice(0, 120)}`, inboxItemId: inserted.id });
+        }
+      }
+    }
+    await env.DB.prepare("UPDATE integration_channels SET status = 'connected', inbound_enabled = 1, last_sync_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE channel = 'whatsapp'").run();
+    return json({ received: true, imported: received });
+  }
+
+  if (url.pathname === "/api/integrations/whatsapp/setup") {
+    const user = await ensureUser(request, env);
+    requireFullAccess(user);
+    if (request.method === "GET") {
+      const config = await decryptWhatsappConfig(env);
+      return json({
+        callbackUrl: env.WHATSAPP_CALLBACK_URL,
+        verifyToken: env.WHATSAPP_VERIFY_TOKEN,
+        configured: Boolean(config?.appSecret),
+        phoneNumberId: config?.phoneNumberId ? `••••${config.phoneNumberId.slice(-4)}` : null,
+        businessAccountId: config?.businessAccountId ? `••••${config.businessAccountId.slice(-4)}` : null,
+        canSend: Boolean(config?.accessToken && config?.phoneNumberId),
+      });
+    }
+    if (request.method === "PUT") {
+      const payload = await request.json<{ appSecret?: string; accessToken?: string; phoneNumberId?: string; businessAccountId?: string }>();
+      const appSecret = payload.appSecret?.trim() ?? "";
+      if (appSecret.length < 16 || appSecret.length > 256) return json({ error: "Informe o App Secret fornecido pela Meta." }, 400);
+      const encrypted = await encryptWhatsappConfig(env, {
+        appSecret,
+        accessToken: payload.accessToken?.trim() ?? "",
+        phoneNumberId: payload.phoneNumberId?.trim() ?? "",
+        businessAccountId: payload.businessAccountId?.trim() ?? "",
+      });
+      await env.DB.prepare(`
+        INSERT INTO integration_credentials (channel, encrypted_config, iv, updated_by_id)
+        VALUES ('whatsapp', ?, ?, ?)
+        ON CONFLICT(channel) DO UPDATE SET encrypted_config = excluded.encrypted_config, iv = excluded.iv,
+          updated_by_id = excluded.updated_by_id, updated_at = CURRENT_TIMESTAMP`).bind(encrypted.encryptedConfig, encrypted.iv, user.id).run();
+      await env.DB.prepare("UPDATE integration_channels SET status = 'pending_credentials', updated_at = CURRENT_TIMESTAMP WHERE channel = 'whatsapp'").run();
+      return json({ ok: true, message: "Credenciais protegidas. Agora valide o webhook na Meta." });
+    }
+  }
+
   if (url.pathname === "/api/inbox" && request.method === "GET") {
     await ensureUser(request, env);
     const result = await env.DB.prepare(`
