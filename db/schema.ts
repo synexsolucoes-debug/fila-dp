@@ -95,6 +95,66 @@ export const demandComments = sqliteTable("demand_comments", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const inboxItems = sqliteTable("inbox_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  channel: text("channel", { enum: ["email", "teams", "whatsapp", "manual"] }).notNull(),
+  sender: text("sender").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull().default(""),
+  externalId: text("external_id"),
+  companyId: integer("company_id").references(() => companies.id),
+  status: text("status", { enum: ["new", "reviewing", "converted", "archived"] }).notNull().default("new"),
+  priorityHint: text("priority_hint", { enum: ["low", "medium", "high", "urgent"] }).notNull().default("medium"),
+  reviewerId: integer("reviewer_id").references(() => users.id),
+  demandId: integer("demand_id").references(() => demands.id),
+  receivedAt: text("received_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("inbox_external_id_idx").on(table.externalId)]);
+
+export const notifications = sqliteTable("notifications", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  demandId: integer("demand_id").references(() => demands.id, { onDelete: "cascade" }),
+  inboxItemId: integer("inbox_item_id").references(() => inboxItems.id, { onDelete: "cascade" }),
+  read: integer("read", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const slaRules = sqliteTable("sla_rules", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  category: text("category").notNull(),
+  businessDays: integer("business_days").notNull().default(3),
+  defaultPriority: text("default_priority", { enum: ["low", "medium", "high", "urgent"] }).notNull().default("medium"),
+  status: text("status", { enum: ["active", "inactive"] }).notNull().default("active"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("sla_rules_category_idx").on(table.category)]);
+
+export const integrationChannels = sqliteTable("integration_channels", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  channel: text("channel", { enum: ["email", "teams", "whatsapp"] }).notNull(),
+  provider: text("provider").notNull(),
+  status: text("status", { enum: ["setup_required", "pending_credentials", "connected", "paused"] }).notNull().default("setup_required"),
+  inboundEnabled: integer("inbound_enabled", { mode: "boolean" }).notNull().default(true),
+  outboundEnabled: integer("outbound_enabled", { mode: "boolean" }).notNull().default(false),
+  lastSyncAt: text("last_sync_at"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("integration_channels_channel_idx").on(table.channel)]);
+
+export const demandAttachments = sqliteTable("demand_attachments", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  demandId: integer("demand_id").notNull().references(() => demands.id, { onDelete: "cascade" }),
+  uploaderId: integer("uploader_id").notNull().references(() => users.id),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  objectKey: text("object_key").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("demand_attachments_object_key_idx").on(table.objectKey)]);
+
 export const demandHistory = sqliteTable("demand_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   demandId: integer("demand_id").notNull().references(() => demands.id, { onDelete: "cascade" }),

@@ -5,10 +5,10 @@ import { FormEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useStat
 type Status = "available" | "in_progress" | "waiting" | "done";
 type Priority = "low" | "medium" | "high" | "urgent";
 type ActiveStatus = "active" | "inactive";
-type View = "overview" | "demands" | "mine" | "reports" | "settings" | "users" | "companies";
+type View = "overview" | "inbox" | "demands" | "mine" | "reports" | "settings" | "users" | "companies";
 
 type User = { name: string; email: string; role: "admin" | "analyst" };
-type TeamMember = { id: number; name: string; email: string };
+type TeamMember = { id: number; name: string; email: string; activeCount: number };
 type ManagedUser = {
   id: number;
   displayName: string;
@@ -34,6 +34,11 @@ type Company = {
 type Label = { id: number; name: string; color: string; status: ActiveStatus };
 type ChecklistTemplate = { id: number; category: string; text: string; sortOrder: number; status: ActiveStatus };
 type ChecklistItem = { id: number; text: string; completed: number | boolean; completedAt: string | null; completedBy: string | null; sortOrder: number };
+type InboxItem = { id: number; channel: "email" | "teams" | "whatsapp" | "manual"; sender: string; subject: string; body: string; status: "new" | "reviewing" | "converted" | "archived"; priorityHint: Priority; companyId: number | null; company: string | null; reviewer: string | null; demandId: number | null; receivedAt: string };
+type IntegrationChannel = { id: number; channel: "email" | "teams" | "whatsapp"; provider: string; status: "setup_required" | "pending_credentials" | "connected" | "paused"; inboundEnabled: number | boolean; outboundEnabled: number | boolean; lastSyncAt: string | null };
+type SlaRule = { id: number; category: string; businessDays: number; defaultPriority: Priority; status: ActiveStatus };
+type NotificationItem = { id: number; type: string; title: string; message: string; demandId: number | null; inboxItemId: number | null; read: number | boolean; createdAt: string };
+type Attachment = { id: number; fileName: string; contentType: string; size: number; uploader: string; createdAt: string };
 
 type Demand = {
   id: number;
@@ -123,6 +128,9 @@ function Icon({ name }: { name: string }) {
     edit: <><path d="m4 20 4.2-1 10.9-10.9-3.2-3.2L5 15.8 4 20Z"/><path d="m14.8 6 3.2 3.2"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
     comment: <><path d="M4 5h16v11H8l-4 4V5Z"/></>,
+    bell: <><path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3V9Z"/><path d="M10 20h4"/></>,
+    paperclip: <path d="m8 12 6-6a4 4 0 0 1 6 6l-8 8a6 6 0 0 1-8-8l8-8"/>,
+    send: <><path d="m3 3 18 9-18 9 4-9-4-9Z"/><path d="M7 12h14"/></>,
   };
   return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -155,6 +163,12 @@ function isAged(demand: Demand) {
   return demand.status === "waiting" && Boolean(updated) && Date.now() - updated!.getTime() > 3 * 86400000;
 }
 
+function businessDueDate(days: number) {
+  const date = new Date(); let remaining = Math.max(1, days);
+  while (remaining > 0) { date.setDate(date.getDate() + 1); if (date.getDay() !== 0 && date.getDay() !== 6) remaining -= 1; }
+  return date.toISOString().slice(0, 10);
+}
+
 export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [demands, setDemands] = useState(initialDemands);
   const [activeUser, setActiveUser] = useState(currentUser);
@@ -163,6 +177,11 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
+  const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
+  const [integrations, setIntegrations] = useState<IntegrationChannel[]>([]);
+  const [slaRules, setSlaRules] = useState<SlaRule[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [view, setView] = useState<View>("demands");
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState<Priority | "all">("all");
@@ -193,6 +212,9 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [companySearch, setCompanySearch] = useState("");
   const [companyStatusFilter, setCompanyStatusFilter] = useState("all");
   const [labelModal, setLabelModal] = useState<Label | "new" | null>(null);
+  const [inboxModalOpen, setInboxModalOpen] = useState(false);
+  const [convertItem, setConvertItem] = useState<InboxItem | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   function flash(message: string) {
@@ -226,6 +248,21 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     if (templatesResponse.ok) setTemplates(templatesData.templates ?? []);
   }, []);
 
+  const loadOperations = useCallback(async () => {
+    const [inboxResponse, integrationsResponse, slaResponse, notificationsResponse] = await Promise.all([
+      fetch("/api/inbox", { cache: "no-store" }), fetch("/api/integrations", { cache: "no-store" }),
+      fetch("/api/sla-rules", { cache: "no-store" }), fetch("/api/notifications", { cache: "no-store" }),
+    ]);
+    const inboxData = await inboxResponse.json() as { items?: InboxItem[] };
+    const integrationsData = await integrationsResponse.json() as { channels?: IntegrationChannel[] };
+    const slaData = await slaResponse.json() as { rules?: SlaRule[] };
+    const notificationsData = await notificationsResponse.json() as { notifications?: NotificationItem[] };
+    if (inboxResponse.ok) setInboxItems(inboxData.items ?? []);
+    if (integrationsResponse.ok) setIntegrations(integrationsData.channels ?? []);
+    if (slaResponse.ok) setSlaRules(slaData.rules ?? []);
+    if (notificationsResponse.ok) setNotifications(notificationsData.notifications ?? []);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -240,6 +277,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
         setActiveUser(user);
         await loadConfiguration();
         await loadUsers();
+        await loadOperations();
       } catch (error) {
         if (!cancelled) flash(error instanceof Error ? error.message : "Erro ao carregar os dados.");
       } finally {
@@ -248,7 +286,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     }
     load();
     return () => { cancelled = true; };
-  }, [currentUser, loadConfiguration, loadUsers]);
+  }, [currentUser, loadConfiguration, loadOperations, loadUsers]);
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -346,19 +384,22 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     setDemandEditMode(false);
     setSaving(true);
     try {
-      const [detailResponse, timelineResponse, checklistResponse] = await Promise.all([
+      const [detailResponse, timelineResponse, checklistResponse, attachmentResponse] = await Promise.all([
         fetch(`/api/demands/${id}`, { cache: "no-store" }),
         fetch(`/api/demands/${id}/timeline`, { cache: "no-store" }),
         fetch(`/api/demands/${id}/checklist`, { cache: "no-store" }),
+        fetch(`/api/demands/${id}/attachments`, { cache: "no-store" }),
       ]);
       const detail = await detailResponse.json() as { demand?: Demand; canEdit?: boolean; error?: string };
       const timelineData = await timelineResponse.json() as { timeline?: TimelineEvent[] };
       const checklistData = await checklistResponse.json() as { checklist?: ChecklistItem[]; canEdit?: boolean };
+      const attachmentData = await attachmentResponse.json() as { attachments?: Attachment[] };
       if (!detailResponse.ok || !detail.demand) throw new Error(detail.error ?? "Não foi possível abrir a demanda.");
       setSelectedDemand(detail.demand);
       setDemandCanEdit(Boolean(detail.canEdit));
       setTimeline(timelineData.timeline ?? []);
       setChecklist(checklistData.checklist ?? []);
+      setAttachments(attachmentData.attachments ?? []);
     } catch (error) { flash(error instanceof Error ? error.message : "Erro ao abrir demanda."); }
     finally { setSaving(false); }
   }
@@ -519,7 +560,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
       if (!response.ok || !data.user) throw new Error(data.message ?? data.error ?? "Não foi possível salvar o usuário.");
       setUsers((list) => isNew ? [...list, data.user!].sort((a, b) => a.displayName.localeCompare(b.displayName)) : list.map((item) => item.id === data.user!.id ? data.user! : item));
       setTeam((list) => data.user!.status === "active"
-        ? [...list.filter((item) => item.id !== data.user!.id), { id: data.user!.id, name: data.user!.displayName, email: data.user!.email }].sort((a, b) => a.name.localeCompare(b.name))
+        ? [...list.filter((item) => item.id !== data.user!.id), { id: data.user!.id, name: data.user!.displayName, email: data.user!.email, activeCount: 0 }].sort((a, b) => a.name.localeCompare(b.name))
         : list.filter((item) => item.id !== data.user!.id));
       setUserModal(null);
       setInactiveConfirm(null);
@@ -586,8 +627,77 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     } catch (error) { flash(error instanceof Error ? error.message : "Erro ao atualizar modelo."); }
   }
 
+  async function prepareIntegration(channel: IntegrationChannel["channel"]) {
+    try {
+      const response = await fetch(`/api/integrations/${channel}`, { method: "PUT" });
+      const data = await response.json() as { message?: string; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível preparar a conexão.");
+      await loadOperations();
+      flash(data.message ?? "Conexão preparada.");
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro na preparação da conexão."); }
+  }
+
+  async function createInboxItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true);
+    try {
+      const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const response = await fetch("/api/inbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível registrar a entrada.");
+      setInboxModalOpen(false); await loadOperations(); flash("Entrada registrada para triagem.");
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro ao registrar entrada."); }
+    finally { setSaving(false); }
+  }
+
+  async function updateInboxStatus(item: InboxItem, status: "new" | "reviewing" | "archived") {
+    const response = await fetch(`/api/inbox/${item.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    const data = await response.json() as { error?: string };
+    if (!response.ok) return flash(data.error ?? "Não foi possível atualizar a entrada.");
+    await loadOperations(); flash(status === "archived" ? "Entrada arquivada." : "Entrada em revisão.");
+  }
+
+  async function convertInbox(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!convertItem) return; setSaving(true);
+    try {
+      const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const response = await fetch(`/api/inbox/${convertItem.id}/convert`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await response.json() as { demand?: Demand; error?: string };
+      if (!response.ok || !data.demand) throw new Error(data.error ?? "Não foi possível converter a entrada.");
+      setDemands((list) => [data.demand!, ...list]); setConvertItem(null); await loadOperations(); setView("demands"); flash("Entrada convertida em demanda.");
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro ao converter entrada."); }
+    finally { setSaving(false); }
+  }
+
+  async function saveSlaRule(rule: SlaRule) {
+    const response = await fetch(`/api/sla-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rule) });
+    const data = await response.json() as { error?: string };
+    if (!response.ok) return flash(data.error ?? "Não foi possível salvar o SLA.");
+    await loadOperations(); flash(`SLA de ${rule.category} atualizado.`);
+  }
+
+  async function markNotification(notification: NotificationItem) {
+    if (notification.id > 0) await fetch(`/api/notifications/${notification.id}`, { method: "PATCH" });
+    setNotifications((list) => list.map((item) => item.id === notification.id ? { ...item, read: true } : item));
+    if (notification.demandId) openDemand(notification.demandId);
+    if (notification.inboxItemId) setView("inbox");
+    setNotificationsOpen(false);
+  }
+
+  async function uploadAttachment(file: File) {
+    if (!selectedDemand) return; setSaving(true);
+    try {
+      const body = new FormData(); body.set("file", file);
+      const response = await fetch(`/api/demands/${selectedDemand.id}/attachments`, { method: "POST", body });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Não foi possível anexar o arquivo.");
+      await openDemand(selectedDemand.id); flash("Arquivo anexado à demanda.");
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro no envio do arquivo."); }
+    finally { setSaving(false); }
+  }
+
   const navItems: Array<{ id: View; label: string; icon: string }> = [
     { id: "overview", label: "Visão geral", icon: "home" },
+    { id: "inbox", label: "Entradas", icon: "send" },
     { id: "demands", label: "Demandas", icon: "inbox" },
     { id: "mine", label: "Minha fila", icon: "user" },
     { id: "reports", label: "Relatórios", icon: "chart" },
@@ -596,7 +706,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     { id: "users" as View, label: "Usuários", icon: "user" },
   ];
 
-  const title = ({ mine: "Minha fila", overview: "Visão geral", reports: "Relatórios", settings: "Configurações", users: "Gestão de usuários", companies: "Gestão de empresas", demands: "Fila DP" } as Record<View, string>)[view];
+  const title = ({ mine: "Minha fila", overview: "Visão geral", inbox: "Central de entradas", reports: "Relatórios", settings: "Configurações", users: "Gestão de usuários", companies: "Gestão de empresas", demands: "Fila DP" } as Record<View, string>)[view];
 
   return <main className="app-shell">
     <aside className="sidebar">
@@ -615,11 +725,16 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
           <div className="kpi blue"><span className="kpi-icon"><Icon name="clock"/></span><div><small>Em andamento</small><strong>{counts.active}</strong></div></div>
           <div className="kpi coral"><span className="kpi-icon"><Icon name="alert"/></span><div><small>Atrasadas</small><strong>{counts.overdue}</strong></div></div>
         </div>}
-        {view === "users"
-          ? <button className="primary" onClick={() => openUser("new")}><Icon name="plus"/>Novo usuário</button>
-          : view === "companies"
-            ? <button className="primary" onClick={() => setCompanyModal("new")}><Icon name="plus"/>Nova empresa</button>
-            : <button className="primary" onClick={() => setNewDemandOpen(true)}><Icon name="plus"/>Nova demanda</button>}
+        <div className="topbar-actions">
+          <div className="notification-wrap"><button className="notification-button" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label="Notificações"><Icon name="bell"/>{notifications.some((item) => !item.read) && <b>{notifications.filter((item) => !item.read).length}</b>}</button>{notificationsOpen && <div className="notification-menu"><header><strong>Alertas da equipe</strong><small>{notifications.filter((item) => !item.read).length} não lidos</small></header>{notifications.length ? notifications.slice(0, 12).map((item) => <button key={`${item.type}-${item.id}`} className={item.read ? "read" : ""} onClick={() => markNotification(item)}><span className={item.type === "sla" ? "alert-dot" : "info-dot"}/><span><strong>{item.title}</strong><small>{item.message}</small></span></button>) : <p>Nenhum alerta no momento.</p>}</div>}</div>
+          {view === "users"
+            ? <button className="primary" onClick={() => openUser("new")}><Icon name="plus"/>Novo usuário</button>
+            : view === "companies"
+              ? <button className="primary" onClick={() => setCompanyModal("new")}><Icon name="plus"/>Nova empresa</button>
+              : view === "inbox"
+                ? <button className="primary" onClick={() => setInboxModalOpen(true)}><Icon name="plus"/>Registrar entrada</button>
+                : <button className="primary" onClick={() => setNewDemandOpen(true)}><Icon name="plus"/>Nova demanda</button>}
+        </div>
       </header>
 
       {(view === "demands" || view === "mine") && <>
@@ -653,14 +768,17 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
       </>}
 
       {view === "overview" && <Overview demands={demands} currentUser={activeUser} onOpenBoard={() => setView("demands")}/>} 
-      {view === "reports" && <Reports demands={demands}/>} 
-      {view === "settings" && <Settings currentUser={activeUser} labels={labels} templates={templates} onManageUsers={() => setView("users")} onManageCompanies={() => setView("companies")} onNewLabel={() => setLabelModal("new")} onEditLabel={setLabelModal} onAddTemplate={addTemplate} onToggleTemplate={toggleTemplate}/>} 
+      {view === "inbox" && <InboxView items={inboxItems} integrations={integrations} onPrepare={prepareIntegration} onReview={(item) => updateInboxStatus(item, "reviewing")} onArchive={(item) => updateInboxStatus(item, "archived")} onConvert={setConvertItem}/>}
+      {view === "reports" && <Reports demands={demands} team={team}/>}
+      {view === "settings" && <Settings currentUser={activeUser} labels={labels} templates={templates} slaRules={slaRules} onSaveSla={saveSlaRule} onManageUsers={() => setView("users")} onManageCompanies={() => setView("companies")} onNewLabel={() => setLabelModal("new")} onEditLabel={setLabelModal} onAddTemplate={addTemplate} onToggleTemplate={toggleTemplate}/>}
       {view === "users" && <UsersView users={filteredUsers} search={userSearch} roleFilter={userRoleFilter} statusFilter={userStatusFilter} setSearch={setUserSearch} setRoleFilter={setUserRoleFilter} setStatusFilter={setUserStatusFilter} onEdit={openUser}/>} 
       {view === "companies" && <CompaniesView companies={filteredCompanies} search={companySearch} statusFilter={companyStatusFilter} setSearch={setCompanySearch} setStatusFilter={setCompanyStatusFilter} onEdit={setCompanyModal}/>} 
     </section>
 
-    {newDemandOpen && <NewDemandModal companies={companies.filter((company) => company.status === "active")} labels={labels.filter((label) => label.status === "active")} templates={templates.filter((template) => template.status === "active")} onClose={() => setNewDemandOpen(false)} onSubmit={createDemand}/>} 
-    {selectedDemand && <DemandDetailModal demand={selectedDemand} timeline={timeline} checklist={checklist} labels={labels.filter((label) => label.status === "active" || selectedDemand.labels.some((item) => item.id === label.id))} companies={companies.filter((company) => company.status === "active" || company.id === selectedDemand.companyId)} canEdit={demandCanEdit} editMode={demandEditMode} saving={saving} error={demandModalError} onEdit={() => setDemandEditMode(true)} onCancelEdit={() => { setDemandEditMode(false); setDemandModalError(""); }} onClose={() => setSelectedDemand(null)} onSubmit={saveDemand} onReload={() => openDemand(selectedDemand.id)} onToggleChecklist={toggleChecklistItem} onAddChecklist={addChecklistItem} onComment={addComment}/>} 
+    {newDemandOpen && <NewDemandModal companies={companies.filter((company) => company.status === "active")} labels={labels.filter((label) => label.status === "active")} templates={templates.filter((template) => template.status === "active")} slaRules={slaRules} onClose={() => setNewDemandOpen(false)} onSubmit={createDemand}/>}
+    {inboxModalOpen && <InboxEntryModal companies={companies.filter((company) => company.status === "active")} saving={saving} onClose={() => setInboxModalOpen(false)} onSubmit={createInboxItem}/>}
+    {convertItem && <ConvertInboxModal item={convertItem} companies={companies.filter((company) => company.status === "active")} slaRules={slaRules} team={team} saving={saving} onClose={() => setConvertItem(null)} onSubmit={convertInbox}/>}
+    {selectedDemand && <DemandDetailModal demand={selectedDemand} timeline={timeline} checklist={checklist} attachments={attachments} labels={labels.filter((label) => label.status === "active" || selectedDemand.labels.some((item) => item.id === label.id))} companies={companies.filter((company) => company.status === "active" || company.id === selectedDemand.companyId)} canEdit={demandCanEdit} editMode={demandEditMode} saving={saving} error={demandModalError} onEdit={() => setDemandEditMode(true)} onCancelEdit={() => { setDemandEditMode(false); setDemandModalError(""); }} onClose={() => setSelectedDemand(null)} onSubmit={saveDemand} onReload={() => openDemand(selectedDemand.id)} onToggleChecklist={toggleChecklistItem} onAddChecklist={addChecklistItem} onComment={addComment} onUpload={uploadAttachment}/>}
     {userModal && <UserModal user={userModal} history={userHistory} saving={saving} onClose={() => setUserModal(null)} onSubmit={submitUser}/>} 
     {inactiveConfirm && <ConfirmInactive count={inactiveConfirm.count} onCancel={() => setInactiveConfirm(null)} onConfirm={() => persistUser(inactiveConfirm.payload, true)}/>} 
     {companyModal && <CompanyModal company={companyModal} saving={saving} onClose={() => setCompanyModal(null)} onSubmit={persistCompany}/>} 
@@ -717,6 +835,19 @@ function QuickActions({ demand, team, labels, onClose, onSave }: { demand: Deman
   </div>;
 }
 
+function InboxView({ items, integrations, onPrepare, onReview, onArchive, onConvert }: { items: InboxItem[]; integrations: IntegrationChannel[]; onPrepare: (channel: IntegrationChannel["channel"]) => void; onReview: (item: InboxItem) => void; onArchive: (item: InboxItem) => void; onConvert: (item: InboxItem) => void }) {
+  const [query, setQuery] = useState("");
+  const [channel, setChannel] = useState("all");
+  const filtered = items.filter((item) => (channel === "all" || item.channel === channel) && `${item.sender} ${item.subject} ${item.body} ${item.company ?? ""}`.toLowerCase().includes(query.toLowerCase()));
+  const channelNames = { email: "E-mail", teams: "Teams", whatsapp: "WhatsApp" };
+  return <div className="inbox-shell">
+    <section className="integration-grid">{integrations.map((item) => <article className="integration-card" key={item.id}><div className={`channel-logo ${item.channel}`}>{item.channel === "email" ? "@" : item.channel === "teams" ? "T" : "W"}</div><div><span className="panel-kicker">{channelNames[item.channel]}</span><h2>{item.provider}</h2><p>{item.status === "connected" ? "Conectado e recebendo mensagens." : item.status === "pending_credentials" ? "Preparado · aguardando credenciais oficiais." : "Estrutura disponível para configuração."}</p></div><button className="secondary" disabled={item.status === "pending_credentials" || item.status === "connected"} onClick={() => onPrepare(item.channel)}>{item.status === "setup_required" ? "Preparar conexão" : item.status === "pending_credentials" ? "Aguardando credenciais" : "Conectado"}</button></article>)}</section>
+    <section className="panel inbox-panel"><div className="inbox-toolbar"><div><span className="panel-kicker">Triagem antes da fila</span><h2>Mensagens recebidas</h2></div><label className="search"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar remetente ou assunto..."/></label><select value={channel} onChange={(event) => setChannel(event.target.value)}><option value="all">Todos os canais</option><option value="email">E-mail</option><option value="teams">Teams</option><option value="whatsapp">WhatsApp</option><option value="manual">Manual</option></select></div>
+      <div className="inbox-list">{filtered.length ? filtered.map((item) => <article key={item.id} className={item.status}><span className={`channel-pill ${item.channel}`}>{item.channel === "manual" ? "Manual" : channelNames[item.channel]}</span><div><header><strong>{item.subject}</strong><small>{formatDateTime(item.receivedAt)}</small></header><p><b>{item.sender}</b>{item.company ? ` · ${item.company}` : ""}</p><blockquote>{item.body || "Sem mensagem adicional."}</blockquote></div><div className="inbox-actions">{item.status !== "converted" && item.status !== "archived" && <><button className="primary compact-button" onClick={() => onConvert(item)}>Criar demanda</button>{item.status === "new" && <button onClick={() => onReview(item)}>Revisar</button>}<button onClick={() => onArchive(item)}>Arquivar</button></>}{item.status === "converted" && <span className="status-badge active">Convertida #{item.demandId}</span>}{item.status === "archived" && <span className="status-badge inactive">Arquivada</span>}</div></article>) : <EmptyState title="Nenhuma entrada encontrada" text="As mensagens dos canais configurados e os registros manuais aparecerão aqui."/>}</div>
+    </section>
+  </div>;
+}
+
 function Overview({ demands, currentUser, onOpenBoard }: { demands: Demand[]; currentUser: User; onOpenBoard: () => void }) {
   const mine = demands.filter((d) => d.assigneeEmail === currentUser.email && d.status !== "done");
   const aged = demands.filter(isAged).length;
@@ -729,22 +860,24 @@ function Overview({ demands, currentUser, onOpenBoard }: { demands: Demand[]; cu
   </div>;
 }
 
-function Reports({ demands }: { demands: Demand[] }) {
+function Reports({ demands, team }: { demands: Demand[]; team: TeamMember[] }) {
   const done = demands.filter((d) => d.status === "done").length;
   const total = demands.length;
   const percent = total ? Math.round(done / total * 100) : 0;
-  const sourcesList = ["E-mail", "WhatsApp", "Verbal"].map((source) => ({ source, value: demands.filter((d) => d.source === source).length }));
+  const sourcesList = ["E-mail", "Teams", "WhatsApp", "Verbal"].map((source) => ({ source, value: demands.filter((d) => d.source === source).length }));
   return <div className="reports-grid">
     <section className="panel report-hero"><span className="panel-kicker">Resumo operacional</span><h2>{percent}% das demandas concluídas</h2><div className="progress"><i style={{ width: `${percent}%` }}/></div><p>{done} concluídas de {total} cadastradas.</p></section>
     <section className="panel"><div className="panel-header"><div><span className="panel-kicker">Origem</span><h2>Canais de entrada</h2></div></div><div className="source-list">{sourcesList.map((item) => <div key={item.source}><span>{item.source}</span><strong>{item.value}</strong></div>)}</div></section>
-    <section className="panel wide"><div className="panel-header"><div><span className="panel-kicker">Equipe</span><h2>Carga por analista</h2></div></div><div className="analyst-table">{Array.from(new Set(demands.map((d) => d.assignee).filter(Boolean))).map((name) => <div key={name}><span className="avatar">{initials(name!)}</span><strong>{name}</strong><span>{demands.filter((d) => d.assignee === name && d.status !== "done").length} ativas</span><span>{demands.filter((d) => d.assignee === name && d.status === "done").length} concluídas</span></div>)}</div></section>
+    <section className="panel wide"><div className="panel-header"><div><span className="panel-kicker">Distribuição inteligente</span><h2>Carga por analista</h2></div><span className="muted">Sugestão: {team[0]?.name ?? "cadastre a equipe"}</span></div><div className="analyst-table">{team.map((member, index) => <div key={member.id}><span className="avatar">{initials(member.name)}</span><strong>{member.name}{index === 0 && <small className="suggested"> · menor carga</small>}</strong><span>{member.activeCount} ativas</span><span>{demands.filter((d) => d.assigneeEmail === member.email && d.status === "done").length} concluídas</span></div>)}</div></section>
   </div>;
 }
 
-function Settings({ currentUser, labels, templates, onManageUsers, onManageCompanies, onNewLabel, onEditLabel, onAddTemplate, onToggleTemplate }: {
+function Settings({ currentUser, labels, templates, slaRules, onSaveSla, onManageUsers, onManageCompanies, onNewLabel, onEditLabel, onAddTemplate, onToggleTemplate }: {
   currentUser: User;
   labels: Label[];
   templates: ChecklistTemplate[];
+  slaRules: SlaRule[];
+  onSaveSla: (rule: SlaRule) => void;
   onManageUsers: () => void;
   onManageCompanies: () => void;
   onNewLabel: () => void;
@@ -761,8 +894,15 @@ function Settings({ currentUser, labels, templates, onManageUsers, onManageCompa
       <section className="panel wide admin-links"><div><span className="panel-kicker">Cadastros mestres</span><h2>Equipe e empresas</h2><p>Controle quem acessa o sistema e mantenha a lista de empresas usada nas demandas.</p></div><div><button className="secondary" onClick={onManageCompanies}>Gerenciar empresas</button><button className="primary" onClick={onManageUsers}>Gerenciar usuários</button></div></section>
       <section className="panel wide config-section"><div className="panel-header"><div><span className="panel-kicker">Contexto visual</span><h2>Etiquetas configuráveis</h2></div><button className="secondary" onClick={onNewLabel}><Icon name="plus"/>Nova etiqueta</button></div><div className="label-admin-grid">{labels.map((label) => <button key={label.id} className={label.status} onClick={() => onEditLabel(label)}><i style={{ background: label.color }}/><span><strong>{label.name}</strong><small>{label.status === "active" ? "Ativa" : "Inativa"}</small></span><Icon name="edit"/></button>)}</div></section>
       <section className="panel wide config-section"><div className="panel-header"><div><span className="panel-kicker">Padronização</span><h2>Modelos automáticos de checklist</h2></div></div><form className="template-add" onSubmit={(event) => { event.preventDefault(); if (templateText.trim()) { onAddTemplate(templateCategory, templateText.trim()); setTemplateText(""); } }}><select value={templateCategory} onChange={(event) => setTemplateCategory(event.target.value)}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select><input value={templateText} onChange={(event) => setTemplateText(event.target.value)} placeholder="Nova etapa do processo..." maxLength={240}/><button className="primary compact-button">Adicionar etapa</button></form><div className="template-groups">{CATEGORIES.filter((category) => templates.some((template) => template.category === category)).map((category) => <section key={category}><h3><span className={`tag ${CATEGORY_COLORS[category]}`}>{category}</span><small>{templates.filter((template) => template.category === category && template.status === "active").length} etapas ativas</small></h3>{templates.filter((template) => template.category === category).map((template) => <div className={template.status} key={template.id}><span>{template.text}</span><button onClick={() => onToggleTemplate(template)}>{template.status === "active" ? "Desativar" : "Reativar"}</button></div>)}</section>)}</div></section>
+      <section className="panel wide config-section"><div className="panel-header"><div><span className="panel-kicker">Prazos automáticos</span><h2>Regras de SLA por tipo</h2></div><span className="muted">Dias úteis</span></div><div className="sla-grid">{slaRules.map((rule) => <SlaRuleEditor key={rule.id} rule={rule} onSave={onSaveSla}/>)}</div></section>
     </>
   </div>;
+}
+
+function SlaRuleEditor({ rule, onSave }: { rule: SlaRule; onSave: (rule: SlaRule) => void }) {
+  const [days, setDays] = useState(rule.businessDays);
+  const [priority, setPriority] = useState(rule.defaultPriority);
+  return <div><span className={`tag ${CATEGORY_COLORS[rule.category]}`}>{rule.category}</span><input type="number" min={1} max={60} value={days} onChange={(event) => setDays(Number(event.target.value))}/><select value={priority} onChange={(event) => setPriority(event.target.value as Priority)}><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="urgent">Urgente</option></select><button onClick={() => onSave({ ...rule, businessDays: days, defaultPriority: priority })}>Salvar</button></div>;
 }
 
 function UsersView({ users, search, roleFilter, statusFilter, setSearch, setRoleFilter, setStatusFilter, onEdit }: { users: ManagedUser[]; search: string; roleFilter: string; statusFilter: string; setSearch: (v: string) => void; setRoleFilter: (v: string) => void; setStatusFilter: (v: string) => void; onEdit: (user: ManagedUser) => void }) {
@@ -773,10 +913,11 @@ function CompaniesView({ companies, search, statusFilter, setSearch, setStatusFi
   return <section className="panel users-panel"><div className="users-toolbar"><label className="search"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar empresa, razão social ou CNPJ..."/></label><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">Todos os status</option><option value="active">Ativas</option><option value="inactive">Inativas</option></select><span className="result-count">{companies.length} empresas</span></div>{companies.length ? <div className="companies-table"><div className="company-head"><span>Nome fantasia</span><span>Razão social</span><span>CNPJ</span><span>Demandas</span><span>Status</span><span>Ações</span></div>{companies.map((company) => <div className="company-row" key={company.id}><div className="user-identity"><span className="company-avatar"><Icon name="building"/></span><strong>{company.tradeName}</strong></div><span>{company.legalName}</span><span>{formatCnpj(company.cnpj)}</span><span>{company.demandCount ?? 0}</span><span className={`status-badge ${company.status}`}>{company.status === "active" ? "Ativa" : "Inativa"}</span><button className="table-action" onClick={() => onEdit(company)}>Editar</button></div>)}</div> : <EmptyState title="Nenhuma empresa encontrada" text="Cadastre a primeira empresa para abrir novas demandas."/>}</section>;
 }
 
-function DemandDetailModal({ demand, timeline, checklist, labels, companies, canEdit, editMode, saving, error, onEdit, onCancelEdit, onClose, onSubmit, onReload, onToggleChecklist, onAddChecklist, onComment }: {
+function DemandDetailModal({ demand, timeline, checklist, attachments, labels, companies, canEdit, editMode, saving, error, onEdit, onCancelEdit, onClose, onSubmit, onReload, onToggleChecklist, onAddChecklist, onComment, onUpload }: {
   demand: Demand;
   timeline: TimelineEvent[];
   checklist: ChecklistItem[];
+  attachments: Attachment[];
   labels: Label[];
   companies: Company[];
   canEdit: boolean;
@@ -791,6 +932,7 @@ function DemandDetailModal({ demand, timeline, checklist, labels, companies, can
   onToggleChecklist: (item: ChecklistItem, completed: boolean) => void;
   onAddChecklist: (text: string) => void;
   onComment: (text: string) => void;
+  onUpload: (file: File) => void;
 }) {
   const [tab, setTab] = useState<"details" | "activity">("details");
   return <div className="modal-backdrop"><section className="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="demand-detail-title">
@@ -799,7 +941,7 @@ function DemandDetailModal({ demand, timeline, checklist, labels, companies, can
     {tab === "details" ? <form onSubmit={onSubmit} className="detail-form">
       <div className="form-grid">
         <label><span>Tipo</span><select name="category" defaultValue={demand.category} disabled={!editMode}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label>
-        <label><span>Canal de origem</span><select name="source" defaultValue={demand.source} disabled={!editMode}><option>E-mail</option><option>WhatsApp</option><option>Verbal</option></select></label>
+        <label><span>Canal de origem</span><select name="source" defaultValue={demand.source} disabled={!editMode}><option>E-mail</option><option>Teams</option><option>WhatsApp</option><option>Verbal</option></select></label>
         <label className="full"><span>Empresa</span><select name="companyId" defaultValue={demand.companyId ?? ""} disabled={!editMode}><option value="">Selecione</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName}{company.status === "inactive" ? " (inativa)" : ""}</option>)}</select></label>
         <label><span>Funcionário</span><input name="employee" defaultValue={demand.employee ?? ""} disabled={!editMode}/></label>
         <label><span>Solicitante</span><input name="requester" defaultValue={demand.requester} disabled={!editMode}/></label>
@@ -811,9 +953,16 @@ function DemandDetailModal({ demand, timeline, checklist, labels, companies, can
       </div>
       {error && <div className="form-error"><span>{error}</span>{error.includes("alterada por outro usuário") && <button type="button" onClick={onReload}>Recarregar dados</button>}</div>}
       <ChecklistPanel checklist={checklist} canEdit={canEdit} saving={saving} onToggle={onToggleChecklist} onAdd={onAddChecklist}/>
+      <AttachmentPanel attachments={attachments} saving={saving} onUpload={onUpload}/>
       <footer>{editMode ? <><button type="button" className="secondary" onClick={onCancelEdit}>Cancelar edição</button><button className="primary" disabled={saving}>Salvar alterações</button></> : <>{!canEdit && <span className="readonly-note">Visualização somente leitura</span>}{canEdit && <button type="button" className="primary" onClick={onEdit}>Editar demanda</button>}</>}</footer>
     </form> : <ActivityTimeline timeline={timeline} saving={saving} onComment={onComment}/>} 
   </section></div>;
+}
+
+function AttachmentPanel({ attachments, saving, onUpload }: { attachments: Attachment[]; saving: boolean; onUpload: (file: File) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const sizeLabel = (size: number) => size >= 1024 * 1024 ? `${(size / 1024 / 1024).toFixed(1)} MB` : `${(size / 1024).toFixed(1)} KB`;
+  return <section className="attachment-panel"><div className="checklist-heading"><div><span className="panel-kicker">Documentos</span><h3>Anexos</h3></div><strong>{attachments.length} arquivo(s)</strong></div><div className="attachment-list">{attachments.map((entry) => <a key={entry.id} href={`/api/attachments/${entry.id}/download`}><Icon name="paperclip"/><span><strong>{entry.fileName}</strong><small>{sizeLabel(entry.size)} · {entry.uploader} · {formatDateTime(entry.createdAt)}</small></span></a>)}</div><div className="attachment-upload"><input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)}/><button type="button" className="secondary" disabled={saving || !file} onClick={() => { if (file) { onUpload(file); setFile(null); } }}><Icon name="paperclip"/>Anexar até 10 MB</button></div></section>;
 }
 
 function ChecklistPanel({ checklist, canEdit, saving, onToggle, onAdd }: { checklist: ChecklistItem[]; canEdit: boolean; saving: boolean; onToggle: (item: ChecklistItem, completed: boolean) => void; onAdd: (text: string) => void }) {
@@ -852,10 +1001,22 @@ function ConfirmInactive({ count, onCancel, onConfirm }: { count: number; onCanc
   return <div className="modal-backdrop confirm-layer"><section className="confirm-modal"><span className="confirm-icon">!</span><h2>Inativar usuário com demandas ativas</h2><p>Este usuário possui <strong>{count} demanda(s)</strong> em andamento. Elas continuarão atribuídas até serem reatribuídas manualmente.</p><footer><button className="secondary" onClick={onCancel}>Cancelar</button><button className="danger-button" onClick={onConfirm}>Confirmar inativação</button></footer></section></div>;
 }
 
-function NewDemandModal({ companies, labels, templates, onClose, onSubmit }: { companies: Company[]; labels: Label[]; templates: ChecklistTemplate[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+function InboxEntryModal({ companies, saving, onClose, onSubmit }: { companies: Company[]; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <div className="modal-backdrop"><section className="modal user-modal"><header><div><span className="panel-kicker">Triagem manual</span><h2>Registrar nova entrada</h2><p>Use para solicitações verbais ou para testar o fluxo dos canais.</p></div><button className="icon-button" onClick={onClose}><Icon name="close"/></button></header><form onSubmit={onSubmit}><div className="form-grid"><label><span>Canal</span><select name="channel"><option value="manual">Verbal / manual</option><option value="email">E-mail</option><option value="teams">Teams</option><option value="whatsapp">WhatsApp</option></select></label><label><span>Prioridade percebida</span><select name="priorityHint" defaultValue="medium"><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><label className="full"><span>Remetente / solicitante *</span><input name="sender" required placeholder="Nome, setor, e-mail ou telefone"/></label><label className="full"><span>Assunto *</span><input name="subject" required placeholder="Resumo da solicitação"/></label><label className="full"><span>Empresa</span><select name="companyId" defaultValue=""><option value="">Identificar depois</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName}</option>)}</select></label><label className="full"><span>Mensagem</span><textarea name="body" rows={5} placeholder="Cole ou descreva o conteúdo recebido..."/></label></div><footer><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving}>Enviar para triagem</button></footer></form></section></div>;
+}
+
+function ConvertInboxModal({ item, companies, slaRules, team, saving, onClose, onSubmit }: { item: InboxItem; companies: Company[]; slaRules: SlaRule[]; team: TeamMember[]; saving: boolean; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const [category, setCategory] = useState("Outros");
+  const rule = slaRules.find((entry) => entry.category === category);
+  const suggested = [...team].sort((a, b) => a.activeCount - b.activeCount)[0];
+  return <div className="modal-backdrop"><section className="modal"><header><div><span className="panel-kicker">Converter entrada #{item.id}</span><h2>{item.subject}</h2><p>Revise os dados antes de adicionar à fila.</p></div><button className="icon-button" onClick={onClose}><Icon name="close"/></button></header><form onSubmit={onSubmit}><div className="conversion-summary"><strong>{item.sender}</strong><p>{item.body || "Sem mensagem adicional."}</p></div><div className="form-grid"><label><span>Tipo de demanda</span><select name="category" value={category} onChange={(event) => setCategory(event.target.value)}>{CATEGORIES.map((value) => <option key={value}>{value}</option>)}</select></label><label><span>Empresa *</span><select name="companyId" required defaultValue={item.companyId ?? ""}><option value="" disabled>Selecione</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName}</option>)}</select></label><label><span>Funcionário</span><input name="employee"/></label><label><span>Solicitante</span><input name="requester" defaultValue={item.sender} required/></label><label><span>Prioridade</span><select name="priority" key={`${category}-priority`} defaultValue={rule?.defaultPriority ?? item.priorityHint}><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><label><span>Prazo</span><input name="dueDate" type="date" key={`${category}-due`} defaultValue={businessDueDate(rule?.businessDays ?? 3)} required/></label><label className="full"><span>Descrição</span><textarea name="description" rows={4} defaultValue={`${item.subject}\n\n${item.body}`}/></label><div className="automation-note full"><Icon name="user"/><div><strong>Sugestão de responsável: {suggested?.name ?? "nenhum analista ativo"}</strong><p>{suggested ? `${suggested.activeCount} demanda(s) ativa(s). A atribuição pode ser feita no cartão após criar.` : "Cadastre usuários para distribuir a carga."}</p></div></div></div><footer><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={saving || !companies.length}>Criar demanda</button></footer></form></section></div>;
+}
+
+function NewDemandModal({ companies, labels, templates, slaRules, onClose, onSubmit }: { companies: Company[]; labels: Label[]; templates: ChecklistTemplate[]; slaRules: SlaRule[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const [category, setCategory] = useState("");
   const automaticCount = templates.filter((template) => template.category === category).length;
-  return <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-demand-title"><header><div><span className="panel-kicker">Cadastro interno</span><h2 id="new-demand-title">Nova demanda</h2><p>Registre a solicitação recebida pela equipe de DP.</p></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><Icon name="close"/></button></header><form onSubmit={onSubmit}><div className="form-grid"><label><span>Tipo de demanda</span><select name="category" required value={category} onChange={(event) => setCategory(event.target.value)}><option value="" disabled>Selecione</option>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>Canal de origem</span><select name="source" required><option>E-mail</option><option>WhatsApp</option><option>Verbal</option></select></label><label className="full"><span>Empresa</span><select name="companyId" required defaultValue=""><option value="" disabled>Selecione uma empresa ativa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName}</option>)}</select>{!companies.length && <small className="field-warning">Cadastre uma empresa antes de abrir a demanda.</small>}</label><label><span>Funcionário relacionado</span><input name="employee" placeholder="Opcional para demandas gerais"/></label><label><span>Solicitante</span><input name="requester" required placeholder="Nome ou setor"/></label><label><span>Prioridade</span><select name="priority" defaultValue="medium"><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><label><span>Prazo</span><input name="dueDate" type="date" required/></label><label className="full"><span>Descrição</span><textarea name="description" rows={3}/></label>{labels.length > 0 && <fieldset className="label-picker full"><legend>Etiquetas iniciais</legend>{labels.map((label) => <label key={label.id}><input name="labelIds" value={label.id} type="checkbox"/><i style={{ background: label.color }}/><span>{label.name}</span></label>)}</fieldset>}{category && <div className="automation-note full"><Icon name="check"/><div><strong>Checklist automático</strong><p>{automaticCount ? `${automaticCount} etapas serão adicionadas ao criar esta demanda.` : "Este tipo ainda não possui um modelo; você poderá adicionar etapas no cartão."}</p></div></div>}</div><footer><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={!companies.length}>Adicionar à fila</button></footer></form></section></div>;
+  const rule = slaRules.find((entry) => entry.category === category);
+  return <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-demand-title"><header><div><span className="panel-kicker">Cadastro interno</span><h2 id="new-demand-title">Nova demanda</h2><p>Registre a solicitação recebida pela equipe de DP.</p></div><button className="icon-button" onClick={onClose} aria-label="Fechar"><Icon name="close"/></button></header><form onSubmit={onSubmit}><div className="form-grid"><label><span>Tipo de demanda</span><select name="category" required value={category} onChange={(event) => setCategory(event.target.value)}><option value="" disabled>Selecione</option>{CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>Canal de origem</span><select name="source" required><option>E-mail</option><option>Teams</option><option>WhatsApp</option><option>Verbal</option></select></label><label className="full"><span>Empresa</span><select name="companyId" required defaultValue=""><option value="" disabled>Selecione uma empresa ativa</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName}</option>)}</select>{!companies.length && <small className="field-warning">Cadastre uma empresa antes de abrir a demanda.</small>}</label><label><span>Funcionário relacionado</span><input name="employee" placeholder="Opcional para demandas gerais"/></label><label><span>Solicitante</span><input name="requester" required placeholder="Nome ou setor"/></label><label><span>Prioridade</span><select name="priority" key={`${category}-priority`} defaultValue={rule?.defaultPriority ?? "medium"}><option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><label><span>Prazo</span><input name="dueDate" type="date" key={`${category}-due`} defaultValue={category ? businessDueDate(rule?.businessDays ?? 3) : ""} required/></label><label className="full"><span>Descrição</span><textarea name="description" rows={3}/></label>{labels.length > 0 && <fieldset className="label-picker full"><legend>Etiquetas iniciais</legend>{labels.map((label) => <label key={label.id}><input name="labelIds" value={label.id} type="checkbox"/><i style={{ background: label.color }}/><span>{label.name}</span></label>)}</fieldset>}{category && <div className="automation-note full"><Icon name="check"/><div><strong>SLA e checklist automáticos</strong><p>{rule ? `Prazo sugerido de ${rule.businessDays} dia(s) útil(eis), prioridade padrão e ` : ""}{automaticCount ? `${automaticCount} etapas de checklist serão aplicadas.` : "checklist editável no cartão."}</p></div></div>}</div><footer><button type="button" className="secondary" onClick={onClose}>Cancelar</button><button className="primary" disabled={!companies.length}>Adicionar à fila</button></footer></form></section></div>;
 }
 
 function EmptyState({ title, text }: { title: string; text?: string }) {

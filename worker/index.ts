@@ -5,6 +5,7 @@ import handler from "vinext/server/app-router-entry";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  BUCKET: R2Bucket;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -46,7 +47,7 @@ type DemandRaw = {
   companyId: number | null;
   employee: string | null;
   requester: string;
-  source: "E-mail" | "WhatsApp" | "Verbal";
+  source: "E-mail" | "Teams" | "WhatsApp" | "Verbal";
   priority: "low" | "medium" | "high" | "urgent";
   dueDate: string;
   status: DemandStatus;
@@ -88,7 +89,7 @@ const userSelect = `
   FROM users`;
 
 const categories = new Set(["Admissão", "Férias", "Rescisão", "Ponto", "Folha", "Benefícios", "Afastamento", "eSocial", "Atendimento", "Outros"]);
-const sources = new Set(["E-mail", "WhatsApp", "Verbal"]);
+const sources = new Set(["E-mail", "Teams", "WhatsApp", "Verbal"]);
 const priorities = new Set(["low", "medium", "high", "urgent"]);
 const statuses = new Set<DemandStatus>(["available", "in_progress", "waiting", "done"]);
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -185,8 +186,63 @@ function canEditDemand(user: AppUser, demand: DemandRow) {
 }
 
 async function activeTeam(env: Env) {
-  const result = await env.DB.prepare("SELECT id, display_name AS name, email FROM users WHERE status = 'active' ORDER BY display_name").all();
+  const result = await env.DB.prepare(`
+    SELECT u.id, u.display_name AS name, u.email,
+      (SELECT COUNT(*) FROM demands d WHERE d.assignee_email = u.email AND d.status <> 'done') AS activeCount
+    FROM users u WHERE u.status = 'active' ORDER BY activeCount, u.display_name`).all();
   return result.results;
+}
+
+function channelSource(channel: string) {
+  return channel === "email" ? "E-mail" : channel === "whatsapp" ? "WhatsApp" : "Verbal";
+}
+
+function addBusinessDays(days: number) {
+  const date = new Date();
+  let remaining = Math.max(1, days);
+  while (remaining > 0) {
+    date.setDate(date.getDate() + 1);
+    const weekday = date.getDay();
+    if (weekday !== 0 && weekday !== 6) remaining -= 1;
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+async function createNotification(env: Env, data: { userId?: number | null; type: string; title: string; message: string; demandId?: number | null; inboxItemId?: number | null }) {
+  await env.DB.prepare(`INSERT INTO notifications (user_id, type, title, message, demand_id, inbox_item_id) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(data.userId ?? null, data.type, data.title, data.message, data.demandId ?? null, data.inboxItemId ?? null).run();
+}
+
+async function createDemandRecord(env: Env, user: AppUser, payload: Record<string, unknown>) {
+  const category = String(payload.category ?? "").trim();
+  const companyId = Number(payload.companyId);
+  const company = await activeCompany(env, companyId);
+  const employee = String(payload.employee ?? "").trim();
+  const requester = String(payload.requester ?? "").trim();
+  const source = String(payload.source ?? "");
+  const rule = await env.DB.prepare("SELECT business_days AS businessDays, default_priority AS defaultPriority FROM sla_rules WHERE category = ? AND status = 'active'")
+    .bind(category).first<{ businessDays: number; defaultPriority: string }>();
+  const priority = String(payload.priority ?? rule?.defaultPriority ?? "medium");
+  const dueDate = String(payload.dueDate ?? (rule ? addBusinessDays(Number(rule.businessDays)) : ""));
+  const description = String(payload.description ?? "").trim();
+  const labelIds = Array.isArray(payload.labelIds) ? payload.labelIds.map(Number).filter(Number.isInteger) : [];
+  if (!categories.has(category) || !company || !requester || !sources.has(source) || !priorities.has(priority) || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    throw new Error("Revise os campos obrigatórios da demanda.");
+  }
+  const title = `${category} – ${employee || company.tradeName}`;
+  const insert = await env.DB.prepare(`
+    INSERT INTO demands (title, description, category, company, company_id, employee, requester, source, priority, due_date, created_by_email, updated_by_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`).bind(
+      title, description, category, company.tradeName, company.id, employee || null, requester, source, priority, dueDate, user.email, user.id,
+    ).first<{ id: number }>();
+  if (!insert) throw new Error("Não foi possível cadastrar a demanda.");
+  const templates = await env.DB.prepare(`SELECT item_text AS text, sort_order AS sortOrder FROM checklist_templates WHERE category = ? AND status = 'active' ORDER BY sort_order, id`)
+    .bind(category).all<{ text: string; sortOrder: number }>();
+  for (const item of templates.results) await env.DB.prepare("INSERT INTO demand_checklists (demand_id, item_text, sort_order) VALUES (?, ?, ?)").bind(insert.id, item.text, item.sortOrder).run();
+  for (const labelId of labelIds) await env.DB.prepare(`INSERT OR IGNORE INTO demand_labels (demand_id, label_id, assigned_by_id) SELECT ?, id, ? FROM labels WHERE id = ? AND status = 'active'`).bind(insert.id, user.id, labelId).run();
+  await addDemandHistory(env, insert.id, "created", `Demanda cadastrada via ${source}`, user);
+  if (templates.results.length) await addDemandHistory(env, insert.id, "checklist_created", `${templates.results.length} itens automáticos adicionados`, user);
+  return getDemand(env, insert.id);
 }
 
 async function activeCompany(env: Env, id: number) {
@@ -233,6 +289,7 @@ async function handleDemandCollaboration(request: Request, env: Env, url: URL): 
         .bind(demandId, user.id, text).first<{ id: number }>();
       await env.DB.prepare("UPDATE demands SET updated_at = CURRENT_TIMESTAMP, updated_by_id = ?, version = version + 1 WHERE id = ?")
         .bind(user.id, demandId).run();
+      await createNotification(env, { type: "comment", title: "Novo comentário em demanda", message: `${user.displayName}: ${text.slice(0, 120)}`, demandId });
       return json({ id: created?.id, demand: await getDemand(env, demandId) }, 201);
     }
     return null;
@@ -306,44 +363,11 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
   if (url.pathname === "/api/demands" && request.method === "POST") {
     const user = await ensureUser(request, env);
     const payload = await request.json<Record<string, unknown>>();
-    const category = String(payload.category ?? "").trim();
-    const companyId = Number(payload.companyId);
-    const company = await activeCompany(env, companyId);
-    const employee = String(payload.employee ?? "").trim();
-    const requester = String(payload.requester ?? "").trim();
-    const source = String(payload.source ?? "");
-    const priority = String(payload.priority ?? "medium");
-    const dueDate = String(payload.dueDate ?? "");
-    const description = String(payload.description ?? "").trim();
-    const labelIds = Array.isArray(payload.labelIds) ? payload.labelIds.map(Number).filter(Number.isInteger) : [];
-    if (!categories.has(category) || !company || !requester || !sources.has(source) || !priorities.has(priority) || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-      return json({ error: "Revise os campos obrigatórios da demanda." }, 400);
+    try {
+      return json({ demand: await createDemandRecord(env, user, payload) }, 201);
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : "Não foi possível cadastrar a demanda." }, 400);
     }
-    const title = `${category} – ${employee || company.tradeName}`;
-    const insert = await env.DB.prepare(`
-      INSERT INTO demands (title, description, category, company, company_id, employee, requester, source, priority, due_date, created_by_email, updated_by_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`).bind(
-        title, description, category, company.tradeName, company.id, employee || null, requester, source, priority, dueDate, user.email, user.id,
-      ).first<{ id: number }>();
-    if (!insert) throw new Error("Não foi possível cadastrar a demanda.");
-
-    const templates = await env.DB.prepare(`
-      SELECT item_text AS text, sort_order AS sortOrder FROM checklist_templates
-      WHERE category = ? AND status = 'active' ORDER BY sort_order, id`).bind(category).all<{ text: string; sortOrder: number }>();
-    for (const item of templates.results) {
-      await env.DB.prepare("INSERT INTO demand_checklists (demand_id, item_text, sort_order) VALUES (?, ?, ?)")
-        .bind(insert.id, item.text, item.sortOrder).run();
-    }
-    if (labelIds.length) {
-      for (const labelId of labelIds) {
-        await env.DB.prepare(`
-          INSERT OR IGNORE INTO demand_labels (demand_id, label_id, assigned_by_id)
-          SELECT ?, id, ? FROM labels WHERE id = ? AND status = 'active'`).bind(insert.id, user.id, labelId).run();
-      }
-    }
-    await addDemandHistory(env, insert.id, "created", `Demanda cadastrada via ${source}`, user);
-    if (templates.results.length) await addDemandHistory(env, insert.id, "checklist_created", `${templates.results.length} itens automáticos adicionados`, user);
-    return json({ demand: await getDemand(env, insert.id) }, 201);
   }
 
   const historyMatch = url.pathname.match(/^\/api\/demands\/(\d+)\/history$/);
@@ -437,6 +461,7 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
       ).first<{ id: number }>();
     if (!updated) return json({ error: "Outro analista assumiu esta demanda primeiro." }, 409);
     await addDemandHistory(env, id, "claimed", "Demanda assumida", user);
+    await createNotification(env, { userId: user.id, type: "assigned", title: "Demanda atribuída a você", message: existing.title, demandId: id });
     return json({ demand: await getDemand(env, id) });
   }
 
@@ -458,7 +483,7 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
     if ("assigneeEmail" in payload) {
       requireFullAccess(user);
       const email = String(payload.assigneeEmail ?? "").trim();
-      const assignee = email ? await env.DB.prepare("SELECT email, display_name AS name FROM users WHERE email = ? AND status = 'active' LIMIT 1").bind(email).first<{ email: string; name: string }>() : null;
+      const assignee = email ? await env.DB.prepare("SELECT id, email, display_name AS name FROM users WHERE email = ? AND status = 'active' LIMIT 1").bind(email).first<{ id: number; email: string; name: string }>() : null;
       if (email && !assignee) return json({ error: "Responsável inválido ou inativo." }, 400);
       assignments.push("assignee_email = ?", "assignee_name = ?", "status = ?");
       values.push(assignee?.email ?? null, assignee?.name ?? null, assignee ? (existing.status === "available" ? "in_progress" : existing.status) : "available");
@@ -493,6 +518,13 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
     const labelHistory = history.find((item) => item.field === "etiquetas");
     if (labelHistory && updatedDemand) labelHistory.newValue = updatedDemand.labels.map((label) => label.name).join(", ") || "Nenhuma";
     for (const item of history) await addDemandHistory(env, id, "edited", `${item.field} alterado`, user, { fieldChanged: item.field, oldValue: item.oldValue, newValue: item.newValue });
+    if ("assigneeEmail" in payload) {
+      const assignedEmail = String(payload.assigneeEmail ?? "");
+      if (assignedEmail) {
+        const assignedUser = await env.DB.prepare("SELECT id FROM users WHERE email = ? AND status = 'active'").bind(assignedEmail).first<{ id: number }>();
+        if (assignedUser) await createNotification(env, { userId: assignedUser.id, type: "assigned", title: "Demanda atribuída a você", message: existing.title, demandId: id });
+      }
+    }
     return json({ demand: updatedDemand });
   }
 
@@ -511,6 +543,7 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
     await addDemandHistory(env, id, action, `Status alterado de ${existing.status} para ${status}`, user, {
       fieldChanged: "status", oldValue: existing.status, newValue: status, justification: justification || undefined,
     });
+    if (status === "done") await createNotification(env, { type: "completed", title: "Demanda concluída", message: existing.title, demandId: id });
     return json({ demand: await getDemand(env, id) });
   }
   return json({ error: "Ação inválida." }, 400);
@@ -741,6 +774,154 @@ async function handleUsers(request: Request, env: Env, url: URL): Promise<Respon
   return json({ user, activeDemandCount: activeCount });
 }
 
+async function handleOperations(request: Request, env: Env, url: URL): Promise<Response | null> {
+  if (url.pathname === "/api/inbox" && request.method === "GET") {
+    await ensureUser(request, env);
+    const result = await env.DB.prepare(`
+      SELECT i.id, i.channel, i.sender, i.subject, i.body, i.status, i.priority_hint AS priorityHint,
+        i.company_id AS companyId, c.trade_name AS company, i.reviewer_id AS reviewerId,
+        u.display_name AS reviewer, i.demand_id AS demandId, i.received_at AS receivedAt
+      FROM inbox_items i LEFT JOIN companies c ON c.id = i.company_id LEFT JOIN users u ON u.id = i.reviewer_id
+      ORDER BY CASE i.status WHEN 'new' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, i.received_at DESC, i.id DESC`).all();
+    return json({ items: result.results });
+  }
+
+  if (url.pathname === "/api/inbox" && request.method === "POST") {
+    const user = await ensureUser(request, env);
+    const payload = await request.json<Record<string, unknown>>();
+    const channel = String(payload.channel ?? "manual");
+    const sender = String(payload.sender ?? "").trim();
+    const subject = String(payload.subject ?? "").trim();
+    const body = String(payload.body ?? "").trim();
+    const companyId = payload.companyId ? Number(payload.companyId) : null;
+    const priorityHint = String(payload.priorityHint ?? "medium");
+    if (!["email", "teams", "whatsapp", "manual"].includes(channel) || !sender || !subject || !priorities.has(priorityHint)) return json({ error: "Revise os dados da entrada." }, 400);
+    if (companyId && !await activeCompany(env, companyId)) return json({ error: "Empresa inválida ou inativa." }, 400);
+    const created = await env.DB.prepare(`
+      INSERT INTO inbox_items (channel, sender, subject, body, company_id, priority_hint, reviewer_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`).bind(channel, sender, subject, body, companyId, priorityHint, user.id).first<{ id: number }>();
+    if (!created) throw new Error("Não foi possível registrar a entrada.");
+    await createNotification(env, { type: "new_inbox", title: "Nova entrada para triagem", message: subject, inboxItemId: created.id });
+    return json({ id: created.id }, 201);
+  }
+
+  const inboxConvert = url.pathname.match(/^\/api\/inbox\/(\d+)\/convert$/);
+  if (inboxConvert && request.method === "POST") {
+    const user = await ensureUser(request, env);
+    const id = Number(inboxConvert[1]);
+    const item = await env.DB.prepare("SELECT id, channel, sender, subject, body, company_id AS companyId, status, priority_hint AS priorityHint FROM inbox_items WHERE id = ?")
+      .bind(id).first<{ id: number; channel: string; sender: string; subject: string; body: string; companyId: number | null; status: string; priorityHint: string }>();
+    if (!item) return json({ error: "Entrada não encontrada." }, 404);
+    if (item.status === "converted") return json({ error: "Esta entrada já foi convertida." }, 409);
+    const payload = await request.json<Record<string, unknown>>();
+    const demand = await createDemandRecord(env, user, {
+      ...payload,
+      companyId: payload.companyId ?? item.companyId,
+      requester: payload.requester ?? item.sender,
+      description: payload.description ?? `${item.subject}\n\n${item.body}`,
+      priority: payload.priority ?? item.priorityHint,
+      source: payload.source ?? channelSource(item.channel),
+    });
+    if (!demand) throw new Error("Não foi possível criar a demanda.");
+    await env.DB.prepare("UPDATE inbox_items SET status = 'converted', reviewer_id = ?, demand_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(user.id, demand.id, id).run();
+    await createNotification(env, { type: "inbox_converted", title: "Entrada convertida", message: demand.title, demandId: demand.id, inboxItemId: id });
+    return json({ demand });
+  }
+
+  const inboxMatch = url.pathname.match(/^\/api\/inbox\/(\d+)$/);
+  if (inboxMatch && request.method === "PATCH") {
+    const user = await ensureUser(request, env);
+    const payload = await request.json<{ status?: string }>();
+    if (!["new", "reviewing", "archived"].includes(payload.status ?? "")) return json({ error: "Status inválido." }, 400);
+    await env.DB.prepare("UPDATE inbox_items SET status = ?, reviewer_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(payload.status, user.id, Number(inboxMatch[1])).run();
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/integrations" && request.method === "GET") {
+    await ensureUser(request, env);
+    const result = await env.DB.prepare("SELECT id, channel, provider, status, inbound_enabled AS inboundEnabled, outbound_enabled AS outboundEnabled, last_sync_at AS lastSyncAt FROM integration_channels ORDER BY id").all();
+    return json({ channels: result.results });
+  }
+  const integrationMatch = url.pathname.match(/^\/api\/integrations\/(email|teams|whatsapp)$/);
+  if (integrationMatch && request.method === "PUT") {
+    const user = await ensureUser(request, env); requireFullAccess(user);
+    await env.DB.prepare("UPDATE integration_channels SET status = 'pending_credentials', updated_at = CURRENT_TIMESTAMP WHERE channel = ?").bind(integrationMatch[1]).run();
+    return json({ status: "pending_credentials", message: "Estrutura preparada. Agora faltam as credenciais da conta oficial." });
+  }
+
+  if (url.pathname === "/api/sla-rules" && request.method === "GET") {
+    await ensureUser(request, env);
+    const result = await env.DB.prepare("SELECT id, category, business_days AS businessDays, default_priority AS defaultPriority, status FROM sla_rules ORDER BY id").all();
+    return json({ rules: result.results });
+  }
+  const slaMatch = url.pathname.match(/^\/api\/sla-rules\/(\d+)$/);
+  if (slaMatch && request.method === "PUT") {
+    const user = await ensureUser(request, env); requireFullAccess(user);
+    const payload = await request.json<{ businessDays?: number; defaultPriority?: string; status?: string }>();
+    const days = Number(payload.businessDays);
+    const priority = String(payload.defaultPriority ?? "");
+    const status = String(payload.status ?? "active");
+    if (!Number.isInteger(days) || days < 1 || days > 60 || !priorities.has(priority) || !["active", "inactive"].includes(status)) return json({ error: "Regra de SLA inválida." }, 400);
+    await env.DB.prepare("UPDATE sla_rules SET business_days = ?, default_priority = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(days, priority, status, Number(slaMatch[1])).run();
+    return json({ ok: true });
+  }
+
+  if (url.pathname === "/api/notifications" && request.method === "GET") {
+    const user = await ensureUser(request, env);
+    const stored = await env.DB.prepare(`SELECT id, type, title, message, demand_id AS demandId, inbox_item_id AS inboxItemId, read, created_at AS createdAt FROM notifications WHERE user_id IS NULL OR user_id = ? ORDER BY created_at DESC, id DESC LIMIT 40`)
+      .bind(user.id).all<Record<string, unknown>>();
+    const deadlines = await env.DB.prepare(`
+      SELECT -id AS id, 'sla' AS type, CASE WHEN due_date < date('now') THEN 'SLA vencido' ELSE 'SLA próximo' END AS title,
+        title || ' · prazo ' || due_date AS message, id AS demandId, NULL AS inboxItemId, 0 AS read, due_date AS createdAt
+      FROM demands WHERE status <> 'done' AND due_date <= date('now', '+2 day') ORDER BY due_date LIMIT 20`).all<Record<string, unknown>>();
+    return json({ notifications: [...deadlines.results, ...stored.results] });
+  }
+  const notificationMatch = url.pathname.match(/^\/api\/notifications\/(\d+)$/);
+  if (notificationMatch && request.method === "PATCH") {
+    const user = await ensureUser(request, env);
+    await env.DB.prepare("UPDATE notifications SET read = 1 WHERE id = ? AND (user_id IS NULL OR user_id = ?)").bind(Number(notificationMatch[1]), user.id).run();
+    return json({ ok: true });
+  }
+
+  const demandAttachments = url.pathname.match(/^\/api\/demands\/(\d+)\/attachments$/);
+  if (demandAttachments) {
+    const user = await ensureUser(request, env);
+    const demandId = Number(demandAttachments[1]);
+    if (!await getDemand(env, demandId)) return json({ error: "Demanda não encontrada." }, 404);
+    if (request.method === "GET") {
+      const result = await env.DB.prepare(`SELECT a.id, a.file_name AS fileName, a.content_type AS contentType, a.size, a.created_at AS createdAt, u.display_name AS uploader FROM demand_attachments a JOIN users u ON u.id = a.uploader_id WHERE a.demand_id = ? ORDER BY a.created_at DESC, a.id DESC`).bind(demandId).all();
+      return json({ attachments: result.results });
+    }
+    if (request.method === "POST") {
+      const form = await request.formData();
+      const file = form.get("file");
+      if (!(file instanceof File) || file.size === 0 || file.size > 10 * 1024 * 1024) return json({ error: "Envie um arquivo de até 10 MB." }, 400);
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120) || "arquivo";
+      const objectKey = `demands/${demandId}/${crypto.randomUUID()}-${safeFileName}`;
+      await env.BUCKET.put(objectKey, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream", contentDisposition: `attachment; filename="${safeFileName}"` } });
+      await env.DB.prepare("INSERT INTO demand_attachments (demand_id, uploader_id, file_name, content_type, size, object_key) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(demandId, user.id, file.name.slice(0, 240), file.type || "application/octet-stream", file.size, objectKey).run();
+      await addDemandHistory(env, demandId, "attachment_added", `Arquivo anexado: ${file.name.slice(0, 240)}`, user);
+      return json({ ok: true }, 201);
+    }
+  }
+
+  const attachmentDownload = url.pathname.match(/^\/api\/attachments\/(\d+)\/download$/);
+  if (attachmentDownload && request.method === "GET") {
+    await ensureUser(request, env);
+    const attachment = await env.DB.prepare("SELECT file_name AS fileName, content_type AS contentType, object_key AS objectKey FROM demand_attachments WHERE id = ?")
+      .bind(Number(attachmentDownload[1])).first<{ fileName: string; contentType: string; objectKey: string }>();
+    if (!attachment) return json({ error: "Arquivo não encontrado." }, 404);
+    const object = await env.BUCKET.get(attachment.objectKey);
+    if (!object) return json({ error: "Arquivo não encontrado no armazenamento." }, 404);
+    return new Response(object.body, { headers: { "Content-Type": attachment.contentType, "Content-Disposition": `attachment; filename="${attachment.fileName.replace(/["\r\n]/g, "")}"` } });
+  }
+  return null;
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -757,7 +938,8 @@ const worker = {
 
     if (url.pathname.startsWith("/api/")) {
       try {
-        const response = await handleDemands(request, env, url)
+        const response = await handleOperations(request, env, url)
+          ?? await handleDemands(request, env, url)
           ?? await handleCompanies(request, env, url)
           ?? await handleLabels(request, env, url)
           ?? await handleTemplates(request, env, url)
