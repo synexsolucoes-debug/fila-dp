@@ -20,5 +20,5 @@ ALTER TABLE `demands` ADD `version` integer DEFAULT 1 NOT NULL;--> statement-bre
 ALTER TABLE `demands` ADD `updated_by_id` integer;--> statement-breakpoint
 ALTER TABLE `users` ADD `status` text DEFAULT 'active' NOT NULL;--> statement-breakpoint
 ALTER TABLE `users` ADD `created_by_id` integer;--> statement-breakpoint
-ALTER TABLE `users` ADD `updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL;--> statement-breakpoint
+ALTER TABLE `users` ADD `updated_at` text DEFAULT '' NOT NULL;--> statement-breakpoint
 ALTER TABLE `users` ADD `last_access_at` text;
