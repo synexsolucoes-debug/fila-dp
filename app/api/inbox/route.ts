@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     if (!subject || !senderName) return Response.json({ error: "Informe solicitante e assunto." }, { status: 400 });
     const channel = ["manual", "email", "whatsapp", "teams"].includes(String(body.channel)) ? String(body.channel) : "manual";
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    await d1.prepare("INSERT INTO inbox_items (id, workspace_id, channel, sender_name, subject, body, status) VALUES (?, ?, ?, ?, ?, ?, 'new')")
+    await d1.prepare("INSERT INTO fdp_inbox_items (id, workspace_id, channel, sender_name, subject, body, status) VALUES (?, ?, ?, ?, ?, ?, 'new')")
       .bind(crypto.randomUUID(), workspace.id, channel, senderName, subject, text(body.body))
       .run();
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });

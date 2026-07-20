@@ -531,8 +531,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "inbox_items": {
-      "name": "inbox_items",
+    "fdp_inbox_items": {
+      "name": "fdp_inbox_items",
       "columns": {
         "id": {
           "name": "id",
@@ -614,9 +614,9 @@
         }
       },
       "foreignKeys": {
-        "inbox_items_workspace_id_workspaces_id_fk": {
-          "name": "inbox_items_workspace_id_workspaces_id_fk",
-          "tableFrom": "inbox_items",
+        "fdp_inbox_items_workspace_id_workspaces_id_fk": {
+          "name": "fdp_inbox_items_workspace_id_workspaces_id_fk",
+          "tableFrom": "fdp_inbox_items",
           "tableTo": "workspaces",
           "columnsFrom": [
             "workspace_id"
@@ -627,9 +627,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "inbox_items_converted_card_id_cards_id_fk": {
-          "name": "inbox_items_converted_card_id_cards_id_fk",
-          "tableFrom": "inbox_items",
+        "fdp_inbox_items_converted_card_id_cards_id_fk": {
+          "name": "fdp_inbox_items_converted_card_id_cards_id_fk",
+          "tableFrom": "fdp_inbox_items",
           "tableTo": "cards",
           "columnsFrom": [
             "converted_card_id"

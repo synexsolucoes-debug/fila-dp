@@ -71,7 +71,7 @@ const schemaStatements = [
     position REAL NOT NULL,
     completed_at TEXT
   )`,
-  `CREATE TABLE IF NOT EXISTS inbox_items (
+  `CREATE TABLE IF NOT EXISTS fdp_inbox_items (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     channel TEXT NOT NULL DEFAULT 'manual',
@@ -104,7 +104,7 @@ const schemaStatements = [
   "CREATE INDEX IF NOT EXISTS cards_board_list_position_idx ON cards (board_id, list_id, position)",
   "CREATE INDEX IF NOT EXISTS cards_due_status_idx ON cards (due_at, sla_status)",
   "CREATE INDEX IF NOT EXISTS checklist_card_position_idx ON checklist_items (card_id, position)",
-  "CREATE INDEX IF NOT EXISTS inbox_workspace_status_received_idx ON inbox_items (workspace_id, status, received_at)",
+  "CREATE INDEX IF NOT EXISTS inbox_workspace_status_received_idx ON fdp_inbox_items (workspace_id, status, received_at)",
   "CREATE INDEX IF NOT EXISTS activity_workspace_created_idx ON activity_events (workspace_id, created_at)",
 ];
 
@@ -221,9 +221,9 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
       d1.prepare("INSERT INTO checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Cadastro no sistema concluído', 0, 3000)").bind(crypto.randomUUID(), cardIds[0]),
       d1.prepare("INSERT INTO checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Elegibilidade validada', 1, 1000)").bind(crypto.randomUUID(), cardIds[1]),
       d1.prepare("INSERT INTO checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Inclusão enviada à operadora', 0, 2000)").bind(crypto.randomUUID(), cardIds[1]),
-      d1.prepare("INSERT INTO inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'whatsapp', 'Mariana — Financeiro', 'Alteração de vale-transporte', 'Solicitação recebida pelo WhatsApp para a próxima competência.', 'new', datetime('now', '-18 minutes'))").bind(crypto.randomUUID(), workspace.id),
-      d1.prepare("INSERT INTO inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'email', 'Carlos Mendes', 'Programação de férias', 'Solicita programação para início no próximo mês.', 'new', datetime('now', '-2 hours'))").bind(crypto.randomUUID(), workspace.id),
-      d1.prepare("INSERT INTO inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'teams', 'Gestora Comercial', 'Nova admissão aprovada', 'Candidata aprovada; dados iniciais enviados no Teams.', 'new', datetime('now', '-1 day'))").bind(crypto.randomUUID(), workspace.id),
+      d1.prepare("INSERT INTO fdp_inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'whatsapp', 'Mariana — Financeiro', 'Alteração de vale-transporte', 'Solicitação recebida pelo WhatsApp para a próxima competência.', 'new', datetime('now', '-18 minutes'))").bind(crypto.randomUUID(), workspace.id),
+      d1.prepare("INSERT INTO fdp_inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'email', 'Carlos Mendes', 'Programação de férias', 'Solicita programação para início no próximo mês.', 'new', datetime('now', '-2 hours'))").bind(crypto.randomUUID(), workspace.id),
+      d1.prepare("INSERT INTO fdp_inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'teams', 'Gestora Comercial', 'Nova admissão aprovada', 'Candidata aprovada; dados iniciais enviados no Teams.', 'new', datetime('now', '-1 day'))").bind(crypto.randomUUID(), workspace.id),
       ...ruleRows.map(([name, trigger, condition, action], index) =>
         d1.prepare("INSERT INTO automation_rules (id, workspace_id, name, trigger, condition_json, action_json, enabled, position) VALUES (?, ?, ?, ?, ?, ?, 1, ?)")
           .bind(crypto.randomUUID(), workspace!.id, name, trigger, JSON.stringify(condition), JSON.stringify(action), (index + 1) * 1000)),
@@ -254,7 +254,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT * FROM cards WHERE board_id = ? AND archived = 0 ORDER BY list_id, position, created_at").bind(board.id).all(),
     d1.prepare("SELECT ci.* FROM checklist_items ci JOIN cards c ON c.id = ci.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY ci.position").bind(board.id).all(),
-    d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
+    d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM fdp_inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
     d1.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM automation_rules WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
   ]);
 

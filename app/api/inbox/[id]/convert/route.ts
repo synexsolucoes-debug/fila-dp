@@ -9,7 +9,7 @@ export async function POST(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
-    const item = await d1.prepare("SELECT * FROM inbox_items WHERE id = ? AND workspace_id = ? AND status = 'new'").bind(id, workspace.id).first<Record<string, unknown>>();
+    const item = await d1.prepare("SELECT * FROM fdp_inbox_items WHERE id = ? AND workspace_id = ? AND status = 'new'").bind(id, workspace.id).first<Record<string, unknown>>();
     if (!item) throw new Error("Solicitação não encontrada ou já convertida.");
     const list = await d1.prepare("SELECT id FROM lists WHERE board_id = ? AND kind = 'new'").bind(board.id).first<{ id: string }>();
     if (!list) throw new Error("Coluna inicial não encontrada.");
@@ -22,7 +22,7 @@ export async function POST(_request: Request, context: RouteContext) {
         .bind(cardId, board.id, list.id, String(item.subject), String(item.body ?? ""), String(item.sender_name), Number(position?.max_position ?? 0) + 1000, String(item.channel), auth.user.email),
       d1.prepare("INSERT INTO checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Analisar solicitação', 0, 1000)").bind(crypto.randomUUID(), cardId),
       d1.prepare("INSERT INTO checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Executar atividade', 0, 2000)").bind(crypto.randomUUID(), cardId),
-      d1.prepare("UPDATE inbox_items SET status = 'converted', converted_card_id = ? WHERE id = ? AND workspace_id = ?").bind(cardId, id, workspace.id),
+      d1.prepare("UPDATE fdp_inbox_items SET status = 'converted', converted_card_id = ? WHERE id = ? AND workspace_id = ?").bind(cardId, id, workspace.id),
     ]);
     await recordActivity(workspace.id, cardId, auth.user.email, "inbox.item_converted", { inboxItemId: id });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });

@@ -88,7 +88,7 @@ export const checklistItems = sqliteTable("checklist_items", {
   completedAt: text("completed_at"),
 }, (table) => [index("checklist_card_position_idx").on(table.cardId, table.position)]);
 
-export const inboxItems = sqliteTable("inbox_items", {
+export const inboxItems = sqliteTable("fdp_inbox_items", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   channel: text("channel").notNull().default("manual"),

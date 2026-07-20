@@ -1,4 +1,4 @@
-CREATE TABLE `activity_events` (
+CREATE TABLE IF NOT EXISTS `activity_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`card_id` text,
@@ -10,8 +10,8 @@ CREATE TABLE `activity_events` (
 	FOREIGN KEY (`card_id`) REFERENCES `cards`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `activity_workspace_created_idx` ON `activity_events` (`workspace_id`,`created_at`);--> statement-breakpoint
-CREATE TABLE `automation_rules` (
+CREATE INDEX IF NOT EXISTS `activity_workspace_created_idx` ON `activity_events` (`workspace_id`,`created_at`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `automation_rules` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`name` text NOT NULL,
@@ -23,8 +23,8 @@ CREATE TABLE `automation_rules` (
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `rules_workspace_position_idx` ON `automation_rules` (`workspace_id`,`position`);--> statement-breakpoint
-CREATE TABLE `boards` (
+CREATE INDEX IF NOT EXISTS `rules_workspace_position_idx` ON `automation_rules` (`workspace_id`,`position`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `boards` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`name` text NOT NULL,
@@ -34,8 +34,8 @@ CREATE TABLE `boards` (
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `boards_workspace_name_uq` ON `boards` (`workspace_id`,`name`);--> statement-breakpoint
-CREATE TABLE `cards` (
+CREATE UNIQUE INDEX IF NOT EXISTS `boards_workspace_name_uq` ON `boards` (`workspace_id`,`name`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `cards` (
 	`id` text PRIMARY KEY NOT NULL,
 	`board_id` text NOT NULL,
 	`list_id` text NOT NULL,
@@ -57,9 +57,9 @@ CREATE TABLE `cards` (
 	FOREIGN KEY (`list_id`) REFERENCES `lists`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE INDEX `cards_board_list_position_idx` ON `cards` (`board_id`,`list_id`,`position`);--> statement-breakpoint
-CREATE INDEX `cards_due_status_idx` ON `cards` (`due_at`,`sla_status`);--> statement-breakpoint
-CREATE TABLE `checklist_items` (
+CREATE INDEX IF NOT EXISTS `cards_board_list_position_idx` ON `cards` (`board_id`,`list_id`,`position`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `cards_due_status_idx` ON `cards` (`due_at`,`sla_status`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `checklist_items` (
 	`id` text PRIMARY KEY NOT NULL,
 	`card_id` text NOT NULL,
 	`title` text NOT NULL,
@@ -69,8 +69,8 @@ CREATE TABLE `checklist_items` (
 	FOREIGN KEY (`card_id`) REFERENCES `cards`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `checklist_card_position_idx` ON `checklist_items` (`card_id`,`position`);--> statement-breakpoint
-CREATE TABLE `inbox_items` (
+CREATE INDEX IF NOT EXISTS `checklist_card_position_idx` ON `checklist_items` (`card_id`,`position`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `fdp_inbox_items` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`channel` text DEFAULT 'manual' NOT NULL,
@@ -84,8 +84,8 @@ CREATE TABLE `inbox_items` (
 	FOREIGN KEY (`converted_card_id`) REFERENCES `cards`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE INDEX `inbox_workspace_status_received_idx` ON `inbox_items` (`workspace_id`,`status`,`received_at`);--> statement-breakpoint
-CREATE TABLE `lists` (
+CREATE INDEX IF NOT EXISTS `inbox_workspace_status_received_idx` ON `fdp_inbox_items` (`workspace_id`,`status`,`received_at`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `lists` (
 	`id` text PRIMARY KEY NOT NULL,
 	`board_id` text NOT NULL,
 	`name` text NOT NULL,
@@ -95,17 +95,17 @@ CREATE TABLE `lists` (
 	FOREIGN KEY (`board_id`) REFERENCES `boards`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `lists_board_kind_uq` ON `lists` (`board_id`,`kind`);--> statement-breakpoint
-CREATE INDEX `lists_board_position_idx` ON `lists` (`board_id`,`position`);--> statement-breakpoint
-CREATE TABLE `users` (
+CREATE UNIQUE INDEX IF NOT EXISTS `lists_board_kind_uq` ON `lists` (`board_id`,`kind`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `lists_board_position_idx` ON `lists` (`board_id`,`position`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `users` (
 	`id` text PRIMARY KEY NOT NULL,
 	`email` text NOT NULL,
 	`name` text NOT NULL,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `users_email_uq` ON `users` (`email`);--> statement-breakpoint
-CREATE TABLE `workspace_members` (
+CREATE UNIQUE INDEX IF NOT EXISTS `users_email_uq` ON `users` (`email`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `workspace_members` (
 	`workspace_id` text NOT NULL,
 	`user_id` text NOT NULL,
 	`role` text DEFAULT 'admin' NOT NULL,
@@ -115,7 +115,7 @@ CREATE TABLE `workspace_members` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE TABLE `workspaces` (
+CREATE TABLE IF NOT EXISTS `workspaces` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`slug` text NOT NULL,
@@ -125,5 +125,5 @@ CREATE TABLE `workspaces` (
 	FOREIGN KEY (`owner_user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `workspaces_owner_uq` ON `workspaces` (`owner_user_id`);--> statement-breakpoint
-CREATE UNIQUE INDEX `workspaces_slug_uq` ON `workspaces` (`slug`);
+CREATE UNIQUE INDEX IF NOT EXISTS `workspaces_owner_uq` ON `workspaces` (`owner_user_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `workspaces_slug_uq` ON `workspaces` (`slug`);
