@@ -1,5 +1,5 @@
 import { apiError, computeSlaStatus, getApiUser, text } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,6 +22,8 @@ export async function POST(request: Request, context: RouteContext) {
       .bind(toListId, Number(position?.max_position ?? 0) + 1000, computeSlaStatus(card.due_at, list.sla_behavior), id, board.id)
       .run();
     await recordActivity(workspace.id, id, auth.user.email, "card.moved", { fromListId: card.list_id, toListId, automation: list.sla_behavior });
+    const fromList = await d1.prepare("SELECT kind FROM fdp_lists WHERE id = ?").bind(card.list_id).first<{ kind: string }>();
+    await runAutomations(workspace.id, board.id, id, "card.moved", auth.user.email, { listKind: list.kind, fromListKind: fromList?.kind });
     return Response.json(await getWorkspaceSnapshot(auth.user));
   } catch (error) {
     return apiError(error);

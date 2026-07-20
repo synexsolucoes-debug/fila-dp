@@ -28,6 +28,77 @@ export type ActivityEvent = {
   createdAt: string;
 };
 
+export type CardAssignee = { userId: string; name: string; email: string };
+export type CardLabel = { id: string; name: string; color: string };
+export type CardAttachment = {
+  id: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  createdAt: string;
+  downloadUrl: string;
+};
+
+export type CustomFieldDefinition = {
+  id: string;
+  name: string;
+  fieldKey: string;
+  fieldType: "text" | "number" | "date" | "select";
+  options: string[];
+  required: boolean;
+  position: number;
+};
+
+export type ProcessTemplate = {
+  id: string;
+  name: string;
+  processType: string;
+  description: string;
+  checklist: string[];
+  defaultSlaDays: number;
+  active: boolean;
+  position: number;
+};
+
+export type SlaPolicy = {
+  id: string;
+  processType: string;
+  targetBusinessDays: number;
+  warningBusinessDays: number;
+  active: boolean;
+};
+
+export type BusinessHoliday = { date: string; name: string };
+export type WorkspaceSettings = {
+  businessDays: number[];
+  dayStart: string;
+  dayEnd: string;
+  realtimeSeconds: number;
+};
+
+export type NotificationItem = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  cardId: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type IntegrationItem = {
+  id: string;
+  channel: string;
+  displayName: string;
+  status: "connected" | "needs_credentials" | "paused" | "error";
+  config: Record<string, unknown>;
+  lastSyncAt: string | null;
+  lastError: string | null;
+};
+export type PlannerBlock = { id: string; userId: string; cardId: string | null; title: string; startAt: string; endAt: string; blockType: string; notes: string };
+export type CalendarConnection = { id: string; provider: string; status: string; config: Record<string, unknown>; externalCalendarId: string | null; lastSyncAt: string | null; lastError: string | null };
+
 export type Card = {
   id: string;
   boardId: string;
@@ -42,11 +113,19 @@ export type Card = {
   slaStatus: "safe" | "warning" | "overdue" | "paused" | "completed";
   position: number;
   sourceType: string;
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
   checklist: ChecklistItem[];
   comments: CardComment[];
   activities: ActivityEvent[];
+  assignees: CardAssignee[];
+  labels: CardLabel[];
+  customValues: Record<string, string>;
+  attachments: CardAttachment[];
+  slaPausedReason: string;
+  slaPausedMinutes: number;
+  slaEscalationLevel: number;
 };
 
 export type BoardList = {
@@ -58,6 +137,8 @@ export type BoardList = {
   slaBehavior: "running" | "paused" | "completed";
   cards: Card[];
 };
+
+export type BoardSummary = { id: string; name: string; description: string; boardType: string };
 
 export type InboxItem = {
   id: string;
@@ -98,9 +179,22 @@ export type AvailableWorkspace = {
 export type WorkspaceSnapshot = {
   workspace: { id: string; name: string; timezone: string; role: WorkspaceRole };
   board: { id: string; name: string; description: string };
+  boards: BoardSummary[];
   lists: BoardList[];
   inbox: InboxItem[];
   rules: AutomationRule[];
   members: WorkspaceMember[];
   availableWorkspaces: AvailableWorkspace[];
+  archivedCards: Card[];
+  labels: CardLabel[];
+  customFields: CustomFieldDefinition[];
+  templates: ProcessTemplate[];
+  slaPolicies: SlaPolicy[];
+  holidays: BusinessHoliday[];
+  settings: WorkspaceSettings;
+  notifications: NotificationItem[];
+  integrations: IntegrationItem[];
+  plannerBlocks: PlannerBlock[];
+  calendarConnections: CalendarConnection[];
+  recentActivity: ActivityEvent[];
 };

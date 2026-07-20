@@ -1,5 +1,6 @@
 import { apiError, computeSlaStatus, getApiUser, text, validDate } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
+import { replaceCardRelations } from "@/lib/fila-dp-relations";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -17,17 +18,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     const title = body.title === undefined ? String(current.title) : text(body.title, 180);
     if (!title) return Response.json({ error: "Informe o título da demanda." }, { status: 400 });
     const assigneeName = body.assigneeName === undefined ? String(current.assignee_name ?? "") : text(body.assigneeName, 120);
+    const hasNewAssignees = Array.isArray(body.assigneeIds) && body.assigneeIds.length > 0;
     let listId = String(current.list_id);
     let list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE id = ? AND board_id = ?").bind(listId, board.id).first<{ id: string; kind: string; sla_behavior: string }>();
     if (!list) throw new Error("Coluna não encontrada.");
-
-    if (!String(current.assignee_name ?? "") && assigneeName && list.kind === "new") {
-      const analysis = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE board_id = ? AND kind = 'analysis'").bind(board.id).first<{ id: string; kind: string; sla_behavior: string }>();
-      if (analysis) {
-        list = analysis;
-        listId = analysis.id;
-      }
-    }
 
     const dueAt = body.dueAt === undefined ? (current.due_at ? String(current.due_at) : null) : validDate(body.dueAt);
     const priority = body.priority === undefined ? String(current.priority) : (["low", "normal", "high", "urgent"].includes(String(body.priority)) ? String(body.priority) : "normal");
@@ -47,6 +41,9 @@ export async function PATCH(request: Request, context: RouteContext) {
         id,
         board.id,
       ).run();
+
+    await replaceCardRelations(d1, workspace.id, id, body);
+    if (hasNewAssignees) await runAutomations(workspace.id, board.id, id, "assignee.added", auth.user.email, { assignee: "present" });
 
     await recordActivity(workspace.id, id, auth.user.email, "card.updated", { title, automationApplied: listId !== current.list_id });
     return Response.json(await getWorkspaceSnapshot(auth.user));

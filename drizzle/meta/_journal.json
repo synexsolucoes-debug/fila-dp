@@ -22,6 +22,34 @@
       "when": 1784566800000,
       "tag": "0002_team_collaboration",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784568000000,
+      "tag": "0003_operations_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784569200000,
+      "tag": "0004_multi_board_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784570400000,
+      "tag": "0005_planner_calendar",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784571600000,
+      "tag": "0006_sla_pause_fields",
+      "breakpoints": true
     }
   ]
 }

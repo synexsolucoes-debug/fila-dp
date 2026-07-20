@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,15 +23,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       .run();
 
     const remaining = await d1.prepare("SELECT COUNT(*) AS count FROM fdp_checklist_items WHERE card_id = ? AND completed = 0").bind(item.card_id).first<{ count: number }>();
-    if (Number(remaining?.count ?? 0) === 0) {
-      const doneList = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'done'").bind(board.id).first<{ id: string }>();
-      if (doneList) {
-        const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS max_position FROM fdp_cards WHERE list_id = ? AND archived = 0").bind(doneList.id).first<{ max_position: number }>();
-        await d1.prepare("UPDATE fdp_cards SET list_id = ?, position = ?, sla_status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-          .bind(doneList.id, Number(position?.max_position ?? 0) + 1000, item.card_id)
-          .run();
-      }
-    }
+    if (Number(remaining?.count ?? 0) === 0) await runAutomations(workspace.id, board.id, item.card_id, "checklist.completed", auth.user.email, { allItems: true });
     await recordActivity(workspace.id, item.card_id, auth.user.email, "checklist.item_toggled", { itemId: id, completed });
     return Response.json(await getWorkspaceSnapshot(auth.user));
   } catch (error) {

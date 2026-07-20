@@ -18,3 +18,10 @@ export function getD1() {
   }
   return env.DB;
 }
+
+export function getAttachmentsBucket() {
+  if (!env.ATTACHMENTS) {
+    throw new Error("Armazenamento de anexos indisponível.");
+  }
+  return env.ATTACHMENTS;
+}
