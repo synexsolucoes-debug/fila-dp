@@ -508,6 +508,31 @@ h1 { color: #142830; font-size: clamp(27px, 2.2vw, 36px); font-weight: 690; lett
 .restore-button:hover { border-color: #85bfaf; background: #e2f2ec; }
 .restore-button:disabled { cursor: wait; opacity: .55; }
 
+.skip-link {
+  position: fixed; left: 16px; top: 12px; z-index: 200; padding: 10px 14px;
+  border-radius: 10px; color: #fff; background: #0d765d; font-size: 11px; font-weight: 750;
+  box-shadow: 0 10px 30px rgba(8, 45, 36, .25); transform: translateY(-150%); transition: transform .15s ease;
+}
+.skip-link:focus { transform: translateY(0); }
+:where(button, a, input, select, textarea):focus-visible { outline: 3px solid rgba(38, 163, 130, .3); outline-offset: 2px; }
+
+.queue-shortcuts {
+  margin: -2px 0 14px; display: flex; align-items: center; gap: 7px; overflow-x: auto;
+  scrollbar-width: thin; scrollbar-color: #c8d7d2 transparent;
+}
+.queue-shortcuts button {
+  min-height: 34px; flex: 0 0 auto; border: 1px solid #d9e4e0; border-radius: 10px; padding: 0 8px 0 11px;
+  display: inline-flex; align-items: center; gap: 8px; color: #607278; background: rgba(255,255,255,.58);
+  font-size: 9px; font-weight: 680; transition: border-color .15s ease, color .15s ease, background .15s ease, transform .15s ease;
+}
+.queue-shortcuts button:hover { border-color: #b8d3ca; color: #1c5f50; background: #fff; transform: translateY(-1px); }
+.queue-shortcuts button b {
+  min-width: 20px; height: 20px; border-radius: 7px; padding: 0 5px; display: grid; place-items: center;
+  color: #718388; background: #edf2f0; font-size: 8px;
+}
+.queue-shortcuts button.active { border-color: #92c7b8; color: #0c6e57; background: #e8f5f0; box-shadow: 0 5px 14px rgba(22,143,112,.08); }
+.queue-shortcuts button.active b { color: #fff; background: #178a6c; }
+
 @media (max-width: 1320px) {
   .topbar { grid-template-columns: minmax(240px, 1fr) auto; }
   .topbar .kpis { grid-column: 1 / -1; grid-row: 2; }
@@ -523,5 +548,5 @@ h1 { color: #142830; font-size: clamp(27px, 2.2vw, 36px); font-weight: 690; lett
 }
 @media (max-width: 640px) {
   .app-shell { display:block; }.sidebar { position:sticky;top:0;width:100%;height:68px;padding:9px 12px;display:flex;flex-direction:row;z-index:90 }.brand{margin:0 auto 0 0;padding:0}.brand>span{width:38px;height:38px;border-radius:11px}.sidebar nav{display:flex;gap:2px;overflow-x:auto}.sidebar nav button{width:40px;min-width:40px;height:40px;min-height:40px;border-radius:10px}.sidebar nav button.active::before{display:none}.profile{margin:0 0 0 5px;padding:0;border:0}.profile .avatar.large{width:36px;height:36px}
-  .workspace { padding: 20px 14px 32px; }.topbar{grid-template-columns:1fr auto;gap:12px}.page-subtitle{display:none}h1{font-size:27px}.topbar .kpis{gap:7px;overflow-x:auto;margin-right:-14px;padding-right:14px}.kpi{min-width:132px}.topbar-actions>.primary{width:43px;padding:0;font-size:0}.toolbar{flex-wrap:wrap}.super-search{width:100%}.result-count{margin-left:0}.board{margin-right:-14px}.dashboard-grid,.reports-grid,.settings-grid{grid-template-columns:1fr}.panel.wide,.welcome{grid-column:auto}.welcome{padding:24px}.welcome-mark{display:none}.inbox-toolbar{grid-template-columns:1fr}.inbox-list>article{grid-template-columns:1fr}.inbox-actions{grid-template-columns:repeat(3,1fr)}.sla-grid{grid-template-columns:1fr}.modal-backdrop{padding:8px}.modal{max-height:calc(100vh - 16px);border-radius:15px}.form-grid{grid-template-columns:1fr}.form-grid label.full{grid-column:auto}.notification-menu{position:fixed;left:14px;right:14px;top:76px;width:auto}.attachment-upload{grid-template-columns:1fr}.trash-toolbar{align-items:stretch;flex-direction:column}.trash-toolbar .search{width:100%}.trash-list>article{grid-template-columns:36px 1fr}.trash-item-icon{width:36px;height:36px}.restore-button{grid-column:2;justify-self:start}.delete-outline{width:100%;margin-right:0;justify-content:center}.detail-form>footer{flex-wrap:wrap}
+  .workspace { padding: 20px 14px 32px; }.topbar{grid-template-columns:1fr auto;gap:12px}.page-subtitle{display:none}h1{font-size:27px}.topbar .kpis{gap:7px;overflow-x:auto;margin-right:-14px;padding-right:14px}.kpi{min-width:132px}.topbar-actions>.primary{width:43px;padding:0;font-size:0}.toolbar{flex-wrap:wrap}.super-search{width:100%}.result-count{margin-left:0}.queue-shortcuts{margin-right:-14px;padding-right:14px}.board{margin-right:-14px}.dashboard-grid,.reports-grid,.settings-grid{grid-template-columns:1fr}.panel.wide,.welcome{grid-column:auto}.welcome{padding:24px}.welcome-mark{display:none}.inbox-toolbar{grid-template-columns:1fr}.inbox-list>article{grid-template-columns:1fr}.inbox-actions{grid-template-columns:repeat(3,1fr)}.sla-grid{grid-template-columns:1fr}.modal-backdrop{padding:8px}.modal{max-height:calc(100vh - 16px);border-radius:15px}.form-grid{grid-template-columns:1fr}.form-grid label.full{grid-column:auto}.notification-menu{position:fixed;left:14px;right:14px;top:76px;width:auto}.attachment-upload{grid-template-columns:1fr}.trash-toolbar{align-items:stretch;flex-direction:column}.trash-toolbar .search{width:100%}.trash-list>article{grid-template-columns:36px 1fr}.trash-item-icon{width:36px;height:36px}.restore-button{grid-column:2;justify-self:start}.delete-outline{width:100%;margin-right:0;justify-content:center}.detail-form>footer{flex-wrap:wrap}
 }

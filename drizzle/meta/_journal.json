@@ -43,6 +43,13 @@
       "when": 1784549809152,
       "tag": "0005_same_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784554783286,
+      "tag": "0006_fat_green_goblin",
+      "breakpoints": true
     }
   ]
 }

@@ -70,21 +70,32 @@ type DemandRow = Omit<DemandRaw, "labelsJson"> & { labels: DemandLabel[] };
 type MetaWebhook = { entry?: Array<{ changes?: Array<{ value?: { contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>; messages?: Array<{ id?: string; from?: string; timestamp?: string; type?: string; text?: { body?: string }; button?: { text?: string }; interactive?: { button_reply?: { title?: string; id?: string }; list_reply?: { title?: string; id?: string } } }> } }> }> };
 
 const demandSelect = `
+  WITH demand_label_summary AS (
+    SELECT dl.demand_id AS demandId,
+      json_group_array(json_object('id', l.id, 'name', l.name, 'color', l.color, 'status', l.status)) AS labelsJson
+    FROM demand_labels dl
+    JOIN labels l ON l.id = dl.label_id
+    GROUP BY dl.demand_id
+  ),
+  demand_checklist_summary AS (
+    SELECT demand_id AS demandId, COUNT(*) AS checklistTotal,
+      SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) AS checklistCompleted
+    FROM demand_checklists
+    GROUP BY demand_id
+  )
   SELECT d.id, d.title, d.description, d.category,
     COALESCE(c.trade_name, d.company) AS company, d.company_id AS companyId,
     d.employee, d.requester, d.source, d.priority, d.due_date AS dueDate,
     d.status, d.assignee_email AS assigneeEmail, d.assignee_name AS assignee,
     d.created_by_email AS createdByEmail, d.created_at AS createdAt,
     d.updated_at AS updatedAt, d.version, d.updated_by_id AS updatedById,
-    COALESCE((
-      SELECT json_group_array(json_object('id', l.id, 'name', l.name, 'color', l.color, 'status', l.status))
-      FROM demand_labels dl JOIN labels l ON l.id = dl.label_id
-      WHERE dl.demand_id = d.id
-    ), '[]') AS labelsJson,
-    (SELECT COUNT(*) FROM demand_checklists dc WHERE dc.demand_id = d.id) AS checklistTotal,
-    (SELECT COUNT(*) FROM demand_checklists dc WHERE dc.demand_id = d.id AND dc.completed = 1) AS checklistCompleted
+    COALESCE(dls.labelsJson, '[]') AS labelsJson,
+    COALESCE(dcs.checklistTotal, 0) AS checklistTotal,
+    COALESCE(dcs.checklistCompleted, 0) AS checklistCompleted
   FROM demands d
-  LEFT JOIN companies c ON c.id = d.company_id`;
+  LEFT JOIN companies c ON c.id = d.company_id
+  LEFT JOIN demand_label_summary dls ON dls.demandId = d.id
+  LEFT JOIN demand_checklist_summary dcs ON dcs.demandId = d.id`;
 
 const userSelect = `
   SELECT id, email, display_name AS displayName, role, status,
@@ -192,13 +203,24 @@ function canEditDemand(user: AppUser, demand: DemandRow) {
 async function activeTeam(env: Env) {
   const result = await env.DB.prepare(`
     SELECT u.id, u.display_name AS name, u.email,
-      (SELECT COUNT(*) FROM demands d WHERE d.assignee_email = u.email AND d.status <> 'done' AND d.deleted_at IS NULL) AS activeCount
-    FROM users u WHERE u.status = 'active' ORDER BY activeCount, u.display_name`).all();
+      COALESCE(workload.activeCount, 0) AS activeCount
+    FROM users u
+    LEFT JOIN (
+      SELECT assignee_email AS email, COUNT(*) AS activeCount
+      FROM demands
+      WHERE status <> 'done' AND deleted_at IS NULL AND assignee_email IS NOT NULL
+      GROUP BY assignee_email
+    ) workload ON workload.email = u.email
+    WHERE u.status = 'active'
+    ORDER BY activeCount, u.display_name`).all();
   return result.results;
 }
 
 function channelSource(channel: string) {
-  return channel === "email" ? "E-mail" : channel === "whatsapp" ? "WhatsApp" : "Verbal";
+  if (channel === "email") return "E-mail";
+  if (channel === "teams") return "Teams";
+  if (channel === "whatsapp") return "WhatsApp";
+  return "Verbal";
 }
 
 const encoder = new TextEncoder();
@@ -642,15 +664,22 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
 
   if (payload.action === "move" && payload.status && statuses.has(payload.status as DemandStatus)) {
     const status = payload.status as DemandStatus;
+    const receivedVersion = Number(payload.version);
+    if (receivedVersion !== existing.version) {
+      return json({ error: "CONFLITO_VERSAO", message: "Esta demanda foi alterada por outro analista. O quadro será atualizado antes de tentar novamente." }, 409);
+    }
+    if (status === existing.status) return json({ demand: existing });
     const justification = String(payload.justification ?? "").trim();
     if (existing.status === "done" && status !== "done") {
       if (!justification) return json({ error: "JUSTIFICATIVA_OBRIGATORIA", message: "Informe o motivo para reabrir a demanda." }, 422);
     }
     const assigneeEmail = status === "available" ? null : (existing.assigneeEmail ?? user.email);
     const assigneeName = status === "available" ? null : (existing.assignee ?? user.displayName);
-    await env.DB.prepare(`
+    const updated = await env.DB.prepare(`
       UPDATE demands SET status = ?, assignee_email = ?, assignee_name = ?, updated_at = CURRENT_TIMESTAMP,
-        updated_by_id = ?, version = version + 1 WHERE id = ?`).bind(status, assigneeEmail, assigneeName, user.id, id).run();
+        updated_by_id = ?, version = version + 1 WHERE id = ? AND version = ? RETURNING id`)
+      .bind(status, assigneeEmail, assigneeName, user.id, id, existing.version).first<{ id: number }>();
+    if (!updated) return json({ error: "CONFLITO_VERSAO", message: "Não foi possível movimentar porque a demanda mudou. Atualize o quadro e tente novamente." }, 409);
     const action = existing.status === "done" && status !== "done" ? "reopened" : status === "available" ? "returned" : "status_changed";
     await addDemandHistory(env, id, action, `Status alterado de ${existing.status} para ${status}`, user, {
       fieldChanged: "status", oldValue: existing.status, newValue: status, justification: justification || undefined,

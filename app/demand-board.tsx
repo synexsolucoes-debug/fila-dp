@@ -6,6 +6,7 @@ type Status = "available" | "in_progress" | "waiting" | "done";
 type Priority = "low" | "medium" | "high" | "urgent";
 type ActiveStatus = "active" | "inactive";
 type View = "overview" | "inbox" | "demands" | "mine" | "reports" | "settings" | "users" | "companies" | "trash";
+type QueueFocus = "all" | "overdue" | "urgent" | "unassigned";
 
 type User = { name: string; email: string; role: "admin" | "analyst" };
 type TeamMember = { id: number; name: string; email: string; activeCount: number };
@@ -177,10 +178,21 @@ function isAged(demand: Demand) {
   return demand.status === "waiting" && Boolean(updated) && Date.now() - updated!.getTime() > 3 * 86400000;
 }
 
+function isOverdue(demand: Demand) {
+  return demand.status !== "done" && new Date(`${demand.dueDate}T23:59:59`).getTime() < Date.now();
+}
+
 function businessDueDate(days: number) {
   const date = new Date(); let remaining = Math.max(1, days);
   while (remaining > 0) { date.setDate(date.getDate() + 1); if (date.getDay() !== 0 && date.getDay() !== 6) remaining -= 1; }
   return date.toISOString().slice(0, 10);
+}
+
+async function requestJson<T>(input: string, init: RequestInit, fallbackMessage: string): Promise<T> {
+  const response = await fetch(input, init);
+  const data = await response.json().catch(() => ({})) as T & { error?: string; message?: string };
+  if (!response.ok) throw new Error(data.message ?? data.error ?? fallbackMessage);
+  return data;
 }
 
 export default function DemandBoard({ currentUser }: { currentUser: User }) {
@@ -203,6 +215,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [labelFilter, setLabelFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [queueFocus, setQueueFocus] = useState<QueueFocus>("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const [labelsExpanded, setLabelsExpanded] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -245,64 +258,55 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   }
 
   const loadUsers = useCallback(async () => {
-    const response = await fetch("/api/users", { cache: "no-store" });
-    const data = await response.json() as { users?: ManagedUser[] };
-    if (response.ok) setUsers(data.users ?? []);
+    const data = await requestJson<{ users?: ManagedUser[] }>("/api/users", { cache: "no-store" }, "Não foi possível carregar os usuários.");
+    setUsers(data.users ?? []);
   }, []);
 
   const loadConfiguration = useCallback(async () => {
     const suffix = "?status=all";
-    const [companiesResponse, labelsResponse, templatesResponse] = await Promise.all([
-      fetch(`/api/companies${suffix}`, { cache: "no-store" }),
-      fetch(`/api/labels${suffix}`, { cache: "no-store" }),
-      fetch(`/api/checklist-templates${suffix}`, { cache: "no-store" }),
+    const [companiesData, labelsData, templatesData] = await Promise.all([
+      requestJson<{ companies?: Company[] }>(`/api/companies${suffix}`, { cache: "no-store" }, "Não foi possível carregar as empresas."),
+      requestJson<{ labels?: Label[] }>(`/api/labels${suffix}`, { cache: "no-store" }, "Não foi possível carregar as etiquetas."),
+      requestJson<{ templates?: ChecklistTemplate[] }>(`/api/checklist-templates${suffix}`, { cache: "no-store" }, "Não foi possível carregar os modelos."),
     ]);
-    const companiesData = await companiesResponse.json() as { companies?: Company[] };
-    const labelsData = await labelsResponse.json() as { labels?: Label[] };
-    const templatesData = await templatesResponse.json() as { templates?: ChecklistTemplate[] };
-    if (companiesResponse.ok) setCompanies(companiesData.companies ?? []);
-    if (labelsResponse.ok) setLabels(labelsData.labels ?? []);
-    if (templatesResponse.ok) setTemplates(templatesData.templates ?? []);
+    setCompanies(companiesData.companies ?? []);
+    setLabels(labelsData.labels ?? []);
+    setTemplates(templatesData.templates ?? []);
   }, []);
 
   const loadOperations = useCallback(async () => {
-    const [inboxResponse, integrationsResponse, slaResponse, notificationsResponse] = await Promise.all([
-      fetch("/api/inbox", { cache: "no-store" }), fetch("/api/integrations", { cache: "no-store" }),
-      fetch("/api/sla-rules", { cache: "no-store" }), fetch("/api/notifications", { cache: "no-store" }),
+    const [inboxData, integrationsData, slaData, notificationsData] = await Promise.all([
+      requestJson<{ items?: InboxItem[] }>("/api/inbox", { cache: "no-store" }, "Não foi possível carregar a caixa de entrada."),
+      requestJson<{ channels?: IntegrationChannel[] }>("/api/integrations", { cache: "no-store" }, "Não foi possível carregar as integrações."),
+      requestJson<{ rules?: SlaRule[] }>("/api/sla-rules", { cache: "no-store" }, "Não foi possível carregar as regras de prazo."),
+      requestJson<{ notifications?: NotificationItem[] }>("/api/notifications", { cache: "no-store" }, "Não foi possível carregar as notificações."),
     ]);
-    const inboxData = await inboxResponse.json() as { items?: InboxItem[] };
-    const integrationsData = await integrationsResponse.json() as { channels?: IntegrationChannel[] };
-    const slaData = await slaResponse.json() as { rules?: SlaRule[] };
-    const notificationsData = await notificationsResponse.json() as { notifications?: NotificationItem[] };
-    if (inboxResponse.ok) setInboxItems(inboxData.items ?? []);
-    if (integrationsResponse.ok) setIntegrations(integrationsData.channels ?? []);
-    if (slaResponse.ok) setSlaRules(slaData.rules ?? []);
-    if (notificationsResponse.ok) setNotifications(notificationsData.notifications ?? []);
+    setInboxItems(inboxData.items ?? []);
+    setIntegrations(integrationsData.channels ?? []);
+    setSlaRules(slaData.rules ?? []);
+    setNotifications(notificationsData.notifications ?? []);
   }, []);
 
   const loadTrash = useCallback(async () => {
-    const response = await fetch("/api/demands-trash", { cache: "no-store" });
-    const data = await response.json() as { demands?: TrashDemand[]; error?: string };
-    if (!response.ok) throw new Error(data.error ?? "Não foi possível carregar a lixeira.");
+    const data = await requestJson<{ demands?: TrashDemand[] }>("/api/demands-trash", { cache: "no-store" }, "Não foi possível carregar a lixeira.");
     setTrashItems(data.demands ?? []);
   }, []);
+
+  const loadBoard = useCallback(async () => {
+    const data = await requestJson<{ demands?: Demand[]; user?: User; team?: TeamMember[] }>(
+      "/api/demands", { cache: "no-store" }, "Não foi possível carregar as demandas.",
+    );
+    setDemands(data.demands ?? []);
+    setTeam(data.team ?? []);
+    setActiveUser(data.user ?? currentUser);
+  }, [currentUser]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const response = await fetch("/api/demands", { cache: "no-store" });
-        const data = await response.json() as { demands?: Demand[]; user?: User; team?: TeamMember[]; error?: string };
-        if (!response.ok) throw new Error(data.error ?? "Não foi possível carregar as demandas.");
+        await Promise.all([loadBoard(), loadConfiguration(), loadUsers(), loadOperations(), loadTrash()]);
         if (cancelled) return;
-        const user = data.user ?? currentUser;
-        setDemands(data.demands ?? []);
-        setTeam(data.team ?? []);
-        setActiveUser(user);
-        await loadConfiguration();
-        await loadUsers();
-        await loadOperations();
-        await loadTrash();
       } catch (error) {
         if (!cancelled) flash(error instanceof Error ? error.message : "Erro ao carregar os dados.");
       } finally {
@@ -311,7 +315,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     }
     load();
     return () => { cancelled = true; };
-  }, [currentUser, loadConfiguration, loadOperations, loadTrash, loadUsers]);
+  }, [loadBoard, loadConfiguration, loadOperations, loadTrash, loadUsers]);
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -339,9 +343,13 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
         && (labelFilter === "all" || demand.labels.some((label) => label.id === Number(labelFilter)))
         && (companyFilter === "all" || demand.companyId === Number(companyFilter))
         && (assigneeFilter === "all" || (assigneeFilter === "unassigned" ? !demand.assigneeEmail : demand.assigneeEmail === assigneeFilter))
+        && (queueFocus === "all"
+          || (queueFocus === "overdue" && isOverdue(demand))
+          || (queueFocus === "urgent" && demand.priority === "urgent" && demand.status !== "done")
+          || (queueFocus === "unassigned" && !demand.assigneeEmail && demand.status !== "done"))
         && (view !== "mine" || demand.assigneeEmail === activeUser.email);
     });
-  }, [demands, query, priority, labelFilter, companyFilter, assigneeFilter, view, activeUser.email]);
+  }, [demands, query, priority, labelFilter, companyFilter, assigneeFilter, queueFocus, view, activeUser.email]);
 
   const filteredUsers = useMemo(() => users.filter((user) => {
     const text = `${user.displayName} ${user.email}`.toLowerCase();
@@ -355,13 +363,16 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     return text.includes(companySearch.toLowerCase()) && (companyStatusFilter === "all" || company.status === companyStatusFilter);
   }), [companies, companySearch, companyStatusFilter]);
 
-  const counts = useMemo(() => ({
-    available: demands.filter((d) => d.status === "available").length,
-    active: demands.filter((d) => d.status === "in_progress").length,
-    overdue: demands.filter((d) => d.status !== "done" && new Date(`${d.dueDate}T23:59:59`) < new Date()).length,
-  }), [demands]);
+  const counts = useMemo(() => demands.reduce((total, demand) => {
+    if (demand.status === "available") total.available += 1;
+    if (demand.status === "in_progress") total.active += 1;
+    if (isOverdue(demand)) total.overdue += 1;
+    if (demand.priority === "urgent" && demand.status !== "done") total.urgent += 1;
+    if (!demand.assigneeEmail && demand.status !== "done") total.unassigned += 1;
+    return total;
+  }, { available: 0, active: 0, overdue: 0, urgent: 0, unassigned: 0 }), [demands]);
 
-  const activeFilters = [priority, labelFilter, companyFilter, assigneeFilter].filter((value) => value !== "all").length;
+  const activeFilters = [priority, labelFilter, companyFilter, assigneeFilter, queueFocus].filter((value) => value !== "all").length;
 
   async function claimDemand(id: number) {
     setSaving(true);
@@ -376,10 +387,13 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   }
 
   async function moveDemand(id: number, status: Status) {
+    const current = demands.find((demand) => demand.id === id);
+    if (!current || current.status === status) return;
     setSaving(true);
     try {
-      const response = await fetch(`/api/demands/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "move", status }) });
+      const response = await fetch(`/api/demands/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "move", status, version: current.version }) });
       const data = await response.json() as { demand?: Demand; error?: string; message?: string };
+      if (response.status === 409) await loadBoard();
       if (!response.ok || !data.demand) throw new Error(data.message ?? data.error ?? "Não foi possível movimentar a demanda.");
       replaceDemand(data.demand);
       flash("Status atualizado.");
@@ -804,16 +818,17 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   } as Record<View, string>)[view];
 
   return <main className="app-shell">
+    <a className="skip-link" href="#conteudo-principal">Ir para o conteúdo principal</a>
     <aside className="sidebar">
       <div className="brand"><span>F</span><div><strong>Fila DP</strong><small>Central operacional</small></div></div>
       <span className="nav-section-label">Menu principal</span>
       <nav aria-label="Navegação principal">
-        {navItems.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon}/><span>{item.label}</span></button>)}
+        {navItems.map((item) => <button type="button" key={item.id} className={view === item.id ? "active" : ""} title={item.label} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}><Icon name={item.icon}/><span>{item.label}</span></button>)}
       </nav>
       <div className="profile"><span className="avatar large">{initials(activeUser.name)}</span><div><strong>{activeUser.name}</strong><small>{activeUser.role === "admin" ? "Administrador" : "Analista · acesso completo"}</small></div><span className="online-dot" title="Online"/></div>
     </aside>
 
-    <section className="workspace">
+    <section className="workspace" id="conteudo-principal" tabIndex={-1}>
       <header className="topbar">
         <div className="page-heading"><p className="eyebrow">Gestão de demandas</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div>
         {!(["users", "companies", "trash"] as View[]).includes(view) && <div className="kpis" aria-label="Indicadores da fila">
@@ -822,7 +837,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
           <div className="kpi coral"><span className="kpi-icon"><Icon name="alert"/></span><div><small>Atrasadas</small><strong>{counts.overdue}</strong></div></div>
         </div>}
         <div className="topbar-actions">
-          <div className="notification-wrap"><button className="notification-button" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label="Notificações"><Icon name="bell"/>{notifications.some((item) => !item.read) && <b>{notifications.filter((item) => !item.read).length}</b>}</button>{notificationsOpen && <div className="notification-menu"><header><strong>Alertas da equipe</strong><small>{notifications.filter((item) => !item.read).length} não lidos</small></header>{notifications.length ? notifications.slice(0, 12).map((item) => <button key={`${item.type}-${item.id}`} className={item.read ? "read" : ""} onClick={() => markNotification(item)}><span className={item.type === "sla" ? "alert-dot" : "info-dot"}/><span><strong>{item.title}</strong><small>{item.message}</small></span></button>) : <p>Nenhum alerta no momento.</p>}</div>}</div>
+          <div className="notification-wrap"><button type="button" className="notification-button" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label="Notificações" aria-expanded={notificationsOpen}><Icon name="bell"/>{notifications.some((item) => !item.read) && <b>{notifications.filter((item) => !item.read).length}</b>}</button>{notificationsOpen && <div className="notification-menu"><header><strong>Alertas da equipe</strong><small>{notifications.filter((item) => !item.read).length} não lidos</small></header>{notifications.length ? notifications.slice(0, 12).map((item) => <button key={`${item.type}-${item.id}`} className={item.read ? "read" : ""} onClick={() => markNotification(item)}><span className={item.type === "sla" ? "alert-dot" : "info-dot"}/><span><strong>{item.title}</strong><small>{item.message}</small></span></button>) : <p>Nenhum alerta no momento.</p>}</div>}</div>
           {view === "trash"
             ? null
             : view === "users"
@@ -837,19 +852,27 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
 
       {(view === "demands" || view === "mine") && <>
         <div className="toolbar">
-          <label className="search super-search"><Icon name="search"/><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Super busca: ex. Férias Maria"/><kbd>F</kbd></label>
+          <label className="search super-search"><Icon name="search"/><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar demandas" placeholder="Super busca: ex. Férias Maria"/><kbd>F</kbd></label>
           <div className="filter-wrap">
-            <button className="secondary" onClick={() => setFilterOpen(!filterOpen)}><Icon name="filter"/>Filtros {activeFilters > 0 && <b>{activeFilters}</b>}<span>⌄</span></button>
+            <button type="button" className="secondary" onClick={() => setFilterOpen(!filterOpen)} aria-expanded={filterOpen}><Icon name="filter"/>Filtros {activeFilters > 0 && <b>{activeFilters}</b>}<span>⌄</span></button>
             {filterOpen && <div className="filter-menu super-filter">
               <label>Prioridade<select value={priority} onChange={(event) => setPriority(event.target.value as Priority | "all")}><option value="all">Todas</option><option value="urgent">Urgente</option><option value="high">Alta</option><option value="medium">Média</option><option value="low">Baixa</option></select></label>
               <label>Etiqueta<select value={labelFilter} onChange={(event) => setLabelFilter(event.target.value)}><option value="all">Todas</option>{labels.filter((label) => label.status === "active").map((label) => <option key={label.id} value={label.id}>{label.name}</option>)}</select></label>
               <label>Empresa<select value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">Todas</option>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{company.tradeName}</option>)}</select></label>
               <label>Responsável<select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Todos</option><option value="unassigned">Sem responsável</option>{team.map((member) => <option key={member.id} value={member.email}>{member.name}</option>)}</select></label>
-              <button onClick={() => { setPriority("all"); setLabelFilter("all"); setCompanyFilter("all"); setAssigneeFilter("all"); }}>Limpar filtros</button>
+              <button type="button" onClick={() => { setPriority("all"); setLabelFilter("all"); setCompanyFilter("all"); setAssigneeFilter("all"); setQueueFocus("all"); }}>Limpar filtros</button>
             </div>}
           </div>
-          {(loading || saving) && <span className="sync-state">{loading ? "Carregando..." : "Salvando..."}</span>}
+          {(loading || saving) && <span className="sync-state" role="status" aria-live="polite">{loading ? "Carregando..." : "Salvando..."}</span>}
           <span className="result-count">{filtered.length} demandas</span>
+        </div>
+        <div className="queue-shortcuts" aria-label="Filtros rápidos da fila">
+          {([
+            { id: "all", label: "Toda a fila", count: demands.length },
+            { id: "overdue", label: "Atrasadas", count: counts.overdue },
+            { id: "urgent", label: "Urgentes", count: counts.urgent },
+            { id: "unassigned", label: "Sem responsável", count: counts.unassigned },
+          ] as Array<{ id: QueueFocus; label: string; count: number }>).map((item) => <button type="button" key={item.id} className={queueFocus === item.id ? "active" : ""} aria-pressed={queueFocus === item.id} onClick={() => setQueueFocus(item.id)}><span>{item.label}</span><b>{item.count}</b></button>)}
         </div>
         <div className="board">
           {STATUS.map((column) => {

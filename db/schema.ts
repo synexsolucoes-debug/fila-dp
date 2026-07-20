@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -54,7 +54,7 @@ export const demands = sqliteTable("demands", {
   companyId: integer("company_id").references(() => companies.id),
   employee: text("employee"),
   requester: text("requester").notNull(),
-  source: text("source", { enum: ["E-mail", "WhatsApp", "Verbal"] }).notNull(),
+  source: text("source", { enum: ["E-mail", "Teams", "WhatsApp", "Verbal"] }).notNull(),
   priority: text("priority", { enum: ["low", "medium", "high", "urgent"] }).notNull().default("medium"),
   dueDate: text("due_date").notNull(),
   status: text("status", { enum: ["available", "in_progress", "waiting", "done"] }).notNull().default("available"),
@@ -68,7 +68,12 @@ export const demands = sqliteTable("demands", {
   deletedAt: text("deleted_at"),
   deletedById: integer("deleted_by_id").references(() => users.id),
   deletionReason: text("deletion_reason"),
-});
+}, (table) => [
+  index("demands_queue_idx").on(table.deletedAt, table.status, table.createdAt),
+  index("demands_assignee_idx").on(table.assigneeEmail, table.status, table.deletedAt),
+  index("demands_due_date_idx").on(table.dueDate, table.status, table.deletedAt),
+  index("demands_company_idx").on(table.companyId, table.deletedAt),
+]);
 
 export const demandLabels = sqliteTable("demand_labels", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -87,7 +92,7 @@ export const demandChecklists = sqliteTable("demand_checklists", {
   completedAt: text("completed_at"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [index("demand_checklists_demand_order_idx").on(table.demandId, table.sortOrder)]);
 
 export const demandComments = sqliteTable("demand_comments", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -96,7 +101,7 @@ export const demandComments = sqliteTable("demand_comments", {
   text: text("text").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [index("demand_comments_demand_created_idx").on(table.demandId, table.createdAt)]);
 
 export const inboxItems = sqliteTable("inbox_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -113,7 +118,10 @@ export const inboxItems = sqliteTable("inbox_items", {
   receivedAt: text("received_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [uniqueIndex("inbox_external_id_idx").on(table.externalId)]);
+}, (table) => [
+  uniqueIndex("inbox_external_id_idx").on(table.externalId),
+  index("inbox_status_received_idx").on(table.status, table.receivedAt),
+]);
 
 export const notifications = sqliteTable("notifications", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -125,7 +133,7 @@ export const notifications = sqliteTable("notifications", {
   inboxItemId: integer("inbox_item_id").references(() => inboxItems.id, { onDelete: "cascade" }),
   read: integer("read", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [index("notifications_user_read_created_idx").on(table.userId, table.read, table.createdAt)]);
 
 export const slaRules = sqliteTable("sla_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -165,7 +173,10 @@ export const demandAttachments = sqliteTable("demand_attachments", {
   size: integer("size").notNull(),
   objectKey: text("object_key").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [uniqueIndex("demand_attachments_object_key_idx").on(table.objectKey)]);
+}, (table) => [
+  uniqueIndex("demand_attachments_object_key_idx").on(table.objectKey),
+  index("demand_attachments_demand_created_idx").on(table.demandId, table.createdAt),
+]);
 
 export const demandHistory = sqliteTable("demand_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -180,7 +191,7 @@ export const demandHistory = sqliteTable("demand_history", {
   newValue: text("new_value"),
   justification: text("justification"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [index("demand_history_demand_created_idx").on(table.demandId, table.createdAt)]);
 
 export const userHistory = sqliteTable("user_history", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -191,7 +202,7 @@ export const userHistory = sqliteTable("user_history", {
   oldValue: text("old_value"),
   newValue: text("new_value"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [index("user_history_target_created_idx").on(table.targetUserId, table.createdAt)]);
 
 export type DemandRecord = typeof demands.$inferSelect;
 export type UserRecord = typeof users.$inferSelect;
