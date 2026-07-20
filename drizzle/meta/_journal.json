@@ -36,6 +36,13 @@
       "when": 1784320044449,
       "tag": "0004_smart_roughhouse",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784549809152,
+      "tag": "0005_same_maximus",
+      "breakpoints": true
     }
   ]
 }

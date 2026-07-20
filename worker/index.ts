@@ -181,7 +181,7 @@ async function addUserHistory(env: Env, targetUserId: number, actor: AppUser, ac
 }
 
 async function getDemand(env: Env, id: number) {
-  const row = await env.DB.prepare(`${demandSelect} WHERE d.id = ? LIMIT 1`).bind(id).first<DemandRaw>();
+  const row = await env.DB.prepare(`${demandSelect} WHERE d.id = ? AND d.deleted_at IS NULL LIMIT 1`).bind(id).first<DemandRaw>();
   return normalizeDemand(row);
 }
 
@@ -192,7 +192,7 @@ function canEditDemand(user: AppUser, demand: DemandRow) {
 async function activeTeam(env: Env) {
   const result = await env.DB.prepare(`
     SELECT u.id, u.display_name AS name, u.email,
-      (SELECT COUNT(*) FROM demands d WHERE d.assignee_email = u.email AND d.status <> 'done') AS activeCount
+      (SELECT COUNT(*) FROM demands d WHERE d.assignee_email = u.email AND d.status <> 'done' AND d.deleted_at IS NULL) AS activeCount
     FROM users u WHERE u.status = 'active' ORDER BY activeCount, u.display_name`).all();
   return result.results;
 }
@@ -401,9 +401,24 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
   const collaboration = await handleDemandCollaboration(request, env, url);
   if (collaboration) return collaboration;
 
+  if (url.pathname === "/api/demands-trash" && request.method === "GET") {
+    const user = await ensureUser(request, env);
+    requireFullAccess(user);
+    const result = await env.DB.prepare(`
+      SELECT d.id, d.title, COALESCE(c.trade_name, d.company) AS company,
+        d.status, d.priority, d.version, d.deleted_at AS deletedAt,
+        d.deletion_reason AS deletionReason, u.display_name AS deletedBy
+      FROM demands d
+      LEFT JOIN companies c ON c.id = d.company_id
+      LEFT JOIN users u ON u.id = d.deleted_by_id
+      WHERE d.deleted_at IS NOT NULL
+      ORDER BY d.deleted_at DESC, d.id DESC`).all();
+    return json({ demands: result.results });
+  }
+
   if (url.pathname === "/api/demands" && request.method === "GET") {
     const user = await ensureUser(request, env);
-    const result = await env.DB.prepare(`${demandSelect} ORDER BY d.created_at DESC, d.id DESC`).all<DemandRaw>();
+    const result = await env.DB.prepare(`${demandSelect} WHERE d.deleted_at IS NULL ORDER BY d.created_at DESC, d.id DESC`).all<DemandRaw>();
     return json({
       demands: result.results.map((row) => normalizeDemand(row)),
       user: { name: user.displayName, email: user.email, role: user.role },
@@ -419,6 +434,32 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
     } catch (error) {
       return json({ error: error instanceof Error ? error.message : "Não foi possível cadastrar a demanda." }, 400);
     }
+  }
+
+  const restoreMatch = url.pathname.match(/^\/api\/demands\/(\d+)\/restore$/);
+  if (restoreMatch && request.method === "POST") {
+    const user = await ensureUser(request, env);
+    requireFullAccess(user);
+    const id = Number(restoreMatch[1]);
+    const existing = await env.DB.prepare(`
+      SELECT id, title, version, deletion_reason AS deletionReason
+      FROM demands WHERE id = ? AND deleted_at IS NOT NULL LIMIT 1`)
+      .bind(id).first<{ id: number; title: string; version: number; deletionReason: string | null }>();
+    if (!existing) return json({ error: "Demanda não encontrada na lixeira." }, 404);
+    const payload = await request.json<{ version?: number }>().catch(() => ({} as { version?: number }));
+    if (Number(payload.version) !== existing.version) {
+      return json({ error: "CONFLITO_VERSAO", message: "Esta demanda foi alterada por outro usuário. Atualize a lixeira e tente novamente." }, 409);
+    }
+    const restored = await env.DB.prepare(`
+      UPDATE demands SET deleted_at = NULL, deleted_by_id = NULL, deletion_reason = NULL,
+        updated_at = CURRENT_TIMESTAMP, updated_by_id = ?, version = version + 1
+      WHERE id = ? AND version = ? AND deleted_at IS NOT NULL RETURNING id`)
+      .bind(user.id, id, existing.version).first<{ id: number }>();
+    if (!restored) return json({ error: "CONFLITO_VERSAO", message: "Não foi possível restaurar porque a demanda mudou." }, 409);
+    await addDemandHistory(env, id, "restored", "Demanda restaurada da lixeira", user, {
+      justification: existing.deletionReason ?? undefined,
+    });
+    return json({ demand: await getDemand(env, id) });
   }
 
   const historyMatch = url.pathname.match(/^\/api\/demands\/(\d+)\/history$/);
@@ -440,6 +481,26 @@ async function handleDemands(request: Request, env: Env, url: URL): Promise<Resp
 
   if (request.method === "GET") {
     return json({ demand: existing, canEdit: canEditDemand(user, existing), editableStructuralFields: true });
+  }
+
+  if (request.method === "DELETE") {
+    requireFullAccess(user);
+    const payload = await request.json<{ reason?: string; version?: number }>().catch(() => ({} as { reason?: string; version?: number }));
+    const reason = payload.reason?.trim() ?? "";
+    if (reason.length < 5 || reason.length > 500) {
+      return json({ error: "Informe o motivo da exclusão com 5 a 500 caracteres." }, 400);
+    }
+    if (Number(payload.version) !== existing.version) {
+      return json({ error: "CONFLITO_VERSAO", message: "Esta demanda foi alterada por outro usuário. Recarregue antes de excluir." }, 409);
+    }
+    const deleted = await env.DB.prepare(`
+      UPDATE demands SET deleted_at = CURRENT_TIMESTAMP, deleted_by_id = ?, deletion_reason = ?,
+        updated_at = CURRENT_TIMESTAMP, updated_by_id = ?, version = version + 1
+      WHERE id = ? AND version = ? AND deleted_at IS NULL RETURNING id`)
+      .bind(user.id, reason, user.id, id, existing.version).first<{ id: number }>();
+    if (!deleted) return json({ error: "CONFLITO_VERSAO", message: "Não foi possível excluir porque a demanda mudou." }, 409);
+    await addDemandHistory(env, id, "deleted", "Demanda enviada para a lixeira", user, { justification: reason });
+    return json({ ok: true });
   }
 
   if (request.method === "PUT") {
@@ -608,7 +669,7 @@ async function handleCompanies(request: Request, env: Env, url: URL): Promise<Re
     const result = await env.DB.prepare(`
       SELECT c.id, c.legal_name AS legalName, c.trade_name AS tradeName, c.cnpj, c.status,
         c.created_at AS createdAt, c.updated_at AS updatedAt,
-        (SELECT COUNT(*) FROM demands d WHERE d.company_id = c.id) AS demandCount
+        (SELECT COUNT(*) FROM demands d WHERE d.company_id = c.id AND d.deleted_at IS NULL) AS demandCount
       FROM companies c ${all ? "" : "WHERE c.status = 'active'"} ORDER BY c.trade_name`).all();
     return json({ companies: result.results });
   }
@@ -734,7 +795,7 @@ async function handleTemplates(request: Request, env: Env, url: URL): Promise<Re
 }
 
 async function activeDemandCount(env: Env, email: string) {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM demands WHERE assignee_email = ? AND status IN ('in_progress', 'waiting')")
+  const row = await env.DB.prepare("SELECT COUNT(*) AS total FROM demands WHERE assignee_email = ? AND status IN ('in_progress', 'waiting') AND deleted_at IS NULL")
     .bind(email).first<{ total: number }>();
   return Number(row?.total ?? 0);
 }
@@ -992,12 +1053,17 @@ async function handleOperations(request: Request, env: Env, url: URL): Promise<R
 
   if (url.pathname === "/api/notifications" && request.method === "GET") {
     const user = await ensureUser(request, env);
-    const stored = await env.DB.prepare(`SELECT id, type, title, message, demand_id AS demandId, inbox_item_id AS inboxItemId, read, created_at AS createdAt FROM notifications WHERE user_id IS NULL OR user_id = ? ORDER BY created_at DESC, id DESC LIMIT 40`)
+    const stored = await env.DB.prepare(`
+      SELECT n.id, n.type, n.title, n.message, n.demand_id AS demandId,
+        n.inbox_item_id AS inboxItemId, n.read, n.created_at AS createdAt
+      FROM notifications n LEFT JOIN demands d ON d.id = n.demand_id
+      WHERE (n.user_id IS NULL OR n.user_id = ?) AND (n.demand_id IS NULL OR d.deleted_at IS NULL)
+      ORDER BY n.created_at DESC, n.id DESC LIMIT 40`)
       .bind(user.id).all<Record<string, unknown>>();
     const deadlines = await env.DB.prepare(`
       SELECT -id AS id, 'sla' AS type, CASE WHEN due_date < date('now') THEN 'SLA vencido' ELSE 'SLA próximo' END AS title,
         title || ' · prazo ' || due_date AS message, id AS demandId, NULL AS inboxItemId, 0 AS read, due_date AS createdAt
-      FROM demands WHERE status <> 'done' AND due_date <= date('now', '+2 day') ORDER BY due_date LIMIT 20`).all<Record<string, unknown>>();
+      FROM demands WHERE status <> 'done' AND deleted_at IS NULL AND due_date <= date('now', '+2 day') ORDER BY due_date LIMIT 20`).all<Record<string, unknown>>();
     return json({ notifications: [...deadlines.results, ...stored.results] });
   }
   const notificationMatch = url.pathname.match(/^\/api\/notifications\/(\d+)$/);

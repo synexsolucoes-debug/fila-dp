@@ -5,7 +5,7 @@ import { FormEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useStat
 type Status = "available" | "in_progress" | "waiting" | "done";
 type Priority = "low" | "medium" | "high" | "urgent";
 type ActiveStatus = "active" | "inactive";
-type View = "overview" | "inbox" | "demands" | "mine" | "reports" | "settings" | "users" | "companies";
+type View = "overview" | "inbox" | "demands" | "mine" | "reports" | "settings" | "users" | "companies" | "trash";
 
 type User = { name: string; email: string; role: "admin" | "analyst" };
 type TeamMember = { id: number; name: string; email: string; activeCount: number };
@@ -40,6 +40,17 @@ type SlaRule = { id: number; category: string; businessDays: number; defaultPrio
 type NotificationItem = { id: number; type: string; title: string; message: string; demandId: number | null; inboxItemId: number | null; read: number | boolean; createdAt: string };
 type Attachment = { id: number; fileName: string; contentType: string; size: number; uploader: string; createdAt: string };
 type WhatsappSetup = { callbackUrl: string; verifyToken: string; configured: boolean; phoneNumberId: string | null; businessAccountId: string | null; canSend: boolean };
+type TrashDemand = {
+  id: number;
+  title: string;
+  company: string;
+  status: Status;
+  priority: Priority;
+  version: number;
+  deletedAt: string;
+  deletionReason: string;
+  deletedBy: string | null;
+};
 
 type Demand = {
   id: number;
@@ -132,6 +143,8 @@ function Icon({ name }: { name: string }) {
     bell: <><path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3V9Z"/><path d="M10 20h4"/></>,
     paperclip: <path d="m8 12 6-6a4 4 0 0 1 6 6l-8 8a6 6 0 0 1-8-8l8-8"/>,
     send: <><path d="m3 3 18 9-18 9 4-9-4-9Z"/><path d="M7 12h14"/></>,
+    trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></>,
+    restore: <><path d="M4 9V4h5"/><path d="M5.5 6.5A8 8 0 1 1 4 14"/><path d="m4 4 4 4"/></>,
   };
   return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -183,6 +196,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [slaRules, setSlaRules] = useState<SlaRule[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [trashItems, setTrashItems] = useState<TrashDemand[]>([]);
   const [view, setView] = useState<View>("demands");
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState<Priority | "all">("all");
@@ -198,6 +212,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [quickEditId, setQuickEditId] = useState<number | null>(null);
   const [selectedDemand, setSelectedDemand] = useState<Demand | null>(null);
+  const [deleteDemand, setDeleteDemand] = useState<Demand | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [demandCanEdit, setDemandCanEdit] = useState(false);
@@ -265,6 +280,13 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     if (notificationsResponse.ok) setNotifications(notificationsData.notifications ?? []);
   }, []);
 
+  const loadTrash = useCallback(async () => {
+    const response = await fetch("/api/demands-trash", { cache: "no-store" });
+    const data = await response.json() as { demands?: TrashDemand[]; error?: string };
+    if (!response.ok) throw new Error(data.error ?? "Não foi possível carregar a lixeira.");
+    setTrashItems(data.demands ?? []);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -280,6 +302,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
         await loadConfiguration();
         await loadUsers();
         await loadOperations();
+        await loadTrash();
       } catch (error) {
         if (!cancelled) flash(error instanceof Error ? error.message : "Erro ao carregar os dados.");
       } finally {
@@ -288,7 +311,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     }
     load();
     return () => { cancelled = true; };
-  }, [currentUser, loadConfiguration, loadOperations, loadUsers]);
+  }, [currentUser, loadConfiguration, loadOperations, loadTrash, loadUsers]);
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -378,6 +401,43 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
       setView("demands");
       flash(data.demand.checklistTotal ? `Demanda criada com ${data.demand.checklistTotal} etapas automáticas.` : "Demanda cadastrada.");
     } catch (error) { flash(error instanceof Error ? error.message : "Erro ao cadastrar demanda."); }
+    finally { setSaving(false); }
+  }
+
+  async function confirmDeleteDemand(reason: string) {
+    if (!deleteDemand) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/demands/${deleteDemand.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, version: deleteDemand.version }),
+      });
+      const data = await response.json() as { ok?: boolean; error?: string; message?: string };
+      if (!response.ok || !data.ok) throw new Error(data.message ?? data.error ?? "Não foi possível excluir a demanda.");
+      setDemands((list) => list.filter((item) => item.id !== deleteDemand.id));
+      setSelectedDemand(null);
+      setDeleteDemand(null);
+      await loadTrash();
+      flash("Demanda enviada para a lixeira.");
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro ao excluir demanda."); }
+    finally { setSaving(false); }
+  }
+
+  async function restoreDemand(item: TrashDemand) {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/demands/${item.id}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: item.version }),
+      });
+      const data = await response.json() as { demand?: Demand; error?: string; message?: string };
+      if (!response.ok || !data.demand) throw new Error(data.message ?? data.error ?? "Não foi possível restaurar a demanda.");
+      setDemands((list) => [data.demand!, ...list.filter((demand) => demand.id !== data.demand!.id)]);
+      await loadTrash();
+      flash("Demanda restaurada e devolvida à fila.");
+    } catch (error) { flash(error instanceof Error ? error.message : "Erro ao restaurar demanda."); }
     finally { setSaving(false); }
   }
 
@@ -724,18 +784,20 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     { id: "demands", label: "Demandas", icon: "inbox" },
     { id: "mine", label: "Minha fila", icon: "user" },
     { id: "reports", label: "Relatórios", icon: "chart" },
+    { id: "trash", label: "Lixeira", icon: "trash" },
     { id: "settings", label: "Configurações", icon: "gear" },
     { id: "companies" as View, label: "Empresas", icon: "building" },
     { id: "users" as View, label: "Usuários", icon: "user" },
   ];
 
-  const title = ({ mine: "Minha fila", overview: "Visão geral", inbox: "Central de entradas", reports: "Relatórios", settings: "Configurações", users: "Gestão de usuários", companies: "Gestão de empresas", demands: "Fila DP" } as Record<View, string>)[view];
+  const title = ({ mine: "Minha fila", overview: "Visão geral", inbox: "Central de entradas", reports: "Relatórios", trash: "Lixeira", settings: "Configurações", users: "Gestão de usuários", companies: "Gestão de empresas", demands: "Fila DP" } as Record<View, string>)[view];
   const subtitle = ({
     overview: "Acompanhe prazos, prioridades e o ritmo da equipe.",
     inbox: "Reúna os pedidos recebidos e transforme mensagens em demandas.",
     demands: "Organize o trabalho do DP em um fluxo claro e compartilhado.",
     mine: "Tudo o que está sob sua responsabilidade em um só lugar.",
     reports: "Visualize produtividade, canais e distribuição da carga.",
+    trash: "Consulte demandas excluídas e restaure itens quando necessário.",
     settings: "Personalize regras, etiquetas e etapas dos processos.",
     users: "Controle acessos e mantenha sua equipe atualizada.",
     companies: "Gerencie as empresas atendidas pelo Departamento Pessoal.",
@@ -754,14 +816,16 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     <section className="workspace">
       <header className="topbar">
         <div className="page-heading"><p className="eyebrow">Gestão de demandas</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div>
-        {!(["users", "companies"] as View[]).includes(view) && <div className="kpis" aria-label="Indicadores da fila">
+        {!(["users", "companies", "trash"] as View[]).includes(view) && <div className="kpis" aria-label="Indicadores da fila">
           <div className="kpi green"><span className="kpi-icon"><Icon name="user"/></span><div><small>Disponíveis</small><strong>{counts.available}</strong></div></div>
           <div className="kpi blue"><span className="kpi-icon"><Icon name="clock"/></span><div><small>Em andamento</small><strong>{counts.active}</strong></div></div>
           <div className="kpi coral"><span className="kpi-icon"><Icon name="alert"/></span><div><small>Atrasadas</small><strong>{counts.overdue}</strong></div></div>
         </div>}
         <div className="topbar-actions">
           <div className="notification-wrap"><button className="notification-button" onClick={() => setNotificationsOpen(!notificationsOpen)} aria-label="Notificações"><Icon name="bell"/>{notifications.some((item) => !item.read) && <b>{notifications.filter((item) => !item.read).length}</b>}</button>{notificationsOpen && <div className="notification-menu"><header><strong>Alertas da equipe</strong><small>{notifications.filter((item) => !item.read).length} não lidos</small></header>{notifications.length ? notifications.slice(0, 12).map((item) => <button key={`${item.type}-${item.id}`} className={item.read ? "read" : ""} onClick={() => markNotification(item)}><span className={item.type === "sla" ? "alert-dot" : "info-dot"}/><span><strong>{item.title}</strong><small>{item.message}</small></span></button>) : <p>Nenhum alerta no momento.</p>}</div>}</div>
-          {view === "users"
+          {view === "trash"
+            ? null
+            : view === "users"
             ? <button className="primary" onClick={() => openUser("new")}><Icon name="plus"/>Novo usuário</button>
             : view === "companies"
               ? <button className="primary" onClick={() => setCompanyModal("new")}><Icon name="plus"/>Nova empresa</button>
@@ -804,6 +868,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
       {view === "overview" && <Overview demands={demands} currentUser={activeUser} onOpenBoard={() => setView("demands")}/>} 
       {view === "inbox" && <InboxView items={inboxItems} integrations={integrations} onPrepare={prepareIntegration} onConfigureWhatsapp={openWhatsappSetup} onReview={(item) => updateInboxStatus(item, "reviewing")} onArchive={(item) => updateInboxStatus(item, "archived")} onConvert={setConvertItem}/>}
       {view === "reports" && <Reports demands={demands} team={team}/>}
+      {view === "trash" && <TrashView demands={trashItems} saving={saving} onRestore={restoreDemand}/>}
       {view === "settings" && <Settings currentUser={activeUser} labels={labels} templates={templates} slaRules={slaRules} onSaveSla={saveSlaRule} onManageUsers={() => setView("users")} onManageCompanies={() => setView("companies")} onNewLabel={() => setLabelModal("new")} onEditLabel={setLabelModal} onAddTemplate={addTemplate} onToggleTemplate={toggleTemplate}/>}
       {view === "users" && <UsersView users={filteredUsers} search={userSearch} roleFilter={userRoleFilter} statusFilter={userStatusFilter} setSearch={setUserSearch} setRoleFilter={setUserRoleFilter} setStatusFilter={setUserStatusFilter} onEdit={openUser}/>} 
       {view === "companies" && <CompaniesView companies={filteredCompanies} search={companySearch} statusFilter={companyStatusFilter} setSearch={setCompanySearch} setStatusFilter={setCompanyStatusFilter} onEdit={setCompanyModal}/>} 
@@ -813,7 +878,8 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
     {inboxModalOpen && <InboxEntryModal companies={companies.filter((company) => company.status === "active")} saving={saving} onClose={() => setInboxModalOpen(false)} onSubmit={createInboxItem}/>}
     {convertItem && <ConvertInboxModal item={convertItem} companies={companies.filter((company) => company.status === "active")} slaRules={slaRules} team={team} saving={saving} onClose={() => setConvertItem(null)} onSubmit={convertInbox}/>}
     {whatsappSetup && <WhatsappSetupModal setup={whatsappSetup} saving={saving} onClose={() => setWhatsappSetup(null)} onSubmit={saveWhatsappSetup}/>}
-    {selectedDemand && <DemandDetailModal demand={selectedDemand} timeline={timeline} checklist={checklist} attachments={attachments} labels={labels.filter((label) => label.status === "active" || selectedDemand.labels.some((item) => item.id === label.id))} companies={companies.filter((company) => company.status === "active" || company.id === selectedDemand.companyId)} canEdit={demandCanEdit} editMode={demandEditMode} saving={saving} error={demandModalError} onEdit={() => setDemandEditMode(true)} onCancelEdit={() => { setDemandEditMode(false); setDemandModalError(""); }} onClose={() => setSelectedDemand(null)} onSubmit={saveDemand} onReload={() => openDemand(selectedDemand.id)} onToggleChecklist={toggleChecklistItem} onAddChecklist={addChecklistItem} onComment={addComment} onUpload={uploadAttachment}/>}
+    {selectedDemand && <DemandDetailModal demand={selectedDemand} timeline={timeline} checklist={checklist} attachments={attachments} labels={labels.filter((label) => label.status === "active" || selectedDemand.labels.some((item) => item.id === label.id))} companies={companies.filter((company) => company.status === "active" || company.id === selectedDemand.companyId)} canEdit={demandCanEdit} editMode={demandEditMode} saving={saving} error={demandModalError} onEdit={() => setDemandEditMode(true)} onDelete={() => setDeleteDemand(selectedDemand)} onCancelEdit={() => { setDemandEditMode(false); setDemandModalError(""); }} onClose={() => setSelectedDemand(null)} onSubmit={saveDemand} onReload={() => openDemand(selectedDemand.id)} onToggleChecklist={toggleChecklistItem} onAddChecklist={addChecklistItem} onComment={addComment} onUpload={uploadAttachment}/>}
+    {deleteDemand && <DeleteDemandModal demand={deleteDemand} saving={saving} onClose={() => setDeleteDemand(null)} onConfirm={confirmDeleteDemand}/>}
     {userModal && <UserModal user={userModal} history={userHistory} saving={saving} onClose={() => setUserModal(null)} onSubmit={submitUser}/>} 
     {inactiveConfirm && <ConfirmInactive count={inactiveConfirm.count} onCancel={() => setInactiveConfirm(null)} onConfirm={() => persistUser(inactiveConfirm.payload, true)}/>} 
     {companyModal && <CompanyModal company={companyModal} saving={saving} onClose={() => setCompanyModal(null)} onSubmit={persistCompany}/>} 
@@ -907,6 +973,23 @@ function Reports({ demands, team }: { demands: Demand[]; team: TeamMember[] }) {
   </div>;
 }
 
+function TrashView({ demands, saving, onRestore }: { demands: TrashDemand[]; saving: boolean; onRestore: (demand: TrashDemand) => void }) {
+  const [query, setQuery] = useState("");
+  const statusLabels: Record<Status, string> = { available: "Disponível", in_progress: "Em andamento", waiting: "Aguardando", done: "Concluída" };
+  const filtered = demands.filter((demand) => `${demand.title} ${demand.company} ${demand.deletionReason} ${demand.deletedBy ?? ""}`.toLowerCase().includes(query.toLowerCase()));
+  return <section className="panel trash-panel">
+    <div className="trash-toolbar"><div><span className="panel-kicker">Exclusão segura</span><h2>Demandas excluídas</h2><p>Os dados, anexos e o histórico ficam preservados para auditoria.</p></div><label className="search"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar na lixeira..."/></label></div>
+    {filtered.length ? <div className="trash-list">{filtered.map((demand) => <article key={demand.id}>
+      <span className="trash-item-icon"><Icon name="trash"/></span>
+      <div className="trash-item-main"><div><strong>{demand.title}</strong><span className="status-badge inactive">{statusLabels[demand.status]}</span></div><p>{demand.company}</p><blockquote>Motivo: {demand.deletionReason}</blockquote><small>Excluída por {demand.deletedBy ?? "usuário da equipe"} em {formatDateTime(demand.deletedAt)}</small></div>
+      <button type="button" className="restore-button" disabled={saving} onClick={() => onRestore(demand)}><Icon name="restore"/>Restaurar</button>
+    </article>)}</div> : <EmptyState
+      title={query ? "Nenhuma demanda encontrada" : "A lixeira está vazia"}
+      text={query ? "Tente buscar por outro termo." : "As demandas excluídas aparecerão aqui e poderão ser restauradas."}
+    />}
+  </section>;
+}
+
 function Settings({ currentUser, labels, templates, slaRules, onSaveSla, onManageUsers, onManageCompanies, onNewLabel, onEditLabel, onAddTemplate, onToggleTemplate }: {
   currentUser: User;
   labels: Label[];
@@ -948,7 +1031,7 @@ function CompaniesView({ companies, search, statusFilter, setSearch, setStatusFi
   return <section className="panel users-panel"><div className="users-toolbar"><label className="search"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar empresa, razão social ou CNPJ..."/></label><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">Todos os status</option><option value="active">Ativas</option><option value="inactive">Inativas</option></select><span className="result-count">{companies.length} empresas</span></div>{companies.length ? <div className="companies-table"><div className="company-head"><span>Nome fantasia</span><span>Razão social</span><span>CNPJ</span><span>Demandas</span><span>Status</span><span>Ações</span></div>{companies.map((company) => <div className="company-row" key={company.id}><div className="user-identity"><span className="company-avatar"><Icon name="building"/></span><strong>{company.tradeName}</strong></div><span>{company.legalName}</span><span>{formatCnpj(company.cnpj)}</span><span>{company.demandCount ?? 0}</span><span className={`status-badge ${company.status}`}>{company.status === "active" ? "Ativa" : "Inativa"}</span><button className="table-action" onClick={() => onEdit(company)}>Editar</button></div>)}</div> : <EmptyState title="Nenhuma empresa encontrada" text="Cadastre a primeira empresa para abrir novas demandas."/>}</section>;
 }
 
-function DemandDetailModal({ demand, timeline, checklist, attachments, labels, companies, canEdit, editMode, saving, error, onEdit, onCancelEdit, onClose, onSubmit, onReload, onToggleChecklist, onAddChecklist, onComment, onUpload }: {
+function DemandDetailModal({ demand, timeline, checklist, attachments, labels, companies, canEdit, editMode, saving, error, onEdit, onDelete, onCancelEdit, onClose, onSubmit, onReload, onToggleChecklist, onAddChecklist, onComment, onUpload }: {
   demand: Demand;
   timeline: TimelineEvent[];
   checklist: ChecklistItem[];
@@ -960,6 +1043,7 @@ function DemandDetailModal({ demand, timeline, checklist, attachments, labels, c
   saving: boolean;
   error: string;
   onEdit: () => void;
+  onDelete: () => void;
   onCancelEdit: () => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -989,8 +1073,20 @@ function DemandDetailModal({ demand, timeline, checklist, attachments, labels, c
       {error && <div className="form-error"><span>{error}</span>{error.includes("alterada por outro usuário") && <button type="button" onClick={onReload}>Recarregar dados</button>}</div>}
       <ChecklistPanel checklist={checklist} canEdit={canEdit} saving={saving} onToggle={onToggleChecklist} onAdd={onAddChecklist}/>
       <AttachmentPanel attachments={attachments} saving={saving} onUpload={onUpload}/>
-      <footer>{editMode ? <><button type="button" className="secondary" onClick={onCancelEdit}>Cancelar edição</button><button className="primary" disabled={saving}>Salvar alterações</button></> : <>{!canEdit && <span className="readonly-note">Visualização somente leitura</span>}{canEdit && <button type="button" className="primary" onClick={onEdit}>Editar demanda</button>}</>}</footer>
+      <footer>{editMode ? <><button type="button" className="secondary" onClick={onCancelEdit}>Cancelar edição</button><button className="primary" disabled={saving}>Salvar alterações</button></> : <>{!canEdit && <span className="readonly-note">Visualização somente leitura</span>}{canEdit && <><button type="button" className="delete-outline" onClick={onDelete}><Icon name="trash"/>Excluir demanda</button><button type="button" className="primary" onClick={onEdit}>Editar demanda</button></>}</>}</footer>
     </form> : <ActivityTimeline timeline={timeline} saving={saving} onComment={onComment}/>} 
+  </section></div>;
+}
+
+function DeleteDemandModal({ demand, saving, onClose, onConfirm }: { demand: Demand; saving: boolean; onClose: () => void; onConfirm: (reason: string) => void }) {
+  const [reason, setReason] = useState("");
+  const valid = reason.trim().length >= 5;
+  return <div className="modal-backdrop confirm-layer"><section className="confirm-modal delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-demand-title">
+    <span className="confirm-icon delete"><Icon name="trash"/></span>
+    <h2 id="delete-demand-title">Excluir esta demanda?</h2>
+    <p><strong>{demand.title}</strong> sairá da fila e dos relatórios ativos. Os dados serão mantidos na lixeira para auditoria e restauração.</p>
+    <label className="delete-reason"><span>Motivo da exclusão *</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} minLength={5} maxLength={500} rows={4} autoFocus placeholder="Ex.: demanda cadastrada em duplicidade"/><small>{reason.trim().length}/500 caracteres</small></label>
+    <footer><button type="button" className="secondary" disabled={saving} onClick={onClose}>Cancelar</button><button type="button" className="danger-button" disabled={saving || !valid} onClick={() => onConfirm(reason.trim())}><Icon name="trash"/>{saving ? "Excluindo..." : "Excluir demanda"}</button></footer>
   </section></div>;
 }
 

@@ -65,6 +65,9 @@ export const demands = sqliteTable("demands", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   version: integer("version").notNull().default(1),
   updatedById: integer("updated_by_id"),
+  deletedAt: text("deleted_at"),
+  deletedById: integer("deleted_by_id").references(() => users.id),
+  deletionReason: text("deletion_reason"),
 });
 
 export const demandLabels = sqliteTable("demand_labels", {
