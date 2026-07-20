@@ -16,7 +16,16 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+img, svg, canvas, video {
+  max-width: 100%;
+  height: auto;
+  image-rendering: auto;
+}
 body {
   margin: 0;
   background: var(--paper);

@@ -5,6 +5,7 @@ import type { ActivityEvent, Card, InboxItem, WorkspaceRole, WorkspaceSnapshot }
 
 type View = "board" | "inbox" | "planner" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar";
+type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
 type SettingsSection = "general" | "team" | "fields" | "templates" | "sla" | "integrations" | "automations";
 type User = { displayName: string; email: string; fullName: string | null };
@@ -168,6 +169,21 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
   const [newBoardDescription, setNewBoardDescription] = useState("");
+  const [theme, setTheme] = useState<Theme>("light");
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("fila-dp-theme");
+    if (storedTheme === "dark" || storedTheme === "light") {
+      setTheme(storedTheme);
+      return;
+    }
+    if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) setTheme("dark");
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("fila-dp-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     void requestSnapshot("/api/workspace")
@@ -555,7 +571,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
 
   return (
-    <main className="dashboard-shell">
+    <main className={`dashboard-shell theme-${theme}`}>
       <aside className="dashboard-sidebar">
         <button className="brand dashboard-brand" onClick={() => setView("board")} aria-label="Fila DP — quadro">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
@@ -585,6 +601,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="workspace-settings-button" aria-label="Configurar workspace" onClick={openWorkspaceSettings}>⚙</button>
             <button aria-label="Pesquisar" onClick={() => setSearchOpen(true)}>⌕</button>
             <button aria-label="Notificações" onClick={() => setNotificationsOpen(true)}>♢{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
+            <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "☾"}</button>
             {canEdit && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>{view === "inbox" ? "＋ Nova solicitação" : "＋ Nova demanda"}</button>}
           </div>
         </header>
