@@ -231,6 +231,8 @@
   color: #0b1528;
 }
 
+.dashboard-shell.sidebar-collapsed { grid-template-columns: 78px minmax(0, 1fr); }
+
 .dashboard-sidebar {
   position: sticky;
   top: 0;
@@ -241,6 +243,18 @@
   background: #081a31;
   color: white;
 }
+
+.sidebar-toggle { width: 28px; height: 28px; margin: -9px 0 8px auto; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.13); border-radius: 7px; background: rgba(255,255,255,.05); color: #a8b6c4; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 700; line-height: 1; }
+.sidebar-toggle:hover, .sidebar-toggle:focus-visible { background: rgba(35,216,161,.16); color: #23d8a1; outline: none; }
+.sidebar-collapsed .dashboard-brand { justify-content: center; padding-inline: 0; }
+.sidebar-collapsed .dashboard-brand > span:last-child,
+.sidebar-collapsed .dashboard-sidebar nav button { font-size: 0; }
+.sidebar-collapsed .dashboard-sidebar nav button { justify-content: center; padding-inline: 0; }
+.sidebar-collapsed .dashboard-sidebar nav button > span { width: auto; font-size: 17px; }
+.sidebar-collapsed .sidebar-workspace { display: none; }
+.sidebar-collapsed .sidebar-account { grid-template-columns: 1fr; justify-items: center; }
+.sidebar-collapsed .sidebar-account > span:nth-child(2) { display: none; }
+.sidebar-collapsed .sidebar-account a { margin-top: 5px; }
 
 .dashboard-brand { padding: 0 10px; color: white; }
 .dashboard-brand strong { color: #23d8a1; }
@@ -784,6 +798,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .workspace-invite-form .primary-button { white-space: nowrap; }
 
 @media (max-width: 760px) {
+  .dashboard-shell, .dashboard-shell.sidebar-collapsed { display: block; min-height: 100svh; }
+  .dashboard-sidebar { position: sticky; z-index: 80; width: 100%; }
+  .sidebar-toggle { position: absolute; top: 8px; right: 10px; margin: 0; }
+  .sidebar-collapsed .dashboard-brand > span:last-child { font-size: 17px; }
+  .sidebar-collapsed .dashboard-sidebar nav button { font-size: 7px; }
+  .sidebar-collapsed .dashboard-sidebar nav button > span { font-size: 16px; }
   .dashboard-sidebar nav {
     position: fixed;
     z-index: 90;

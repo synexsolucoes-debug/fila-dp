@@ -36,6 +36,34 @@ novo inicia vazio e o Fila DP cria suas tabelas no primeiro login. Se precisar
 preservar dados, sera necessario exportar o Turso e importar os registros para
 o Neon antes de liberar o acesso da equipe.
 
+## Integrações externas
+
+As telas de integrações guardam apenas o endpoint e a conta. Os tokens devem
+ser adicionados nas Environment Variables da Vercel, nunca no formulário:
+
+```text
+FDP_EMAIL_TOKEN
+FDP_WHATSAPP_TOKEN
+FDP_TEAMS_TOKEN
+FDP_DRIVE_TOKEN
+FDP_ONEDRIVE_TOKEN
+FDP_ERP_TOKEN
+FDP_EMAIL_WEBHOOK_SECRET
+FDP_WHATSAPP_WEBHOOK_SECRET
+FDP_TEAMS_WEBHOOK_SECRET
+```
+
+O botão **Sincronizar agora** espera que o endpoint configurado devolva JSON no
+formato `{ "items": [...] }`. Para entrada por webhook, use
+`/api/integrations/webhook/email`, `/api/integrations/webhook/whatsapp` ou
+`/api/integrations/webhook/teams`, enviando o segredo no header
+`x-fila-dp-secret` e um corpo com `senderName`, `subject` e `body`.
+
+OneDrive e Teams oficiais usam Microsoft Graph/OAuth; WhatsApp usa Cloud API
+ou um provedor homologado; e-mail precisa de um relay/webhook (por exemplo,
+um provedor transacional). Sem essas credenciais e endpoints, a integração
+permanece corretamente como **Aguardando credenciais**.
+
 ## Publicacao via CLI
 
 Com a CLI autenticada (`vercel login` ou `VERCEL_TOKEN`):

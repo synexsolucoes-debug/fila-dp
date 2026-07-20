@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityEvent, Card, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 
 type View = "board" | "inbox" | "planner" | "indicators";
@@ -170,6 +170,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [newBoardName, setNewBoardName] = useState("");
   const [newBoardDescription, setNewBoardDescription] = useState("");
   const [theme, setTheme] = useState<Theme>("light");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarPreferenceLoaded = useRef(false);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -187,6 +189,21 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem("fila-dp-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const stored = window.localStorage.getItem("fila-dp-sidebar-collapsed");
+      if (stored === "true" || stored === "false") setSidebarCollapsed(stored === "true");
+      else if (window.matchMedia?.("(max-width: 760px)").matches) setSidebarCollapsed(true);
+      sidebarPreferenceLoaded.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarPreferenceLoaded.current) return;
+    window.localStorage.setItem("fila-dp-sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     void requestSnapshot("/api/workspace")
@@ -540,7 +557,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       if (!response.ok) throw new Error(payload.error || "Não foi possível sincronizar.");
       if (payload.snapshot) applySnapshot(payload.snapshot, `${payload.synced ?? 0} item(ns) sincronizado(s).`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível sincronizar."); }
-    finally { setBusy(false); }
+    finally { void requestSnapshot("/api/workspace").then(setSnapshot).catch(() => undefined); setBusy(false); }
   }
 
   function openSearchResult(result: SearchResult) {
@@ -574,8 +591,11 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
 
   return (
-    <main className={`dashboard-shell theme-${theme}`}>
+    <main className={`dashboard-shell theme-${theme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
+        <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
+          <span aria-hidden="true">{sidebarCollapsed ? "→" : "←"}</span>
+        </button>
         <button className="brand dashboard-brand" onClick={() => setView("board")} aria-label="Fila DP — quadro">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Fila <strong>DP</strong></span>
