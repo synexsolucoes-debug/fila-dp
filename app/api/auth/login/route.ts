@@ -13,6 +13,9 @@ function cleanReturnTo(value: unknown) {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { email?: string; password?: string; name?: string; mode?: string; returnTo?: string };
+    if (process.env.NODE_ENV === "production" && !process.env.FDP_AUTH_SECRET) {
+      return Response.json({ error: "A autenticação do site não está configurada. Defina FDP_AUTH_SECRET na Vercel." }, { status: 503 });
+    }
     const email = String(body.email ?? "").trim().toLowerCase();
     const password = String(body.password ?? "");
     const mode = body.mode === "register" ? "register" : "login";

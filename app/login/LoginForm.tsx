@@ -22,6 +22,13 @@ export function LoginForm() {
         body: JSON.stringify({ mode, email, password, name, returnTo }),
       });
       const payload = await response.json() as { error?: string; redirectTo?: string };
+      if (response.status === 409) {
+        setMode("login");
+        setPassword("");
+        setError("Esta conta já foi criada. Entre com sua senha para continuar.");
+        setBusy(false);
+        return;
+      }
       if (!response.ok) throw new Error(payload.error || "Não foi possível concluir o acesso.");
       window.location.assign(payload.redirectTo || "/painel");
     } catch (cause) {
