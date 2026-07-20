@@ -785,3 +785,73 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .card-form-actions > span { display: none; }
   .card-form-actions .danger-link { grid-column: auto; }
 }
+
+/* Fluid Kanban sizing: readable without changing browser zoom */
+.dashboard-content { width: 100%; max-width: 1920px; margin-inline: auto; padding-inline: clamp(18px, 2vw, 40px); }
+.dashboard-header { padding-inline: clamp(18px, 2vw, 40px); }
+.dashboard-heading h1 { font-size: clamp(30px, 2.1vw, 40px); }
+.dashboard-heading p { font-size: clamp(11px, .76vw, 14px); }
+.dashboard-stats { gap: clamp(10px, .8vw, 16px); }
+.dashboard-stats article { min-width: 0; min-height: clamp(104px, 7vw, 132px); padding: clamp(15px, 1.1vw, 21px); }
+.dashboard-stats span { font-size: clamp(9px, .62vw, 12px); }
+.dashboard-stats strong { font-size: clamp(27px, 1.8vw, 34px); }
+.dashboard-stats small { font-size: clamp(8px, .55vw, 11px); }
+.dashboard-tabs button { min-height: 38px; font-size: clamp(9px, .58vw, 11px); }
+.dashboard-filters label { min-height: 34px; font-size: clamp(8px, .52vw, 10px); }
+.dashboard-filters select { font-size: clamp(9px, .58vw, 11px); }
+.dashboard-column { display: flex; flex-direction: column; }
+.dashboard-column > header { height: clamp(44px, 3vw, 50px); }
+.dashboard-column > header > span { font-size: clamp(9px, .58vw, 11px); }
+.dashboard-column > header b { font-size: clamp(8px, .5vw, 10px); }
+.dashboard-card-list { flex: 1; padding: clamp(9px, .7vw, 13px); }
+.dashboard-task { padding: clamp(13px, .9vw, 17px); margin-bottom: clamp(9px, .7vw, 12px); }
+.dashboard-task-labels span { font-size: clamp(7px, .43vw, 8px); }
+.dashboard-task h2 { margin-top: clamp(10px, .7vw, 13px); font-size: clamp(12px, .76vw, 15px); }
+.dashboard-task > p { font-size: clamp(9px, .57vw, 11px); }
+.dashboard-task-bottom { margin-top: clamp(14px, 1vw, 19px); }
+.dashboard-sla, .dashboard-check { font-size: clamp(8px, .5vw, 10px); }
+.dashboard-mini-avatar { width: clamp(22px, 1.55vw, 28px); height: clamp(22px, 1.55vw, 28px); font-size: clamp(7px, .46vw, 9px); }
+.dashboard-add-card { min-height: 40px; font-size: clamp(9px, .56vw, 11px); }
+
+@media (min-width: 900px) {
+  .dashboard-column { min-height: max(280px, calc(100dvh - 430px)); }
+}
+
+@media (min-width: 1200px) {
+  .dashboard-kanban { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-auto-flow: row; overflow-x: clip; }
+  .dashboard-column { min-width: 0; }
+}
+
+@media (min-width: 761px) and (max-width: 1499px) {
+  .dashboard-shell { grid-template-columns: 78px minmax(0, 1fr); }
+  .dashboard-sidebar { padding-inline: 11px; }
+  .dashboard-brand { justify-content: center; }
+  .dashboard-brand > span:last-child { display: none; }
+  .dashboard-sidebar nav button { padding: 0; justify-content: center; font-size: 0; }
+  .dashboard-sidebar nav button > span { width: auto; font-size: 18px; }
+  .dashboard-sidebar nav button b { position: absolute; top: 3px; right: 3px; margin: 0; }
+  .sidebar-workspace { display: none; }
+  .sidebar-account { grid-template-columns: 1fr; justify-items: center; }
+  .sidebar-account > span:nth-child(2) { display: none; }
+  .sidebar-account a { margin-top: 7px; }
+}
+
+@media (max-width: 1199px) and (min-width: 761px) {
+  .dashboard-kanban { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(250px, 34vw); overflow-x: auto; scroll-snap-type: x proximity; }
+  .dashboard-column { scroll-snap-align: start; }
+}
+
+@media (max-width: 760px) {
+  .dashboard-content { padding-inline: 16px; }
+  .dashboard-header { padding-inline: 16px; }
+  .dashboard-heading h1 { font-size: 28px; }
+  .dashboard-stats article { min-height: 92px; padding: 13px; }
+  .dashboard-stats strong { font-size: 24px; }
+  .dashboard-task h2 { font-size: 13px; }
+  .dashboard-task > p { font-size: 9px; }
+}
+
+@media (max-width: 420px) {
+  .dashboard-content, .dashboard-header { padding-inline: 12px; }
+  .dashboard-stats article { min-height: 88px; padding: 12px; }
+}
