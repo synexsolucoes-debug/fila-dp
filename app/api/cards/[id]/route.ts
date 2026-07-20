@@ -19,8 +19,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!title) return Response.json({ error: "Informe o título da demanda." }, { status: 400 });
     const assigneeName = body.assigneeName === undefined ? String(current.assignee_name ?? "") : text(body.assigneeName, 120);
     const hasNewAssignees = Array.isArray(body.assigneeIds) && body.assigneeIds.length > 0;
-    let listId = String(current.list_id);
-    let list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE id = ? AND board_id = ?").bind(listId, board.id).first<{ id: string; kind: string; sla_behavior: string }>();
+    const listId = String(current.list_id);
+    const list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE id = ? AND board_id = ?").bind(listId, board.id).first<{ id: string; kind: string; sla_behavior: string }>();
     if (!list) throw new Error("Coluna não encontrada.");
 
     const dueAt = body.dueAt === undefined ? (current.due_at ? String(current.due_at) : null) : validDate(body.dueAt);

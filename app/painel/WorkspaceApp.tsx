@@ -172,12 +172,15 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem("fila-dp-theme");
-    if (storedTheme === "dark" || storedTheme === "light") {
-      setTheme(storedTheme);
-      return;
-    }
-    if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) setTheme("dark");
+    const frame = window.requestAnimationFrame(() => {
+      const storedTheme = window.localStorage.getItem("fila-dp-theme");
+      if (storedTheme === "dark" || storedTheme === "light") {
+        setTheme(storedTheme);
+        return;
+      }
+      if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) setTheme("dark");
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -705,6 +708,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <header><div><span>CENTRAL DE ALERTAS</span><h2 id="notifications-title">Notificações</h2></div><button onClick={() => setNotificationsOpen(false)} aria-label="Fechar">×</button></header>
             <div className="notification-actions"><span>{snapshot.notifications.filter((item) => !item.readAt).length} não lida(s)</span><button disabled={busy || !snapshot.notifications.some((item) => !item.readAt)} onClick={() => void markAllNotifications()}>Marcar todas como lidas</button></div>
             <div className="notification-list">
+              {/* eslint-disable-next-line @typescript-eslint/no-unused-expressions */}
               {snapshot.notifications.length === 0 && <div className="empty-view"><span>✓</span><strong>Tudo em dia</strong><p>Alertas de SLA, comentários e movimentações aparecerão aqui.</p></div>}
               {snapshot.notifications.map((notification) => <button className={notification.readAt ? "read" : "unread"} key={notification.id} onClick={() => { if (!notification.readAt) void markNotification(notification.id); const card = notification.cardId ? allCards.find((item) => item.id === notification.cardId) : null; if (card) { setNotificationsOpen(false); card.archived ? setArchiveOpen(true) : openCard(card); } }}><i>{notification.type.includes("sla") ? "!" : "●"}</i><span><strong>{notification.title}</strong><p>{notification.body}</p><time>{formatMoment(notification.createdAt)}</time></span></button>)}
             </div>

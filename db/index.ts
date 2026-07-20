@@ -153,7 +153,7 @@ class VercelBlobBucket implements R2Bucket {
 const attachmentsBucket = new VercelBlobBucket();
 
 export function getAttachmentsBucket(): R2Bucket {
-  if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.VERCEL_OIDC_TOKEN && !process.env.BLOB_STORE_ID) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
     throw new Error("Armazenamento de anexos não configurado. Conecte um Blob privado ao projeto Vercel.");
   }
   return attachmentsBucket;

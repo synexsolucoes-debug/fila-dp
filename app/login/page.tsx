@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { chatGPTSignOutPath, getChatGPTUser } from "../chatgpt-auth";
 import { LoginForm } from "./LoginForm";
 
@@ -15,10 +16,10 @@ export default async function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-brand-panel">
-        <a className="brand auth-brand" href="/#inicio" aria-label="Fila DP — início">
+        <Link className="brand auth-brand" href="/#inicio" aria-label="Fila DP — início">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Fila <strong>DP</strong></span>
-        </a>
+        </Link>
 
         <div className="auth-message">
           <span className="auth-kicker">Acesso seguro à sua operação</span>
@@ -37,7 +38,7 @@ export default async function LoginPage() {
       </section>
 
       <section className="auth-form-panel">
-        <a className="auth-back" href="/#inicio">← Voltar para o site</a>
+        <Link className="auth-back" href="/#inicio">← Voltar para o site</Link>
 
         <div className="auth-form-card">
           {user ? (

@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   return Response.redirect(new URL(redirectTarget(request), request.url));
 }
 
-export async function POST(request: Request) {
+export async function POST() {
   await clearAuthSession();
   return Response.json({ ok: true });
 }

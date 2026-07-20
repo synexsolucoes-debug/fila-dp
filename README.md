@@ -1,8 +1,8 @@
-# vinext-starter
+# Fila DP
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Plataforma full-stack de gestão visual de demandas de Departamento Pessoal.
+O deploy de produção usa Next.js na Vercel, Turso/libSQL para o banco e Vercel
+Blob privado para anexos.
 
 ## Prerequisites
 
@@ -18,16 +18,16 @@ npm run build
 
 This starter does not use `wrangler.jsonc`.
 
-## Included Shape
+## Arquitetura de produção
 
 - edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+- `app/` contém as telas e rotas do Next.js
+- `db/index.ts` mantém uma camada de compatibilidade D1/R2 sobre libSQL e Blob
+- `db/schema.ts` e `lib/fila-dp-db.ts` definem o modelo e a criação idempotente do schema
+- `vercel.json` configura o build nativo do Next.js
+- `VERCEL_DEPLOYMENT.md` descreve as credenciais e o processo de publicação
 
-## Workspace Auth Headers
+## Autenticação
 
 OpenAI workspace sites can read the current user's email from
 `oai-authenticated-user-email`.
@@ -58,10 +58,14 @@ export default async function Home() {
 }
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+Em produção na Vercel, `/login` usa e-mail e senha próprios com cookie de sessão
+assinado por `FDP_AUTH_SECRET`. Os headers do Sites continuam sendo aceitos
+como compatibilidade durante a transição.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+## Compatibilidade com Sites
+
+Os helpers em `app/chatgpt-auth.ts` continuam disponíveis para páginas que
+precisam ler o usuário atual:
 
 - Use `getChatGPTUser()` for optional signed-in UI.
 - Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
@@ -73,23 +77,14 @@ optional or required ChatGPT sign-in:
 - Mark protected pages with `export const dynamic = "force-dynamic"` because
   they depend on per-request identity headers.
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+O fluxo antigo por headers do Sites permanece somente como fallback. Novos
+deploys devem usar a sessão própria e a validação de membros do workspace.
 
 ## Useful Commands
 
 - `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
+- `npm run build`: gerar o build Next.js para a Vercel
+- `npm test`: gerar o build e verificar o HTML renderizado
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 
 ## Learn More
