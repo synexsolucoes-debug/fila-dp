@@ -1,5 +1,5 @@
 import { apiError, computeSlaStatus, getApiUser, text, validDate } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -10,6 +10,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
+    requireWorkspaceRole(workspace.role, ["admin", "member"]);
     const current = await d1.prepare("SELECT * FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first<Record<string, unknown>>();
     if (!current) throw new Error("Demanda não encontrada.");
 
@@ -60,6 +61,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
+    requireWorkspaceRole(workspace.role, ["admin", "member"]);
     const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
     if (!result.meta.changes) throw new Error("Demanda não encontrada.");
     await recordActivity(workspace.id, id, auth.user.email, "card.archived");

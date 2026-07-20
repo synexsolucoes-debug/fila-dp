@@ -1,6 +1,6 @@
 import { getD1 } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
-import type { WorkspaceSnapshot } from "./fila-dp-types";
+import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 
 let schemaPromise: Promise<void> | null = null;
 
@@ -25,6 +25,11 @@ const schemaStatements = [
     role TEXT NOT NULL DEFAULT 'admin',
     joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (workspace_id, user_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS fdp_user_workspace_preferences (
+    user_id TEXT PRIMARY KEY REFERENCES fdp_users(id) ON DELETE CASCADE,
+    active_workspace_id TEXT REFERENCES fdp_workspaces(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS fdp_boards (
     id TEXT PRIMARY KEY,
@@ -71,6 +76,14 @@ const schemaStatements = [
     position REAL NOT NULL,
     completed_at TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS fdp_card_comments (
+    id TEXT PRIMARY KEY,
+    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
+    author_user_id TEXT NOT NULL REFERENCES fdp_users(id),
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS fdp_workspace_inbox_items (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
@@ -104,6 +117,7 @@ const schemaStatements = [
   "CREATE INDEX IF NOT EXISTS fdp_cards_board_list_position_idx ON fdp_cards (board_id, list_id, position)",
   "CREATE INDEX IF NOT EXISTS fdp_cards_due_status_idx ON fdp_cards (due_at, sla_status)",
   "CREATE INDEX IF NOT EXISTS fdp_checklist_card_position_idx ON fdp_checklist_items (card_id, position)",
+  "CREATE INDEX IF NOT EXISTS fdp_comments_card_created_idx ON fdp_card_comments (card_id, created_at)",
   "CREATE INDEX IF NOT EXISTS fdp_inbox_workspace_status_received_idx ON fdp_workspace_inbox_items (workspace_id, status, received_at)",
   "CREATE INDEX IF NOT EXISTS fdp_activity_workspace_created_idx ON fdp_activity_events (workspace_id, created_at)",
 ];
@@ -149,12 +163,24 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   if (!userRow) throw new Error("Não foi possível criar o usuário.");
 
   let workspace = await d1.prepare(
-    `SELECT w.id, w.name, w.timezone
-     FROM fdp_workspaces w
-     JOIN fdp_workspace_members wm ON wm.workspace_id = w.id
-     WHERE wm.user_id = ?
+    `SELECT w.id, w.name, w.timezone, wm.role
+     FROM fdp_user_workspace_preferences p
+     JOIN fdp_workspaces w ON w.id = p.active_workspace_id
+     JOIN fdp_workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = p.user_id
+     WHERE p.user_id = ?
      LIMIT 1`,
-  ).bind(userRow.id).first<{ id: string; name: string; timezone: string }>();
+  ).bind(userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
+
+  if (!workspace) {
+    workspace = await d1.prepare(
+      `SELECT w.id, w.name, w.timezone, wm.role
+       FROM fdp_workspaces w
+       JOIN fdp_workspace_members wm ON wm.workspace_id = w.id
+       WHERE wm.user_id = ?
+       ORDER BY CASE WHEN w.owner_user_id = ? THEN 0 ELSE 1 END, wm.joined_at
+       LIMIT 1`,
+    ).bind(userRow.id, userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
+  }
 
   if (!workspace) {
     const workspaceId = crypto.randomUUID();
@@ -164,15 +190,23 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
         .bind(workspaceId, "Synex DP", `synex-dp-${slugSuffix}`, userRow.id),
       d1.prepare("INSERT OR IGNORE INTO fdp_workspace_members (workspace_id, user_id, role) VALUES (?, ?, 'admin')")
         .bind(workspaceId, userRow.id),
+      d1.prepare("INSERT OR REPLACE INTO fdp_user_workspace_preferences (user_id, active_workspace_id, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
+        .bind(userRow.id, workspaceId),
     ]);
     workspace = await d1.prepare(
-      `SELECT w.id, w.name, w.timezone
+      `SELECT w.id, w.name, w.timezone, wm.role
        FROM fdp_workspaces w
        JOIN fdp_workspace_members wm ON wm.workspace_id = w.id
        WHERE wm.user_id = ? LIMIT 1`,
-    ).bind(userRow.id).first<{ id: string; name: string; timezone: string }>();
+    ).bind(userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
   }
   if (!workspace) throw new Error("Não foi possível criar o workspace.");
+
+  await d1.prepare(
+    `INSERT INTO fdp_user_workspace_preferences (user_id, active_workspace_id, updated_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(user_id) DO UPDATE SET active_workspace_id = excluded.active_workspace_id, updated_at = CURRENT_TIMESTAMP`,
+  ).bind(userRow.id, workspace.id).run();
 
   let board = await d1.prepare("SELECT id, name, description FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at LIMIT 1")
     .bind(workspace.id)
@@ -235,7 +269,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 }
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
-  const { d1, workspace, board } = await getWorkspaceContext(user);
+  const { d1, workspace, board, user: userRow } = await getWorkspaceContext(user);
   const today = new Date().toISOString().slice(0, 10);
   await d1.prepare(
     `UPDATE fdp_cards
@@ -250,15 +284,42 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
        AND due_at IS NOT NULL`,
   ).bind(today, today, board.id, board.id).run();
 
-  const [listsResult, cardsResult, checklistResult, inboxResult, rulesResult] = await Promise.all([
+  const [listsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult] = await Promise.all([
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? AND archived = 0 ORDER BY list_id, position, created_at").bind(board.id).all(),
     d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY ci.position").bind(board.id).all(),
     d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM fdp_workspace_inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
     d1.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM fdp_automation_rules WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
+    d1.prepare(`SELECT cc.id, cc.card_id, cc.body, cc.created_at, u.name AS author_name, u.email AS author_email
+      FROM fdp_card_comments cc
+      JOIN fdp_users u ON u.id = cc.author_user_id
+      JOIN fdp_cards c ON c.id = cc.card_id
+      WHERE c.board_id = ? AND c.archived = 0
+      ORDER BY cc.created_at`).bind(board.id).all(),
+    d1.prepare(`SELECT ae.id, ae.card_id, ae.actor_email, ae.event_type, ae.payload_json, ae.created_at,
+        COALESCE(u.name, ae.actor_email) AS actor_name
+      FROM fdp_activity_events ae
+      JOIN fdp_cards c ON c.id = ae.card_id
+      LEFT JOIN fdp_users u ON u.email = ae.actor_email
+      WHERE c.board_id = ? AND c.archived = 0
+      ORDER BY ae.created_at DESC`).bind(board.id).all(),
+    d1.prepare(`SELECT u.id AS user_id, u.email, u.name, wm.role, wm.joined_at,
+        CASE WHEN w.owner_user_id = u.id THEN 1 ELSE 0 END AS is_owner
+      FROM fdp_workspace_members wm
+      JOIN fdp_users u ON u.id = wm.user_id
+      JOIN fdp_workspaces w ON w.id = wm.workspace_id
+      WHERE wm.workspace_id = ?
+      ORDER BY is_owner DESC, u.name`).bind(workspace.id).all(),
+    d1.prepare(`SELECT w.id, w.name, wm.role
+      FROM fdp_workspace_members wm
+      JOIN fdp_workspaces w ON w.id = wm.workspace_id
+      WHERE wm.user_id = ?
+      ORDER BY w.name`).bind(userRow.id).all(),
   ]);
 
   const checklistRows = checklistResult.results as Array<Record<string, unknown>>;
+  const commentRows = commentsResult.results as Array<Record<string, unknown>>;
+  const activityRows = activitiesResult.results as Array<Record<string, unknown>>;
   const cardRows = cardsResult.results as Array<Record<string, unknown>>;
   const cards = cardRows.map((row) => ({
     id: String(row.id),
@@ -284,10 +345,27 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       position: Number(item.position),
       completedAt: item.completed_at ? String(item.completed_at) : null,
     })),
+    comments: commentRows.filter((item) => item.card_id === row.id).map((item) => ({
+      id: String(item.id),
+      cardId: String(item.card_id),
+      authorName: String(item.author_name),
+      authorEmail: String(item.author_email),
+      body: String(item.body),
+      createdAt: String(item.created_at),
+    })),
+    activities: activityRows.filter((item) => item.card_id === row.id).map((item) => ({
+      id: String(item.id),
+      cardId: item.card_id ? String(item.card_id) : null,
+      actorEmail: String(item.actor_email),
+      actorName: String(item.actor_name),
+      eventType: String(item.event_type),
+      payload: safeJson(String(item.payload_json)),
+      createdAt: String(item.created_at),
+    })),
   }));
 
   return {
-    workspace,
+    workspace: { ...workspace, role: workspace.role },
     board,
     lists: (listsResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id),
@@ -317,7 +395,26 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       enabled: Boolean(row.enabled),
       position: Number(row.position),
     })),
+    members: (membersResult.results as Array<Record<string, unknown>>).map((row) => ({
+      userId: String(row.user_id),
+      email: String(row.email),
+      name: String(row.name),
+      role: String(row.role) as WorkspaceRole,
+      joinedAt: String(row.joined_at),
+      isOwner: Boolean(row.is_owner),
+    })),
+    availableWorkspaces: (workspacesResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      name: String(row.name),
+      role: String(row.role) as WorkspaceRole,
+    })),
   };
+}
+
+export function requireWorkspaceRole(role: WorkspaceRole, allowed: WorkspaceRole[]) {
+  if (!allowed.includes(role)) {
+    throw new Error("Você não tem permissão para realizar esta ação.");
+  }
 }
 
 export async function recordActivity(workspaceId: string, cardId: string | null, actorEmail: string, eventType: string, payload: Record<string, unknown> = {}) {

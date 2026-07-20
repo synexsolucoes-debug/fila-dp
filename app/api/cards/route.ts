@@ -1,5 +1,5 @@
 import { apiError, computeSlaStatus, getApiUser, text, validDate } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 const checklistTemplates: Record<string, string[]> = {
   "ADMISSÃO": ["Documentos pessoais recebidos", "Exame admissional anexado", "Cadastro no sistema concluído"],
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     if (!title) return Response.json({ error: "Informe o título da demanda." }, { status: 400 });
 
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
+    requireWorkspaceRole(workspace.role, ["admin", "member"]);
     const assigneeName = text(body.assigneeName, 120);
     const requestedListId = text(body.listId, 80);
     let list = requestedListId

@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -9,6 +9,7 @@ export async function POST(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
+    requireWorkspaceRole(workspace.role, ["admin", "member"]);
     const item = await d1.prepare("SELECT * FROM fdp_workspace_inbox_items WHERE id = ? AND workspace_id = ? AND status = 'new'").bind(id, workspace.id).first<Record<string, unknown>>();
     if (!item) throw new Error("Solicitação não encontrada ou já convertida.");
     const list = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'new'").bind(board.id).first<{ id: string }>();

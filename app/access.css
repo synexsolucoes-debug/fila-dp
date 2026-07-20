@@ -317,6 +317,7 @@
 .dashboard-sla.safe { color: #167354; background: #dff7ee; }
 .dashboard-sla.paused { color: #596779; background: #edf0f2; }
 .dashboard-check { color: #758294; font-size: 7px; }
+.dashboard-comments { color: #5f6f81; font-size: 7px; }
 .dashboard-mini-avatar { width: 20px; height: 20px; margin-left: auto; display: grid; place-items: center; border-radius: 50%; background: #d9f6ed; color: #087b63; font-size: 6px; font-weight: 800; }
 .dashboard-add-card { width: 100%; min-height: 30px; padding: 0 4px; border: 1px dashed transparent; border-radius: 6px; background: transparent; color: #788696; text-align: left; cursor: pointer; font-size: 8px; }
 .dashboard-add-card:hover { border-color: #cdd8d7; background: white; color: #087b63; }
@@ -498,6 +499,7 @@
 .workspace-modal > header span { color: #087b63; font-family: var(--font-geist-mono), monospace; font-size: 8px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .workspace-modal > header h2 { margin: 6px 0 0; font-size: 22px; line-height: 1.1; letter-spacing: -.035em; }
 .workspace-modal > header > button { width: 34px; height: 34px; border: 1px solid #dce3e4; border-radius: 7px; background: white; color: #718093; cursor: pointer; font-size: 20px; }
+.card-modal { width: min(1120px, 100%); }
 .card-modal-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(270px, .6fr); }
 
 .card-form { padding: 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
@@ -514,6 +516,7 @@
 }
 .card-form input, .card-form select { height: 41px; padding: 0 11px; }
 .card-form textarea { padding: 10px 11px; resize: vertical; }
+.card-form.read-only input:disabled, .card-form.read-only textarea:disabled, .card-form.read-only select:disabled { background: #f1f4f3; color: #5c6979; opacity: 1; cursor: default; }
 .card-form input:focus, .card-form textarea:focus, .card-form select:focus, .checklist-panel form input:focus { border-color: #23b88e; box-shadow: 0 0 0 3px rgba(35,216,161,.11); }
 .card-form-actions { padding-top: 5px; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 9px; }
 .primary-button, .secondary-button, .danger-link { min-height: 39px; padding: 0 14px; border-radius: 7px; cursor: pointer; font: 700 10px var(--font-geist-sans), sans-serif; }
@@ -539,6 +542,29 @@
 .checklist-panel form button { border: 0; border-radius: 6px; background: #081a31; color: white; cursor: pointer; }
 .checklist-panel form button:disabled { opacity: .4; }
 .checklist-panel > p { margin: 16px 0 0; color: #80909b; font-size: 8px; line-height: 1.55; }
+.card-collaboration { margin: 24px -24px -24px; padding: 22px 24px 24px; border-top: 1px solid #d7dfde; background: #f8faf9; }
+.card-collaboration > header { display: flex; align-items: center; justify-content: space-between; }
+.card-collaboration > header span { color: #5f6f81; font-family: var(--font-geist-mono), monospace; font-size: 8px; font-weight: 750; letter-spacing: .1em; }
+.card-collaboration > header strong { font-size: 10px; }
+.card-comments { margin-top: 14px; display: grid; gap: 10px; }
+.card-comments article { display: grid; grid-template-columns: 28px 1fr; gap: 8px; }
+.card-comments article > i { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: #d9f6ed; color: #087b63; font-size: 7px; font-style: normal; font-weight: 800; }
+.card-comments article > div { min-width: 0; padding: 9px; border: 1px solid #dce3e3; border-radius: 7px; background: white; }
+.card-comments article strong { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 9px; }
+.card-comments article time { color: #929da6; font-size: 7px; font-weight: 500; }
+.card-comments article p { margin: 6px 0 0; color: #4e5d70; font-size: 9px; line-height: 1.5; white-space: pre-wrap; }
+.card-empty-note { margin: 2px 0 4px; color: #84919e; font-size: 9px; }
+.checklist-panel .comment-form { margin-top: 12px; display: grid; grid-template-columns: 1fr; gap: 7px; }
+.checklist-panel .comment-form textarea { width: 100%; padding: 9px; resize: vertical; border: 1px solid #d5dddf; border-radius: 7px; background: white; color: #152237; font: 400 10px/1.45 var(--font-geist-sans), sans-serif; outline: 0; }
+.checklist-panel .comment-form textarea:focus { border-color: #23b88e; box-shadow: 0 0 0 3px rgba(35,216,161,.11); }
+.checklist-panel .comment-form button { min-height: 34px; padding: 0 11px; justify-self: end; border: 0; border-radius: 6px; background: #081a31; color: white; cursor: pointer; font: 700 9px var(--font-geist-sans), sans-serif; }
+.checklist-panel .comment-form button:disabled { opacity: .45; }
+.card-collaboration .activity-heading { margin-top: 24px; padding-top: 19px; border-top: 1px solid #dce3e3; }
+.activity-list { margin: 14px 0 0; padding: 0; display: grid; gap: 11px; list-style: none; }
+.activity-list li { display: grid; grid-template-columns: 8px 1fr; gap: 9px; color: #6b7888; font-size: 8px; line-height: 1.4; }
+.activity-list li > i { width: 7px; height: 7px; margin-top: 2px; border: 2px solid #b8eadd; border-radius: 50%; background: #23b88e; }
+.activity-list li strong { color: #334258; }
+.activity-list li time { display: block; margin-top: 2px; color: #929da6; font-size: 7px; }
 .inbox-modal { width: min(680px, 100%); }
 
 .inbox-layout, .planner-layout, .indicators-layout { margin-top: 27px; }
@@ -705,7 +731,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .dashboard-filters label { min-width: 150px; display: grid; grid-template-columns: auto minmax(80px, 1fr); align-items: center; gap: 7px; padding: 0 8px; border: 1px solid #d9e0e1; border-radius: 6px; background: white; color: #7b8795; font-size: 8px; white-space: nowrap; }
 .dashboard-filters select { min-width: 0; height: 30px; border: 0; background: transparent; color: #334258; font: 700 9px var(--font-geist-sans), sans-serif; outline: 0; }
 
-.workspace-settings-modal { width: min(540px, 100%); }
+.workspace-settings-modal { width: min(820px, 100%); }
+.workspace-settings-content { padding: 22px; display: grid; gap: 16px; }
+.workspace-name-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; }
+.workspace-name-form label, .workspace-invite-form label { display: grid; gap: 7px; color: #536174; font-size: 9px; font-weight: 700; letter-spacing: .045em; text-transform: uppercase; }
+.workspace-name-form input, .workspace-invite-form input, .workspace-invite-form select, .workspace-member-list select { width: 100%; height: 41px; padding: 0 11px; border: 1px solid #d5dddf; border-radius: 7px; background: white; color: #152237; font: 400 12px var(--font-geist-sans), sans-serif; outline: 0; }
+.workspace-name-form input:focus, .workspace-invite-form input:focus, .workspace-invite-form select:focus, .workspace-member-list select:focus { border-color: #23b88e; box-shadow: 0 0 0 3px rgba(35,216,161,.11); }
+.workspace-name-form input:disabled { background: #f1f4f3; color: #657385; }
 .workspace-account-summary { min-height: 72px; padding: 14px; display: flex; align-items: center; gap: 12px; border: 1px solid #dfe5e5; border-radius: 8px; background: #f3f6f5; }
 .workspace-account-summary > div { min-width: 0; }
 .workspace-account-summary strong, .workspace-account-summary small, .workspace-account-summary em { display: block; }
@@ -713,6 +745,33 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .workspace-account-summary small { margin-top: 3px; overflow: hidden; color: #778596; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-account-summary em { width: max-content; margin-top: 7px; padding: 4px 6px; border-radius: 4px; background: #dcf7ee; color: #087b63; font-size: 7px; font-style: normal; font-weight: 800; text-transform: uppercase; }
 .workspace-settings-note { margin: -2px 0 0; color: #758396; font-size: 9px; line-height: 1.5; }
+.workspace-switcher, .workspace-team, .workspace-invite-form { overflow: hidden; border: 1px solid #dfe5e5; border-radius: 9px; background: white; }
+.workspace-switcher > header, .workspace-team > header, .workspace-invite-form > header { min-height: 57px; padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid #e3e8e8; }
+.workspace-switcher > header strong, .workspace-switcher > header span, .workspace-team > header strong, .workspace-team > header span, .workspace-invite-form > header strong, .workspace-invite-form > header span { display: block; }
+.workspace-switcher > header strong, .workspace-team > header strong, .workspace-invite-form > header strong { font-size: 11px; }
+.workspace-switcher > header span, .workspace-team > header span, .workspace-invite-form > header span { margin-top: 3px; color: #7f8c9a; font-size: 8px; }
+.workspace-team > header > p { max-width: 310px; margin: 0; color: #7f8c9a; font-size: 8px; line-height: 1.45; text-align: right; }
+.workspace-switcher > div { padding: 8px; display: grid; gap: 6px; }
+.workspace-switcher > div > button { min-height: 52px; padding: 8px; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; border: 1px solid #e0e5e5; border-radius: 7px; background: #fbfcfc; color: #223146; cursor: pointer; text-align: left; }
+.workspace-switcher > div > button.active { border-color: #a8dfcf; background: #f0fbf7; }
+.workspace-switcher button > i, .workspace-member-list article > i { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 7px; background: #d9f6ed; color: #087b63; font-size: 8px; font-style: normal; font-weight: 800; }
+.workspace-switcher button span strong, .workspace-switcher button span small { display: block; }
+.workspace-switcher button span strong { font-size: 10px; }
+.workspace-switcher button span small { margin-top: 3px; color: #7c8998; font-size: 8px; }
+.workspace-switcher button > b { color: #087b63; font-size: 8px; }
+.workspace-member-list { padding: 0 8px; }
+.workspace-member-list article { min-height: 58px; padding: 7px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 128px 30px; align-items: center; gap: 10px; border-bottom: 1px solid #e7ebeb; }
+.workspace-member-list article:last-child { border-bottom: 0; }
+.workspace-member-list article > div { min-width: 0; }
+.workspace-member-list article > div strong, .workspace-member-list article > div small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-member-list article > div strong { font-size: 10px; }
+.workspace-member-list article > div strong em { margin-left: 7px; padding: 3px 5px; border-radius: 4px; background: #e7edf2; color: #5a6879; font-size: 6px; font-style: normal; text-transform: uppercase; }
+.workspace-member-list article > div small { margin-top: 3px; color: #7d8997; font-size: 8px; }
+.workspace-member-list article > select { height: 34px; padding: 0 7px; font-size: 9px; }
+.workspace-member-list article > b { justify-self: end; color: #647284; font-size: 8px; }
+.workspace-member-list article > button { width: 28px; height: 28px; border: 1px solid #e1e5e5; border-radius: 6px; background: white; color: #a14c4c; cursor: pointer; font-size: 16px; }
+.workspace-invite-form > div { padding: 14px; display: grid; grid-template-columns: .9fr 1.25fr .75fr auto; align-items: end; gap: 9px; }
+.workspace-invite-form .primary-button { white-space: nowrap; }
 
 @media (max-width: 760px) {
   .dashboard-sidebar nav {
@@ -767,7 +826,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .workspace-modal > header > button { width: 44px; height: 44px; }
   .card-form input, .card-form select { height: 46px; font-size: 16px; }
   .card-form textarea { font-size: 16px; }
+  .checklist-panel .comment-form textarea { font-size: 16px; }
   .primary-button, .secondary-button, .danger-link { min-height: 46px; font-size: 11px; }
+  .workspace-settings-content { padding: 16px; }
+  .workspace-name-form { grid-template-columns: 1fr; }
+  .workspace-name-form input, .workspace-invite-form input, .workspace-invite-form select { height: 46px; font-size: 16px; }
+  .workspace-invite-form > div { grid-template-columns: 1fr 1fr; }
+  .workspace-invite-form .primary-button { align-self: end; }
 }
 
 @media (max-width: 420px) {
@@ -784,6 +849,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .card-form-actions { grid-template-columns: 1fr; }
   .card-form-actions > span { display: none; }
   .card-form-actions .danger-link { grid-column: auto; }
+  .workspace-team > header { align-items: start; flex-direction: column; gap: 6px; }
+  .workspace-team > header > p { max-width: none; text-align: left; }
+  .workspace-member-list article { grid-template-columns: 34px minmax(0, 1fr) 28px; }
+  .workspace-member-list article > select, .workspace-member-list article > b { grid-column: 2; justify-self: stretch; }
+  .workspace-member-list article > button { grid-column: 3; grid-row: 1; }
+  .workspace-invite-form > div { grid-template-columns: 1fr; }
 }
 
 /* Fluid Kanban sizing: readable without changing browser zoom */
@@ -809,7 +880,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .dashboard-task h2 { margin-top: clamp(10px, .7vw, 13px); font-size: clamp(12px, .76vw, 15px); }
 .dashboard-task > p { font-size: clamp(9px, .57vw, 11px); }
 .dashboard-task-bottom { margin-top: clamp(14px, 1vw, 19px); }
-.dashboard-sla, .dashboard-check { font-size: clamp(8px, .5vw, 10px); }
+.dashboard-sla, .dashboard-check, .dashboard-comments { font-size: clamp(8px, .5vw, 10px); }
 .dashboard-mini-avatar { width: clamp(22px, 1.55vw, 28px); height: clamp(22px, 1.55vw, 28px); font-size: clamp(7px, .46vw, 9px); }
 .dashboard-add-card { min-height: 40px; font-size: clamp(9px, .56vw, 11px); }
 

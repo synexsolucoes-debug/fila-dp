@@ -15,6 +15,13 @@
       "when": 1784565700000,
       "tag": "0001_namespace_fila_dp",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784566800000,
+      "tag": "0002_team_collaboration",
+      "breakpoints": true
     }
   ]
 }

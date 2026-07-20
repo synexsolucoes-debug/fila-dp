@@ -7,6 +7,27 @@ export type ChecklistItem = {
   completedAt: string | null;
 };
 
+export type WorkspaceRole = "admin" | "member" | "observer" | "guest";
+
+export type CardComment = {
+  id: string;
+  cardId: string;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
+};
+
+export type ActivityEvent = {
+  id: string;
+  cardId: string | null;
+  actorEmail: string;
+  actorName: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
 export type Card = {
   id: string;
   boardId: string;
@@ -24,6 +45,8 @@ export type Card = {
   createdAt: string;
   updatedAt: string;
   checklist: ChecklistItem[];
+  comments: CardComment[];
+  activities: ActivityEvent[];
 };
 
 export type BoardList = {
@@ -57,10 +80,27 @@ export type AutomationRule = {
   position: number;
 };
 
+export type WorkspaceMember = {
+  userId: string;
+  email: string;
+  name: string;
+  role: WorkspaceRole;
+  joinedAt: string;
+  isOwner: boolean;
+};
+
+export type AvailableWorkspace = {
+  id: string;
+  name: string;
+  role: WorkspaceRole;
+};
+
 export type WorkspaceSnapshot = {
-  workspace: { id: string; name: string; timezone: string };
+  workspace: { id: string; name: string; timezone: string; role: WorkspaceRole };
   board: { id: string; name: string; description: string };
   lists: BoardList[];
   inbox: InboxItem[];
   rules: AutomationRule[];
+  members: WorkspaceMember[];
+  availableWorkspaces: AvailableWorkspace[];
 };

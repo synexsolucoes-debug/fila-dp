@@ -35,6 +35,12 @@ export const workspaceMembers = sqliteTable("fdp_workspace_members", {
   joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })]);
 
+export const userWorkspacePreferences = sqliteTable("fdp_user_workspace_preferences", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  activeWorkspaceId: text("active_workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const boards = sqliteTable("fdp_boards", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -87,6 +93,15 @@ export const checklistItems = sqliteTable("fdp_checklist_items", {
   position: real("position").notNull(),
   completedAt: text("completed_at"),
 }, (table) => [index("fdp_checklist_card_position_idx").on(table.cardId, table.position)]);
+
+export const cardComments = sqliteTable("fdp_card_comments", {
+  id: text("id").primaryKey(),
+  cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
+  authorUserId: text("author_user_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("fdp_comments_card_created_idx").on(table.cardId, table.createdAt)]);
 
 export const inboxItems = sqliteTable("fdp_workspace_inbox_items", {
   id: text("id").primaryKey(),

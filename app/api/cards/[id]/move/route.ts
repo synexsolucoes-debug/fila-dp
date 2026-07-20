@@ -1,5 +1,5 @@
 import { apiError, computeSlaStatus, getApiUser, text } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +11,7 @@ export async function POST(request: Request, context: RouteContext) {
     const body = await request.json() as Record<string, unknown>;
     const toListId = text(body.toListId, 80);
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
+    requireWorkspaceRole(workspace.role, ["admin", "member"]);
     const card = await d1.prepare("SELECT id, list_id, due_at FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first<{ id: string; list_id: string; due_at: string | null }>();
     const list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE id = ? AND board_id = ?").bind(toListId, board.id).first<{ id: string; kind: string; sla_behavior: string }>();
     if (!card) throw new Error("Demanda não encontrada.");

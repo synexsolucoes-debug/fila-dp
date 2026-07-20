@@ -13,7 +13,7 @@ export async function getApiUser() {
 
 export function apiError(error: unknown) {
   const message = error instanceof Error ? error.message : "Erro inesperado.";
-  const status = message.includes("não encontrad") ? 404 : message.includes("inválid") ? 400 : 500;
+  const status = message.includes("permissão") ? 403 : message.includes("não encontrad") ? 404 : message.includes("inválid") ? 400 : 500;
   return Response.json({ error: message }, { status });
 }
 
