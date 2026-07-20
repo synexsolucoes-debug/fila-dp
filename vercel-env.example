@@ -1,10 +1,10 @@
-# Obrigatórias em produção
-TURSO_DATABASE_URL=libsql://seu-banco.turso.io
-TURSO_AUTH_TOKEN=seu-token-do-turso
+# Variaveis obrigatorias em producao (Neon + Vercel Marketplace)
+# A integracao do Neon normalmente cria DATABASE_URL automaticamente.
+DATABASE_URL=postgresql://usuario:senha@host.neon.tech/neondb?sslmode=require
 BLOB_READ_WRITE_TOKEN=seu-token-do-vercel-blob
 FDP_AUTH_SECRET=gere-um-segredo-longo-e-aleatorio
 
-# Opcionais: webhooks/sincronizações externas
+# Opcionais: webhooks e sincronizacoes externas
 FDP_EMAIL_TOKEN=
 FDP_WHATSAPP_TOKEN=
 FDP_TEAMS_TOKEN=
