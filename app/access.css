@@ -754,7 +754,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .dashboard-tabs button { min-width: max-content; min-height: 42px; }
   .dashboard-filters { padding: 8px 0 10px; display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr)); overflow-x: auto; }
   .dashboard-filters label { min-height: 38px; }
-  .dashboard-kanban { margin-right: -16px; padding-right: 16px; grid-auto-columns: min(84vw, 310px); scroll-snap-type: x mandatory; scroll-padding-inline: 0; }
+  .dashboard-kanban { margin-right: -16px; padding-right: 16px; grid-template-columns: none; grid-auto-columns: min(84vw, 310px); scroll-snap-type: x mandatory; scroll-padding-inline: 0; }
   .dashboard-column { min-width: 0; scroll-snap-align: start; }
   .dashboard-column > header { height: 46px; }
   .dashboard-task { padding: 14px; cursor: pointer; }
