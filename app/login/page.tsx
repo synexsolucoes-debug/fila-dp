@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import {
-  chatGPTSignInPath,
-  chatGPTSignOutPath,
-  getChatGPTUser,
-} from "../chatgpt-auth";
+import { chatGPTSignOutPath, getChatGPTUser } from "../chatgpt-auth";
+import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
@@ -51,22 +48,7 @@ export default async function LoginPage() {
               <a className="button auth-primary" href="/painel">Continuar para o painel <span aria-hidden="true">→</span></a>
               <a className="auth-secondary-link" href={chatGPTSignOutPath("/login")}>Entrar com outra conta</a>
             </>
-          ) : (
-            <>
-              <span className="auth-status neutral">Área exclusiva</span>
-              <h2>Entrar no Fila DP</h2>
-              <p>Use sua conta ChatGPT para acessar o ambiente da sua equipe com segurança.</p>
-              <a className="button auth-primary" href={chatGPTSignInPath("/painel")}>
-                <span className="auth-provider-mark" aria-hidden="true">◎</span>
-                Entrar com ChatGPT
-                <span aria-hidden="true">→</span>
-              </a>
-              <div className="auth-security-note">
-                <span aria-hidden="true">✓</span>
-                <p>O Fila DP recebe apenas as informações necessárias para identificar seu acesso. Sua senha não é armazenada pela plataforma.</p>
-              </div>
-            </>
-          )}
+          ) : <LoginForm />}
         </div>
 
         <p className="auth-help">Precisa de acesso? Solicite um convite ao administrador do seu workspace.</p>

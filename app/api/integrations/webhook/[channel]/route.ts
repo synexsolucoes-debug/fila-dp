@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { getD1 } from "@/db";
 import { apiError, text } from "@/lib/fila-dp-api";
 
@@ -11,9 +10,8 @@ export async function POST(request: Request, context: RouteContext) {
     if (!["email", "whatsapp", "teams"].includes(channel)) return Response.json({ error: "Canal não suportado." }, { status: 404 });
     const url = new URL(request.url);
     const workspaceId = text(url.searchParams.get("workspaceId"), 100);
-    const runtimeEnv = env as unknown as Record<string, unknown>;
     const secretKey = `FDP_${channel.toUpperCase()}_WEBHOOK_SECRET`;
-    const expectedSecret = String(runtimeEnv[secretKey] ?? "");
+    const expectedSecret = String(process.env[secretKey] ?? "");
     const receivedSecret = request.headers.get("x-fila-dp-secret") ?? request.headers.get("x-webhook-secret") ?? "";
     if (!expectedSecret || receivedSecret !== expectedSecret) return Response.json({ error: "Webhook não autorizado." }, { status: 401 });
     if (!workspaceId) return Response.json({ error: "workspaceId obrigatório." }, { status: 400 });

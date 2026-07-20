@@ -9,6 +9,8 @@ const schemaStatements = [
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
+    password_hash TEXT,
+    password_salt TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS fdp_workspaces (
@@ -278,7 +280,15 @@ const schemaStatements = [
 export async function ensureSchema() {
   if (!schemaPromise) {
     const d1 = getD1();
-    schemaPromise = d1.batch(schemaStatements.map((statement) => d1.prepare(statement))).then(() => undefined);
+    schemaPromise = d1.batch(schemaStatements.map((statement) => d1.prepare(statement))).then(async () => {
+      const columns = await d1.prepare("PRAGMA table_info(fdp_users)").all<{ name: string }>();
+      const names = new Set(columns.results.map((column) => column.name));
+      const compatibility = [
+        !names.has("password_hash") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_hash TEXT") : null,
+        !names.has("password_salt") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_salt TEXT") : null,
+      ].filter((statement): statement is D1PreparedStatement => Boolean(statement));
+      if (compatibility.length) await d1.batch(compatibility);
+    });
   }
   return schemaPromise;
 }

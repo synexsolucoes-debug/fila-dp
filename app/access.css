@@ -213,6 +213,15 @@
 .auth-security-note p { margin: 0; font-size: 11px; line-height: 1.55; }
 .auth-secondary-link { margin-top: 20px; display: block; color: #526174; text-align: center; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
 .auth-help { position: absolute; bottom: 35px; left: 38px; right: 38px; margin: 0; color: #84909d; text-align: center; font-size: 11px; }
+.auth-login-form { margin-top: 26px; display: grid; gap: 15px; }
+.auth-login-form label { display: grid; gap: 7px; color: #425166; font-size: 12px; font-weight: 700; }
+.auth-login-form input { width: 100%; min-height: 48px; padding: 0 13px; border: 1px solid #ccd7d8; border-radius: 8px; background: rgba(255,255,255,.86); color: #0b1528; outline: none; font: inherit; font-weight: 500; }
+.auth-login-form input:focus { border-color: #23b98e; box-shadow: 0 0 0 3px rgba(35,216,161,.14); }
+.auth-login-form small { color: #84909d; font-size: 10px; font-weight: 500; }
+.auth-login-form .auth-primary { margin-top: 5px; border: 0; cursor: pointer; }
+.auth-login-form .auth-primary:disabled { opacity: .65; cursor: wait; }
+.auth-mode-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; }
+.auth-login-error { margin: 0; padding: 11px 12px; border: 1px solid #f0c8c8; border-radius: 7px; background: #fff3f3; color: #a23b3b; font-size: 12px; line-height: 1.45; }
 
 .dashboard-shell {
   min-height: 100vh;

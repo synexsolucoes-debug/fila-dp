@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers";
 import { getD1 } from "@/db";
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
@@ -18,8 +17,7 @@ export async function POST(request: Request) {
     if (!integration) return Response.json({ error: "Configure a integração antes de sincronizar." }, { status: 409 });
     const config = JSON.parse(integration.config_json || "{}") as Record<string, unknown>;
     const endpoint = text(config.endpoint, 500);
-    const runtimeEnv = env as unknown as Record<string, unknown>;
-    const token = String(runtimeEnv[`FDP_${channel.toUpperCase()}_TOKEN`] ?? "");
+    const token = String(process.env[`FDP_${channel.toUpperCase()}_TOKEN`] ?? "");
     if (!endpoint || !token) return Response.json({ error: "Endpoint e credencial segura ainda não configurados." }, { status: 409 });
     const response = await fetch(endpoint, { headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
     if (!response.ok) throw new Error(`O provedor respondeu com status ${response.status}.`);
