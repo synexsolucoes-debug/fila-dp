@@ -1172,6 +1172,71 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .theme-dark .dashboard-sla.completed { color: #b8c6d3; background: #273545; }
 .theme-dark .dashboard-mini-avatar { background: #1d5148; color: #9af3d6; }
 
+/* Settings modal contrast: every child surface follows the selected theme. */
+.theme-dark .workspace-modal > header {
+  background: #111d2b;
+  border-color: var(--ui-border);
+}
+.theme-dark .workspace-modal > header h2 { color: #eef5f4; }
+.theme-dark .workspace-modal > header > button {
+  border-color: var(--ui-border-strong);
+  background: #162536;
+  color: #b9c8d6;
+}
+.theme-dark .workspace-settings-layout,
+.theme-dark .workspace-settings-content { background: #0f1b29; }
+.theme-dark .settings-nav {
+  border-color: var(--ui-border);
+  background: #162536;
+}
+.theme-dark .settings-nav button { color: #a8b8c8; }
+.theme-dark .settings-nav button.active,
+.theme-dark .settings-nav button:hover { background: #1d4b42; color: #a8f2d6; }
+.theme-dark .workspace-name-form label,
+.theme-dark .workspace-invite-form label { color: #b9c8d6; }
+.theme-dark .workspace-name-form input,
+.theme-dark .workspace-invite-form input,
+.theme-dark .workspace-invite-form select,
+.theme-dark .workspace-member-list select,
+.theme-dark .board-create-form input {
+  border-color: var(--ui-border-strong);
+  background: #162536;
+  color: #eef5f4;
+}
+.theme-dark .workspace-name-form input:disabled { background: #1c2c3d; color: #a8b8c8; }
+.theme-dark .board-manager {
+  border-color: var(--ui-border);
+  background: #111d2b;
+}
+.theme-dark .board-manager > header,
+.theme-dark .workspace-switcher > header,
+.theme-dark .workspace-team > header,
+.theme-dark .workspace-invite-form > header { border-color: var(--ui-border); }
+.theme-dark .board-manager > header strong,
+.theme-dark .workspace-switcher > header strong,
+.theme-dark .workspace-team > header strong,
+.theme-dark .workspace-invite-form > header strong { color: #eef5f4; }
+.theme-dark .board-manager > header span,
+.theme-dark .workspace-switcher > header span,
+.theme-dark .workspace-team > header span,
+.theme-dark .workspace-invite-form > header span,
+.theme-dark .workspace-team > header > p { color: #91a4b6; }
+.theme-dark .board-manager > div > button,
+.theme-dark .workspace-switcher > div > button {
+  border-color: var(--ui-border-strong);
+  background: #162536;
+  color: #eef5f4;
+}
+.theme-dark .board-manager > div > button.active,
+.theme-dark .workspace-switcher > div > button.active { border-color: #56c9aa; background: #183b39; }
+.theme-dark .board-manager button span small,
+.theme-dark .workspace-switcher button span small,
+.theme-dark .workspace-member-list article > div small { color: #91a4b6; }
+.theme-dark .board-create-form { border-color: var(--ui-border); background: #111d2b; }
+.theme-dark .workspace-member-list article { border-color: var(--ui-border); }
+.theme-dark .workspace-member-list article > b { color: #b9c8d6; }
+.theme-dark .workspace-member-list article > button { border-color: var(--ui-border-strong); background: #162536; }
+
 @media (max-width: 1050px) {
   .dashboard-content { padding-inline: clamp(16px, 3vw, 28px); }
   .dashboard-kanban { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
