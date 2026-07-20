@@ -152,8 +152,8 @@ export default function Home() {
           <a href="#planos">Planos</a>
         </nav>
         <div className="header-actions">
-          <a className="login-link" href="#contato">Entrar</a>
-          <a className="button button-small" href="#planos">Criar conta grátis</a>
+          <a className="login-link" href="/login">Entrar</a>
+          <a className="button button-small" href="/login">Criar conta grátis</a>
         </div>
       </header>
 
@@ -167,7 +167,7 @@ export default function Home() {
             Centralize solicitações, acompanhe SLAs e organize admissões, férias, rescisões e outras rotinas em um quadro visual simples de usar.
           </p>
           <div className="hero-actions">
-            <a className="button" href="#planos">Criar conta grátis <Chevron /></a>
+            <a className="button" href="/login">Criar conta grátis <Chevron /></a>
             <a className="button button-secondary" href="#como-funciona">Ver como funciona</a>
           </div>
           <div className="hero-notes">
@@ -252,7 +252,7 @@ export default function Home() {
           <p>Escolha o nível de controle adequado para o momento da sua equipe.</p>
         </div>
         <div className="plans-grid">
-          <article><span className="plan-name">Gratuito</span><h3>Para experimentar</h3><p>O essencial para organizar uma pequena fila e validar o método com a equipe.</p><a href="#contato">Começar grátis <Chevron /></a></article>
+          <article><span className="plan-name">Gratuito</span><h3>Para experimentar</h3><p>O essencial para organizar uma pequena fila e validar o método com a equipe.</p><a href="/login">Começar grátis <Chevron /></a></article>
           <article><span className="plan-name">Standard</span><h3>Para organizar</h3><p>Mais controle, colaboração e capacidade para operações em crescimento.</p><a href="#contato">Conhecer o plano <Chevron /></a></article>
           <article className="featured-plan"><span className="recommended">Mais completo</span><span className="plan-name">Premium</span><h3>Para gerir e otimizar</h3><p>Dashboards, automações avançadas e inteligência aplicada à rotina.</p><a href="#contato">Falar com especialista <Chevron /></a></article>
           <article><span className="plan-name">Enterprise</span><h3>Para escalar</h3><p>Permissões, integrações e implantação alinhadas a operações complexas.</p><a href="#contato">Agendar conversa <Chevron /></a></article>
@@ -281,8 +281,8 @@ export default function Home() {
           <h2>Seu DP já tem demandas demais. Organizar a fila não precisa ser mais uma delas.</h2>
         </div>
         <div className="final-cta-actions">
-          <a className="button button-light" href="#inicio">Criar minha conta grátis <Chevron /></a>
-          <a className="demo-link" href="#inicio">Agendar demonstração</a>
+          <a className="button button-light" href="/login">Criar minha conta grátis <Chevron /></a>
+          <a className="demo-link" href="/login">Acessar minha conta</a>
           <p>Comece pelo plano gratuito e evolua quando precisar.</p>
         </div>
       </section>
