@@ -93,6 +93,10 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [cardForm, setCardForm] = useState<CardForm>(emptyCardForm);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [slaFilter, setSlaFilter] = useState("all");
 
   useEffect(() => {
     void requestSnapshot("/api/workspace")
@@ -108,19 +112,26 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }, [toast]);
 
   useEffect(() => {
-    if (!cardModalOpen && !inboxModalOpen) return;
+    if (!cardModalOpen && !inboxModalOpen && !workspaceModalOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setCardModalOpen(false);
         setInboxModalOpen(false);
+        setWorkspaceModalOpen(false);
       }
     };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [cardModalOpen, inboxModalOpen]);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [cardModalOpen, inboxModalOpen, workspaceModalOpen]);
 
   const allCards = useMemo(() => snapshot?.lists.flatMap((list) => list.cards) ?? [], [snapshot]);
   const selectedCard = useMemo(() => allCards.find((card) => card.id === selectedCardId) ?? null, [allCards, selectedCardId]);
+  const assignees = useMemo(() => Array.from(new Set(allCards.map((card) => card.assigneeName).filter(Boolean))).sort(), [allCards]);
   const workspaceInitials = initials(snapshot?.workspace.name ?? "Synex DP");
   const userInitials = initials(user.displayName);
 
@@ -248,6 +259,18 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     await mutate(`/api/rules/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }, enabled ? "Automação ativada." : "Automação pausada.");
   }
 
+  function openWorkspaceSettings() {
+    setWorkspaceName(snapshot?.workspace.name ?? "");
+    setWorkspaceModalOpen(true);
+  }
+
+  async function saveWorkspace(event: FormEvent) {
+    event.preventDefault();
+    if (!workspaceName.trim()) return;
+    const next = await mutate("/api/workspace", { method: "PATCH", body: JSON.stringify({ name: workspaceName }) }, "Workspace atualizado.");
+    if (next) setWorkspaceModalOpen(false);
+  }
+
   if (loading) {
     return <main className="workspace-loading"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><p>Preparando sua fila…</p></main>;
   }
@@ -274,7 +297,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         </nav>
         <div className="sidebar-workspace">
           <span>WORKSPACE</span>
-          <button type="button"><i>{workspaceInitials}</i><strong>{snapshot.workspace.name}</strong><span>⌄</span></button>
+          <button type="button" onClick={openWorkspaceSettings}><i>{workspaceInitials}</i><strong>{snapshot.workspace.name}</strong><span>⌄</span></button>
         </div>
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
@@ -287,6 +310,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <header className="dashboard-header">
           <div><span>{snapshot.workspace.name} /</span><strong> {header.title}</strong></div>
           <div className="dashboard-header-actions">
+            <button className="workspace-settings-button" aria-label="Configurar workspace" onClick={openWorkspaceSettings}>⚙</button>
             <button aria-label="Pesquisar" onClick={() => setToast("A busca avançada será aberta pelos filtros do quadro.")}>⌕</button>
             <button aria-label="Notificações" onClick={() => setToast(`${stats.attention} demanda(s) exigem atenção.`)}>♢{stats.attention > 0 && <i />}</button>
             <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>{view === "inbox" ? "＋ Nova solicitação" : "＋ Nova demanda"}</button>
@@ -310,11 +334,16 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
               <div className="dashboard-board-head">
                 <div className="dashboard-tabs"><button className="active">Quadro</button><button onClick={() => setView("planner")}>Planner</button><button onClick={() => setView("indicators")}>Indicadores</button></div>
-                <div className="dashboard-filters"><button>Responsável: Todos ⌄</button><button>SLA: Todos ⌄</button><button>☷ Filtros</button></div>
+                <div className="dashboard-filters">
+                  <label><span>Responsável</span><select aria-label="Filtrar por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Todos</option>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label>
+                  <label><span>SLA</span><select aria-label="Filtrar por SLA" value={slaFilter} onChange={(event) => setSlaFilter(event.target.value)}><option value="all">Todos</option><option value="safe">No prazo</option><option value="warning">Vence hoje</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>
+                </div>
               </div>
 
               <div className="dashboard-kanban">
-                {snapshot.lists.map((list) => (
+                {snapshot.lists.map((list) => {
+                  const visibleCards = list.cards.filter((card) => (assigneeFilter === "all" || card.assigneeName === assigneeFilter) && (slaFilter === "all" || card.slaStatus === slaFilter));
+                  return (
                   <section
                     className={`dashboard-column ${draggedCardId ? "drop-ready" : ""}`}
                     key={list.id}
@@ -325,9 +354,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                       setDraggedCardId(null);
                     }}
                   >
-                    <header><span><i className={list.kind} />{list.name}</span><b>{list.cards.length}</b><button aria-label={`Opções de ${list.name}`}>•••</button></header>
+                    <header><span><i className={list.kind} />{list.name}</span><b>{visibleCards.length}</b><button aria-label={`Opções de ${list.name}`} onClick={() => setToast(`${list.name}: ${visibleCards.length} demanda(s) visível(is).`)}>•••</button></header>
                     <div className="dashboard-card-list">
-                      {list.cards.map((card) => {
+                      {visibleCards.map((card) => {
                         const completed = card.checklist.filter((item) => item.completed).length;
                         return (
                           <article
@@ -350,7 +379,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                       <button className="dashboard-add-card" onClick={() => { setCardForm({ ...emptyCardForm, listId: list.id }); setSelectedCardId(null); setCardModalOpen(true); }}>＋ Adicionar demanda</button>
                     </div>
                   </section>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
@@ -406,6 +436,20 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               <label className="full">Assunto<input name="subject" placeholder="Resumo da solicitação" required /></label>
               <label className="full">Mensagem<textarea name="body" rows={5} placeholder="Contexto recebido do solicitante" /></label>
               <div className="card-form-actions full"><span /><button type="button" className="secondary-button" onClick={() => setInboxModalOpen(false)}>Cancelar</button><button className="primary-button" disabled={busy}>Adicionar à Inbox</button></div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {workspaceModalOpen && (
+        <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setWorkspaceModalOpen(false); }}>
+          <section className="workspace-modal workspace-settings-modal" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
+            <header><div><span>CONFIGURAÇÕES</span><h2 id="workspace-modal-title">Seu workspace</h2></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
+            <form className="card-form" onSubmit={saveWorkspace}>
+              <label className="full">Nome do workspace<input autoFocus value={workspaceName} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>
+              <div className="workspace-account-summary full"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>Administrador</em></div></div>
+              <p className="workspace-settings-note full">Este nome aparece no cabeçalho, no quadro e na identificação da operação.</p>
+              <div className="card-form-actions full"><span /><button type="button" className="secondary-button" onClick={() => setWorkspaceModalOpen(false)}>Cancelar</button><button className="primary-button" disabled={busy}>Salvar workspace</button></div>
             </form>
           </section>
         </div>

@@ -10,18 +10,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
-    const current = await d1.prepare("SELECT * FROM cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first<Record<string, unknown>>();
+    const current = await d1.prepare("SELECT * FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first<Record<string, unknown>>();
     if (!current) throw new Error("Demanda não encontrada.");
 
     const title = body.title === undefined ? String(current.title) : text(body.title, 180);
     if (!title) return Response.json({ error: "Informe o título da demanda." }, { status: 400 });
     const assigneeName = body.assigneeName === undefined ? String(current.assignee_name ?? "") : text(body.assigneeName, 120);
     let listId = String(current.list_id);
-    let list = await d1.prepare("SELECT id, kind, sla_behavior FROM lists WHERE id = ? AND board_id = ?").bind(listId, board.id).first<{ id: string; kind: string; sla_behavior: string }>();
+    let list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE id = ? AND board_id = ?").bind(listId, board.id).first<{ id: string; kind: string; sla_behavior: string }>();
     if (!list) throw new Error("Coluna não encontrada.");
 
     if (!String(current.assignee_name ?? "") && assigneeName && list.kind === "new") {
-      const analysis = await d1.prepare("SELECT id, kind, sla_behavior FROM lists WHERE board_id = ? AND kind = 'analysis'").bind(board.id).first<{ id: string; kind: string; sla_behavior: string }>();
+      const analysis = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE board_id = ? AND kind = 'analysis'").bind(board.id).first<{ id: string; kind: string; sla_behavior: string }>();
       if (analysis) {
         list = analysis;
         listId = analysis.id;
@@ -30,7 +30,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const dueAt = body.dueAt === undefined ? (current.due_at ? String(current.due_at) : null) : validDate(body.dueAt);
     const priority = body.priority === undefined ? String(current.priority) : (["low", "normal", "high", "urgent"].includes(String(body.priority)) ? String(body.priority) : "normal");
-    await d1.prepare(`UPDATE cards SET
+    await d1.prepare(`UPDATE fdp_cards SET
       list_id = ?, title = ?, description = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND board_id = ?`)
       .bind(
@@ -60,7 +60,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
-    const result = await d1.prepare("UPDATE cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
+    const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
     if (!result.meta.changes) throw new Error("Demanda não encontrada.");
     await recordActivity(workspace.id, id, auth.user.email, "card.archived");
     return Response.json(await getWorkspaceSnapshot(auth.user));
@@ -68,3 +68,4 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return apiError(error);
   }
 }
+

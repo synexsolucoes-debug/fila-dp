@@ -10,7 +10,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json() as { enabled?: boolean };
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    const result = await d1.prepare("UPDATE automation_rules SET enabled = ? WHERE id = ? AND workspace_id = ?")
+    const result = await d1.prepare("UPDATE fdp_automation_rules SET enabled = ? WHERE id = ? AND workspace_id = ?")
       .bind(body.enabled ? 1 : 0, id, workspace.id)
       .run();
     if (!result.meta.changes) throw new Error("Regra não encontrada.");
@@ -19,3 +19,4 @@ export async function PATCH(request: Request, context: RouteContext) {
     return apiError(error);
   }
 }
+
