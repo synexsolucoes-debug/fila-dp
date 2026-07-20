@@ -730,19 +730,30 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
   ];
 
   const title = ({ mine: "Minha fila", overview: "Visão geral", inbox: "Central de entradas", reports: "Relatórios", settings: "Configurações", users: "Gestão de usuários", companies: "Gestão de empresas", demands: "Fila DP" } as Record<View, string>)[view];
+  const subtitle = ({
+    overview: "Acompanhe prazos, prioridades e o ritmo da equipe.",
+    inbox: "Reúna os pedidos recebidos e transforme mensagens em demandas.",
+    demands: "Organize o trabalho do DP em um fluxo claro e compartilhado.",
+    mine: "Tudo o que está sob sua responsabilidade em um só lugar.",
+    reports: "Visualize produtividade, canais e distribuição da carga.",
+    settings: "Personalize regras, etiquetas e etapas dos processos.",
+    users: "Controle acessos e mantenha sua equipe atualizada.",
+    companies: "Gerencie as empresas atendidas pelo Departamento Pessoal.",
+  } as Record<View, string>)[view];
 
   return <main className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><span>F</span><strong>Fila DP</strong></div>
+      <div className="brand"><span>F</span><div><strong>Fila DP</strong><small>Central operacional</small></div></div>
+      <span className="nav-section-label">Menu principal</span>
       <nav aria-label="Navegação principal">
         {navItems.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => setView(item.id)}><Icon name={item.icon}/><span>{item.label}</span></button>)}
       </nav>
-      <div className="profile"><span className="avatar large">{initials(activeUser.name)}</span><div><strong>{activeUser.name}</strong><small>{activeUser.role === "admin" ? "Administrador" : "Analista · acesso completo"}</small></div><span className="chevron">⌄</span></div>
+      <div className="profile"><span className="avatar large">{initials(activeUser.name)}</span><div><strong>{activeUser.name}</strong><small>{activeUser.role === "admin" ? "Administrador" : "Analista · acesso completo"}</small></div><span className="online-dot" title="Online"/></div>
     </aside>
 
     <section className="workspace">
       <header className="topbar">
-        <div><p className="eyebrow">Gestão de demandas</p><h1>{title}</h1></div>
+        <div className="page-heading"><p className="eyebrow">Gestão de demandas</p><h1>{title}</h1><p className="page-subtitle">{subtitle}</p></div>
         {!(["users", "companies"] as View[]).includes(view) && <div className="kpis" aria-label="Indicadores da fila">
           <div className="kpi green"><span className="kpi-icon"><Icon name="user"/></span><div><small>Disponíveis</small><strong>{counts.available}</strong></div></div>
           <div className="kpi blue"><span className="kpi-icon"><Icon name="clock"/></span><div><small>Em andamento</small><strong>{counts.active}</strong></div></div>
@@ -780,7 +791,7 @@ export default function DemandBoard({ currentUser }: { currentUser: User }) {
           {STATUS.map((column) => {
             const items = filtered.filter((demand) => demand.status === column.id);
             return <section className="column" key={column.id} onDragOver={(event) => event.preventDefault()} onDrop={() => { if (draggedId) moveDemand(draggedId, column.id); setDraggedId(null); }}>
-              <header><div><span className="grip">⠿</span><strong>{column.label}</strong></div><span className={`count ${column.id}`}>{items.length}</span></header>
+              <header><div><span className={`column-dot ${column.id}`}/><strong>{column.label}</strong></div><span className={`count ${column.id}`}>{items.length}</span></header>
               <div className="card-list">
                 {items.map((demand) => <DemandCard key={demand.id} demand={demand} currentUser={activeUser} team={team} availableLabels={labels.filter((label) => label.status === "active")} labelsExpanded={labelsExpanded} quickOpen={quickEditId === demand.id} onToggleLabels={() => setLabelsExpanded((value) => !value)} onQuickOpen={() => setQuickEditId(quickEditId === demand.id ? null : demand.id)} onQuickSave={(changes) => quickUpdateDemand(demand.id, changes)} onClaim={claimDemand} onOpen={openDemand} onDragStart={setDraggedId}/>)}
                 {items.length === 0 && <div className="empty-column">Nenhuma demanda nesta etapa</div>}
