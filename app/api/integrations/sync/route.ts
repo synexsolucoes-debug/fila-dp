@@ -150,11 +150,11 @@ export async function POST(request: Request) {
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
 
     const integration = await d1!.prepare("SELECT id, config_json FROM fdp_integrations WHERE workspace_id = ? AND channel = ?").bind(workspace.id, channel).first<{ id: string; config_json: string }>();
-    if (!integration) return Response.json({ error: "Configure a integração antes de sincronizar." }, { status: 409 });
+    if (!integration) return Response.json({ error: `A integração ${channel} ainda não foi inicializada neste workspace. Abra as configurações e salve a integração uma vez antes de sincronizar.`, code: "INTEGRATION_NOT_INITIALIZED", details: { channel } }, { status: 409 });
     integrationId = integration.id;
 
     const config = JSON.parse(integration.config_json || "{}") as Record<string, unknown>;
-    const endpoint = text(config.endpoint, 500);
+    const endpoint = text(config.endpoint, 500) || text(process.env[`FDP_${channel.toUpperCase()}_ENDPOINT`], 500);
     const explicitToken = String(process.env[`FDP_${channel.toUpperCase()}_TOKEN`] ?? "");
     const microsoftReady = Boolean(process.env.FDP_MICROSOFT_CLIENT_ID && process.env.FDP_MICROSOFT_TENANT_ID && process.env.FDP_MICROSOFT_CLIENT_SECRET);
     const sankhyaReady = Boolean(process.env.FDP_SANKHYA_CLIENT_ID && process.env.FDP_SANKHYA_CLIENT_SECRET && process.env.FDP_SANKHYA_X_TOKEN);
@@ -167,12 +167,14 @@ export async function POST(request: Request) {
         : channel === "erp"
           ? "FDP_ERP_TOKEN ou FDP_SANKHYA_CLIENT_ID, FDP_SANKHYA_CLIENT_SECRET e FDP_SANKHYA_X_TOKEN"
           : `a variável FDP_${channel.toUpperCase()}_TOKEN`;
-      const missing = !endpoint && !token
-        ? `o endpoint e ${tokenRequirement}`
-        : !endpoint
-          ? "o endpoint"
-          : tokenRequirement;
-      return Response.json({ error: `Configure ${missing} antes de sincronizar.` }, { status: 409 });
+      const missing: string[] = [];
+      if (!endpoint) missing.push(`o endpoint (salvo na integração ou FDP_${channel.toUpperCase()}_ENDPOINT)`);
+      if (!token) missing.push(tokenRequirement);
+      return Response.json({
+        error: `Integração ${channel} incompleta. Configure ${missing.join(" e ")} antes de sincronizar.`,
+        code: "INTEGRATION_CONFIGURATION_MISSING",
+        details: { channel, endpointConfigured: Boolean(endpoint), tokenConfigured: Boolean(token), microsoftCredentialsConfigured: microsoftReady },
+      }, { status: 409 });
     }
 
     const rawRequestBody = channel === "erp" ? (config.requestBody ?? process.env.FDP_SANKHYA_REQUEST_BODY) : undefined;

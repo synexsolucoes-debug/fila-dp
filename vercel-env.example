@@ -16,6 +16,8 @@ FDP_ERP_TOKEN=
 FDP_MICROSOFT_CLIENT_ID=
 FDP_MICROSOFT_TENANT_ID=
 FDP_MICROSOFT_CLIENT_SECRET=
+FDP_TEAMS_ENDPOINT=https://graph.microsoft.com/v1.0/teams/TEAM_ID/channels/CHANNEL_ID/messages
+FDP_ONEDRIVE_ENDPOINT=https://graph.microsoft.com/v1.0/drives/DRIVE_ID/root/children
 
 # Sankhya Gateway (OAuth2 Client Credentials; X-Token vem do Sankhya Om)
 FDP_SANKHYA_BASE_URL=https://api.sankhya.com.br
