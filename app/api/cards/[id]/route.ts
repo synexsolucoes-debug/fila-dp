@@ -19,6 +19,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!title) return Response.json({ error: "Informe o título da demanda." }, { status: 400 });
     const assigneeName = body.assigneeName === undefined ? String(current.assignee_name ?? "") : text(body.assigneeName, 120);
     const hasNewAssignees = Array.isArray(body.assigneeIds) && body.assigneeIds.length > 0;
+    const companyId = body.companyId === undefined ? (current.company_id ? String(current.company_id) : null) : (text(body.companyId, 120) || null);
+    let companyName = body.company === undefined ? String(current.company ?? "") : text(body.company, 160);
+    if (companyId) {
+      const company = await d1.prepare("SELECT legal_name, trade_name FROM fdp_companies WHERE id = ? AND workspace_id = ? AND status = 'active'").bind(companyId, workspace.id).first<{ legal_name: string; trade_name: string }>();
+      if (!company) return Response.json({ error: "Empresa selecionada nÃ£o encontrada." }, { status: 400 });
+      companyName = company.trade_name || company.legal_name;
+    }
     const listId = String(current.list_id);
     const list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE id = ? AND board_id = ?").bind(listId, board.id).first<{ id: string; kind: string; sla_behavior: string }>();
     if (!list) throw new Error("Coluna não encontrada.");
@@ -26,13 +33,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     const dueAt = body.dueAt === undefined ? (current.due_at ? String(current.due_at) : null) : validDate(body.dueAt);
     const priority = body.priority === undefined ? String(current.priority) : (["low", "normal", "high", "urgent"].includes(String(body.priority)) ? String(body.priority) : "normal");
     await d1.prepare(`UPDATE fdp_cards SET
-      list_id = ?, title = ?, description = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, updated_at = CURRENT_TIMESTAMP
+      list_id = ?, title = ?, description = ?, company_id = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND board_id = ?`)
       .bind(
         listId,
         title,
         body.description === undefined ? String(current.description ?? "") : text(body.description),
-        body.company === undefined ? String(current.company ?? "") : text(body.company, 160),
+        companyId,
+        companyName,
         body.processType === undefined ? String(current.process_type ?? "OUTROS") : text(body.processType, 40).toUpperCase(),
         priority,
         assigneeName,

@@ -1,5 +1,5 @@
 {
-  "version": "7",
+  "version": "8",
   "dialect": "sqlite",
   "entries": [
     {
@@ -56,6 +56,13 @@
       "version": "7",
       "when": 1784745600000,
       "tag": "0007_companies_hr_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "8",
+      "when": 1784752800000,
+      "tag": "0008_card_company",
       "breakpoints": true
     }
   ]

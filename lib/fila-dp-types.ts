@@ -129,6 +129,7 @@ export type Card = {
   listId: string;
   title: string;
   description: string;
+  companyId: string | null;
   company: string;
   processType: string;
   priority: "low" | "normal" | "high" | "urgent";

@@ -12,6 +12,13 @@ export async function POST(request: Request) {
 
     const { d1, workspace, board } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    const companyId = text(body.companyId, 120) || null;
+    let companyName = text(body.company, 160);
+    if (companyId) {
+      const company = await d1.prepare("SELECT legal_name, trade_name FROM fdp_companies WHERE id = ? AND workspace_id = ? AND status = 'active'").bind(companyId, workspace.id).first<{ legal_name: string; trade_name: string }>();
+      if (!company) return Response.json({ error: "Empresa selecionada nÃ£o encontrada." }, { status: 400 });
+      companyName = company.trade_name || company.legal_name;
+    }
     const assigneeName = text(body.assigneeName, 120);
     const hasAssignees = Array.isArray(body.assigneeIds) ? body.assigneeIds.length > 0 : Boolean(assigneeName);
     const requestedListId = text(body.listId, 80);
@@ -50,15 +57,16 @@ export async function POST(request: Request) {
 
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
-        (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)`)
+        (id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)`)
         .bind(
           cardId,
           board.id,
           list.id,
           title,
           text(body.description),
-          text(body.company, 160),
+          companyId,
+          companyName,
           processType,
           priority,
           assigneeName,

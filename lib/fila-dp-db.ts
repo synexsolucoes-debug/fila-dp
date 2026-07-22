@@ -71,6 +71,7 @@ const schemaStatements = [
     list_id TEXT NOT NULL REFERENCES fdp_lists(id),
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL,
     company TEXT NOT NULL DEFAULT '',
     process_type TEXT NOT NULL DEFAULT 'OUTROS',
     priority TEXT NOT NULL DEFAULT 'normal',
@@ -315,11 +316,15 @@ export async function ensureSchema() {
     schemaPromise = d1.batch(schemaStatements.map((statement) => d1.prepare(statement))).then(async () => {
       const columns = await d1.prepare("PRAGMA table_info(fdp_users)").all<{ name: string }>();
       const names = new Set(columns.results.map((column) => column.name));
+      const cardColumns = await d1.prepare("PRAGMA table_info(fdp_cards)").all<{ name: string }>();
+      const cardNames = new Set(cardColumns.results.map((column) => column.name));
       const compatibility = [
         !names.has("password_hash") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_hash TEXT") : null,
         !names.has("password_salt") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_salt TEXT") : null,
+        !cardNames.has("company_id") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL") : null,
       ].filter((statement): statement is D1PreparedStatement => Boolean(statement));
       if (compatibility.length) await d1.batch(compatibility);
+      await d1.prepare("CREATE INDEX IF NOT EXISTS fdp_cards_company_idx ON fdp_cards (company_id)").run();
     });
   }
   return schemaPromise;
@@ -402,6 +407,20 @@ async function ensureWorkspaceDefaults(d1: ReturnType<typeof getD1>, workspaceId
   ]);
 }
 
+async function removeLegacyProcessLists(d1: ReturnType<typeof getD1>, workspaceId: string) {
+  const boards = await d1.prepare("SELECT id FROM fdp_boards WHERE workspace_id = ?").bind(workspaceId).all<{ id: string }>();
+  for (const board of boards.results) {
+    const target = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'analysis' LIMIT 1").bind(board.id).first<{ id: string }>();
+    const fallback = target ?? await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'new' LIMIT 1").bind(board.id).first<{ id: string }>();
+    if (!fallback) continue;
+    const legacy = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind IN ('waiting', 'review')").bind(board.id).all<{ id: string }>();
+    for (const list of legacy.results) {
+      await d1.prepare("UPDATE fdp_cards SET list_id = ?, sla_status = CASE WHEN sla_status = 'paused' THEN 'warning' ELSE sla_status END, updated_at = CURRENT_TIMESTAMP WHERE list_id = ?").bind(fallback.id, list.id).run();
+      await d1.prepare("DELETE FROM fdp_lists WHERE id = ?").bind(list.id).run();
+    }
+  }
+}
+
 export async function getWorkspaceContext(user: ChatGPTUser) {
   await ensureSchema();
   const d1 = getD1();
@@ -476,8 +495,6 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
     const listIds = {
       new: crypto.randomUUID(),
       analysis: crypto.randomUUID(),
-      waiting: crypto.randomUUID(),
-      review: crypto.randomUUID(),
       done: crypto.randomUUID(),
     };
     const cardIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
@@ -485,8 +502,6 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
       ["Ao atribuir um analista, mover para Em análise", "assignee.added", { assignee: "present" }, { moveTo: "analysis" }],
       ["Quando o SLA vencer, marcar como Atrasado", "sla.tick", { dueAt: "past" }, { slaStatus: "overdue" }],
       ["Ao concluir o checklist, mover para Concluído", "checklist.completed", { allItems: true }, { moveTo: "done" }],
-      ["Ao aguardar documentos, pausar o SLA", "card.moved", { listKind: "waiting" }, { slaStatus: "paused" }],
-      ["Ao sair da espera, retomar o SLA", "card.moved", { fromListKind: "waiting" }, { slaStatus: "recalculate" }],
     ] as const;
 
     await d1.batch([
@@ -494,9 +509,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
         .bind(boardId, workspace.id),
       d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Novas demandas', 'new', 1000, 'running')").bind(listIds.new, boardId),
       d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Em análise', 'analysis', 2000, 'running')").bind(listIds.analysis, boardId),
-      d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Aguardando documentos', 'waiting', 3000, 'paused')").bind(listIds.waiting, boardId),
-      d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Em conferência', 'review', 4000, 'running')").bind(listIds.review, boardId),
-      d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Concluído', 'done', 5000, 'completed')").bind(listIds.done, boardId),
+      d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Concluído', 'done', 3000, 'completed')").bind(listIds.done, boardId),
       d1.prepare(`INSERT INTO fdp_cards (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
         VALUES (?, ?, ?, 'Admissão — Maria Oliveira', 'Conferir documentos e preparar cadastro de admissão.', 'Synex Soluções', 'ADMISSÃO', 'urgent', 'Ana Martins', ?, 'warning', 1000, 'email', ?)`)
         .bind(cardIds[0], boardId, listIds.new, dateOffset(0), userRow.email),
@@ -504,11 +517,11 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
         VALUES (?, ?, ?, 'Inclusão no plano de saúde', 'Validar elegibilidade e documentação do dependente.', 'Matrícula 0482', 'BENEFÍCIOS', 'normal', 'Lucas Souza', ?, 'safe', 1000, 'manual', ?)`)
         .bind(cardIds[1], boardId, listIds.analysis, dateOffset(2), userRow.email),
       d1.prepare(`INSERT INTO fdp_cards (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, 'Documentos pendentes — Ana Reis', 'Aguardando comprovante e exame admissional.', 'Synex Soluções', 'ADMISSÃO', 'high', 'Rafael Costa', ?, 'paused', 1000, 'whatsapp', ?)`)
-        .bind(cardIds[2], boardId, listIds.waiting, dateOffset(1), userRow.email),
+        VALUES (?, ?, ?, 'Documentos pendentes — Ana Reis', 'Aguardando comprovante e exame admissional.', 'Synex Soluções', 'ADMISSÃO', 'high', 'Rafael Costa', ?, 'warning', 1000, 'whatsapp', ?)`)
+        .bind(cardIds[2], boardId, listIds.analysis, dateOffset(1), userRow.email),
       d1.prepare(`INSERT INTO fdp_cards (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
         VALUES (?, ?, ?, 'Conferência de cálculo rescisório', 'Revisar verbas e documentação antes do envio.', 'Empresa Sul', 'RESCISÃO', 'high', 'Ana Martins', ?, 'safe', 1000, 'teams', ?)`)
-        .bind(cardIds[3], boardId, listIds.review, dateOffset(3), userRow.email),
+        .bind(cardIds[3], boardId, listIds.analysis, dateOffset(3), userRow.email),
       d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Documentos pessoais recebidos', 1, 1000)").bind(crypto.randomUUID(), cardIds[0]),
       d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Exame admissional anexado', 0, 2000)").bind(crypto.randomUUID(), cardIds[0]),
       d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Cadastro no sistema concluído', 0, 3000)").bind(crypto.randomUUID(), cardIds[0]),
@@ -527,6 +540,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   await d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(board.id, userRow.id, workspace.id).run();
 
   await ensureWorkspaceDefaults(d1, workspace.id);
+  await removeLegacyProcessLists(d1, workspace.id);
 
   return { d1, user: userRow, workspace, board };
 }
@@ -643,6 +657,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     listId: String(row.list_id),
     title: String(row.title),
     description: String(row.description ?? ""),
+    companyId: row.company_id ? String(row.company_id) : null,
     company: String(row.company ?? ""),
     processType: String(row.process_type ?? "OUTROS"),
     priority: String(row.priority ?? "normal") as "low" | "normal" | "high" | "urgent",

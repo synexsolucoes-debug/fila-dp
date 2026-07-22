@@ -14,6 +14,7 @@ type CatalogHandler = (payload: Record<string, unknown>, message: string) => Pro
 type CardForm = {
   title: string;
   description: string;
+  companyId: string;
   company: string;
   processType: string;
   priority: string;
@@ -29,6 +30,7 @@ type CardForm = {
 const emptyCardForm: CardForm = {
   title: "",
   description: "",
+  companyId: "",
   company: "",
   processType: "ADMISSÃO",
   priority: "normal",
@@ -341,6 +343,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     setCardForm({
       title: card.title,
       description: card.description,
+      companyId: card.companyId ?? "",
       company: card.company,
       processType: card.processType,
       priority: card.priority,
@@ -778,7 +781,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                 <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Admissão — Maria Oliveira" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
                 <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>ADMISSÃO</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>
-                <label>Empresa / referência<input value={cardForm.company} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, company: event.target.value })} placeholder="Empresa, matrícula ou unidade" /></label>
+                <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
                 <label>Prazo<input type="date" value={cardForm.dueAt} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
                 <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>

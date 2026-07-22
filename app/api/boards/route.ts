@@ -16,8 +16,6 @@ export async function POST(request: Request) {
     const columns = [
       ["Novas demandas", "new", "running"],
       ["Em análise", "analysis", "running"],
-      ["Aguardando documentos", "waiting", "paused"],
-      ["Em conferência", "review", "running"],
       ["Concluído", "done", "completed"],
     ] as const;
     await d1.batch([

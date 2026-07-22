@@ -86,6 +86,7 @@ export const cards = sqliteTable("fdp_cards", {
   listId: text("list_id").notNull().references(() => lists.id),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
+  companyId: text("company_id").references(() => companies.id, { onDelete: "set null" }),
   company: text("company").notNull().default(""),
   processType: text("process_type").notNull().default("OUTROS"),
   priority: text("priority").notNull().default("normal"),

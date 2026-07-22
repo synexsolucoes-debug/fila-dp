@@ -187,7 +187,21 @@ export async function POST(request: Request) {
       body: requestBody,
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) throw new Error(`O provedor respondeu com status ${response.status}.`);
+    if (!response.ok) {
+      const responseText = await response.text();
+      let providerMessage = "";
+      try {
+        const providerPayload = JSON.parse(responseText) as Record<string, unknown>;
+        const providerError = asRecord(providerPayload.error);
+        providerMessage = text(providerError.message ?? providerPayload.message ?? providerPayload.error_description, 500);
+      } catch {
+        providerMessage = responseText.replace(/\s+/g, " ").trim().slice(0, 500);
+      }
+      if (response.status === 403 && channel === "teams") {
+        throw new Error(`Teams recusou a chamada (403). Conceda Admin consent à permissão de aplicação ChannelMessage.Read.All no Microsoft Graph (e Team.ReadBasic.All se o endpoint listar times/canais) e confirme se o endpoint aponta para o time/canal corretos.${providerMessage ? ` Detalhe: ${providerMessage}` : ""}`);
+      }
+      throw new Error(`O provedor respondeu com status ${response.status}.${providerMessage ? ` Detalhe: ${providerMessage}` : ""}`);
+    }
 
     const payload = await response.json() as Record<string, unknown>;
     const items = mapExternalItems(channel, payload);
