@@ -50,6 +50,13 @@
       "when": 1784571600000,
       "tag": "0006_sla_pause_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784745600000,
+      "tag": "0007_companies_hr_metrics",
+      "breakpoints": true
     }
   ]
 }

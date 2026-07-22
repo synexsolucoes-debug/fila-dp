@@ -3,8 +3,8 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { ActivityEvent, Card, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 
-type View = "board" | "inbox" | "planner" | "indicators";
-type BoardMode = "kanban" | "table" | "calendar";
+type View = "board" | "inbox" | "planner" | "indicators" | "companies";
+type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
 type SettingsSection = "general" | "team" | "fields" | "templates" | "sla" | "integrations" | "automations";
@@ -56,6 +56,7 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   inbox: { eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada", description: "Transforme solicitações recebidas em demandas rastreáveis." },
   planner: { eyebrow: "AGENDA DO ANALISTA", title: "Meu planner", description: "Organize sua execução a partir dos prazos da operação." },
   indicators: { eyebrow: "GESTÃO DA OPERAÇÃO", title: "Indicadores e automações", description: "Monitore SLAs, volume e regras ativas do workspace." },
+  companies: { eyebrow: "CADASTRO OPERACIONAL", title: "Empresas e folha", description: "Mantenha empresas, competências, headcount e custo de folha organizados." },
 };
 
 const roleLabels: Record<WorkspaceRole, string> = {
@@ -549,13 +550,26 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     return mutate("/api/catalog", { method: "POST", body: JSON.stringify(payload) }, message);
   }
 
+  async function createCompany(payload: Record<string, unknown>) {
+    return mutate("/api/companies", { method: "POST", body: JSON.stringify(payload) }, "Empresa cadastrada.");
+  }
+
+  async function deleteCompany(id: string, name: string) {
+    if (!window.confirm(`Excluir o cadastro de ${name}?`)) return null;
+    return mutate(`/api/companies/${id}`, { method: "DELETE" }, "Empresa excluída.");
+  }
+
+  async function saveHrMetric(payload: Record<string, unknown>) {
+    return mutate("/api/hr-metrics", { method: "POST", body: JSON.stringify(payload) }, "Indicadores da folha atualizados.");
+  }
+
   async function syncIntegration(channel: string) {
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/integrations/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channel }) });
-      const payload = await response.json() as { synced?: number; snapshot?: WorkspaceSnapshot; error?: string };
+      const payload = await response.json() as { synced?: number; metricsSynced?: number; snapshot?: WorkspaceSnapshot; error?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível sincronizar.");
-      if (payload.snapshot) applySnapshot(payload.snapshot, `${payload.synced ?? 0} item(ns) sincronizado(s).`);
+      if (payload.snapshot) applySnapshot(payload.snapshot, `${payload.synced ?? 0} item(ns) e ${payload.metricsSynced ?? 0} métrica(s) sincronizado(s).`);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível sincronizar."); }
     finally { void requestSnapshot("/api/workspace").then(setSnapshot).catch(() => undefined); setBusy(false); }
   }
@@ -605,6 +619,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <button className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true">▣</span> Caixa de entrada <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>
           <button className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true">□</span> Meu planner</button>
           <button className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true">⌁</span> Indicadores</button>
+          <button className={view === "companies" ? "active" : ""} onClick={() => setView("companies")}><span aria-hidden="true">▤</span> Empresas</button>
         </nav>
         <div className="sidebar-workspace">
           <span>WORKSPACE</span>
@@ -652,6 +667,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                 </div>
               </div>
 
+              <div className="process-view-trigger"><button className={boardMode === "process" ? "active" : ""} onClick={() => setBoardMode("process")}>Tabelas por processo</button></div>
               {boardMode === "kanban" && <div className="dashboard-kanban">
                 {snapshot.lists.map((list) => {
                   const visibleCards = list.cards.filter((card) => (assigneeFilter === "all" || card.assigneeName === assigneeFilter || card.assignees.some((assignee) => assignee.name === assigneeFilter)) && (slaFilter === "all" || card.slaStatus === slaFilter));
@@ -696,12 +712,14 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               </div>}
               {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
               {boardMode === "calendar" && <DemandCalendarView cards={filteredActiveCards} onOpen={openCard} />}
+              {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
             </>
           )}
 
           {view === "inbox" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
           {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} />}
-          {view === "indicators" && <IndicatorsView cards={activeCards} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} />}
+          {view === "indicators" && <IndicatorsView cards={activeCards} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
+          {view === "companies" && <CompaniesView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onCreateCompany={createCompany} onDeleteCompany={deleteCompany} onSaveMetric={saveHrMetric} />}
         </div>
       </section>
 
@@ -826,6 +844,35 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   );
 }
 
+function ProcessTablesView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
+  const grouped = cards.reduce<Record<string, Card[]>>((accumulator, card) => {
+    (accumulator[card.processType] ??= []).push(card);
+    return accumulator;
+  }, {});
+  const processNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>FLUXO ESPECÍFICO</span><strong>{process}</strong></div><b>{grouped[process].length} demanda(s)</b></header><DemandTableView cards={grouped[process]} lists={lists} onOpen={onOpen} /></section>)}</div>;
+}
+
+function CompaniesView({ companies, metrics, busy, canEdit, onCreateCompany, onDeleteCompany, onSaveMetric }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; busy: boolean; canEdit: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => Promise<WorkspaceSnapshot | null>; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null> }) {
+  const [showCompanyForm, setShowCompanyForm] = useState(false);
+  const [showMetricForm, setShowMetricForm] = useState(false);
+  async function submitCompany(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const result = await onCreateCompany({ legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"), externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone") });
+    if (result) { event.currentTarget.reset(); setShowCompanyForm(false); }
+  }
+  async function submitMetric(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const result = await onSaveMetric({ companyId: data.get("companyId"), period: data.get("period"), headcount: data.get("headcount"), admissions: data.get("admissions"), terminations: data.get("terminations"), payrollCost: data.get("payrollCost"), source: "manual" });
+    if (result) { event.currentTarget.reset(); setShowMetricForm(false); }
+  }
+  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
+  const latest = metrics.slice(0, 12);
+  return <div className="companies-view"><div className="companies-actions">{canEdit && <><button className="primary-button" onClick={() => setShowCompanyForm((value) => !value)}>＋ Cadastrar empresa</button><button className="secondary-button" onClick={() => setShowMetricForm((value) => !value)}>＋ Registrar folha</button></>}</div>{showCompanyForm && <form className="company-form catalog-card" onSubmit={submitCompany}><header><div><strong>Cadastro de empresa</strong><span>Use o código externo para vincular ao Sankhya.</span></div></header><div className="catalog-form"><label>Razão social<input name="legalName" required placeholder="Empresa Exemplo Ltda." /></label><label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" /></label><label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" /></label><label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" /></label><label>E-mail<input type="email" name="email" /></label><label>Telefone<input name="phone" /></label><button className="primary-button" disabled={busy}>Salvar empresa</button></div></form>}{showMetricForm && <form className="metric-form catalog-card" onSubmit={submitMetric}><header><div><strong>Registrar custo e movimentação da folha</strong><span>Turnover = (admissões + desligamentos) ÷ 2 ÷ headcount médio.</span></div></header><div className="catalog-form"><label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Competência<input type="month" name="period" required defaultValue={new Date().toISOString().slice(0, 7)} /></label><label>Headcount<input type="number" name="headcount" min="0" defaultValue="0" /></label><label>Admissões<input type="number" name="admissions" min="0" defaultValue="0" /></label><label>Desligamentos<input type="number" name="terminations" min="0" defaultValue="0" /></label><label>Custo da folha<input type="number" name="payrollCost" min="0" step="0.01" defaultValue="0" /></label><button className="primary-button" disabled={busy || companies.length === 0}>Salvar competência</button></div></form>}<section className="companies-list catalog-card"><header><div><strong>Empresas cadastradas</strong><span>{companies.length} empresa(s) • vínculo para demandas e indicadores</span></div></header>{companies.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a primeira empresa para registrar a folha.</p></div>}{companies.map((company) => <article key={company.id}><div><strong>{company.tradeName || company.legalName}</strong><small>{company.taxId || "CNPJ não informado"} • {company.externalCode || "Sem código Sankhya"}</small></div><span>{company.email || company.phone || "Sem contato"}</span>{canEdit && <button disabled={busy} onClick={() => void onDeleteCompany(company.id, company.legalName)}>Excluir</button>}</article>)}</section><section className="metrics-list catalog-card"><header><div><strong>Histórico de folha</strong><span>{metrics.length} competência(s) registrada(s)</span></div></header>{latest.length === 0 && <div className="empty-view"><span>◷</span><strong>Nenhum indicador de folha</strong><p>Registre uma competência ou conecte o Sankhya.</p></div>}{latest.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.period} • origem {metric.source}</small></div><span>{metric.headcount} colaboradores</span><span>{metric.admissions} admissões / {metric.terminations} desligamentos</span><b>{metric.payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b></article>)}</section></div>;
+}
+
 function DemandTableView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
   const listNames = new Map(lists.map((list) => [list.id, list.name]));
   return (
@@ -924,7 +971,7 @@ function IntegrationsSettings({ snapshot, busy, isAdmin, onCatalog, onSync }: { 
     teams: { icon: "T", description: "Direcione mensagens de canais do Teams para triagem.", placeholder: "URL ou identificador do canal" },
     drive: { icon: "D", description: "Referencie documentos do Google Drive nos processos.", placeholder: "Pasta padrão ou URL" },
     onedrive: { icon: "O", description: "Referencie documentos do OneDrive nos processos.", placeholder: "Pasta padrão ou URL" },
-    erp: { icon: "E", description: "Sincronize eventos do ERP e da folha com a Inbox.", placeholder: "Endpoint do ERP" },
+    erp: { icon: "E", description: "Sincronize eventos do ERP, custo da folha e indicadores com a Inbox.", placeholder: "Endpoint do Sankhya Gateway" },
   };
   return <div className="settings-stack"><div className="integration-security-note"><i>!</i><div><strong>Conexão segura por credenciais do ambiente</strong><p>Esta tela salva somente endereços e preferências. Tokens, senhas e chaves devem ser adicionados ao cofre seguro da implantação antes de ativar a sincronização real.</p></div></div><div className="integration-grid">{snapshot.integrations.map((integration) => { const copy = channelCopy[integration.channel] ?? { icon: "↗", description: "Integração externa configurável.", placeholder: "Endpoint ou referência" }; return <form key={integration.id} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onCatalog({ resource: "integration", id: integration.id, status: data.get("status"), config: { endpoint: data.get("endpoint"), account: data.get("account") } }, `${integration.displayName} atualizado.`); }}><header><i>{copy.icon}</i><div><strong>{integration.displayName}</strong><span className={integration.status}>{integration.status === "connected" ? "Conectada" : integration.status === "paused" ? "Pausada" : integration.status === "error" ? "Com erro" : "Aguardando credenciais"}</span></div></header><p>{copy.description}</p><label>Conta / origem<input name="account" defaultValue={String(integration.config.account ?? "")} placeholder={copy.placeholder} disabled={!isAdmin || busy} /></label><label>Endpoint ou referência<input name="endpoint" defaultValue={String(integration.config.endpoint ?? "")} placeholder="https://…" disabled={!isAdmin || busy} /></label><label>Operação<select name="status" defaultValue={integration.status === "paused" ? "paused" : "needs_credentials"} disabled={!isAdmin || busy}><option value="needs_credentials">Aguardando credenciais</option><option value="paused">Pausada</option></select></label>{integration.lastError && <small className="integration-error">{integration.lastError}</small>}{isAdmin && <div className="integration-actions"><button className="primary-button" disabled={busy}>Salvar configuração</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void onSync(integration.channel)}>Sincronizar agora</button></div>}</form>; })}</div></div>;
 }
@@ -1013,8 +1060,8 @@ function PlannerView({ cards, blocks, onOpen, onCreateBlock, onDeleteBlock }: { 
   );
 }
 
-function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onExport }: { cards: Card[]; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void }) {
-  const [report, setReport] = useState<{ from: string; to: string; total: number; completed: number; completionRate: number; averageCompletionHours: number; activityCount: number; byProcess: Record<string, number> } | null>(null);
+function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {
+  const [report, setReport] = useState<{ from: string; to: string; total: number; completed: number; completionRate: number; averageCompletionHours: number; activityCount: number; byProcess: Record<string, number>; hrMetrics?: { admissions: number; terminations: number; averageHeadcount: number; payrollCostTotal: number; turnoverRate: number; payrollByCompany: Record<string, number> } } | null>(null);
   const [reportDays, setReportDays] = useState("30");
   useEffect(() => { const to = new Date(); const from = new Date(Date.now() - (Number(reportDays) - 1) * 86400000); void fetch(`/api/reports?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`).then((response) => response.json()).then((payload) => setReport(payload)).catch(() => setReport(null)); }, [reportDays]);
   const processes = Object.entries(cards.reduce<Record<string, number>>((accumulator, card) => { accumulator[card.processType] = (accumulator[card.processType] ?? 0) + 1; return accumulator; }, {})).sort((a, b) => b[1] - a[1]);
@@ -1023,6 +1070,7 @@ function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onEx
   cards.forEach((card) => { statusCounts[card.slaStatus] += 1; });
   return (
     <div className="indicators-layout">
+      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência.</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
       <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s)</span></div><button className="export-button" onClick={onExport}>Exportar CSV</button></header><div className="process-bars">{processes.map(([process, count]) => <div key={process}><span>{process}</span><i><b style={{ width: `${(count / max) * 100}%` }} /></i><strong>{count}</strong></div>)}</div></section>
       <section className="sla-panel"><header><strong>Saúde dos SLAs</strong><span>Visão atual</span></header><div className="sla-donut" style={{ background: `conic-gradient(#23d8a1 0 ${(statusCounts.safe / Math.max(1, cards.length)) * 100}%, #f2a13e 0 ${((statusCounts.safe + statusCounts.warning) / Math.max(1, cards.length)) * 100}%, #ef5b5b 0 ${((statusCounts.safe + statusCounts.warning + statusCounts.overdue) / Math.max(1, cards.length)) * 100}%, #8b98a7 0 100%)` }}><span><strong>{cards.length - statusCounts.overdue}</strong><small>sob controle</small></span></div><ul><li><i className="safe" />No prazo <b>{statusCounts.safe}</b></li><li><i className="warning" />Atenção <b>{statusCounts.warning}</b></li><li><i className="overdue" />Atrasadas <b>{statusCounts.overdue}</b></li><li><i className="paused" />Pausadas/concluídas <b>{statusCounts.paused + statusCounts.completed}</b></li></ul></section>
       <section className="report-panel"><header><div><strong>Histórico e produtividade</strong><span>Indicadores calculados a partir da auditoria do workspace.</span></div><select value={reportDays} onChange={(event) => setReportDays(event.target.value)}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></header>{report && <div className="report-metrics"><article><strong>{report.total}</strong><span>Demandas no período</span></article><article><strong>{report.completionRate}%</strong><span>Taxa de conclusão</span></article><article><strong>{report.averageCompletionHours}h</strong><span>Tempo médio</span></article><article><strong>{report.activityCount}</strong><span>Eventos auditados</span></article></div>}<div className="report-process-list">{report && Object.entries(report.byProcess).sort((a, b) => b[1] - a[1]).map(([process, count]) => <span key={process}><b>{process}</b><i style={{ width: `${Math.max(8, (count / Math.max(1, report.total)) * 100)}%` }} /><em>{count}</em></span>)}</div></section>

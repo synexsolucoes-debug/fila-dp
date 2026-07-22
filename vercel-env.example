@@ -12,6 +12,19 @@ FDP_DRIVE_TOKEN=
 FDP_ONEDRIVE_TOKEN=
 FDP_ERP_TOKEN=
 
+# Microsoft Graph (Teams e OneDrive; use as tres variaveis juntas)
+FDP_MICROSOFT_CLIENT_ID=
+FDP_MICROSOFT_TENANT_ID=
+FDP_MICROSOFT_CLIENT_SECRET=
+
+# Sankhya Gateway (OAuth2 Client Credentials; X-Token vem do Sankhya Om)
+FDP_SANKHYA_BASE_URL=https://api.sankhya.com.br
+FDP_SANKHYA_CLIENT_ID=
+FDP_SANKHYA_CLIENT_SECRET=
+FDP_SANKHYA_X_TOKEN=
+FDP_SANKHYA_REQUEST_BODY=
+FDP_SANKHYA_METRIC_FIELD_MAP=
+
 # Segredos dos webhooks de entrada (email, WhatsApp e Teams)
 FDP_EMAIL_WEBHOOK_SECRET=
 FDP_WHATSAPP_WEBHOOK_SECRET=

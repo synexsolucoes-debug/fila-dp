@@ -28,6 +28,23 @@ export const workspaces = sqliteTable("fdp_workspaces", {
   uniqueIndex("fdp_workspaces_slug_uq").on(table.slug),
 ]);
 
+export const companies = sqliteTable("fdp_companies", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  legalName: text("legal_name").notNull(),
+  tradeName: text("trade_name").notNull().default(""),
+  taxId: text("tax_id").notNull().default(""),
+  externalCode: text("external_code").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("fdp_companies_workspace_name_idx").on(table.workspaceId, table.legalName),
+  index("fdp_companies_workspace_tax_idx").on(table.workspaceId, table.taxId),
+]);
+
 export const workspaceMembers = sqliteTable("fdp_workspace_members", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -294,3 +311,22 @@ export const activityEvents = sqliteTable("fdp_activity_events", {
   payloadJson: text("payload_json").notNull().default("{}"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("fdp_activity_workspace_created_idx").on(table.workspaceId, table.createdAt)]);
+
+export const hrMetrics = sqliteTable("fdp_hr_metrics", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  period: text("period").notNull(),
+  headcount: integer("headcount").notNull().default(0),
+  admissions: integer("admissions").notNull().default(0),
+  terminations: integer("terminations").notNull().default(0),
+  payrollCost: real("payroll_cost").notNull().default(0),
+  source: text("source").notNull().default("manual"),
+  externalId: text("external_id").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("fdp_hr_metrics_workspace_company_period_uq").on(table.workspaceId, table.companyId, table.period),
+  index("fdp_hr_metrics_workspace_period_idx").on(table.workspaceId, table.period),
+]);

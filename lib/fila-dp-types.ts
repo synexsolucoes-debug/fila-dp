@@ -99,6 +99,30 @@ export type IntegrationItem = {
 export type PlannerBlock = { id: string; userId: string; cardId: string | null; title: string; startAt: string; endAt: string; blockType: string; notes: string };
 export type CalendarConnection = { id: string; provider: string; status: string; config: Record<string, unknown>; externalCalendarId: string | null; lastSyncAt: string | null; lastError: string | null };
 
+export type Company = {
+  id: string;
+  legalName: string;
+  tradeName: string;
+  taxId: string;
+  externalCode: string;
+  email: string;
+  phone: string;
+  status: "active" | "inactive";
+};
+
+export type HrMetric = {
+  id: string;
+  companyId: string;
+  period: string;
+  headcount: number;
+  admissions: number;
+  terminations: number;
+  payrollCost: number;
+  source: string;
+  externalId: string;
+  notes: string;
+};
+
 export type Card = {
   id: string;
   boardId: string;
@@ -196,5 +220,7 @@ export type WorkspaceSnapshot = {
   integrations: IntegrationItem[];
   plannerBlocks: PlannerBlock[];
   calendarConnections: CalendarConnection[];
+  companies: Company[];
+  hrMetrics: HrMetric[];
   recentActivity: ActivityEvent[];
 };

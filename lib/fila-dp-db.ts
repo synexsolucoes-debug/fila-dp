@@ -21,6 +21,19 @@ const schemaStatements = [
     timezone TEXT NOT NULL DEFAULT 'America/Sao_Paulo',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  `CREATE TABLE IF NOT EXISTS fdp_companies (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
+    legal_name TEXT NOT NULL,
+    trade_name TEXT NOT NULL DEFAULT '',
+    tax_id TEXT NOT NULL DEFAULT '',
+    external_code TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
   `CREATE TABLE IF NOT EXISTS fdp_workspace_members (
     workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
@@ -265,6 +278,22 @@ const schemaStatements = [
     payload_json TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
+  `CREATE TABLE IF NOT EXISTS fdp_hr_metrics (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
+    company_id TEXT NOT NULL REFERENCES fdp_companies(id) ON DELETE CASCADE,
+    period TEXT NOT NULL,
+    headcount INTEGER NOT NULL DEFAULT 0,
+    admissions INTEGER NOT NULL DEFAULT 0,
+    terminations INTEGER NOT NULL DEFAULT 0,
+    payroll_cost REAL NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'manual',
+    external_id TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (workspace_id, company_id, period)
+  )`,
   "CREATE INDEX IF NOT EXISTS fdp_cards_board_list_position_idx ON fdp_cards (board_id, list_id, position)",
   "CREATE INDEX IF NOT EXISTS fdp_cards_due_status_idx ON fdp_cards (due_at, sla_status)",
   "CREATE INDEX IF NOT EXISTS fdp_checklist_card_position_idx ON fdp_checklist_items (card_id, position)",
@@ -275,6 +304,9 @@ const schemaStatements = [
   "CREATE INDEX IF NOT EXISTS fdp_notifications_user_read_created_idx ON fdp_notifications (user_id, read_at, created_at)",
   "CREATE INDEX IF NOT EXISTS fdp_inbox_workspace_status_received_idx ON fdp_workspace_inbox_items (workspace_id, status, received_at)",
   "CREATE INDEX IF NOT EXISTS fdp_activity_workspace_created_idx ON fdp_activity_events (workspace_id, created_at)",
+  "CREATE INDEX IF NOT EXISTS fdp_companies_workspace_name_idx ON fdp_companies (workspace_id, legal_name)",
+  "CREATE INDEX IF NOT EXISTS fdp_companies_workspace_tax_idx ON fdp_companies (workspace_id, tax_id)",
+  "CREATE INDEX IF NOT EXISTS fdp_hr_metrics_workspace_period_idx ON fdp_hr_metrics (workspace_id, period)",
 ];
 
 export async function ensureSchema() {
@@ -501,7 +533,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow } = await getWorkspaceContext(user);
-  const [boardsResult, listsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, pausesResult] = await Promise.all([
+  const [boardsResult, listsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
@@ -552,6 +584,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT id, channel, display_name, status, config_json, last_sync_at, last_error FROM fdp_integrations WHERE workspace_id = ? ORDER BY channel").bind(workspace.id).all(),
     d1.prepare("SELECT id, user_id, card_id, title, start_at, end_at, block_type, notes FROM fdp_planner_blocks WHERE workspace_id = ? AND user_id = ? ORDER BY start_at LIMIT 300").bind(workspace.id, userRow.id).all(),
     d1.prepare("SELECT id, provider, status, config_json, external_calendar_id, last_sync_at, last_error FROM fdp_calendar_connections WHERE workspace_id = ? AND user_id = ? ORDER BY provider").bind(workspace.id, userRow.id).all(),
+    d1.prepare("SELECT id, legal_name, trade_name, tax_id, external_code, email, phone, status FROM fdp_companies WHERE workspace_id = ? ORDER BY legal_name").bind(workspace.id).all(),
+    d1.prepare("SELECT id, company_id, period, headcount, admissions, terminations, payroll_cost, source, external_id, notes FROM fdp_hr_metrics WHERE workspace_id = ? ORDER BY period DESC, company_id").bind(workspace.id).all(),
     d1.prepare("SELECT p.card_id, p.reason FROM fdp_card_sla_pauses p JOIN fdp_cards c ON c.id = p.card_id WHERE p.workspace_id = ? AND p.ended_at IS NULL AND c.board_id = ?").bind(workspace.id, board.id).all(),
   ]);
 
@@ -730,6 +764,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     integrations: (integrationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), channel: String(row.channel), displayName: String(row.display_name), status: String(row.status) as "connected" | "needs_credentials" | "paused" | "error", config: safeJson(String(row.config_json)), lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
     plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: String(row.start_at), endAt: String(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
     calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), provider: String(row.provider), status: String(row.status), config: safeJson(String(row.config_json)), externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
+    companies: (companiesResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
+    hrMetrics: (hrMetricsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })),
     recentActivity: activityRows.slice(0, 50).map(mapActivity),
   };
 }

@@ -1344,3 +1344,55 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .calendar-weekdays span { padding: 4px 1px; font-size: 6px; }
   .calendar-days article { min-height: 66px; }
 }
+
+.process-view-trigger { margin-top: 10px; display: flex; justify-content: flex-end; }
+.process-view-trigger button { min-height: 29px; padding: 0 10px; border: 1px solid #cfe6de; border-radius: 6px; background: #effaf6; color: #087b63; cursor: pointer; font-size: 8px; font-weight: 750; }
+.process-view-trigger button.active { color: #fff; background: #087b63; }
+.process-tables-view { display: grid; gap: 14px; }
+.process-tables-view > section { overflow: hidden; border: 1px solid #dfe5e5; border-radius: 9px; background: #fff; }
+.process-tables-view > section > header { min-height: 55px; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e4e9e8; }
+.process-tables-view > section > header span, .process-tables-view > section > header strong { display: block; }
+.process-tables-view > section > header span { color: #087b63; font-size: 7px; font-weight: 750; letter-spacing: .08em; }
+.process-tables-view > section > header strong { margin-top: 3px; font-size: 12px; }
+.process-tables-view > section > header b { color: #687689; font-size: 8px; }
+.process-tables-view .demand-table-view { margin-top: 0; border: 0; border-radius: 0; }
+.companies-view { margin-top: 25px; display: grid; gap: 14px; }
+.companies-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.companies-view .catalog-card { overflow: hidden; border: 1px solid #dfe5e5; border-radius: 9px; background: #fff; }
+.companies-view .catalog-card > header { min-height: 62px; padding: 0 15px; display: flex; align-items: center; border-bottom: 1px solid #e4e9e8; }
+.companies-view .catalog-card > header strong, .companies-view .catalog-card > header span { display: block; }
+.companies-view .catalog-card > header strong { font-size: 11px; }
+.companies-view .catalog-card > header span { margin-top: 4px; color: #84909d; font-size: 8px; }
+.companies-list > article, .metrics-list > article { min-height: 54px; padding: 9px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border-bottom: 1px solid #eef1f1; }
+.companies-list > article:last-child, .metrics-list > article:last-child { border-bottom: 0; }
+.companies-list article strong, .companies-list article small, .metrics-list article strong, .metrics-list article small { display: block; }
+.companies-list article strong, .metrics-list article strong { color: #243349; font-size: 9px; }
+.companies-list article small, .metrics-list article small { margin-top: 4px; color: #8793a0; font-size: 7px; }
+.companies-list article > span, .metrics-list article > span, .metrics-list article > b { color: #687689; font-size: 8px; }
+.companies-list article button { min-height: 27px; padding: 0 8px; border: 1px solid #f0d1cd; border-radius: 5px; background: #fff6f5; color: #a14c4c; cursor: pointer; font-size: 8px; }
+.hr-indicators-panel { grid-column: 1 / -1; padding: 16px; border: 1px solid #dce3e3; border-radius: 10px; background: #fff; }
+.hr-indicators-panel > header { min-height: 35px; display: flex; align-items: center; justify-content: space-between; }
+.hr-indicators-panel > header strong, .hr-indicators-panel > header span { display: block; }
+.hr-indicators-panel > header strong { color: #223146; font-size: 12px; }
+.hr-indicators-panel > header span { margin-top: 4px; color: #84919e; font-size: 8px; }
+.hr-indicators-panel > header > b { color: #087b63; font-size: 18px; }
+.hr-indicator-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.hr-indicator-grid article { padding: 12px; border: 1px solid #e4e9e8; border-radius: 7px; background: #f8fbfa; }
+.hr-indicator-grid article strong, .hr-indicator-grid article span { display: block; }
+.hr-indicator-grid article strong { color: #243349; font-size: 16px; }
+.hr-indicator-grid article span { margin-top: 5px; color: #84909d; font-size: 8px; }
+.hr-indicator-note { margin-top: 12px; color: #84909d; font-size: 8px; }
+.theme-dark .process-tables-view > section, .theme-dark .companies-view .catalog-card, .theme-dark .hr-indicators-panel { border-color: #294251; background: #122733; }
+.theme-dark .process-tables-view > section > header, .theme-dark .companies-view .catalog-card > header { border-color: #294251; }
+.theme-dark .process-tables-view > section > header strong, .theme-dark .companies-list article strong, .theme-dark .metrics-list article strong, .theme-dark .hr-indicator-grid article strong, .theme-dark .hr-indicators-panel > header strong { color: #e8f3f2; }
+.theme-dark .companies-list > article, .theme-dark .metrics-list > article { border-color: #294251; }
+.theme-dark .companies-list article > span, .theme-dark .metrics-list article > span, .theme-dark .metrics-list article > b, .theme-dark .hr-indicator-note { color: #98aeba; }
+.theme-dark .hr-indicator-grid article { border-color: #294251; background: #192f3b; }
+
+@media (max-width: 760px) {
+  .companies-actions { justify-content: stretch; }
+  .companies-actions > button { flex: 1; }
+  .hr-indicator-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .companies-list > article, .metrics-list > article { grid-template-columns: minmax(0, 1fr) auto; }
+  .companies-list article > span, .metrics-list article > span, .metrics-list article > b { grid-column: 1; }
+}
