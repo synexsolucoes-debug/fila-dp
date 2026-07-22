@@ -971,7 +971,7 @@ function IntegrationsSettings({ snapshot, busy, isAdmin, onCatalog, onSync }: { 
   const channelCopy: Record<string, { icon: string; description: string; placeholder: string }> = {
     email: { icon: "@", description: "Capture e-mails recebidos e transforme-os em itens da Inbox.", placeholder: "dp@empresa.com" },
     whatsapp: { icon: "W", description: "Receba solicitações via provedor oficial ou intermediador homologado.", placeholder: "Identificador do número/provedor" },
-    teams: { icon: "T", description: "Direcione mensagens de canais do Teams para triagem.", placeholder: "URL ou identificador do canal" },
+    teams: { icon: "T", description: "Direcione mensagens de canais ou chats do Teams para triagem. Use um endpoint Graph /teams/.../channels/.../messages ou /chats/.../messages.", placeholder: "Endpoint Graph do canal ou chat" },
     drive: { icon: "D", description: "Referencie documentos do Google Drive nos processos.", placeholder: "Pasta padrão ou URL" },
     onedrive: { icon: "O", description: "Referencie documentos do OneDrive nos processos.", placeholder: "Pasta padrão ou URL" },
     erp: { icon: "E", description: "Sincronize eventos do ERP, custo da folha e indicadores com a Inbox.", placeholder: "Endpoint do Sankhya Gateway" },

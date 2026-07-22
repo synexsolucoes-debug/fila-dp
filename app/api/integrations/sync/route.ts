@@ -200,7 +200,14 @@ export async function POST(request: Request) {
         providerMessage = responseText.replace(/\s+/g, " ").trim().slice(0, 500);
       }
       if (response.status === 403 && channel === "teams") {
-        throw new Error(`Teams recusou a chamada (403). Conceda Admin consent à permissão de aplicação ChannelMessage.Read.All no Microsoft Graph (e Team.ReadBasic.All se o endpoint listar times/canais) e confirme se o endpoint aponta para o time/canal corretos.${providerMessage ? ` Detalhe: ${providerMessage}` : ""}`);
+        const isChatEndpoint = /\/chats\//i.test(endpoint);
+        const permissionHint = isChatEndpoint
+          ? "ChatMessage.Read.All (Application) — ou Chat.Read.All como permissão superior"
+          : "ChannelMessage.Read.All (Application) — ou ChannelMessage.Read.Group com consentimento específico do recurso";
+        const endpointHint = isChatEndpoint
+          ? "Você configurou um endpoint de chat; se a intenção era ler um canal, use /teams/TEAM_ID/channels/CHANNEL_ID/messages"
+          : "confirme se o endpoint aponta para o time e canal corretos";
+        throw new Error(`Teams recusou a chamada (403). Conceda Admin consent à permissão ${permissionHint} no Microsoft Graph e ${endpointHint}.${providerMessage ? ` Detalhe: ${providerMessage}` : ""}`);
       }
       throw new Error(`O provedor respondeu com status ${response.status}.${providerMessage ? ` Detalhe: ${providerMessage}` : ""}`);
     }

@@ -91,7 +91,8 @@ Nunca coloque o `client_secret` no formulario do sistema ou no codigo-fonte.
    de aprovar.
 3. No cartao da integracao, salve o endpoint Graph que deseja consultar. Exemplos:
 
-   - Teams: `https://graph.microsoft.com/v1.0/teams/TEAM_ID/channels/CHANNEL_ID/messages`
+   - Teams (canal): `https://graph.microsoft.com/v1.0/teams/TEAM_ID/channels/CHANNEL_ID/messages`
+   - Teams (chat): `https://graph.microsoft.com/v1.0/chats/CHAT_ID/messages` — exige a permissão de aplicação `ChatMessage.Read.All` (ou `Chat.Read.All`)
    - OneDrive: `https://graph.microsoft.com/v1.0/drives/DRIVE_ID/root/children`
 
 4. Publique um novo deploy e clique em **Sincronizar agora**. A resposta `value`
