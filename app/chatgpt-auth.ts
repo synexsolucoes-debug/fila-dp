@@ -1,4 +1,5 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -20,6 +21,7 @@ const SIGN_OUT_PATH = "/api/auth/logout";
 const CALLBACK_PATH = "/callback";
 
 type SessionPayload = { email: string; displayName: string; fullName: string | null; exp: number };
+const scryptAsync = promisify(scrypt);
 
 function authSecret() {
   return process.env.FDP_AUTH_SECRET ?? (process.env.NODE_ENV === "production" ? "" : "fila-dp-local-secret-change-me");
@@ -80,15 +82,15 @@ export async function clearAuthSession() {
   store.set(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
 }
 
-export function hashPassword(password: string) {
+export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
+  const hash = (await scryptAsync(password, salt, 64) as Buffer).toString("hex");
   return { salt, hash };
 }
 
-export function verifyPassword(password: string, salt: string, expectedHash: string) {
+export async function verifyPassword(password: string, salt: string, expectedHash: string) {
   try {
-    const actual = scryptSync(password, salt, 64);
+    const actual = await scryptAsync(password, salt, 64) as Buffer;
     const expected = Buffer.from(expectedHash, "hex");
     return expected.length === actual.length && timingSafeEqual(actual, expected);
   } catch {
@@ -101,7 +103,11 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const sessionUser = readSessionToken(requestCookies.get(SESSION_COOKIE)?.value);
   if (sessionUser) return sessionUser;
 
-  // Keep compatibility with the original Sites runtime while the migration is deployed.
+  // OpenAI Sites authenticates and replaces these headers at its dispatcher.
+  // Vercel does not provide that trust boundary, so never accept a caller-
+  // supplied identity header there.
+  if (process.env.VERCEL) return null;
+
   const requestHeaders = await headers();
   const email = requestHeaders.get(USER_EMAIL_HEADER);
   if (!email) return null;

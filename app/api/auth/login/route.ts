@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     if (mode === "register") {
       const name = String(body.name ?? "").trim().slice(0, 160);
       if (name.length < 2) return Response.json({ error: "Informe seu nome completo." }, { status: 400 });
-      const credentials = hashPassword(password);
+      const credentials = await hashPassword(password);
       if (current) {
         if (current.password_hash) return Response.json({ error: "Este e-mail já possui uma conta. Entre com sua senha." }, { status: 409 });
         await d1.prepare("UPDATE fdp_users SET name = ?, password_hash = ?, password_salt = ? WHERE id = ?").bind(name, credentials.hash, credentials.salt, current.id).run();
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         await d1.prepare("INSERT INTO fdp_users (id, email, name, password_hash, password_salt) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), email, name, credentials.hash, credentials.salt).run();
       }
     } else {
-      if (!current || !current.password_hash || !current.password_salt || !verifyPassword(password, current.password_salt, current.password_hash)) {
+      if (!current || !current.password_hash || !current.password_salt || !await verifyPassword(password, current.password_salt, current.password_hash)) {
         return Response.json({ error: "E-mail ou senha incorretos." }, { status: 401 });
       }
     }

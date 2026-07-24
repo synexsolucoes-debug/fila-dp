@@ -89,7 +89,14 @@ function formatDate(value: string | null, long = false) {
 }
 
 function formatReceived(value: string) {
-  const date = new Date(value.replace(" ", "T") + (value.includes("Z") ? "" : "Z"));
+  // Inbox items can come from SQLite as `YYYY-MM-DD HH:mm:ss`, from an API
+  // as an ISO string, or briefly have no timestamp while a webhook is being
+  // processed. Never render `NaN` when the value cannot be parsed.
+  const raw = String(value ?? "").trim();
+  if (!raw) return "agora";
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const date = new Date(normalized + (/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized) ? "" : "Z"));
+  if (Number.isNaN(date.getTime())) return "agora";
   const diffMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
   if (diffMinutes < 60) return `há ${diffMinutes || 1} min`;
   if (diffMinutes < 1440) return `há ${Math.floor(diffMinutes / 60)} h`;
@@ -749,9 +756,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <header><div><span>CENTRAL DE ALERTAS</span><h2 id="notifications-title">Notificações</h2></div><button onClick={() => setNotificationsOpen(false)} aria-label="Fechar">×</button></header>
             <div className="notification-actions"><span>{snapshot.notifications.filter((item) => !item.readAt).length} não lida(s)</span><button disabled={busy || !snapshot.notifications.some((item) => !item.readAt)} onClick={() => void markAllNotifications()}>Marcar todas como lidas</button></div>
             <div className="notification-list">
-              {/* eslint-disable-next-line @typescript-eslint/no-unused-expressions */}
               {snapshot.notifications.length === 0 && <div className="empty-view"><span>✓</span><strong>Tudo em dia</strong><p>Alertas de SLA, comentários e movimentações aparecerão aqui.</p></div>}
-              {snapshot.notifications.map((notification) => <button className={notification.readAt ? "read" : "unread"} key={notification.id} onClick={() => { if (!notification.readAt) void markNotification(notification.id); const card = notification.cardId ? allCards.find((item) => item.id === notification.cardId) : null; if (card) { setNotificationsOpen(false); card.archived ? setArchiveOpen(true) : openCard(card); } }}><i>{notification.type.includes("sla") ? "!" : "●"}</i><span><strong>{notification.title}</strong><p>{notification.body}</p><time>{formatMoment(notification.createdAt)}</time></span></button>)}
+              {snapshot.notifications.map((notification) => <button className={notification.readAt ? "read" : "unread"} key={notification.id} onClick={() => { if (!notification.readAt) void markNotification(notification.id); const card = notification.cardId ? allCards.find((item) => item.id === notification.cardId) : null; if (card) { setNotificationsOpen(false); if (card.archived) setArchiveOpen(true); else openCard(card); } }}><i>{notification.type.includes("sla") ? "!" : "●"}</i><span><strong>{notification.title}</strong><p>{notification.body}</p><time>{formatMoment(notification.createdAt)}</time></span></button>)}
             </div>
           </aside>
         </div>

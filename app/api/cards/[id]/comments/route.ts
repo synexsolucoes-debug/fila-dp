@@ -22,8 +22,20 @@ export async function POST(request: Request, context: RouteContext) {
       .bind(commentId, id, user.id, comment)
       .run();
     const recipients = await d1.prepare("SELECT user_id FROM fdp_card_assignees WHERE card_id = ? AND user_id <> ?").bind(id, user.id).all<{ user_id: string }>();
-    const mentionNames = Array.from(comment.matchAll(/@([\p{L}0-9._-]{2,80})/gu)).map((match) => match[1].toLowerCase());
-    const mentionRecipients = mentionNames.length ? await d1.prepare("SELECT id AS user_id FROM fdp_users WHERE lower(name) LIKE ? AND id <> ? LIMIT 10").bind(`%${mentionNames[0]}%`, user.id).all<{ user_id: string }>() : { results: [] as Array<{ user_id: string }> };
+    const mentionNames = Array.from(new Set(
+      Array.from(comment.matchAll(/@([\p{L}0-9._-]{2,80})/gu))
+        .map((match) => match[1].toLowerCase()),
+    )).slice(0, 10);
+    const mentionRecipients = mentionNames.length
+      ? await d1.prepare(`SELECT DISTINCT u.id AS user_id
+          FROM fdp_users u
+          JOIN fdp_workspace_members wm ON wm.user_id = u.id
+          WHERE wm.workspace_id = ? AND u.id <> ?
+            AND (${mentionNames.map(() => "lower(u.name) LIKE ?").join(" OR ")})
+          LIMIT 20`)
+        .bind(workspace.id, user.id, ...mentionNames.map((name) => `%${name}%`))
+        .all<{ user_id: string }>()
+      : { results: [] as Array<{ user_id: string }> };
     const recipientIds = Array.from(new Set([...recipients.results.map((recipient) => recipient.user_id), ...mentionRecipients.results.map((recipient) => recipient.user_id)]));
     if (recipientIds.length) await d1.batch(recipientIds.map((recipientId) => d1.prepare(`INSERT OR IGNORE INTO fdp_notifications
       (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)

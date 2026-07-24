@@ -1,6 +1,7 @@
 import { getD1 } from "@/db";
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { validateIntegrationEndpoint } from "@/lib/integration-security";
 
 const supported = new Set(["email", "whatsapp", "teams", "drive", "onedrive", "erp"]);
 const microsoftChannels = new Set(["teams", "onedrive"]);
@@ -154,7 +155,16 @@ export async function POST(request: Request) {
     integrationId = integration.id;
 
     const config = JSON.parse(integration.config_json || "{}") as Record<string, unknown>;
-    const endpoint = text(config.endpoint, 500) || text(process.env[`FDP_${channel.toUpperCase()}_ENDPOINT`], 500);
+    const configuredEndpoint = text(process.env[`FDP_${channel.toUpperCase()}_ENDPOINT`], 500);
+    const endpointCandidate = text(config.endpoint, 500) || configuredEndpoint;
+    const endpoint = endpointCandidate
+      ? validateIntegrationEndpoint(
+        channel,
+        endpointCandidate,
+        configuredEndpoint,
+        [process.env.FDP_INTEGRATION_ALLOWED_HOSTS, process.env[`FDP_${channel.toUpperCase()}_ALLOWED_HOSTS`]].filter(Boolean).join(","),
+      )
+      : "";
     const explicitToken = String(process.env[`FDP_${channel.toUpperCase()}_TOKEN`] ?? "");
     const microsoftReady = Boolean(process.env.FDP_MICROSOFT_CLIENT_ID && process.env.FDP_MICROSOFT_TENANT_ID && process.env.FDP_MICROSOFT_CLIENT_SECRET);
     const sankhyaReady = Boolean(process.env.FDP_SANKHYA_CLIENT_ID && process.env.FDP_SANKHYA_CLIENT_SECRET && process.env.FDP_SANKHYA_X_TOKEN);
@@ -187,6 +197,7 @@ export async function POST(request: Request) {
       method,
       headers: { Accept: "application/json", Authorization: `Bearer ${token}`, ...(requestBody ? { "Content-Type": "application/json" } : {}) },
       body: requestBody,
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) {

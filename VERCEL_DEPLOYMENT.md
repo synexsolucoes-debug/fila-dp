@@ -59,9 +59,13 @@ FDP_SANKHYA_CLIENT_SECRET
 FDP_SANKHYA_X_TOKEN
 FDP_SANKHYA_REQUEST_BODY
 FDP_SANKHYA_METRIC_FIELD_MAP
+FDP_INTEGRATION_ALLOWED_HOSTS
 FDP_EMAIL_WEBHOOK_SECRET
 FDP_WHATSAPP_WEBHOOK_SECRET
 FDP_TEAMS_WEBHOOK_SECRET
+FDP_EMAIL_WEBHOOK_SECRETS
+FDP_WHATSAPP_WEBHOOK_SECRETS
+FDP_TEAMS_WEBHOOK_SECRETS
 ```
 
 O botão **Sincronizar agora** espera que o endpoint configurado devolva JSON no
@@ -69,6 +73,20 @@ formato `{ "items": [...] }`. Para entrada por webhook, use
 `/api/integrations/webhook/email`, `/api/integrations/webhook/whatsapp` ou
 `/api/integrations/webhook/teams`, enviando o segredo no header
 `x-fila-dp-secret` e um corpo com `senderName`, `subject` e `body`.
+
+Em uma instalação com vários workspaces, use os segredos por workspace. O valor
+é um objeto JSON e deve ser configurado como variável sensível:
+
+```json
+{"WORKSPACE_ID_1":"segredo-aleatorio-1","WORKSPACE_ID_2":"segredo-aleatorio-2"}
+```
+
+Por exemplo, o mapa do Teams fica em `FDP_TEAMS_WEBHOOK_SECRETS`. O segredo
+global antigo continua aceito apenas quando existe um único workspace ativo no
+canal, para não interromper integrações já publicadas. Endpoints de saída só
+podem usar domínios oficiais, o mesmo domínio definido em
+`FDP_<CANAL>_ENDPOINT`, ou hosts aprovados em
+`FDP_INTEGRATION_ALLOWED_HOSTS`.
 
 OneDrive e Teams oficiais usam Microsoft Graph/OAuth; WhatsApp usa Cloud API
 ou um provedor homologado; e-mail precisa de um relay/webhook (por exemplo,

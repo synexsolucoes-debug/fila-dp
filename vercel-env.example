@@ -18,6 +18,8 @@ FDP_MICROSOFT_TENANT_ID=
 FDP_MICROSOFT_CLIENT_SECRET=
 FDP_TEAMS_ENDPOINT=https://graph.microsoft.com/v1.0/teams/TEAM_ID/channels/CHANNEL_ID/messages
 FDP_ONEDRIVE_ENDPOINT=https://graph.microsoft.com/v1.0/drives/DRIVE_ID/root/children
+# Hosts adicionais, aprovados pela equipe de infraestrutura (separados por vírgula)
+FDP_INTEGRATION_ALLOWED_HOSTS=
 
 # Sankhya Gateway (OAuth2 Client Credentials; X-Token vem do Sankhya Om)
 FDP_SANKHYA_BASE_URL=https://api.sankhya.com.br
@@ -31,3 +33,9 @@ FDP_SANKHYA_METRIC_FIELD_MAP=
 FDP_EMAIL_WEBHOOK_SECRET=
 FDP_WHATSAPP_WEBHOOK_SECRET=
 FDP_TEAMS_WEBHOOK_SECRET=
+
+# Recomendado quando houver mais de um workspace ativo no mesmo canal.
+# Cada valor é um JSON workspaceId -> segredo com pelo menos 24 caracteres.
+FDP_EMAIL_WEBHOOK_SECRETS={}
+FDP_WHATSAPP_WEBHOOK_SECRETS={}
+FDP_TEAMS_WEBHOOK_SECRETS={}
