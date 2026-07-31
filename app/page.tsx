@@ -1,8 +1,9 @@
-const Chevron = () => <span aria-hidden="true">→</span>;
+import { ArrowRight, ArrowUp, Check, Clock3, MoreHorizontal, Paperclip, Plus, Search, SlidersHorizontal } from "lucide-react";
 
-const ClockIcon = () => <span className="mini-icon" aria-hidden="true">◷</span>;
-const CheckIcon = () => <span className="mini-icon" aria-hidden="true">✓</span>;
-const PaperclipIcon = () => <span className="mini-icon" aria-hidden="true">⌕</span>;
+const Chevron = () => <ArrowRight className="inline-icon" aria-hidden="true" />;
+const ClockIcon = () => <Clock3 className="mini-icon" aria-hidden="true" />;
+const CheckIcon = () => <Check className="mini-icon" aria-hidden="true" />;
+const PaperclipIcon = () => <Paperclip className="mini-icon" aria-hidden="true" />;
 
 const featureItems = [
   {
@@ -73,7 +74,7 @@ function ProductBoard() {
           <strong> Fila geral</strong>
         </div>
         <div className="board-actions" aria-hidden="true">
-          <span>⌕</span><span>☷</span><span>•••</span>
+          <span><Search /></span><span><SlidersHorizontal /></span><span><MoreHorizontal /></span>
         </div>
       </div>
       <div className="board-filters">
@@ -98,7 +99,7 @@ function ProductBoard() {
             <p className="company">Unidade São Paulo</p>
             <div className="task-meta"><span><CheckIcon /> 2/5</span><span className="avatar avatar-b">RC</span></div>
           </article>
-          <button className="add-card">＋ Adicionar demanda</button>
+          <button className="add-card"><Plus /> Adicionar demanda</button>
         </div>
 
         <div className="kanban-column" role="listitem">
@@ -118,12 +119,12 @@ function ProductBoard() {
         </div>
 
         <div className="kanban-column" role="listitem">
-          <div className="column-title"><span>Aguardando docs</span><b>2</b></div>
+          <div className="column-title"><span>Em execução</span><b>2</b></div>
           <article className="task-card">
             <div className="labels"><span className="label label-blue">ADMISSÃO</span></div>
-            <h3>Documentos pendentes — Ana Reis</h3>
-            <p className="company">Aguardando solicitante</p>
-            <div className="task-meta"><span className="sla sla-paused">Ⅱ SLA pausado</span><span className="avatar avatar-b">RC</span></div>
+            <h3>Cadastro em andamento — Ana Reis</h3>
+            <p className="company">Dados em validação</p>
+            <div className="task-meta"><span className="sla sla-safe"><ClockIcon /> 1 dia</span><span className="avatar avatar-b">RC</span></div>
           </article>
           <article className="task-card">
             <div className="labels"><span className="label label-gray">CADASTRO</span></div>
@@ -153,21 +154,21 @@ export default function Home() {
         </nav>
         <div className="header-actions">
           <a className="login-link" href="/login">Entrar</a>
-          <a className="button button-small" href="/login">Criar conta grátis</a>
+          <a className="button button-small" href="/login">Solicitar acesso</a>
         </div>
       </header>
 
       <section className="hero" id="inicio">
         <div className="hero-glow" aria-hidden="true" />
         <div className="hero-copy">
-          <div className="eyebrow"><span>●</span> Gestão visual criada para DP e RH</div>
+          <div className="eyebrow"><i className="eyebrow-dot" /> Gestão visual criada para DP e RH</div>
           <h1>Toda demanda do DP na fila certa.</h1>
           <p className="hero-lead">Com responsável, prazo e próximo passo.</p>
           <p className="hero-description">
             Centralize solicitações, acompanhe SLAs e organize admissões, férias, rescisões e outras rotinas em um quadro visual simples de usar.
           </p>
           <div className="hero-actions">
-            <a className="button" href="/login">Criar conta grátis <Chevron /></a>
+            <a className="button" href="/login">Solicitar acesso <Chevron /></a>
             <a className="button button-secondary" href="#como-funciona">Ver como funciona</a>
           </div>
           <div className="hero-notes">
@@ -268,7 +269,7 @@ export default function Home() {
         <div className="faq-list">
           {faqs.map(([question, answer], index) => (
             <details key={question} open={index === 0}>
-              <summary>{question}<span aria-hidden="true">＋</span></summary>
+              <summary>{question}<Plus className="faq-toggle-icon" aria-hidden="true" /></summary>
               <p>{answer}</p>
             </details>
           ))}
@@ -281,7 +282,7 @@ export default function Home() {
           <h2>Seu DP já tem demandas demais. Organizar a fila não precisa ser mais uma delas.</h2>
         </div>
         <div className="final-cta-actions">
-          <a className="button button-light" href="/login">Criar minha conta grátis <Chevron /></a>
+          <a className="button button-light" href="/login">Solicitar acesso <Chevron /></a>
           <a className="demo-link" href="/login">Acessar minha conta</a>
           <p>Comece pelo plano gratuito e evolua quando precisar.</p>
         </div>
@@ -293,7 +294,7 @@ export default function Home() {
           <span>Fila <strong>DP</strong></span>
         </a>
         <p>Gestão visual de demandas para Departamento Pessoal e RH.</p>
-        <div><a href="#recursos">Recursos</a><a href="#planos">Planos</a><a href="#inicio">Voltar ao topo ↑</a></div>
+        <div><a href="#recursos">Recursos</a><a href="#planos">Planos</a><a href="#inicio">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a></div>
       </footer>
     </main>
   );

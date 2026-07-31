@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
 
 export const dynamic = "force-dynamic";
 
@@ -7,7 +7,8 @@ export async function GET(request: Request) {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
   try {
-    const { d1, board } = await getWorkspaceContext(auth.user);
+    const { d1, board, workspace, user } = await getWorkspaceContext(auth.user);
+    const companyAccess = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     const url = new URL(request.url);
     const q = (url.searchParams.get("q") ?? "").trim().slice(0, 100);
     const processType = (url.searchParams.get("processType") ?? "").trim().slice(0, 40);
@@ -15,6 +16,12 @@ export async function GET(request: Request) {
     const archived = url.searchParams.get("archived");
     const conditions = ["c.board_id = ?"];
     const values: unknown[] = [board.id];
+    if (!companyAccess.unrestricted) {
+      if (!companyAccess.companyIds.size) return Response.json({ results: [] });
+      const companyIds = Array.from(companyAccess.companyIds);
+      conditions.push(`c.company_id IN (${companyIds.map(() => "?").join(", ")})`);
+      values.push(...companyIds);
+    }
     if (q) {
       const term = `%${q}%`;
       conditions.push(`(c.title LIKE ? OR c.description LIKE ? OR c.company LIKE ? OR c.assignee_name LIKE ? OR c.process_type LIKE ?

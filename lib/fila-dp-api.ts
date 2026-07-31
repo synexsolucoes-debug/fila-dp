@@ -31,6 +31,16 @@ export function validDate(value: unknown) {
   return value;
 }
 
+export function validDueAt(value: unknown) {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") throw new Error("Prazo inválido.");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return validDate(value);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) throw new Error("Prazo inválido.");
+  const date = new Date(`${value}:00`);
+  if (Number.isNaN(date.getTime())) throw new Error("Prazo inválido.");
+  return value;
+}
+
 export function computeSlaStatus(dueAt: string | null, behavior: string) {
   if (behavior === "paused") return "paused";
   if (behavior === "completed") return "completed";

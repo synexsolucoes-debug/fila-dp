@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { getAttachmentsBucket } from "@/db";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -19,8 +19,9 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const { d1, workspace, board } = await getWorkspaceContext(auth.user);
+    const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const card = await d1.prepare("SELECT id FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first();
     if (!card) throw new Error("Demanda não encontrada.");
     const form = await request.formData();

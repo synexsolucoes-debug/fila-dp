@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnySQLiteColumn,
   index,
   integer,
   primaryKey,
@@ -31,6 +32,8 @@ export const workspaces = sqliteTable("fdp_workspaces", {
 export const companies = sqliteTable("fdp_companies", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  parentCompanyId: text("parent_company_id").references((): AnySQLiteColumn => companies.id, { onDelete: "set null" }),
+  isPrincipal: integer("is_principal", { mode: "boolean" }).notNull().default(false),
   legalName: text("legal_name").notNull(),
   tradeName: text("trade_name").notNull().default(""),
   taxId: text("tax_id").notNull().default(""),
@@ -43,6 +46,7 @@ export const companies = sqliteTable("fdp_companies", {
 }, (table) => [
   index("fdp_companies_workspace_name_idx").on(table.workspaceId, table.legalName),
   index("fdp_companies_workspace_tax_idx").on(table.workspaceId, table.taxId),
+  index("fdp_companies_workspace_parent_idx").on(table.workspaceId, table.parentCompanyId),
 ]);
 
 export const workspaceMembers = sqliteTable("fdp_workspace_members", {
@@ -51,6 +55,16 @@ export const workspaceMembers = sqliteTable("fdp_workspace_members", {
   role: text("role").notNull().default("admin"),
   joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })]);
+
+export const memberCompanyAccess = sqliteTable("fdp_member_company_access", {
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.userId, table.companyId] }),
+  index("fdp_member_company_access_user_idx").on(table.workspaceId, table.userId),
+]);
 
 export const userWorkspacePreferences = sqliteTable("fdp_user_workspace_preferences", {
   userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
@@ -319,8 +333,34 @@ export const hrMetrics = sqliteTable("fdp_hr_metrics", {
   companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
   period: text("period").notNull(),
   headcount: integer("headcount").notNull().default(0),
+  headcountStart: integer("headcount_start").notNull().default(0),
+  headcountEnd: integer("headcount_end").notNull().default(0),
+  leavesCount: integer("leaves_count").notNull().default(0),
   admissions: integer("admissions").notNull().default(0),
   terminations: integer("terminations").notNull().default(0),
+  voluntaryTerminations: integer("voluntary_terminations").notNull().default(0),
+  involuntaryTerminations: integer("involuntary_terminations").notNull().default(0),
+  baseSalary: real("base_salary").notNull().default(0),
+  variablePay: real("variable_pay").notNull().default(0),
+  overtimePay: real("overtime_pay").notNull().default(0),
+  additionalPay: real("additional_pay").notNull().default(0),
+  vacationPay: real("vacation_pay").notNull().default(0),
+  thirteenthPay: real("thirteenth_pay").notNull().default(0),
+  terminationPay: real("termination_pay").notNull().default(0),
+  grossPayroll: real("gross_payroll").notNull().default(0),
+  employeeInss: real("employee_inss").notNull().default(0),
+  employeeIrrf: real("employee_irrf").notNull().default(0),
+  employeeOtherDeductions: real("employee_other_deductions").notNull().default(0),
+  netPay: real("net_pay").notNull().default(0),
+  employerInss: real("employer_inss").notNull().default(0),
+  ratContribution: real("rat_contribution").notNull().default(0),
+  thirdPartyContributions: real("third_party_contributions").notNull().default(0),
+  fgts: real("fgts").notNull().default(0),
+  fgtsPenalty: real("fgts_penalty").notNull().default(0),
+  employerCharges: real("employer_charges").notNull().default(0),
+  benefitsCost: real("benefits_cost").notNull().default(0),
+  provisionsCost: real("provisions_cost").notNull().default(0),
+  otherCosts: real("other_costs").notNull().default(0),
   payrollCost: real("payroll_cost").notNull().default(0),
   source: text("source").notNull().default("manual"),
   externalId: text("external_id").notNull().default(""),

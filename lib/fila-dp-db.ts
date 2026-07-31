@@ -1,6 +1,7 @@
 import { getD1 } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
+import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 
 let schemaPromise: Promise<void> | null = null;
 
@@ -24,6 +25,8 @@ const schemaStatements = [
   `CREATE TABLE IF NOT EXISTS fdp_companies (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
+    parent_company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL,
+    is_principal INTEGER NOT NULL DEFAULT 0,
     legal_name TEXT NOT NULL,
     trade_name TEXT NOT NULL DEFAULT '',
     tax_id TEXT NOT NULL DEFAULT '',
@@ -40,6 +43,22 @@ const schemaStatements = [
     role TEXT NOT NULL DEFAULT 'admin',
     joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (workspace_id, user_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS fdp_member_company_access (
+    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
+    company_id TEXT NOT NULL REFERENCES fdp_companies(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (workspace_id, user_id, company_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS fdp_access_recovery_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS fdp_user_workspace_preferences (
     user_id TEXT PRIMARY KEY REFERENCES fdp_users(id) ON DELETE CASCADE,
@@ -285,8 +304,34 @@ const schemaStatements = [
     company_id TEXT NOT NULL REFERENCES fdp_companies(id) ON DELETE CASCADE,
     period TEXT NOT NULL,
     headcount INTEGER NOT NULL DEFAULT 0,
+    headcount_start INTEGER NOT NULL DEFAULT 0,
+    headcount_end INTEGER NOT NULL DEFAULT 0,
+    leaves_count INTEGER NOT NULL DEFAULT 0,
     admissions INTEGER NOT NULL DEFAULT 0,
     terminations INTEGER NOT NULL DEFAULT 0,
+    voluntary_terminations INTEGER NOT NULL DEFAULT 0,
+    involuntary_terminations INTEGER NOT NULL DEFAULT 0,
+    base_salary REAL NOT NULL DEFAULT 0,
+    variable_pay REAL NOT NULL DEFAULT 0,
+    overtime_pay REAL NOT NULL DEFAULT 0,
+    additional_pay REAL NOT NULL DEFAULT 0,
+    vacation_pay REAL NOT NULL DEFAULT 0,
+    thirteenth_pay REAL NOT NULL DEFAULT 0,
+    termination_pay REAL NOT NULL DEFAULT 0,
+    gross_payroll REAL NOT NULL DEFAULT 0,
+    employee_inss REAL NOT NULL DEFAULT 0,
+    employee_irrf REAL NOT NULL DEFAULT 0,
+    employee_other_deductions REAL NOT NULL DEFAULT 0,
+    net_pay REAL NOT NULL DEFAULT 0,
+    employer_inss REAL NOT NULL DEFAULT 0,
+    rat_contribution REAL NOT NULL DEFAULT 0,
+    third_party_contributions REAL NOT NULL DEFAULT 0,
+    fgts REAL NOT NULL DEFAULT 0,
+    fgts_penalty REAL NOT NULL DEFAULT 0,
+    employer_charges REAL NOT NULL DEFAULT 0,
+    benefits_cost REAL NOT NULL DEFAULT 0,
+    provisions_cost REAL NOT NULL DEFAULT 0,
+    other_costs REAL NOT NULL DEFAULT 0,
     payroll_cost REAL NOT NULL DEFAULT 0,
     source TEXT NOT NULL DEFAULT 'manual',
     external_id TEXT NOT NULL DEFAULT '',
@@ -307,7 +352,9 @@ const schemaStatements = [
   "CREATE INDEX IF NOT EXISTS fdp_activity_workspace_created_idx ON fdp_activity_events (workspace_id, created_at)",
   "CREATE INDEX IF NOT EXISTS fdp_companies_workspace_name_idx ON fdp_companies (workspace_id, legal_name)",
   "CREATE INDEX IF NOT EXISTS fdp_companies_workspace_tax_idx ON fdp_companies (workspace_id, tax_id)",
+  "CREATE INDEX IF NOT EXISTS fdp_member_company_access_user_idx ON fdp_member_company_access (workspace_id, user_id)",
   "CREATE INDEX IF NOT EXISTS fdp_hr_metrics_workspace_period_idx ON fdp_hr_metrics (workspace_id, period)",
+  "CREATE INDEX IF NOT EXISTS fdp_access_recovery_user_expiry_idx ON fdp_access_recovery_tokens (user_id, expires_at)",
 ];
 
 export async function ensureSchema() {
@@ -318,13 +365,53 @@ export async function ensureSchema() {
       const names = new Set(columns.results.map((column) => column.name));
       const cardColumns = await d1.prepare("PRAGMA table_info(fdp_cards)").all<{ name: string }>();
       const cardNames = new Set(cardColumns.results.map((column) => column.name));
+      const companyColumns = await d1.prepare("PRAGMA table_info(fdp_companies)").all<{ name: string }>();
+      const companyNames = new Set(companyColumns.results.map((column) => column.name));
+      const hrMetricColumns = await d1.prepare("PRAGMA table_info(fdp_hr_metrics)").all<{ name: string }>();
+      const hrMetricNames = new Set(hrMetricColumns.results.map((column) => column.name));
       const compatibility = [
         !names.has("password_hash") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_hash TEXT") : null,
         !names.has("password_salt") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_salt TEXT") : null,
+        !companyNames.has("parent_company_id") ? d1.prepare("ALTER TABLE fdp_companies ADD COLUMN parent_company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL") : null,
+        !companyNames.has("is_principal") ? d1.prepare("ALTER TABLE fdp_companies ADD COLUMN is_principal INTEGER NOT NULL DEFAULT 0") : null,
         !cardNames.has("company_id") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL") : null,
+        !cardNames.has("sla_target_minutes") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_target_minutes INTEGER NOT NULL DEFAULT 0") : null,
+        !cardNames.has("sla_started_at") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_started_at TEXT") : null,
+        !cardNames.has("sla_paused_minutes") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_paused_minutes INTEGER NOT NULL DEFAULT 0") : null,
+        !cardNames.has("sla_pause_reason") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_pause_reason TEXT NOT NULL DEFAULT ''") : null,
+        !cardNames.has("sla_escalation_level") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_escalation_level INTEGER NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("gross_payroll") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN gross_payroll REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("headcount_start") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN headcount_start INTEGER NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("headcount_end") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN headcount_end INTEGER NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("leaves_count") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN leaves_count INTEGER NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("voluntary_terminations") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN voluntary_terminations INTEGER NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("involuntary_terminations") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN involuntary_terminations INTEGER NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("base_salary") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN base_salary REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("variable_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN variable_pay REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("overtime_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN overtime_pay REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("additional_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN additional_pay REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("vacation_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN vacation_pay REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("thirteenth_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN thirteenth_pay REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("termination_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN termination_pay REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("employee_inss") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employee_inss REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("employee_irrf") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employee_irrf REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("employee_other_deductions") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employee_other_deductions REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("net_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN net_pay REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("employer_inss") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employer_inss REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("rat_contribution") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN rat_contribution REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("third_party_contributions") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN third_party_contributions REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("fgts") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN fgts REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("fgts_penalty") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN fgts_penalty REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("employer_charges") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employer_charges REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("benefits_cost") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN benefits_cost REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("provisions_cost") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN provisions_cost REAL NOT NULL DEFAULT 0") : null,
+        !hrMetricNames.has("other_costs") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN other_costs REAL NOT NULL DEFAULT 0") : null,
       ].filter((statement): statement is D1PreparedStatement => Boolean(statement));
       if (compatibility.length) await d1.batch(compatibility);
       await d1.prepare("CREATE INDEX IF NOT EXISTS fdp_cards_company_idx ON fdp_cards (company_id)").run();
+      // Existing production databases can predate parent_company_id. Create
+      // this index only after the compatibility migration above has completed.
+      await d1.prepare("CREATE INDEX IF NOT EXISTS fdp_companies_workspace_parent_idx ON fdp_companies (workspace_id, parent_company_id)").run();
     });
   }
   return schemaPromise;
@@ -352,6 +439,54 @@ function safeArray(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+export type CompanyAccessScope = {
+  unrestricted: boolean;
+  companyIds: Set<string>;
+};
+
+export async function getCompanyAccessScope(
+  d1: ReturnType<typeof getD1>,
+  workspaceId: string,
+  userId: string,
+  role: WorkspaceRole,
+): Promise<CompanyAccessScope> {
+  if (role === "admin") return { unrestricted: true, companyIds: new Set() };
+  const access = await d1.prepare("SELECT company_id FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ?")
+    .bind(workspaceId, userId)
+    .all<{ company_id: string }>();
+  return { unrestricted: false, companyIds: new Set(access.results.map((row) => String(row.company_id))) };
+}
+
+export async function requireCompanyAccess(
+  d1: ReturnType<typeof getD1>,
+  workspaceId: string,
+  userId: string,
+  role: WorkspaceRole,
+  companyId: string | null,
+) {
+  if (role === "admin") return;
+  if (!companyId) throw new Error("Selecione uma empresa à qual você tenha acesso.");
+  const access = await d1.prepare("SELECT 1 FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ? AND company_id = ?")
+    .bind(workspaceId, userId, companyId)
+    .first();
+  if (!access) throw new Error("Você não tem acesso a esta empresa.");
+}
+
+export async function requireCardCompanyAccess(
+  d1: ReturnType<typeof getD1>,
+  workspaceId: string,
+  userId: string,
+  role: WorkspaceRole,
+  cardId: string,
+) {
+  if (role === "admin") return;
+  const card = await d1.prepare(`SELECT c.company_id
+    FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id
+    WHERE c.id = ? AND b.workspace_id = ?`).bind(cardId, workspaceId).first<{ company_id: string | null }>();
+  if (!card) throw new Error("Demanda não encontrada.");
+  await requireCompanyAccess(d1, workspaceId, userId, role, card.company_id ? String(card.company_id) : null);
 }
 
 function todayInTimezone(timezone: string) {
@@ -426,17 +561,10 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   const d1 = getD1();
   const normalizedEmail = user.email.trim().toLowerCase();
 
-  await d1.prepare("INSERT OR IGNORE INTO fdp_users (id, email, name) VALUES (?, ?, ?)")
-    .bind(crypto.randomUUID(), normalizedEmail, user.displayName)
-    .run();
-  await d1.prepare("UPDATE fdp_users SET name = ? WHERE email = ?")
-    .bind(user.displayName, normalizedEmail)
-    .run();
-
   const userRow = await d1.prepare("SELECT id, email, name FROM fdp_users WHERE email = ?")
     .bind(normalizedEmail)
     .first<{ id: string; email: string; name: string }>();
-  if (!userRow) throw new Error("Não foi possível criar o usuário.");
+  if (!userRow) throw new Error("Sem permissão para acessar este grupo.");
 
   let workspace = await d1.prepare(
     `SELECT w.id, w.name, w.timezone, wm.role
@@ -458,25 +586,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
     ).bind(userRow.id, userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
   }
 
-  if (!workspace) {
-    const workspaceId = crypto.randomUUID();
-    const slugSuffix = userRow.id.replaceAll("-", "").slice(0, 8);
-    await d1.batch([
-      d1.prepare("INSERT OR IGNORE INTO fdp_workspaces (id, name, slug, owner_user_id) VALUES (?, ?, ?, ?)")
-        .bind(workspaceId, "Synex DP", `synex-dp-${slugSuffix}`, userRow.id),
-      d1.prepare("INSERT OR IGNORE INTO fdp_workspace_members (workspace_id, user_id, role) VALUES (?, ?, 'admin')")
-        .bind(workspaceId, userRow.id),
-      d1.prepare("INSERT OR REPLACE INTO fdp_user_workspace_preferences (user_id, active_workspace_id, active_board_id, updated_at) VALUES (?, ?, NULL, CURRENT_TIMESTAMP)")
-        .bind(userRow.id, workspaceId),
-    ]);
-    workspace = await d1.prepare(
-      `SELECT w.id, w.name, w.timezone, wm.role
-       FROM fdp_workspaces w
-       JOIN fdp_workspace_members wm ON wm.workspace_id = w.id
-       WHERE wm.user_id = ? LIMIT 1`,
-    ).bind(userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
-  }
-  if (!workspace) throw new Error("Não foi possível criar o workspace.");
+  if (!workspace) throw new Error("Sem permissão para acessar este grupo. Peça ao administrador para liberar seu usuário.");
 
   await d1.prepare(
     `INSERT INTO fdp_user_workspace_preferences (user_id, active_workspace_id, updated_at)
@@ -547,9 +657,11 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow } = await getWorkspaceContext(user);
-  const [boardsResult, listsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
+  const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
+  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
+    d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
     d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
     d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? ORDER BY ci.position").bind(board.id).all(),
     d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM fdp_workspace_inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
@@ -567,7 +679,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       WHERE ae.workspace_id = ?
       ORDER BY ae.created_at DESC LIMIT 150`).bind(workspace.id).all(),
     d1.prepare(`SELECT u.id AS user_id, u.email, u.name, wm.role, wm.joined_at,
-        CASE WHEN w.owner_user_id = u.id THEN 1 ELSE 0 END AS is_owner
+        CASE WHEN w.owner_user_id = u.id THEN 1 ELSE 0 END AS is_owner,
+        CASE WHEN u.password_hash IS NULL THEN 0 ELSE 1 END AS is_activated
       FROM fdp_workspace_members wm
       JOIN fdp_users u ON u.id = wm.user_id
       JOIN fdp_workspaces w ON w.id = wm.workspace_id
@@ -598,23 +711,40 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT id, channel, display_name, status, config_json, last_sync_at, last_error FROM fdp_integrations WHERE workspace_id = ? ORDER BY channel").bind(workspace.id).all(),
     d1.prepare("SELECT id, user_id, card_id, title, start_at, end_at, block_type, notes FROM fdp_planner_blocks WHERE workspace_id = ? AND user_id = ? ORDER BY start_at LIMIT 300").bind(workspace.id, userRow.id).all(),
     d1.prepare("SELECT id, provider, status, config_json, external_calendar_id, last_sync_at, last_error FROM fdp_calendar_connections WHERE workspace_id = ? AND user_id = ? ORDER BY provider").bind(workspace.id, userRow.id).all(),
-    d1.prepare("SELECT id, legal_name, trade_name, tax_id, external_code, email, phone, status FROM fdp_companies WHERE workspace_id = ? ORDER BY legal_name").bind(workspace.id).all(),
-    d1.prepare("SELECT id, company_id, period, headcount, admissions, terminations, payroll_cost, source, external_id, notes FROM fdp_hr_metrics WHERE workspace_id = ? ORDER BY period DESC, company_id").bind(workspace.id).all(),
+    d1.prepare("SELECT id, parent_company_id, is_principal, legal_name, trade_name, tax_id, external_code, email, phone, status FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name").bind(workspace.id).all(),
+    d1.prepare("SELECT id, company_id, period, headcount, headcount_start, headcount_end, leaves_count, admissions, terminations, voluntary_terminations, involuntary_terminations, base_salary, variable_pay, overtime_pay, additional_pay, vacation_pay, thirteenth_pay, termination_pay, gross_payroll, employee_inss, employee_irrf, employee_other_deductions, net_pay, employer_inss, rat_contribution, third_party_contributions, fgts, fgts_penalty, employer_charges, benefits_cost, provisions_cost, other_costs, payroll_cost, source, external_id, notes FROM fdp_hr_metrics WHERE workspace_id = ? ORDER BY period DESC, company_id").bind(workspace.id).all(),
     d1.prepare("SELECT p.card_id, p.reason FROM fdp_card_sla_pauses p JOIN fdp_cards c ON c.id = p.card_id WHERE p.workspace_id = ? AND p.ended_at IS NULL AND c.board_id = ?").bind(workspace.id, board.id).all(),
   ]);
 
   const checklistRows = checklistResult.results as Array<Record<string, unknown>>;
   const commentRows = commentsResult.results as Array<Record<string, unknown>>;
-  const activityRows = activitiesResult.results as Array<Record<string, unknown>>;
-  const cardRows = cardsResult.results as Array<Record<string, unknown>>;
+  const companyRows = companiesResult.results as Array<Record<string, unknown>>;
+  const isVisibleCompany = (companyId: unknown) => companyAccess.unrestricted || Boolean(companyId && companyAccess.companyIds.has(String(companyId)));
+  const cardRows = (cardsResult.results as Array<Record<string, unknown>>).filter((row) => isVisibleCompany(row.company_id));
+  const visibleCardIds = new Set(cardRows.map((row) => String(row.id)));
+  const activityRows = (activitiesResult.results as Array<Record<string, unknown>>).filter((row) => row.card_id && visibleCardIds.has(String(row.card_id)));
+  const inboxRows = (inboxResult.results as Array<Record<string, unknown>>).filter((row) => companyAccess.unrestricted || Boolean(row.converted_card_id && visibleCardIds.has(String(row.converted_card_id))));
+  const visibleCompanyRows = companyRows.filter((row) => isVisibleCompany(row.id));
+  const visibleMetricRows = (hrMetricsResult.results as Array<Record<string, unknown>>).filter((row) => isVisibleCompany(row.company_id));
   const listRows = listsResult.results as Array<Record<string, unknown>>;
   const policyRows = policiesResult.results as Array<Record<string, unknown>>;
   const businessDays = safeArray(String(settingsRow?.business_days_json ?? "[1,2,3,4,5]")).map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
   const holidaySet = new Set((holidaysResult.results as Array<Record<string, unknown>>).map((row) => String(row.holiday_date)));
   const today = todayInTimezone(workspace.timezone);
+  const slaCalendar = {
+    businessDays: businessDays.length ? businessDays : [1, 2, 3, 4, 5],
+    holidays: holidaySet,
+    dayStart: String(settingsRow?.day_start ?? "08:00"),
+    dayEnd: String(settingsRow?.day_end ?? "18:00"),
+    timezone: workspace.timezone,
+  };
+  const workdayMinutes = workingDayMinutes(slaCalendar);
   const listBehavior = new Map(listRows.map((row) => [String(row.id), String(row.sla_behavior)]));
   const policyByProcess = new Map(policyRows.map((row) => [String(row.process_type), Number(row.warning_business_days ?? 1)]));
   const activePauseByCard = new Map((pausesResult.results as Array<Record<string, unknown>>).map((row) => [String(row.card_id), String(row.reason)]));
+  const escalationRecipients = (membersResult.results as Array<Record<string, unknown>>)
+    .filter((member) => ["admin", "member"].includes(String(member.role)))
+    .map((member) => String(member.user_id));
   const slaStatements: D1PreparedStatement[] = [];
 
   for (const row of cardRows) {
@@ -624,14 +754,23 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     let status = "safe";
     if (activePauseByCard.has(String(row.id)) || behavior === "paused") status = "paused";
     else if (behavior === "completed") status = "completed";
-    else if (dueAt) {
-      const remaining = businessDaysUntil(today, dueAt, businessDays.length ? businessDays : [1, 2, 3, 4, 5], holidaySet);
-      if (dueAt < today) status = "overdue";
+    else if (Number(row.sla_target_minutes ?? 0) > 0 && row.sla_started_at) {
+      const target = Number(row.sla_target_minutes);
+      const elapsed = Math.max(0, businessMinutesBetween(String(row.sla_started_at), new Date(), slaCalendar) - Number(row.sla_paused_minutes ?? 0));
+      const warningMinutes = Math.max(0, Number(policyByProcess.get(String(row.process_type)) ?? 1) * workdayMinutes);
+      if (elapsed >= target) status = "overdue";
+      else if (elapsed >= Math.max(0, target - warningMinutes)) status = "warning";
+    } else if (dueAt) {
+      const dueDate = dueAt.slice(0, 10);
+      const remaining = businessDaysUntil(today, dueDate, slaCalendar.businessDays, holidaySet);
+      if (dueDate < today) status = "overdue";
       else if (remaining <= (policyByProcess.get(String(row.process_type)) ?? 1)) status = "warning";
     }
-    if (String(row.sla_status) !== status) {
+    const shouldEscalate = status === "overdue" && Number(row.sla_escalation_level ?? 0) < 1;
+    if (String(row.sla_status) !== status || shouldEscalate) {
       row.sla_status = status;
-      slaStatements.push(d1.prepare("UPDATE fdp_cards SET sla_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(status, String(row.id)));
+      if (shouldEscalate) row.sla_escalation_level = 1;
+      slaStatements.push(d1.prepare("UPDATE fdp_cards SET sla_status = ?, sla_escalation_level = CASE WHEN ? = 1 THEN 1 ELSE sla_escalation_level END, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(status, shouldEscalate ? 1 : 0, String(row.id)));
     }
     if ((status === "warning" || status === "overdue") && dueAt) {
       slaStatements.push(d1.prepare(`INSERT OR IGNORE INTO fdp_notifications
@@ -641,12 +780,27 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
           status === "overdue" ? "SLA atrasado" : "SLA próximo do vencimento",
           `${String(row.title)} • prazo ${dueAt.split("-").reverse().join("/")}`,
           String(row.id),
-        ));
+      ));
+    }
+    if (shouldEscalate) {
+      for (const recipientId of escalationRecipients) {
+        slaStatements.push(d1.prepare(`INSERT OR IGNORE INTO fdp_notifications
+          (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)
+          VALUES (?, ?, ?, ?, 'sla_escalation', 'Escalonamento de SLA', ?, ?)`)
+          .bind(crypto.randomUUID(), workspace.id, recipientId, `sla-escalation:${row.id}:1:${recipientId}`, `${String(row.title)} ultrapassou o SLA e requer ação imediata.`, String(row.id)));
+      }
     }
   }
   if (slaStatements.length) await d1.batch(slaStatements);
 
   const notificationsResult = await d1.prepare("SELECT id, notification_type, title, body, card_id, read_at, created_at FROM fdp_notifications WHERE workspace_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 50").bind(workspace.id, userRow.id).all();
+  const memberCompanyAccessResult = await d1.prepare("SELECT user_id, company_id FROM fdp_member_company_access WHERE workspace_id = ?").bind(workspace.id).all<{ user_id: string; company_id: string }>();
+  const memberCompanyIds = new Map<string, string[]>();
+  for (const access of memberCompanyAccessResult.results) {
+    const userCompanies = memberCompanyIds.get(String(access.user_id)) ?? [];
+    userCompanies.push(String(access.company_id));
+    memberCompanyIds.set(String(access.user_id), userCompanies);
+  }
   const cardLabelRows = cardLabelsResult.results as Array<Record<string, unknown>>;
   const assigneeRows = assigneesResult.results as Array<Record<string, unknown>>;
   const customValueRows = customValuesResult.results as Array<Record<string, unknown>>;
@@ -705,6 +859,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       id: String(item.id), filename: String(item.filename), contentType: String(item.content_type), sizeBytes: Number(item.size_bytes), uploadedBy: String(item.uploaded_by), createdAt: String(item.created_at), downloadUrl: `/api/attachments/${encodeURIComponent(String(item.id))}`,
     })),
     slaPausedReason: String(row.sla_pause_reason ?? ""),
+    slaTargetMinutes: Number(row.sla_target_minutes ?? 0),
     slaPausedMinutes: Number(row.sla_paused_minutes ?? 0),
     slaEscalationLevel: Number(row.sla_escalation_level ?? 0),
   }));
@@ -720,9 +875,12 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   });
 
   return {
-    workspace: { ...workspace, role: workspace.role },
+    workspace: { ...workspace, role: workspace.role, companyScope: companyAccess.unrestricted ? "all" : "restricted" },
     board,
-    boards: (boardsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), name: String(row.name), description: String(row.description ?? ""), boardType: String(row.board_type ?? "general") })),
+    boards: (boardsResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id), name: String(row.name), description: String(row.description ?? ""), boardType: String(row.board_type ?? "general"),
+      stages: (allBoardListsResult.results as Array<Record<string, unknown>>).filter((list) => String(list.board_id) === String(row.id)).map((list) => ({ id: String(list.id), name: String(list.name), kind: String(list.kind), slaBehavior: String(list.sla_behavior) as "running" | "paused" | "completed" })),
+    })),
     lists: listRows.map((row) => ({
       id: String(row.id),
       boardId: String(row.board_id),
@@ -732,7 +890,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       slaBehavior: String(row.sla_behavior) as "running" | "paused" | "completed",
       cards: cards.filter((card) => !card.archived && card.listId === row.id),
     })),
-    inbox: (inboxResult.results as Array<Record<string, unknown>>).map((row) => ({
+    inbox: inboxRows.map((row) => ({
       id: String(row.id),
       channel: String(row.channel),
       senderName: String(row.sender_name),
@@ -758,6 +916,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       role: String(row.role) as WorkspaceRole,
       joinedAt: String(row.joined_at),
       isOwner: Boolean(row.is_owner),
+      isActivated: Boolean(row.is_activated),
+      companyIds: memberCompanyIds.get(String(row.user_id)) ?? [],
     })),
     availableWorkspaces: (workspacesResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id),
@@ -775,12 +935,12 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     slaPolicies: policyRows.map((row) => ({ id: String(row.id), processType: String(row.process_type), targetBusinessDays: Number(row.target_business_days), warningBusinessDays: Number(row.warning_business_days), active: Boolean(row.active) })),
     holidays: (holidaysResult.results as Array<Record<string, unknown>>).map((row) => ({ date: String(row.holiday_date), name: String(row.name) })),
     settings: { businessDays: businessDays.length ? businessDays : [1, 2, 3, 4, 5], dayStart: String(settingsRow?.day_start ?? "08:00"), dayEnd: String(settingsRow?.day_end ?? "18:00"), realtimeSeconds: Number(settingsRow?.realtime_seconds ?? 30) },
-    notifications: (notificationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), type: String(row.notification_type), title: String(row.title), body: String(row.body), cardId: row.card_id ? String(row.card_id) : null, readAt: row.read_at ? String(row.read_at) : null, createdAt: String(row.created_at) })),
+    notifications: (notificationsResult.results as Array<Record<string, unknown>>).filter((row) => companyAccess.unrestricted || Boolean(row.card_id && visibleCardIds.has(String(row.card_id)))).map((row) => ({ id: String(row.id), type: String(row.notification_type), title: String(row.title), body: String(row.body), cardId: row.card_id ? String(row.card_id) : null, readAt: row.read_at ? String(row.read_at) : null, createdAt: String(row.created_at) })),
     integrations: (integrationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), channel: String(row.channel), displayName: String(row.display_name), status: String(row.status) as "connected" | "needs_credentials" | "paused" | "error", config: safeJson(String(row.config_json)), lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
     plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: String(row.start_at), endAt: String(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
     calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), provider: String(row.provider), status: String(row.status), config: safeJson(String(row.config_json)), externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
-    companies: (companiesResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
-    hrMetrics: (hrMetricsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })),
+    companies: visibleCompanyRows.map((row) => ({ id: String(row.id), parentCompanyId: row.parent_company_id ? String(row.parent_company_id) : null, isPrincipal: Boolean(row.is_principal), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
+    hrMetrics: visibleMetricRows.map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), headcountStart: Number(row.headcount_start ?? row.headcount ?? 0), headcountEnd: Number(row.headcount_end ?? row.headcount ?? 0), leavesCount: Number(row.leaves_count ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), voluntaryTerminations: Number(row.voluntary_terminations ?? 0), involuntaryTerminations: Number(row.involuntary_terminations ?? 0), baseSalary: Number(row.base_salary ?? 0), variablePay: Number(row.variable_pay ?? 0), overtimePay: Number(row.overtime_pay ?? 0), additionalPay: Number(row.additional_pay ?? 0), vacationPay: Number(row.vacation_pay ?? 0), thirteenthPay: Number(row.thirteenth_pay ?? 0), terminationPay: Number(row.termination_pay ?? 0), grossPayroll: Number(row.gross_payroll ?? 0), employeeInss: Number(row.employee_inss ?? 0), employeeIrrf: Number(row.employee_irrf ?? 0), employeeOtherDeductions: Number(row.employee_other_deductions ?? 0), netPay: Number(row.net_pay ?? 0), employerInss: Number(row.employer_inss ?? 0), ratContribution: Number(row.rat_contribution ?? 0), thirdPartyContributions: Number(row.third_party_contributions ?? 0), fgts: Number(row.fgts ?? 0), fgtsPenalty: Number(row.fgts_penalty ?? 0), employerCharges: Number(row.employer_charges ?? 0), benefitsCost: Number(row.benefits_cost ?? 0), provisionsCost: Number(row.provisions_cost ?? 0), otherCosts: Number(row.other_costs ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })),
     recentActivity: activityRows.slice(0, 50).map(mapActivity),
   };
 }

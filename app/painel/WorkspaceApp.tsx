@@ -1,17 +1,67 @@
 "use client";
 
+import Image from "next/image";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { ActivityEvent, Card, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import {
+  Archive,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  Building2,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  CircleAlert,
+  CircleHelp,
+  Clock3,
+  Download,
+  Inbox,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  Mail,
+  MessageCircle,
+  MessageSquareMore,
+  Moon,
+  MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Paperclip,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  Smartphone,
+  Sun,
+  Trash2,
+  Users,
+  WalletCards,
+  X,
+} from "lucide-react";
+import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 
-type View = "board" | "inbox" | "planner" | "indicators" | "companies";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
-type SettingsSection = "general" | "team" | "fields" | "templates" | "sla" | "integrations" | "automations";
+type SettingsSection = "general" | "companies" | "columns" | "team" | "fields" | "templates" | "sla" | "integrations" | "automations";
+type RealtimeStatus = "syncing" | "current" | "delayed";
 type User = { displayName: string; email: string; fullName: string | null };
 type SearchResult = { id: string; title: string; company: string; processType: string; priority: string; slaStatus: string; dueAt: string | null; assigneeName: string; archived: boolean; listId: string };
 type CatalogHandler = (payload: Record<string, unknown>, message: string) => Promise<WorkspaceSnapshot | null>;
+type SnapshotMutation = (url: string, options: RequestInit, message?: string) => Promise<WorkspaceSnapshot | null>;
+type ConfirmationRequest = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  action: () => void | Promise<unknown>;
+};
+type ConfirmHandler = (request: ConfirmationRequest) => void;
+type RecoveryLink = { name: string; url: string; expiresAt: string };
 type CardForm = {
+  boardId: string;
   title: string;
   description: string;
   companyId: string;
@@ -28,6 +78,7 @@ type CardForm = {
 };
 
 const emptyCardForm: CardForm = {
+  boardId: "",
   title: "",
   description: "",
   companyId: "",
@@ -54,11 +105,13 @@ const processColors: Record<string, string> = {
 };
 
 const viewContent: Record<View, { eyebrow: string; title: string; description: string }> = {
-  board: { eyebrow: "VISÃO OPERACIONAL", title: "Fila geral", description: "Acompanhe prioridades, responsáveis e próximos passos." },
+  overview: { eyebrow: "VISÃO GERAL", title: "Visão geral", description: "Acompanhe o que exige ação e mantenha a operação sob controle." },
+  board: { eyebrow: "DEMANDAS", title: "Quadro de demandas", description: "Acompanhe prioridades, responsáveis e próximos passos." },
   inbox: { eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada", description: "Transforme solicitações recebidas em demandas rastreáveis." },
   planner: { eyebrow: "AGENDA DO ANALISTA", title: "Meu planner", description: "Organize sua execução a partir dos prazos da operação." },
-  indicators: { eyebrow: "GESTÃO DA OPERAÇÃO", title: "Indicadores e automações", description: "Monitore SLAs, volume e regras ativas do workspace." },
-  companies: { eyebrow: "CADASTRO OPERACIONAL", title: "Empresas e folha", description: "Mantenha empresas, competências, headcount e custo de folha organizados." },
+  processes: { eyebrow: "PROCESSOS OPERACIONAIS", title: "Processos de DP", description: "Crie fluxos próprios para cada rotina e mantenha cada demanda nas colunas do seu processo." },
+  payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
+  indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
 };
 
 const roleLabels: Record<WorkspaceRole, string> = {
@@ -75,17 +128,100 @@ async function requestSnapshot(url: string, options?: RequestInit): Promise<Work
   });
   const payload = await response.json() as WorkspaceSnapshot & { error?: string };
   if (!response.ok) throw new Error(payload.error || "Não foi possível concluir a operação.");
-  return payload;
+  return normalizeWorkspaceSnapshot(payload);
+}
+
+function normalizeWorkspaceSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
+  const normalizeCard = (card: Card): Card => ({
+    ...card,
+    checklist: Array.isArray(card.checklist) ? card.checklist : [],
+    comments: Array.isArray(card.comments) ? card.comments : [],
+    activities: Array.isArray(card.activities) ? card.activities : [],
+    assignees: Array.isArray(card.assignees) ? card.assignees : [],
+    labels: Array.isArray(card.labels) ? card.labels : [],
+    attachments: Array.isArray(card.attachments) ? card.attachments : [],
+    customValues: card.customValues && typeof card.customValues === "object" && !Array.isArray(card.customValues) ? card.customValues : {},
+  });
+
+  return {
+    ...snapshot,
+    lists: Array.isArray(snapshot.lists) ? snapshot.lists.map((list) => ({ ...list, cards: Array.isArray(list.cards) ? list.cards.map(normalizeCard) : [] })) : [],
+    archivedCards: Array.isArray(snapshot.archivedCards) ? snapshot.archivedCards.map(normalizeCard) : [],
+    inbox: Array.isArray(snapshot.inbox) ? snapshot.inbox : [],
+    rules: Array.isArray(snapshot.rules) ? snapshot.rules : [],
+    members: Array.isArray(snapshot.members) ? snapshot.members.map((member) => ({ ...member, isActivated: member.isActivated !== false, companyIds: Array.isArray(member.companyIds) ? member.companyIds : [] })) : [],
+    boards: Array.isArray(snapshot.boards) ? snapshot.boards.map((board) => ({ ...board, stages: Array.isArray(board.stages) ? board.stages : [] })) : [],
+    availableWorkspaces: Array.isArray(snapshot.availableWorkspaces) ? snapshot.availableWorkspaces : [],
+    labels: Array.isArray(snapshot.labels) ? snapshot.labels : [],
+    customFields: Array.isArray(snapshot.customFields) ? snapshot.customFields : [],
+    templates: Array.isArray(snapshot.templates) ? snapshot.templates : [],
+    slaPolicies: Array.isArray(snapshot.slaPolicies) ? snapshot.slaPolicies : [],
+    holidays: Array.isArray(snapshot.holidays) ? snapshot.holidays : [],
+    notifications: Array.isArray(snapshot.notifications) ? snapshot.notifications : [],
+    integrations: Array.isArray(snapshot.integrations) ? snapshot.integrations : [],
+    plannerBlocks: Array.isArray(snapshot.plannerBlocks) ? snapshot.plannerBlocks : [],
+    calendarConnections: Array.isArray(snapshot.calendarConnections) ? snapshot.calendarConnections : [],
+    companies: Array.isArray(snapshot.companies) ? snapshot.companies.map((company) => ({ ...company, parentCompanyId: company.parentCompanyId ?? null, isPrincipal: Boolean(company.isPrincipal) })) : [],
+    hrMetrics: Array.isArray(snapshot.hrMetrics) ? snapshot.hrMetrics.map((metric) => ({
+      ...metric,
+      headcount: Number(metric.headcount ?? 0),
+      headcountStart: Number(metric.headcountStart ?? metric.headcount ?? 0),
+      headcountEnd: Number(metric.headcountEnd ?? metric.headcount ?? 0),
+      leavesCount: Number(metric.leavesCount ?? 0),
+      admissions: Number(metric.admissions ?? 0),
+      terminations: Number(metric.terminations ?? 0),
+      voluntaryTerminations: Number(metric.voluntaryTerminations ?? 0),
+      involuntaryTerminations: Number(metric.involuntaryTerminations ?? 0),
+      baseSalary: Number(metric.baseSalary ?? 0),
+      variablePay: Number(metric.variablePay ?? 0),
+      overtimePay: Number(metric.overtimePay ?? 0),
+      additionalPay: Number(metric.additionalPay ?? 0),
+      vacationPay: Number(metric.vacationPay ?? 0),
+      thirteenthPay: Number(metric.thirteenthPay ?? 0),
+      terminationPay: Number(metric.terminationPay ?? 0),
+      grossPayroll: Number(metric.grossPayroll ?? 0),
+      employeeInss: Number(metric.employeeInss ?? 0),
+      employeeIrrf: Number(metric.employeeIrrf ?? 0),
+      employeeOtherDeductions: Number(metric.employeeOtherDeductions ?? 0),
+      netPay: Number(metric.netPay ?? 0),
+      employerInss: Number(metric.employerInss ?? 0),
+      ratContribution: Number(metric.ratContribution ?? 0),
+      thirdPartyContributions: Number(metric.thirdPartyContributions ?? 0),
+      fgts: Number(metric.fgts ?? 0),
+      fgtsPenalty: Number(metric.fgtsPenalty ?? 0),
+      employerCharges: Number(metric.employerCharges ?? 0),
+      benefitsCost: Number(metric.benefitsCost ?? 0),
+      provisionsCost: Number(metric.provisionsCost ?? 0),
+      otherCosts: Number(metric.otherCosts ?? 0),
+      payrollCost: Number(metric.payrollCost ?? 0),
+    })) : [],
+    recentActivity: Array.isArray(snapshot.recentActivity) ? snapshot.recentActivity : [],
+  };
 }
 
 function initials(value: string) {
-  return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "DP";
+  return String(value ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "DP";
 }
 
 function formatDate(value: string | null, long = false) {
-  if (!value) return "Sem prazo";
+  if (!value || typeof value !== "string") return "Sem prazo";
   const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "Sem prazo";
   return new Intl.DateTimeFormat("pt-BR", long ? { day: "2-digit", month: "long", year: "numeric" } : { day: "2-digit", month: "short" }).format(date);
+}
+
+function formatDue(value: string | null) {
+  if (!value || typeof value !== "string") return "Sem prazo";
+  if (!value.includes("T")) return formatDate(value);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return formatDate(value);
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function dueInputValue(value: string, defaultTime: string) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T${defaultTime}`;
+  return value.slice(0, 16);
 }
 
 function formatReceived(value: string) {
@@ -103,12 +239,24 @@ function formatReceived(value: string) {
   return `há ${Math.floor(diffMinutes / 1440)} d`;
 }
 
+function realtimeCursor(date = new Date()) {
+  return date.toISOString().replace("T", " ").slice(0, 19);
+}
+
+function formatSyncStatus(updatedAt: Date | null, status: RealtimeStatus) {
+  if (status === "syncing") return "Sincronizando painel";
+  if (status === "delayed") return "Atualização temporariamente indisponível";
+  if (!updatedAt) return "Atualizado automaticamente";
+  const minutes = Math.max(0, Math.floor((Date.now() - updatedAt.getTime()) / 60000));
+  return minutes < 1 ? "Atualizado agora" : `Atualizado há ${minutes} min`;
+}
+
 function slaLabel(card: Card) {
-  if (card.slaStatus === "overdue") return `Atrasada • ${formatDate(card.dueAt)}`;
-  if (card.slaStatus === "warning") return "Vence hoje";
+  if (card.slaStatus === "overdue") return `Atrasada • ${formatDue(card.dueAt)}`;
+  if (card.slaStatus === "warning") return card.dueAt ? `Atenção • ${formatDue(card.dueAt)}` : "Atenção no SLA";
   if (card.slaStatus === "paused") return "SLA pausado";
   if (card.slaStatus === "completed") return "Concluída";
-  return card.dueAt ? formatDate(card.dueAt) : "Sem prazo";
+  return card.dueAt ? formatDue(card.dueAt) : "Sem prazo";
 }
 
 function compactSlaLabel(status: string, dueAt: string | null) {
@@ -120,8 +268,12 @@ function compactSlaLabel(status: string, dueAt: string | null) {
 }
 
 function formatMoment(value: string) {
-  const normalized = value.includes("T") ? value : value.replace(" ", "T") + "Z";
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(normalized));
+  const raw = String(value ?? "").trim();
+  if (!raw) return "agora";
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T") + "Z";
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "agora";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function formatFileSize(bytes: number) {
@@ -148,9 +300,38 @@ function activityLabel(activity: ActivityEvent) {
   return labels[activity.eventType] ?? "atualizou a demanda";
 }
 
+function activityDetails(activity: ActivityEvent) {
+  const payload = activity.payload && typeof activity.payload === "object" && !Array.isArray(activity.payload) ? activity.payload : {};
+  if (activity.eventType === "card.moved") {
+    return [`De ${String(payload.fromListName ?? "coluna anterior")} para ${String(payload.toListName ?? "nova coluna")}.`];
+  }
+  if (activity.eventType === "checklist.item_toggled") {
+    const state = payload.completed ? "concluída" : "reaberta";
+    return [payload.title ? `Etapa: ${String(payload.title)} (${state}).` : `Etapa ${state}.`];
+  }
+  if (activity.eventType === "attachment.uploaded" || activity.eventType === "attachment.deleted") {
+    return payload.filename ? [`Arquivo: ${String(payload.filename)}.`] : [];
+  }
+  const changes = payload.changes;
+  if (!changes || typeof changes !== "object" || Array.isArray(changes)) return [];
+  const labels: Record<string, string> = { title: "Título", description: "Descrição", company: "Empresa", processType: "Processo", priority: "Prioridade", assigneeName: "Responsável", dueAt: "Prazo", name: "Nome", slaBehavior: "Comportamento do SLA" };
+  return Object.entries(changes).flatMap(([field, value]) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const change = value as { from?: unknown; to?: unknown };
+    if (change.from === undefined && change.to === undefined) return [];
+    const from = String(change.from ?? "sem valor") || "sem valor";
+    const to = String(change.to ?? "sem valor") || "sem valor";
+    return [`${labels[field] ?? field}: ${from} → ${to}.`];
+  });
+}
+
+function canPreviewAttachment(attachment: CardAttachment) {
+  return attachment.contentType === "application/pdf" || attachment.contentType.startsWith("image/");
+}
+
 export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: string }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
-  const [view, setView] = useState<View>("board");
+  const [view, setView] = useState<View>("overview");
   const [boardMode, setBoardMode] = useState<BoardMode>("kanban");
   const [cardTab, setCardTab] = useState<CardTab>("details");
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
@@ -169,19 +350,31 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [workspaceName, setWorkspaceName] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [slaFilter, setSlaFilter] = useState("all");
+  const [companyFilter, setCompanyFilter] = useState("all");
+  const [processFilter, setProcessFilter] = useState("all");
+  const [dueFilter, setDueFilter] = useState("all");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberName, setMemberName] = useState("");
   const [memberRole, setMemberRole] = useState<WorkspaceRole>("member");
+  const [memberCompanyIds, setMemberCompanyIds] = useState<string[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<CardAttachment | null>(null);
+  const [recoveryLink, setRecoveryLink] = useState<RecoveryLink | null>(null);
   const [newBoardName, setNewBoardName] = useState("");
   const [newBoardDescription, setNewBoardDescription] = useState("");
   const [theme, setTheme] = useState<Theme>("light");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("syncing");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const sidebarPreferenceLoaded = useRef(false);
+  const realtimeCursorRef = useRef("");
+  const touchCardMoveRef = useRef<{ cardId: string; x: number; y: number } | null>(null);
+  const suppressCardOpenRef = useRef<string | null>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -217,19 +410,56 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
   useEffect(() => {
     void requestSnapshot("/api/workspace")
-      .then(setSnapshot)
+      .then((next) => {
+        setSnapshot(next);
+        setLastUpdatedAt(new Date());
+        setRealtimeStatus("current");
+        realtimeCursorRef.current = realtimeCursor();
+      })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Erro ao carregar o workspace."))
       .finally(() => setLoading(false));
   }, []);
 
+  const activeWorkspaceId = snapshot?.workspace.id;
+  const configuredRealtimeSeconds = snapshot?.settings.realtimeSeconds ?? 30;
+
   useEffect(() => {
-    const seconds = snapshot?.settings.realtimeSeconds ?? 30;
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== "visible" || busy) return;
-      void requestSnapshot("/api/workspace").then(setSnapshot).catch(() => undefined);
-    }, Math.max(5, seconds) * 1000);
-    return () => window.clearInterval(interval);
-  }, [snapshot?.settings.realtimeSeconds, busy]);
+    if (!activeWorkspaceId) return;
+    const seconds = configuredRealtimeSeconds;
+    let checking = false;
+    let cancelled = false;
+    const checkForUpdates = async () => {
+      if (checking || cancelled || document.visibilityState !== "visible" || busy) return;
+      checking = true;
+      try {
+        const cursor = realtimeCursorRef.current || realtimeCursor();
+        const response = await fetch(`/api/realtime?since=${encodeURIComponent(cursor)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Não foi possível verificar as atualizações.");
+        const payload = await response.json() as { changed?: boolean; latestAt?: string };
+        if (payload.changed) {
+          const next = await requestSnapshot("/api/workspace");
+          if (!cancelled) {
+            setSnapshot(next);
+            setLastUpdatedAt(new Date());
+          }
+        }
+        if (payload.latestAt) realtimeCursorRef.current = payload.latestAt;
+        if (!cancelled) setRealtimeStatus("current");
+      } catch {
+        if (!cancelled) setRealtimeStatus("delayed");
+      } finally {
+        checking = false;
+      }
+    };
+    const interval = window.setInterval(() => { void checkForUpdates(); }, Math.max(5, seconds) * 1000);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") void checkForUpdates(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [activeWorkspaceId, configuredRealtimeSeconds, busy]);
 
   useEffect(() => {
     const openSearch = (event: KeyboardEvent) => {
@@ -259,7 +489,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }, [toast]);
 
   useEffect(() => {
-    if (!cardModalOpen && !inboxModalOpen && !workspaceModalOpen && !searchOpen && !notificationsOpen && !archiveOpen) return;
+    if (!cardModalOpen && !inboxModalOpen && !workspaceModalOpen && !searchOpen && !notificationsOpen && !archiveOpen && !confirmation && !attachmentPreview) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setCardModalOpen(false);
@@ -268,6 +498,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         setSearchOpen(false);
         setNotificationsOpen(false);
         setArchiveOpen(false);
+        setConfirmation(null);
+        setAttachmentPreview(null);
       }
     };
     const previousOverflow = document.body.style.overflow;
@@ -277,21 +509,37 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [cardModalOpen, inboxModalOpen, workspaceModalOpen, searchOpen, notificationsOpen, archiveOpen]);
+  }, [cardModalOpen, inboxModalOpen, workspaceModalOpen, searchOpen, notificationsOpen, archiveOpen, confirmation, attachmentPreview]);
 
   const activeCards = useMemo(() => snapshot?.lists.flatMap((list) => list.cards) ?? [], [snapshot]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
-  const filteredActiveCards = useMemo(() => activeCards.filter((card) =>
-    (assigneeFilter === "all" || card.assigneeName === assigneeFilter || card.assignees.some((assignee) => assignee.name === assigneeFilter)) &&
-    (slaFilter === "all" || card.slaStatus === slaFilter)
-  ), [activeCards, assigneeFilter, slaFilter]);
+  const filteredActiveCards = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+    const weekEnd = todayStart + 7 * 24 * 60 * 60 * 1000;
+    return activeCards.filter((card) => {
+      const dueAt = card.dueAt ? new Date(card.dueAt).getTime() : Number.NaN;
+      const dueMatches = dueFilter === "all" ||
+        (dueFilter === "today" && dueAt >= todayStart && dueAt < tomorrowStart) ||
+        (dueFilter === "week" && dueAt >= todayStart && dueAt < weekEnd) ||
+        (dueFilter === "overdue" && card.slaStatus === "overdue");
+      return (assigneeFilter === "all" || card.assigneeName === assigneeFilter || card.assignees.some((assignee) => assignee.name === assigneeFilter)) &&
+        (slaFilter === "all" || card.slaStatus === slaFilter) &&
+        (companyFilter === "all" || card.companyId === companyFilter) &&
+        (processFilter === "all" || card.processType === processFilter) &&
+        dueMatches;
+    });
+  }, [activeCards, assigneeFilter, companyFilter, dueFilter, processFilter, slaFilter]);
   const selectedCard = useMemo(() => allCards.find((card) => card.id === selectedCardId) ?? null, [allCards, selectedCardId]);
   const assignees = useMemo(() => Array.from(new Set(activeCards.flatMap((card) => card.assignees.length ? card.assignees.map((assignee) => assignee.name) : [card.assigneeName]).filter(Boolean))).sort(), [activeCards]);
+  const processTypes = useMemo(() => Array.from(new Set(activeCards.map((card) => card.processType).filter(Boolean))).sort(), [activeCards]);
   const workspaceInitials = initials(snapshot?.workspace.name ?? "Synex DP");
   const userInitials = initials(user.displayName);
   const canEdit = snapshot ? ["admin", "member"].includes(snapshot.workspace.role) : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
+  const currentMemberName = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.name ?? user.displayName;
 
   const stats = useMemo(() => {
     const active = activeCards.filter((card) => card.slaStatus !== "completed");
@@ -303,11 +551,16 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       waiting: active.filter((card) => waitingListIds.has(card.listId)).length,
       onTime: activeCards.length ? Math.round(((activeCards.length - activeCards.filter((card) => card.slaStatus === "overdue").length) / activeCards.length) * 100) : 100,
       completed,
+      documentsPending: active.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0),
+      activeCompanies: snapshot?.companies.filter((company) => company.status === "active").length ?? 0,
     };
   }, [activeCards, snapshot]);
 
   function applySnapshot(next: WorkspaceSnapshot, message?: string) {
     setSnapshot(next);
+    setLastUpdatedAt(new Date());
+    setRealtimeStatus("current");
+    realtimeCursorRef.current = realtimeCursor();
     setError("");
     if (message) setToast(message);
   }
@@ -327,10 +580,25 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     }
   }
 
+  function requestConfirmation(request: ConfirmationRequest) {
+    setConfirmation(request);
+  }
+
+  async function confirmPendingAction() {
+    const action = confirmation?.action;
+    setConfirmation(null);
+    if (!action) return;
+    try {
+      await action();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível concluir a operação.");
+    }
+  }
+
   function openNewCard() {
     if (!canEdit) return;
     setSelectedCardId(null);
-    setCardForm(emptyCardForm);
+    setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
     setNewChecklistItem("");
     setCardTab("details");
     setCardModalOpen(true);
@@ -340,7 +608,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     const template = snapshot?.templates.find((item) => item.id === templateId);
     if (!template) return openNewCard();
     setSelectedCardId(null);
-    setCardForm({ ...emptyCardForm, templateId, processType: template.processType, description: template.description });
+    setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "", templateId, processType: template.processType, description: template.description });
     setCardTab("details");
     setCardModalOpen(true);
   }
@@ -348,6 +616,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   function openCard(card: Card) {
     setSelectedCardId(card.id);
     setCardForm({
+      boardId: card.boardId,
       title: card.title,
       description: card.description,
       companyId: card.companyId ?? "",
@@ -395,10 +664,51 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     await mutate(`/api/cards/${cardId}/move`, { method: "POST", body: JSON.stringify({ toListId }) }, "Demanda movida. Regras de SLA recalculadas.");
   }
 
-  async function archiveCard() {
-    if (!selectedCardId || !window.confirm("Arquivar esta demanda? Ela deixará de aparecer no quadro.")) return;
-    const next = await mutate(`/api/cards/${selectedCardId}`, { method: "DELETE" }, "Demanda arquivada.");
-    if (next) setCardModalOpen(false);
+  function moveCardByDirection(cardId: string, direction: -1 | 1) {
+    const card = allCards.find((item) => item.id === cardId);
+    if (!card || !snapshot) return;
+    const orderedLists = [...snapshot.lists].sort((a, b) => a.position - b.position);
+    const currentIndex = orderedLists.findIndex((list) => list.id === card.listId);
+    const nextList = orderedLists[currentIndex + direction];
+    if (!nextList) {
+      setToast(direction < 0 ? "Esta demanda já está na primeira coluna." : "Esta demanda já está na última coluna.");
+      return;
+    }
+    void moveCard(cardId, nextList.id);
+  }
+
+  function completeSelectedCard() {
+    if (!selectedCard) return;
+    const completedList = snapshot?.lists.find((list) => list.slaBehavior === "completed");
+    if (!completedList) {
+      setError("Crie ou configure uma coluna com SLA concluído antes de finalizar esta demanda.");
+      return;
+    }
+    requestConfirmation({
+      title: "Concluir demanda?",
+      description: "A demanda será movida para a coluna concluída e o SLA será encerrado. Essa ação ficará registrada no histórico.",
+      confirmLabel: "Concluir demanda",
+      action: () => moveCard(selectedCard.id, completedList.id),
+    });
+  }
+
+  function focusCardField(fieldId: string, tab: CardTab = "details") {
+    setCardTab(tab);
+    window.setTimeout(() => document.getElementById(fieldId)?.focus(), 0);
+  }
+
+  function archiveCard() {
+    if (!selectedCardId) return;
+    const cardId = selectedCardId;
+    requestConfirmation({
+      title: "Arquivar demanda?",
+      description: "Ela sairá do quadro, mas poderá ser restaurada posteriormente.",
+      confirmLabel: "Arquivar demanda",
+      action: async () => {
+        const next = await mutate(`/api/cards/${cardId}`, { method: "DELETE" }, "Demanda arquivada.");
+        if (next) setCardModalOpen(false);
+      },
+    });
   }
 
   async function toggleChecklist(itemId: string, completed: boolean) {
@@ -425,9 +735,15 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     await mutate(`/api/cards/${selectedCardId}/comments`, { method: "PATCH", body: JSON.stringify({ id: commentId, body: nextBody }) }, "Comentário atualizado.");
   }
 
-  async function deleteComment(commentId: string) {
-    if (!selectedCardId || !window.confirm("Excluir este comentário?")) return;
-    await mutate(`/api/cards/${selectedCardId}/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" }, "Comentário excluído.");
+  function deleteComment(commentId: string) {
+    if (!selectedCardId) return;
+    const cardId = selectedCardId;
+    requestConfirmation({
+      title: "Excluir comentário?",
+      description: "Este comentário será removido do histórico da demanda.",
+      confirmLabel: "Excluir comentário",
+      action: () => mutate(`/api/cards/${cardId}/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" }, "Comentário excluído."),
+    });
   }
 
   async function addInboxItem(event: FormEvent<HTMLFormElement>) {
@@ -468,21 +784,52 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   async function addMember(event: FormEvent) {
     event.preventDefault();
     if (!memberEmail.trim()) return;
-    const next = await mutate("/api/members", { method: "POST", body: JSON.stringify({ email: memberEmail, name: memberName, role: memberRole }) }, "Acesso da equipe atualizado.");
-    if (next) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: memberEmail, name: memberName, role: memberRole, companyIds: memberCompanyIds }) });
+      const payload = await response.json() as { error?: string; snapshot?: WorkspaceSnapshot; activation?: { url: string; expiresAt: string; name: string } | null };
+      if (!response.ok || !payload.snapshot) throw new Error(payload.error || "Não foi possível criar o usuário.");
+      applySnapshot(normalizeWorkspaceSnapshot(payload.snapshot), payload.activation ? "Usuário criado. Compartilhe o link de ativação somente com a pessoa indicada." : "Acesso da equipe atualizado.");
+      if (payload.activation) setRecoveryLink(payload.activation);
       setMemberEmail("");
       setMemberName("");
       setMemberRole("member");
-    }
+      setMemberCompanyIds([]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível criar o usuário.");
+    } finally { setBusy(false); }
   }
 
   async function updateMemberRole(userId: string, role: WorkspaceRole) {
     await mutate(`/api/members/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }, "Papel de acesso atualizado.");
   }
 
-  async function removeMember(userId: string, name: string) {
-    if (!window.confirm(`Remover o acesso de ${name}?`)) return;
-    await mutate(`/api/members/${userId}`, { method: "DELETE" }, "Membro removido do workspace.");
+  async function updateMemberCompanies(userId: string, companyIds: string[]) {
+    await mutate(`/api/members/${userId}`, { method: "PATCH", body: JSON.stringify({ companyIds }) }, "Empresas liberadas para a pessoa.");
+  }
+
+  async function generateRecoveryLink(userId: string, name: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/members/${userId}/recovery`, { method: "POST" });
+      const payload = await response.json() as { error?: string; snapshot?: WorkspaceSnapshot; recoveryUrl?: string; expiresAt?: string; memberName?: string };
+      if (!response.ok || !payload.snapshot || !payload.recoveryUrl || !payload.expiresAt) throw new Error(payload.error || "Não foi possível gerar o link de recuperação.");
+      applySnapshot(payload.snapshot, "Link de recuperação criado. Compartilhe-o somente com a pessoa indicada.");
+      setRecoveryLink({ name: payload.memberName || name, url: payload.recoveryUrl, expiresAt: payload.expiresAt });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível gerar o link de recuperação.");
+    } finally { setBusy(false); }
+  }
+
+  function removeMember(userId: string, name: string) {
+    requestConfirmation({
+      title: "Remover acesso?",
+      description: `${name} deixará de acessar este workspace.`,
+      confirmLabel: "Remover acesso",
+      action: () => mutate(`/api/members/${userId}`, { method: "DELETE" }, "Membro removido do workspace."),
+    });
   }
 
   async function switchWorkspace(workspaceId: string) {
@@ -498,6 +845,28 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   async function switchBoard(boardId: string) {
     if (boardId === snapshot?.board.id) return;
     await mutate("/api/boards/select", { method: "POST", body: JSON.stringify({ boardId }) }, "Quadro alterado.");
+  }
+
+  async function openProcess(boardId: string) {
+    if (boardId !== snapshot?.board.id) {
+      const next = await mutate("/api/boards/select", { method: "POST", body: JSON.stringify({ boardId }) }, "Processo aberto.");
+      if (!next) return;
+    }
+    setBoardMode("kanban");
+    setView("board");
+  }
+
+  async function createProcess(payload: { name: string; description: string; columns: string[] }) {
+    const next = await mutate(
+      "/api/boards",
+      { method: "POST", body: JSON.stringify({ ...payload, boardType: "process" }) },
+      "Processo criado. As novas demandas seguirão estas etapas.",
+    );
+    if (next) {
+      setBoardMode("kanban");
+      setView("board");
+    }
+    return next;
   }
 
   async function createBoard(event: FormEvent) {
@@ -525,18 +894,26 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     }
   }
 
-  async function removeAttachment(id: string) {
-    if (!window.confirm("Excluir este anexo?")) return;
-    await mutate(`/api/attachments/${id}`, { method: "DELETE" }, "Anexo removido.");
+  function removeAttachment(id: string) {
+    requestConfirmation({
+      title: "Excluir anexo?",
+      description: "O arquivo será removido permanentemente desta demanda.",
+      confirmLabel: "Excluir anexo",
+      action: () => mutate(`/api/attachments/${id}`, { method: "DELETE" }, "Anexo removido."),
+    });
   }
 
   async function restoreCard(id: string) {
     await mutate(`/api/cards/${id}/restore`, { method: "POST" }, "Demanda restaurada para o quadro.");
   }
 
-  async function deleteCardPermanently(id: string, title: string) {
-    if (!window.confirm(`Excluir permanentemente “${title}”? Esta ação não pode ser desfeita.`)) return;
-    await mutate(`/api/cards/${id}/permanent`, { method: "DELETE" }, "Demanda excluída permanentemente.");
+  function deleteCardPermanently(id: string, title: string) {
+    requestConfirmation({
+      title: "Excluir definitivamente?",
+      description: `“${title}” será excluída e não poderá ser restaurada.`,
+      confirmLabel: "Excluir definitivamente",
+      action: () => mutate(`/api/cards/${id}/permanent`, { method: "DELETE" }, "Demanda excluída permanentemente."),
+    });
   }
 
   async function toggleSlaPause() {
@@ -564,9 +941,13 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     return mutate("/api/companies", { method: "POST", body: JSON.stringify(payload) }, "Empresa cadastrada.");
   }
 
-  async function deleteCompany(id: string, name: string) {
-    if (!window.confirm(`Excluir o cadastro de ${name}?`)) return null;
-    return mutate(`/api/companies/${id}`, { method: "DELETE" }, "Empresa excluída.");
+  function deleteCompany(id: string, name: string) {
+    requestConfirmation({
+      title: "Excluir empresa?",
+      description: `O cadastro de ${name} será removido da operação. Demandas antigas manterão o histórico já registrado.`,
+      confirmLabel: "Excluir empresa",
+      action: () => mutate(`/api/companies/${id}`, { method: "DELETE" }, "Empresa excluída."),
+    });
   }
 
   async function saveHrMetric(payload: Record<string, unknown>) {
@@ -613,52 +994,70 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
   const header = viewContent[view];
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
+  const principalCompany = snapshot.companies.find((company) => company.isPrincipal) ?? null;
+  const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
 
   return (
     <main className={`dashboard-shell theme-${theme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
-          <span aria-hidden="true">{sidebarCollapsed ? "→" : "←"}</span>
+          {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
-        <button className="brand dashboard-brand" onClick={() => setView("board")} aria-label="Fila DP — quadro">
+        <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Fila DP — visão geral">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Fila <strong>DP</strong></span>
         </button>
+        <div className="sidebar-group-context">
+          <span>GRUPO OPERACIONAL</span>
+          <strong>{snapshot.workspace.name}</strong>
+          <small>{principalCompany ? `Principal: ${principalCompany.tradeName || principalCompany.legalName}` : "Defina a empresa principal"}</small>
+        </div>
         <nav aria-label="Navegação do painel">
-          <button className={view === "board" ? "active" : ""} onClick={() => setView("board")}><span aria-hidden="true">▦</span> Quadro</button>
-          <button className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true">▣</span> Caixa de entrada <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>
-          <button className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true">□</span> Meu planner</button>
-          <button className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true">⌁</span> Indicadores</button>
-          <button className={view === "companies" ? "active" : ""} onClick={() => setView("companies")}><span aria-hidden="true">▤</span> Empresas</button>
+          <span className="sidebar-nav-section">OPERAÇÃO</span>
+          <button title="Visão geral" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span aria-hidden="true"><LayoutDashboard /></span> Visão geral</button>
+          <button title="Demandas" className={view === "board" ? "active" : ""} onClick={() => setView("board")}><span aria-hidden="true"><ListChecks /></span> Demandas</button>
+          <button title="Inbox" className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true"><Inbox /></span> Inbox <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>
+          <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>
+          <button title="Processos" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Processos</button>
+          <span className="sidebar-nav-section management">GESTÃO</span>
+          <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>
+          <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>
+          {isAdmin && <button title="Configurações" onClick={() => { setSettingsSection("general"); openWorkspaceSettings(); }}><span aria-hidden="true"><Settings /></span> Configurações</button>}
         </nav>
         <div className="sidebar-workspace">
-          <span>WORKSPACE</span>
-          <button type="button" onClick={openWorkspaceSettings}><i>{workspaceInitials}</i><strong>{snapshot.workspace.name}</strong><span>⌄</span></button>
+          <span>ESTRUTURA EMPRESARIAL</span>
+          <button type="button" onClick={() => { if (isAdmin) { setSettingsSection("companies"); openWorkspaceSettings(); } else setToast("As empresas do grupo são administradas pelo administrador do workspace."); }}><i>{workspaceInitials}</i><span><strong>{principalCompany?.tradeName || principalCompany?.legalName || "Sem principal"}</strong><small>{snapshot.companies.length} empresa(s) no grupo</small></span><ChevronDown aria-hidden="true" /></button>
         </div>
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
           <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
-          <a href={signOutPath} aria-label="Sair do Fila DP">↗</a>
+          <a href={signOutPath} aria-label="Sair do Fila DP" title="Sair"><LogOut aria-hidden="true" /></a>
         </div>
       </aside>
 
       <section className="dashboard-main">
         <header className="dashboard-header">
-          <div><span>{snapshot.workspace.name} /</span><strong> {header.title}</strong></div>
+          <div className="dashboard-location"><span>{snapshot.workspace.name} /</span><strong> {header.title}</strong></div>
           <div className="dashboard-header-actions">
-            <button className="workspace-settings-button" aria-label="Configurar workspace" onClick={openWorkspaceSettings}>⚙</button>
-            <button aria-label="Pesquisar" onClick={() => setSearchOpen(true)}>⌕</button>
-            <button aria-label="Notificações" onClick={() => setNotificationsOpen(true)}>♢{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
-            <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? "☀" : "☾"}</button>
-            {canEdit && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>{view === "inbox" ? "＋ Nova solicitação" : "＋ Nova demanda"}</button>}
+            <label className="header-company-select"><Building2 aria-hidden="true" /><select aria-label="Selecionar empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">{companyScopeLabel}</option>{snapshot.companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</option>)}</select></label>
+            <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
+            <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
+            <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
+            <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
+            <button className="header-profile" aria-label="Abrir perfil e configurações" title="Perfil e configurações" onClick={() => { setSettingsSection("team"); openWorkspaceSettings(); }}><span>{userInitials}</span></button>
+            {canEdit && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
           </div>
         </header>
 
         <div className="dashboard-content">
           <div className="dashboard-heading">
-            <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{header.title}</h1><p>{header.description}</p></div>
+            <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{view === "overview" ? `Olá, ${user.displayName.split(" ")[0] || "equipe"}.` : header.title}</h1><p>{view === "overview" ? "Veja as prioridades da operação e avance com segurança." : header.description}</p><div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div></div>
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
+
+          {view === "overview" && <OverviewView cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} />}
+
+          {view === "processes" && <ProcessBoardsView boards={snapshot.boards} activeBoardId={snapshot.board.id} busy={busy} isAdmin={isAdmin} onOpen={openProcess} onCreate={createProcess} />}
 
           {view === "board" && (
             <>
@@ -670,17 +1069,23 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               </div>
 
               <div className="dashboard-board-head">
-                <div className="dashboard-tabs board-mode-tabs"><label className="board-selector"><span>Quadro</span><select value={snapshot.board.id} onChange={(event) => void switchBoard(event.target.value)} aria-label="Selecionar quadro">{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}</select></label><button className={boardMode === "kanban" ? "active" : ""} onClick={() => setBoardMode("kanban")}>Kanban</button><button className={boardMode === "table" ? "active" : ""} onClick={() => setBoardMode("table")}>Tabela</button><button className={boardMode === "calendar" ? "active" : ""} onClick={() => setBoardMode("calendar")}>Calendário</button><button className="archive-trigger" onClick={() => setArchiveOpen(true)}>Arquivados <b>{snapshot.archivedCards.length}</b></button></div>
+                <div className="dashboard-tabs board-mode-tabs"><label className="board-selector"><span>Quadro</span><select value={snapshot.board.id} onChange={(event) => void switchBoard(event.target.value)} aria-label="Selecionar quadro">{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}</select></label><button className={boardMode === "kanban" ? "active" : ""} onClick={() => setBoardMode("kanban")}>Kanban</button><button className={boardMode === "table" ? "active" : ""} onClick={() => setBoardMode("table")}>Tabela</button><button className={boardMode === "calendar" ? "active" : ""} onClick={() => setBoardMode("calendar")}>Calendário</button><button className={boardMode === "process" ? "active" : ""} onClick={() => setBoardMode("process")}>Processos</button><button className="archive-trigger" onClick={() => setArchiveOpen(true)}><Archive aria-hidden="true" /> Arquivados <b>{snapshot.archivedCards.length}</b></button></div>
                 <div className="dashboard-filters">
+                  <button type="button" className={`filter-chip ${assigneeFilter === currentMemberName ? "active" : ""}`} aria-pressed={assigneeFilter === currentMemberName} onClick={() => setAssigneeFilter((current) => current === currentMemberName ? "all" : currentMemberName)}>Minhas</button>
+                  <button type="button" className={`filter-chip ${slaFilter === "overdue" ? "active" : ""}`} aria-pressed={slaFilter === "overdue"} onClick={() => setSlaFilter((current) => current === "overdue" ? "all" : "overdue")}>Atrasadas</button>
+                  <button type="button" className={`filter-chip ${slaFilter === "warning" ? "active" : ""}`} aria-pressed={slaFilter === "warning"} onClick={() => setSlaFilter((current) => current === "warning" ? "all" : "warning")}>Hoje</button>
                   <label><span>Responsável</span><select aria-label="Filtrar por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Todos</option>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label>
+                  <label><span>Empresa</span><select aria-label="Filtrar por empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">Todas</option>{snapshot.companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
+                  <label><span>Tipo</span><select aria-label="Filtrar por tipo de demanda" value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}><option value="all">Todos</option>{processTypes.map((process) => <option key={process}>{process}</option>)}</select></label>
+                  <label><span>Prazo</span><select aria-label="Filtrar por prazo" value={dueFilter} onChange={(event) => setDueFilter(event.target.value)}><option value="all">Todos</option><option value="today">Vence hoje</option><option value="week">Próximos 7 dias</option><option value="overdue">Já atrasados</option></select></label>
                   <label><span>SLA</span><select aria-label="Filtrar por SLA" value={slaFilter} onChange={(event) => setSlaFilter(event.target.value)}><option value="all">Todos</option><option value="safe">No prazo</option><option value="warning">Vence hoje</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>
+                  {(assigneeFilter !== "all" || slaFilter !== "all" || companyFilter !== "all" || processFilter !== "all" || dueFilter !== "all") && <button type="button" className="filter-clear" onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); setCompanyFilter("all"); setProcessFilter("all"); setDueFilter("all"); }}>Limpar</button>}
                 </div>
               </div>
 
-              <div className="process-view-trigger"><button className={boardMode === "process" ? "active" : ""} onClick={() => setBoardMode("process")}>Tabelas por processo</button></div>
               {boardMode === "kanban" && <div className="dashboard-kanban">
                 {snapshot.lists.map((list) => {
-                  const visibleCards = list.cards.filter((card) => (assigneeFilter === "all" || card.assigneeName === assigneeFilter || card.assignees.some((assignee) => assignee.name === assigneeFilter)) && (slaFilter === "all" || card.slaStatus === slaFilter));
+                  const visibleCards = filteredActiveCards.filter((card) => card.listId === list.id);
                   return (
                   <section
                     className={`dashboard-column ${draggedCardId ? "drop-ready" : ""}`}
@@ -692,29 +1097,54 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                       setDraggedCardId(null);
                     }}
                   >
-                    <header><span><i className={list.kind} />{list.name}</span><b>{visibleCards.length}</b><button aria-label={`Opções de ${list.name}`} onClick={() => setToast(`${list.name}: ${visibleCards.length} demanda(s) visível(is).`)}>•••</button></header>
+                    <header><span><i className={list.kind} />{list.name}</span><b>{visibleCards.length}</b><button aria-label={`Opções de ${list.name}`} onClick={() => setToast(`${list.name}: ${visibleCards.length} demanda(s) visível(is).`)}><MoreHorizontal aria-hidden="true" /></button></header>
                     <div className="dashboard-card-list">
                       {visibleCards.map((card) => {
                         const completed = card.checklist.filter((item) => item.completed).length;
                         return (
                           <article
-                            className={`dashboard-task priority-${card.priority}`}
+                            className={`dashboard-task priority-${card.priority} sla-${card.slaStatus}`}
                             key={card.id}
                             draggable={canEdit}
                             tabIndex={0}
+                            role="button"
+                            aria-label={`Abrir demanda ${card.title}`}
                             onDragStart={() => setDraggedCardId(card.id)}
                             onDragEnd={() => setDraggedCardId(null)}
-                            onClick={() => openCard(card)}
-                            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openCard(card); }}
+                            onTouchStart={(event) => {
+                              if (canEdit) touchCardMoveRef.current = { cardId: card.id, x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 };
+                            }}
+                            onTouchEnd={(event) => {
+                              const start = touchCardMoveRef.current;
+                              touchCardMoveRef.current = null;
+                              const end = event.changedTouches[0];
+                              if (!canEdit || !start || start.cardId !== card.id || !end) return;
+                              const deltaX = end.clientX - start.x;
+                              const deltaY = end.clientY - start.y;
+                              if (Math.abs(deltaX) > 96 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+                                suppressCardOpenRef.current = card.id;
+                                moveCardByDirection(card.id, deltaX > 0 ? -1 : 1);
+                              }
+                            }}
+                            onClick={() => {
+                              if (suppressCardOpenRef.current === card.id) { suppressCardOpenRef.current = null; return; }
+                              openCard(card);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.altKey && event.key === "ArrowLeft" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, -1); return; }
+                              if (event.altKey && event.key === "ArrowRight" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, 1); return; }
+                              if (event.key === "Enter" || event.key === " ") openCard(card);
+                            }}
                           >
                             <div className="dashboard-task-labels"><span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}</div>
                             <h2>{card.title}</h2>
-                            <p>{card.company || "Sem empresa informada"}</p>
-                            <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}`}>◷ {slaLabel(card)}</span><span className="dashboard-check">✓ {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments">↥ {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments">● {card.comments.length}</span>}<span className="dashboard-mini-avatar">{initials(card.assignees[0]?.name || card.assigneeName || "DP")}</span>{card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}</div>
+                            <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
+                            {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
+                            <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}`}><Clock3 aria-hidden="true" /> {slaLabel(card)}</span><span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}<span className="dashboard-mini-avatar">{initials(card.assignees[0]?.name || card.assigneeName || "DP")}</span>{card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}</div>
                           </article>
                         );
                       })}
-                      {canEdit && <button className="dashboard-add-card" onClick={() => { setCardForm({ ...emptyCardForm, listId: list.id }); setSelectedCardId(null); setCardTab("details"); setCardModalOpen(true); }}>＋ Adicionar demanda</button>}
+                      {canEdit && <button className="dashboard-add-card" onClick={() => { setCardForm({ ...emptyCardForm, boardId: snapshot.board.id, listId: list.id }); setSelectedCardId(null); setCardTab("details"); setCardModalOpen(true); }}><Plus aria-hidden="true" /> Adicionar demanda</button>}
                     </div>
                   </section>
                   );
@@ -727,9 +1157,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           )}
 
           {view === "inbox" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
-          {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} />}
+          {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
+          {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} />}
           {view === "indicators" && <IndicatorsView cards={activeCards} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
-          {view === "companies" && <CompaniesView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onCreateCompany={createCompany} onDeleteCompany={deleteCompany} onSaveMetric={saveHrMetric} />}
         </div>
       </section>
 
@@ -777,21 +1207,24 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
       {cardModalOpen && (
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
-          <section className="workspace-modal card-modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
-            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2></div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
+          <section className="workspace-modal card-modal demand-detail-modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
+            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {selectedCard.assigneeName || "Sem responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
             {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length}</b></button></nav>}
             <div className="card-modal-body single">
+              {selectedCard && <section className="demand-detail-summary"><div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div><div className="demand-document-state"><span>DOCUMENTOS</span><strong>{selectedCard.checklist.filter((item) => item.completed).length} aprovados</strong><small>{selectedCard.checklist.filter((item) => !item.completed).length} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div><div className="demand-quick-actions">{canEdit && !selectedCard.archived && <><button className="quick-complete" type="button" onClick={completeSelectedCard}><CheckCircle2 aria-hidden="true" /> Concluir</button><button type="button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button><button type="button" onClick={() => focusCardField("card-assignees")}>Responsável</button><button type="button" onClick={() => focusCardField("card-due-at")}>Prazo</button></>}</div></section>}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
                 {!selectedCard && <label className="full">Começar com um template<select value={cardForm.templateId} onChange={(event) => { const template = snapshot.templates.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, templateId: event.target.value, processType: template?.processType ?? cardForm.processType, description: template?.description ?? cardForm.description }); }}><option value="">Demanda em branco</option>{snapshot.templates.filter((item) => item.active).map((template) => <option value={template.id} key={template.id}>{template.name} • SLA {template.defaultSlaDays} dia(s) útil(eis)</option>)}</select></label>}
+                {!selectedCard && <label className="full">Processo operacional<select value={cardForm.boardId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, boardId: event.target.value, listId: "" })}>{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.boardType === "process" ? `Processo: ${board.name}` : `Quadro geral: ${board.name}`}</option>)}</select><small className="card-process-helper">A demanda será criada e movimentada somente nas colunas deste processo.</small></label>}
                 <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Admissão — Maria Oliveira" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
                 <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>ADMISSÃO</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>
                 <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
-                <label>Prazo<input type="date" value={cardForm.dueAt} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>
+                <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>
+                {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
                 <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>
-                <section className="card-choice-section full"><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
+                <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
                 <section className="card-choice-section full"><header><strong>Etiquetas</strong><span>Classifique sem alterar o processo</span></header><div className="choice-chips label-choices">{snapshot.labels.map((label) => <label className={cardForm.labelIds.includes(label.id) ? "selected" : ""} style={{ borderColor: cardForm.labelIds.includes(label.id) ? label.color : undefined }} key={label.id}><input type="checkbox" checked={cardForm.labelIds.includes(label.id)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, labelIds: event.target.checked ? [...cardForm.labelIds, label.id] : cardForm.labelIds.filter((id) => id !== label.id) })} /><i style={{ backgroundColor: label.color }} />{label.name}</label>)}</div></section>
                 {snapshot.customFields.map((field) => <label key={field.id}>{field.name}{field.fieldType === "select" ? <select value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })}><option value="">Selecione</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={field.fieldType === "date" ? "date" : field.fieldType === "number" ? "number" : "text"} value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })} />}</label>)}
                 <div className="card-form-actions full">{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="danger-link" onClick={archiveCard}>Arquivar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="secondary-button" onClick={() => void toggleSlaPause()}>{selectedCard.slaStatus === "paused" ? "Retomar SLA" : "Pausar SLA"}</button>}<span /><button type="button" className="secondary-button" onClick={() => setCardModalOpen(false)}>Fechar</button>{canEdit && !selectedCard?.archived && <button className="primary-button" disabled={busy}>{selectedCard ? "Salvar alterações" : "Criar demanda"}</button>}</div>
@@ -807,9 +1240,20 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                 </section>
               )}
 
-              {selectedCard && cardTab === "attachments" && <section className="card-tab-panel attachments-panel"><header><div><span>DOCUMENTOS</span><h3>Anexos da demanda</h3><p>PDF, imagem, TXT, CSV, DOCX ou XLSX, com até 20 MB.</p></div>{canEdit && !selectedCard.archived && <label className="upload-button">＋ Enviar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.target.value = ""; }} /></label>}</header><div className="attachment-list">{selectedCard.attachments.length === 0 && <div className="empty-view"><span>↥</span><strong>Nenhum anexo</strong><p>Envie documentos para manter todo o processo no mesmo lugar.</p></div>}{selectedCard.attachments.map((attachment) => <article key={attachment.id}><i>{attachment.filename.split(".").pop()?.toUpperCase()}</i><div><strong>{attachment.filename}</strong><span>{formatFileSize(attachment.sizeBytes)} • {attachment.uploadedBy} • {formatMoment(attachment.createdAt)}</span></div><a href={attachment.downloadUrl}>Baixar</a>{canEdit && !selectedCard.archived && <button onClick={() => void removeAttachment(attachment.id)} aria-label={`Excluir ${attachment.filename}`}>×</button>}</article>)}</div></section>}
+              {selectedCard && cardTab === "attachments" && <section className="card-tab-panel attachments-panel"><header><div><span>DOCUMENTOS</span><h3>Anexos da demanda</h3><p>PDF, imagem, TXT, CSV, DOCX ou XLSX, com até 20 MB.</p></div>{canEdit && !selectedCard.archived && <label className="upload-button">＋ Enviar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.target.value = ""; }} /></label>}</header><div className="attachment-list">{selectedCard.attachments.length === 0 && <div className="empty-view"><span>↥</span><strong>Nenhum anexo</strong><p>Envie documentos para manter todo o processo no mesmo lugar.</p></div>}{selectedCard.attachments.map((attachment) => <article key={attachment.id}><i>{attachment.filename.split(".").pop()?.toUpperCase()}</i><div><strong>{attachment.filename}</strong><span>{formatFileSize(attachment.sizeBytes)} • {attachment.uploadedBy} • {formatMoment(attachment.createdAt)}</span></div>{canPreviewAttachment(attachment) && <button className="attachment-preview-button" onClick={() => setAttachmentPreview(attachment)}>Visualizar</button>}<a href={attachment.downloadUrl}>Baixar</a>{canEdit && !selectedCard.archived && <button onClick={() => void removeAttachment(attachment.id)} aria-label={`Excluir ${attachment.filename}`}>×</button>}</article>)}</div></section>}
 
-              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO</span><strong>{selectedCard.activities.length}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}<time>{formatMoment(activity.createdAt)}</time></div></li>)}</ol></div></section>}
+              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO</span><strong>{selectedCard.activities.length}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {attachmentPreview && (
+        <div className="workspace-modal-backdrop attachment-preview-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setAttachmentPreview(null); }}>
+          <section className="workspace-modal attachment-preview-modal" role="dialog" aria-modal="true" aria-labelledby="attachment-preview-title">
+            <header><div><span>PRÉ-VISUALIZAÇÃO SEGURA</span><h2 id="attachment-preview-title">{attachmentPreview.filename}</h2></div><div className="attachment-preview-actions"><a href={attachmentPreview.downloadUrl}>Baixar</a><button onClick={() => setAttachmentPreview(null)} aria-label="Fechar">×</button></div></header>
+            <div className="attachment-preview-content">
+              {attachmentPreview.contentType.startsWith("image/") ? <Image src={`${attachmentPreview.downloadUrl}?disposition=inline`} alt={`Pré-visualização de ${attachmentPreview.filename}`} width={1600} height={1000} unoptimized /> : <iframe src={`${attachmentPreview.downloadUrl}?disposition=inline`} title={`Pré-visualização de ${attachmentPreview.filename}`} />}
             </div>
           </section>
         </div>
@@ -833,24 +1277,178 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       {workspaceModalOpen && (
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setWorkspaceModalOpen(false); }}>
           <section className="workspace-modal workspace-settings-modal" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
-            <header><div><span>EQUIPE E ACESSO</span><h2 id="workspace-modal-title">Configurações do workspace</h2></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>ADMINISTRAÇÃO DO GRUPO · EQUIPE E ACESSO</span><h2 id="workspace-modal-title">Configurações do grupo</h2><p>{snapshot.workspace.name} · {snapshot.companies.length} empresa(s) · {snapshot.members.length} usuário(s) com acesso</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
             <div className="workspace-settings-layout">
-              <nav className="settings-nav" aria-label="Seções das configurações"><button className={settingsSection === "general" ? "active" : ""} onClick={() => setSettingsSection("general")}>Geral</button><button className={settingsSection === "team" ? "active" : ""} onClick={() => setSettingsSection("team")}>Equipe</button><button className={settingsSection === "fields" ? "active" : ""} onClick={() => setSettingsSection("fields")}>Campos e etiquetas</button><button className={settingsSection === "templates" ? "active" : ""} onClick={() => setSettingsSection("templates")}>Templates</button><button className={settingsSection === "sla" ? "active" : ""} onClick={() => setSettingsSection("sla")}>SLA e calendário</button><button className={settingsSection === "automations" ? "active" : ""} onClick={() => setSettingsSection("automations")}>Automações</button><button className={settingsSection === "integrations" ? "active" : ""} onClick={() => setSettingsSection("integrations")}>Integrações</button></nav>
+              <nav className="settings-nav" aria-label="Seções das configurações">
+                <span className="settings-nav-label">ESTRUTURA DO GRUPO</span>
+                <button className={settingsSection === "general" ? "active" : ""} onClick={() => setSettingsSection("general")}><Building2 aria-hidden="true" /><span>Grupo e quadros<small>Identidade e operação</small></span></button>
+                {isAdmin && <button className={settingsSection === "companies" ? "active" : ""} onClick={() => setSettingsSection("companies")}><Building2 aria-hidden="true" /><span>Empresas do grupo<small>CNPJs, hierarquia e Sankhya</small></span></button>}
+                <button className={settingsSection === "team" ? "active" : ""} onClick={() => setSettingsSection("team")}><Users aria-hidden="true" /><span>Usuários e acessos<small>Libere pessoas e empresas</small></span></button>
+                <button className={settingsSection === "columns" ? "active" : ""} onClick={() => setSettingsSection("columns")}><ListChecks aria-hidden="true" /><span>Fluxo do quadro<small>Colunas e status</small></span></button>
+                <span className="settings-nav-label">OPERAÇÃO</span>
+                <button className={settingsSection === "fields" ? "active" : ""} onClick={() => setSettingsSection("fields")}><Settings aria-hidden="true" /><span>Campos e etiquetas<small>Dados padronizados</small></span></button>
+                <button className={settingsSection === "templates" ? "active" : ""} onClick={() => setSettingsSection("templates")}><WalletCards aria-hidden="true" /><span>Templates<small>Processos recorrentes</small></span></button>
+                <button className={settingsSection === "sla" ? "active" : ""} onClick={() => setSettingsSection("sla")}><CalendarDays aria-hidden="true" /><span>SLA e calendário<small>Expediente e prazos</small></span></button>
+                <button className={settingsSection === "automations" ? "active" : ""} onClick={() => setSettingsSection("automations")}><RefreshCw aria-hidden="true" /><span>Automações<small>Regras da operação</small></span></button>
+                <button className={settingsSection === "integrations" ? "active" : ""} onClick={() => setSettingsSection("integrations")}><Mail aria-hidden="true" /><span>Integrações<small>Canais e sistemas</small></span></button>
+              </nav>
               <div className="workspace-settings-content">
                 {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{snapshot.boards.length} quadro(s) disponíveis</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}
-                {settingsSection === "team" && <><section className="workspace-team"><header><div><strong>Equipe</strong><span>{snapshot.members.length} pessoa(s) com acesso</span></div><p>Administrador gerencia tudo; membro executa; observador somente consulta; convidado pode comentar.</p></header><div className="workspace-member-list">{snapshot.members.map((member) => <article key={member.userId}><i>{initials(member.name)}</i><div><strong>{member.name}{member.isOwner && <em>Proprietário</em>}</strong><small>{member.email}</small></div>{isAdmin && !member.isOwner ? <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}><option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option></select> : <b>{roleLabels[member.role]}</b>}{isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}</article>)}</div></section>{isAdmin && <form className="workspace-invite-form" onSubmit={addMember}><header><strong>Adicionar pessoa</strong><span>O acesso passa a valer quando ela entrar com este e-mail.</span></header><div><label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label><label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label><label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label><button className="primary-button" disabled={busy || !memberEmail.trim()}>Adicionar acesso</button></div></form>}</>}
-                {settingsSection === "fields" && <FieldsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} />}
-                {settingsSection === "templates" && <TemplatesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onUseTemplate={(id) => { setWorkspaceModalOpen(false); openFromTemplate(id); }} />}
+                {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
+                {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
+                {settingsSection === "team" && <>
+                  <section className="access-admin-hero"><span><Users aria-hidden="true" /></span><div><strong>Controle de acesso do grupo</strong><p>Você define quem entra, qual papel cada pessoa terá e quais empresas poderá consultar ou operar.</p></div><b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b></section>
+                  <section className="workspace-team"><header><div><strong>Usuários liberados</strong><span>{snapshot.members.length} pessoa(s) com acesso ao grupo</span></div><p>O proprietário e os administradores veem todas as empresas. Os demais acessam apenas os CNPJs liberados.</p></header>
+                    <div className="workspace-member-list">{snapshot.members.map((member) => <article key={member.userId}><i>{initials(member.name)}</i><div><strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong><small>{member.email}</small><span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span></div>{isAdmin && !member.isOwner ? <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}><option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option></select> : <b>{roleLabels[member.role]}</b>}{isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}{isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}{isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}</article>)}</div>
+                  </section>
+                  {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}><header><div><strong>Criar e liberar usuário</strong><span>O sistema gerará um link único para a pessoa definir a própria senha.</span></div><b>1. Cadastre · 2. Copie o link · 3. Libere</b></header><div><label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label><label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label><label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label><fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset><button className="primary-button" disabled={busy || !memberEmail.trim()}>Criar usuário e gerar link</button></div></form>}
+                </>}
+                {settingsSection === "team" && recoveryLink && <section className="access-recovery-link"><header><div><span>LINK ÚNICO DE RECUPERAÇÃO</span><strong>{recoveryLink.name}</strong><small>Válido até {new Date(recoveryLink.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. O link deixa de funcionar após o primeiro uso.</small></div><button onClick={() => { void navigator.clipboard.writeText(recoveryLink.url).then(() => setToast("Link de recuperação copiado.")); }}>Copiar link</button></header><input value={recoveryLink.url} readOnly aria-label="Link de recuperação" /></section>}
+                {settingsSection === "fields" && <FieldsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
+                {settingsSection === "templates" && <TemplatesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} onUseTemplate={(id) => { setWorkspaceModalOpen(false); openFromTemplate(id); }} />}
                 {settingsSection === "sla" && <SlaSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} />}
-                {settingsSection === "automations" && <RulesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} />}
+                {settingsSection === "automations" && <RulesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
                 {settingsSection === "integrations" && <IntegrationsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onSync={syncIntegration} />}
               </div>
             </div>
           </section>
         </div>
       )}
+
+      {confirmation && (
+        <div className="workspace-modal-backdrop confirmation-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmation(null); }}>
+          <section className="workspace-modal confirmation-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-description">
+            <header><div><span>CONFIRMAÇÃO NECESSÁRIA</span><h2 id="confirmation-title">{confirmation.title}</h2></div><button onClick={() => setConfirmation(null)} aria-label="Fechar"><X aria-hidden="true" /></button></header>
+            <div className="confirmation-body"><CircleAlert aria-hidden="true" /><p id="confirmation-description">{confirmation.description}</p></div>
+            <footer><button type="button" className="secondary-button" onClick={() => setConfirmation(null)}>Cancelar</button><button type="button" className="danger-button" disabled={busy} onClick={() => void confirmPendingAction()}>{confirmation.confirmLabel}</button></footer>
+          </section>
+        </div>
+      )}
     </main>
   );
+}
+
+function OverviewView({ cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit }: {
+  cards: Card[];
+  companies: WorkspaceSnapshot["companies"];
+  lists: WorkspaceSnapshot["lists"];
+  activities: ActivityEvent[];
+  stats: { active: number; attention: number; waiting: number; onTime: number; completed: number; documentsPending: number; activeCompanies: number };
+  onOpen: (card: Card) => void;
+  onOpenBoard: () => void;
+  onNew: () => void;
+  canEdit: boolean;
+}) {
+  const attention = cards.filter((card) => card.slaStatus === "overdue" || card.slaStatus === "warning").sort((a, b) => (a.slaStatus === "overdue" ? -1 : 1) - (b.slaStatus === "overdue" ? -1 : 1));
+  const companyById = new Map(companies.map((company) => [company.id, company]));
+  const totalChecklistItems = cards.reduce((total, card) => total + card.checklist.length, 0);
+  const checkedItems = cards.reduce((total, card) => total + card.checklist.filter((item) => item.completed).length, 0);
+  const maxStatus = Math.max(1, ...lists.map((list) => list.cards.length));
+  const visibleColumns = lists.slice(0, 3);
+
+  return <div className="overview-layout">
+    <section className="overview-hero">
+      <div><span>RESUMO OPERACIONAL</span><strong>{stats.active ? `${stats.active} demanda(s) em andamento.` : "Tudo sob controle por enquanto."}</strong><p>Priorize o que vence primeiro e mantenha cada empresa atualizada sem abrir planilhas paralelas.</p></div>
+      {canEdit && <button className="primary-button overview-new-demand" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
+    </section>
+
+    <section className="overview-metrics" aria-label="Indicadores principais">
+      <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{stats.completed} concluída(s) no quadro</small></article>
+      <article className={stats.attention ? "requires-attention" : ""}><span>SLA em risco</span><strong>{stats.attention}</strong><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small></article>
+      <article><span>Documentos pendentes</span><strong>{stats.documentsPending}</strong><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small></article>
+      <article><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><small>Cadastros disponíveis na operação</small></article>
+    </section>
+
+    <section className="overview-sla-band">
+      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime}% dentro do prazo</strong><p>{stats.completed} demandas concluídas • {stats.waiting} com SLA pausado</p></div>
+      <div className="sla-progress" aria-label={`${stats.onTime}% das demandas dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>
+      <div className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></div>
+    </section>
+
+    <div className="overview-grid">
+      <section className="overview-panel attention-panel"><header><div><span>ATENÇÃO HOJE</span><h2>O que exige ação</h2></div><button onClick={onOpenBoard}>Ver quadro <ArrowRight aria-hidden="true" /></button></header><div className="overview-attention-list">
+        {attention.length === 0 && <div className="overview-empty"><CheckCircle2 aria-hidden="true" /><strong>Nenhuma demanda crítica agora.</strong><p>Os prazos em aberto estão dentro da política definida.</p></div>}
+        {attention.slice(0, 4).map((card) => <button className={`overview-attention-card ${card.slaStatus}`} key={card.id} onClick={() => onOpen(card)}><i /><span><strong>{card.title}</strong><small>{card.company || "Sem empresa"} • {card.assigneeName || "Sem responsável"}</small></span><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>)}
+      </div></section>
+
+      <section className="overview-panel status-panel"><header><div><span>VOLUME POR STATUS</span><h2>Demandas na operação</h2></div><button onClick={onOpenBoard}>Abrir demandas <ArrowRight aria-hidden="true" /></button></header><div className="status-chart" role="img" aria-label="Gráfico de demandas por status">
+        {lists.map((list) => <div key={list.id}><span style={{ height: `${Math.max(10, (list.cards.length / maxStatus) * 100)}%` }} /><strong>{list.cards.length}</strong><small>{list.name}</small></div>)}
+      </div></section>
+    </div>
+
+    <div className="overview-grid overview-bottom-grid">
+      <section className="overview-panel board-preview"><header><div><span>PRÉVIA DO QUADRO</span><h2>Próximas demandas</h2></div><button onClick={onOpenBoard}>Ver todas <ArrowRight aria-hidden="true" /></button></header><div className="board-preview-columns">
+        {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
+      </div></section>
+
+      <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div></header><div className="recent-activity-list">
+        {activities.slice(0, 5).map((activity) => <article key={activity.id}><span>{initials(activity.actorName || "DP")}</span><div><strong>{activity.actorName || "Equipe DP"} <small>{activityLabel(activity)}</small></strong><p>{activityDetails(activity)[0] || "Registro atualizado na operação."}</p></div><time>{formatMoment(activity.createdAt)}</time></article>)}
+        {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
+      </div></section>
+    </div>
+  </div>;
+}
+
+function MemberCompanyAccess({ member, companies, busy, onSave }: { member: WorkspaceSnapshot["members"][number]; companies: WorkspaceSnapshot["companies"]; busy: boolean; onSave: (userId: string, companyIds: string[]) => Promise<void> }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>(member.companyIds);
+  if (member.role === "admin") return <span className="member-company-summary">Todas as empresas</span>;
+  return <details className="member-company-access"><summary>{selectedIds.length ? `${selectedIds.length} empresa(s) liberada(s)` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
+}
+
+function ProcessBoardsView({ boards, activeBoardId, busy, isAdmin, onOpen, onCreate }: { boards: WorkspaceSnapshot["boards"]; activeBoardId: string; busy: boolean; isAdmin: boolean; onOpen: (boardId: string) => Promise<void>; onCreate: (payload: { name: string; description: string; columns: string[] }) => Promise<WorkspaceSnapshot | null> }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [stages, setStages] = useState("Recebimento da demanda\nEm execução\nConcluído");
+  const [formError, setFormError] = useState("");
+  const processBoards = boards.filter((board) => board.boardType === "process");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const columns = stages.split("\n").map((stage) => stage.trim()).filter(Boolean);
+    if (columns.length < 2) {
+      setFormError("Informe pelo menos duas etapas: uma inicial e uma de conclusão.");
+      return;
+    }
+    setFormError("");
+    const result = await onCreate({ name: name.trim(), description: description.trim(), columns });
+    if (result) {
+      setName("");
+      setDescription("");
+      setStages("Recebimento da demanda\nEm execução\nConcluído");
+    }
+  }
+
+  return <div className="process-management-view">
+    <section className="process-management-intro">
+      <span className="process-management-icon"><ListChecks aria-hidden="true" /></span>
+      <div><span>FLUXOS INDEPENDENTES</span><h2>Cada demanda segue o processo correto</h2><p>Crie um fluxo para admissão, rescisão, férias ou qualquer rotina do DP. As colunas e a movimentação da demanda ficam restritas ao processo escolhido.</p></div>
+      <b>{processBoards.length} processo(s)</b>
+    </section>
+
+    <section className="process-board-catalog">
+      <header><div><span>PROCESSOS CADASTRADOS</span><h2>Fluxos da operação</h2><p>Abra um processo para visualizar apenas as demandas e as etapas dele.</p></div></header>
+      {processBoards.length === 0 && <div className="process-empty-state"><ListChecks aria-hidden="true" /><strong>Nenhum processo criado ainda</strong><p>Comece com o fluxo de Admissão, Rescisão ou Férias. Você define as colunas que cada demanda deverá percorrer.</p></div>}
+      <div className="process-board-grid">
+        {processBoards.map((board) => <article className={board.id === activeBoardId ? "active" : ""} key={board.id}>
+          <header><div><span>{board.id === activeBoardId ? "PROCESSO ATIVO" : "PROCESSO DE DP"}</span><h3>{board.name}</h3></div><b>{board.stages.length} etapas</b></header>
+          <p>{board.description || "Fluxo personalizado para a rotina do Departamento Pessoal."}</p>
+          <ol className="process-stage-flow">{board.stages.map((stage, index) => <li key={stage.id}><i>{index + 1}</i><span>{stage.name}</span><small>{stage.slaBehavior === "completed" ? "Conclui" : stage.slaBehavior === "paused" ? "SLA pausado" : "Em andamento"}</small></li>)}</ol>
+          <button className="secondary-button" disabled={busy} onClick={() => void onOpen(board.id)}>{board.id === activeBoardId ? "Abrir quadro do processo" : "Abrir processo"}<ArrowRight aria-hidden="true" /></button>
+        </article>)}
+      </div>
+    </section>
+
+    {isAdmin && <section className="process-create-panel">
+      <header><div><span>NOVO PROCESSO</span><h2>Montar fluxo de demanda</h2><p>A primeira etapa recebe novas demandas. A última etapa conclui automaticamente o SLA.</p></div></header>
+      <form onSubmit={(event) => void submit(event)}>
+        <label>Nome do processo<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Admissão" maxLength={80} disabled={busy} required /></label>
+        <label>Descrição opcional<input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Contratação de novos colaboradores" maxLength={300} disabled={busy} /></label>
+        <label className="process-stages-field">Etapas do processo<textarea value={stages} onChange={(event) => setStages(event.target.value)} rows={6} placeholder={"Recebimento da demanda\nValidação dos documentos\nConclusão"} disabled={busy} required /><small>Uma etapa por linha. Você poderá editar, reordenar ou incluir colunas nas configurações do processo.</small></label>
+        {formError && <p className="process-form-error" role="alert">{formError}</p>}
+        <button className="primary-button" disabled={busy}><Plus aria-hidden="true" /> Criar processo</button>
+      </form>
+    </section>}
+  </div>;
 }
 
 function ProcessTablesView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
@@ -862,13 +1460,122 @@ function ProcessTablesView({ cards, lists, onOpen }: { cards: Card[]; lists: Wor
   return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>FLUXO ESPECÍFICO</span><strong>{process}</strong></div><b>{grouped[process].length} demanda(s)</b></header><DemandTableView cards={grouped[process]} lists={lists} onOpen={onOpen} /></section>)}</div>;
 }
 
-function CompaniesView({ companies, metrics, busy, canEdit, onCreateCompany, onDeleteCompany, onSaveMetric }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; busy: boolean; canEdit: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => Promise<WorkspaceSnapshot | null>; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null> }) {
+function CompanySettings({ companies, members, busy, onCreateCompany, onDeleteCompany, onOpenAccess }: { companies: WorkspaceSnapshot["companies"]; members: WorkspaceSnapshot["members"]; busy: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onOpenAccess: () => void }) {
+  const [showForm, setShowForm] = useState(false);
+  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
+  const principalCompanies = companies.filter((company) => company.isPrincipal);
+  const orderedCompanies = [...companies].sort((a, b) => Number(b.isPrincipal) - Number(a.isPrincipal) || (companyName.get(a.parentCompanyId ?? "") ?? "").localeCompare(companyName.get(b.parentCompanyId ?? "") ?? "") || (a.tradeName || a.legalName).localeCompare(b.tradeName || b.legalName));
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const result = await onCreateCompany({ legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"), externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"), companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId") });
+    if (result) { event.currentTarget.reset(); setShowForm(false); }
+  }
+
+  return <div className="company-settings-view">
+    <section className="company-settings-intro">
+      <span><Building2 aria-hidden="true" /></span><div><strong>Empresas do grupo</strong><p>Cadastre a empresa principal e os CNPJs vinculados. Esses cadastros ficam disponíveis para demandas, folha, permissões e integrações.</p></div><b>{companies.length} empresa(s)</b>
+    </section>
+    <section className="company-settings-access"><div><strong>Controle de acesso por empresa</strong><p>Após cadastrar um CNPJ, escolha quais usuários poderão consultar ou operar demandas daquela empresa.</p></div><button className="secondary-button" onClick={onOpenAccess}><Users aria-hidden="true" /> Gerenciar usuários e acessos</button></section>
+    <section className="company-settings-catalog">
+      <header><div><strong>Cadastros do grupo</strong><span>CNPJ, estrutura societária, contato e código externo para Sankhya.</span></div><button className="primary-button" disabled={busy} onClick={() => setShowForm((current) => !current)}><Plus aria-hidden="true" /> {showForm ? "Fechar cadastro" : "Cadastrar empresa"}</button></header>
+      {showForm && <form className="company-settings-form" onSubmit={submit}>
+        <label>Tipo<select name="companyType" defaultValue={companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"} disabled={busy}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label>
+        <label>Empresa principal<select name="parentCompanyId" defaultValue="" disabled={busy}><option value="">Vincular à principal automaticamente</option>{principalCompanies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
+        <label>Razão social<input name="legalName" placeholder="Empresa Exemplo Ltda." maxLength={160} required disabled={busy} /></label>
+        <label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" maxLength={160} disabled={busy} /></label>
+        <label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" maxLength={30} disabled={busy} /></label>
+        <label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" maxLength={80} disabled={busy} /></label>
+        <label>E-mail<input type="email" name="email" maxLength={160} disabled={busy} /></label>
+        <label>Telefone<input name="phone" maxLength={40} disabled={busy} /></label>
+        <button className="primary-button" disabled={busy}>Salvar empresa</button>
+      </form>}
+      <div className="company-settings-list">
+        {orderedCompanies.length === 0 && <div className="empty-view"><span><Building2 aria-hidden="true" /></span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a empresa principal para estruturar o grupo e liberar acessos.</p></div>}
+        {orderedCompanies.map((company) => {
+          const allowedMembers = members.filter((member) => member.role === "admin" || member.companyIds.includes(company.id)).length;
+          return <article className={company.isPrincipal ? "principal" : "subsidiary"} key={company.id}><i>{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} · {company.taxId || "CNPJ não informado"}</small></div><span><small>Usuários com acesso</small><b>{allowedMembers}</b></span><span><small>Sankhya</small><b>{company.externalCode || "Não vinculado"}</b></span><button className="danger-link" type="button" disabled={busy} onClick={() => onDeleteCompany(company.id, company.legalName)}>Excluir</button></article>;
+        })}
+      </div>
+    </section>
+  </div>;
+}
+
+function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; busy: boolean; canEdit: boolean; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null> }) {
+  const currentPeriod = new Date().toISOString().slice(0, 7);
+  const [selectedPeriod, setSelectedPeriod] = useState(currentPeriod);
+  const [form, setForm] = useState({
+    companyId: companies.find((company) => company.status === "active")?.id ?? "", period: currentPeriod,
+    headcountStart: "0", headcountEnd: "0", leavesCount: "0", admissions: "0", voluntaryTerminations: "0", involuntaryTerminations: "0",
+    baseSalary: "0", variablePay: "0", overtimePay: "0", additionalPay: "0", vacationPay: "0", thirteenthPay: "0", terminationPay: "0",
+    employeeInss: "0", employeeIrrf: "0", employeeOtherDeductions: "0",
+    employerInss: "0", ratContribution: "0", thirdPartyContributions: "0", fgts: "0", fgtsPenalty: "0",
+    benefitsCost: "0", provisionsCost: "0", otherCosts: "0", notes: "",
+  });
+  const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
+  const periods = [...new Set([currentPeriod, ...metrics.map((metric) => metric.period)])].sort((a, b) => b.localeCompare(a));
+  const selectedMetrics = metrics.filter((metric) => metric.period === selectedPeriod);
+  const toNumber = (value: string | number) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
+  const totalCost = selectedMetrics.reduce((total, metric) => total + metric.payrollCost, 0);
+  const totalHeadcount = selectedMetrics.reduce((total, metric) => total + metric.headcount, 0);
+  const totalAdmissions = selectedMetrics.reduce((total, metric) => total + metric.admissions, 0);
+  const totalTerminations = selectedMetrics.reduce((total, metric) => total + metric.terminations, 0);
+  const turnover = totalHeadcount ? ((totalAdmissions + totalTerminations) / 2 / totalHeadcount) * 100 : 0;
+  const costPerEmployee = totalHeadcount ? totalCost / totalHeadcount : 0;
+  const componentTotals = [
+    { label: "Remuneração bruta", value: selectedMetrics.reduce((total, metric) => total + metric.grossPayroll, 0), color: "#62D5B2" },
+    { label: "Encargos", value: selectedMetrics.reduce((total, metric) => total + metric.employerCharges, 0), color: "#73b8ff" },
+    { label: "Benefícios", value: selectedMetrics.reduce((total, metric) => total + metric.benefitsCost, 0), color: "#b99cff" },
+    { label: "Provisões e outros", value: selectedMetrics.reduce((total, metric) => total + metric.provisionsCost + metric.otherCosts, 0), color: "#F4A261" },
+  ];
+  const formHeadcount = (toNumber(form.headcountStart) + toNumber(form.headcountEnd)) / 2;
+  const formTerminations = toNumber(form.voluntaryTerminations) + toNumber(form.involuntaryTerminations);
+  const formGrossPayroll = toNumber(form.baseSalary) + toNumber(form.variablePay) + toNumber(form.overtimePay) + toNumber(form.additionalPay) + toNumber(form.vacationPay) + toNumber(form.thirteenthPay) + toNumber(form.terminationPay);
+  const formDeductions = toNumber(form.employeeInss) + toNumber(form.employeeIrrf) + toNumber(form.employeeOtherDeductions);
+  const formNetPay = Math.max(0, formGrossPayroll - formDeductions);
+  const formEmployerCharges = toNumber(form.employerInss) + toNumber(form.ratContribution) + toNumber(form.thirdPartyContributions) + toNumber(form.fgts) + toNumber(form.fgtsPenalty);
+  const formTotal = formGrossPayroll + formEmployerCharges + toNumber(form.benefitsCost) + toNumber(form.provisionsCost) + toNumber(form.otherCosts);
+  const expectedHeadcount = Math.max(0, toNumber(form.headcountStart) + toNumber(form.admissions) - formTerminations);
+  const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  type NumericFormKey = Exclude<keyof typeof form, "companyId" | "period" | "notes">;
+  const numericField = (label: string, key: NumericFormKey, step = "1") => <label key={key}>{label}<input type="number" min="0" step={step} value={form[key]} disabled={busy} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const result = await onSaveMetric({ ...form, headcount: formHeadcount, terminations: formTerminations, grossPayroll: formGrossPayroll, employerCharges: formEmployerCharges, netPay: formNetPay, payrollCost: formTotal, source: "manual" });
+    if (result) setForm((current) => ({ ...current, headcountStart: "0", headcountEnd: "0", leavesCount: "0", admissions: "0", voluntaryTerminations: "0", involuntaryTerminations: "0", baseSalary: "0", variablePay: "0", overtimePay: "0", additionalPay: "0", vacationPay: "0", thirteenthPay: "0", terminationPay: "0", employeeInss: "0", employeeIrrf: "0", employeeOtherDeductions: "0", employerInss: "0", ratContribution: "0", thirdPartyContributions: "0", fgts: "0", fgtsPenalty: "0", benefitsCost: "0", provisionsCost: "0", otherCosts: "0", notes: "" }));
+  }
+
+  return <div className="payroll-view">
+    <section className="payroll-toolbar"><div><span>COMPETÊNCIA</span><h2>Painel consolidado da folha</h2><p>Os indicadores são recalculados automaticamente a cada lançamento ou sincronização do Sankhya.</p></div><label>Período<select value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)}>{periods.map((period) => <option key={period}>{period}</option>)}</select></label></section>
+    <section className="payroll-kpi-grid"><article><WalletCards aria-hidden="true" /><span>Custo total da folha</span><strong>{money(totalCost)}</strong><small>{selectedMetrics.length} empresa(s) com competência</small></article><article><Users aria-hidden="true" /><span>Headcount médio</span><strong>{totalHeadcount}</strong><small>{totalAdmissions} admissões · {totalTerminations} desligamentos</small></article><article><BarChart3 aria-hidden="true" /><span>Turnover</span><strong>{turnover.toFixed(2)}%</strong><small>Movimentação ÷ headcount médio</small></article><article><Building2 aria-hidden="true" /><span>Custo por colaborador</span><strong>{money(costPerEmployee)}</strong><small>Baseado no headcount médio</small></article></section>
+    <div className="payroll-layout">
+      <section className="payroll-composition"><header><div><strong>Composição do custo</strong><span>Distribuição da competência selecionada</span></div><b>{money(totalCost)}</b></header><div className="payroll-bars">{componentTotals.map((item) => <div key={item.label}><span><strong>{item.label}</strong><small>{money(item.value)}</small></span><i><b style={{ width: `${totalCost ? Math.min(100, (item.value / totalCost) * 100) : 0}%`, backgroundColor: item.color }} /></i></div>)}</div></section>
+      <section className="payroll-company-breakdown"><header><div><strong>Folha por empresa</strong><span>{selectedMetrics.length} lançamento(s) em {selectedPeriod}</span></div></header>{selectedMetrics.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Sem lançamentos nesta competência</strong><p>Registre os dados da folha para gerar os indicadores automaticamente.</p></div>}{selectedMetrics.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.headcount} colaboradores · {metric.admissions} admissões · {metric.terminations} desligamentos · líquido {money(metric.netPay)}</small></div><span>{money(metric.payrollCost)}</span><b>{metric.source === "sankhya" ? "Sankhya" : "Manual"}</b></article>)}</section>
+    </div>
+    {canEdit && <section className="payroll-entry-panel"><header><div><span>NOVO LANÇAMENTO</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou ERP. O sistema consolida custos e indicadores, sem aplicar alíquotas legais por conta própria.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
+      <label>Empresa<select value={form.companyId} required disabled={busy} onChange={(event) => setForm({ ...form, companyId: event.target.value })}><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
+      <label>Competência<input type="month" value={form.period} required disabled={busy} onChange={(event) => setForm({ ...form, period: event.target.value })} /></label>
+      <fieldset className="payroll-form-section"><legend>Pessoas e movimentação</legend>{numericField("Headcount no início", "headcountStart")}{numericField("Headcount no fim", "headcountEnd")}{numericField("Afastados no período", "leavesCount")}{numericField("Admissões", "admissions")}{numericField("Desligamentos voluntários", "voluntaryTerminations")}{numericField("Desligamentos involuntários", "involuntaryTerminations")}<p>Headcount médio: <strong>{formHeadcount.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</strong> · encerramento esperado: <strong>{expectedHeadcount.toLocaleString("pt-BR")}</strong></p></fieldset>
+      <fieldset className="payroll-form-section"><legend>Proventos da competência</legend>{numericField("Salário-base", "baseSalary", "0.01")}{numericField("Variáveis / comissões", "variablePay", "0.01")}{numericField("Horas extras", "overtimePay", "0.01")}{numericField("Adicionais", "additionalPay", "0.01")}{numericField("Férias + 1/3", "vacationPay", "0.01")}{numericField("13º salário", "thirteenthPay", "0.01")}{numericField("Verbas rescisórias", "terminationPay", "0.01")}<p>Remuneração bruta calculada: <strong>{money(formGrossPayroll)}</strong></p></fieldset>
+      <fieldset className="payroll-form-section"><legend>Descontos do colaborador</legend>{numericField("INSS do colaborador", "employeeInss", "0.01")}{numericField("IRRF", "employeeIrrf", "0.01")}{numericField("Outros descontos", "employeeOtherDeductions", "0.01")}<p>Descontos: <strong>{money(formDeductions)}</strong> · líquido calculado: <strong>{money(formNetPay)}</strong></p></fieldset>
+      <fieldset className="payroll-form-section"><legend>Encargos do empregador</legend>{numericField("INSS patronal", "employerInss", "0.01")}{numericField("RAT", "ratContribution", "0.01")}{numericField("Terceiros", "thirdPartyContributions", "0.01")}{numericField("FGTS", "fgts", "0.01")}{numericField("Multa de FGTS", "fgtsPenalty", "0.01")}<p>Encargos patronais calculados: <strong>{money(formEmployerCharges)}</strong></p></fieldset>
+      <fieldset className="payroll-form-section"><legend>Custos complementares</legend>{numericField("Benefícios", "benefitsCost", "0.01")}{numericField("Provisões", "provisionsCost", "0.01")}{numericField("Outros custos", "otherCosts", "0.01")}<p>Use provisões para férias, 13º e demais ajustes que sua operação acompanhar separadamente.</p></fieldset>
+      <div className="payroll-live-totals" aria-live="polite"><span>Bruto<strong>{money(formGrossPayroll)}</strong></span><span>Descontos<strong>{money(formDeductions)}</strong></span><span>Líquido<strong>{money(formNetPay)}</strong></span><span>Encargos<strong>{money(formEmployerCharges)}</strong></span><span>Custo total<strong>{money(formTotal)}</strong></span></div>
+      <label className="wide">Observações<textarea rows={3} maxLength={500} value={form.notes} disabled={busy} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Ex.: ajuste de competência, acordo coletivo ou variação relevante" /></label><button className="primary-button" disabled={busy || !form.companyId}><WalletCards aria-hidden="true" /> Salvar e atualizar painel</button>
+    </form></section>}
+  </div>;
+}
+
+export function LegacyCompaniesView({ companies, metrics, cards, busy, canEdit, onCreateCompany, onDeleteCompany, onSaveMetric, onOpenCard }: { companies: WorkspaceSnapshot["companies"]; metrics: WorkspaceSnapshot["hrMetrics"]; cards: Card[]; busy: boolean; canEdit: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onSaveMetric: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onOpenCard: (card: Card) => void }) {
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [showMetricForm, setShowMetricForm] = useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
   async function submitCompany(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const result = await onCreateCompany({ legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"), externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone") });
+    const result = await onCreateCompany({ legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"), externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"), companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId") });
     if (result) { event.currentTarget.reset(); setShowCompanyForm(false); }
   }
   async function submitMetric(event: FormEvent<HTMLFormElement>) {
@@ -878,8 +1585,25 @@ function CompaniesView({ companies, metrics, busy, canEdit, onCreateCompany, onD
     if (result) { event.currentTarget.reset(); setShowMetricForm(false); }
   }
   const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
+  const principalCompanies = companies.filter((company) => company.isPrincipal);
+  const subsidiaryCompanies = companies.filter((company) => !company.isPrincipal).sort((a, b) => (companyName.get(a.parentCompanyId ?? "") ?? "").localeCompare(companyName.get(b.parentCompanyId ?? "") ?? "") || (a.tradeName || a.legalName).localeCompare(b.tradeName || b.legalName));
+  const orderedCompanies = [...principalCompanies, ...subsidiaryCompanies];
   const latest = metrics.slice(0, 12);
-  return <div className="companies-view"><div className="companies-actions">{canEdit && <><button className="primary-button" onClick={() => setShowCompanyForm((value) => !value)}>＋ Cadastrar empresa</button><button className="secondary-button" onClick={() => setShowMetricForm((value) => !value)}>＋ Registrar folha</button></>}</div>{showCompanyForm && <form className="company-form catalog-card" onSubmit={submitCompany}><header><div><strong>Cadastro de empresa</strong><span>Use o código externo para vincular ao Sankhya.</span></div></header><div className="catalog-form"><label>Razão social<input name="legalName" required placeholder="Empresa Exemplo Ltda." /></label><label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" /></label><label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" /></label><label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" /></label><label>E-mail<input type="email" name="email" /></label><label>Telefone<input name="phone" /></label><button className="primary-button" disabled={busy}>Salvar empresa</button></div></form>}{showMetricForm && <form className="metric-form catalog-card" onSubmit={submitMetric}><header><div><strong>Registrar custo e movimentação da folha</strong><span>Turnover = (admissões + desligamentos) ÷ 2 ÷ headcount médio.</span></div></header><div className="catalog-form"><label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Competência<input type="month" name="period" required defaultValue={new Date().toISOString().slice(0, 7)} /></label><label>Headcount<input type="number" name="headcount" min="0" defaultValue="0" /></label><label>Admissões<input type="number" name="admissions" min="0" defaultValue="0" /></label><label>Desligamentos<input type="number" name="terminations" min="0" defaultValue="0" /></label><label>Custo da folha<input type="number" name="payrollCost" min="0" step="0.01" defaultValue="0" /></label><button className="primary-button" disabled={busy || companies.length === 0}>Salvar competência</button></div></form>}<section className="companies-list catalog-card"><header><div><strong>Empresas cadastradas</strong><span>{companies.length} empresa(s) • vínculo para demandas e indicadores</span></div></header>{companies.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a primeira empresa para registrar a folha.</p></div>}{companies.map((company) => <article key={company.id}><div><strong>{company.tradeName || company.legalName}</strong><small>{company.taxId || "CNPJ não informado"} • {company.externalCode || "Sem código Sankhya"}</small></div><span>{company.email || company.phone || "Sem contato"}</span>{canEdit && <button disabled={busy} onClick={() => void onDeleteCompany(company.id, company.legalName)}>Excluir</button>}</article>)}</section><section className="metrics-list catalog-card"><header><div><strong>Histórico de folha</strong><span>{metrics.length} competência(s) registrada(s)</span></div></header>{latest.length === 0 && <div className="empty-view"><span>◷</span><strong>Nenhum indicador de folha</strong><p>Registre uma competência ou conecte o Sankhya.</p></div>}{latest.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.period} • origem {metric.source}</small></div><span>{metric.headcount} colaboradores</span><span>{metric.admissions} admissões / {metric.terminations} desligamentos</span><b>{metric.payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b></article>)}</section></div>;
+  const activeCompanies = companies.filter((company) => company.status === "active").length;
+  const payrollTotal = latest.reduce((total, metric) => total + metric.payrollCost, 0);
+  const selectedCompany = companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null;
+  const companyCards = selectedCompany ? cards.filter((card) => card.companyId === selectedCompany.id) : [];
+  const companyDocumentPending = companyCards.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0);
+  const companyMetrics = selectedCompany ? metrics.filter((metric) => metric.companyId === selectedCompany.id).sort((a, b) => b.period.localeCompare(a.period)) : [];
+  return <div className="companies-view">
+    <div className="companies-toolbar"><div><strong>Grupo empresarial</strong><span>Defina a empresa principal e cadastre os CNPJs do grupo para demandas, folha e indicadores.</span></div><div className="companies-actions">{canEdit && <><button className="primary-button" onClick={() => setShowCompanyForm((value) => !value)}><Plus aria-hidden="true" /> Cadastrar empresa</button><button className="secondary-button" onClick={() => setShowMetricForm((value) => !value)}><WalletCards aria-hidden="true" /> Registrar folha</button></>}</div></div>
+    <div className="companies-overview"><article><Building2 aria-hidden="true" /><div><strong>{activeCompanies}</strong><span>Empresas ativas</span></div></article><article><CalendarClock aria-hidden="true" /><div><strong>{metrics.length}</strong><span>Competências registradas</span></div></article><article><WalletCards aria-hidden="true" /><div><strong>{payrollTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Folha nos registros recentes</span></div></article></div>
+    {selectedCompany && <section className="company-profile-card"><header><div><span>{selectedCompany.isPrincipal ? "EMPRESA PRINCIPAL DO GRUPO" : "EMPRESA DO GRUPO"}</span><h2>{selectedCompany.tradeName || selectedCompany.legalName}</h2><p>{selectedCompany.legalName}</p></div><em className={selectedCompany.status}>{selectedCompany.status === "active" ? "Ativa" : "Inativa"}</em></header><div className="company-profile-data"><div><span>Estrutura</span><strong>{selectedCompany.isPrincipal ? "Empresa principal" : companyName.get(selectedCompany.parentCompanyId ?? "") || "Grupo principal"}</strong></div><div><span>CNPJ</span><strong>{selectedCompany.taxId || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedCompany.email || selectedCompany.phone || "Não informado"}</strong></div><div><span>Código Sankhya</span><strong>{selectedCompany.externalCode || "Não vinculado"}</strong></div><div><span>Demandas abertas</span><strong>{companyCards.filter((card) => card.slaStatus !== "completed").length}</strong></div><div><span>Documentos pendentes</span><strong>{companyDocumentPending}</strong></div><div><span>Última folha</span><strong>{companyMetrics[0] ? companyMetrics[0].payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Sem registro"}</strong></div></div><div className="company-profile-demands"><strong>Demandas relacionadas</strong>{companyCards.slice(0, 4).map((card) => <button key={card.id} onClick={() => onOpenCard(card)}><i className={card.slaStatus} /><span>{card.title}<small>{card.processType} • {slaLabel(card)}</small></span><ArrowRight aria-hidden="true" /></button>)}{companyCards.length === 0 && <p>Não há demandas vinculadas a esta empresa.</p>}</div></section>}
+    {showCompanyForm && <form className="company-form catalog-card" onSubmit={submitCompany}><header><div><strong>Cadastro no grupo empresarial</strong><span>A primeira empresa será definida como principal. As demais podem ser vinculadas a ela.</span></div></header><div className="catalog-form"><label>Tipo<select name="companyType" defaultValue={companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label><label>Empresa principal<select name="parentCompanyId" defaultValue=""><option value="">Vincular à principal automaticamente</option>{principalCompanies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Razão social<input name="legalName" required placeholder="Empresa Exemplo Ltda." /></label><label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" /></label><label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" /></label><label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" /></label><label>E-mail<input type="email" name="email" /></label><label>Telefone<input name="phone" /></label><button className="primary-button" disabled={busy}>Salvar empresa</button></div></form>}
+    {showMetricForm && <form className="metric-form catalog-card" onSubmit={submitMetric}><header><div><strong>Registrar custo e movimentação da folha</strong><span>Turnover = (admissões + desligamentos) ÷ 2 ÷ headcount médio.</span></div></header><div className="catalog-form"><label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Competência<input type="month" name="period" required defaultValue={new Date().toISOString().slice(0, 7)} /></label><label>Headcount<input type="number" name="headcount" min="0" defaultValue="0" /></label><label>Admissões<input type="number" name="admissions" min="0" defaultValue="0" /></label><label>Desligamentos<input type="number" name="terminations" min="0" defaultValue="0" /></label><label>Custo da folha<input type="number" name="payrollCost" min="0" step="0.01" defaultValue="0" /></label><button className="primary-button" disabled={busy || companies.length === 0}>Salvar competência</button></div></form>}
+    <section className="companies-list catalog-card"><header><div><strong>Empresas do grupo</strong><span>{companies.length} empresa(s) • vínculo para demandas e indicadores</span></div></header>{companies.length === 0 && <div className="empty-view"><span><Building2 aria-hidden="true" /></span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a empresa principal do grupo para começar.</p></div>}{orderedCompanies.map((company) => <article className={`${selectedCompany?.id === company.id ? "selected" : ""}${company.isPrincipal ? " principal" : " subsidiary"}`} key={company.id} tabIndex={0} role="button" onClick={() => setSelectedCompanyId(company.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedCompanyId(company.id); }}><i aria-hidden="true">{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} • {company.taxId || "CNPJ não informado"}</small></div><span>{company.email || company.phone || "Sem contato"}</span>{canEdit && <button disabled={busy} onClick={(event) => { event.stopPropagation(); void onDeleteCompany(company.id, company.legalName); }} aria-label={`Excluir ${company.tradeName || company.legalName}`}><Trash2 aria-hidden="true" /><span>Excluir</span></button>}</article>)}</section>
+    <section className="metrics-list catalog-card"><header><div><strong>Histórico de folha</strong><span>{metrics.length} competência(s) registrada(s)</span></div></header>{latest.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Nenhum indicador de folha</strong><p>Registre uma competência ou conecte o Sankhya.</p></div>}{latest.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.period} • origem {metric.source}</small></div><span>{metric.headcount} colaboradores</span><span>{metric.admissions} admissões / {metric.terminations} desligamentos</span><b>{metric.payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</b></article>)}</section>
+  </div>;
 }
 
 function DemandTableView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
@@ -923,7 +1647,49 @@ function DemandCalendarView({ cards, onOpen }: { cards: Card[]; onOpen: (card: C
   );
 }
 
-function FieldsSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler }) {
+function ListsSettings({ snapshot, busy, isAdmin, onMutate, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onMutate: SnapshotMutation; onConfirm: ConfirmHandler }) {
+  const [deleteTargets, setDeleteTargets] = useState<Record<string, string>>({});
+  const lists = [...snapshot.lists].sort((a, b) => a.position - b.position);
+  const behaviorLabel: Record<string, string> = { running: "SLA em andamento", paused: "SLA pausado", completed: "SLA concluído" };
+
+  async function createList(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const next = await onMutate("/api/lists", { method: "POST", body: JSON.stringify({ boardId: snapshot.board.id, name: data.get("name"), slaBehavior: data.get("slaBehavior") }) }, "Coluna criada no quadro.");
+    if (next) form.reset();
+  }
+
+  async function saveList(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    await onMutate(`/api/lists/${id}`, { method: "PATCH", body: JSON.stringify({ name: data.get("name"), slaBehavior: data.get("slaBehavior") }) }, "Coluna atualizada.");
+  }
+
+  async function reorder(listId: string, direction: -1 | 1) {
+    const index = lists.findIndex((list) => list.id === listId);
+    const neighbour = lists[index + direction];
+    const current = lists[index];
+    if (!current || !neighbour) return;
+    const first = await onMutate(`/api/lists/${current.id}`, { method: "PATCH", body: JSON.stringify({ position: neighbour.position }) }, "Ordem da coluna atualizada.");
+    if (first) await onMutate(`/api/lists/${neighbour.id}`, { method: "PATCH", body: JSON.stringify({ position: current.position }) });
+  }
+
+  function removeList(listId: string, listName: string, cards: number) {
+    const moveToListId = deleteTargets[listId] ?? "";
+    if (cards > 0 && !moveToListId) return;
+    onConfirm({
+      title: "Excluir coluna?",
+      description: cards > 0 ? `${cards} demanda(s) serão transferidas para a coluna selecionada antes da exclusão.` : `A coluna “${listName}” será removida do quadro.`,
+      confirmLabel: "Excluir coluna",
+      action: () => onMutate(`/api/lists/${listId}`, { method: "DELETE", body: cards > 0 ? JSON.stringify({ moveToListId }) : undefined }, "Coluna excluída com segurança."),
+    });
+  }
+
+  return <div className="settings-stack"><section className="catalog-section list-manager"><header><div><strong>Colunas do quadro</strong><span>Renomeie, ordene, controle o SLA e mova demandas com segurança antes de excluir.</span></div><b>{lists.length}</b></header><div className="list-manager-items">{lists.map((list, index) => <form key={list.id} onSubmit={(event) => void saveList(event, list.id)}><div className="list-order-controls"><button type="button" disabled={!isAdmin || busy || index === 0} onClick={() => void reorder(list.id, -1)} aria-label={`Mover ${list.name} para a esquerda`}>↑</button><button type="button" disabled={!isAdmin || busy || index === lists.length - 1} onClick={() => void reorder(list.id, 1)} aria-label={`Mover ${list.name} para a direita`}>↓</button></div><label>Nome<input name="name" defaultValue={list.name} maxLength={80} disabled={!isAdmin || busy} required /></label><label>SLA<select name="slaBehavior" defaultValue={list.slaBehavior} disabled={!isAdmin || busy}><option value="running">Em andamento</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label><small>{list.cards.length} demanda(s) · {behaviorLabel[list.slaBehavior]}</small>{isAdmin && <><button className="secondary-button" disabled={busy}>Salvar</button>{list.cards.length > 0 && <label className="list-transfer">Mover para<select value={deleteTargets[list.id] ?? ""} disabled={busy} onChange={(event) => setDeleteTargets((current) => ({ ...current, [list.id]: event.target.value }))}><option value="">Escolha antes de excluir</option>{lists.filter((target) => target.id !== list.id).map((target) => <option value={target.id} key={target.id}>{target.name}</option>)}</select></label>}<button type="button" className="danger-link list-delete" disabled={busy || (list.cards.length > 0 && !deleteTargets[list.id])} onClick={() => removeList(list.id, list.name, list.cards.length)}>Excluir</button></>}</form>)}</div></section>{isAdmin && <section className="catalog-section"><header><div><strong>Nova coluna</strong><span>Use uma coluna com SLA pausado apenas quando houver uma justificativa operacional.</span></div></header><form className="catalog-form list-create-form" onSubmit={createList}><label>Nome da coluna<input name="name" placeholder="Ex.: Aguardando aprovação" maxLength={80} required /></label><label>Comportamento do SLA<select name="slaBehavior" defaultValue="running"><option value="running">Em andamento</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label><button className="primary-button" disabled={busy}>Criar coluna</button></form></section>}</div>;
+}
+
+function FieldsSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler }) {
   async function createLabel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -938,11 +1704,27 @@ function FieldsSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: Work
     const next = await onCatalog({ resource: "field", name: data.get("name"), fieldKey: data.get("fieldKey"), fieldType: data.get("fieldType"), required: data.get("required") === "on", options: String(data.get("options") ?? "").split(",").map((item) => item.trim()).filter(Boolean) }, "Campo personalizado criado.");
     if (next) form.reset();
   }
-  return <div className="settings-stack"><section className="catalog-section"><header><div><strong>Etiquetas operacionais</strong><span>Cores para urgência, área ou classificação complementar.</span></div><b>{snapshot.labels.length}</b></header><div className="label-catalog">{snapshot.labels.map((label) => <article key={label.id}><i style={{ backgroundColor: label.color }} /><strong>{label.name}</strong>{isAdmin && <button disabled={busy} onClick={() => { if (window.confirm(`Excluir a etiqueta “${label.name}”?`)) void onCatalog({ resource: "label", operation: "delete", id: label.id }, "Etiqueta excluída."); }} aria-label={`Excluir ${label.name}`}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form compact" onSubmit={createLabel}><label>Nome<input name="name" maxLength={40} placeholder="Ex.: Urgente" required /></label><label>Cor<select name="color" defaultValue="#dc2626"><option value="#dc2626">Vermelho</option><option value="#ea580c">Laranja</option><option value="#d97706">Amarelo</option><option value="#16a34a">Verde</option><option value="#0891b2">Ciano</option><option value="#2563eb">Azul</option><option value="#7c3aed">Roxo</option><option value="#64748b">Cinza</option></select></label><button className="primary-button" disabled={busy}>Adicionar</button></form>}</section>
-    <section className="catalog-section"><header><div><strong>Campos personalizados</strong><span>Dados estruturados visíveis nos cartões de DP.</span></div><b>{snapshot.customFields.length}</b></header><div className="field-catalog">{snapshot.customFields.map((field) => <article key={field.id}><div><strong>{field.name}{field.required && <em>Obrigatório</em>}</strong><small>{field.fieldKey} • {field.fieldType}{field.options.length ? ` • ${field.options.join(", ")}` : ""}</small></div>{isAdmin && <button disabled={busy} onClick={() => { if (window.confirm(`Excluir o campo “${field.name}”?`)) void onCatalog({ resource: "field", operation: "delete", id: field.id }, "Campo excluído."); }} aria-label={`Excluir ${field.name}`}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form fields-form" onSubmit={createField}><label>Nome<input name="name" placeholder="Ex.: Matrícula" maxLength={60} required /></label><label>Identificador<input name="fieldKey" placeholder="matricula" pattern="[A-Za-z0-9_]+" required /></label><label>Tipo<select name="fieldType" defaultValue="text"><option value="text">Texto</option><option value="number">Número</option><option value="date">Data</option><option value="select">Lista</option></select></label><label className="wide">Opções da lista<input name="options" placeholder="Opção 1, Opção 2" /></label><label className="catalog-check"><input type="checkbox" name="required" /> Obrigatório</label><button className="primary-button" disabled={busy}>Criar campo</button></form>}</section></div>;
+  return (
+    <div className="settings-stack">
+      <section className="catalog-section">
+        <header><div><strong>Etiquetas operacionais</strong><span>Cores para urgência, área ou classificação complementar.</span></div><b>{snapshot.labels.length}</b></header>
+        <div className="label-catalog">
+          {snapshot.labels.map((label) => <article key={label.id}><i style={{ backgroundColor: label.color }} /><strong>{label.name}</strong>{isAdmin && <button disabled={busy} onClick={() => onConfirm({ title: "Excluir etiqueta?", description: `A etiqueta “${label.name}” será removida da operação.`, confirmLabel: "Excluir etiqueta", action: () => onCatalog({ resource: "label", operation: "delete", id: label.id }, "Etiqueta excluída.") })} aria-label={`Excluir ${label.name}`}>×</button>}</article>)}
+        </div>
+        {isAdmin && <form className="catalog-form compact" onSubmit={createLabel}><label>Nome<input name="name" maxLength={40} placeholder="Ex.: Urgente" required /></label><label>Cor<select name="color" defaultValue="#dc2626"><option value="#dc2626">Vermelho</option><option value="#ea580c">Laranja</option><option value="#d97706">Amarelo</option><option value="#16a34a">Verde</option><option value="#0891b2">Ciano</option><option value="#2563eb">Azul</option><option value="#7c3aed">Roxo</option><option value="#64748b">Cinza</option></select></label><button className="primary-button" disabled={busy}>Adicionar</button></form>}
+      </section>
+      <section className="catalog-section">
+        <header><div><strong>Campos personalizados</strong><span>Dados estruturados visíveis nos cartões de DP.</span></div><b>{snapshot.customFields.length}</b></header>
+        <div className="field-catalog">
+          {snapshot.customFields.map((field) => <article key={field.id}><div><strong>{field.name}{field.required && <em>Obrigatório</em>}</strong><small>{field.fieldKey} • {field.fieldType}{field.options.length ? ` • ${field.options.join(", ")}` : ""}</small></div>{isAdmin && <button disabled={busy} onClick={() => onConfirm({ title: "Excluir campo?", description: `O campo “${field.name}” deixará de estar disponível nas demandas.`, confirmLabel: "Excluir campo", action: () => onCatalog({ resource: "field", operation: "delete", id: field.id }, "Campo excluído.") })} aria-label={`Excluir ${field.name}`}>×</button>}</article>)}
+        </div>
+        {isAdmin && <form className="catalog-form fields-form" onSubmit={createField}><label>Nome<input name="name" placeholder="Ex.: Matrícula" maxLength={60} required /></label><label>Identificador<input name="fieldKey" placeholder="matricula" pattern="[A-Za-z0-9_]+" required /></label><label>Tipo<select name="fieldType" defaultValue="text"><option value="text">Texto</option><option value="number">Número</option><option value="date">Data</option><option value="select">Lista</option></select></label><label className="wide">Opções da lista<input name="options" placeholder="Opção 1, Opção 2" /></label><label className="catalog-check"><input type="checkbox" name="required" /> Obrigatório</label><button className="primary-button" disabled={busy}>Criar campo</button></form>}
+      </section>
+    </div>
+  );
 }
 
-function TemplatesSettings({ snapshot, busy, isAdmin, onCatalog, onUseTemplate }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onUseTemplate: (id: string) => void }) {
+function TemplatesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm, onUseTemplate }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler; onUseTemplate: (id: string) => void }) {
   async function createTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -951,7 +1733,17 @@ function TemplatesSettings({ snapshot, busy, isAdmin, onCatalog, onUseTemplate }
     const next = await onCatalog({ resource: "template", name: data.get("name"), processType: data.get("processType"), description: data.get("description"), checklist, defaultSlaDays: Number(data.get("defaultSlaDays")) }, "Template criado.");
     if (next) form.reset();
   }
-  return <div className="settings-stack"><section className="catalog-section"><header><div><strong>Templates de processos</strong><span>Checklists e SLA prontos para iniciar uma demanda sem esquecer etapas.</span></div><b>{snapshot.templates.length}</b></header><div className="template-catalog">{snapshot.templates.map((template) => <article key={template.id}><div><span>{template.processType}</span><strong>{template.name}</strong><small>{template.checklist.length} etapa(s) • SLA de {template.defaultSlaDays} dia(s) útil(eis)</small></div><button onClick={() => onUseTemplate(template.id)}>Usar</button>{isAdmin && <button className="danger" disabled={busy} onClick={() => { if (window.confirm(`Excluir o template “${template.name}”?`)) void onCatalog({ resource: "template", operation: "delete", id: template.id }, "Template excluído."); }}>Excluir</button>}</article>)}</div></section>{isAdmin && <section className="catalog-section"><header><div><strong>Novo template</strong><span>Uma etapa por linha no checklist.</span></div></header><form className="catalog-form template-form" onSubmit={createTemplate}><label>Nome<input name="name" placeholder="Ex.: Admissão completa" required /></label><label>Processo<select name="processType" defaultValue="ADMISSÃO"><option>ADMISSÃO</option><option>FÉRIAS</option><option>RESCISÃO</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label><label>SLA (dias úteis)<input type="number" min="1" max="60" name="defaultSlaDays" defaultValue="3" required /></label><label className="wide">Descrição<textarea name="description" rows={2} placeholder="Orientações para o processo" /></label><label className="wide">Etapas<textarea name="checklist" rows={7} placeholder={'Receber documentos\nValidar cadastro\nConferir informações'} required /></label><button className="primary-button" disabled={busy}>Salvar template</button></form></section>}</div>;
+  return (
+    <div className="settings-stack">
+      <section className="catalog-section">
+        <header><div><strong>Templates de processos</strong><span>Checklists e SLA prontos para iniciar uma demanda sem esquecer etapas.</span></div><b>{snapshot.templates.length}</b></header>
+        <div className="template-catalog">
+          {snapshot.templates.map((template) => <article key={template.id}><div><span>{template.processType}</span><strong>{template.name}</strong><small>{template.checklist.length} etapa(s) • SLA de {template.defaultSlaDays} dia(s) útil(eis)</small></div><button onClick={() => onUseTemplate(template.id)}>Usar</button>{isAdmin && <button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir template?", description: `O template “${template.name}” e seu checklist padrão serão removidos.`, confirmLabel: "Excluir template", action: () => onCatalog({ resource: "template", operation: "delete", id: template.id }, "Template excluído.") })}>Excluir</button>}</article>)}
+        </div>
+      </section>
+      {isAdmin && <section className="catalog-section"><header><div><strong>Novo template</strong><span>Uma etapa por linha no checklist.</span></div></header><form className="catalog-form template-form" onSubmit={createTemplate}><label>Nome<input name="name" placeholder="Ex.: Admissão completa" required /></label><label>Processo<select name="processType" defaultValue="ADMISSÃO"><option>ADMISSÃO</option><option>FÉRIAS</option><option>RESCISÃO</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label><label>SLA (dias úteis)<input type="number" min="1" max="60" name="defaultSlaDays" defaultValue="3" required /></label><label className="wide">Descrição<textarea name="description" rows={2} placeholder="Orientações para o processo" /></label><label className="wide">Etapas<textarea name="checklist" rows={7} placeholder={'Receber documentos\nValidar cadastro\nConferir informações'} required /></label><button className="primary-button" disabled={busy}>Salvar template</button></form></section>}
+    </div>
+  );
 }
 
 function SlaSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler }) {
@@ -974,75 +1766,141 @@ function SlaSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: Workspa
 }
 
 function IntegrationsSettings({ snapshot, busy, isAdmin, onCatalog, onSync }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onSync: (channel: string) => Promise<void> }) {
-  const channelCopy: Record<string, { icon: string; description: string; placeholder: string }> = {
-    email: { icon: "@", description: "Capture e-mails recebidos e transforme-os em itens da Inbox.", placeholder: "dp@empresa.com" },
-    whatsapp: { icon: "W", description: "Receba solicitações via provedor oficial ou intermediador homologado.", placeholder: "Identificador do número/provedor" },
-    teams: { icon: "T", description: "Direcione mensagens de canais ou chats do Teams para triagem. Use um endpoint Graph /teams/.../channels/.../messages ou /chats/.../messages.", placeholder: "Endpoint Graph do canal ou chat" },
-    drive: { icon: "D", description: "Referencie documentos do Google Drive nos processos.", placeholder: "Pasta padrão ou URL" },
-    onedrive: { icon: "O", description: "Referencie documentos do OneDrive nos processos.", placeholder: "Pasta padrão ou URL" },
-    erp: { icon: "E", description: "Sincronize eventos do ERP, custo da folha e indicadores com a Inbox.", placeholder: "Endpoint do Sankhya Gateway" },
+  const channelCopy: Record<string, { icon: string; description: string; placeholder: string; nextStep: string }> = {
+    email: { icon: "@", description: "Capture e-mails recebidos e transforme-os em itens da Inbox.", placeholder: "dp@empresa.com", nextStep: "Informe a caixa ou origem que será consultada e salve a configuração." },
+    whatsapp: { icon: "W", description: "Receba solicitações via provedor oficial ou intermediador homologado.", placeholder: "Identificador do número/provedor", nextStep: "Conecte o provedor homologado e use o webhook para enviar novas mensagens à Inbox." },
+    teams: { icon: "T", description: "Direcione mensagens de canais ou chats do Teams para triagem.", placeholder: "Canal, fluxo ou endpoint Graph", nextStep: "Para Power Automate, mantenha o webhook do Fila DP no fluxo. Para Graph, informe o endpoint do canal ou chat." },
+    drive: { icon: "D", description: "Referencie documentos do Google Drive nos processos.", placeholder: "Pasta padrão ou URL", nextStep: "Defina a pasta padrão ou o endpoint autorizado para os documentos do processo." },
+    onedrive: { icon: "O", description: "Referencie documentos do OneDrive nos processos.", placeholder: "Pasta padrão ou URL", nextStep: "Defina a pasta ou o endpoint Microsoft Graph que será usado na operação." },
+    erp: { icon: "E", description: "Sincronize eventos do ERP, custo da folha e indicadores.", placeholder: "Endpoint do Sankhya Gateway", nextStep: "Salve o endpoint do Sankhya e vincule o código externo de cada empresa cadastrada." },
   };
-  return <div className="settings-stack"><div className="integration-security-note"><i>!</i><div><strong>Conexão segura por credenciais do ambiente</strong><p>Esta tela salva somente endereços e preferências. Tokens, senhas e chaves devem ser adicionados ao cofre seguro da implantação antes de ativar a sincronização real.</p></div></div><div className="integration-grid">{snapshot.integrations.map((integration) => { const copy = channelCopy[integration.channel] ?? { icon: "↗", description: "Integração externa configurável.", placeholder: "Endpoint ou referência" }; return <form key={integration.id} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onCatalog({ resource: "integration", id: integration.id, status: data.get("status"), config: { endpoint: data.get("endpoint"), account: data.get("account") } }, `${integration.displayName} atualizado.`); }}><header><i>{copy.icon}</i><div><strong>{integration.displayName}</strong><span className={integration.status}>{integration.status === "connected" ? "Conectada" : integration.status === "paused" ? "Pausada" : integration.status === "error" ? "Com erro" : "Aguardando credenciais"}</span></div></header><p>{copy.description}</p><label>Conta / origem<input name="account" defaultValue={String(integration.config.account ?? "")} placeholder={copy.placeholder} disabled={!isAdmin || busy} /></label><label>Endpoint ou referência<input name="endpoint" defaultValue={String(integration.config.endpoint ?? "")} placeholder="https://…" disabled={!isAdmin || busy} /></label><label>Operação<select name="status" defaultValue={integration.status === "paused" ? "paused" : "needs_credentials"} disabled={!isAdmin || busy}><option value="needs_credentials">Aguardando credenciais</option><option value="paused">Pausada</option></select></label>{integration.lastError && <small className="integration-error">{integration.lastError}</small>}{isAdmin && <div className="integration-actions"><button className="primary-button" disabled={busy}>Salvar configuração</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void onSync(integration.channel)}>Sincronizar agora</button></div>}</form>; })}</div></div>;
+  const totals = snapshot.integrations.reduce((result, integration) => {
+    result[integration.status] += 1;
+    return result;
+  }, { connected: 0, needs_credentials: 0, paused: 0, error: 0 });
+  const statusLabel = (status: WorkspaceSnapshot["integrations"][number]["status"]) => status === "connected" ? "Conectada" : status === "paused" ? "Pausada" : status === "error" ? "Com erro" : "Aguardando credenciais";
+  const statusIcon = (status: WorkspaceSnapshot["integrations"][number]["status"]) => status === "connected" ? <CheckCircle2 aria-hidden="true" /> : status === "error" ? <CircleAlert aria-hidden="true" /> : <Clock3 aria-hidden="true" />;
+
+  return (
+    <div className="settings-stack">
+      <div className="integration-security-note"><i>!</i><div><strong>Conexão segura por credenciais do ambiente</strong><p>Esta tela salva somente endereços e preferências. Tokens, senhas e chaves devem ser adicionados ao cofre seguro da implantação antes de ativar a sincronização real.</p></div></div>
+      <div className="integration-overview" aria-label="Resumo das integrações"><span><CheckCircle2 aria-hidden="true" />{totals.connected} conectada(s)</span><span><Clock3 aria-hidden="true" />{totals.needs_credentials} em configuração</span>{totals.error > 0 && <span className="error"><CircleAlert aria-hidden="true" />{totals.error} com erro</span>}</div>
+      <div className="integration-grid">
+        {snapshot.integrations.map((integration) => {
+          const copy = channelCopy[integration.channel] ?? { icon: "↗", description: "Integração externa configurável.", placeholder: "Endpoint ou referência", nextStep: "Informe a origem, salve a configuração e teste a sincronização." };
+          const hasSavedReference = Boolean(String(integration.config.account ?? "").trim() || String(integration.config.endpoint ?? "").trim());
+          return <form className={`integration-card ${integration.status}`} key={integration.id} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onCatalog({ resource: "integration", id: integration.id, status: data.get("status"), config: { endpoint: data.get("endpoint"), account: data.get("account") } }, `${integration.displayName} atualizado.`); }}>
+            <header><i>{copy.icon}</i><div><strong>{integration.displayName}</strong><span className={integration.status}>{statusIcon(integration.status)} {statusLabel(integration.status)}</span></div></header>
+            <p>{copy.description}</p>
+            <div className="integration-meta"><span>{integration.lastSyncAt ? `Última sincronização: ${formatMoment(integration.lastSyncAt)}` : "Ainda não sincronizada"}</span><span>{hasSavedReference ? "Origem configurada" : "Origem não informada"}</span></div>
+            <aside className="integration-guide"><Clock3 aria-hidden="true" /><div><strong>Próximo passo</strong><p>{copy.nextStep}</p></div></aside>
+            <label>Conta / origem<input name="account" defaultValue={String(integration.config.account ?? "")} placeholder={copy.placeholder} disabled={!isAdmin || busy} /></label>
+            <label>Endpoint ou referência<input name="endpoint" defaultValue={String(integration.config.endpoint ?? "")} placeholder="https://…" disabled={!isAdmin || busy} /></label>
+            <label>Operação<select name="status" defaultValue={integration.status === "paused" ? "paused" : "needs_credentials"} disabled={!isAdmin || busy}><option value="needs_credentials">Aguardando credenciais</option><option value="paused">Pausada</option></select></label>
+            {integration.lastError && <details className="integration-error"><summary><CircleAlert aria-hidden="true" /> Ver detalhe do erro</summary><p>{integration.lastError}</p></details>}
+            {integration.channel === "teams" && <small className="integration-channel-note">Mensagens via Power Automate chegam pela Inbox automaticamente; a sincronização manual é necessária apenas para consultas diretas ao Graph.</small>}
+            {isAdmin && <div className="integration-actions"><button className="primary-button" disabled={busy}>Salvar configuração</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void onSync(integration.channel)}>{busy ? "Sincronizando…" : "Sincronizar agora"}</button></div>}
+          </form>;
+        })}
+      </div>
+    </div>
+  );
 }
 
-type CatalogHandlerV2 = (payload: Record<string, unknown>, message: string) => Promise<WorkspaceSnapshot | null>;
+function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler }) {
+  type ConditionType = "always" | "processType" | "priority" | "toList";
+  type ActionType = "moveTo" | "slaStatus" | "labelId";
+  const triggerLabels: Record<string, string> = {
+    "card.created": "uma demanda for criada",
+    "card.moved": "uma demanda for movimentada",
+    "assignee.added": "um responsável for atribuído",
+    "checklist.completed": "todas as etapas forem concluídas",
+    "sla.tick": "o SLA for avaliado",
+  };
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [trigger, setTrigger] = useState("card.created");
+  const [conditionType, setConditionType] = useState<ConditionType>("always");
+  const [conditionValue, setConditionValue] = useState("");
+  const [actionType, setActionType] = useState<ActionType>("moveTo");
+  const [actionValue, setActionValue] = useState("");
+  const [editorError, setEditorError] = useState("");
 
-function FieldsSettingsV2({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandlerV2 }) {
-  const [labelName, setLabelName] = useState("");
-  const [labelColor, setLabelColor] = useState("#2563eb");
-  const [fieldName, setFieldName] = useState("");
-  const [fieldKey, setFieldKey] = useState("");
-  const [fieldType, setFieldType] = useState("text");
-  const [fieldOptions, setFieldOptions] = useState("");
-  const [fieldRequired, setFieldRequired] = useState(false);
-  async function createLabel(event: FormEvent) { event.preventDefault(); if (!labelName.trim()) return; const result = await onCatalog({ resource: "label", name: labelName, color: labelColor }, "Etiqueta criada."); if (result) setLabelName(""); }
-  async function createField(event: FormEvent) { event.preventDefault(); if (!fieldName.trim() || !fieldKey.trim()) return; const result = await onCatalog({ resource: "field", name: fieldName, fieldKey, fieldType, options: fieldOptions.split(",").map((item) => item.trim()).filter(Boolean), required: fieldRequired }, "Campo personalizado criado."); if (result) { setFieldName(""); setFieldKey(""); setFieldOptions(""); setFieldRequired(false); } }
-  return <div className="catalog-settings"><div className="settings-intro"><span>PADRONIZAÇÃO</span><h3>Campos e etiquetas</h3><p>Deixe os cartões com a linguagem e os dados que a sua operação realmente usa.</p></div>
-    <section className="catalog-card"><header><div><strong>Etiquetas</strong><span>{snapshot.labels.length} disponíveis</span></div></header><div className="catalog-items">{snapshot.labels.map((label) => <article key={label.id}><i style={{ backgroundColor: label.color }} /><strong>{label.name}</strong>{isAdmin && <button disabled={busy} onClick={() => void onCatalog({ resource: "label", operation: "delete", id: label.id }, "Etiqueta removida.")}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form compact" onSubmit={createLabel}><input value={labelName} onChange={(event) => setLabelName(event.target.value)} placeholder="Nova etiqueta" /><input type="color" value={labelColor} onChange={(event) => setLabelColor(event.target.value)} aria-label="Cor da etiqueta" /><button className="primary-button" disabled={busy || !labelName.trim()}>Adicionar</button></form>}</section>
-    <section className="catalog-card"><header><div><strong>Campos personalizados</strong><span>{snapshot.customFields.length} configurado(s)</span></div></header><div className="catalog-items">{snapshot.customFields.map((field) => <article className="field-item" key={field.id}><div><strong>{field.name}</strong><small>{field.fieldKey} • {field.fieldType}{field.required ? " • obrigatório" : ""}</small></div>{isAdmin && <button disabled={busy} onClick={() => void onCatalog({ resource: "field", operation: "delete", id: field.id }, "Campo removido.")}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form" onSubmit={createField}><div><label>Nome<input value={fieldName} onChange={(event) => setFieldName(event.target.value)} placeholder="Ex.: Matrícula" /></label><label>Identificador<input value={fieldKey} onChange={(event) => setFieldKey(event.target.value)} placeholder="matricula" /></label><label>Tipo<select value={fieldType} onChange={(event) => setFieldType(event.target.value)}><option value="text">Texto</option><option value="number">Número</option><option value="date">Data</option><option value="select">Lista</option></select></label></div><label>Opções da lista<input value={fieldOptions} onChange={(event) => setFieldOptions(event.target.value)} placeholder="Separadas por vírgula (quando aplicável)" /></label><label className="inline-check"><input type="checkbox" checked={fieldRequired} onChange={(event) => setFieldRequired(event.target.checked)} /> Campo obrigatório</label><button className="primary-button" disabled={busy || !fieldName.trim() || !fieldKey.trim()}>Criar campo</button></form>}</section>
-  </div>;
-}
+  const actionLabel = (action: Record<string, unknown>) => {
+    if (typeof action.moveTo === "string") return `mover para ${snapshot.lists.find((list) => list.kind === action.moveTo)?.name ?? action.moveTo}`;
+    if (typeof action.slaStatus === "string") return action.slaStatus === "overdue" ? "marcar SLA como atrasado" : action.slaStatus === "completed" ? "marcar como concluída" : action.slaStatus === "paused" ? "pausar o SLA" : "recalcular o SLA";
+    if (typeof action.labelId === "string") return `aplicar etiqueta ${snapshot.labels.find((label) => label.id === action.labelId)?.name ?? "selecionada"}`;
+    return "executar ação configurada";
+  };
+  const conditionLabel = (condition: Record<string, unknown>) => {
+    if (condition.processType) return `processo é ${condition.processType}`;
+    if (condition.priority) return `prioridade é ${condition.priority}`;
+    if (condition.listKind) return `coluna é ${snapshot.lists.find((list) => list.kind === condition.listKind)?.name ?? condition.listKind}`;
+    if (condition.assignee === "present") return "há responsável atribuído";
+    if (condition.allItems === true) return "checklist completo";
+    if (condition.dueAt === "past") return "prazo vencido";
+    return "sem condição adicional";
+  };
+  const defaultActionFor = (nextTrigger: string): { type: ActionType; value: string } => {
+    if (nextTrigger === "sla.tick") return { type: "slaStatus", value: "overdue" };
+    if (nextTrigger === "checklist.completed") return { type: "moveTo", value: snapshot.lists.find((list) => list.kind === "done")?.kind ?? "" };
+    if (nextTrigger === "assignee.added") return { type: "moveTo", value: snapshot.lists.find((list) => list.kind === "analysis")?.kind ?? "" };
+    return { type: "moveTo", value: snapshot.lists[0]?.kind ?? "" };
+  };
+  function changeTrigger(nextTrigger: string) {
+    setTrigger(nextTrigger);
+    setConditionType("always");
+    setConditionValue("");
+    const nextAction = defaultActionFor(nextTrigger);
+    setActionType(nextAction.type);
+    setActionValue(nextAction.value);
+  }
+  function edit(rule?: WorkspaceSnapshot["rules"][number]) {
+    setEditorOpen(true);
+    setEditingId(rule?.id ?? null);
+    setName(rule?.name ?? "");
+    const nextTrigger = rule?.trigger ?? "card.created";
+    setTrigger(nextTrigger);
+    const condition = rule?.condition ?? {};
+    if (typeof condition.processType === "string") { setConditionType("processType"); setConditionValue(condition.processType); }
+    else if (typeof condition.priority === "string") { setConditionType("priority"); setConditionValue(condition.priority); }
+    else if (typeof condition.listKind === "string") { setConditionType("toList"); setConditionValue(condition.listKind); }
+    else { setConditionType("always"); setConditionValue(""); }
+    const action = rule?.action ?? {};
+    if (typeof action.slaStatus === "string") { setActionType("slaStatus"); setActionValue(action.slaStatus); }
+    else if (typeof action.labelId === "string") { setActionType("labelId"); setActionValue(action.labelId); }
+    else if (typeof action.moveTo === "string") { setActionType("moveTo"); setActionValue(action.moveTo); }
+    else { const nextAction = defaultActionFor(nextTrigger); setActionType(nextAction.type); setActionValue(nextAction.value); }
+    setEditorError("");
+  }
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    if (!actionValue) { setEditorError("Escolha a ação que a automação deverá executar."); return; }
+    const fixedCondition = trigger === "assignee.added" ? { assignee: "present" } : trigger === "checklist.completed" ? { allItems: true } : trigger === "sla.tick" ? { dueAt: "past" } : {};
+    const condition = conditionType === "processType" ? { processType: conditionValue } : conditionType === "priority" ? { priority: conditionValue } : conditionType === "toList" ? { listKind: conditionValue } : fixedCondition;
+    const action = actionType === "moveTo" ? { moveTo: actionValue } : actionType === "slaStatus" ? { slaStatus: actionValue } : { labelId: actionValue };
+    const result = await onCatalog({ resource: "rule", operation: editingId ? "update" : "create", id: editingId ?? "", name, trigger, condition, action, enabled: true }, editingId ? "Automação atualizada." : "Automação criada.");
+    if (result) setEditorOpen(false);
+  }
+  const showConditionSelector = trigger === "card.created" || trigger === "card.moved";
+  const fixedConditionText = trigger === "assignee.added" ? "Só continua se houver um responsável atribuído." : trigger === "checklist.completed" ? "Só continua quando todas as etapas estiverem concluídas." : trigger === "sla.tick" ? "Só continua quando o prazo estiver vencido." : "Sem condição adicional.";
 
-function TemplatesSettingsV2({ snapshot, busy, isAdmin, onCatalog, onUseTemplate }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandlerV2; onUseTemplate: (id: string) => void }) {
-  const [name, setName] = useState(""); const [processType, setProcessType] = useState("ADMISSÃO"); const [description, setDescription] = useState(""); const [checklist, setChecklist] = useState(""); const [days, setDays] = useState("3");
-  async function create(event: FormEvent) { event.preventDefault(); const result = await onCatalog({ resource: "template", name, processType, description, checklist: checklist.split("\n").map((item) => item.trim()).filter(Boolean), defaultSlaDays: Number(days) }, "Template criado."); if (result) { setName(""); setDescription(""); setChecklist(""); } }
-  return <div className="catalog-settings"><div className="settings-intro"><span>PROCESSOS REPETÍVEIS</span><h3>Templates de processo</h3><p>Comece admissões, férias e rescisões com checklist e SLA já preparados.</p></div><section className="template-grid">{snapshot.templates.map((template) => <article className={!template.active ? "inactive" : ""} key={template.id}><header><span>{template.processType}</span><b>{template.defaultSlaDays} dias úteis</b></header><h4>{template.name}</h4><p>{template.description}</p><ol>{template.checklist.slice(0, 4).map((item) => <li key={item}>{item}</li>)}</ol><footer><button className="secondary-button" onClick={() => onUseTemplate(template.id)}>Usar template</button>{isAdmin && !template.id.startsWith("native-") && <button className="danger-link" disabled={busy} onClick={() => void onCatalog({ resource: "template", operation: "delete", id: template.id }, "Template removido.")}>Excluir</button>}</footer></article>)}</section>{isAdmin && <form className="catalog-card template-form" onSubmit={create}><header><div><strong>Novo template</strong><span>Checklist: uma etapa por linha</span></div></header><div className="catalog-form"><div><label>Nome<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Admissão CLT" required /></label><label>Processo<select value={processType} onChange={(event) => setProcessType(event.target.value)}><option>ADMISSÃO</option><option>FÉRIAS</option><option>RESCISÃO</option><option>FOLHA</option><option>OUTROS</option></select></label><label>SLA (dias úteis)<input type="number" min="1" max="60" value={days} onChange={(event) => setDays(event.target.value)} /></label></div><label>Descrição<textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={2} /></label><label>Etapas<textarea value={checklist} onChange={(event) => setChecklist(event.target.value)} rows={5} placeholder="Conferir documentos\nCadastrar no sistema\nEnviar confirmação" required /></label><button className="primary-button" disabled={busy || !name.trim()}>Criar template</button></div></form>}</div>;
-}
-
-function SlaSettingsV2({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandlerV2 }) {
-  const [days, setDays] = useState(snapshot.settings.businessDays); const [start, setStart] = useState(snapshot.settings.dayStart); const [end, setEnd] = useState(snapshot.settings.dayEnd); const [realtime, setRealtime] = useState(String(snapshot.settings.realtimeSeconds)); const [holidayDate, setHolidayDate] = useState(""); const [holidayName, setHolidayName] = useState("");
-  async function saveSettings(event: FormEvent) { event.preventDefault(); const result = await onCatalog({ resource: "settings", businessDays: days, dayStart: start, dayEnd: end, realtimeSeconds: Number(realtime) }, "Política de calendário atualizada."); if (result) setDays(result.settings.businessDays); }
-  async function addHoliday(event: FormEvent) { event.preventDefault(); const result = await onCatalog({ resource: "holiday", date: holidayDate, name: holidayName }, "Feriado adicionado."); if (result) { setHolidayDate(""); setHolidayName(""); } }
-  return <div className="catalog-settings"><div className="settings-intro"><span>POLÍTICA OPERACIONAL</span><h3>SLA e calendário</h3><p>Os prazos contam dias úteis e respeitam os feriados cadastrados para a operação.</p></div><form className="catalog-card sla-settings-form" onSubmit={saveSettings}><header><div><strong>Jornada de atendimento</strong><span>O relógio do SLA considera estes dias e horários.</span></div></header><div className="weekday-picker">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((label, index) => <label className={days.includes(index) ? "selected" : ""} key={label}><input type="checkbox" checked={days.includes(index)} disabled={!isAdmin} onChange={(event) => setDays(event.target.checked ? [...days, index].sort() : days.filter((day) => day !== index))} />{label}</label>)}</div><div className="catalog-form"><label>Início<input type="time" value={start} disabled={!isAdmin} onChange={(event) => setStart(event.target.value)} /></label><label>Fim<input type="time" value={end} disabled={!isAdmin} onChange={(event) => setEnd(event.target.value)} /></label><label>Atualização em tempo real (s)<input type="number" min="15" max="120" value={realtime} disabled={!isAdmin} onChange={(event) => setRealtime(event.target.value)} /></label>{isAdmin && <button className="primary-button" disabled={busy || days.length === 0}>Salvar política</button>}</div></form><section className="catalog-card"><header><div><strong>Políticas por processo</strong><span>Alerta antes do vencimento</span></div></header><div className="sla-policy-list">{snapshot.slaPolicies.map((policy) => <SlaPolicyRowV2 key={policy.id} policy={policy} busy={busy} isAdmin={isAdmin} onCatalog={onCatalog} />)}</div></section><section className="catalog-card"><header><div><strong>Feriados e exceções</strong><span>{snapshot.holidays.length} data(s) sem contagem de SLA</span></div></header><div className="catalog-items">{snapshot.holidays.map((holiday) => <article key={holiday.date}><strong>{formatDate(holiday.date, true)}</strong><span>{holiday.name}</span>{isAdmin && <button disabled={busy} onClick={() => void onCatalog({ resource: "holiday", operation: "delete", date: holiday.date }, "Feriado removido.")}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form compact" onSubmit={addHoliday}><input type="date" value={holidayDate} onChange={(event) => setHolidayDate(event.target.value)} required /><input value={holidayName} onChange={(event) => setHolidayName(event.target.value)} placeholder="Nome do feriado" required /><button className="primary-button" disabled={busy}>Adicionar feriado</button></form>}</section></div>;
-}
-
-function SlaPolicyRowV2({ policy, busy, isAdmin, onCatalog }: { policy: WorkspaceSnapshot["slaPolicies"][number]; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandlerV2 }) {
-  const [target, setTarget] = useState(String(policy.targetBusinessDays)); const [warning, setWarning] = useState(String(policy.warningBusinessDays));
-  return <form className="sla-policy-row" onSubmit={(event) => { event.preventDefault(); void onCatalog({ resource: "sla", processType: policy.processType, targetBusinessDays: Number(target), warningBusinessDays: Number(warning), active: policy.active }, `SLA de ${policy.processType} atualizado.`); }}><strong>{policy.processType}</strong><label>Meta<input type="number" min="1" max="60" value={target} disabled={!isAdmin} onChange={(event) => setTarget(event.target.value)} /></label><label>Alerta<input type="number" min="0" max="60" value={warning} disabled={!isAdmin} onChange={(event) => setWarning(event.target.value)} /></label>{isAdmin && <button className="secondary-button" disabled={busy}>Salvar</button>}</form>;
-}
-
-function IntegrationsSettingsV2({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandlerV2 }) {
-  const [values, setValues] = useState<Record<string, string>>({});
-  return <div className="catalog-settings"><div className="settings-intro"><span>CANAIS CONECTADOS</span><h3>Integrações</h3><p>Prepare e monitore os canais que alimentam a Inbox. Credenciais ficam fora do banco e devem ser adicionadas no ambiente seguro.</p></div><div className="integration-grid">{snapshot.integrations.map((integration) => { const endpoint = values[`${integration.id}:endpoint`] ?? String(integration.config.endpoint ?? ""); const account = values[`${integration.id}:account`] ?? String(integration.config.account ?? ""); return <article className={`integration-card ${integration.status}`} key={integration.id}><header><i>{integration.channel.slice(0, 1).toUpperCase()}</i><div><strong>{integration.displayName}</strong><span>{integration.status === "connected" ? "Conectada" : integration.status === "paused" ? "Pausada" : "Precisa de credenciais"}</span></div><b>{integration.status === "connected" ? "●" : "○"}</b></header><label>Endpoint / webhook<input value={endpoint} disabled={!isAdmin} onChange={(event) => setValues({ ...values, [`${integration.id}:endpoint`]: event.target.value })} placeholder="https://…" /></label><label>Conta / caixa de entrada<input value={account} disabled={!isAdmin} onChange={(event) => setValues({ ...values, [`${integration.id}:account`]: event.target.value })} placeholder="e-mail, time ou número" /></label><p>Token e segredos são configurados no ambiente de produção.</p>{isAdmin && <div><button className="secondary-button" disabled={busy} onClick={() => void onCatalog({ resource: "integration", id: integration.id, status: "needs_credentials", config: { endpoint, account } }, "Configuração salva; credenciais ainda necessárias.")}>Salvar configuração</button><button className="danger-link" disabled={busy} onClick={() => void onCatalog({ resource: "integration", id: integration.id, status: "paused", config: { endpoint, account } }, "Integração pausada.")}>Pausar</button></div>}</article>; })}</div></div>;
-}
-
-function RulesSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler }) {
-  const [editorOpen, setEditorOpen] = useState(false); const [editingId, setEditingId] = useState<string | null>(null); const [name, setName] = useState(""); const [trigger, setTrigger] = useState("card.created"); const [conditionJson, setConditionJson] = useState("{}"); const [actionJson, setActionJson] = useState("{}");
-  function edit(rule?: WorkspaceSnapshot["rules"][number]) { setEditorOpen(true); setEditingId(rule?.id ?? null); setName(rule?.name ?? ""); setTrigger(rule?.trigger ?? "card.created"); setConditionJson(JSON.stringify(rule?.condition ?? {}, null, 2)); setActionJson(JSON.stringify(rule?.action ?? {}, null, 2)); }
-  async function save(event: FormEvent) { event.preventDefault(); if (!name.trim()) return; try { const condition = JSON.parse(conditionJson) as Record<string, unknown>; const action = JSON.parse(actionJson) as Record<string, unknown>; const result = await onCatalog({ resource: "rule", operation: editingId ? "update" : "create", id: editingId ?? "", name, trigger, condition, action, enabled: true }, editingId ? "Automação atualizada." : "Automação criada."); if (result) setEditorOpen(false); } catch { window.alert("Condição e ação precisam ser JSON válido."); } }
-  return <div className="settings-stack"><section className="catalog-section rules-editor"><header><div><strong>Editor No-Code</strong><span>Monte gatilho, condição e ação para o fluxo do DP.</span></div>{isAdmin && <button className="secondary-button" onClick={() => edit()}>＋ Nova regra</button>}</header><div className="rule-catalog">{snapshot.rules.map((rule) => <article key={rule.id}><div><strong>{rule.name}</strong><small>{rule.trigger} • {JSON.stringify(rule.condition)} → {JSON.stringify(rule.action)}</small></div>{isAdmin && <><button onClick={() => edit(rule)}>Editar</button><button className="danger" disabled={busy} onClick={() => void onCatalog({ resource: "rule", operation: "delete", id: rule.id }, "Automação excluída.")}>Excluir</button></>}</article>)}</div></section>{isAdmin && editorOpen && <form className="catalog-section rule-editor-form" onSubmit={save}><header><div><strong>{editingId ? "Editar automação" : "Nova automação"}</strong><span>Use JSON simples nos dois campos para manter regras auditáveis.</span></div><button type="button" className="danger-link" onClick={() => setEditorOpen(false)}>Cancelar</button></header><div className="catalog-form"><label>Nome<input value={name} onChange={(event) => setName(event.target.value)} required /></label><label>Gatilho<select value={trigger} onChange={(event) => setTrigger(event.target.value)}><option>card.created</option><option>card.moved</option><option>assignee.added</option><option>checklist.completed</option><option>sla.tick</option></select></label><label className="wide">Condição<textarea rows={4} value={conditionJson} onChange={(event) => setConditionJson(event.target.value)} /></label><label className="wide">Ação<textarea rows={4} value={actionJson} onChange={(event) => setActionJson(event.target.value)} /></label><button className="primary-button" disabled={busy}>Salvar automação</button></div></form>}</div>;
+  return <div className="settings-stack"><section className="catalog-section rules-editor"><header><div><strong>Editor No-Code</strong><span>Regras ativas que executam tarefas automaticamente no fluxo do DP.</span></div>{isAdmin && <button className="secondary-button" onClick={() => edit()}><Plus aria-hidden="true" /> Nova regra</button>}</header><div className="rule-catalog no-code-rule-catalog">{snapshot.rules.length === 0 && <div className="empty-view"><span><ListChecks aria-hidden="true" /></span><strong>Nenhuma automação criada</strong><p>Crie uma regra para padronizar o fluxo da sua operação.</p></div>}{snapshot.rules.map((rule) => <article key={rule.id}><div><strong>{rule.name}</strong><div className="rule-flow"><span>Quando {triggerLabels[rule.trigger] ?? rule.trigger}</span><ArrowRight aria-hidden="true" /><span>Se {conditionLabel(rule.condition)}</span><ArrowRight aria-hidden="true" /><span>Então {actionLabel(rule.action)}</span></div></div>{isAdmin && <><button onClick={() => edit(rule)}>Editar</button><button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir automação?", description: `A regra “${rule.name}” deixará de ser executada na operação.`, confirmLabel: "Excluir automação", action: () => onCatalog({ resource: "rule", operation: "delete", id: rule.id }, "Automação excluída.") })}>Excluir</button></>}</article>)}</div></section>{isAdmin && editorOpen && <form className="catalog-section rule-editor-form no-code-editor" onSubmit={save}><header><div><strong>{editingId ? "Editar automação" : "Nova automação"}</strong><span>Escolha o evento, a condição e o resultado desejado. O sistema traduz isso para uma regra auditável.</span></div><button type="button" className="danger-link" onClick={() => setEditorOpen(false)}>Cancelar</button></header><div className="no-code-editor-body"><label className="wide">Nome da automação<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Ao concluir checklist, finalizar demanda" required /></label><section><span>1. Quando</span><label>Gatilho<select value={trigger} onChange={(event) => changeTrigger(event.target.value)}><option value="card.created">Uma demanda for criada</option><option value="card.moved">Uma demanda for movimentada</option><option value="assignee.added">Um responsável for atribuído</option><option value="checklist.completed">Todas as etapas forem concluídas</option><option value="sla.tick">O SLA estiver vencido</option></select></label></section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>2. Se</span>{showConditionSelector ? <><label>Condição<select value={conditionType} onChange={(event) => { setConditionType(event.target.value as ConditionType); setConditionValue(""); }}><option value="always">Sem condição adicional</option>{trigger === "card.created" && <><option value="processType">O processo for</option><option value="priority">A prioridade for</option></>}{trigger === "card.moved" && <option value="toList">A coluna de destino for</option>}</select></label>{conditionType === "processType" && <label>Processo<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["ADMISSÃO", "FÉRIAS", "RESCISÃO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "OUTROS"].map((item) => <option key={item}>{item}</option>)}</select></label>}{conditionType === "priority" && <label>Prioridade<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>}{conditionType === "toList" && <label>Coluna<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}</> : <div className="fixed-rule-condition"><CheckCircle2 aria-hidden="true" />{fixedConditionText}</div>}</section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>3. Então</span><label>Ação<select value={actionType} onChange={(event) => { setActionType(event.target.value as ActionType); setActionValue(""); }}><option value="moveTo">Mover a demanda</option><option value="slaStatus">Atualizar o SLA</option><option value="labelId">Aplicar uma etiqueta</option></select></label>{actionType === "moveTo" && <label>Coluna de destino<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}{actionType === "slaStatus" && <label>Novo status<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option><option value="safe">Dentro do prazo</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>}{actionType === "labelId" && <label>Etiqueta<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>}</section></div>{editorError && <p className="no-code-editor-error" role="alert"><CircleAlert aria-hidden="true" />{editorError}</p>}<footer><span>Prévia: Quando {triggerLabels[trigger] ?? trigger}, se {conditionType === "always" ? fixedConditionText.toLowerCase() : "a condição selecionada for atendida"}, então {actionType === "moveTo" ? "a demanda será movida" : actionType === "slaStatus" ? "o SLA será atualizado" : "uma etiqueta será aplicada"}.</span><button className="primary-button" disabled={busy}>Salvar automação</button></footer></form>}</div>;
 }
 
 function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxItem[]; busy: boolean; canEdit: boolean; onConvert: (item: InboxItem) => Promise<void>; onNew: () => void }) {
   const pending = items.filter((item) => item.status === "new");
   const converted = items.filter((item) => item.status === "converted");
+  const channelIcon = (channel: string) => channel === "whatsapp" ? <Smartphone aria-hidden="true" /> : channel === "email" ? <Mail aria-hidden="true" /> : channel === "teams" ? <MessageSquareMore aria-hidden="true" /> : <Plus aria-hidden="true" />;
   return (
     <div className="inbox-layout">
       <section className="inbox-list-panel">
-        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s)</span></div>{canEdit && <button onClick={onNew}>＋ Registrar solicitação</button>}</header>
+        <header><div><strong>Aguardando triagem</strong><span>{pending.length} nova(s) • {converted.length} convertida(s)</span></div>{canEdit && <button onClick={onNew}><Plus aria-hidden="true" /> Registrar solicitação</button>}</header>
         <div className="inbox-items">
-          {pending.length === 0 && <div className="empty-view"><span>✓</span><strong>Inbox organizada</strong><p>Não há solicitações aguardando triagem.</p></div>}
-          {pending.map((item) => <article className="inbox-item" key={item.id}><span className={`channel-icon ${item.channel}`}>{item.channel === "whatsapp" ? "W" : item.channel === "email" ? "@" : item.channel === "teams" ? "T" : "+"}</span><div><div><strong>{item.subject}</strong><time>{formatReceived(item.receivedAt)}</time></div><span>{item.senderName} • {item.channel}</span><p>{item.body}</p>{canEdit && <button disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda →</button>}</div></article>)}
+          {pending.length === 0 && <div className="empty-view"><span><CheckCircle2 aria-hidden="true" /></span><strong>Inbox organizada</strong><p>Não há solicitações aguardando triagem.</p></div>}
+          {pending.map((item) => <article className="inbox-item" key={item.id}><span className={`channel-icon ${item.channel}`}>{channelIcon(item.channel)}</span><div><div><strong>{item.subject}</strong><time>{formatReceived(item.receivedAt)}</time></div><span>{item.senderName} • {item.channel}</span><p>{item.body}</p>{canEdit && <button disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda <ArrowRight aria-hidden="true" /></button>}</div></article>)}
         </div>
       </section>
       <aside className="inbox-summary">
@@ -1052,19 +1910,39 @@ function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxIte
   );
 }
 
-function PlannerView({ cards, blocks, onOpen, onCreateBlock, onDeleteBlock }: { cards: Card[]; blocks: WorkspaceSnapshot["plannerBlocks"]; onOpen: (card: Card) => void; onCreateBlock: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteBlock: (id: string) => Promise<WorkspaceSnapshot | null> }) {
+function PlannerView({ cards, blocks, connections, onOpen, onCreateBlock, onDeleteBlock, onSaveConnection }: { cards: Card[]; blocks: WorkspaceSnapshot["plannerBlocks"]; connections: WorkspaceSnapshot["calendarConnections"]; onOpen: (card: Card) => void; onCreateBlock: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteBlock: (id: string) => Promise<WorkspaceSnapshot | null>; onSaveConnection: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null> }) {
   const scheduled = cards.filter((card) => card.dueAt && card.slaStatus !== "completed").sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)));
-  const grouped = scheduled.reduce<Record<string, Card[]>>((accumulator, card) => { const key = card.dueAt!; (accumulator[key] ??= []).push(card); return accumulator; }, {});
+  const grouped = scheduled.reduce<Record<string, Card[]>>((accumulator, card) => { const key = card.dueAt!.slice(0, 10); (accumulator[key] ??= []).push(card); return accumulator; }, {});
   const [showBlockForm, setShowBlockForm] = useState(false);
   const [blockTitle, setBlockTitle] = useState("");
   const [blockStart, setBlockStart] = useState("");
   const [blockEnd, setBlockEnd] = useState("");
   const [blockCardId, setBlockCardId] = useState("");
-  async function createBlock(event: FormEvent) { event.preventDefault(); const next = await onCreateBlock({ title: blockTitle, startAt: new Date(blockStart).toISOString(), endAt: new Date(blockEnd).toISOString(), cardId: blockCardId || null, blockType: "focus" }); if (next) { setBlockTitle(""); setBlockStart(""); setBlockEnd(""); setBlockCardId(""); setShowBlockForm(false); } }
+  const [blockError, setBlockError] = useState("");
+  const [showConnectionForm, setShowConnectionForm] = useState(false);
+  const [calendarProvider, setCalendarProvider] = useState("google");
+  const [calendarId, setCalendarId] = useState("");
+  async function createBlock(event: FormEvent) {
+    event.preventDefault();
+    const start = new Date(blockStart);
+    const end = new Date(blockEnd);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      setBlockError("O término precisa ser posterior ao início do bloco.");
+      return;
+    }
+    setBlockError("");
+    const next = await onCreateBlock({ title: blockTitle, startAt: start.toISOString(), endAt: end.toISOString(), cardId: blockCardId || null, blockType: "focus" });
+    if (next) { setBlockTitle(""); setBlockStart(""); setBlockEnd(""); setBlockCardId(""); setShowBlockForm(false); }
+  }
+  async function saveConnection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = await onSaveConnection({ provider: calendarProvider, externalCalendarId: calendarId, config: { calendarLabel: calendarId || "Calendário principal" } });
+    if (next) { setCalendarId(""); setShowConnectionForm(false); }
+  }
   return (
     <div className="planner-layout">
-      <section className="planner-calendar"><header><div><strong>Agenda por prazo</strong><span>{scheduled.length} atividade(s) programada(s) • {blocks.length} bloco(s) de foco</span></div><button className="secondary-button" onClick={() => setShowBlockForm((value) => !value)}>＋ Bloco de tempo</button></header>{showBlockForm && <form className="planner-block-form" onSubmit={createBlock}><label>Título<input value={blockTitle} onChange={(event) => setBlockTitle(event.target.value)} placeholder="Ex.: Conferir admissões" required /></label><label>Início<input type="datetime-local" value={blockStart} onChange={(event) => setBlockStart(event.target.value)} required /></label><label>Fim<input type="datetime-local" value={blockEnd} onChange={(event) => setBlockEnd(event.target.value)} required /></label><label>Demanda<select value={blockCardId} onChange={(event) => setBlockCardId(event.target.value)}><option value="">Bloco geral</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.title}</option>)}</select></label><button className="primary-button">Salvar bloco</button></form>}{blocks.length > 0 && <div className="planner-block-list">{blocks.map((block) => <article key={block.id}><i /><div><strong>{block.title}</strong><small>{new Date(block.startAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} – {new Date(block.endAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div><button onClick={() => void onDeleteBlock(block.id)} aria-label={`Excluir ${block.title}`}>×</button></article>)}</div>}{Object.keys(grouped).length === 0 && <div className="empty-view"><span>□</span><strong>Nenhum prazo agendado</strong><p>Defina uma data nas demandas para montar o planner.</p></div>}{Object.entries(grouped).map(([date, dateCards]) => <div className="planner-day" key={date}><div><strong>{formatDate(date, true)}</strong><span>{dateCards.length} demanda(s)</span></div><div>{dateCards.map((card) => <button key={card.id} onClick={() => onOpen(card)}><i className={processColors[card.processType] ?? "gray"} /><span><strong>{card.title}</strong><small>{card.assigneeName || "Sem responsável"} • {card.company || card.processType}</small></span><em className={card.slaStatus}>{slaLabel(card)}</em></button>)}</div></div>)}</section>
-      <aside className="planner-focus"><span>FOCO DO DIA</span><h2>{scheduled.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length}</h2><p>demanda(s) precisam de atenção imediata.</p><div><i /><span><strong>Priorize atrasos</strong><small>Comece pelos SLAs vencidos antes de assumir novas atividades.</small></span></div></aside>
+      <section className="planner-calendar"><header><div><strong>Agenda por prazo</strong><span>{scheduled.length} atividade(s) programada(s) • {blocks.length} bloco(s) de foco</span></div><button className="secondary-button" onClick={() => { setShowBlockForm((value) => !value); setBlockError(""); }}><Plus aria-hidden="true" /> Bloco de tempo</button></header>{showBlockForm && <form className="planner-block-form" onSubmit={createBlock}><label>Título<input value={blockTitle} onChange={(event) => setBlockTitle(event.target.value)} placeholder="Ex.: Conferir admissões" required /></label><label>Início<input type="datetime-local" value={blockStart} onChange={(event) => setBlockStart(event.target.value)} required /></label><label>Fim<input type="datetime-local" value={blockEnd} onChange={(event) => setBlockEnd(event.target.value)} required /></label><label>Demanda<select value={blockCardId} onChange={(event) => setBlockCardId(event.target.value)}><option value="">Bloco geral</option>{cards.map((card) => <option key={card.id} value={card.id}>{card.title}</option>)}</select></label><button className="primary-button">Salvar bloco</button>{blockError && <p className="planner-form-error" role="alert">{blockError}</p>}</form>}{blocks.length > 0 && <div className="planner-block-list">{blocks.map((block) => <article key={block.id}><CalendarClock aria-hidden="true" /><div><strong>{block.title}</strong><small>{new Date(block.startAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} – {new Date(block.endAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</small></div><button onClick={() => void onDeleteBlock(block.id)} aria-label={`Excluir ${block.title}`}><Trash2 aria-hidden="true" /></button></article>)}</div>}{Object.keys(grouped).length === 0 && <div className="empty-view"><span><CalendarClock aria-hidden="true" /></span><strong>Nenhum prazo agendado</strong><p>Defina uma data nas demandas para montar o planner.</p></div>}{Object.entries(grouped).map(([date, dateCards]) => <div className="planner-day" key={date}><div><strong>{formatDate(date, true)}</strong><span>{dateCards.length} demanda(s)</span></div><div>{dateCards.map((card) => <button key={card.id} onClick={() => onOpen(card)}><i className={processColors[card.processType] ?? "gray"} /><span><strong>{card.title}</strong><small>{card.assigneeName || "Sem responsável"} • {card.company || card.processType}</small></span><em className={card.slaStatus}><Clock3 aria-hidden="true" />{slaLabel(card)}</em></button>)}</div></div>)}</section>
+      <aside className="planner-focus"><span>FOCO DO DIA</span><h2>{scheduled.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length}</h2><p>demanda(s) precisam de atenção imediata.</p><div><i /><span><strong>Priorize atrasos</strong><small>Comece pelos SLAs vencidos antes de assumir novas atividades.</small></span></div><section className="planner-connections"><header><strong>Calendários externos</strong><button onClick={() => setShowConnectionForm((value) => !value)}>{showConnectionForm ? "Cancelar" : "Configurar"}</button></header>{connections.length === 0 && <p>Conecte Google ou Microsoft Calendar para preparar a sincronização da agenda.</p>}{connections.map((connection) => <article key={connection.id}><CalendarDays aria-hidden="true" /><span><strong>{connection.provider === "microsoft" ? "Microsoft Calendar" : "Google Calendar"}</strong><small>{connection.externalCalendarId || "Calendário principal"} · {connection.status === "connected" ? "conectado" : "aguardando OAuth"}</small></span></article>)}{showConnectionForm && <form onSubmit={saveConnection}><select value={calendarProvider} onChange={(event) => setCalendarProvider(event.target.value)}><option value="google">Google Calendar</option><option value="microsoft">Microsoft Calendar</option></select><input value={calendarId} onChange={(event) => setCalendarId(event.target.value)} placeholder="ID ou nome do calendário (opcional)" /><button className="secondary-button">Salvar configuração</button></form>}</section></aside>
     </div>
   );
 }
@@ -1072,17 +1950,36 @@ function PlannerView({ cards, blocks, onOpen, onCreateBlock, onDeleteBlock }: { 
 function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {
   const [report, setReport] = useState<{ from: string; to: string; total: number; completed: number; completionRate: number; averageCompletionHours: number; activityCount: number; byProcess: Record<string, number>; hrMetrics?: { admissions: number; terminations: number; averageHeadcount: number; payrollCostTotal: number; turnoverRate: number; payrollByCompany: Record<string, number> } } | null>(null);
   const [reportDays, setReportDays] = useState("30");
-  useEffect(() => { const to = new Date(); const from = new Date(Date.now() - (Number(reportDays) - 1) * 86400000); void fetch(`/api/reports?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`).then((response) => response.json()).then((payload) => setReport(payload)).catch(() => setReport(null)); }, [reportDays]);
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    const to = new Date();
+    const from = new Date(Date.now() - (Number(reportDays) - 1) * 86400000);
+    void fetch(`/api/reports?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Não foi possível carregar o relatório.");
+        return response.json();
+      })
+      .then((payload) => setReport(payload))
+      .catch((cause) => {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        setReport(null);
+        setReportError(cause instanceof Error ? cause.message : "Não foi possível carregar o relatório.");
+      })
+      .finally(() => { if (!controller.signal.aborted) setReportLoading(false); });
+    return () => controller.abort();
+  }, [reportDays]);
   const processes = Object.entries(cards.reduce<Record<string, number>>((accumulator, card) => { accumulator[card.processType] = (accumulator[card.processType] ?? 0) + 1; return accumulator; }, {})).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...processes.map(([, count]) => count));
   const statusCounts = { safe: 0, warning: 0, overdue: 0, paused: 0, completed: 0 };
   cards.forEach((card) => { statusCounts[card.slaStatus] += 1; });
   return (
     <div className="indicators-layout">
-      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência.</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
-      <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s)</span></div><button className="export-button" onClick={onExport}>Exportar CSV</button></header><div className="process-bars">{processes.map(([process, count]) => <div key={process}><span>{process}</span><i><b style={{ width: `${(count / max) * 100}%` }} /></i><strong>{count}</strong></div>)}</div></section>
+      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência.</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><Users aria-hidden="true" /><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><Plus aria-hidden="true" /><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><ArrowRight aria-hidden="true" /><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><WalletCards aria-hidden="true" /><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
+      <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s)</span></div><button className="export-button" onClick={onExport}><Download aria-hidden="true" /> Exportar CSV</button></header><div className="process-bars">{processes.length === 0 && <div className="panel-empty">Nenhuma demanda nos filtros atuais.</div>}{processes.map(([process, count]) => <div key={process}><span>{process}</span><i><b style={{ width: `${(count / max) * 100}%` }} /></i><strong>{count}</strong></div>)}</div></section>
       <section className="sla-panel"><header><strong>Saúde dos SLAs</strong><span>Visão atual</span></header><div className="sla-donut" style={{ background: `conic-gradient(#23d8a1 0 ${(statusCounts.safe / Math.max(1, cards.length)) * 100}%, #f2a13e 0 ${((statusCounts.safe + statusCounts.warning) / Math.max(1, cards.length)) * 100}%, #ef5b5b 0 ${((statusCounts.safe + statusCounts.warning + statusCounts.overdue) / Math.max(1, cards.length)) * 100}%, #8b98a7 0 100%)` }}><span><strong>{cards.length - statusCounts.overdue}</strong><small>sob controle</small></span></div><ul><li><i className="safe" />No prazo <b>{statusCounts.safe}</b></li><li><i className="warning" />Atenção <b>{statusCounts.warning}</b></li><li><i className="overdue" />Atrasadas <b>{statusCounts.overdue}</b></li><li><i className="paused" />Pausadas/concluídas <b>{statusCounts.paused + statusCounts.completed}</b></li></ul></section>
-      <section className="report-panel"><header><div><strong>Histórico e produtividade</strong><span>Indicadores calculados a partir da auditoria do workspace.</span></div><select value={reportDays} onChange={(event) => setReportDays(event.target.value)}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></header>{report && <div className="report-metrics"><article><strong>{report.total}</strong><span>Demandas no período</span></article><article><strong>{report.completionRate}%</strong><span>Taxa de conclusão</span></article><article><strong>{report.averageCompletionHours}h</strong><span>Tempo médio</span></article><article><strong>{report.activityCount}</strong><span>Eventos auditados</span></article></div>}<div className="report-process-list">{report && Object.entries(report.byProcess).sort((a, b) => b[1] - a[1]).map(([process, count]) => <span key={process}><b>{process}</b><i style={{ width: `${Math.max(8, (count / Math.max(1, report.total)) * 100)}%` }} /><em>{count}</em></span>)}</div></section>
+      <section className="report-panel" aria-live="polite"><header><div><strong>Histórico e produtividade</strong><span>Indicadores calculados a partir da auditoria do workspace.</span></div><select value={reportDays} onChange={(event) => { setReportDays(event.target.value); setReportLoading(true); setReportError(""); }}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></header>{reportLoading && <div className="report-state"><i /> Atualizando relatório…</div>}{reportError && <div className="report-state error"><CircleAlert aria-hidden="true" /> {reportError}</div>}{report && !reportLoading && <div className="report-metrics"><article><strong>{report.total}</strong><span>Demandas no período</span></article><article><strong>{report.completionRate}%</strong><span>Taxa de conclusão</span></article><article><strong>{report.averageCompletionHours}h</strong><span>Tempo médio</span></article><article><strong>{report.activityCount}</strong><span>Eventos auditados</span></article></div>}<div className="report-process-list">{report && !reportLoading && Object.entries(report.byProcess).sort((a, b) => b[1] - a[1]).map(([process, count]) => <span key={process}><b>{process}</b><i style={{ width: `${Math.max(8, (count / Math.max(1, report.total)) * 100)}%` }} /><em>{count}</em></span>)}</div></section>
       <section className="rules-panel"><header><div><strong>Automações nativas</strong><span>Gatilho → condição → ação</span></div><b>{rules.filter((rule) => rule.enabled).length} ativas</b></header><div>{rules.map((rule, index) => <article key={rule.id}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{rule.name}</strong><small>{rule.trigger.replaceAll(".", " ")}</small></div><label className="rule-switch"><input type="checkbox" checked={rule.enabled} disabled={busy || !canManageRules} onChange={(event) => void onToggleRule(rule.id, event.target.checked)} /><i /></label></article>)}</div></section>
     </div>
   );

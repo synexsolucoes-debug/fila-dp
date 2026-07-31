@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowLeft, ArrowRight, MoreHorizontal } from "lucide-react";
 import { chatGPTSignOutPath, getChatGPTUser } from "../chatgpt-auth";
 import { LoginForm } from "./LoginForm";
 
@@ -28,17 +29,17 @@ export default async function LoginPage() {
         </div>
 
         <div className="auth-preview" aria-hidden="true">
-          <div className="auth-preview-top"><span>Fila geral</span><span>•••</span></div>
+          <div className="auth-preview-top"><span>Fila geral</span><MoreHorizontal /></div>
           <div className="auth-preview-columns">
             <div><b>Novas</b><article><span className="auth-tag blue">ADMISSÃO</span><strong>Documentos de admissão</strong><small>Vence hoje</small></article></div>
             <div><b>Em análise</b><article><span className="auth-tag green">BENEFÍCIOS</span><strong>Inclusão no plano</strong><small>4 de 6 etapas</small></article></div>
-            <div><b>Aguardando</b><article><span className="auth-tag gray">DOCUMENTOS</span><strong>Pendência do solicitante</strong><small>SLA pausado</small></article></div>
+            <div><b>Em execução</b><article><span className="auth-tag gray">CADASTRO</span><strong>Cadastro em andamento</strong><small>Dados em validação</small></article></div>
           </div>
         </div>
       </section>
 
       <section className="auth-form-panel">
-        <Link className="auth-back" href="/#inicio">← Voltar para o site</Link>
+        <Link className="auth-back" href="/#inicio"><ArrowLeft aria-hidden="true" /> Voltar para o site</Link>
 
         <div className="auth-form-card">
           {user ? (
@@ -46,7 +47,7 @@ export default async function LoginPage() {
               <span className="auth-status"><i /> Sessão ativa</span>
               <h2>Bem-vindo de volta.</h2>
               <p>Você está conectado como <strong>{user.displayName}</strong>.</p>
-              <a className="button auth-primary" href="/painel">Continuar para o painel <span aria-hidden="true">→</span></a>
+              <a className="button auth-primary" href="/painel">Continuar para o painel <ArrowRight aria-hidden="true" /></a>
               <a className="auth-secondary-link" href={chatGPTSignOutPath("/login")}>Entrar com outra conta</a>
             </>
           ) : <LoginForm />}

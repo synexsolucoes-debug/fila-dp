@@ -241,12 +241,19 @@ export async function POST(request: Request) {
       const company = await d1!.prepare("SELECT id FROM fdp_companies WHERE workspace_id = ? AND (id = ? OR external_code = ?)").bind(workspace.id, metric.companyId, metric.companyId).first<{ id: string }>();
       if (!company) continue;
       await d1!.prepare(`INSERT INTO fdp_hr_metrics
-        (id, workspace_id, company_id, period, headcount, admissions, terminations, payroll_cost, source, external_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'sankhya', ?)
+        (id, workspace_id, company_id, period, headcount, headcount_start, headcount_end, admissions, terminations, payroll_cost, source, external_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sankhya', ?)
         ON CONFLICT(workspace_id, company_id, period) DO UPDATE SET headcount = excluded.headcount,
-          admissions = excluded.admissions, terminations = excluded.terminations, payroll_cost = excluded.payroll_cost,
-          source = excluded.source, external_id = excluded.external_id, updated_at = CURRENT_TIMESTAMP`)
-        .bind(crypto.randomUUID(), workspace.id, company.id, metric.period, metric.headcount, metric.admissions, metric.terminations, metric.payrollCost, metric.externalId)
+          headcount_start = excluded.headcount_start, headcount_end = excluded.headcount_end,
+          leaves_count = 0, admissions = excluded.admissions, terminations = excluded.terminations,
+          voluntary_terminations = 0, involuntary_terminations = 0,
+          base_salary = 0, variable_pay = 0, overtime_pay = 0, additional_pay = 0, vacation_pay = 0,
+          thirteenth_pay = 0, termination_pay = 0, gross_payroll = 0,
+          employee_inss = 0, employee_irrf = 0, employee_other_deductions = 0, net_pay = 0,
+          employer_inss = 0, rat_contribution = 0, third_party_contributions = 0, fgts = 0, fgts_penalty = 0,
+          employer_charges = 0, benefits_cost = 0, provisions_cost = 0, other_costs = 0,
+          payroll_cost = excluded.payroll_cost, source = excluded.source, external_id = excluded.external_id, updated_at = CURRENT_TIMESTAMP`)
+        .bind(crypto.randomUUID(), workspace.id, company.id, metric.period, metric.headcount, metric.headcount, metric.headcount, metric.admissions, metric.terminations, metric.payrollCost, metric.externalId)
         .run();
       metricsSynced += 1;
     }

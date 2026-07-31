@@ -101,6 +101,8 @@ export type CalendarConnection = { id: string; provider: string; status: string;
 
 export type Company = {
   id: string;
+  parentCompanyId: string | null;
+  isPrincipal: boolean;
   legalName: string;
   tradeName: string;
   taxId: string;
@@ -115,8 +117,34 @@ export type HrMetric = {
   companyId: string;
   period: string;
   headcount: number;
+  headcountStart: number;
+  headcountEnd: number;
+  leavesCount: number;
   admissions: number;
   terminations: number;
+  voluntaryTerminations: number;
+  involuntaryTerminations: number;
+  baseSalary: number;
+  variablePay: number;
+  overtimePay: number;
+  additionalPay: number;
+  vacationPay: number;
+  thirteenthPay: number;
+  terminationPay: number;
+  grossPayroll: number;
+  employeeInss: number;
+  employeeIrrf: number;
+  employeeOtherDeductions: number;
+  netPay: number;
+  employerInss: number;
+  ratContribution: number;
+  thirdPartyContributions: number;
+  fgts: number;
+  fgtsPenalty: number;
+  employerCharges: number;
+  benefitsCost: number;
+  provisionsCost: number;
+  otherCosts: number;
   payrollCost: number;
   source: string;
   externalId: string;
@@ -149,6 +177,7 @@ export type Card = {
   customValues: Record<string, string>;
   attachments: CardAttachment[];
   slaPausedReason: string;
+  slaTargetMinutes: number;
   slaPausedMinutes: number;
   slaEscalationLevel: number;
 };
@@ -163,7 +192,13 @@ export type BoardList = {
   cards: Card[];
 };
 
-export type BoardSummary = { id: string; name: string; description: string; boardType: string };
+export type BoardSummary = {
+  id: string;
+  name: string;
+  description: string;
+  boardType: string;
+  stages: Array<{ id: string; name: string; kind: string; slaBehavior: "running" | "paused" | "completed" }>;
+};
 
 export type InboxItem = {
   id: string;
@@ -193,6 +228,8 @@ export type WorkspaceMember = {
   role: WorkspaceRole;
   joinedAt: string;
   isOwner: boolean;
+  isActivated: boolean;
+  companyIds: string[];
 };
 
 export type AvailableWorkspace = {
@@ -202,7 +239,7 @@ export type AvailableWorkspace = {
 };
 
 export type WorkspaceSnapshot = {
-  workspace: { id: string; name: string; timezone: string; role: WorkspaceRole };
+  workspace: { id: string; name: string; timezone: string; role: WorkspaceRole; companyScope: "all" | "restricted" };
   board: { id: string; name: string; description: string };
   boards: BoardSummary[];
   lists: BoardList[];

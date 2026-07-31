@@ -1,16 +1,17 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
 
 export async function GET(request: Request) {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
   try {
-    const { d1, workspace } = await getWorkspaceContext(auth.user);
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    const companyAccess = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     const url = new URL(request.url);
     const to = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("to") ?? "") ? url.searchParams.get("to")! : new Date().toISOString().slice(0, 10);
     const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("from") ?? "") ? url.searchParams.get("from")! : new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
     const [cards, hrMetrics] = await Promise.all([
-      d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.archived,
+      d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.archived, c.company_id,
       COALESCE(c.assignee_name, '') AS assignee_name
       FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id
       WHERE b.workspace_id = ? AND date(c.created_at) BETWEEN date(?) AND date(?)`).bind(workspace.id, from, to).all<Record<string, unknown>>(),
@@ -18,17 +19,20 @@ export async function GET(request: Request) {
         FROM fdp_hr_metrics m LEFT JOIN fdp_companies c ON c.id = m.company_id
         WHERE m.workspace_id = ? AND m.period BETWEEN ? AND ? ORDER BY m.period`).bind(workspace.id, from.slice(0, 7), to.slice(0, 7)).all<Record<string, unknown>>(),
     ]);
-    const activity = await d1.prepare(`SELECT ae.event_type, ae.actor_email, ae.created_at FROM fdp_activity_events ae WHERE ae.workspace_id = ? AND date(ae.created_at) BETWEEN date(?) AND date(?)`).bind(workspace.id, from, to).all<Record<string, unknown>>();
+    const visibleCards = companyAccess.unrestricted ? cards.results : cards.results.filter((card) => companyAccess.companyIds.has(String(card.company_id)));
+    const metricRows = companyAccess.unrestricted ? hrMetrics.results : hrMetrics.results.filter((metric) => companyAccess.companyIds.has(String(metric.company_id)));
+    const activity = await d1.prepare(`SELECT ae.event_type, ae.actor_email, ae.created_at, c.company_id FROM fdp_activity_events ae
+      JOIN fdp_cards c ON c.id = ae.card_id WHERE ae.workspace_id = ? AND date(ae.created_at) BETWEEN date(?) AND date(?)`).bind(workspace.id, from, to).all<Record<string, unknown>>();
+    const visibleActivity = companyAccess.unrestricted ? activity.results : activity.results.filter((item) => companyAccess.companyIds.has(String(item.company_id)));
     const byProcess: Record<string, number> = {};
     const byMember: Record<string, number> = {};
     let completed = 0;
     let totalHours = 0;
-    for (const card of cards.results) {
+    for (const card of visibleCards) {
       const process = String(card.process_type ?? "OUTROS"); byProcess[process] = (byProcess[process] ?? 0) + 1;
       const member = String(card.assignee_name ?? "Sem responsável"); byMember[member] = (byMember[member] ?? 0) + 1;
       if (String(card.sla_status) === "completed" || Boolean(card.archived)) { completed += 1; totalHours += Math.max(0, (new Date(String(card.updated_at)).getTime() - new Date(String(card.created_at)).getTime()) / 3600000); }
     }
-    const metricRows = hrMetrics.results;
     const admissions = metricRows.reduce((sum, row) => sum + Number(row.admissions ?? 0), 0);
     const terminations = metricRows.reduce((sum, row) => sum + Number(row.terminations ?? 0), 0);
     const headcountTotal = metricRows.reduce((sum, row) => sum + Number(row.headcount ?? 0), 0);
@@ -40,6 +44,6 @@ export async function GET(request: Request) {
       accumulator[key] = Math.round(((accumulator[key] ?? 0) + Number(row.payroll_cost ?? 0)) * 100) / 100;
       return accumulator;
     }, {});
-    return Response.json({ from, to, total: cards.results.length, completed, completionRate: cards.results.length ? Math.round((completed / cards.results.length) * 100) : 100, averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0, byProcess, byMember, activityCount: activity.results.length, activityByType: activity.results.reduce<Record<string, number>>((accumulator, item) => { const key = String(item.event_type); accumulator[key] = (accumulator[key] ?? 0) + 1; return accumulator; }, {}), hrMetrics: { periods: metricRows.length, admissions, terminations, averageHeadcount: Math.round(averageHeadcount * 10) / 10, payrollCostTotal: Math.round(payrollCostTotal * 100) / 100, turnoverRate, payrollByCompany } });
+    return Response.json({ from, to, total: visibleCards.length, completed, completionRate: visibleCards.length ? Math.round((completed / visibleCards.length) * 100) : 100, averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0, byProcess, byMember, activityCount: visibleActivity.length, activityByType: visibleActivity.reduce<Record<string, number>>((accumulator, item) => { const key = String(item.event_type); accumulator[key] = (accumulator[key] ?? 0) + 1; return accumulator; }, {}), hrMetrics: { periods: metricRows.length, admissions, terminations, averageHeadcount: Math.round(averageHeadcount * 10) / 10, payrollCostTotal: Math.round(payrollCostTotal * 100) / 100, turnoverRate, payrollByCompany } });
   } catch (error) { return apiError(error); }
 }
