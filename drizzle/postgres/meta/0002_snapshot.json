@@ -1,6 +1,6 @@
 {
-  "id": "38a3174a-aa68-411f-a132-f50adcf72296",
-  "prevId": "db7ca900-3c1d-48e9-954e-7f96b07e834e",
+  "id": "ce9e1eea-2bfc-4452-b0ec-031bca8544db",
+  "prevId": "38a3174a-aa68-411f-a132-f50adcf72296",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -25,6 +25,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'system'"
         },
         "expires_at": {
           "name": "expires_at",

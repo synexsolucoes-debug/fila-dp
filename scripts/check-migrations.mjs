@@ -6,6 +6,17 @@ const migrationDirectory = join(root, "drizzle", "postgres");
 const files = (await readdir(migrationDirectory)).filter((file) => file.endsWith(".sql")).sort();
 if (!files.length) throw new Error("Nenhuma migration PostgreSQL encontrada.");
 
+const metadataDirectory = join(migrationDirectory, "meta");
+const metadataFiles = (await readdir(metadataDirectory)).filter((file) => file.endsWith(".json")).sort();
+for (const file of metadataFiles) {
+  const source = await readFile(join(metadataDirectory, file), "utf8");
+  try {
+    JSON.parse(source);
+  } catch (error) {
+    throw new Error(`${file} contém metadados Drizzle inválidos: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 const destructive = /\b(DROP\s+TABLE|TRUNCATE\s+TABLE|ALTER\s+TABLE\s+[^;]+\s+DROP\s+COLUMN|DELETE\s+FROM)\b/i;
 for (const file of files) {
   const sql = await readFile(join(migrationDirectory, file), "utf8");
@@ -22,4 +33,4 @@ for (const file of sourceFiles) {
   }
 }
 
-console.log(`${files.length} migrations PostgreSQL validadas; nenhum DDL foi encontrado no caminho HTTP.`);
+console.log(`${files.length} migrations e ${metadataFiles.length} metadados PostgreSQL validados; nenhum DDL foi encontrado no caminho HTTP.`);

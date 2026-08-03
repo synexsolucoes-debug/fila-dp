@@ -26,3 +26,10 @@ test("rotas não inicializam schema nem traduzem dialeto SQLite", async () => {
   assert.doesNotMatch(database, /PRAGMA|INSERT\s+OR\s+IGNORE|datetime\s*\(/i);
   assert.doesNotMatch(workspace, /CREATE\s+TABLE|ensureSchema|PRAGMA/i);
 });
+
+test("token de recuperação mantém a autoria exigida pela API", async () => {
+  const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/postgres/0002_chief_venom.sql", import.meta.url), "utf8");
+  assert.match(schema, /createdBy:\s*text\("created_by"\)\.notNull\(\)/);
+  assert.match(migration, /ADD COLUMN "created_by" text DEFAULT 'system' NOT NULL/);
+});
