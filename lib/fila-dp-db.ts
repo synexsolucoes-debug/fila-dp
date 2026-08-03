@@ -3,426 +3,6 @@ import type { ChatGPTUser } from "../app/chatgpt-auth";
 import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 
-let schemaPromise: Promise<void> | null = null;
-
-const schemaStatements = [
-  `CREATE TABLE IF NOT EXISTS fdp_users (
-    id TEXT PRIMARY KEY,
-    email TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL,
-    password_hash TEXT,
-    password_salt TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_workspaces (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
-    owner_user_id TEXT NOT NULL UNIQUE REFERENCES fdp_users(id),
-    timezone TEXT NOT NULL DEFAULT 'America/Sao_Paulo',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_companies (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    parent_company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL,
-    is_principal INTEGER NOT NULL DEFAULT 0,
-    legal_name TEXT NOT NULL,
-    trade_name TEXT NOT NULL DEFAULT '',
-    tax_id TEXT NOT NULL DEFAULT '',
-    external_code TEXT NOT NULL DEFAULT '',
-    email TEXT NOT NULL DEFAULT '',
-    phone TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_workspace_members (
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
-    role TEXT NOT NULL DEFAULT 'admin',
-    joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (workspace_id, user_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_member_company_access (
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
-    company_id TEXT NOT NULL REFERENCES fdp_companies(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (workspace_id, user_id, company_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_access_recovery_tokens (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
-    token_hash TEXT NOT NULL UNIQUE,
-    created_by TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    used_at TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_user_workspace_preferences (
-    user_id TEXT PRIMARY KEY REFERENCES fdp_users(id) ON DELETE CASCADE,
-    active_workspace_id TEXT REFERENCES fdp_workspaces(id) ON DELETE SET NULL,
-    active_board_id TEXT,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_boards (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    board_type TEXT NOT NULL DEFAULT 'general',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (workspace_id, name)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_lists (
-    id TEXT PRIMARY KEY,
-    board_id TEXT NOT NULL REFERENCES fdp_boards(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    position REAL NOT NULL,
-    sla_behavior TEXT NOT NULL DEFAULT 'running',
-    UNIQUE (board_id, kind)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_cards (
-    id TEXT PRIMARY KEY,
-    board_id TEXT NOT NULL REFERENCES fdp_boards(id) ON DELETE CASCADE,
-    list_id TEXT NOT NULL REFERENCES fdp_lists(id),
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL,
-    company TEXT NOT NULL DEFAULT '',
-    process_type TEXT NOT NULL DEFAULT 'OUTROS',
-    priority TEXT NOT NULL DEFAULT 'normal',
-    assignee_name TEXT NOT NULL DEFAULT '',
-    due_at TEXT,
-    sla_status TEXT NOT NULL DEFAULT 'safe',
-    position REAL NOT NULL,
-    source_type TEXT NOT NULL DEFAULT 'manual',
-    archived INTEGER NOT NULL DEFAULT 0,
-    created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    sla_target_minutes INTEGER NOT NULL DEFAULT 0,
-    sla_started_at TEXT,
-    sla_paused_minutes INTEGER NOT NULL DEFAULT 0,
-    sla_pause_reason TEXT NOT NULL DEFAULT '',
-    sla_escalation_level INTEGER NOT NULL DEFAULT 0
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_checklist_items (
-    id TEXT PRIMARY KEY,
-    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    completed INTEGER NOT NULL DEFAULT 0,
-    position REAL NOT NULL,
-    completed_at TEXT
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_card_comments (
-    id TEXT PRIMARY KEY,
-    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    author_user_id TEXT NOT NULL REFERENCES fdp_users(id),
-    body TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_labels (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    color TEXT NOT NULL DEFAULT '#64748b',
-    position REAL NOT NULL,
-    UNIQUE (workspace_id, name)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_card_labels (
-    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    label_id TEXT NOT NULL REFERENCES fdp_labels(id) ON DELETE CASCADE,
-    PRIMARY KEY (card_id, label_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_card_assignees (
-    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
-    PRIMARY KEY (card_id, user_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_custom_fields (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    field_key TEXT NOT NULL,
-    field_type TEXT NOT NULL DEFAULT 'text',
-    options_json TEXT NOT NULL DEFAULT '[]',
-    required INTEGER NOT NULL DEFAULT 0,
-    position REAL NOT NULL,
-    UNIQUE (workspace_id, field_key)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_custom_field_values (
-    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    field_id TEXT NOT NULL REFERENCES fdp_custom_fields(id) ON DELETE CASCADE,
-    value_text TEXT NOT NULL DEFAULT '',
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (card_id, field_id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_card_attachments (
-    id TEXT PRIMARY KEY,
-    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    object_key TEXT NOT NULL UNIQUE,
-    filename TEXT NOT NULL,
-    content_type TEXT NOT NULL,
-    size_bytes INTEGER NOT NULL,
-    uploaded_by TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_process_templates (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    process_type TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    checklist_json TEXT NOT NULL DEFAULT '[]',
-    default_sla_days INTEGER NOT NULL DEFAULT 3,
-    active INTEGER NOT NULL DEFAULT 1,
-    position REAL NOT NULL,
-    UNIQUE (workspace_id, name)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_workspace_settings (
-    workspace_id TEXT PRIMARY KEY REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    business_days_json TEXT NOT NULL DEFAULT '[1,2,3,4,5]',
-    day_start TEXT NOT NULL DEFAULT '08:00',
-    day_end TEXT NOT NULL DEFAULT '18:00',
-    realtime_seconds INTEGER NOT NULL DEFAULT 30,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_business_holidays (
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    holiday_date TEXT NOT NULL,
-    name TEXT NOT NULL,
-    PRIMARY KEY (workspace_id, holiday_date)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_sla_policies (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    process_type TEXT NOT NULL,
-    target_business_days INTEGER NOT NULL DEFAULT 3,
-    warning_business_days INTEGER NOT NULL DEFAULT 1,
-    active INTEGER NOT NULL DEFAULT 1,
-    UNIQUE (workspace_id, process_type)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_notifications (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
-    event_key TEXT NOT NULL,
-    notification_type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    body TEXT NOT NULL DEFAULT '',
-    card_id TEXT REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    read_at TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_id, event_key)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_integrations (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    channel TEXT NOT NULL,
-    display_name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'needs_credentials',
-    config_json TEXT NOT NULL DEFAULT '{}',
-    last_sync_at TEXT,
-    last_error TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (workspace_id, channel)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_planner_blocks (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
-    card_id TEXT REFERENCES fdp_cards(id) ON DELETE SET NULL,
-    title TEXT NOT NULL,
-    start_at TEXT NOT NULL,
-    end_at TEXT NOT NULL,
-    block_type TEXT NOT NULL DEFAULT 'focus',
-    notes TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_calendar_connections (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES fdp_users(id) ON DELETE CASCADE,
-    provider TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'needs_credentials',
-    config_json TEXT NOT NULL DEFAULT '{}',
-    external_calendar_id TEXT,
-    last_sync_at TEXT,
-    last_error TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_id, provider)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_card_sla_pauses (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    card_id TEXT NOT NULL REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    ended_at TEXT,
-    reason TEXT NOT NULL,
-    created_by TEXT NOT NULL
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_workspace_inbox_items (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    channel TEXT NOT NULL DEFAULT 'manual',
-    sender_name TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    body TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'new',
-    received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    converted_card_id TEXT REFERENCES fdp_cards(id)
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_automation_rules (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    trigger TEXT NOT NULL,
-    condition_json TEXT NOT NULL DEFAULT '{}',
-    action_json TEXT NOT NULL DEFAULT '{}',
-    enabled INTEGER NOT NULL DEFAULT 1,
-    position REAL NOT NULL
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_activity_events (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    card_id TEXT REFERENCES fdp_cards(id) ON DELETE CASCADE,
-    actor_email TEXT NOT NULL,
-    event_type TEXT NOT NULL,
-    payload_json TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`,
-  `CREATE TABLE IF NOT EXISTS fdp_hr_metrics (
-    id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES fdp_workspaces(id) ON DELETE CASCADE,
-    company_id TEXT NOT NULL REFERENCES fdp_companies(id) ON DELETE CASCADE,
-    period TEXT NOT NULL,
-    headcount INTEGER NOT NULL DEFAULT 0,
-    headcount_start INTEGER NOT NULL DEFAULT 0,
-    headcount_end INTEGER NOT NULL DEFAULT 0,
-    leaves_count INTEGER NOT NULL DEFAULT 0,
-    admissions INTEGER NOT NULL DEFAULT 0,
-    terminations INTEGER NOT NULL DEFAULT 0,
-    voluntary_terminations INTEGER NOT NULL DEFAULT 0,
-    involuntary_terminations INTEGER NOT NULL DEFAULT 0,
-    base_salary REAL NOT NULL DEFAULT 0,
-    variable_pay REAL NOT NULL DEFAULT 0,
-    overtime_pay REAL NOT NULL DEFAULT 0,
-    additional_pay REAL NOT NULL DEFAULT 0,
-    vacation_pay REAL NOT NULL DEFAULT 0,
-    thirteenth_pay REAL NOT NULL DEFAULT 0,
-    termination_pay REAL NOT NULL DEFAULT 0,
-    gross_payroll REAL NOT NULL DEFAULT 0,
-    employee_inss REAL NOT NULL DEFAULT 0,
-    employee_irrf REAL NOT NULL DEFAULT 0,
-    employee_other_deductions REAL NOT NULL DEFAULT 0,
-    net_pay REAL NOT NULL DEFAULT 0,
-    employer_inss REAL NOT NULL DEFAULT 0,
-    rat_contribution REAL NOT NULL DEFAULT 0,
-    third_party_contributions REAL NOT NULL DEFAULT 0,
-    fgts REAL NOT NULL DEFAULT 0,
-    fgts_penalty REAL NOT NULL DEFAULT 0,
-    employer_charges REAL NOT NULL DEFAULT 0,
-    benefits_cost REAL NOT NULL DEFAULT 0,
-    provisions_cost REAL NOT NULL DEFAULT 0,
-    other_costs REAL NOT NULL DEFAULT 0,
-    payroll_cost REAL NOT NULL DEFAULT 0,
-    source TEXT NOT NULL DEFAULT 'manual',
-    external_id TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (workspace_id, company_id, period)
-  )`,
-  "CREATE INDEX IF NOT EXISTS fdp_cards_board_list_position_idx ON fdp_cards (board_id, list_id, position)",
-  "CREATE INDEX IF NOT EXISTS fdp_cards_due_status_idx ON fdp_cards (due_at, sla_status)",
-  "CREATE INDEX IF NOT EXISTS fdp_checklist_card_position_idx ON fdp_checklist_items (card_id, position)",
-  "CREATE INDEX IF NOT EXISTS fdp_comments_card_created_idx ON fdp_card_comments (card_id, created_at)",
-  "CREATE INDEX IF NOT EXISTS fdp_attachments_card_created_idx ON fdp_card_attachments (card_id, created_at)",
-  "CREATE INDEX IF NOT EXISTS fdp_planner_user_start_idx ON fdp_planner_blocks (user_id, start_at)",
-  "CREATE INDEX IF NOT EXISTS fdp_card_sla_pause_open_idx ON fdp_card_sla_pauses (card_id, ended_at)",
-  "CREATE INDEX IF NOT EXISTS fdp_notifications_user_read_created_idx ON fdp_notifications (user_id, read_at, created_at)",
-  "CREATE INDEX IF NOT EXISTS fdp_inbox_workspace_status_received_idx ON fdp_workspace_inbox_items (workspace_id, status, received_at)",
-  "CREATE INDEX IF NOT EXISTS fdp_activity_workspace_created_idx ON fdp_activity_events (workspace_id, created_at)",
-  "CREATE INDEX IF NOT EXISTS fdp_companies_workspace_name_idx ON fdp_companies (workspace_id, legal_name)",
-  "CREATE INDEX IF NOT EXISTS fdp_companies_workspace_tax_idx ON fdp_companies (workspace_id, tax_id)",
-  "CREATE INDEX IF NOT EXISTS fdp_member_company_access_user_idx ON fdp_member_company_access (workspace_id, user_id)",
-  "CREATE INDEX IF NOT EXISTS fdp_hr_metrics_workspace_period_idx ON fdp_hr_metrics (workspace_id, period)",
-  "CREATE INDEX IF NOT EXISTS fdp_access_recovery_user_expiry_idx ON fdp_access_recovery_tokens (user_id, expires_at)",
-];
-
-export async function ensureSchema() {
-  if (!schemaPromise) {
-    const d1 = getD1();
-    schemaPromise = d1.batch(schemaStatements.map((statement) => d1.prepare(statement))).then(async () => {
-      const columns = await d1.prepare("PRAGMA table_info(fdp_users)").all<{ name: string }>();
-      const names = new Set(columns.results.map((column) => column.name));
-      const cardColumns = await d1.prepare("PRAGMA table_info(fdp_cards)").all<{ name: string }>();
-      const cardNames = new Set(cardColumns.results.map((column) => column.name));
-      const companyColumns = await d1.prepare("PRAGMA table_info(fdp_companies)").all<{ name: string }>();
-      const companyNames = new Set(companyColumns.results.map((column) => column.name));
-      const hrMetricColumns = await d1.prepare("PRAGMA table_info(fdp_hr_metrics)").all<{ name: string }>();
-      const hrMetricNames = new Set(hrMetricColumns.results.map((column) => column.name));
-      const compatibility = [
-        !names.has("password_hash") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_hash TEXT") : null,
-        !names.has("password_salt") ? d1.prepare("ALTER TABLE fdp_users ADD COLUMN password_salt TEXT") : null,
-        !companyNames.has("parent_company_id") ? d1.prepare("ALTER TABLE fdp_companies ADD COLUMN parent_company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL") : null,
-        !companyNames.has("is_principal") ? d1.prepare("ALTER TABLE fdp_companies ADD COLUMN is_principal INTEGER NOT NULL DEFAULT 0") : null,
-        !cardNames.has("company_id") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN company_id TEXT REFERENCES fdp_companies(id) ON DELETE SET NULL") : null,
-        !cardNames.has("sla_target_minutes") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_target_minutes INTEGER NOT NULL DEFAULT 0") : null,
-        !cardNames.has("sla_started_at") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_started_at TEXT") : null,
-        !cardNames.has("sla_paused_minutes") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_paused_minutes INTEGER NOT NULL DEFAULT 0") : null,
-        !cardNames.has("sla_pause_reason") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_pause_reason TEXT NOT NULL DEFAULT ''") : null,
-        !cardNames.has("sla_escalation_level") ? d1.prepare("ALTER TABLE fdp_cards ADD COLUMN sla_escalation_level INTEGER NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("gross_payroll") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN gross_payroll REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("headcount_start") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN headcount_start INTEGER NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("headcount_end") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN headcount_end INTEGER NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("leaves_count") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN leaves_count INTEGER NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("voluntary_terminations") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN voluntary_terminations INTEGER NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("involuntary_terminations") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN involuntary_terminations INTEGER NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("base_salary") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN base_salary REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("variable_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN variable_pay REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("overtime_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN overtime_pay REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("additional_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN additional_pay REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("vacation_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN vacation_pay REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("thirteenth_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN thirteenth_pay REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("termination_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN termination_pay REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("employee_inss") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employee_inss REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("employee_irrf") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employee_irrf REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("employee_other_deductions") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employee_other_deductions REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("net_pay") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN net_pay REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("employer_inss") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employer_inss REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("rat_contribution") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN rat_contribution REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("third_party_contributions") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN third_party_contributions REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("fgts") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN fgts REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("fgts_penalty") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN fgts_penalty REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("employer_charges") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN employer_charges REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("benefits_cost") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN benefits_cost REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("provisions_cost") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN provisions_cost REAL NOT NULL DEFAULT 0") : null,
-        !hrMetricNames.has("other_costs") ? d1.prepare("ALTER TABLE fdp_hr_metrics ADD COLUMN other_costs REAL NOT NULL DEFAULT 0") : null,
-      ].filter((statement): statement is D1PreparedStatement => Boolean(statement));
-      if (compatibility.length) await d1.batch(compatibility);
-      await d1.prepare("CREATE INDEX IF NOT EXISTS fdp_cards_company_idx ON fdp_cards (company_id)").run();
-      // Existing production databases can predate parent_company_id. Create
-      // this index only after the compatibility migration above has completed.
-      await d1.prepare("CREATE INDEX IF NOT EXISTS fdp_companies_workspace_parent_idx ON fdp_companies (workspace_id, parent_company_id)").run();
-    });
-  }
-  return schemaPromise;
-}
-
-function dateOffset(days: number) {
-  const date = new Date();
-  date.setUTCHours(12, 0, 0, 0);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
 
 function safeJson(value: string) {
   try {
@@ -513,7 +93,7 @@ const nativeTemplates = [
   { key: "beneficios", name: "Benefícios", process: "BENEFÍCIOS", days: 3, checklist: ["Elegibilidade validada", "Documentos conferidos", "Solicitação enviada à operadora"] },
 ] as const;
 
-async function ensureWorkspaceDefaults(d1: ReturnType<typeof getD1>, workspaceId: string) {
+export async function provisionWorkspaceDefaults(d1: ReturnType<typeof getD1>, workspaceId: string) {
   const defaultLabels = [
     ["critico", "Crítico", "#dc2626"],
     ["documentos", "Documentos", "#2563eb"],
@@ -533,31 +113,16 @@ async function ensureWorkspaceDefaults(d1: ReturnType<typeof getD1>, workspaceId
   ] as const;
 
   await d1.batch([
-    d1.prepare("INSERT OR IGNORE INTO fdp_workspace_settings (workspace_id) VALUES (?)").bind(workspaceId),
-    ...defaultLabels.map(([key, name, color], index) => d1.prepare("INSERT OR IGNORE INTO fdp_labels (id, workspace_id, name, color, position) VALUES (?, ?, ?, ?, ?)").bind(`${workspaceId}:label:${key}`, workspaceId, name, color, (index + 1) * 1000)),
-    ...defaultFields.map(([key, name, type, options], index) => d1.prepare("INSERT OR IGNORE INTO fdp_custom_fields (id, workspace_id, name, field_key, field_type, options_json, position) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(`${workspaceId}:field:${key}`, workspaceId, name, key, type, options, (index + 1) * 1000)),
-    ...nativeTemplates.map((template, index) => d1.prepare("INSERT OR IGNORE INTO fdp_process_templates (id, workspace_id, name, process_type, description, checklist_json, default_sla_days, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(`${workspaceId}:template:${template.key}`, workspaceId, template.name, template.process, `Fluxo padrão de ${template.name.toLowerCase()} do Fila DP.`, JSON.stringify(template.checklist), template.days, (index + 1) * 1000)),
-    ...policies.map(([processType, target, warning]) => d1.prepare("INSERT OR IGNORE INTO fdp_sla_policies (id, workspace_id, process_type, target_business_days, warning_business_days) VALUES (?, ?, ?, ?, ?)").bind(`${workspaceId}:sla:${processType}`, workspaceId, processType, target, warning)),
-    ...integrationRows.map(([channel, displayName]) => d1.prepare("INSERT OR IGNORE INTO fdp_integrations (id, workspace_id, channel, display_name) VALUES (?, ?, ?, ?)").bind(`${workspaceId}:integration:${channel}`, workspaceId, channel, displayName)),
+    d1.prepare("INSERT INTO fdp_workspace_settings (workspace_id) VALUES (?) ON CONFLICT DO NOTHING").bind(workspaceId),
+    ...defaultLabels.map(([key, name, color], index) => d1.prepare("INSERT INTO fdp_labels (id, workspace_id, name, color, position) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:label:${key}`, workspaceId, name, color, (index + 1) * 1000)),
+    ...defaultFields.map(([key, name, type, options], index) => d1.prepare("INSERT INTO fdp_custom_fields (id, workspace_id, name, field_key, field_type, options_json, position) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:field:${key}`, workspaceId, name, key, type, options, (index + 1) * 1000)),
+    ...nativeTemplates.map((template, index) => d1.prepare("INSERT INTO fdp_process_templates (id, workspace_id, name, process_type, description, checklist_json, default_sla_days, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:template:${template.key}`, workspaceId, template.name, template.process, `Fluxo padrão de ${template.name.toLowerCase()} do Fila DP.`, JSON.stringify(template.checklist), template.days, (index + 1) * 1000)),
+    ...policies.map(([processType, target, warning]) => d1.prepare("INSERT INTO fdp_sla_policies (id, workspace_id, process_type, target_business_days, warning_business_days) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:sla:${processType}`, workspaceId, processType, target, warning)),
+    ...integrationRows.map(([channel, displayName]) => d1.prepare("INSERT INTO fdp_integrations (id, workspace_id, channel, display_name) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:integration:${channel}`, workspaceId, channel, displayName)),
   ]);
 }
 
-async function removeLegacyProcessLists(d1: ReturnType<typeof getD1>, workspaceId: string) {
-  const boards = await d1.prepare("SELECT id FROM fdp_boards WHERE workspace_id = ?").bind(workspaceId).all<{ id: string }>();
-  for (const board of boards.results) {
-    const target = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'analysis' LIMIT 1").bind(board.id).first<{ id: string }>();
-    const fallback = target ?? await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'new' LIMIT 1").bind(board.id).first<{ id: string }>();
-    if (!fallback) continue;
-    const legacy = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind IN ('waiting', 'review')").bind(board.id).all<{ id: string }>();
-    for (const list of legacy.results) {
-      await d1.prepare("UPDATE fdp_cards SET list_id = ?, sla_status = CASE WHEN sla_status = 'paused' THEN 'warning' ELSE sla_status END, updated_at = CURRENT_TIMESTAMP WHERE list_id = ?").bind(fallback.id, list.id).run();
-      await d1.prepare("DELETE FROM fdp_lists WHERE id = ?").bind(list.id).run();
-    }
-  }
-}
-
 export async function getWorkspaceContext(user: ChatGPTUser) {
-  await ensureSchema();
   const d1 = getD1();
   const normalizedEmail = user.email.trim().toLowerCase();
 
@@ -600,57 +165,9 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
     : null;
   if (!board) board = await d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at LIMIT 1").bind(workspace.id).first<{ id: string; name: string; description: string; board_type: string }>();
 
-  if (!board) {
-    const boardId = crypto.randomUUID();
-    const listIds = {
-      new: crypto.randomUUID(),
-      analysis: crypto.randomUUID(),
-      done: crypto.randomUUID(),
-    };
-    const cardIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
-    const ruleRows = [
-      ["Ao atribuir um analista, mover para Em análise", "assignee.added", { assignee: "present" }, { moveTo: "analysis" }],
-      ["Quando o SLA vencer, marcar como Atrasado", "sla.tick", { dueAt: "past" }, { slaStatus: "overdue" }],
-      ["Ao concluir o checklist, mover para Concluído", "checklist.completed", { allItems: true }, { moveTo: "done" }],
-    ] as const;
-
-    await d1.batch([
-      d1.prepare("INSERT INTO fdp_boards (id, workspace_id, name, description, board_type) VALUES (?, ?, 'Fila geral', 'Operação central do Departamento Pessoal', 'general')")
-        .bind(boardId, workspace.id),
-      d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Novas demandas', 'new', 1000, 'running')").bind(listIds.new, boardId),
-      d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Em análise', 'analysis', 2000, 'running')").bind(listIds.analysis, boardId),
-      d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Concluído', 'done', 3000, 'completed')").bind(listIds.done, boardId),
-      d1.prepare(`INSERT INTO fdp_cards (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, 'Admissão — Maria Oliveira', 'Conferir documentos e preparar cadastro de admissão.', 'Synex Soluções', 'ADMISSÃO', 'urgent', 'Ana Martins', ?, 'warning', 1000, 'email', ?)`)
-        .bind(cardIds[0], boardId, listIds.new, dateOffset(0), userRow.email),
-      d1.prepare(`INSERT INTO fdp_cards (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, 'Inclusão no plano de saúde', 'Validar elegibilidade e documentação do dependente.', 'Matrícula 0482', 'BENEFÍCIOS', 'normal', 'Lucas Souza', ?, 'safe', 1000, 'manual', ?)`)
-        .bind(cardIds[1], boardId, listIds.analysis, dateOffset(2), userRow.email),
-      d1.prepare(`INSERT INTO fdp_cards (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, 'Documentos pendentes — Ana Reis', 'Aguardando comprovante e exame admissional.', 'Synex Soluções', 'ADMISSÃO', 'high', 'Rafael Costa', ?, 'warning', 1000, 'whatsapp', ?)`)
-        .bind(cardIds[2], boardId, listIds.analysis, dateOffset(1), userRow.email),
-      d1.prepare(`INSERT INTO fdp_cards (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, 'Conferência de cálculo rescisório', 'Revisar verbas e documentação antes do envio.', 'Empresa Sul', 'RESCISÃO', 'high', 'Ana Martins', ?, 'safe', 1000, 'teams', ?)`)
-        .bind(cardIds[3], boardId, listIds.analysis, dateOffset(3), userRow.email),
-      d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Documentos pessoais recebidos', 1, 1000)").bind(crypto.randomUUID(), cardIds[0]),
-      d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Exame admissional anexado', 0, 2000)").bind(crypto.randomUUID(), cardIds[0]),
-      d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Cadastro no sistema concluído', 0, 3000)").bind(crypto.randomUUID(), cardIds[0]),
-      d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Elegibilidade validada', 1, 1000)").bind(crypto.randomUUID(), cardIds[1]),
-      d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Inclusão enviada à operadora', 0, 2000)").bind(crypto.randomUUID(), cardIds[1]),
-      d1.prepare("INSERT INTO fdp_workspace_inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'whatsapp', 'Mariana — Financeiro', 'Alteração de vale-transporte', 'Solicitação recebida pelo WhatsApp para a próxima competência.', 'new', datetime('now', '-18 minutes'))").bind(crypto.randomUUID(), workspace.id),
-      d1.prepare("INSERT INTO fdp_workspace_inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'email', 'Carlos Mendes', 'Programação de férias', 'Solicita programação para início no próximo mês.', 'new', datetime('now', '-2 hours'))").bind(crypto.randomUUID(), workspace.id),
-      d1.prepare("INSERT INTO fdp_workspace_inbox_items (id, workspace_id, channel, sender_name, subject, body, status, received_at) VALUES (?, ?, 'teams', 'Gestora Comercial', 'Nova admissão aprovada', 'Candidata aprovada; dados iniciais enviados no Teams.', 'new', datetime('now', '-1 day'))").bind(crypto.randomUUID(), workspace.id),
-      ...ruleRows.map(([name, trigger, condition, action], index) =>
-        d1.prepare("INSERT INTO fdp_automation_rules (id, workspace_id, name, trigger, condition_json, action_json, enabled, position) VALUES (?, ?, ?, ?, ?, ?, 1, ?)")
-          .bind(crypto.randomUUID(), workspace!.id, name, trigger, JSON.stringify(condition), JSON.stringify(action), (index + 1) * 1000)),
-    ]);
-    board = { id: boardId, name: "Fila geral", description: "Operação central do Departamento Pessoal", board_type: "general" };
-  }
+  if (!board) throw new Error("Este grupo ainda não possui um quadro. Peça ao administrador para concluir a configuração inicial.");
 
   await d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(board.id, userRow.id, workspace.id).run();
-
-  await ensureWorkspaceDefaults(d1, workspace.id);
-  await removeLegacyProcessLists(d1, workspace.id);
 
   return { d1, user: userRow, workspace, board };
 }
@@ -742,11 +259,6 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const listBehavior = new Map(listRows.map((row) => [String(row.id), String(row.sla_behavior)]));
   const policyByProcess = new Map(policyRows.map((row) => [String(row.process_type), Number(row.warning_business_days ?? 1)]));
   const activePauseByCard = new Map((pausesResult.results as Array<Record<string, unknown>>).map((row) => [String(row.card_id), String(row.reason)]));
-  const escalationRecipients = (membersResult.results as Array<Record<string, unknown>>)
-    .filter((member) => ["admin", "member"].includes(String(member.role)))
-    .map((member) => String(member.user_id));
-  const slaStatements: D1PreparedStatement[] = [];
-
   for (const row of cardRows) {
     if (Boolean(row.archived)) continue;
     const behavior = listBehavior.get(String(row.list_id)) ?? "running";
@@ -770,28 +282,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     if (String(row.sla_status) !== status || shouldEscalate) {
       row.sla_status = status;
       if (shouldEscalate) row.sla_escalation_level = 1;
-      slaStatements.push(d1.prepare("UPDATE fdp_cards SET sla_status = ?, sla_escalation_level = CASE WHEN ? = 1 THEN 1 ELSE sla_escalation_level END, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(status, shouldEscalate ? 1 : 0, String(row.id)));
-    }
-    if ((status === "warning" || status === "overdue") && dueAt) {
-      slaStatements.push(d1.prepare(`INSERT OR IGNORE INTO fdp_notifications
-        (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)
-        VALUES (?, ?, ?, ?, 'sla', ?, ?, ?)`).bind(
-          crypto.randomUUID(), workspace.id, userRow.id, `sla:${row.id}:${status}:${dueAt}`,
-          status === "overdue" ? "SLA atrasado" : "SLA próximo do vencimento",
-          `${String(row.title)} • prazo ${dueAt.split("-").reverse().join("/")}`,
-          String(row.id),
-      ));
-    }
-    if (shouldEscalate) {
-      for (const recipientId of escalationRecipients) {
-        slaStatements.push(d1.prepare(`INSERT OR IGNORE INTO fdp_notifications
-          (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)
-          VALUES (?, ?, ?, ?, 'sla_escalation', 'Escalonamento de SLA', ?, ?)`)
-          .bind(crypto.randomUUID(), workspace.id, recipientId, `sla-escalation:${row.id}:1:${recipientId}`, `${String(row.title)} ultrapassou o SLA e requer ação imediata.`, String(row.id)));
-      }
     }
   }
-  if (slaStatements.length) await d1.batch(slaStatements);
 
   const notificationsResult = await d1.prepare("SELECT id, notification_type, title, body, card_id, read_at, created_at FROM fdp_notifications WHERE workspace_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 50").bind(workspace.id, userRow.id).all();
   const memberCompanyAccessResult = await d1.prepare("SELECT user_id, company_id FROM fdp_member_company_access WHERE workspace_id = ?").bind(workspace.id).all<{ user_id: string; company_id: string }>();
@@ -981,7 +473,7 @@ export async function runAutomations(
       statements.push(d1.prepare("UPDATE fdp_cards SET sla_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ?").bind(status, cardId, boardId));
     }
     if (typeof action.labelId === "string") {
-      statements.push(d1.prepare("INSERT OR IGNORE INTO fdp_card_labels (card_id, label_id) SELECT ?, id FROM fdp_labels WHERE id = ? AND workspace_id = ?").bind(cardId, action.labelId, workspaceId));
+      statements.push(d1.prepare("INSERT INTO fdp_card_labels (card_id, label_id) SELECT ?, id FROM fdp_labels WHERE id = ? AND workspace_id = ? ON CONFLICT DO NOTHING").bind(cardId, action.labelId, workspaceId));
     }
     if (statements.length) await d1.batch(statements);
     await recordActivity(workspaceId, cardId, actorEmail, "automation.executed", { ruleId: rule.id, ruleName: rule.name, trigger });
@@ -996,4 +488,3 @@ export async function recordActivity(workspaceId: string, cardId: string | null,
     .bind(crypto.randomUUID(), workspaceId, cardId, actorEmail, eventType, JSON.stringify(payload))
     .run();
 }
-

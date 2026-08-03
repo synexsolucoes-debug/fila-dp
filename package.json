@@ -3,25 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run build && node --experimental-strip-types --test tests/integration-security.test.mts tests/rendered-html.test.mjs",
+    "test": "node --experimental-strip-types --test tests/integration-security.test.mts tests/release-foundation.test.mts tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:check": "node scripts/check-migrations.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:migrate:baseline": "node scripts/migrate.mjs --baseline-existing",
+    "release:verify-source": "node scripts/verify-release-source.mjs",
+    "ci": "npm run lint && npm run db:check && npm test && npm run build"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.4",
     "@neondatabase/serverless": "^1.0.0",
     "@vercel/blob": "^2.6.1",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^0.468.0",
-    "next": "16.2.6",
+    "next": "16.2.12",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "ws": "8.21.1"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
@@ -33,13 +38,17 @@
     "@vitejs/plugin-rsc": "0.5.26",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.12",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.0.13",
     "wrangler": "4.92.0"
+  },
+  "overrides": {
+    "postcss": "8.5.25",
+    "sharp": "0.35.3"
   },
   "type": "module"
 }

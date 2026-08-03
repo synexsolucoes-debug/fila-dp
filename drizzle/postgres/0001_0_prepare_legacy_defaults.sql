@@ -1,0 +1,43 @@
+-- Legacy SQLite-compatible databases stored timestamps as text and attached
+-- text defaults to those columns. PostgreSQL cannot cast those defaults while
+-- changing the column type, so remove them before the compatibility migration.
+ALTER TABLE "fdp_users" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_access_recovery_tokens" ALTER COLUMN "expires_at" DROP DEFAULT;
+ALTER TABLE "fdp_access_recovery_tokens" ALTER COLUMN "used_at" DROP DEFAULT;
+ALTER TABLE "fdp_access_recovery_tokens" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_workspaces" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_companies" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_companies" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_workspace_members" ALTER COLUMN "joined_at" DROP DEFAULT;
+ALTER TABLE "fdp_member_company_access" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_user_workspace_preferences" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_boards" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_cards" ALTER COLUMN "due_at" DROP DEFAULT;
+ALTER TABLE "fdp_cards" ALTER COLUMN "sla_started_at" DROP DEFAULT;
+ALTER TABLE "fdp_cards" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_cards" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_checklist_items" ALTER COLUMN "completed_at" DROP DEFAULT;
+ALTER TABLE "fdp_card_comments" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_card_comments" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_custom_field_values" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_card_attachments" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_workspace_settings" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_business_holidays" ALTER COLUMN "holiday_date" DROP DEFAULT;
+ALTER TABLE "fdp_notifications" ALTER COLUMN "read_at" DROP DEFAULT;
+ALTER TABLE "fdp_notifications" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_integrations" ALTER COLUMN "last_sync_at" DROP DEFAULT;
+ALTER TABLE "fdp_integrations" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_integrations" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_planner_blocks" ALTER COLUMN "start_at" DROP DEFAULT;
+ALTER TABLE "fdp_planner_blocks" ALTER COLUMN "end_at" DROP DEFAULT;
+ALTER TABLE "fdp_planner_blocks" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_planner_blocks" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_calendar_connections" ALTER COLUMN "last_sync_at" DROP DEFAULT;
+ALTER TABLE "fdp_calendar_connections" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_calendar_connections" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "fdp_card_sla_pauses" ALTER COLUMN "started_at" DROP DEFAULT;
+ALTER TABLE "fdp_card_sla_pauses" ALTER COLUMN "ended_at" DROP DEFAULT;
+ALTER TABLE "fdp_workspace_inbox_items" ALTER COLUMN "received_at" DROP DEFAULT;
+ALTER TABLE "fdp_activity_events" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_hr_metrics" ALTER COLUMN "created_at" DROP DEFAULT;
+ALTER TABLE "fdp_hr_metrics" ALTER COLUMN "updated_at" DROP DEFAULT;
