@@ -1379,24 +1379,52 @@ function OverviewView({ cards, companies, lists, activities, stats, onOpen, onOp
   const checkedItems = cards.reduce((total, card) => total + card.checklist.filter((item) => item.completed).length, 0);
   const maxStatus = Math.max(1, ...lists.map((list) => list.cards.length));
   const visibleColumns = lists.slice(0, 3);
+  const primaryAttention = attention[0];
+  const checklistProgress = totalChecklistItems ? Math.round((checkedItems / totalChecklistItems) * 100) : 100;
+  const operationalMessage = stats.attention
+    ? `${stats.attention} prioridade(s) precisam da equipe agora.`
+    : stats.active
+      ? `${stats.active} demanda(s) avançando dentro do fluxo.`
+      : "Sua operação está pronta para receber novas demandas.";
 
   return <div className="overview-layout">
     <section className="overview-hero">
-      <div><span>RESUMO OPERACIONAL</span><strong>{stats.active ? `${stats.active} demanda(s) em andamento.` : "Tudo sob controle por enquanto."}</strong><p>Priorize o que vence primeiro e mantenha cada empresa atualizada sem abrir planilhas paralelas.</p></div>
-      {canEdit && <button className="primary-button overview-new-demand" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
+      <div className="overview-hero-copy">
+        <div className="overview-hero-title"><i><LayoutDashboard aria-hidden="true" /></i><div><span>CENTRAL DA OPERAÇÃO</span><strong>{operationalMessage}</strong></div></div>
+        <p>Uma leitura rápida de prazos, documentos e movimentações para decidir o próximo passo sem abrir planilhas paralelas.</p>
+        <div className="overview-hero-chips" aria-label="Resumo rápido da operação">
+          <b><ListChecks aria-hidden="true" /> {stats.active} abertas</b>
+          <b className={stats.attention ? "attention" : "healthy"}><CircleAlert aria-hidden="true" /> {stats.attention} em risco</b>
+          <b><Paperclip aria-hidden="true" /> {stats.documentsPending} documentos</b>
+        </div>
+      </div>
+      <aside className={`overview-next-action ${primaryAttention ? primaryAttention.slaStatus : "healthy"}`}>
+        <span>{primaryAttention ? "PRÓXIMA AÇÃO RECOMENDADA" : "OPERAÇÃO SAUDÁVEL"}</span>
+        <strong>{primaryAttention?.title || "Nenhuma demanda crítica agora"}</strong>
+        <p>{primaryAttention ? `${primaryAttention.company || "Sem empresa"} • ${compactSlaLabel(primaryAttention.slaStatus, primaryAttention.dueAt)}` : "Todos os prazos abertos estão dentro da política definida."}</p>
+        {primaryAttention
+          ? <button onClick={() => onOpen(primaryAttention)}>Abrir prioridade <ArrowRight aria-hidden="true" /></button>
+          : canEdit
+            ? <button onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>
+            : <button onClick={onOpenBoard}>Ver demandas <ArrowRight aria-hidden="true" /></button>}
+      </aside>
     </section>
 
     <section className="overview-metrics" aria-label="Indicadores principais">
-      <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{stats.completed} concluída(s) no quadro</small></article>
-      <article className={stats.attention ? "requires-attention" : ""}><span>SLA em risco</span><strong>{stats.attention}</strong><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small></article>
-      <article><span>Documentos pendentes</span><strong>{stats.documentsPending}</strong><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small></article>
-      <article><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><small>Cadastros disponíveis na operação</small></article>
+      <article className="overview-metric-card"><header><i><ListChecks aria-hidden="true" /></i><em>OPERAÇÃO</em></header><span>Demandas abertas</span><strong>{stats.active}</strong><footer><small>{stats.completed} concluída(s) no quadro</small><b>Ver fluxo</b></footer></article>
+      <article className={`overview-metric-card ${stats.attention ? "requires-attention" : "healthy"}`}><header><i><CircleAlert aria-hidden="true" /></i><em>PRIORIDADE</em></header><span>SLA em risco</span><strong>{stats.attention}</strong><footer><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small><b>{stats.attention ? "Atenção" : "Em dia"}</b></footer></article>
+      <article className="overview-metric-card"><header><i><Paperclip aria-hidden="true" /></i><em>DOCUMENTOS</em></header><span>Pendências documentais</span><strong>{stats.documentsPending}</strong><footer><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small><b>{checklistProgress}%</b></footer></article>
+      <article className="overview-metric-card"><header><i><Building2 aria-hidden="true" /></i><em>CARTEIRA</em></header><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><footer><small>Cadastros disponíveis na operação</small><b>Grupo</b></footer></article>
     </section>
 
     <section className="overview-sla-band">
-      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime}% dentro do prazo</strong><p>{stats.completed} demandas concluídas • {stats.waiting} com SLA pausado</p></div>
-      <div className="sla-progress" aria-label={`${stats.onTime}% das demandas dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>
-      <div className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></div>
+      <div className="overview-sla-gauge" aria-label={`${stats.onTime}% das demandas dentro do prazo`} role="img" style={{ background: `conic-gradient(var(--ui-mint) ${Math.max(0, Math.min(100, stats.onTime))}%, color-mix(in srgb, var(--ui-mint) 16%, var(--ui-surface)) 0)` }}><div><strong>{stats.onTime}%</strong><span>no prazo</span></div></div>
+      <div className="overview-sla-copy"><span>SAÚDE DO SLA</span><strong>Ritmo e previsibilidade da operação</strong><p>Acompanhe o cumprimento dos prazos e intervenha antes que uma demanda se torne crítica.</p><div className="sla-progress"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div></div>
+      <div className="overview-sla-facts">
+        <article><strong>{stats.completed}</strong><span>concluídas</span></article>
+        <article><strong>{stats.waiting}</strong><span>SLA pausado</span></article>
+        <article className={stats.attention ? "attention" : ""}><strong>{stats.attention}</strong><span>em atenção</span></article>
+      </div>
     </section>
 
     <div className="overview-grid">
