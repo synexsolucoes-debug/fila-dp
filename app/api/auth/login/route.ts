@@ -1,6 +1,6 @@
 import { hashPassword, setAuthSession, verifyPassword } from "@/app/chatgpt-auth";
 import { getD1 } from "@/db";
-import { ensureSchema } from "@/lib/fila-dp-db";
+import { provisionWorkspaceDefaults } from "@/lib/fila-dp-db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +30,6 @@ export async function POST(request: Request) {
     if (!/^\S+@\S+\.\S+$/.test(email)) return Response.json({ error: "Informe um e-mail válido." }, { status: 400 });
     if (password.length < 8 || password.length > 200) return Response.json({ error: "A senha deve ter entre 8 e 200 caracteres." }, { status: 400 });
 
-    await ensureSchema();
     const d1 = getD1();
     const current = await d1.prepare("SELECT id, email, name, password_hash, password_salt FROM fdp_users WHERE email = ?").bind(email).first<UserRow>();
 
@@ -55,6 +54,15 @@ export async function POST(request: Request) {
         d1.prepare("INSERT INTO fdp_workspace_members (workspace_id, user_id, role) VALUES (?, ?, 'admin')").bind(workspaceId, userId),
         d1.prepare("INSERT INTO fdp_user_workspace_preferences (user_id, active_workspace_id, active_board_id, updated_at) VALUES (?, ?, NULL, CURRENT_TIMESTAMP)").bind(userId, workspaceId),
       ]);
+      const boardId = crypto.randomUUID();
+      await d1.batch([
+        d1.prepare("INSERT INTO fdp_boards (id, workspace_id, name, description, board_type) VALUES (?, ?, 'Fila geral', 'Operação central do Departamento Pessoal', 'general')").bind(boardId, workspaceId),
+        d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Novas demandas', 'new', 1000, 'running')").bind(crypto.randomUUID(), boardId),
+        d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Em análise', 'analysis', 2000, 'running')").bind(crypto.randomUUID(), boardId),
+        d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, 'Concluído', 'done', 3000, 'completed')").bind(crypto.randomUUID(), boardId),
+        d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?").bind(boardId, userId),
+      ]);
+      await provisionWorkspaceDefaults(d1, workspaceId);
     } else {
       if (!current || !current.password_hash || !current.password_salt || !await verifyPassword(password, current.password_salt, current.password_hash)) {
         return Response.json({ error: "E-mail ou senha incorretos." }, { status: 401 });

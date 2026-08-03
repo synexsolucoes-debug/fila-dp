@@ -38,9 +38,9 @@ export async function POST(request: Request, context: RouteContext) {
         .all<{ user_id: string }>()
       : { results: [] as Array<{ user_id: string }> };
     const recipientIds = Array.from(new Set([...recipients.results.map((recipient) => recipient.user_id), ...mentionRecipients.results.map((recipient) => recipient.user_id)]));
-    if (recipientIds.length) await d1.batch(recipientIds.map((recipientId) => d1.prepare(`INSERT OR IGNORE INTO fdp_notifications
+    if (recipientIds.length) await d1.batch(recipientIds.map((recipientId) => d1.prepare(`INSERT INTO fdp_notifications
       (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)
-      VALUES (?, ?, ?, ?, 'comment', 'Novo comentário', ?, ?)`)
+      VALUES (?, ?, ?, ?, 'comment', 'Novo comentário', ?, ?) ON CONFLICT DO NOTHING`)
       .bind(crypto.randomUUID(), workspace.id, recipientId, `comment:${commentId}:${recipientId}`, `${auth.user.displayName} comentou em ${card.title}`, id)));
     await recordActivity(workspace.id, id, auth.user.email, "card.commented");
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
