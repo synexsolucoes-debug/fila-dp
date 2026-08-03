@@ -182,7 +182,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
     d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? ORDER BY ci.position").bind(board.id).all(),
     d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM fdp_workspace_inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
-    d1.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM fdp_automation_rules WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
+    d1.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM fdp_automation_rules WHERE workspace_id = ? AND board_id = ? ORDER BY position").bind(workspace.id, board.id).all(),
     d1.prepare(`SELECT cc.id, cc.card_id, cc.body, cc.created_at, u.name AS author_name, u.email AS author_email
       FROM fdp_card_comments cc
       JOIN fdp_users u ON u.id = cc.author_user_id
@@ -452,7 +452,7 @@ export async function runAutomations(
   context: Record<string, unknown> = {},
 ) {
   const d1 = getD1();
-  const rules = await d1.prepare("SELECT id, name, condition_json, action_json FROM fdp_automation_rules WHERE workspace_id = ? AND trigger = ? AND enabled = 1 ORDER BY position").bind(workspaceId, trigger).all<Record<string, unknown>>();
+  const rules = await d1.prepare("SELECT id, name, condition_json, action_json FROM fdp_automation_rules WHERE workspace_id = ? AND board_id = ? AND trigger = ? AND enabled = 1 ORDER BY position").bind(workspaceId, boardId, trigger).all<Record<string, unknown>>();
   let executed = 0;
   for (const rule of rules.results) {
     const condition = safeJson(String(rule.condition_json));
@@ -474,6 +474,34 @@ export async function runAutomations(
     }
     if (typeof action.labelId === "string") {
       statements.push(d1.prepare("INSERT INTO fdp_card_labels (card_id, label_id) SELECT ?, id FROM fdp_labels WHERE id = ? AND workspace_id = ? ON CONFLICT DO NOTHING").bind(cardId, action.labelId, workspaceId));
+    }
+    if (typeof action.priority === "string" && ["low", "normal", "high", "urgent"].includes(action.priority)) {
+      statements.push(d1.prepare("UPDATE fdp_cards SET priority = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ?").bind(action.priority, cardId, boardId));
+    }
+    if (typeof action.assignUserId === "string") {
+      const assignee = await d1.prepare(`SELECT u.id, u.name FROM fdp_users u
+        JOIN fdp_workspace_members wm ON wm.user_id = u.id
+        WHERE u.id = ? AND wm.workspace_id = ? AND wm.role IN ('admin', 'member')`)
+        .bind(action.assignUserId, workspaceId)
+        .first<{ id: string; name: string }>();
+      if (assignee) {
+        statements.push(d1.prepare("INSERT INTO fdp_card_assignees (card_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING").bind(cardId, assignee.id));
+        statements.push(d1.prepare("UPDATE fdp_cards SET assignee_name = CASE WHEN assignee_name = '' THEN ? ELSE assignee_name END, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ?").bind(assignee.name, cardId, boardId));
+      }
+    }
+    if (typeof action.notifyRole === "string" && ["admin", "assignees", "all"].includes(action.notifyRole)) {
+      const recipients = await d1.prepare(`SELECT DISTINCT u.id FROM fdp_users u
+        JOIN fdp_workspace_members wm ON wm.user_id = u.id AND wm.workspace_id = ?
+        LEFT JOIN fdp_card_assignees ca ON ca.user_id = u.id AND ca.card_id = ?
+        WHERE (? = 'all') OR (? = 'admin' AND wm.role = 'admin') OR (? = 'assignees' AND ca.user_id IS NOT NULL)`)
+        .bind(workspaceId, cardId, action.notifyRole, action.notifyRole, action.notifyRole)
+        .all<{ id: string }>();
+      for (const recipient of recipients.results) {
+        statements.push(d1.prepare(`INSERT INTO fdp_notifications
+          (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)
+          VALUES (?, ?, ?, ?, 'automation', ?, ?, ?) ON CONFLICT DO NOTHING`)
+          .bind(crypto.randomUUID(), workspaceId, recipient.id, `automation:${rule.id}:${cardId}:${trigger}:${recipient.id}`, String(rule.name), `A automação foi executada após ${trigger}.`, cardId));
+      }
     }
     if (statements.length) await d1.batch(statements);
     await recordActivity(workspaceId, cardId, actorEmail, "automation.executed", { ruleId: rule.id, ruleName: rule.name, trigger });

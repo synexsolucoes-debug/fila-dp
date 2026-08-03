@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { ensureProcessVersion } from "@/lib/fila-dp-processes";
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
       ...columns.map(([label, kind, behavior], index) => d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), boardId, label, kind, (index + 1) * 1000, behavior)),
       d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(boardId, user.id, workspace.id),
     ]);
-    await recordActivity(workspace.id, null, auth.user.email, "board.created", { boardId, name, boardType, columns: columns.map(([label]) => label) });
+    await ensureProcessVersion(d1, boardId, auth.user.email);
+    await recordActivity(workspace.id, null, auth.user.email, "board.created", { boardId, name, boardType, processVersion: 1, columns: columns.map(([label]) => label) });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
     return apiError(error);

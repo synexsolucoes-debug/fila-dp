@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { ensureProcessVersion, publishProcessVersion } from "@/lib/fila-dp-processes";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -18,6 +19,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       .bind(id, workspace.id)
       .first<{ board_id: string; name: string; position: number; sla_behavior: string }>();
     if (!current) return Response.json({ error: "Coluna não encontrada." }, { status: 404 });
+    await ensureProcessVersion(d1, current.board_id, auth.user.email);
 
     const name = body.name === undefined ? current.name : text(body.name, 80);
     if (!name) return Response.json({ error: "Informe o nome da coluna." }, { status: 400 });
@@ -28,6 +30,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     await d1.prepare(`UPDATE fdp_lists SET name = ?, position = ?, sla_behavior = ? WHERE id = ?${scope}`)
       .bind(name, position, slaBehavior, id, workspace.id)
       .run();
+    const processVersion = await publishProcessVersion(d1, current.board_id, auth.user.email);
     await recordActivity(workspace.id, null, auth.user.email, "list.updated", {
       listId: id,
       boardId: current.board_id,
@@ -36,6 +39,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         slaBehavior: current.sla_behavior === slaBehavior ? undefined : { from: current.sla_behavior, to: slaBehavior },
         position: current.position === position ? undefined : { from: current.position, to: position },
       },
+      processVersion,
     });
     return Response.json(await getWorkspaceSnapshot(auth.user));
   } catch (error) {
@@ -57,6 +61,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       .bind(id, workspace.id)
       .first<{ board_id: string; name: string }>();
     if (!current) return Response.json({ error: "Coluna não encontrada." }, { status: 404 });
+    await ensureProcessVersion(d1, current.board_id, auth.user.email);
     const count = await d1.prepare("SELECT COUNT(*) AS value FROM fdp_lists WHERE board_id = ?").bind(current.board_id).first<{ value: number }>();
     if (Number(count?.value ?? 0) <= 1) return Response.json({ error: "O quadro precisa manter pelo menos uma coluna." }, { status: 400 });
 
@@ -79,7 +84,8 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     const deleted = await d1.prepare("DELETE FROM fdp_lists WHERE id = ? AND board_id IN (SELECT id FROM fdp_boards WHERE workspace_id = ?)").bind(id, workspace.id).run();
     if (Number(deleted.meta.changes ?? 0) === 0) return Response.json({ error: "Coluna não encontrada." }, { status: 404 });
-    await recordActivity(workspace.id, null, auth.user.email, "list.deleted", { listId: id, name: current.name, movedCards: cardCount, moveToListId: moveToListId || null });
+    const processVersion = await publishProcessVersion(d1, current.board_id, auth.user.email);
+    await recordActivity(workspace.id, null, auth.user.email, "list.deleted", { listId: id, name: current.name, movedCards: cardCount, moveToListId: moveToListId || null, processVersion });
     return Response.json(await getWorkspaceSnapshot(auth.user));
   } catch (error) {
     return apiError(error);

@@ -42,3 +42,7 @@ Referências operacionais: [promover deployments na Vercel](https://vercel.com/d
 - Confirmar que a integração Git da Vercel aponta para este repositório e que Preview é criado em cada PR.
 - Separar credenciais Neon de Preview e Production.
 - Definir e testar a retenção de histórico/PITR conforme o plano contratado no Neon.
+- Configurar `CRON_SECRET` e confirmar uma execução 200 de `/api/cron/sla` nos logs de produção.
+- Validar o domínio do remetente no Resend antes de habilitar convites e recuperação por e-mail.
+- Definir `FDP_INTEGRATION_ENCRYPTION_KEY` antes de conectar calendários externos.
+- Executar `GET /api/health` e confirmar banco conectado após cada publicação.

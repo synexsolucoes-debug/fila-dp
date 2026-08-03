@@ -760,11 +760,12 @@
 .planner-connections > header strong { color: var(--ui-text); font-size: 11px; }
 .planner-connections > header button { padding: 0; border: 0; background: transparent; color: var(--ui-primary); cursor: pointer; font: 700 10px var(--font-geist-sans), sans-serif; }
 .planner-connections > p { margin: 9px 0 0; color: var(--ui-text-soft); font-size: 10px; line-height: 1.45; }
-.planner-connections article { margin-top: 9px; display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: center; }
+.planner-connections article { margin-top: 9px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .planner-connections article > svg { width: 16px; color: var(--ui-primary); }
 .planner-connections article strong, .planner-connections article small { display: block; }
 .planner-connections article strong { color: var(--ui-text); font-size: 10px; }
 .planner-connections article small { margin-top: 3px; color: var(--ui-text-soft); font-size: 9px; }
+.planner-connections .calendar-sync-button { min-height: 30px; padding: 0 9px; border: 1px solid var(--ui-border-strong); border-radius: 8px; background: var(--ui-surface); color: var(--ui-primary); cursor: pointer; font-size: 9px; font-weight: 800; }
 .planner-connections form { margin-top: 11px; display: grid; gap: 7px; }
 .planner-connections select, .planner-connections input { min-height: 34px; padding: 0 8px; border: 1px solid var(--ui-border-strong); border-radius: 7px; background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 10px; }
 .planner-connections form .secondary-button { min-height: 34px; font-size: 9px; }
@@ -781,6 +782,8 @@
 .access-recovery-link input { width: 100%; min-height: 36px; margin-top: 11px; padding: 0 9px; border: 1px solid var(--ui-border-strong); border-radius: 6px; background: var(--ui-surface); color: var(--ui-text-soft); font: 400 10px var(--font-geist-mono), monospace; }
 
 .auth-recovery-hint { margin: 12px 0 0; color: #758297; font-size: 11px; line-height: 1.45; }
+.auth-recovery-hint button { padding: 0; border: 0; background: transparent; color: #0E6657; cursor: pointer; font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+.auth-recovery-hint button:disabled { cursor: wait; opacity: .58; }
 .recovery-state { display: grid; gap: 13px; }.recovery-state h2, .recovery-state p { margin: 0; }.recovery-state h2 { color: #11233b; font-size: 25px; }.recovery-state p { color: #718095; font-size: 13px; line-height: 1.55; }
 
 @media (max-width: 760px) {
@@ -1826,6 +1829,12 @@
   color: var(--ui-text-soft);
   font-size: 9px;
 }
+
+.sla-company-report { margin: 4px 18px 18px; padding: 14px; display: grid; gap: 8px; border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface-muted); }
+.sla-company-report > strong { color: var(--ui-text); font-size: 11px; }
+.sla-company-report > span { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sla-company-report b { overflow: hidden; color: var(--ui-text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.sla-company-report small { color: var(--ui-text-soft); font-size: 9px; text-align: right; }
 
 .report-state {
   min-height: 110px;

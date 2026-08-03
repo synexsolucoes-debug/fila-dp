@@ -71,8 +71,8 @@ export async function POST(request: Request) {
 
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
-        (id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by, sla_target_minutes, sla_started_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, CURRENT_TIMESTAMP)`)
+        (id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by, sla_target_minutes, sla_started_at, process_version)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, CURRENT_TIMESTAMP, COALESCE((SELECT process_version FROM fdp_boards WHERE id = ?), 1))`)
         .bind(
           cardId,
           targetBoard.id,
@@ -89,6 +89,7 @@ export async function POST(request: Request) {
           Number(positionRow?.max_position ?? 0) + 1000,
           auth.user.email,
           slaTargetMinutes,
+          targetBoard.id,
         ),
       ...checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, ?, 0, ?)")
         .bind(crypto.randomUUID(), cardId, item, (index + 1) * 1000)),

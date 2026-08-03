@@ -1,6 +1,7 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { createRecoveryToken } from "@/lib/fila-dp-recovery";
+import { sendTransactionalEmail, type EmailDeliveryResult } from "@/lib/fila-dp-email";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 
 const memberRoles: WorkspaceRole[] = ["admin", "member", "observer", "guest"];
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       ...companyIds.map((companyId) => d1.prepare("INSERT INTO fdp_member_company_access (workspace_id, user_id, company_id) VALUES (?, ?, ?)").bind(workspace.id, invitedUser!.id, companyId)),
     ]);
 
-    let activation: { url: string; expiresAt: string; name: string } | null = null;
+    let activation: { url: string; expiresAt: string; name: string; delivery: EmailDeliveryResult["status"] } | null = null;
     if (createdNow || !invitedUser.password_hash) {
       const { token, hash } = createRecoveryToken();
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
@@ -52,10 +53,21 @@ export async function POST(request: Request) {
         d1.prepare("UPDATE fdp_access_recovery_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = ? AND used_at IS NULL").bind(invitedUser.id),
         d1.prepare("INSERT INTO fdp_access_recovery_tokens (id, user_id, token_hash, created_by, expires_at) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), invitedUser.id, hash, auth.user.email, expiresAt),
       ]);
-      const url = new URL("/recuperar", request.url);
+      const url = new URL("/recuperar", process.env.FDP_PUBLIC_URL || request.url);
       url.searchParams.set("token", token);
       url.searchParams.set("email", email);
-      activation = { url: url.toString(), expiresAt, name };
+      const delivery = await sendTransactionalEmail({
+        to: email,
+        subject: `Seu acesso ao ${workspace.name} no Fila DP`,
+        preheader: "Defina sua senha e acesse as demandas liberadas para você.",
+        title: `Olá, ${name}.`,
+        paragraphs: [`Você recebeu acesso ao grupo ${workspace.name} com o papel de ${role}.`, "O link expira em 30 minutos e só pode ser utilizado uma vez."],
+        actionLabel: "Ativar meu acesso",
+        actionUrl: url.toString(),
+        idempotencyKey: `workspace-invite-${workspace.id}-${invitedUser.id}-${hash.slice(0, 16)}`,
+      });
+      if (delivery.status === "failed") console.error("[fila-dp][email] workspace-invite", { workspaceId: workspace.id, email, error: delivery.error });
+      activation = { url: url.toString(), expiresAt, name, delivery: delivery.status };
     }
 
     await recordActivity(workspace.id, null, auth.user.email, "workspace.member_added", { email, role, companyIds, createdNow });

@@ -1,6 +1,7 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 import { getAttachmentsBucket } from "@/db";
+import { scanAttachment } from "@/lib/fila-dp-antivirus";
 
 type RouteContext = { params: Promise<{ id: string }> };
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -33,10 +34,12 @@ export async function POST(request: Request, context: RouteContext) {
       return Response.json({ error: "Tipo de arquivo não permitido. Use PDF, imagem, TXT, CSV, DOCX ou XLSX." }, { status: 415 });
     }
 
+    const contents = await file.arrayBuffer();
+    const antivirus = await scanAttachment(contents, file.name, file.type);
     const attachmentId = crypto.randomUUID();
     const objectKey = `workspaces/${workspace.id}/cards/${id}/${attachmentId}`;
     const bucket = getAttachmentsBucket();
-    await bucket.put(objectKey, file.stream(), {
+    await bucket.put(objectKey, contents, {
       httpMetadata: { contentType: file.type, contentDisposition: "attachment" },
       customMetadata: { attachmentId, cardId: id, workspaceId: workspace.id },
     });
@@ -48,7 +51,8 @@ export async function POST(request: Request, context: RouteContext) {
       await bucket.delete(objectKey).catch(() => undefined);
       throw error;
     }
-    await recordActivity(workspace.id, id, auth.user.email, "attachment.uploaded", { attachmentId, filename: file.name, sizeBytes: file.size });
+    await recordActivity(workspace.id, id, auth.user.email, "attachment.uploaded", { attachmentId, filename: file.name, sizeBytes: file.size, antivirus: antivirus.status, antivirusEngine: antivirus.engine ?? null });
+    await runAutomations(workspace.id, board.id, id, "attachment.uploaded", auth.user.email, { contentType: file.type, antivirus: antivirus.status });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
     return apiError(error);

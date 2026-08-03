@@ -36,6 +36,13 @@
       "when": 1785761250454,
       "tag": "0002_chief_venom",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785787200000,
+      "tag": "0003_operational_hardening",
+      "breakpoints": true
     }
   ]
 }

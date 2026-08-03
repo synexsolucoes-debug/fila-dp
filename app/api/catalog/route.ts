@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text, validDate } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { ensureProcessVersion, publishProcessVersion } from "@/lib/fila-dp-processes";
 
 const colors = new Set(["#dc2626", "#ea580c", "#d97706", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#64748b"]);
 
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
     const resource = text(body.resource, 40);
     const operation = text(body.operation, 20) || "create";
     const id = text(body.id, 160);
-    const { d1, workspace } = await getWorkspaceContext(auth.user);
+    const { d1, workspace, board } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
 
     if (resource === "label") {
@@ -81,19 +82,58 @@ export async function POST(request: Request) {
       const status = ["needs_credentials", "paused"].includes(String(body.status)) ? String(body.status) : "needs_credentials";
       await d1.prepare("UPDATE fdp_integrations SET config_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND workspace_id = ?").bind(JSON.stringify(config), status, id, workspace.id).run();
     } else if (resource === "rule") {
-      if (operation === "delete") await d1.prepare("DELETE FROM fdp_automation_rules WHERE id = ? AND workspace_id = ?").bind(id, workspace.id).run();
+      await ensureProcessVersion(d1, board.id, auth.user.email);
+      if (operation === "delete") await d1.prepare("DELETE FROM fdp_automation_rules WHERE id = ? AND workspace_id = ? AND board_id = ?").bind(id, workspace.id, board.id).run();
       else {
         const name = text(body.name, 120);
-        const trigger = ["card.created", "card.moved", "assignee.added", "checklist.completed", "sla.tick"].includes(String(body.trigger)) ? String(body.trigger) : "card.created";
-        const condition = body.condition && typeof body.condition === "object" ? body.condition : {};
-        const action = body.action && typeof body.action === "object" ? body.action : {};
+        const trigger = ["card.created", "card.moved", "assignee.added", "checklist.completed", "comment.added", "attachment.uploaded", "sla.tick"].includes(String(body.trigger)) ? String(body.trigger) : "card.created";
         if (!name) return Response.json({ error: "Informe o nome da automação." }, { status: 400 });
-        if (id) await d1.prepare("UPDATE fdp_automation_rules SET name = ?, trigger = ?, condition_json = ?, action_json = ?, enabled = ? WHERE id = ? AND workspace_id = ?").bind(name, trigger, JSON.stringify(condition), JSON.stringify(action), body.enabled === false ? 0 : 1, id, workspace.id).run();
+        const rawCondition = body.condition && typeof body.condition === "object" && !Array.isArray(body.condition) ? body.condition as Record<string, unknown> : {};
+        const condition: Record<string, unknown> = {};
+        const processType = text(rawCondition.processType, 40).toUpperCase();
+        const priorityCondition = ["low", "normal", "high", "urgent"].includes(String(rawCondition.priority)) ? String(rawCondition.priority) : "";
+        const listKind = text(rawCondition.listKind, 80);
+        if (processType) condition.processType = processType;
+        else if (priorityCondition) condition.priority = priorityCondition;
+        else if (listKind) condition.listKind = listKind;
+        else if (rawCondition.assignee === "present") condition.assignee = "present";
+        else if (rawCondition.allItems === true) condition.allItems = true;
+        else if (rawCondition.dueAt === "past") condition.dueAt = "past";
+
+        const rawAction = body.action && typeof body.action === "object" && !Array.isArray(body.action) ? body.action as Record<string, unknown> : {};
+        const action: Record<string, string> = {};
+        const moveTo = text(rawAction.moveTo, 80);
+        const slaStatus = ["safe", "warning", "overdue", "paused", "completed", "recalculate"].includes(String(rawAction.slaStatus)) ? String(rawAction.slaStatus) : "";
+        const labelId = text(rawAction.labelId, 120);
+        const priorityAction = ["low", "normal", "high", "urgent"].includes(String(rawAction.priority)) ? String(rawAction.priority) : "";
+        const assignUserId = text(rawAction.assignUserId, 120);
+        const notifyRole = ["admin", "assignees", "all"].includes(String(rawAction.notifyRole)) ? String(rawAction.notifyRole) : "";
+        if (moveTo) action.moveTo = moveTo;
+        else if (slaStatus) action.slaStatus = slaStatus;
+        else if (labelId) action.labelId = labelId;
+        else if (priorityAction) action.priority = priorityAction;
+        else if (assignUserId) action.assignUserId = assignUserId;
+        else if (notifyRole) action.notifyRole = notifyRole;
+        if (!Object.keys(action).length) return Response.json({ error: "Escolha uma ação válida para a automação." }, { status: 400 });
+        if (action.moveTo) {
+          const targetList = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = ?").bind(board.id, action.moveTo).first();
+          if (!targetList) return Response.json({ error: "A coluna selecionada não pertence a este processo." }, { status: 400 });
+        }
+        if (action.labelId) {
+          const label = await d1.prepare("SELECT id FROM fdp_labels WHERE id = ? AND workspace_id = ?").bind(action.labelId, workspace.id).first();
+          if (!label) return Response.json({ error: "A etiqueta selecionada não pertence a este grupo." }, { status: 400 });
+        }
+        if (action.assignUserId) {
+          const member = await d1.prepare("SELECT user_id FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = ? AND role IN ('admin', 'member')").bind(workspace.id, action.assignUserId).first();
+          if (!member) return Response.json({ error: "O responsável selecionado não possui acesso operacional." }, { status: 400 });
+        }
+        if (id) await d1.prepare("UPDATE fdp_automation_rules SET name = ?, trigger = ?, condition_json = ?, action_json = ?, enabled = ? WHERE id = ? AND workspace_id = ? AND board_id = ?").bind(name, trigger, JSON.stringify(condition), JSON.stringify(action), body.enabled === false ? 0 : 1, id, workspace.id, board.id).run();
         else {
           const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS value FROM fdp_automation_rules WHERE workspace_id = ?").bind(workspace.id).first<{ value: number }>();
-          await d1.prepare("INSERT INTO fdp_automation_rules (id, workspace_id, name, trigger, condition_json, action_json, enabled, position) VALUES (?, ?, ?, ?, ?, ?, 1, ?)").bind(crypto.randomUUID(), workspace.id, name, trigger, JSON.stringify(condition), JSON.stringify(action), Number(position?.value ?? 0) + 1000).run();
+          await d1.prepare("INSERT INTO fdp_automation_rules (id, workspace_id, board_id, name, trigger, condition_json, action_json, enabled, position) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)").bind(crypto.randomUUID(), workspace.id, board.id, name, trigger, JSON.stringify(condition), JSON.stringify(action), Number(position?.value ?? 0) + 1000).run();
         }
       }
+      await publishProcessVersion(d1, board.id, auth.user.email);
     } else {
       return Response.json({ error: "Configuração inválida." }, { status: 400 });
     }

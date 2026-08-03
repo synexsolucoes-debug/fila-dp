@@ -13,8 +13,11 @@ anexos usam Vercel Blob privado.
 4. Confirme que `DATABASE_URL` foi criada nas Environment Variables.
 5. Crie um Blob privado e confirme `BLOB_READ_WRITE_TOKEN`.
 6. Defina `FDP_AUTH_SECRET` com pelo menos 32 bytes aleatorios.
-7. Faca um novo deploy. O schema e criado de forma idempotente na primeira
-   requisicao autenticada.
+7. Antes do deploy, aponte `DATABASE_URL` para uma copia/branch do Neon e rode
+   `npm run db:migrate`.
+8. Valide o Preview, crie um ponto de recuperacao no Neon, rode a mesma
+   migration em producao e somente entao promova o deploy. As rotas HTTP nunca
+   criam ou alteram tabelas.
 
 O codigo tambem aceita `POSTGRES_URL` ou `NEON_DATABASE_URL`, mas
 `DATABASE_URL` e a variavel padrao da integracao da Vercel.
@@ -25,16 +28,67 @@ O codigo tambem aceita `POSTGRES_URL` ou `NEON_DATABASE_URL`, mas
 DATABASE_URL=postgresql://...neon.tech/...
 BLOB_READ_WRITE_TOKEN=...
 FDP_AUTH_SECRET=...
+CRON_SECRET=...
+FDP_INTEGRATION_ENCRYPTION_KEY=...
+FDP_PUBLIC_URL=https://fila-dp.vercel.app
 ```
 
 Nao compartilhe esses valores no chat ou no repositorio.
 
+## E-mail, SLA e recuperação de acesso
+
+Conecte o Resend pelo Marketplace da Vercel ou defina `RESEND_API_KEY` e
+`FDP_EMAIL_FROM`. O domínio do remetente deve estar validado no Resend. Com isso,
+convites, recuperação de senha e alertas de SLA são enviados automaticamente;
+sem a chave, o administrador ainda recebe o link para compartilhamento manual.
+
+O cron `/api/cron/sla` é protegido por `CRON_SECRET` e está configurado em
+`vercel.json` para executar diariamente às 11:00 UTC. Em planos que permitem
+maior frequência, o agendamento pode ser alterado para horário ou a cada poucos
+minutos. O processamento persiste o estado, gera níveis de escalonamento e usa
+chaves idempotentes para evitar alertas duplicados.
+
+## Calendários Google e Microsoft
+
+Defina `FDP_INTEGRATION_ENCRYPTION_KEY` e as credenciais do provedor:
+
+```text
+FDP_GOOGLE_CALENDAR_CLIENT_ID
+FDP_GOOGLE_CALENDAR_CLIENT_SECRET
+FDP_MICROSOFT_CALENDAR_CLIENT_ID
+FDP_MICROSOFT_CALENDAR_CLIENT_SECRET
+FDP_MICROSOFT_TENANT_ID
+```
+
+Cadastre nos provedores as URLs de retorno
+`https://SEU-DOMINIO/api/calendar/oauth/google/callback` e
+`https://SEU-DOMINIO/api/calendar/oauth/microsoft/callback`. Os tokens são
+criptografados antes de serem persistidos. Cada usuário conecta sua própria
+agenda pelo Planner e pode sincronizar os blocos de tempo sem compartilhar
+tokens no navegador.
+
+## WhatsApp Cloud API
+
+Além do webhook simplificado, a rota do WhatsApp aceita diretamente o payload
+assinado da Meta. Configure `FDP_WHATSAPP_VERIFY_TOKEN` e
+`FDP_WHATSAPP_APP_SECRET`; use como callback
+`/api/integrations/webhook/whatsapp?workspaceId=WORKSPACE_ID`. No cadastro da
+integração, o campo **Conta / origem** deve conter o `phone_number_id` da Meta,
+impedindo que uma mensagem assinada seja vinculada ao grupo errado.
+
+## Antivírus de anexos
+
+Opcionalmente configure `FDP_ANTIVIRUS_ENDPOINT` e `FDP_ANTIVIRUS_TOKEN`. O
+serviço deve aceitar os bytes do arquivo e responder JSON com `{"clean":true}`.
+Para bloquear qualquer upload quando o scanner estiver indisponível, defina
+`FDP_REQUIRE_ANTIVIRUS=true`.
+
 ## Dados existentes
 
 A troca do provedor nao copia automaticamente os dados do Turso. O banco Neon
-novo inicia vazio e o Fila DP cria suas tabelas no primeiro login. Se precisar
-preservar dados, sera necessario exportar o Turso e importar os registros para
-o Neon antes de liberar o acesso da equipe.
+novo inicia vazio e precisa receber `npm run db:migrate` antes do primeiro
+acesso. Se precisar preservar dados, sera necessario exportar o Turso e importar
+os registros para o Neon antes de liberar o acesso da equipe.
 
 ## Integrações externas
 
@@ -140,9 +194,27 @@ para custos deve conter:
     {
       "companyId": "ID_DA_EMPRESA_NO_FILA_DP",
       "period": "2026-07",
-      "headcount": 120,
+      "headcountStart": 118,
+      "headcountEnd": 120,
+      "leavesCount": 3,
       "admissions": 4,
       "terminations": 2,
+      "voluntaryTerminations": 1,
+      "involuntaryTerminations": 1,
+      "baseSalary": 250000,
+      "variablePay": 18000,
+      "overtimePay": 12000,
+      "additionalPay": 8000,
+      "vacationPay": 16000,
+      "terminationPay": 14000,
+      "employeeInss": 24000,
+      "employeeIrrf": 16000,
+      "employerInss": 52000,
+      "ratContribution": 7000,
+      "thirdPartyContributions": 14000,
+      "fgts": 23000,
+      "benefitsCost": 36000,
+      "provisionsCost": 28000,
       "payrollCost": 385000.50,
       "externalId": "COMP-2026-07"
     }
@@ -158,7 +230,7 @@ Quando a resposta do Sankhya usar nomes de campos diferentes, configure
 `FDP_SANKHYA_METRIC_FIELD_MAP` como JSON, por exemplo:
 
 ```json
-{"companyId":"CODEMP","period":"PERREF","headcount":"QTDPESSOAS","admissions":"ADMISSOES","terminations":"DESLIGAMENTOS","payrollCost":"VLRFOLHA"}
+{"companyId":"CODEMP","period":"PERREF","headcountStart":"QTDPESSOASINICIO","headcountEnd":"QTDPESSOASFIM","leavesCount":"QTDAFASTADOS","admissions":"ADMISSOES","terminations":"DESLIGAMENTOS","baseSalary":"VLRBASE","grossPayroll":"VLRFOLHABRUTA","employerInss":"VLRINSSPATRONAL","fgts":"VLRFGTS","benefitsCost":"VLRBENEFICIOS","provisionsCost":"VLRPROVISOES","payrollCost":"CUSTOFOLHA"}
 ```
 
 O corpo da chamada Gateway pode ficar em `FDP_SANKHYA_REQUEST_BODY` como segredo

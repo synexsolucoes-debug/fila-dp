@@ -1,6 +1,7 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { createRecoveryToken } from "@/lib/fila-dp-recovery";
+import { sendTransactionalEmail } from "@/lib/fila-dp-email";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,10 +23,21 @@ export async function POST(request: Request, context: RouteContext) {
       d1.prepare("INSERT INTO fdp_access_recovery_tokens (id, user_id, token_hash, created_by, expires_at) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), member.id, hash, auth.user.email, expiresAt),
     ]);
     await recordActivity(workspace.id, null, auth.user.email, "workspace.recovery_link_created", { email: member.email, expiresAt });
-    const recoveryUrl = new URL("/recuperar", request.url);
+    const recoveryUrl = new URL("/recuperar", process.env.FDP_PUBLIC_URL || request.url);
     recoveryUrl.searchParams.set("token", token);
     recoveryUrl.searchParams.set("email", member.email);
-    return Response.json({ snapshot: await getWorkspaceSnapshot(auth.user), recoveryUrl: recoveryUrl.toString(), expiresAt, memberName: member.name });
+    const delivery = await sendTransactionalEmail({
+      to: member.email,
+      subject: "Novo link de acesso ao Fila DP",
+      preheader: "Defina uma nova senha com um link seguro.",
+      title: `Olá, ${member.name}.`,
+      paragraphs: [`Um administrador do grupo ${workspace.name} gerou um novo link de acesso para você.`, "O link expira em 30 minutos e só pode ser utilizado uma vez."],
+      actionLabel: "Definir nova senha",
+      actionUrl: recoveryUrl.toString(),
+      idempotencyKey: `admin-recovery-${workspace.id}-${member.id}-${hash.slice(0, 16)}`,
+    });
+    if (delivery.status === "failed") console.error("[fila-dp][email] admin-recovery", { workspaceId: workspace.id, email: member.email, error: delivery.error });
+    return Response.json({ snapshot: await getWorkspaceSnapshot(auth.user), recoveryUrl: recoveryUrl.toString(), expiresAt, memberName: member.name, delivery: delivery.status });
   } catch (error) {
     return apiError(error);
   }

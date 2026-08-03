@@ -14,7 +14,9 @@ export async function getApiUser() {
 export function apiError(error: unknown) {
   const message = error instanceof Error ? error.message : "Erro inesperado.";
   const status = message.includes("permissão") ? 403 : message.includes("não encontrad") ? 404 : message.includes("inválid") ? 400 : 500;
-  return Response.json({ error: message }, { status });
+  const requestId = crypto.randomUUID();
+  if (status >= 500) console.error("[fila-dp][api] request-failed", { requestId, message, stack: error instanceof Error ? error.stack : undefined });
+  return Response.json({ error: message, requestId }, { status, headers: { "Cache-Control": "no-store", "X-Request-Id": requestId } });
 }
 
 export function text(value: unknown, max = 5000) {

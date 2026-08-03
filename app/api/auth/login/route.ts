@@ -1,6 +1,7 @@
 import { hashPassword, setAuthSession, verifyPassword } from "@/app/chatgpt-auth";
 import { getD1 } from "@/db";
 import { provisionWorkspaceDefaults } from "@/lib/fila-dp-db";
+import { assertAuthAttemptAllowed, AuthRateLimitError, authRateLimitResponse, clearAuthFailures, registerAuthFailure } from "@/lib/fila-dp-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     if (password.length < 8 || password.length > 200) return Response.json({ error: "A senha deve ter entre 8 e 200 caracteres." }, { status: 400 });
 
     const d1 = getD1();
+    const rateLimitKey = await assertAuthAttemptAllowed(request, email, mode);
     const current = await d1.prepare("SELECT id, email, name, password_hash, password_salt FROM fdp_users WHERE email = ?").bind(email).first<UserRow>();
 
     if (mode === "bootstrap") {
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
       await provisionWorkspaceDefaults(d1, workspaceId);
     } else {
       if (!current || !current.password_hash || !current.password_salt || !await verifyPassword(password, current.password_salt, current.password_hash)) {
+        await registerAuthFailure(rateLimitKey);
         return Response.json({ error: "E-mail ou senha incorretos." }, { status: 401 });
       }
       const access = await d1.prepare("SELECT 1 AS granted FROM fdp_workspace_members WHERE user_id = ? LIMIT 1").bind(current.id).first<{ granted: number }>();
@@ -73,9 +76,11 @@ export async function POST(request: Request) {
 
     const user = await d1.prepare("SELECT id, email, name FROM fdp_users WHERE email = ?").bind(email).first<{ id: string; email: string; name: string }>();
     if (!user) return Response.json({ error: "Não foi possível iniciar a sessão." }, { status: 500 });
+    await clearAuthFailures(rateLimitKey);
     await setAuthSession({ id: user.id, email: user.email, displayName: user.name, fullName: user.name });
     return Response.json({ ok: true, redirectTo: cleanReturnTo(body.returnTo) });
   } catch (error) {
+    if (error instanceof AuthRateLimitError) return authRateLimitResponse(error);
     const message = error instanceof Error ? error.message : "Não foi possível entrar.";
     return Response.json({ error: message }, { status: 500 });
   }

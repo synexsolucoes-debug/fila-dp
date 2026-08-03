@@ -1,5 +1,5 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -43,6 +43,7 @@ export async function POST(request: Request, context: RouteContext) {
       VALUES (?, ?, ?, ?, 'comment', 'Novo comentário', ?, ?) ON CONFLICT DO NOTHING`)
       .bind(crypto.randomUUID(), workspace.id, recipientId, `comment:${commentId}:${recipientId}`, `${auth.user.displayName} comentou em ${card.title}`, id)));
     await recordActivity(workspace.id, id, auth.user.email, "card.commented");
+    await runAutomations(workspace.id, board.id, id, "comment.added", auth.user.email, { hasMentions: mentionNames.length > 0 });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
     return apiError(error);

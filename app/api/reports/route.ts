@@ -11,9 +11,9 @@ export async function GET(request: Request) {
     const to = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("to") ?? "") ? url.searchParams.get("to")! : new Date().toISOString().slice(0, 10);
     const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("from") ?? "") ? url.searchParams.get("from")! : new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
     const [cards, hrMetrics] = await Promise.all([
-      d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.archived, c.company_id,
-      COALESCE(c.assignee_name, '') AS assignee_name
-      FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id
+      d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.sla_escalation_level, c.archived, c.company_id,
+      COALESCE(c.assignee_name, '') AS assignee_name, COALESCE(company.trade_name, company.legal_name, 'Sem empresa') AS company_name
+      FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id LEFT JOIN fdp_companies company ON company.id = c.company_id
       WHERE b.workspace_id = ? AND date(c.created_at) BETWEEN date(?) AND date(?)`).bind(workspace.id, from, to).all<Record<string, unknown>>(),
       d1.prepare(`SELECT m.period, m.headcount, m.admissions, m.terminations, m.payroll_cost, m.company_id, COALESCE(c.legal_name, 'Sem empresa') AS company_name
         FROM fdp_hr_metrics m LEFT JOIN fdp_companies c ON c.id = m.company_id
@@ -44,6 +44,27 @@ export async function GET(request: Request) {
       accumulator[key] = Math.round(((accumulator[key] ?? 0) + Number(row.payroll_cost ?? 0)) * 100) / 100;
       return accumulator;
     }, {});
-    return Response.json({ from, to, total: visibleCards.length, completed, completionRate: visibleCards.length ? Math.round((completed / visibleCards.length) * 100) : 100, averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0, byProcess, byMember, activityCount: visibleActivity.length, activityByType: visibleActivity.reduce<Record<string, number>>((accumulator, item) => { const key = String(item.event_type); accumulator[key] = (accumulator[key] ?? 0) + 1; return accumulator; }, {}), hrMetrics: { periods: metricRows.length, admissions, terminations, averageHeadcount: Math.round(averageHeadcount * 10) / 10, payrollCostTotal: Math.round(payrollCostTotal * 100) / 100, turnoverRate, payrollByCompany } });
+    const slaStatus = { safe: 0, warning: 0, overdue: 0, paused: 0, completed: 0 };
+    const slaByCompany: Record<string, { total: number; warning: number; overdue: number }> = {};
+    const slaByProcess: Record<string, { total: number; warning: number; overdue: number }> = {};
+    let escalated = 0;
+    for (const card of visibleCards) {
+      const status = String(card.sla_status) as keyof typeof slaStatus;
+      if (status in slaStatus) slaStatus[status] += 1;
+      if (Number(card.sla_escalation_level ?? 0) > 0) escalated += 1;
+      const company = String(card.company_name ?? "Sem empresa");
+      const process = String(card.process_type ?? "OUTROS");
+      const companySummary = slaByCompany[company] ??= { total: 0, warning: 0, overdue: 0 };
+      const processSummary = slaByProcess[process] ??= { total: 0, warning: 0, overdue: 0 };
+      companySummary.total += 1;
+      processSummary.total += 1;
+      if (status === "warning" || status === "overdue") {
+        companySummary[status] += 1;
+        processSummary[status] += 1;
+      }
+    }
+    const slaMeasured = visibleCards.length - slaStatus.paused;
+    const slaComplianceRate = slaMeasured ? Math.round(((slaStatus.safe + slaStatus.completed) / slaMeasured) * 10000) / 100 : 100;
+    return Response.json({ from, to, total: visibleCards.length, completed, completionRate: visibleCards.length ? Math.round((completed / visibleCards.length) * 100) : 100, averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0, byProcess, byMember, activityCount: visibleActivity.length, activityByType: visibleActivity.reduce<Record<string, number>>((accumulator, item) => { const key = String(item.event_type); accumulator[key] = (accumulator[key] ?? 0) + 1; return accumulator; }, {}), sla: { ...slaStatus, escalated, complianceRate: slaComplianceRate, byCompany: slaByCompany, byProcess: slaByProcess }, hrMetrics: { periods: metricRows.length, admissions, terminations, averageHeadcount: Math.round(averageHeadcount * 10) / 10, payrollCostTotal: Math.round(payrollCostTotal * 100) / 100, turnoverRate, payrollByCompany } });
   } catch (error) { return apiError(error); }
 }

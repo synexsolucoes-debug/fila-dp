@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { ensureProcessVersion, publishProcessVersion } from "@/lib/fila-dp-processes";
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -15,9 +16,11 @@ export async function POST(request: Request) {
     requireWorkspaceRole(workspace.role, ["admin"]);
     const board = await d1.prepare("SELECT id FROM fdp_boards WHERE id = ? AND workspace_id = ?").bind(boardId, workspace.id).first();
     if (!board) return Response.json({ error: "Quadro não encontrado." }, { status: 404 });
+    await ensureProcessVersion(d1, boardId, auth.user.email);
     const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS value FROM fdp_lists WHERE board_id = ?").bind(boardId).first<{ value: number }>();
     await d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), boardId, name, `${kind}-${crypto.randomUUID().slice(0, 6)}`, Number(position?.value ?? 0) + 1000, slaBehavior).run();
-    await recordActivity(workspace.id, null, auth.user.email, "list.created", { boardId, name });
+    const processVersion = await publishProcessVersion(d1, boardId, auth.user.email);
+    await recordActivity(workspace.id, null, auth.user.email, "list.created", { boardId, name, processVersion });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
     return apiError(error);

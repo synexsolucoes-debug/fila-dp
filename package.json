@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --test tests/integration-security.test.mts tests/release-foundation.test.mts tests/rendered-html.test.mjs",
+    "test": "node --experimental-strip-types --test tests/integration-security.test.mts tests/operational-hardening.test.mts tests/release-foundation.test.mts tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:check": "node scripts/check-migrations.mjs",

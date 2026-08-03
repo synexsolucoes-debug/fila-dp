@@ -217,6 +217,7 @@
 .auth-primary svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .auth-mode-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; }
 .auth-login-error { margin: 0; padding: 11px 12px; border: 1px solid #f0c8c8; border-radius: 7px; background: #fff3f3; color: #a23b3b; font-size: 12px; line-height: 1.45; }
+.auth-login-success { margin: 0; padding: 11px 12px; border: 1px solid #b8e3d4; border-radius: 7px; background: #eefaf6; color: #0E6657; font-size: 12px; line-height: 1.45; }
 
 .dashboard-shell {
   min-height: 100vh;

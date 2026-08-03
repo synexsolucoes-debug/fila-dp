@@ -83,6 +83,14 @@ export const accessRecoveryTokens = pgTable("fdp_access_recovery_tokens", {
   index("fdp_access_recovery_user_expiry_idx").on(table.userId, table.expiresAt),
 ]);
 
+export const authRateLimits = pgTable("fdp_auth_rate_limits", {
+  keyHash: text("key_hash").primaryKey(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  blockedUntil: timestamp("blocked_until", { withTimezone: true, mode: "string" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [index("fdp_auth_rate_limits_updated_idx").on(table.updatedAt)]);
+
 export const userWorkspacePreferences = pgTable("fdp_user_workspace_preferences", {
   userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
   activeWorkspaceId: text("active_workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
@@ -96,6 +104,7 @@ export const boards = pgTable("fdp_boards", {
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   boardType: text("board_type").notNull().default("general"),
+  processVersion: integer("process_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("fdp_boards_workspace_name_uq").on(table.workspaceId, table.name)]);
 
@@ -135,9 +144,22 @@ export const cards = pgTable("fdp_cards", {
   slaPausedMinutes: integer("sla_paused_minutes").notNull().default(0),
   slaPauseReason: text("sla_pause_reason").notNull().default(""),
   slaEscalationLevel: integer("sla_escalation_level").notNull().default(0),
+  processVersion: integer("process_version").notNull().default(1),
 }, (table) => [
   index("fdp_cards_board_list_position_idx").on(table.boardId, table.listId, table.position),
   index("fdp_cards_due_status_idx").on(table.dueAt, table.slaStatus),
+]);
+
+export const processVersions = pgTable("fdp_process_versions", {
+  id: text("id").primaryKey(),
+  boardId: text("board_id").notNull().references(() => boards.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  snapshotJson: text("snapshot_json").notNull().default("{}"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_process_versions_board_version_uq").on(table.boardId, table.version),
+  index("fdp_process_versions_board_created_idx").on(table.boardId, table.createdAt),
 ]);
 
 export const checklistItems = pgTable("fdp_checklist_items", {
@@ -301,6 +323,25 @@ export const calendarConnections = pgTable("fdp_calendar_connections", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("fdp_calendar_connections_user_provider_uq").on(table.userId, table.provider)]);
 
+export const calendarCredentials = pgTable("fdp_calendar_credentials", {
+  connectionId: text("connection_id").primaryKey().references(() => calendarConnections.id, { onDelete: "cascade" }),
+  encryptedPayload: text("encrypted_payload").notNull(),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true, mode: "string" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+});
+
+export const calendarEventLinks = pgTable("fdp_calendar_event_links", {
+  id: text("id").primaryKey(),
+  connectionId: text("connection_id").notNull().references(() => calendarConnections.id, { onDelete: "cascade" }),
+  blockId: text("block_id").notNull().references(() => plannerBlocks.id, { onDelete: "cascade" }),
+  externalEventId: text("external_event_id").notNull(),
+  contentFingerprint: text("content_fingerprint").notNull(),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_calendar_event_links_connection_block_uq").on(table.connectionId, table.blockId),
+  index("fdp_calendar_event_links_external_idx").on(table.connectionId, table.externalEventId),
+]);
+
 export const cardSlaPauses = pgTable("fdp_card_sla_pauses", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -318,21 +359,29 @@ export const inboxItems = pgTable("fdp_workspace_inbox_items", {
   senderName: text("sender_name").notNull(),
   subject: text("subject").notNull(),
   body: text("body").notNull().default(""),
+  externalId: text("external_id"),
   status: text("status").notNull().default("new"),
   receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   convertedCardId: text("converted_card_id").references(() => cards.id),
-}, (table) => [index("fdp_inbox_workspace_status_received_idx").on(table.workspaceId, table.status, table.receivedAt)]);
+}, (table) => [
+  index("fdp_inbox_workspace_status_received_idx").on(table.workspaceId, table.status, table.receivedAt),
+  uniqueIndex("fdp_inbox_workspace_channel_external_uq").on(table.workspaceId, table.channel, table.externalId),
+]);
 
 export const automationRules = pgTable("fdp_automation_rules", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  boardId: text("board_id").references(() => boards.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   trigger: text("trigger").notNull(),
   conditionJson: text("condition_json").notNull().default("{}"),
   actionJson: text("action_json").notNull().default("{}"),
   enabled: integer("enabled").notNull().default(1),
   position: doublePrecision("position").notNull(),
-}, (table) => [index("fdp_rules_workspace_position_idx").on(table.workspaceId, table.position)]);
+}, (table) => [
+  index("fdp_rules_workspace_position_idx").on(table.workspaceId, table.position),
+  index("fdp_rules_workspace_board_position_idx").on(table.workspaceId, table.boardId, table.position),
+]);
 
 export const activityEvents = pgTable("fdp_activity_events", {
   id: text("id").primaryKey(),
