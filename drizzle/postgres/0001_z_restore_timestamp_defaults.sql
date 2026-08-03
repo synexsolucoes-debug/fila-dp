@@ -1,0 +1,30 @@
+-- Restore the defaults declared by the current Drizzle schema after legacy
+-- timestamp columns have been converted to timestamptz.
+ALTER TABLE "fdp_users" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_access_recovery_tokens" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_workspaces" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_companies" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_companies" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_workspace_members" ALTER COLUMN "joined_at" SET DEFAULT now();
+ALTER TABLE "fdp_member_company_access" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_user_workspace_preferences" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_boards" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_cards" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_cards" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_card_comments" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_card_comments" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_custom_field_values" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_card_attachments" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_workspace_settings" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_notifications" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_integrations" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_integrations" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_planner_blocks" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_planner_blocks" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_calendar_connections" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_calendar_connections" ALTER COLUMN "updated_at" SET DEFAULT now();
+ALTER TABLE "fdp_card_sla_pauses" ALTER COLUMN "started_at" SET DEFAULT now();
+ALTER TABLE "fdp_workspace_inbox_items" ALTER COLUMN "received_at" SET DEFAULT now();
+ALTER TABLE "fdp_activity_events" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_hr_metrics" ALTER COLUMN "created_at" SET DEFAULT now();
+ALTER TABLE "fdp_hr_metrics" ALTER COLUMN "updated_at" SET DEFAULT now();

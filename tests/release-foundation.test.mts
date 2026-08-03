@@ -33,3 +33,27 @@ test("token de recuperação mantém a autoria exigida pela API", async () => {
   assert.match(schema, /createdBy:\s*text\("created_by"\)\.notNull\(\)/);
   assert.match(migration, /ADD COLUMN "created_by" text DEFAULT 'system' NOT NULL/);
 });
+
+test("legacy timestamp defaults are bridged around the type conversion", async () => {
+  const prepare = await readFile(new URL("../drizzle/postgres/0001_0_prepare_legacy_defaults.sql", import.meta.url), "utf8");
+  const normalize = await readFile(new URL("../drizzle/postgres/0001_normalize_existing_neon.sql", import.meta.url), "utf8");
+  const restore = await readFile(new URL("../drizzle/postgres/0001_z_restore_timestamp_defaults.sql", import.meta.url), "utf8");
+  assert.match(prepare, /ALTER COLUMN "created_at" DROP DEFAULT/);
+  assert.match(normalize, /ALTER COLUMN "created_at" TYPE timestamptz/);
+  assert.match(restore, /ALTER COLUMN "created_at" SET DEFAULT now\(\)/);
+  assert.ok("0001_0_prepare_legacy_defaults.sql" < "0001_normalize_existing_neon.sql");
+  assert.ok("0001_normalize_existing_neon.sql" < "0001_z_restore_timestamp_defaults.sql");
+});
+
+test("the legacy recovery author column is normalized instead of recreated", async () => {
+  const migrator = await readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8");
+  assert.match(migrator, /file === "0002_chief_venom\.sql"/);
+  assert.match(migrator, /ALTER COLUMN created_by SET DEFAULT 'system'/);
+  assert.match(migrator, /normalized-existing-column/);
+});
+
+test("migration checksums ignore only line endings and final whitespace", async () => {
+  const migrator = await readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8");
+  assert.match(migrator, /replace\(\/\\r\\n\/g, "\\n"\)\.trimEnd\(\)/);
+  assert.match(migrator, /compatibleChecksums/);
+});

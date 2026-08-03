@@ -17,6 +17,17 @@ for (const file of metadataFiles) {
   }
 }
 
+const journal = JSON.parse(await readFile(join(metadataDirectory, "_journal.json"), "utf8"));
+const migrationTags = files.map((file) => file.replace(/\.sql$/, ""));
+const journalEntries = [...journal.entries].sort((left, right) => left.idx - right.idx);
+const journalTags = journalEntries.map((entry) => entry.tag);
+if (JSON.stringify(journalTags) !== JSON.stringify(migrationTags)) {
+  throw new Error("O journal do Drizzle nÃ£o corresponde Ã  ordem das migrations PostgreSQL.");
+}
+if (journalEntries.some((entry, index) => entry.idx !== index)) {
+  throw new Error("Os Ã­ndices do journal do Drizzle nÃ£o sÃ£o sequenciais.");
+}
+
 const destructive = /\b(DROP\s+TABLE|TRUNCATE\s+TABLE|ALTER\s+TABLE\s+[^;]+\s+DROP\s+COLUMN|DELETE\s+FROM)\b/i;
 for (const file of files) {
   const sql = await readFile(join(migrationDirectory, file), "utf8");

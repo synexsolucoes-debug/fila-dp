@@ -12,12 +12,26 @@
     {
       "idx": 1,
       "version": "7",
+      "when": 1785758500000,
+      "tag": "0001_0_prepare_legacy_defaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
       "when": 1785759000000,
       "tag": "0001_normalize_existing_neon",
       "breakpoints": true
     },
     {
-      "idx": 2,
+      "idx": 3,
+      "version": "7",
+      "when": 1785760000000,
+      "tag": "0001_z_restore_timestamp_defaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
       "version": "7",
       "when": 1785761250454,
       "tag": "0002_chief_venom",

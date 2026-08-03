@@ -33,11 +33,43 @@ if (existingApplication && applied.size === 0 && !baselineExisting) {
 let createdCleanBaseline = false;
 for (const file of files) {
   const source = await readFile(join(migrationDirectory, file), "utf8");
-  const checksum = createHash("sha256").update(source).digest("hex");
+  const canonicalSource = source.replace(/\r\n/g, "\n").trimEnd();
+  const checksum = createHash("sha256").update(canonicalSource).digest("hex");
+  const crlfSource = canonicalSource.replace(/\n/g, "\r\n");
+  const compatibleChecksums = new Set([
+    checksum,
+    createHash("sha256").update(source).digest("hex"),
+    createHash("sha256").update(`${canonicalSource}\n`).digest("hex"),
+    createHash("sha256").update(crlfSource).digest("hex"),
+    createHash("sha256").update(`${crlfSource}\r\n`).digest("hex"),
+  ]);
   const previousChecksum = applied.get(file);
   if (previousChecksum) {
-    if (previousChecksum !== checksum) throw new Error(`A migration já aplicada ${file} foi alterada.`);
+    if (!compatibleChecksums.has(previousChecksum)) throw new Error(`A migration já aplicada ${file} foi alterada.`);
     continue;
+  }
+
+  if (file === "0002_chief_venom.sql" && existingApplication) {
+    const existingCreatedBy = (await sql.query(
+      `SELECT data_type, is_nullable
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'fdp_access_recovery_tokens'
+         AND column_name = 'created_by'`,
+      [],
+    )).rows[0];
+    if (existingCreatedBy) {
+      if (existingCreatedBy.data_type !== "text" || existingCreatedBy.is_nullable !== "NO") {
+        throw new Error("A coluna legado fdp_access_recovery_tokens.created_by nao possui a definicao segura esperada.");
+      }
+      await sql.transaction([
+        sql.query("SELECT pg_advisory_xact_lock(81902141)", []),
+        sql.query("ALTER TABLE fdp_access_recovery_tokens ALTER COLUMN created_by SET DEFAULT 'system'", []),
+        sql.query("INSERT INTO fdp_schema_migrations (id, checksum, execution_note) VALUES ($1, $2, $3)", [file, checksum, "normalized-existing-column"]),
+      ]);
+      console.log(`${file}: normalized-existing-column`);
+      continue;
+    }
   }
 
   const isBaseline = file.startsWith("0000_");
