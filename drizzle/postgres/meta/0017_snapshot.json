@@ -7966,6 +7966,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "fdp_integrations_workspace_id_uq": {
+          "name": "fdp_integrations_workspace_id_uq",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {

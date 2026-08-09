@@ -136,6 +136,8 @@ CREATE TABLE "fdp_integration_sync_runs" (
 	CONSTRAINT "fdp_integration_sync_runs_counts_check" CHECK ("fdp_integration_sync_runs"."attempt" >= 0 AND "fdp_integration_sync_runs"."received_count" >= 0 AND "fdp_integration_sync_runs"."processed_count" >= 0 AND "fdp_integration_sync_runs"."skipped_count" >= 0 AND "fdp_integration_sync_runs"."conflict_count" >= 0 AND "fdp_integration_sync_runs"."failed_count" >= 0)
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX "fdp_integrations_workspace_id_uq" ON "fdp_integrations" USING btree ("workspace_id","id");
+--> statement-breakpoint
 ALTER TABLE "fdp_integration_credentials" ADD CONSTRAINT "fdp_integration_credentials_workspace_id_fdp_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."fdp_workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "fdp_integration_credentials" ADD CONSTRAINT "fdp_integration_credentials_integration_id_fdp_integrations_id_fk" FOREIGN KEY ("integration_id") REFERENCES "public"."fdp_integrations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "fdp_integration_credentials" ADD CONSTRAINT "fdp_integration_credentials_workspace_integration_fk" FOREIGN KEY ("workspace_id","integration_id") REFERENCES "public"."fdp_integrations"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
