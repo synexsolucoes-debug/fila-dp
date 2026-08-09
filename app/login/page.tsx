@@ -31,7 +31,7 @@ export default async function LoginPage() {
         <div className="auth-preview" aria-hidden="true">
           <div className="auth-preview-top"><span>Fila geral</span><MoreHorizontal /></div>
           <div className="auth-preview-columns">
-            <div><b>Novas</b><article><span className="auth-tag blue">ADMISSÃO</span><strong>Documentos de admissão</strong><small>Vence hoje</small></article></div>
+            <div><b>Novas</b><article><span className="auth-tag blue">CONCILIAÇÃO</span><strong>Vincular Sólides ao ERP</strong><small>Vence hoje</small></article></div>
             <div><b>Em análise</b><article><span className="auth-tag green">BENEFÍCIOS</span><strong>Inclusão no plano</strong><small>4 de 6 etapas</small></article></div>
             <div><b>Em execução</b><article><span className="auth-tag gray">CADASTRO</span><strong>Cadastro em andamento</strong><small>Dados em validação</small></article></div>
           </div>

@@ -7,7 +7,9 @@ import {
   ArrowRight,
   BarChart3,
   Bell,
+  Blocks,
   Building2,
+  Cable,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -41,12 +43,16 @@ import {
 } from "lucide-react";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
+import { RegistrationsView } from "./features/registrations";
+import { OperationsView } from "./features/operations";
+import { AuxiliaryModulesView } from "./features/auxiliary";
+import { IntegrationsView } from "./features/integrations";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "integrations" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
-type SettingsSection = "general" | "companies" | "columns" | "team" | "fields" | "templates" | "sla" | "integrations" | "automations";
+type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
 type RealtimeStatus = "syncing" | "current" | "delayed";
 type User = { displayName: string; email: string; fullName: string | null };
 type SearchResult = { id: string; title: string; company: string; processType: string; priority: string; slaStatus: string; dueAt: string | null; assigneeName: string; archived: boolean; listId: string };
@@ -60,6 +66,7 @@ type ConfirmationRequest = {
 };
 type ConfirmHandler = (request: ConfirmationRequest) => void;
 type RecoveryLink = { name: string; url: string; expiresAt: string };
+type AuthSession = { id: string; deviceLabel: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean };
 type CardForm = {
   boardId: string;
   title: string;
@@ -83,7 +90,7 @@ const emptyCardForm: CardForm = {
   description: "",
   companyId: "",
   company: "",
-  processType: "ADMISSÃO",
+  processType: "CONCILIAÇÃO CADASTRAL",
   priority: "normal",
   assigneeName: "",
   dueAt: "",
@@ -95,7 +102,7 @@ const emptyCardForm: CardForm = {
 };
 
 const processColors: Record<string, string> = {
-  "ADMISSÃO": "blue",
+  "CONCILIAÇÃO CADASTRAL": "blue",
   "FÉRIAS": "purple",
   "BENEFÍCIOS": "green",
   "RESCISÃO": "orange",
@@ -109,7 +116,10 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   board: { eyebrow: "DEMANDAS", title: "Quadro de demandas", description: "Acompanhe prioridades, responsáveis e próximos passos." },
   inbox: { eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada", description: "Transforme solicitações recebidas em demandas rastreáveis." },
   planner: { eyebrow: "AGENDA DO ANALISTA", title: "Meu planner", description: "Organize sua execução a partir dos prazos da operação." },
-  processes: { eyebrow: "PROCESSOS OPERACIONAIS", title: "Processos de DP", description: "Crie fluxos próprios para cada rotina e mantenha cada demanda nas colunas do seu processo." },
+  processes: { eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento", description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides." },
+  auxiliary: { eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares", description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ." },
+  integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Central de integrações", description: "Configure conectores, publique mapeamentos e acompanhe execuções e conciliações com segurança." },
+  registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
 };
@@ -365,6 +375,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<CardAttachment | null>(null);
   const [recoveryLink, setRecoveryLink] = useState<RecoveryLink | null>(null);
+  const [authSessions, setAuthSessions] = useState<AuthSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
   const [newBoardDescription, setNewBoardDescription] = useState("");
   const [theme, setTheme] = useState<Theme>("light");
@@ -580,6 +592,20 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     }
   }
 
+  async function signOut() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(signOutPath, { method: "POST" });
+      const payload = await response.json() as { redirectTo?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Não foi possível encerrar a sessão.");
+      window.location.assign(payload.redirectTo || "/");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível encerrar a sessão.");
+      setBusy(false);
+    }
+  }
+
   function requestConfirmation(request: ConfirmationRequest) {
     setConfirmation(request);
   }
@@ -774,6 +800,47 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     setWorkspaceModalOpen(true);
   }
 
+  async function loadAuthSessions() {
+    setSessionsLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/sessions", { cache: "no-store" });
+      const payload = await response.json() as { sessions?: AuthSession[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Não foi possível carregar as sessões.");
+      setAuthSessions(payload.sessions ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar as sessões.");
+    } finally {
+      setSessionsLoading(false);
+    }
+  }
+
+  function openSecuritySettings() {
+    setSettingsSection("security");
+    openWorkspaceSettings();
+    void loadAuthSessions();
+  }
+
+  async function revokeAuthSessions(target: string) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(target, { method: "DELETE" });
+      const payload = await response.json() as { signedOut?: boolean; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Não foi possível revogar a sessão.");
+      if (payload.signedOut) {
+        window.location.assign("/login");
+        return;
+      }
+      await loadAuthSessions();
+      setToast("Sessões atualizadas.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível revogar a sessão.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveWorkspace(event: FormEvent) {
     event.preventDefault();
     if (!workspaceName.trim()) return;
@@ -845,28 +912,6 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   async function switchBoard(boardId: string) {
     if (boardId === snapshot?.board.id) return;
     await mutate("/api/boards/select", { method: "POST", body: JSON.stringify({ boardId }) }, "Quadro alterado.");
-  }
-
-  async function openProcess(boardId: string) {
-    if (boardId !== snapshot?.board.id) {
-      const next = await mutate("/api/boards/select", { method: "POST", body: JSON.stringify({ boardId }) }, "Processo aberto.");
-      if (!next) return;
-    }
-    setBoardMode("kanban");
-    setView("board");
-  }
-
-  async function createProcess(payload: { name: string; description: string; columns: string[] }) {
-    const next = await mutate(
-      "/api/boards",
-      { method: "POST", body: JSON.stringify({ ...payload, boardType: "process" }) },
-      "Processo criado. As novas demandas seguirão estas etapas.",
-    );
-    if (next) {
-      setBoardMode("kanban");
-      setView("board");
-    }
-    return next;
   }
 
   async function createBoard(event: FormEvent) {
@@ -954,17 +999,6 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     return mutate("/api/hr-metrics", { method: "POST", body: JSON.stringify(payload) }, "Indicadores da folha atualizados.");
   }
 
-  async function syncIntegration(channel: string) {
-    setBusy(true); setError("");
-    try {
-      const response = await fetch("/api/integrations/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channel }) });
-      const payload = await response.json() as { synced?: number; metricsSynced?: number; snapshot?: WorkspaceSnapshot; error?: string };
-      if (!response.ok) throw new Error(payload.error || "Não foi possível sincronizar.");
-      if (payload.snapshot) applySnapshot(payload.snapshot, `${payload.synced ?? 0} item(ns) e ${payload.metricsSynced ?? 0} métrica(s) sincronizado(s).`);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível sincronizar."); }
-    finally { void requestSnapshot("/api/workspace").then(setSnapshot).catch(() => undefined); setBusy(false); }
-  }
-
   function openSearchResult(result: SearchResult) {
     const card = allCards.find((item) => item.id === result.id);
     if (card) {
@@ -1018,7 +1052,10 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <button title="Demandas" className={view === "board" ? "active" : ""} onClick={() => setView("board")}><span aria-hidden="true"><ListChecks /></span> Demandas</button>
           <button title="Inbox" className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true"><Inbox /></span> Inbox <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>
           <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>
-          <button title="Processos" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Processos</button>
+          <button title="Operação DP" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Operação DP</button>
+          {snapshot.workspace.role !== "guest" && <button title="Módulos auxiliares" className={view === "auxiliary" ? "active" : ""} onClick={() => setView("auxiliary")}><span aria-hidden="true"><Blocks /></span> Módulos auxiliares</button>}
+          {snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
+          {snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
           <span className="sidebar-nav-section management">GESTÃO</span>
           <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>
           <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>
@@ -1031,7 +1068,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
           <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
-          <a href={signOutPath} aria-label="Sair do Fila DP" title="Sair"><LogOut aria-hidden="true" /></a>
+          <button type="button" className="sign-out-button" disabled={busy} onClick={() => void signOut()} aria-label="Sair do Fila DP" title="Sair"><LogOut aria-hidden="true" /></button>
         </div>
       </aside>
 
@@ -1044,8 +1081,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
             <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
-            <button className="header-profile" aria-label="Abrir perfil e configurações" title="Perfil e configurações" onClick={() => { setSettingsSection("team"); openWorkspaceSettings(); }}><span>{userInitials}</span></button>
-            {canEdit && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
+            <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
+            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
           </div>
         </header>
 
@@ -1057,7 +1094,13 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
           {view === "overview" && <OverviewView cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} />}
 
-          {view === "processes" && <ProcessBoardsView boards={snapshot.boards} activeBoardId={snapshot.board.id} busy={busy} isAdmin={isAdmin} onOpen={openProcess} onCreate={createProcess} />}
+          {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
+
+          {view === "auxiliary" && <AuxiliaryModulesView role={snapshot.workspace.role} />}
+
+          {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
+
+          {view === "registrations" && <RegistrationsView role={snapshot.workspace.role} />}
 
           {view === "board" && (
             <>
@@ -1216,9 +1259,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
                 {!selectedCard && <label className="full">Começar com um template<select value={cardForm.templateId} onChange={(event) => { const template = snapshot.templates.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, templateId: event.target.value, processType: template?.processType ?? cardForm.processType, description: template?.description ?? cardForm.description }); }}><option value="">Demanda em branco</option>{snapshot.templates.filter((item) => item.active).map((template) => <option value={template.id} key={template.id}>{template.name} • SLA {template.defaultSlaDays} dia(s) útil(eis)</option>)}</select></label>}
                 {!selectedCard && <label className="full">Processo operacional<select value={cardForm.boardId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, boardId: event.target.value, listId: "" })}>{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.boardType === "process" ? `Processo: ${board.name}` : `Quadro geral: ${board.name}`}</option>)}</select><small className="card-process-helper">A demanda será criada e movimentada somente nas colunas deste processo.</small></label>}
-                <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Admissão — Maria Oliveira" required /></label>
+                <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Conciliar colaborador com o ERP" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
-                <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>ADMISSÃO</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>
+                <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>CONCILIAÇÃO CADASTRAL</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>
                 <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
                 <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
@@ -1284,13 +1327,13 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                 <button className={settingsSection === "general" ? "active" : ""} onClick={() => setSettingsSection("general")}><Building2 aria-hidden="true" /><span>Grupo e quadros<small>Identidade e operação</small></span></button>
                 {isAdmin && <button className={settingsSection === "companies" ? "active" : ""} onClick={() => setSettingsSection("companies")}><Building2 aria-hidden="true" /><span>Empresas do grupo<small>CNPJs, hierarquia e Sankhya</small></span></button>}
                 <button className={settingsSection === "team" ? "active" : ""} onClick={() => setSettingsSection("team")}><Users aria-hidden="true" /><span>Usuários e acessos<small>Libere pessoas e empresas</small></span></button>
+                <button className={settingsSection === "security" ? "active" : ""} onClick={() => { setSettingsSection("security"); void loadAuthSessions(); }}><Smartphone aria-hidden="true" /><span>Segurança<small>Dispositivos e sessões</small></span></button>
                 <button className={settingsSection === "columns" ? "active" : ""} onClick={() => setSettingsSection("columns")}><ListChecks aria-hidden="true" /><span>Fluxo do quadro<small>Colunas e status</small></span></button>
                 <span className="settings-nav-label">OPERAÇÃO</span>
                 <button className={settingsSection === "fields" ? "active" : ""} onClick={() => setSettingsSection("fields")}><Settings aria-hidden="true" /><span>Campos e etiquetas<small>Dados padronizados</small></span></button>
                 <button className={settingsSection === "templates" ? "active" : ""} onClick={() => setSettingsSection("templates")}><WalletCards aria-hidden="true" /><span>Templates<small>Processos recorrentes</small></span></button>
                 <button className={settingsSection === "sla" ? "active" : ""} onClick={() => setSettingsSection("sla")}><CalendarDays aria-hidden="true" /><span>SLA e calendário<small>Expediente e prazos</small></span></button>
                 <button className={settingsSection === "automations" ? "active" : ""} onClick={() => setSettingsSection("automations")}><RefreshCw aria-hidden="true" /><span>Automações<small>Regras da operação</small></span></button>
-                <button className={settingsSection === "integrations" ? "active" : ""} onClick={() => setSettingsSection("integrations")}><Mail aria-hidden="true" /><span>Integrações<small>Canais e sistemas</small></span></button>
               </nav>
               <div className="workspace-settings-content">
                 {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{snapshot.boards.length} quadro(s) disponíveis</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}
@@ -1304,11 +1347,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                   {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}><header><div><strong>Criar e liberar usuário</strong><span>O sistema gerará um link único para a pessoa definir a própria senha.</span></div><b>1. Cadastre · 2. Copie o link · 3. Libere</b></header><div><label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label><label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label><label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label><fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset><button className="primary-button" disabled={busy || !memberEmail.trim()}>Criar usuário e gerar link</button></div></form>}
                 </>}
                 {settingsSection === "team" && recoveryLink && <section className="access-recovery-link"><header><div><span>LINK ÚNICO DE RECUPERAÇÃO</span><strong>{recoveryLink.name}</strong><small>Válido até {new Date(recoveryLink.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. O link deixa de funcionar após o primeiro uso.</small></div><button onClick={() => { void navigator.clipboard.writeText(recoveryLink.url).then(() => setToast("Link de recuperação copiado.")); }}>Copiar link</button></header><input value={recoveryLink.url} readOnly aria-label="Link de recuperação" /></section>}
+                {settingsSection === "security" && <section className="security-sessions">
+                  <header><div><strong>Dispositivos conectados</strong><span>Revise os acessos ativos da sua conta. Endereços IP e identificadores completos do navegador não são armazenados.</span></div><button className="secondary-button" disabled={busy || sessionsLoading || authSessions.length < 2} onClick={() => void revokeAuthSessions("/api/auth/sessions?scope=others")}>Sair dos outros</button></header>
+                  {sessionsLoading && <p>Carregando sessões...</p>}
+                  {!sessionsLoading && authSessions.length === 0 && <p>Nenhuma sessão gerenciável foi encontrada para este tipo de acesso.</p>}
+                  <div>{authSessions.map((session) => <article key={session.id}><i><Smartphone aria-hidden="true" /></i><span><strong>{session.deviceLabel}{session.current && <em>Atual</em>}</strong><small>Último uso: {new Date(session.lastSeenAt).toLocaleString("pt-BR")} · Criada em {new Date(session.createdAt).toLocaleDateString("pt-BR")}</small><small>Expira em {new Date(session.expiresAt).toLocaleString("pt-BR")}</small></span><button className="secondary-button" disabled={busy} onClick={() => void revokeAuthSessions(`/api/auth/sessions/${session.id}`)}>{session.current ? "Sair deste dispositivo" : "Revogar"}</button></article>)}</div>
+                  <footer><span>Se você não reconhecer um dispositivo, encerre todas as sessões e entre novamente.</span><button className="danger-button" disabled={busy || sessionsLoading || authSessions.length === 0} onClick={() => void revokeAuthSessions("/api/auth/sessions?scope=all")}>Sair de todos</button></footer>
+                </section>}
                 {settingsSection === "fields" && <FieldsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
                 {settingsSection === "templates" && <TemplatesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} onUseTemplate={(id) => { setWorkspaceModalOpen(false); openFromTemplate(id); }} />}
                 {settingsSection === "sla" && <SlaSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} />}
                 {settingsSection === "automations" && <RulesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
-                {settingsSection === "integrations" && <IntegrationsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onSync={syncIntegration} />}
               </div>
             </div>
           </section>
@@ -1393,62 +1442,6 @@ function MemberCompanyAccess({ member, companies, busy, onSave }: { member: Work
   const [selectedIds, setSelectedIds] = useState<string[]>(member.companyIds);
   if (member.role === "admin") return <span className="member-company-summary">Todas as empresas</span>;
   return <details className="member-company-access"><summary>{selectedIds.length ? `${selectedIds.length} empresa(s) liberada(s)` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
-}
-
-function ProcessBoardsView({ boards, activeBoardId, busy, isAdmin, onOpen, onCreate }: { boards: WorkspaceSnapshot["boards"]; activeBoardId: string; busy: boolean; isAdmin: boolean; onOpen: (boardId: string) => Promise<void>; onCreate: (payload: { name: string; description: string; columns: string[] }) => Promise<WorkspaceSnapshot | null> }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [stages, setStages] = useState("Recebimento da demanda\nEm execução\nConcluído");
-  const [formError, setFormError] = useState("");
-  const processBoards = boards.filter((board) => board.boardType === "process");
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const columns = stages.split("\n").map((stage) => stage.trim()).filter(Boolean);
-    if (columns.length < 2) {
-      setFormError("Informe pelo menos duas etapas: uma inicial e uma de conclusão.");
-      return;
-    }
-    setFormError("");
-    const result = await onCreate({ name: name.trim(), description: description.trim(), columns });
-    if (result) {
-      setName("");
-      setDescription("");
-      setStages("Recebimento da demanda\nEm execução\nConcluído");
-    }
-  }
-
-  return <div className="process-management-view">
-    <section className="process-management-intro">
-      <span className="process-management-icon"><ListChecks aria-hidden="true" /></span>
-      <div><span>FLUXOS INDEPENDENTES</span><h2>Cada demanda segue o processo correto</h2><p>Crie um fluxo para admissão, rescisão, férias ou qualquer rotina do DP. As colunas e a movimentação da demanda ficam restritas ao processo escolhido.</p></div>
-      <b>{processBoards.length} processo(s)</b>
-    </section>
-
-    <section className="process-board-catalog">
-      <header><div><span>PROCESSOS CADASTRADOS</span><h2>Fluxos da operação</h2><p>Abra um processo para visualizar apenas as demandas e as etapas dele.</p></div></header>
-      {processBoards.length === 0 && <div className="process-empty-state"><ListChecks aria-hidden="true" /><strong>Nenhum processo criado ainda</strong><p>Comece com o fluxo de Admissão, Rescisão ou Férias. Você define as colunas que cada demanda deverá percorrer.</p></div>}
-      <div className="process-board-grid">
-        {processBoards.map((board) => <article className={board.id === activeBoardId ? "active" : ""} key={board.id}>
-          <header><div><span>{board.id === activeBoardId ? "PROCESSO ATIVO" : "PROCESSO DE DP"}</span><h3>{board.name}</h3></div><b>{board.stages.length} etapas</b></header>
-          <p>{board.description || "Fluxo personalizado para a rotina do Departamento Pessoal."}</p>
-          <ol className="process-stage-flow">{board.stages.map((stage, index) => <li key={stage.id}><i>{index + 1}</i><span>{stage.name}</span><small>{stage.slaBehavior === "completed" ? "Conclui" : stage.slaBehavior === "paused" ? "SLA pausado" : "Em andamento"}</small></li>)}</ol>
-          <button className="secondary-button" disabled={busy} onClick={() => void onOpen(board.id)}>{board.id === activeBoardId ? "Abrir quadro do processo" : "Abrir processo"}<ArrowRight aria-hidden="true" /></button>
-        </article>)}
-      </div>
-    </section>
-
-    {isAdmin && <section className="process-create-panel">
-      <header><div><span>NOVO PROCESSO</span><h2>Montar fluxo de demanda</h2><p>A primeira etapa recebe novas demandas. A última etapa conclui automaticamente o SLA.</p></div></header>
-      <form onSubmit={(event) => void submit(event)}>
-        <label>Nome do processo<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Admissão" maxLength={80} disabled={busy} required /></label>
-        <label>Descrição opcional<input value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex.: Contratação de novos colaboradores" maxLength={300} disabled={busy} /></label>
-        <label className="process-stages-field">Etapas do processo<textarea value={stages} onChange={(event) => setStages(event.target.value)} rows={6} placeholder={"Recebimento da demanda\nValidação dos documentos\nConclusão"} disabled={busy} required /><small>Uma etapa por linha. Você poderá editar, reordenar ou incluir colunas nas configurações do processo.</small></label>
-        {formError && <p className="process-form-error" role="alert">{formError}</p>}
-        <button className="primary-button" disabled={busy}><Plus aria-hidden="true" /> Criar processo</button>
-      </form>
-    </section>}
-  </div>;
 }
 
 function ProcessTablesView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
@@ -1741,7 +1734,7 @@ function TemplatesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm, onUs
           {snapshot.templates.map((template) => <article key={template.id}><div><span>{template.processType}</span><strong>{template.name}</strong><small>{template.checklist.length} etapa(s) • SLA de {template.defaultSlaDays} dia(s) útil(eis)</small></div><button onClick={() => onUseTemplate(template.id)}>Usar</button>{isAdmin && <button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir template?", description: `O template “${template.name}” e seu checklist padrão serão removidos.`, confirmLabel: "Excluir template", action: () => onCatalog({ resource: "template", operation: "delete", id: template.id }, "Template excluído.") })}>Excluir</button>}</article>)}
         </div>
       </section>
-      {isAdmin && <section className="catalog-section"><header><div><strong>Novo template</strong><span>Uma etapa por linha no checklist.</span></div></header><form className="catalog-form template-form" onSubmit={createTemplate}><label>Nome<input name="name" placeholder="Ex.: Admissão completa" required /></label><label>Processo<select name="processType" defaultValue="ADMISSÃO"><option>ADMISSÃO</option><option>FÉRIAS</option><option>RESCISÃO</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label><label>SLA (dias úteis)<input type="number" min="1" max="60" name="defaultSlaDays" defaultValue="3" required /></label><label className="wide">Descrição<textarea name="description" rows={2} placeholder="Orientações para o processo" /></label><label className="wide">Etapas<textarea name="checklist" rows={7} placeholder={'Receber documentos\nValidar cadastro\nConferir informações'} required /></label><button className="primary-button" disabled={busy}>Salvar template</button></form></section>}
+      {isAdmin && <section className="catalog-section"><header><div><strong>Novo template</strong><span>Uma etapa por linha no checklist.</span></div></header><form className="catalog-form template-form" onSubmit={createTemplate}><label>Nome<input name="name" placeholder="Ex.: Conciliação cadastral" required /></label><label>Processo<select name="processType" defaultValue="CONCILIAÇÃO CADASTRAL"><option>CONCILIAÇÃO CADASTRAL</option><option>FÉRIAS</option><option>RESCISÃO</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label><label>SLA (dias úteis)<input type="number" min="1" max="60" name="defaultSlaDays" defaultValue="3" required /></label><label className="wide">Descrição<textarea name="description" rows={2} placeholder="Orientações para o processo" /></label><label className="wide">Etapas<textarea name="checklist" rows={7} placeholder={'Importar dados concluídos\nVincular registros\nTratar divergências'} required /></label><button className="primary-button" disabled={busy}>Salvar template</button></form></section>}
     </div>
   );
 }
@@ -1763,48 +1756,6 @@ function SlaSettings({ snapshot, busy, isAdmin, onCatalog }: { snapshot: Workspa
   return <div className="settings-stack"><section className="catalog-section"><header><div><strong>Calendário operacional</strong><span>O prazo ignora dias não úteis e feriados cadastrados.</span></div></header><form className="calendar-settings-form" onSubmit={saveCalendar}><fieldset disabled={!isAdmin || busy}><legend>Dias úteis</legend><div>{weekdays.map((day, index) => <label key={day}><input type="checkbox" name="businessDays" value={index} defaultChecked={snapshot.settings.businessDays.includes(index)} />{day}</label>)}</div></fieldset><label>Início do expediente<input type="time" name="dayStart" defaultValue={snapshot.settings.dayStart} disabled={!isAdmin || busy} /></label><label>Fim do expediente<input type="time" name="dayEnd" defaultValue={snapshot.settings.dayEnd} disabled={!isAdmin || busy} /></label><label>Atualização da tela<select name="realtimeSeconds" defaultValue={snapshot.settings.realtimeSeconds} disabled={!isAdmin || busy}><option value="5">5 segundos</option><option value="15">15 segundos</option><option value="30">30 segundos</option><option value="60">1 minuto</option><option value="120">2 minutos</option></select></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar calendário</button>}</form></section>
     <section className="catalog-section"><header><div><strong>Políticas por processo</strong><span>Meta e janela de atenção em dias úteis.</span></div></header><div className="sla-policy-list">{snapshot.slaPolicies.map((policy) => <form key={policy.id} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onCatalog({ resource: "sla", processType: policy.processType, targetBusinessDays: Number(data.get("target")), warningBusinessDays: Number(data.get("warning")), active: data.get("active") === "on" }, `SLA de ${policy.processType} atualizado.`); }}><strong>{policy.processType}</strong><label>Meta<input type="number" name="target" min="1" max="60" defaultValue={policy.targetBusinessDays} disabled={!isAdmin || busy} /></label><label>Alertar antes<input type="number" name="warning" min="0" max="60" defaultValue={policy.warningBusinessDays} disabled={!isAdmin || busy} /></label><label className="catalog-check"><input type="checkbox" name="active" defaultChecked={policy.active} disabled={!isAdmin || busy} /> Ativa</label>{isAdmin && <button disabled={busy}>Salvar</button>}</form>)}</div></section>
     <section className="catalog-section"><header><div><strong>Feriados e exceções</strong><span>{snapshot.holidays.length} data(s) fora do expediente.</span></div></header><div className="holiday-list">{snapshot.holidays.map((holiday) => <article key={holiday.date}><time>{formatDate(holiday.date, true)}</time><strong>{holiday.name}</strong>{isAdmin && <button onClick={() => void onCatalog({ resource: "holiday", operation: "delete", date: holiday.date }, "Feriado removido.")} disabled={busy}>×</button>}</article>)}</div>{isAdmin && <form className="catalog-form compact" onSubmit={addHoliday}><label>Data<input type="date" name="date" required /></label><label>Nome<input name="name" placeholder="Ex.: Feriado municipal" required /></label><button className="primary-button" disabled={busy}>Adicionar</button></form>}</section></div>;
-}
-
-function IntegrationsSettings({ snapshot, busy, isAdmin, onCatalog, onSync }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onSync: (channel: string) => Promise<void> }) {
-  const channelCopy: Record<string, { icon: string; description: string; placeholder: string; nextStep: string }> = {
-    email: { icon: "@", description: "Capture e-mails recebidos e transforme-os em itens da Inbox.", placeholder: "dp@empresa.com", nextStep: "Informe a caixa ou origem que será consultada e salve a configuração." },
-    whatsapp: { icon: "W", description: "Receba solicitações via provedor oficial ou intermediador homologado.", placeholder: "Identificador do número/provedor", nextStep: "Conecte o provedor homologado e use o webhook para enviar novas mensagens à Inbox." },
-    teams: { icon: "T", description: "Direcione mensagens de canais ou chats do Teams para triagem.", placeholder: "Canal, fluxo ou endpoint Graph", nextStep: "Para Power Automate, mantenha o webhook do Fila DP no fluxo. Para Graph, informe o endpoint do canal ou chat." },
-    drive: { icon: "D", description: "Referencie documentos do Google Drive nos processos.", placeholder: "Pasta padrão ou URL", nextStep: "Defina a pasta padrão ou o endpoint autorizado para os documentos do processo." },
-    onedrive: { icon: "O", description: "Referencie documentos do OneDrive nos processos.", placeholder: "Pasta padrão ou URL", nextStep: "Defina a pasta ou o endpoint Microsoft Graph que será usado na operação." },
-    erp: { icon: "E", description: "Sincronize eventos do ERP, custo da folha e indicadores.", placeholder: "Endpoint do Sankhya Gateway", nextStep: "Salve o endpoint do Sankhya e vincule o código externo de cada empresa cadastrada." },
-  };
-  const totals = snapshot.integrations.reduce((result, integration) => {
-    result[integration.status] += 1;
-    return result;
-  }, { connected: 0, needs_credentials: 0, paused: 0, error: 0 });
-  const statusLabel = (status: WorkspaceSnapshot["integrations"][number]["status"]) => status === "connected" ? "Conectada" : status === "paused" ? "Pausada" : status === "error" ? "Com erro" : "Aguardando credenciais";
-  const statusIcon = (status: WorkspaceSnapshot["integrations"][number]["status"]) => status === "connected" ? <CheckCircle2 aria-hidden="true" /> : status === "error" ? <CircleAlert aria-hidden="true" /> : <Clock3 aria-hidden="true" />;
-
-  return (
-    <div className="settings-stack">
-      <div className="integration-security-note"><i>!</i><div><strong>Conexão segura por credenciais do ambiente</strong><p>Esta tela salva somente endereços e preferências. Tokens, senhas e chaves devem ser adicionados ao cofre seguro da implantação antes de ativar a sincronização real.</p></div></div>
-      <div className="integration-overview" aria-label="Resumo das integrações"><span><CheckCircle2 aria-hidden="true" />{totals.connected} conectada(s)</span><span><Clock3 aria-hidden="true" />{totals.needs_credentials} em configuração</span>{totals.error > 0 && <span className="error"><CircleAlert aria-hidden="true" />{totals.error} com erro</span>}</div>
-      <div className="integration-grid">
-        {snapshot.integrations.map((integration) => {
-          const copy = channelCopy[integration.channel] ?? { icon: "↗", description: "Integração externa configurável.", placeholder: "Endpoint ou referência", nextStep: "Informe a origem, salve a configuração e teste a sincronização." };
-          const hasSavedReference = Boolean(String(integration.config.account ?? "").trim() || String(integration.config.endpoint ?? "").trim());
-          return <form className={`integration-card ${integration.status}`} key={integration.id} onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void onCatalog({ resource: "integration", id: integration.id, status: data.get("status"), config: { endpoint: data.get("endpoint"), account: data.get("account") } }, `${integration.displayName} atualizado.`); }}>
-            <header><i>{copy.icon}</i><div><strong>{integration.displayName}</strong><span className={integration.status}>{statusIcon(integration.status)} {statusLabel(integration.status)}</span></div></header>
-            <p>{copy.description}</p>
-            <div className="integration-meta"><span>{integration.lastSyncAt ? `Última sincronização: ${formatMoment(integration.lastSyncAt)}` : "Ainda não sincronizada"}</span><span>{hasSavedReference ? "Origem configurada" : "Origem não informada"}</span></div>
-            <aside className="integration-guide"><Clock3 aria-hidden="true" /><div><strong>Próximo passo</strong><p>{copy.nextStep}</p></div></aside>
-            <label>Conta / origem<input name="account" defaultValue={String(integration.config.account ?? "")} placeholder={copy.placeholder} disabled={!isAdmin || busy} /></label>
-            <label>Endpoint ou referência<input name="endpoint" defaultValue={String(integration.config.endpoint ?? "")} placeholder="https://…" disabled={!isAdmin || busy} /></label>
-            <label>Operação<select name="status" defaultValue={integration.status === "paused" ? "paused" : "needs_credentials"} disabled={!isAdmin || busy}><option value="needs_credentials">Aguardando credenciais</option><option value="paused">Pausada</option></select></label>
-            {integration.lastError && <details className="integration-error"><summary><CircleAlert aria-hidden="true" /> Ver detalhe do erro</summary><p>{integration.lastError}</p></details>}
-            {integration.channel === "teams" && <small className="integration-channel-note">Mensagens via Power Automate chegam pela Inbox automaticamente; a sincronização manual é necessária apenas para consultas diretas ao Graph.</small>}
-            {isAdmin && <div className="integration-actions"><button className="primary-button" disabled={busy}>Salvar configuração</button><button type="button" className="secondary-button" disabled={busy} onClick={() => void onSync(integration.channel)}>{busy ? "Sincronizando…" : "Sincronizar agora"}</button></div>}
-          </form>;
-        })}
-      </div>
-    </div>
-  );
 }
 
 function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onCatalog: CatalogHandler; onConfirm: ConfirmHandler }) {

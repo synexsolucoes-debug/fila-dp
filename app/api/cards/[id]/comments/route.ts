@@ -1,4 +1,4 @@
-import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
+import { ApiError, apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -17,10 +17,10 @@ export async function POST(request: Request, context: RouteContext) {
     const card = await d1.prepare("SELECT id, title FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0")
       .bind(id, board.id)
       .first<{ id: string; title: string }>();
-    if (!card) throw new Error("Demanda não encontrada.");
+    if (!card) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
     const commentId = crypto.randomUUID();
-    await d1.prepare("INSERT INTO fdp_card_comments (id, card_id, author_user_id, body) VALUES (?, ?, ?, ?)")
-      .bind(commentId, id, user.id, comment)
+    await d1.prepare("INSERT INTO fdp_card_comments (id, workspace_id, card_id, author_user_id, body) VALUES (?, ?, ?, ?, ?)")
+      .bind(commentId, workspace.id, id, user.id, comment)
       .run();
     const recipients = await d1.prepare("SELECT user_id FROM fdp_card_assignees WHERE card_id = ? AND user_id <> ?").bind(id, user.id).all<{ user_id: string }>();
     const mentionNames = Array.from(new Set(

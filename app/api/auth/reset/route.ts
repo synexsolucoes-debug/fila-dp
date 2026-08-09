@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     await d1.batch([
       d1.prepare("UPDATE fdp_users SET password_hash = ?, password_salt = ? WHERE id = ?").bind(credentials.hash, credentials.salt, recovery.user_id),
       d1.prepare("UPDATE fdp_access_recovery_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?").bind(recovery.id),
+      d1.prepare("UPDATE fdp_auth_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL").bind(recovery.user_id),
     ]);
     return Response.json({ ok: true });
   } catch (error) {

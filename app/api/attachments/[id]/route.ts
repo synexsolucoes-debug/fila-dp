@@ -1,5 +1,5 @@
 import { getAttachmentsBucket } from "@/db";
-import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -18,10 +18,10 @@ export async function GET(request: Request, context: RouteContext) {
     const attachment = await d1.prepare(`SELECT a.object_key, a.filename, a.content_type, a.card_id
       FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id
       WHERE a.id = ? AND c.board_id = ?`).bind(id, board.id).first<{ object_key: string; filename: string; content_type: string; card_id: string }>();
-    if (!attachment) throw new Error("Anexo não encontrado.");
+    if (!attachment) throw ApiError.notFound("Anexo não encontrado.", "ATTACHMENT_NOT_FOUND");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, attachment.card_id);
     const object = await getAttachmentsBucket().get(attachment.object_key);
-    if (!object) throw new Error("Anexo não encontrado.");
+    if (!object) throw ApiError.notFound("Anexo não encontrado.", "ATTACHMENT_NOT_FOUND");
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("Content-Type", attachment.content_type || "application/octet-stream");
@@ -49,7 +49,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const attachment = await d1.prepare(`SELECT a.object_key, a.card_id, a.filename
       FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id
       WHERE a.id = ? AND c.board_id = ?`).bind(id, board.id).first<{ object_key: string; card_id: string; filename: string }>();
-    if (!attachment) throw new Error("Anexo não encontrado.");
+    if (!attachment) throw ApiError.notFound("Anexo não encontrado.", "ATTACHMENT_NOT_FOUND");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, attachment.card_id);
     await getAttachmentsBucket().delete(attachment.object_key);
     await d1.prepare("DELETE FROM fdp_card_attachments WHERE id = ?").bind(id).run();

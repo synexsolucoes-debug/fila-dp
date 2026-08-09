@@ -198,14 +198,14 @@
   font-size: 10px;
 }
 
-.sidebar-account a {
+.sidebar-account :is(a, .sign-out-button) {
   width: 28px;
   height: 28px;
   display: grid;
   place-items: center;
 }
 
-.sidebar-account a svg {
+.sidebar-account :is(a, .sign-out-button) svg {
   width: 17px;
   height: 17px;
 }
@@ -875,7 +875,7 @@
     justify-items: center;
   }
 
-  .sidebar-account a {
+  .sidebar-account :is(a, .sign-out-button) {
     margin-top: 5px;
   }
 

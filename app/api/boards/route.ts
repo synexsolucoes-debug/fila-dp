@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       : defaultColumns;
     await d1.batch([
       d1.prepare("INSERT INTO fdp_boards (id, workspace_id, name, description, board_type) VALUES (?, ?, ?, ?, ?)").bind(boardId, workspace.id, name, description, boardType),
-      ...columns.map(([label, kind, behavior], index) => d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), boardId, label, kind, (index + 1) * 1000, behavior)),
+      ...columns.map(([label, kind, behavior], index) => d1.prepare("INSERT INTO fdp_lists (id, workspace_id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), workspace.id, boardId, label, kind, (index + 1) * 1000, behavior)),
       d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(boardId, user.id, workspace.id),
     ]);
     await recordActivity(workspace.id, null, auth.user.email, "board.created", { boardId, name, boardType, columns: columns.map(([label]) => label) });

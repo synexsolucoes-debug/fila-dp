@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -16,7 +16,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       WHERE ci.id = ? AND c.board_id = ? AND c.archived = 0`)
       .bind(id, board.id)
       .first<{ id: string; card_id: string; title: string; completed: number }>();
-    if (!item) throw new Error("Etapa não encontrada.");
+    if (!item) throw ApiError.notFound("Etapa não encontrada.", "CHECKLIST_ITEM_NOT_FOUND");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, item.card_id);
     const completed = Boolean(body.completed);
     await d1.prepare("UPDATE fdp_checklist_items SET completed = ?, completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id = ?")

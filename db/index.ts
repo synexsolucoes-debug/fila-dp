@@ -1,6 +1,7 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { del, get, put } from "@vercel/blob";
 import { toPostgresParameters } from "../lib/postgres-parameters";
+import { getTenantContext } from "../lib/tenant-context";
 
 type SqlValue = unknown;
 
@@ -23,7 +24,13 @@ class NeonPreparedStatement implements D1PreparedStatement {
   }
 
   private async execute() {
-    return this.sql.query(toPostgresParameters(this.query), this.args);
+    const context = getTenantContext();
+    if (!context) return this.sql.query(toPostgresParameters(this.query), this.args);
+    const results = await this.sql.transaction([
+      this.sql`SELECT set_config('app.workspace_id', ${context.workspaceId}, true), set_config('app.user_id', ${context.userId ?? ""}, true)`,
+      this.sql.query(toPostgresParameters(this.query), this.args),
+    ] as never, { fullResults: true } as never);
+    return results[1];
   }
 
   async first<T = Record<string, unknown>>(columnName?: string): Promise<T | null> {
@@ -69,8 +76,13 @@ class NeonDatabase implements D1Database {
       if (!(statement instanceof NeonPreparedStatement)) throw new Error("Comando de banco incompatível.");
       return statement.toNeonQuery();
     });
-    const results = await this.sql.transaction(prepared as never, { fullResults: true } as never);
-    return results.map((result) => ({
+    const context = getTenantContext();
+    const transaction = context
+      ? [this.sql`SELECT set_config('app.workspace_id', ${context.workspaceId}, true), set_config('app.user_id', ${context.userId ?? ""}, true)`, ...prepared]
+      : prepared;
+    const results = await this.sql.transaction(transaction as never, { fullResults: true } as never);
+    const visibleResults = context ? results.slice(1) : results;
+    return visibleResults.map((result) => ({
       results: result.rows as T[],
       success: true,
       meta: { changes: result.rowCount, rows_read: result.rows.length, rows_written: result.rowCount },

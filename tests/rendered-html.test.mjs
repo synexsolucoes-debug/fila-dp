@@ -87,11 +87,12 @@ test("keeps the responsive visual layer for the new surfaces", async () => {
 });
 
 test("keeps critical workspace and integration security boundaries", async () => {
-  const [auth, listsRoute, commentsRoute, syncRoute, webhookRoute] = await Promise.all([
+  const [auth, listsRoute, commentsRoute, syncRoute, integrationEngine, webhookRoute] = await Promise.all([
     source("app/chatgpt-auth.ts"),
     source("app/api/lists/[id]/route.ts"),
     source("app/api/cards/[id]/comments/route.ts"),
     source("app/api/integrations/sync/route.ts"),
+    source("lib/integration-engine.ts"),
     source("app/api/integrations/webhook/[channel]/route.ts"),
   ]);
 
@@ -99,8 +100,9 @@ test("keeps critical workspace and integration security boundaries", async () =>
   assert.match(listsRoute, /b\.workspace_id = \?/);
   assert.match(listsRoute, /board_id IN \(SELECT id FROM fdp_boards WHERE workspace_id = \?\)/);
   assert.match(commentsRoute, /JOIN fdp_workspace_members/);
-  assert.match(syncRoute, /validateIntegrationEndpoint/);
-  assert.match(syncRoute, /redirect: "error"/);
+  assert.match(syncRoute, /queueIntegrationRun/);
+  assert.match(integrationEngine, /validateConnectorEndpoint/);
+  assert.match(integrationEngine, /redirect: "error"/);
   assert.match(webhookRoute, /WEBHOOK_SECRETS/);
   assert.match(webhookRoute, /Payload do webhook excede 64 KB/);
 });

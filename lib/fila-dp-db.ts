@@ -2,6 +2,10 @@ import { getD1 } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
+import { getTenantContext, setTenantContext } from "./tenant-context";
+import { hasCapability } from "./authorization";
+import { ApiError } from "./fila-dp-api";
+import { safeIntegrationError } from "./integrations";
 
 
 function safeJson(value: string) {
@@ -47,11 +51,11 @@ export async function requireCompanyAccess(
   companyId: string | null,
 ) {
   if (role === "admin") return;
-  if (!companyId) throw new Error("Selecione uma empresa à qual você tenha acesso.");
+  if (!companyId) throw ApiError.forbidden("Selecione uma empresa à qual você tenha acesso.", "COMPANY_ACCESS_REQUIRED");
   const access = await d1.prepare("SELECT 1 FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ? AND company_id = ?")
     .bind(workspaceId, userId, companyId)
     .first();
-  if (!access) throw new Error("Você não tem acesso a esta empresa.");
+  if (!access) throw ApiError.forbidden("Você não tem acesso a esta empresa.", "COMPANY_ACCESS_REQUIRED");
 }
 
 export async function requireCardCompanyAccess(
@@ -65,7 +69,7 @@ export async function requireCardCompanyAccess(
   const card = await d1.prepare(`SELECT c.company_id
     FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id
     WHERE c.id = ? AND b.workspace_id = ?`).bind(cardId, workspaceId).first<{ company_id: string | null }>();
-  if (!card) throw new Error("Demanda não encontrada.");
+  if (!card) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
   await requireCompanyAccess(d1, workspaceId, userId, role, card.company_id ? String(card.company_id) : null);
 }
 
@@ -87,7 +91,7 @@ function businessDaysUntil(from: string, to: string, businessDays: number[], hol
 }
 
 const nativeTemplates = [
-  { key: "admissao", name: "Admissão completa", process: "ADMISSÃO", days: 2, checklist: ["Documentos pessoais recebidos", "Exame admissional anexado", "Cadastro no sistema concluído", "Benefícios configurados"] },
+  { key: "conciliacao-admitido", name: "Conciliação de colaborador admitido", process: "CONCILIAÇÃO CADASTRAL", days: 2, checklist: ["Importação concluída", "Registro da Sólides vinculado ao ERP", "Divergências cadastrais tratadas", "Sincronização registrada"] },
   { key: "rescisao", name: "Rescisão", process: "RESCISÃO", days: 2, checklist: ["Desligamento registrado", "Cálculo rescisório conferido", "Documentos finais enviados", "Pagamento confirmado"] },
   { key: "ferias", name: "Programação de férias", process: "FÉRIAS", days: 5, checklist: ["Período aquisitivo validado", "Gestor confirmou as datas", "Aviso de férias emitido", "Pagamento programado"] },
   { key: "beneficios", name: "Benefícios", process: "BENEFÍCIOS", days: 3, checklist: ["Elegibilidade validada", "Documentos conferidos", "Solicitação enviada à operadora"] },
@@ -106,10 +110,10 @@ export async function provisionWorkspaceDefaults(d1: ReturnType<typeof getD1>, w
     ["canal_entrada", "Canal de entrada", "select", JSON.stringify(["Manual", "E-mail", "WhatsApp", "Teams"])],
   ] as const;
   const policies = [
-    ["ADMISSÃO", 2, 1], ["RESCISÃO", 2, 1], ["FÉRIAS", 5, 2], ["BENEFÍCIOS", 3, 1], ["FOLHA", 2, 1], ["OUTROS", 3, 1],
+    ["CONCILIAÇÃO CADASTRAL", 2, 1], ["RESCISÃO", 2, 1], ["FÉRIAS", 5, 2], ["BENEFÍCIOS", 3, 1], ["FOLHA", 2, 1], ["OUTROS", 3, 1],
   ] as const;
   const integrationRows = [
-    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["teams", "Microsoft Teams"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["erp", "ERP / Folha"],
+    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["teams", "Microsoft Teams"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["solides", "Sólides"], ["erp", "ERP / Folha"],
   ] as const;
 
   await d1.batch([
@@ -129,7 +133,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   const userRow = await d1.prepare("SELECT id, email, name FROM fdp_users WHERE email = ?")
     .bind(normalizedEmail)
     .first<{ id: string; email: string; name: string }>();
-  if (!userRow) throw new Error("Sem permissão para acessar este grupo.");
+  if (!userRow) throw ApiError.forbidden("Sem permissão para acessar este grupo.", "WORKSPACE_ACCESS_DENIED");
 
   let workspace = await d1.prepare(
     `SELECT w.id, w.name, w.timezone, wm.role
@@ -151,7 +155,9 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
     ).bind(userRow.id, userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
   }
 
-  if (!workspace) throw new Error("Sem permissão para acessar este grupo. Peça ao administrador para liberar seu usuário.");
+  if (!workspace) throw ApiError.forbidden("Sem permissão para acessar este grupo. Peça ao administrador para liberar seu usuário.", "WORKSPACE_ACCESS_DENIED");
+
+  setTenantContext({ workspaceId: workspace.id, userId: userRow.id });
 
   await d1.prepare(
     `INSERT INTO fdp_user_workspace_preferences (user_id, active_workspace_id, updated_at)
@@ -165,7 +171,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
     : null;
   if (!board) board = await d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at LIMIT 1").bind(workspace.id).first<{ id: string; name: string; description: string; board_type: string }>();
 
-  if (!board) throw new Error("Este grupo ainda não possui um quadro. Peça ao administrador para concluir a configuração inicial.");
+  if (!board) throw ApiError.notFound("Este grupo ainda não possui um quadro. Peça ao administrador para concluir a configuração inicial.", "BOARD_NOT_FOUND");
 
   await d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(board.id, userRow.id, workspace.id).run();
 
@@ -175,6 +181,9 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow } = await getWorkspaceContext(user);
   const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
+  const canManageMembers = hasCapability(workspace.role, "members.manage");
+  const canReadHr = hasCapability(workspace.role, "hr.read");
+  const canManageIntegrations = hasCapability(workspace.role, "integrations.manage");
   const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
@@ -354,6 +363,10 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     slaTargetMinutes: Number(row.sla_target_minutes ?? 0),
     slaPausedMinutes: Number(row.sla_paused_minutes ?? 0),
     slaEscalationLevel: Number(row.sla_escalation_level ?? 0),
+    competence: String(row.competence ?? ""),
+    legalDueAt: row.legal_due_at ? String(row.legal_due_at) : null,
+    processTemplateId: row.process_template_id ? String(row.process_template_id) : null,
+    closedAt: row.closed_at ? String(row.closed_at) : null,
   }));
 
   const mapActivity = (row: Record<string, unknown>) => ({
@@ -403,13 +416,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     })),
     members: (membersResult.results as Array<Record<string, unknown>>).map((row) => ({
       userId: String(row.user_id),
-      email: String(row.email),
+      email: canManageMembers ? String(row.email) : "",
       name: String(row.name),
       role: String(row.role) as WorkspaceRole,
       joinedAt: String(row.joined_at),
       isOwner: Boolean(row.is_owner),
-      isActivated: Boolean(row.is_activated),
-      companyIds: memberCompanyIds.get(String(row.user_id)) ?? [],
+      isActivated: canManageMembers ? Boolean(row.is_activated) : false,
+      companyIds: canManageMembers ? (memberCompanyIds.get(String(row.user_id)) ?? []) : [],
     })),
     availableWorkspaces: (workspacesResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id),
@@ -428,18 +441,18 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     holidays: (holidaysResult.results as Array<Record<string, unknown>>).map((row) => ({ date: String(row.holiday_date), name: String(row.name) })),
     settings: { businessDays: businessDays.length ? businessDays : [1, 2, 3, 4, 5], dayStart: String(settingsRow?.day_start ?? "08:00"), dayEnd: String(settingsRow?.day_end ?? "18:00"), realtimeSeconds: Number(settingsRow?.realtime_seconds ?? 30) },
     notifications: (notificationsResult.results as Array<Record<string, unknown>>).filter((row) => companyAccess.unrestricted || Boolean(row.card_id && visibleCardIds.has(String(row.card_id)))).map((row) => ({ id: String(row.id), type: String(row.notification_type), title: String(row.title), body: String(row.body), cardId: row.card_id ? String(row.card_id) : null, readAt: row.read_at ? String(row.read_at) : null, createdAt: String(row.created_at) })),
-    integrations: (integrationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), channel: String(row.channel), displayName: String(row.display_name), status: String(row.status) as "connected" | "needs_credentials" | "paused" | "error", config: safeJson(String(row.config_json)), lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
+    integrations: (integrationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), channel: String(row.channel), displayName: String(row.display_name), status: String(row.status) as "connected" | "needs_credentials" | "paused" | "error", config: canManageIntegrations ? publicIntegrationConfig(String(row.config_json)) : {}, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: canManageIntegrations && row.last_error ? safeIntegrationError(new Error(String(row.last_error))).message : null })),
     plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: String(row.start_at), endAt: String(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
     calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), provider: String(row.provider), status: String(row.status), config: safeJson(String(row.config_json)), externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
     companies: visibleCompanyRows.map((row) => ({ id: String(row.id), parentCompanyId: row.parent_company_id ? String(row.parent_company_id) : null, isPrincipal: Boolean(row.is_principal), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
-    hrMetrics: visibleMetricRows.map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), headcountStart: Number(row.headcount_start ?? row.headcount ?? 0), headcountEnd: Number(row.headcount_end ?? row.headcount ?? 0), leavesCount: Number(row.leaves_count ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), voluntaryTerminations: Number(row.voluntary_terminations ?? 0), involuntaryTerminations: Number(row.involuntary_terminations ?? 0), baseSalary: Number(row.base_salary ?? 0), variablePay: Number(row.variable_pay ?? 0), overtimePay: Number(row.overtime_pay ?? 0), additionalPay: Number(row.additional_pay ?? 0), vacationPay: Number(row.vacation_pay ?? 0), thirteenthPay: Number(row.thirteenth_pay ?? 0), terminationPay: Number(row.termination_pay ?? 0), grossPayroll: Number(row.gross_payroll ?? 0), employeeInss: Number(row.employee_inss ?? 0), employeeIrrf: Number(row.employee_irrf ?? 0), employeeOtherDeductions: Number(row.employee_other_deductions ?? 0), netPay: Number(row.net_pay ?? 0), employerInss: Number(row.employer_inss ?? 0), ratContribution: Number(row.rat_contribution ?? 0), thirdPartyContributions: Number(row.third_party_contributions ?? 0), fgts: Number(row.fgts ?? 0), fgtsPenalty: Number(row.fgts_penalty ?? 0), employerCharges: Number(row.employer_charges ?? 0), benefitsCost: Number(row.benefits_cost ?? 0), provisionsCost: Number(row.provisions_cost ?? 0), otherCosts: Number(row.other_costs ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })),
+    hrMetrics: canReadHr ? visibleMetricRows.map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), headcountStart: Number(row.headcount_start ?? row.headcount ?? 0), headcountEnd: Number(row.headcount_end ?? row.headcount ?? 0), leavesCount: Number(row.leaves_count ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), voluntaryTerminations: Number(row.voluntary_terminations ?? 0), involuntaryTerminations: Number(row.involuntary_terminations ?? 0), baseSalary: Number(row.base_salary ?? 0), variablePay: Number(row.variable_pay ?? 0), overtimePay: Number(row.overtime_pay ?? 0), additionalPay: Number(row.additional_pay ?? 0), vacationPay: Number(row.vacation_pay ?? 0), thirteenthPay: Number(row.thirteenth_pay ?? 0), terminationPay: Number(row.termination_pay ?? 0), grossPayroll: Number(row.gross_payroll ?? 0), employeeInss: Number(row.employee_inss ?? 0), employeeIrrf: Number(row.employee_irrf ?? 0), employeeOtherDeductions: Number(row.employee_other_deductions ?? 0), netPay: Number(row.net_pay ?? 0), employerInss: Number(row.employer_inss ?? 0), ratContribution: Number(row.rat_contribution ?? 0), thirdPartyContributions: Number(row.third_party_contributions ?? 0), fgts: Number(row.fgts ?? 0), fgtsPenalty: Number(row.fgts_penalty ?? 0), employerCharges: Number(row.employer_charges ?? 0), benefitsCost: Number(row.benefits_cost ?? 0), provisionsCost: Number(row.provisions_cost ?? 0), otherCosts: Number(row.other_costs ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })) : [],
     recentActivity: activityRows.slice(0, 50).map(mapActivity),
   };
 }
 
 export function requireWorkspaceRole(role: WorkspaceRole, allowed: WorkspaceRole[]) {
   if (!allowed.includes(role)) {
-    throw new Error("Você não tem permissão para realizar esta ação.");
+    throw ApiError.forbidden();
   }
 }
 
@@ -473,7 +486,7 @@ export async function runAutomations(
       statements.push(d1.prepare("UPDATE fdp_cards SET sla_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ?").bind(status, cardId, boardId));
     }
     if (typeof action.labelId === "string") {
-      statements.push(d1.prepare("INSERT INTO fdp_card_labels (card_id, label_id) SELECT ?, id FROM fdp_labels WHERE id = ? AND workspace_id = ? ON CONFLICT DO NOTHING").bind(cardId, action.labelId, workspaceId));
+      statements.push(d1.prepare("INSERT INTO fdp_card_labels (workspace_id, card_id, label_id) SELECT ?, ?, id FROM fdp_labels WHERE id = ? AND workspace_id = ? ON CONFLICT DO NOTHING").bind(workspaceId, cardId, action.labelId, workspaceId));
     }
     if (statements.length) await d1.batch(statements);
     await recordActivity(workspaceId, cardId, actorEmail, "automation.executed", { ruleId: rule.id, ruleName: rule.name, trigger });
@@ -482,9 +495,70 @@ export async function runAutomations(
   return executed;
 }
 
-export async function recordActivity(workspaceId: string, cardId: string | null, actorEmail: string, eventType: string, payload: Record<string, unknown> = {}) {
+function assertTenantWorkspace(workspaceId: string) {
+  if (getTenantContext()?.workspaceId !== workspaceId) {
+    throw ApiError.forbidden("Contexto tenant inválido para registrar atividade.", "TENANT_CONTEXT_MISMATCH");
+  }
+}
+
+function publicIntegrationConfig(value: string) {
+  const config = safeJson(value);
+  const endpoint = typeof config.endpoint === "string" ? config.endpoint.slice(0, 500) : undefined;
+  const accountReference = typeof config.accountReference === "string" ? config.accountReference.slice(0, 160) : undefined;
+  return { ...(endpoint ? { endpoint } : {}), ...(accountReference ? { accountReference } : {}) };
+}
+
+export function prepareActivity(workspaceId: string, cardId: string | null, actorEmail: string, eventType: string, payload: Record<string, unknown> = {}) {
+  assertTenantWorkspace(workspaceId);
   const d1 = getD1();
-  await d1.prepare("INSERT INTO fdp_activity_events (id, workspace_id, card_id, actor_email, event_type, payload_json) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(crypto.randomUUID(), workspaceId, cardId, actorEmail, eventType, JSON.stringify(payload))
-    .run();
+  return d1.prepare("INSERT INTO fdp_activity_events (id, workspace_id, card_id, actor_email, event_type, payload_json) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(crypto.randomUUID(), workspaceId, cardId, actorEmail, eventType, JSON.stringify(payload));
+}
+
+export async function recordActivity(workspaceId: string, cardId: string | null, actorEmail: string, eventType: string, payload: Record<string, unknown> = {}) {
+  await prepareActivity(workspaceId, cardId, actorEmail, eventType, payload).run();
+}
+
+type AuditEventInput = {
+  workspaceId: string;
+  actorUserId?: string | null;
+  actorEmail: string;
+  actorType?: "user" | "system" | "integration";
+  action: string;
+  outcome?: "success" | "denied" | "failure";
+  entityType: string;
+  entityId?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
+  requestId?: string | null;
+};
+
+const sensitiveAuditKey = /password|token|secret|authorization|cookie|senha|chave|cpf|taxpayer/i;
+
+function redactAuditValue(value: unknown, depth = 0): unknown {
+  if (depth > 6) return "[truncated]";
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => redactAuditValue(item, depth + 1));
+  if (!value || typeof value !== "object") return typeof value === "string" ? value.slice(0, 2000) : value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+    key,
+    sensitiveAuditKey.test(key) ? "[redacted]" : redactAuditValue(item, depth + 1),
+  ]));
+}
+
+function auditJson(value: Record<string, unknown> | null | undefined) {
+  return JSON.stringify(redactAuditValue(value ?? {}));
+}
+
+export function prepareAuditEvent(input: AuditEventInput) {
+  assertTenantWorkspace(input.workspaceId);
+  const d1 = getD1();
+  return d1.prepare(`INSERT INTO fdp_audit_events
+    (id, workspace_id, actor_type, actor_user_id, actor_email, action, outcome, entity_type, entity_id, before_json, after_json, metadata_json, request_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?)`)
+    .bind(
+      crypto.randomUUID(), input.workspaceId, input.actorType ?? "user", input.actorUserId ?? null,
+      input.actorEmail, input.action, input.outcome ?? "success", input.entityType, input.entityId ?? null,
+      auditJson(input.before), auditJson(input.after), auditJson(input.metadata), input.requestId ?? null,
+    );
 }
