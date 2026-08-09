@@ -58,6 +58,25 @@ test("migration checksums ignore only line endings and final whitespace", async 
   assert.match(migrator, /compatibleChecksums/);
 });
 
+test("legacy auth rate limits are normalized before later migrations", async () => {
+  const migrationRunner = await readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8");
+  assert.match(migrationRunner, /0004_auth_rate_limits\.sql/);
+  assert.match(migrationRunner, /normalized-existing-table/);
+  assert.match(migrationRunner, /information_schema\.columns/);
+  assert.match(migrationRunner, /fdp_auth_rate_limits_blocked_idx/);
+  assert.match(migrationRunner, /RENAME COLUMN \"attempt_count\" TO \"failure_count\"/);
+});
+
+test("legacy board process snapshots are preserved before the operations schema", async () => {
+  const migrationRunner = await readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8");
+  assert.match(migrationRunner, /0014_operation_dp_foundation\.sql/);
+  assert.match(migrationRunner, /fdp_legacy_board_process_versions/);
+  assert.match(migrationRunner, /ALTER TABLE \"fdp_process_versions\" RENAME TO/);
+  assert.match(migrationRunner, /legacyShape/);
+  assert.match(migrationRunner, /uniqueIndexes/);
+  assert.match(migrationRunner, /firstForeignKey/);
+});
+
 test("authentication sessions are opaque, persisted and revocable", async () => {
   const [schema, auth, migration] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),

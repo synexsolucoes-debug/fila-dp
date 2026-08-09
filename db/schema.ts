@@ -442,7 +442,10 @@ export const integrations = pgTable("fdp_integrations", {
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("fdp_integrations_workspace_channel_uq").on(table.workspaceId, table.channel)]);
+}, (table) => [
+  uniqueIndex("fdp_integrations_workspace_channel_uq").on(table.workspaceId, table.channel),
+  uniqueIndex("fdp_integrations_workspace_id_uq").on(table.workspaceId, table.id),
+]);
 
 export const plannerBlocks = pgTable("fdp_planner_blocks", {
   id: text("id").primaryKey(),
