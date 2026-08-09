@@ -97,6 +97,15 @@ A Fase 7 transforma o provisionamento singleton em cadastro multi-workspace e ad
 - Limites de usuários, empresas e integrações são aplicados no servidor sob lock transacional.
 - Planos pagos nascem como rascunho. Um operador da plataforma deve configurar preços `price_...`, valores e ativá-los antes da oferta.
 
+## Continuidade e prontidão de cobrança
+
+Detalhes e resultado medido em `docs/continuidade-e-prontidao-de-cobranca.md`.
+
+- `npm run db:rehearse-restore` faz o ciclo completo de backup e restauração contra PostgreSQL real e verifica contagem por tabela, políticas de RLS, `FORCE ROW LEVEL SECURITY`, triggers, constraints, isolamento multi-tenant no banco restaurado e imutabilidade de fechamento concluído. Falha em qualquer verificação reprova o ensaio.
+- A verificação de isolamento foi comprovada como não-vazia: concedendo `BYPASSRLS` ao papel de aplicação, o ensaio acusa o vazamento.
+- Os tempos medidos referem-se ao volume do ensaio e **não são promessa de RTO em produção**.
+- `GET /api/platform/billing-readiness` responde se dá para cobrar cliente real: chaves, URL pública, plano ativo com preço no provedor, webhook com evento processado e assinatura criada pelo checkout. `ready` só é verdadeiro quando todos os bloqueios caem, e nenhum segredo é devolvido.
+
 ## Site comercial
 
 O site publica apenas o que o produto faz. Detalhes e checklist em `docs/fase-10-comercializacao.md`.

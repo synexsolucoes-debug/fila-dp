@@ -271,6 +271,17 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
   PostgreSQL 16 real cobrindo outbox, lease, limites, idempotência e isolamento.
 - Detalhamento e pendências: `docs/fase-9-escala.md`.
 
+### Continuidade e prontidão de cobrança
+
+- Concluído no repositório: ensaio executável de backup e restauração e diagnóstico de prontidão de cobrança.
+- O ensaio de restauração roda contra PostgreSQL real e verifica dados, RLS, triggers, constraints,
+  isolamento multi-tenant no banco restaurado e imutabilidade de fechamento concluído; foi executado
+  com aprovação e comprovado como não-vazio ao acusar vazamento com `BYPASSRLS`.
+- Os tempos medidos não são declarados como RTO de produção: falta ensaiar sobre volume representativo.
+- A prontidão de cobrança lista bloqueios objetivos e só declara `ready` quando todos caem, incluindo
+  as provas de que webhook e checkout funcionaram ao menos uma vez.
+- Detalhamento: `docs/continuidade-e-prontidao-de-cobranca.md`.
+
 ### Fase 10 — Comercialização
 
 - Concluída no repositório: site comercial completo, captação de contato funcional e documentos legais.
