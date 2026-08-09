@@ -36,6 +36,15 @@ function tenantQueries(workspaceId, userId, statements) {
   ];
 }
 
+function platformQueries(userId, statements) {
+  return [
+    sql.query("SELECT set_config('search_path', $1, true)", [schema]),
+    sql.query("SELECT set_config('app.platform_admin', 'true', true)"),
+    sql.query("SELECT set_config('app.user_id', $1, true)", [userId]),
+    ...statements.map(({ statement, parameters = [] }) => sql.query(statement, parameters)),
+  ];
+}
+
 await sql.query(`CREATE SCHEMA "${schema}"`, []);
 try {
   for (const file of migrationFiles) {
@@ -87,6 +96,11 @@ try {
       { statement: "INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type) VALUES ($1, $2, $3, $4, $5, $6, $7, 'conflict', $8, 'employee')", parameters: [`sync-item-${suffix}`, workspaceId, `integration-${suffix}`, `sync-run-${suffix}`, `mapping-${suffix}`, `item-${suffix}`, `external-${suffix}`, `payload-hash-${suffix}`] },
       { statement: "INSERT INTO fdp_integration_jobs (id, workspace_id, integration_id, run_id, idempotency_key) VALUES ($1, $2, $3, $4, $5)", parameters: [`job-${suffix}`, workspaceId, `integration-${suffix}`, `sync-run-${suffix}`, `job-idempotency-${suffix}`] },
       { statement: "INSERT INTO fdp_integration_reconciliations (id, workspace_id, integration_id, run_id, item_id, entity_type, external_id, status, differences_json) VALUES ($1, $2, $3, $4, $5, 'employee', $6, 'conflict', '{\"fields\":[\"fullName\"]}'::jsonb)", parameters: [`reconciliation-${suffix}`, workspaceId, `integration-${suffix}`, `sync-run-${suffix}`, `sync-item-${suffix}`, `external-${suffix}`] },
+      { statement: "INSERT INTO fdp_workspace_subscriptions (id, workspace_id, plan_id, status, provider) VALUES ($1, $2, 'plan_starter', 'active', 'manual')", parameters: [`subscription-${suffix}`, workspaceId] },
+      { statement: "INSERT INTO fdp_workspace_onboarding (workspace_id, status, current_step, completed_steps_json) VALUES ($1, 'in_progress', 'team', '[\"company\"]'::jsonb)", parameters: [workspaceId] },
+      { statement: "INSERT INTO fdp_workspace_usage_counters (id, workspace_id, metric, period, quantity, limit_snapshot) VALUES ($1, $2, 'companies', '2026-08', 1, 1)", parameters: [`usage-${suffix}`, workspaceId] },
+      { statement: "INSERT INTO fdp_billing_events (id, workspace_id, external_event_id, event_type, object_type, object_id, summary_json, processed_at) VALUES ($1, $2, $3, 'invoice.paid', 'invoice', $4, '{\"amountPaidCents\":0}'::jsonb, now())", parameters: [`billing-event-${suffix}`, workspaceId, `evt-${suffix}`, `invoice-${suffix}`] },
+      { statement: "INSERT INTO fdp_billing_invoices (id, workspace_id, subscription_id, external_invoice_id, status) VALUES ($1, $2, $3, $4, 'paid')", parameters: [`billing-invoice-${suffix}`, workspaceId, `subscription-${suffix}`, `invoice-${suffix}`] },
     ]));
   }
 
@@ -100,6 +114,8 @@ try {
   assert.equal(noAuxiliaryContext.at(-1).rows.length, 0, "RLS deve negar leitura dos módulos auxiliares sem contexto tenant");
   const noIntegrationContext = await sql.transaction(schemaQuery("SELECT id FROM fdp_integration_sync_runs"));
   assert.equal(noIntegrationContext.at(-1).rows.length, 0, "RLS deve negar leitura do motor de integrações sem contexto tenant");
+  const noSubscriptionContext = await sql.transaction(schemaQuery("SELECT id FROM fdp_workspace_subscriptions"));
+  assert.equal(noSubscriptionContext.at(-1).rows.length, 0, "RLS deve negar leitura de assinaturas sem contexto tenant");
 
   for (const [workspaceId, userId, expectedCard] of [[workspaceA, userA, "card-a"], [workspaceB, userB, "card-b"]]) {
     const result = await sql.transaction(tenantQueries(workspaceId, userId, [
@@ -139,6 +155,28 @@ try {
     assert.deepEqual(result.at(-2).rows.map((row) => row.id), [`job-${suffix}`]);
     assert.deepEqual(result.at(-1).rows.map((row) => row.id), [`reconciliation-${suffix}`]);
   }
+
+  for (const [workspaceId, userId, suffix] of [[workspaceA, userA, "a"], [workspaceB, userB, "b"]]) {
+    const result = await sql.transaction(tenantQueries(workspaceId, userId, [
+      { statement: "SELECT id FROM fdp_workspace_subscriptions" },
+      { statement: "SELECT workspace_id, current_step FROM fdp_workspace_onboarding" },
+      { statement: "SELECT id FROM fdp_workspace_usage_counters" },
+      { statement: "SELECT id FROM fdp_billing_events" },
+      { statement: "SELECT id FROM fdp_billing_invoices" },
+    ]));
+    assert.deepEqual(result.at(-5).rows.map((row) => row.id), [`subscription-${suffix}`]);
+    assert.deepEqual(result.at(-4).rows.map((row) => row.workspace_id), [workspaceId]);
+    assert.deepEqual(result.at(-3).rows.map((row) => row.id), [`usage-${suffix}`]);
+    assert.deepEqual(result.at(-2).rows.map((row) => row.id), [`billing-event-${suffix}`]);
+    assert.deepEqual(result.at(-1).rows.map((row) => row.id), [`billing-invoice-${suffix}`]);
+  }
+
+  const platformOverview = await sql.transaction(platformQueries(userA, [
+    { statement: "SELECT id FROM fdp_workspaces WHERE id LIKE 'phase2-workspace-%' ORDER BY id" },
+    { statement: "SELECT id FROM fdp_workspace_subscriptions ORDER BY id" },
+  ]));
+  assert.equal(platformOverview.at(-2).rows.length, 2, "Visão global deve listar os workspaces da plataforma");
+  assert.equal(platformOverview.at(-1).rows.length, 2, "Contexto de plataforma deve enxergar assinaturas para suporte global");
 
   await assert.rejects(
     sql.transaction(tenantQueries(workspaceA, userA, [{
@@ -217,7 +255,12 @@ try {
     /append-only/u,
   );
 
-  console.log(`Ensaio das Fases 2 a 6 aprovado em ${migrationFiles.length} migrations: RLS, FKs compostas, operação DP, módulos auxiliares, cofre e integrações idempotentes, versões imutáveis e auditoria append-only.`);
+  await assert.rejects(
+    sql.transaction(tenantQueries(workspaceA, userA, [{ statement: "UPDATE fdp_billing_events SET status = 'ignored' WHERE id = 'billing-event-a'" }])),
+    /append-only/u,
+  );
+
+  console.log(`Ensaio das Fases 2 a 7 aprovado em ${migrationFiles.length} migrations: RLS, FKs compostas, operação DP, módulos auxiliares, integrações, SaaS multi-workspace, cobrança idempotente e auditoria append-only.`);
 } finally {
   await sql.query(`DROP SCHEMA "${schema}" CASCADE`, []);
 }

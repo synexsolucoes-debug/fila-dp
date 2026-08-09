@@ -216,6 +216,10 @@
 .auth-login-form .auth-primary:disabled { opacity: .65; cursor: wait; }
 .auth-primary svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .auth-mode-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; }
+.auth-mode-switch { width: 100%; margin-top: 22px; padding: 4px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; border: 1px solid #d5dfe0; border-radius: 9px; background: #edf2f1; }
+.auth-mode-switch button { min-height: 38px; border: 0; border-radius: 6px; background: transparent; color: #687588; cursor: pointer; font-size: 12px; font-weight: 720; }
+.auth-mode-switch button[aria-pressed="true"] { background: #fff; color: #087b63; box-shadow: 0 2px 8px rgba(8,26,49,.08); }
+.auth-mode-switch button:focus-visible { outline: 3px solid rgba(35,216,161,.22); outline-offset: 1px; }
 .auth-login-error { margin: 0; padding: 11px 12px; border: 1px solid #f0c8c8; border-radius: 7px; background: #fff3f3; color: #a23b3b; font-size: 12px; line-height: 1.45; }
 
 .dashboard-shell {

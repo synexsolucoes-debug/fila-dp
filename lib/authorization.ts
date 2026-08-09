@@ -18,6 +18,8 @@ export const capabilities = [
   "integrations.manage",
   "integrations.run",
   "integrations.reconcile",
+  "saas.read",
+  "saas.manage",
   "audit.read",
   "companies.read",
   "companies.manage",

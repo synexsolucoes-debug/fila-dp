@@ -1,5 +1,5 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
-import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 
@@ -43,17 +43,38 @@ export async function POST(request: Request) {
       stateRegistration: text(body.stateRegistration, 40), municipalRegistration: text(body.municipalRegistration, 40), postalCode: text(body.postalCode, 20),
       street: text(body.street, 160), streetNumber: text(body.streetNumber, 30), addressComplement: text(body.addressComplement, 120),
       district: text(body.district, 100), city: text(body.city, 100), state: text(body.state, 2).toUpperCase(), country: text(body.country, 80) || "Brasil" };
-    const statements: D1PreparedStatement[] = [d1.prepare(`INSERT INTO fdp_companies
-      (id, workspace_id, parent_company_id, is_principal, legal_name, trade_name, tax_id, external_code, email, phone, status, tax_regime,
-       state_registration, municipal_registration, postal_code, street, street_number, address_complement, district, city, state, country)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .bind(company.id, workspace.id, company.parentCompanyId, company.isPrincipal ? 1 : 0, company.legalName, company.tradeName, company.taxId,
+    const inserted = await d1.prepare(`WITH lock AS (
+        SELECT pg_advisory_xact_lock(hashtext(?))
+      ), entitlement AS (
+        SELECT plan.company_limit FROM fdp_workspace_subscriptions subscription
+        JOIN fdp_saas_plans plan ON plan.id = subscription.plan_id, lock
+        WHERE subscription.workspace_id = ? AND subscription.status IN ('trialing', 'active')
+      ), inserted AS (
+        INSERT INTO fdp_companies
+          (id, workspace_id, parent_company_id, is_principal, legal_name, trade_name, tax_id, external_code, email, phone, status, tax_regime,
+           state_registration, municipal_registration, postal_code, street, street_number, address_complement, district, city, state, country)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
+        WHERE (SELECT COUNT(*) FROM fdp_companies WHERE workspace_id = ? AND status = 'active') < entitlement.company_limit
+        RETURNING id
+      ), demoted AS (
+        UPDATE fdp_companies SET is_principal = 0, parent_company_id = ?
+        WHERE ? = 1 AND workspace_id = ? AND id <> ? AND is_principal = 1 AND EXISTS (SELECT 1 FROM inserted)
+        RETURNING id
+      ), audited AS (
+        INSERT INTO fdp_audit_events
+          (id, workspace_id, actor_type, actor_user_id, actor_email, action, outcome, entity_type, entity_id, before_json, after_json, metadata_json, request_id)
+        SELECT ?, ?, 'user', ?, ?, 'company.created', 'success', 'company', inserted.id, '{}'::jsonb, ?::jsonb, '{}'::jsonb, ?
+        FROM inserted RETURNING id
+      ) SELECT id FROM inserted`)
+      .bind(
+        workspace.id, workspace.id,
+        company.id, workspace.id, company.parentCompanyId, company.isPrincipal ? 1 : 0, company.legalName, company.tradeName, company.taxId,
         company.externalCode, company.email, company.phone, company.status, company.taxRegime, company.stateRegistration, company.municipalRegistration,
-        company.postalCode, company.street, company.streetNumber, company.addressComplement, company.district, company.city, company.state, company.country)];
-    if (isPrincipal) statements.push(d1.prepare("UPDATE fdp_companies SET is_principal = 0, parent_company_id = ? WHERE workspace_id = ? AND id <> ? AND is_principal = 1").bind(company.id, workspace.id, company.id));
-    statements.push(prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "company.created",
-      entityType: "company", entityId: company.id, after: company, requestId: request.headers.get("x-fila-dp-request-id") }));
-    await d1.batch(statements);
+        company.postalCode, company.street, company.streetNumber, company.addressComplement, company.district, company.city, company.state, company.country,
+        workspace.id, company.id, company.isPrincipal ? 1 : 0, workspace.id, company.id,
+        crypto.randomUUID(), workspace.id, user.id, auth.user.email, JSON.stringify(company), request.headers.get("x-fila-dp-request-id"),
+      ).first<{ id: string }>();
+    if (!inserted) throw new ApiError(409, "PLAN_COMPANY_LIMIT", "O plano atual atingiu o limite de empresas ativas.");
     return Response.json({ company }, { status: 201 });
   } catch (error) { return apiError(error); }
 }

@@ -69,14 +69,15 @@ export async function POST(request: Request) {
       if (!claimedWorkspace) return Response.json({ error: "O grupo já foi configurado. Solicite ao administrador a liberação do seu acesso." }, { status: 403 });
       setTenantContext({ workspaceId, userId });
       const boardId = crypto.randomUUID();
-      await d1.batch([
+      await provisionWorkspaceDefaults(d1, workspaceId, [
         d1.prepare("INSERT INTO fdp_boards (id, workspace_id, name, description, board_type) VALUES (?, ?, 'Fila geral', 'Operação central do Departamento Pessoal', 'general')").bind(boardId, workspaceId),
         d1.prepare("INSERT INTO fdp_lists (id, workspace_id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, 'Novas demandas', 'new', 1000, 'running')").bind(crypto.randomUUID(), workspaceId, boardId),
         d1.prepare("INSERT INTO fdp_lists (id, workspace_id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, 'Em análise', 'analysis', 2000, 'running')").bind(crypto.randomUUID(), workspaceId, boardId),
         d1.prepare("INSERT INTO fdp_lists (id, workspace_id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, 'Concluído', 'done', 3000, 'completed')").bind(crypto.randomUUID(), workspaceId, boardId),
         d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?").bind(boardId, userId),
+        d1.prepare("INSERT INTO fdp_workspace_onboarding (workspace_id, status, current_step) VALUES (?, 'in_progress', 'company') ON CONFLICT DO NOTHING").bind(workspaceId),
+        d1.prepare("INSERT INTO fdp_workspace_subscriptions (id, workspace_id, plan_id, status, billing_interval, seat_quantity, provider) VALUES (?, ?, 'plan_starter', 'active', 'monthly', 1, 'manual') ON CONFLICT (workspace_id) DO NOTHING").bind(crypto.randomUUID(), workspaceId),
       ]);
-      await provisionWorkspaceDefaults(d1, workspaceId);
     } else {
       if (!current || !current.password_hash || !current.password_salt || !await verifyPassword(password, current.password_salt, current.password_hash)) {
         const failure = await recordLoginFailure(email, address);

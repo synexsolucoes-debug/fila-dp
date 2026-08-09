@@ -1175,6 +1175,159 @@ export const integrationReconciliations = pgTable("fdp_integration_reconciliatio
   check("fdp_integration_reconciliations_resolution_check", sql`${table.resolution} IN ('', 'link', 'accept_external', 'keep_internal', 'ignore')`),
 ]);
 
+export const saasPlans = pgTable("fdp_saas_plans", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  status: text("status").notNull().default("active"),
+  currency: text("currency").notNull().default("brl"),
+  monthlyPriceCents: integer("monthly_price_cents").notNull().default(0),
+  annualPriceCents: integer("annual_price_cents").notNull().default(0),
+  trialDays: integer("trial_days").notNull().default(14),
+  includedSeats: integer("included_seats").notNull().default(3),
+  companyLimit: integer("company_limit").notNull().default(1),
+  integrationLimit: integer("integration_limit").notNull().default(1),
+  storageLimitMb: integer("storage_limit_mb").notNull().default(1024),
+  featuresJson: jsonb("features_json").notNull().default(sql`'[]'::jsonb`),
+  stripeMonthlyPriceId: text("stripe_monthly_price_id").notNull().default(""),
+  stripeAnnualPriceId: text("stripe_annual_price_id").notNull().default(""),
+  position: integer("position").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_saas_plans_code_uq").on(table.code),
+  index("fdp_saas_plans_status_position_idx").on(table.status, table.position),
+  check("fdp_saas_plans_status_check", sql`${table.status} IN ('draft', 'active', 'archived')`),
+  check("fdp_saas_plans_currency_check", sql`${table.currency} ~ '^[a-z]{3}$'`),
+  check("fdp_saas_plans_prices_check", sql`${table.monthlyPriceCents} >= 0 AND ${table.annualPriceCents} >= 0`),
+  check("fdp_saas_plans_limits_check", sql`${table.trialDays} BETWEEN 0 AND 90 AND ${table.includedSeats} > 0 AND ${table.companyLimit} > 0 AND ${table.integrationLimit} >= 0 AND ${table.storageLimitMb} > 0`),
+]);
+
+export const workspaceSubscriptions = pgTable("fdp_workspace_subscriptions", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  planId: text("plan_id").notNull().references(() => saasPlans.id, { onDelete: "restrict" }),
+  status: text("status").notNull().default("trialing"),
+  billingInterval: text("billing_interval").notNull().default("monthly"),
+  seatQuantity: integer("seat_quantity").notNull().default(1),
+  provider: text("provider").notNull().default("stripe"),
+  externalCustomerId: text("external_customer_id").notNull().default(""),
+  externalSubscriptionId: text("external_subscription_id").notNull().default(""),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true, mode: "string" }),
+  currentPeriodStartsAt: timestamp("current_period_starts_at", { withTimezone: true, mode: "string" }),
+  currentPeriodEndsAt: timestamp("current_period_ends_at", { withTimezone: true, mode: "string" }),
+  cancelAtPeriodEnd: integer("cancel_at_period_end").notNull().default(0),
+  canceledAt: timestamp("canceled_at", { withTimezone: true, mode: "string" }),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_workspace_subscriptions_workspace_uq").on(table.workspaceId),
+  uniqueIndex("fdp_workspace_subscriptions_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_workspace_subscriptions_customer_uq").on(table.externalCustomerId).where(sql`${table.externalCustomerId} <> ''`),
+  uniqueIndex("fdp_workspace_subscriptions_external_uq").on(table.externalSubscriptionId).where(sql`${table.externalSubscriptionId} <> ''`),
+  index("fdp_workspace_subscriptions_status_idx").on(table.status, table.updatedAt),
+  check("fdp_workspace_subscriptions_status_check", sql`${table.status} IN ('trialing', 'active', 'past_due', 'paused', 'canceled', 'incomplete')`),
+  check("fdp_workspace_subscriptions_interval_check", sql`${table.billingInterval} IN ('monthly', 'annual')`),
+  check("fdp_workspace_subscriptions_provider_check", sql`${table.provider} IN ('stripe', 'manual')`),
+  check("fdp_workspace_subscriptions_seats_check", sql`${table.seatQuantity} > 0`),
+]);
+
+export const workspaceOnboarding = pgTable("fdp_workspace_onboarding", {
+  workspaceId: text("workspace_id").primaryKey().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("in_progress"),
+  currentStep: text("current_step").notNull().default("company"),
+  completedStepsJson: jsonb("completed_steps_json").notNull().default(sql`'[]'::jsonb`),
+  skippedStepsJson: jsonb("skipped_steps_json").notNull().default(sql`'[]'::jsonb`),
+  profileJson: jsonb("profile_json").notNull().default(sql`'{}'::jsonb`),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_workspace_onboarding_status_idx").on(table.status, table.updatedAt),
+  check("fdp_workspace_onboarding_status_check", sql`${table.status} IN ('in_progress', 'completed', 'dismissed')`),
+  check("fdp_workspace_onboarding_step_check", sql`${table.currentStep} IN ('company', 'team', 'operation', 'integrations', 'billing', 'completed')`),
+]);
+
+export const workspaceUsageCounters = pgTable("fdp_workspace_usage_counters", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  metric: text("metric").notNull(),
+  period: text("period").notNull(),
+  quantity: integer("quantity").notNull().default(0),
+  limitSnapshot: integer("limit_snapshot").notNull().default(0),
+  measuredAt: timestamp("measured_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_workspace_usage_metric_period_uq").on(table.workspaceId, table.metric, table.period),
+  uniqueIndex("fdp_workspace_usage_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_workspace_usage_period_idx").on(table.workspaceId, table.period, table.metric),
+  check("fdp_workspace_usage_metric_check", sql`${table.metric} IN ('members', 'companies', 'integrations', 'storage_mb')`),
+  check("fdp_workspace_usage_quantity_check", sql`${table.quantity} >= 0 AND ${table.limitSnapshot} >= 0`),
+]);
+
+export const billingInvoices = pgTable("fdp_billing_invoices", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  subscriptionId: text("subscription_id").notNull(),
+  externalInvoiceId: text("external_invoice_id").notNull(),
+  status: text("status").notNull().default("open"),
+  currency: text("currency").notNull().default("brl"),
+  amountDueCents: integer("amount_due_cents").notNull().default(0),
+  amountPaidCents: integer("amount_paid_cents").notNull().default(0),
+  hostedInvoiceUrl: text("hosted_invoice_url").notNull().default(""),
+  periodStartsAt: timestamp("period_starts_at", { withTimezone: true, mode: "string" }),
+  periodEndsAt: timestamp("period_ends_at", { withTimezone: true, mode: "string" }),
+  paidAt: timestamp("paid_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_billing_invoices_external_uq").on(table.externalInvoiceId),
+  uniqueIndex("fdp_billing_invoices_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_billing_invoices_workspace_created_idx").on(table.workspaceId, table.createdAt),
+  foreignKey({ name: "fdp_billing_invoices_workspace_subscription_fk", columns: [table.workspaceId, table.subscriptionId], foreignColumns: [workspaceSubscriptions.workspaceId, workspaceSubscriptions.id] }).onDelete("cascade"),
+  check("fdp_billing_invoices_status_check", sql`${table.status} IN ('draft', 'open', 'paid', 'void', 'uncollectible')`),
+  check("fdp_billing_invoices_amount_check", sql`${table.amountDueCents} >= 0 AND ${table.amountPaidCents} >= 0`),
+]);
+
+export const billingEvents = pgTable("fdp_billing_events", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  externalEventId: text("external_event_id").notNull(),
+  eventType: text("event_type").notNull(),
+  status: text("status").notNull().default("processed"),
+  objectType: text("object_type").notNull().default(""),
+  objectId: text("object_id").notNull().default(""),
+  summaryJson: jsonb("summary_json").notNull().default(sql`'{}'::jsonb`),
+  errorCode: text("error_code").notNull().default(""),
+  receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_billing_events_external_uq").on(table.externalEventId),
+  uniqueIndex("fdp_billing_events_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_billing_events_workspace_received_idx").on(table.workspaceId, table.receivedAt),
+  check("fdp_billing_events_status_check", sql`${table.status} IN ('processed', 'ignored', 'failed')`),
+]);
+
+export const platformAuditEvents = pgTable("fdp_platform_audit_events", {
+  id: text("id").primaryKey(),
+  actorUserId: text("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  actorEmail: text("actor_email").notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull().default(""),
+  beforeJson: jsonb("before_json").notNull().default(sql`'{}'::jsonb`),
+  afterJson: jsonb("after_json").notNull().default(sql`'{}'::jsonb`),
+  requestId: text("request_id").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_platform_audit_created_idx").on(table.createdAt),
+  index("fdp_platform_audit_actor_idx").on(table.actorUserId, table.createdAt),
+]);
+
 export const hrMetrics = pgTable("fdp_hr_metrics", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),

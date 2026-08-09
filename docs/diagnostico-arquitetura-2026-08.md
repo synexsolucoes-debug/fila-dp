@@ -208,9 +208,17 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Sólides continua aguardando credenciais até confirmar recurso oficial; a API impede estado conectado sem autenticação e teste real.
 - Gate operacional antes do deploy: aplicar a migration `0016_integrations_engine`, configurar as chaves do cofre/executor, executar `npm run db:rehearse-phase2` em PostgreSQL de homologação e testar cada conector contra a conta sandbox/oficial do cliente.
 
-### Fases 7 a 10 — SaaS, experiência, escala e comercialização
+### Fase 7 — Plataforma SaaS
 
-- Onboarding, planos, cobrança, administração da plataforma; redesign modular e acessível; filas/observabilidade/backups/API; site, suporte, LGPD e documentação comercial.
+- Concluída no repositório: cadastro multi-workspace controlado por flag, provisionamento transacional, onboarding por etapas, catálogo persistido de planos, assinatura por tenant, quotas, faturas e ledger financeiro append-only.
+- Checkout e portal usam IDs de preço resolvidos somente no servidor; o webhook Stripe valida a assinatura antes do banco e deduplica o identificador global do evento.
+- Administração global usa `FDP_PLATFORM_ADMIN_EMAILS` e contexto próprio no banco. O papel `admin` de um workspace nunca concede acesso cruzado a clientes.
+- Limites de empresas, usuários e integrações são aplicados no servidor sob advisory lock; esconder uma ação na interface não é usado como controle de plano.
+- Gate operacional antes do deploy: aplicar a migration `0017_saas_foundation`, configurar URL pública/Stripe/operadores, executar o rehearsal multi-tenant, homologar checkout e portal no modo teste e só então avaliar `FDP_ALLOW_SELF_SIGNUP=true`.
+
+### Fases 8 a 10 — Experiência, escala e comercialização
+
+- Redesign modular e acessível; filas/observabilidade/backups/API; site, suporte, LGPD e documentação comercial.
 
 ## Alterações implementadas nesta fase
 

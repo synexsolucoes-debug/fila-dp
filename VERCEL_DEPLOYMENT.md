@@ -13,10 +13,11 @@ anexos usam Vercel Blob privado.
 4. Confirme que `DATABASE_URL` foi criada nas Environment Variables.
 5. Crie um Blob privado e confirme `BLOB_READ_WRITE_TOKEN`.
 6. Defina `FDP_AUTH_SECRET`, `FDP_PII_HASH_SECRET`, `FDP_INTEGRATION_VAULT_KEY` e `FDP_INTEGRATION_WORKER_SECRET` com valores aleatorios e diferentes. A chave do cofre deve representar exatamente 32 bytes em base64; o segredo do executor deve ter ao menos 32 caracteres.
-7. Em uma branch/banco Neon dedicado a testes, defina `FDP_PHASE2_TEST_DATABASE_URL`
+7. Configure `FDP_APP_URL`, `FDP_PLATFORM_ADMIN_EMAILS` e a integração Stripe. Mantenha `FDP_ALLOW_SELF_SIGNUP=false` até homologar cadastro, cobrança e suporte.
+8. Em uma branch/banco Neon dedicado a testes, defina `FDP_PHASE2_TEST_DATABASE_URL`
    e `FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true` e execute `npm run db:rehearse-phase2`.
    O ensaio cria e remove somente um schema aleatório com prefixo `fdp_phase2_`.
-8. Antes do deploy da aplicação, execute `npm run db:migrate` em um job
+9. Antes do deploy da aplicação, execute `npm run db:migrate` em um job
    controlado. Nunca crie ou altere schema na primeira requisição.
 
 O codigo tambem aceita `POSTGRES_URL` ou `NEON_DATABASE_URL`, mas
@@ -32,9 +33,28 @@ FDP_PII_HASH_SECRET=...
 FDP_INTEGRATION_VAULT_KEY=...base64-de-32-bytes...
 FDP_INTEGRATION_VAULT_KEY_VERSION=1
 FDP_INTEGRATION_WORKER_SECRET=...
+FDP_ALLOW_SELF_SIGNUP=false
+FDP_PLATFORM_ADMIN_EMAILS=operador@example.com
+FDP_APP_URL=https://app.example.com
+STRIPE_SECRET_KEY=...
+STRIPE_WEBHOOK_SECRET=...
 ```
 
 Nao compartilhe esses valores no chat ou no repositorio.
+
+## SaaS e Stripe
+
+Instale a integração Stripe no Marketplace da Vercel ou configure manualmente `STRIPE_SECRET_KEY` e `STRIPE_WEBHOOK_SECRET`. Cadastre no Stripe os preços recorrentes e depois publique somente os identificadores `price_...` no console `/plataforma`.
+
+Configure o webhook para `POST /api/saas/webhook/stripe` e habilite, no mínimo, `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid` e `invoice.payment_failed`. O endpoint lê o corpo bruto e rejeita qualquer evento cuja assinatura não corresponda ao segredo do ambiente.
+
+O catálogo migra com Gratuito ativo e os planos pagos em rascunho, sem preços comerciais presumidos. Depois da homologação:
+
+1. configure os valores e IDs Stripe no console global;
+2. ative os planos desejados;
+3. execute um checkout em modo teste;
+4. confirme a assinatura e a fatura no ledger local;
+5. somente então habilite `FDP_ALLOW_SELF_SIGNUP=true`.
 
 ## Dados existentes
 
@@ -180,6 +200,10 @@ vercel env add BLOB_READ_WRITE_TOKEN production
 vercel env add FDP_AUTH_SECRET production
 vercel env add FDP_INTEGRATION_VAULT_KEY production
 vercel env add FDP_INTEGRATION_WORKER_SECRET production
+vercel env add FDP_APP_URL production
+vercel env add FDP_PLATFORM_ADMIN_EMAILS production
+vercel env add STRIPE_SECRET_KEY production
+vercel env add STRIPE_WEBHOOK_SECRET production
 vercel --prod
 ```
 
