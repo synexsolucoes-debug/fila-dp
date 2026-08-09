@@ -1,0 +1,1 @@
+export { PaymentsView } from "./PaymentsView";

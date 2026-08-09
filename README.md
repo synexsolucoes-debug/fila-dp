@@ -55,6 +55,17 @@ Benefícios, Psicologia e Prestadores PJ compartilham um fluxo controlado por em
 - Psicologia armazena somente quantidades e protocolos administrativos agregados. Diagnóstico, CID, prontuário, medicação e notas clínicas são proibidos.
 - Aprovações validam responsável atribuído, acesso à empresa e segregação contra autoaprovação.
 
+## Controle de pagamento: Psicólogos e PJ
+
+Dois módulos dedicados respondem às perguntas financeiras da operação. Documentação completa em `docs/pagamentos-psicologos-e-pj.md`.
+
+- **Psicólogos**: quantas consultas válidas cada profissional realizou na competência e quanto pagar. O valor unitário é congelado no lançamento — reajustar a tabela não altera consultas antigas. Ajustes são append-only, com motivo e autor. O módulo é exclusivamente administrativo e financeiro: nenhum dado clínico é aceito.
+- **PJ**: quanto o prestador tem a receber, quanto deve emitir de nota e quanto vai para o meio complementar. A ordem do cálculo é obrigatória — `líquido = base + créditos - descontos`, depois `nota = mínimo(líquido, limite)`, depois `complemento = líquido - nota`, e o Caju Saldo Livre recebe o complemento quando configurado.
+- O limite da nota não é constante de código: políticas versionadas por workspace, empresa, contrato e prestador são resolvidas na ordem prestador → contrato → empresa → workspace, e competências já apuradas mantêm o limite que usaram.
+- Concluir um fechamento grava snapshot imutável; reabrir exige capability própria e justificativa, garantidas também por trigger no PostgreSQL.
+- O complemento em cartão de benefício é controle assistido com exportação: **não há integração oficial implementada** com a plataforma.
+- Ensaio contra PostgreSQL real: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse-payments`.
+
 ## Central de Integrações
 
 A fase 6 substitui sincronizações longas dentro da requisição por um motor rastreável: conectores usam credenciais criptografadas por workspace, mapeamentos versionados, execuções e itens idempotentes, fila com lease/backoff/dead-letter e conciliação explícita.

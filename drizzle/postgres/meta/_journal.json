@@ -141,6 +141,13 @@
       "when": 1786237000000,
       "tag": "0017_saas_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786238000000,
+      "tag": "0018_payment_control_modules",
+      "breakpoints": true
     }
   ]
 }

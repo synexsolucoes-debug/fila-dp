@@ -216,6 +216,27 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Limites de empresas, usuários e integrações são aplicados no servidor sob advisory lock; esconder uma ação na interface não é usado como controle de plano.
 - Gate operacional antes do deploy: aplicar a migration `0017_saas_foundation`, configurar URL pública/Stripe/operadores, executar o rehearsal multi-tenant, homologar checkout e portal no modo teste e só então avaliar `FDP_ALLOW_SELF_SIGNUP=true`.
 
+### Fase 5.1 — Controle de pagamento de psicólogos e PJ
+
+- Concluída no repositório: os módulos de Psicologia e Prestadores PJ deixaram de ser apenas
+  entregas genéricas do motor auxiliar e passaram a ter o modelo de pagamento exigido pelo produto.
+- Psicólogos: cadastro administrativo/financeiro, lançamento de consulta com valor unitário
+  histórico, fechamento por profissional e competência, ajustes append-only com motivo,
+  pagamento com nota opcional e relatórios.
+- PJ: cadastro com contrato e meio complementar, políticas versionadas de limite da nota
+  (prestador → contrato → empresa → workspace), créditos e descontos tipados, apuração na ordem
+  obrigatória (créditos e descontos antes do limite), nota esperada, complemento, controle
+  assistido do Caju, conciliação e snapshot imutável.
+- Nenhum limite fixo em código: `R$ 6.000,00` deixou de ser regra embutida e passou a ser
+  política configurável e versionada.
+- O complemento não declara integração pronta: a resposta da API informa `connected: false` e a
+  documentação registra exatamente o que falta para tornar o conector operacional.
+- Validação executada: lint, `db:check` (21 migrations), 93 testes e build aprovados; além disso
+  `npm run db:rehearse-payments` aplicou as migrations em PostgreSQL 16 real e verificou
+  constraints, imutabilidade de fechamento, ajustes append-only e isolamento multi-tenant sob RLS
+  com papel sem superusuário.
+- Detalhamento, permissões, rollback e pendências: `docs/pagamentos-psicologos-e-pj.md`.
+
 ### Fases 8 a 10 — Experiência, escala e comercialização
 
 - Redesign modular e acessível; filas/observabilidade/backups/API; site, suporte, LGPD e documentação comercial.
