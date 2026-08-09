@@ -21,6 +21,9 @@ export const domainEventTypes = [
   "contractor_invoice.registered",
   "contractor_complement.updated",
   "competence.closed",
+  "time_sheet.approved",
+  "time_sheet.reopened",
+  "time_export.prepared",
 ] as const;
 export type DomainEventType = typeof domainEventTypes[number];
 

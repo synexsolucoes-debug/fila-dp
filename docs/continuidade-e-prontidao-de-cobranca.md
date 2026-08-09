@@ -120,5 +120,7 @@ passa a responder `ready: true` com base em fatos registrados no banco, não em 
 - **Homologação da cobrança em produção**: depende de credenciais reais do provedor, que não existem
   neste repositório. A ferramenta está pronta; a execução é operacional.
 - **Recuperação de anexos**: o ensaio cobre o banco, não o armazenamento de arquivos.
-- **Módulo de Ponto (§28)**: continua sendo a maior lacuna funcional da especificação.
+- **Conector de relógio de ponto**: o módulo de Ponto (§28) foi implementado — ver
+  `docs/conferencia-de-ponto.md` —, mas nenhum fornecedor de REP tem integração oficial. As marcações
+  entram por API, importação ou digitação.
 - **Envio de e-mail**: notificações e avisos de cobrança dependem de provedor de envio ainda ausente.

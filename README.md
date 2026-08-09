@@ -60,7 +60,6 @@ Benefícios, Psicologia e Prestadores PJ compartilham um fluxo controlado por em
 O painel abre respondendo **o que precisa ser feito agora**: indicadores clicáveis de demandas vencidas, aprovações atribuídas a você, pendências bloqueantes, itens de fechamento, obrigações no radar, pagamentos e fechamentos pendentes, notas divergentes, complemento a carregar e erros de integração. Detalhes em `docs/fase-8-experiencia.md`.
 
 - Cada indicador vem de uma consulta real, respeita a capability do papel e o escopo de empresa do membro, e leva ao módulo responsável. Indicadores zerados não aparecem.
-- O módulo de Ponto ainda não existe no produto e por isso não há indicador de ponto — a API declara o que não é coberto em vez de simular.
 - A busca global (`Ctrl`+`K`) cobre demandas, empresas, colaboradores, psicólogos, prestadores PJ, competências e integrações. CPF é pesquisado por HMAC e exibido sempre mascarado.
 
 ## Controle de pagamento: Psicólogos e PJ
@@ -73,6 +72,20 @@ Dois módulos dedicados respondem às perguntas financeiras da operação. Docum
 - Concluir um fechamento grava snapshot imutável; reabrir exige capability própria e justificativa, garantidas também por trigger no PostgreSQL.
 - O complemento em cartão de benefício é controle assistido com exportação: **não há integração oficial implementada** com a plataforma.
 - Ensaio contra PostgreSQL real: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse-payments`.
+
+## Conferência de ponto
+
+O módulo de Ponto confere marcações e prepara o envio dos eventos de hora para a folha. Documentação completa em `docs/conferencia-de-ponto.md`.
+
+- O produto **confere horas; não calcula dinheiro**. Não existe valor de hora extra, adicional noturno ou falta em nenhuma tabela nem em nenhuma linha exportada — a conversão de hora em dinheiro pertence ao sistema de folha.
+- A hora noturna reduzida do art. 73, §1º da CLT **não é aplicada aqui**: o módulo apura os minutos dentro da janela das 22h às 5h e entrega a quantidade. Aplicá-la produziria dois números divergentes para o mesmo fato.
+- **Evento do tipo hora vai para índice, referência ou quantidade — nunca para valor.** A regra é imposta em quatro camadas: o vocabulário não tem `value`, a aplicação recusa, o `CHECK` do PostgreSQL recusa e a exportação bloqueia. Sem rubrica configurada não há palpite: há bloqueio nomeando o evento.
+- Marcação em férias, licença ou falta **não vira evento automático**: vira inconsistência bloqueante, porque o certo depende de decisão humana.
+- Aprovar exige que nenhuma inconsistência bloqueante esteja aberta, e a contagem é reapurada na hora. Não existe caminho de conferência direto para exportado.
+- Folha exportada congela totais, marcações e eventos; reabrir exige justificativa, garantida também por trigger no PostgreSQL. O lote de exportação é append-only.
+- `punches_json` guarda apenas pares `{ in, out }`: CPF, identificador de dispositivo e qualquer outro campo do relógio são descartados antes de tocar o banco.
+- Nenhum fornecedor de relógio de ponto tem integração oficial implementada. Marcações entram por API, importação ou digitação.
+- Ensaio contra PostgreSQL real: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse`.
 
 ## Central de Integrações
 
@@ -195,6 +208,8 @@ deploys devem usar a sessão própria e a validação de membros do workspace.
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 - `npm run db:check`: validar journal, metadados e operações destrutivas
 - `npm run db:rehearse-phase2`: aplicar todas as migrations em schema efêmero e testar dois tenants nas Fases 2 a 7, inclusive SaaS, cobrança idempotente, cofre e imutabilidade; exige `FDP_PHASE2_TEST_DATABASE_URL` e `FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true`
+- `npm run db:rehearse`: aplicar todas as migrations em banco descartável e verificar constraints de pagamento, a regra do §22 no ponto, outbox/webhooks/API e isolamento multi-tenant sob RLS; exige `FDP_PAYMENTS_TEST_DATABASE_URL` e `FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true`
+- `npm run db:rehearse-restore`: ensaiar o ciclo completo de backup e restauração; exige `FDP_DR_ADMIN_DATABASE_URL` e `FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true`
 - `npm run db:migrate`: aplicar migrations em banco PostgreSQL vazio ou versionado
 - `npm run db:migrate:baseline`: registrar uma instalação legado existente antes da primeira migration controlada
 

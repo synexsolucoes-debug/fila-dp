@@ -39,6 +39,7 @@ import {
   Smartphone,
   Stethoscope,
   Sun,
+  Timer,
   Trash2,
   Users,
   WalletCards,
@@ -53,9 +54,10 @@ import { AuxiliaryModulesView } from "./features/auxiliary";
 import { IntegrationsView } from "./features/integrations";
 import { SaasView } from "./features/saas";
 import { PaymentsView } from "./features/payments";
+import { TimeTrackingView } from "./features/time";
 import { ActionCenter } from "./features/action-center";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "integrations" | "registrations" | "saas" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "integrations" | "registrations" | "saas" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -128,6 +130,7 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   auxiliary: { eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares", description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ." },
   psychologistPayments: { eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos", description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro." },
   contractorPayments: { eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ", description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado." },
+  timeTracking: { eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto", description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada." },
   integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Central de integrações", description: "Configure conectores, publique mapeamentos e acompanhe execuções e conciliações com segurança." },
   registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
   saas: { eyebrow: "ADMINISTRAÇÃO SAAS", title: "Plano e ativação", description: "Conclua a implantação do workspace, acompanhe limites, assinatura e cobranças." },
@@ -1112,6 +1115,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {snapshot.workspace.role !== "guest" && <button title="Módulos auxiliares" className={view === "auxiliary" ? "active" : ""} onClick={() => setView("auxiliary")}><span aria-hidden="true"><Blocks /></span> Módulos auxiliares</button>}
           {snapshot.workspace.role !== "guest" && snapshot.workspace.role !== "observer" && <button title="Pagamento de Psicólogos" className={view === "psychologistPayments" ? "active" : ""} onClick={() => setView("psychologistPayments")}><span aria-hidden="true"><Stethoscope /></span> Pagamento de Psicólogos</button>}
           {snapshot.workspace.role !== "guest" && <button title="Pagamentos PJ" className={view === "contractorPayments" ? "active" : ""} onClick={() => setView("contractorPayments")}><span aria-hidden="true"><Receipt /></span> Pagamentos PJ</button>}
+          {snapshot.workspace.role !== "guest" && <button title="Ponto" className={view === "timeTracking" ? "active" : ""} onClick={() => setView("timeTracking")}><span aria-hidden="true"><Timer /></span> Ponto</button>}
           {snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
           {snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
           <span className="sidebar-nav-section management">GESTÃO</span>
@@ -1141,7 +1145,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
             <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
-            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "saas" && view !== "psychologistPayments" && view !== "contractorPayments" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
+            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "saas" && view !== "psychologistPayments" && view !== "contractorPayments" && view !== "timeTracking" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
           </div>
         </header>
 
@@ -1160,6 +1164,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "psychologistPayments" && <PaymentsView role={snapshot.workspace.role} module="psychology" />}
 
           {view === "contractorPayments" && <PaymentsView role={snapshot.workspace.role} module="contractors" />}
+
+          {view === "timeTracking" && <TimeTrackingView role={snapshot.workspace.role} />}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
 

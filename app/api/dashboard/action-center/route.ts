@@ -75,8 +75,6 @@ export async function GET(request: Request) {
       criticalTotal: items.filter((item) => item.tone === "critical").reduce((total, item) => total + item.count, 0),
       companyScope: scopedCompanyIds ? "restricted" : "all",
       generatedAt: new Date().toISOString(),
-      // O módulo de Ponto ainda não existe no produto; nenhum indicador é simulado.
-      notCovered: ["ponto"],
     });
   } catch (error) {
     return apiError(error);

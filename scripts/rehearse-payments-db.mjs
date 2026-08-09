@@ -84,4 +84,5 @@ psql(guardFile);
 psql(migrationsFile);
 psql(join(root, "scripts", "payments-db-rehearsal.sql"));
 psql(join(root, "scripts", "scale-db-rehearsal.sql"));
-console.log("Ensaio concluído: migrations, constraints de pagamento, outbox/webhooks/API e isolamento multi-tenant verificados.");
+psql(join(root, "scripts", "time-db-rehearsal.sql"));
+console.log("Ensaio concluído: migrations, constraints de pagamento, regra do §22 no ponto, outbox/webhooks/API e isolamento multi-tenant verificados.");

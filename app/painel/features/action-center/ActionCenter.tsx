@@ -10,7 +10,6 @@ type Payload = {
   pendingTotal?: number;
   criticalTotal?: number;
   generatedAt?: string;
-  notCovered?: string[];
   error?: string;
 };
 
