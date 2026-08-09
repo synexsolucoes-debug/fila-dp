@@ -1,7 +1,8 @@
-import { apiError, computeSlaStatus, getApiUser, text, validDueAt } from "@/lib/fila-dp-api";
+import { ApiError, apiError, computeSlaStatus, getApiUser, text, validDueAt, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 import { addBusinessDays, replaceCardRelations } from "@/lib/fila-dp-relations";
 import { workingDayMinutes } from "@/lib/fila-dp-sla";
+import { validCompetence } from "@/lib/operations";
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -40,14 +41,14 @@ export async function POST(request: Request) {
     if (!list) {
       list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE board_id = ? AND kind = 'new'").bind(targetBoard.id).first<{ id: string; kind: string; sla_behavior: string }>();
     }
-    if (!list) throw new Error("Coluna não encontrada.");
+    if (!list) throw ApiError.notFound("Coluna não encontrada.", "LIST_NOT_FOUND");
 
     const requestedTemplateId = text(body.templateId, 120);
     const template = requestedTemplateId
       ? await d1.prepare("SELECT * FROM fdp_process_templates WHERE id = ? AND workspace_id = ? AND active = 1").bind(requestedTemplateId, workspace.id).first<Record<string, unknown>>()
       : null;
     if (requestedTemplateId && !template) return Response.json({ error: "Template inválido." }, { status: 400 });
-    const processType = template ? String(template.process_type) : (text(body.processType, 40).toUpperCase() || "OUTROS");
+    const processType = validProcessType(template ? template.process_type : body.processType);
     let dueAt = validDueAt(body.dueAt);
     let slaTargetMinutes = 0;
     if (!dueAt) {
@@ -68,13 +69,16 @@ export async function POST(request: Request) {
     const cardId = crypto.randomUUID();
     const fallbackTemplate = template ?? await d1.prepare("SELECT * FROM fdp_process_templates WHERE workspace_id = ? AND process_type = ? AND active = 1 ORDER BY position LIMIT 1").bind(workspace.id, processType).first<Record<string, unknown>>();
     const checklist = fallbackTemplate ? JSON.parse(String(fallbackTemplate.checklist_json)) as string[] : ["Analisar solicitação", "Executar atividade", "Conferir conclusão"];
+    const competence = body.competence ? validCompetence(body.competence) : "";
+    const legalDueAt = body.legalDueAt === undefined ? null : validDueAt(body.legalDueAt);
 
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
-        (id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by, sla_target_minutes, sla_started_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, CURRENT_TIMESTAMP)`)
+        (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by, sla_target_minutes, sla_started_at, competence, legal_due_at, process_template_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`)
         .bind(
           cardId,
+          workspace.id,
           targetBoard.id,
           list.id,
           title,
@@ -89,9 +93,12 @@ export async function POST(request: Request) {
           Number(positionRow?.max_position ?? 0) + 1000,
           auth.user.email,
           slaTargetMinutes,
+          competence,
+          legalDueAt,
+          template?.id ?? null,
         ),
-      ...checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, ?, 0, ?)")
-        .bind(crypto.randomUUID(), cardId, item, (index + 1) * 1000)),
+      ...checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
+        .bind(crypto.randomUUID(), workspace.id, cardId, item, (index + 1) * 1000)),
       d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?")
         .bind(targetBoard.id, user.id, workspace.id),
     ]);
@@ -100,7 +107,7 @@ export async function POST(request: Request) {
     await runAutomations(workspace.id, targetBoard.id, cardId, "card.created", auth.user.email, { processType, priority });
     if (hasAssignees) await runAutomations(workspace.id, targetBoard.id, cardId, "assignee.added", auth.user.email, { assignee: "present" });
 
-    await recordActivity(workspace.id, cardId, auth.user.email, "card.created", { title, boardId: targetBoard.id, listKind: list.kind, templateId: template?.id ?? null });
+    await recordActivity(workspace.id, cardId, auth.user.email, "card.created", { title, boardId: targetBoard.id, listKind: list.kind, templateId: template?.id ?? null, competence, legalDueAt });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
     return apiError(error);

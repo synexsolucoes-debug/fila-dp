@@ -24,7 +24,7 @@ const featureItems = [
   {
     number: "04",
     title: "Checklists por processo",
-    text: "Padronize admissões, férias, rescisões e outras rotinas com etapas obrigatórias que ninguém precisa decorar.",
+    text: "Padronize férias, rescisões, conciliações cadastrais e outras rotinas com etapas obrigatórias que ninguém precisa decorar.",
   },
   {
     number: "05",
@@ -52,8 +52,8 @@ const faqs = [
     "Não. O Fila DP organiza demandas, tarefas, prazos e processos operacionais. Ele complementa sistemas de folha, ERPs e outras ferramentas utilizadas pela empresa.",
   ],
   [
-    "Posso separar admissão, férias e rescisão?",
-    "Sim. Sua equipe pode trabalhar com uma fila geral ou criar quadros específicos para cada processo, unidade ou empresa.",
+    "Como o Fila DP trabalha com admissões feitas na Sólides?",
+    "A admissão digital continua integralmente na Sólides. O Fila DP prepara a integração dos dados concluídos, a vinculação com o ERP e a conciliação cadastral, quando houver um meio oficial disponível.",
   ],
   [
     "Como o sistema controla os prazos?",
@@ -88,8 +88,8 @@ function ProductBoard() {
         <div className="kanban-column" role="listitem">
           <div className="column-title"><span>Novas demandas</span><b>3</b></div>
           <article className="task-card">
-            <div className="labels"><span className="label label-blue">ADMISSÃO</span><span className="label label-red">URGENTE</span></div>
-            <h3>Admissão — Maria Oliveira</h3>
+            <div className="labels"><span className="label label-blue">CONCILIAÇÃO</span><span className="label label-red">URGENTE</span></div>
+            <h3>Vincular colaborador ao ERP</h3>
             <p className="company">Synex Soluções • Ago/26</p>
             <div className="task-meta"><span className="sla sla-warning"><ClockIcon /> vence hoje</span><span className="avatar avatar-a">AM</span></div>
           </article>
@@ -121,9 +121,9 @@ function ProductBoard() {
         <div className="kanban-column" role="listitem">
           <div className="column-title"><span>Em execução</span><b>2</b></div>
           <article className="task-card">
-            <div className="labels"><span className="label label-blue">ADMISSÃO</span></div>
-            <h3>Cadastro em andamento — Ana Reis</h3>
-            <p className="company">Dados em validação</p>
+            <div className="labels"><span className="label label-blue">CONCILIAÇÃO</span></div>
+            <h3>Conferir vínculo Sólides × ERP</h3>
+            <p className="company">Dados concluídos na origem</p>
             <div className="task-meta"><span className="sla sla-safe"><ClockIcon /> 1 dia</span><span className="avatar avatar-b">RC</span></div>
           </article>
           <article className="task-card">
@@ -165,7 +165,7 @@ export default function Home() {
           <h1>Toda demanda do DP na fila certa.</h1>
           <p className="hero-lead">Com responsável, prazo e próximo passo.</p>
           <p className="hero-description">
-            Centralize solicitações, acompanhe SLAs e organize admissões, férias, rescisões e outras rotinas em um quadro visual simples de usar.
+            Centralize solicitações, acompanhe SLAs e organize férias, rescisões, conciliações e outras rotinas em um quadro visual simples de usar.
           </p>
           <div className="hero-actions">
             <a className="button" href="/login">Solicitar acesso <Chevron /></a>

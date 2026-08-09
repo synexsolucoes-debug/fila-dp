@@ -2,9 +2,11 @@ import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getD1 } from "@/db";
 
 export type ChatGPTUser = {
   id?: string;
+  sessionId?: string;
   displayName: string;
   email: string;
   fullName: string | null;
@@ -12,6 +14,7 @@ export type ChatGPTUser = {
 
 const SESSION_COOKIE = "fila_dp_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
+const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 const USER_EMAIL_HEADER = "oai-authenticated-user-email";
 const USER_FULL_NAME_HEADER = "oai-authenticated-user-full-name";
 const USER_FULL_NAME_ENCODING_HEADER = "oai-authenticated-user-full-name-encoding";
@@ -20,55 +23,83 @@ const SIGN_IN_PATH = "/login";
 const SIGN_OUT_PATH = "/api/auth/logout";
 const CALLBACK_PATH = "/callback";
 
-type SessionPayload = { email: string; displayName: string; fullName: string | null; exp: number };
 const scryptAsync = promisify(scrypt);
 
 function authSecret() {
   return process.env.FDP_AUTH_SECRET ?? (process.env.NODE_ENV === "production" ? "" : "fila-dp-local-secret-change-me");
 }
 
-function base64url(value: string) {
-  return Buffer.from(value, "utf8").toString("base64url");
-}
-
-function decodeBase64url(value: string) {
-  return Buffer.from(value, "base64url").toString("utf8");
-}
-
-function sign(value: string) {
+function hashSessionToken(value: string) {
   const secret = authSecret();
   if (!secret) return "";
   return createHmac("sha256", secret).update(value).digest("base64url");
 }
 
-function createSessionToken(user: ChatGPTUser) {
-  const payload: SessionPayload = {
-    email: user.email.trim().toLowerCase(),
-    displayName: user.displayName.trim().slice(0, 160),
-    fullName: user.fullName?.trim().slice(0, 160) ?? null,
-    exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
-  };
-  const encoded = base64url(JSON.stringify(payload));
-  return `${encoded}.${sign(encoded)}`;
+function hashSessionAddress(value: string) {
+  const secret = authSecret();
+  if (!secret || !value || value === "unknown") return "";
+  return createHmac("sha256", secret).update(`session-address:${value}`).digest("base64url");
 }
 
-function readSessionToken(token: string | undefined): ChatGPTUser | null {
-  if (!token || !authSecret()) return null;
-  const [encoded, signature] = token.split(".");
-  const expectedSignature = encoded ? sign(encoded) : "";
-  if (!encoded || !signature || signature.length !== expectedSignature.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) return null;
-  try {
-    const payload = JSON.parse(decodeBase64url(encoded)) as SessionPayload;
-    if (!payload.email || !payload.displayName || payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return { email: payload.email, displayName: payload.displayName, fullName: payload.fullName ?? null };
-  } catch {
-    return null;
+export function sessionDeviceLabel(userAgent: string) {
+  const source = userAgent.slice(0, 512);
+  const browser = /Edg\//.test(source) ? "Edge"
+    : /OPR\//.test(source) ? "Opera"
+      : /Firefox\//.test(source) ? "Firefox"
+        : /(?:Chrome|CriOS)\//.test(source) ? "Chrome"
+          : /Safari\//.test(source) ? "Safari"
+            : "Navegador";
+  const system = /(?:iPhone|iPad|iPod)/.test(source) ? "iOS"
+    : /Android/.test(source) ? "Android"
+      : /Windows/.test(source) ? "Windows"
+        : /Macintosh|Mac OS X/.test(source) ? "macOS"
+          : /Linux/.test(source) ? "Linux"
+            : "dispositivo desconhecido";
+  return `${browser} · ${system}`;
+}
+
+async function readSessionToken(token: string | undefined): Promise<ChatGPTUser | null> {
+  if (!token || token.length < 32 || !authSecret()) return null;
+  const d1 = getD1();
+  const session = await d1.prepare(`SELECT u.id, u.email, u.name,
+      s.id AS session_id, s.last_seen_at
+    FROM fdp_auth_sessions s
+    JOIN fdp_users u ON u.id = s.user_id
+    WHERE s.token_hash = ?
+      AND s.revoked_at IS NULL
+      AND s.expires_at > CURRENT_TIMESTAMP`)
+    .bind(hashSessionToken(token))
+    .first<{ id: string; email: string; name: string; session_id: string; last_seen_at: string | Date }>();
+  if (!session) return null;
+  const lastSeenAt = new Date(session.last_seen_at).getTime();
+  if (!Number.isFinite(lastSeenAt) || Date.now() - lastSeenAt >= SESSION_TOUCH_INTERVAL_MS) {
+    await d1.prepare(`UPDATE fdp_auth_sessions
+      SET last_seen_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP`)
+      .bind(session.session_id)
+      .run();
   }
+  return { id: session.id, sessionId: session.session_id, email: session.email, displayName: session.name, fullName: session.name };
 }
 
-export async function setAuthSession(user: ChatGPTUser) {
+export async function setAuthSession(user: ChatGPTUser, metadata: { address?: string; userAgent?: string } = {}) {
+  if (!user.id) throw new Error("Não foi possível criar uma sessão sem usuário persistido.");
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+  await getD1().prepare(`INSERT INTO fdp_auth_sessions
+    (id, user_id, token_hash, expires_at, device_label, ip_hash)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(
+      crypto.randomUUID(),
+      user.id,
+      hashSessionToken(token),
+      expiresAt,
+      sessionDeviceLabel(metadata.userAgent ?? ""),
+      hashSessionAddress(metadata.address ?? ""),
+    )
+    .run();
   const store = await cookies();
-  store.set(SESSION_COOKIE, createSessionToken(user), {
+  store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -79,6 +110,14 @@ export async function setAuthSession(user: ChatGPTUser) {
 
 export async function clearAuthSession() {
   const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (token && authSecret()) {
+    await getD1().prepare(`UPDATE fdp_auth_sessions
+      SET revoked_at = CURRENT_TIMESTAMP
+      WHERE token_hash = ? AND revoked_at IS NULL`)
+      .bind(hashSessionToken(token))
+      .run();
+  }
   store.set(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 });
 }
 
@@ -100,7 +139,7 @@ export async function verifyPassword(password: string, salt: string, expectedHas
 
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestCookies = await cookies();
-  const sessionUser = readSessionToken(requestCookies.get(SESSION_COOKIE)?.value);
+  const sessionUser = await readSessionToken(requestCookies.get(SESSION_COOKIE)?.value);
   if (sessionUser) return sessionUser;
 
   // OpenAI Sites authenticates and replaces these headers at its dispatcher.
@@ -134,7 +173,7 @@ export function chatGPTSignOutPath(returnTo = "/"): string {
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
-function safeRelativeReturnPath(value: string): string {
+export function safeRelativeReturnPath(value: string): string {
   if (!value.startsWith("/") || value.startsWith("//")) return "/";
   let url: URL;
   try { url = new URL(value, "https://app.local"); } catch { return "/"; }

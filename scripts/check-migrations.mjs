@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { splitPostgresStatements } from "./sql-statements.mjs";
 
 const root = process.cwd();
 const migrationDirectory = join(root, "drizzle", "postgres");
@@ -31,6 +32,8 @@ if (journalEntries.some((entry, index) => entry.idx !== index)) {
 const destructive = /\b(DROP\s+TABLE|TRUNCATE\s+TABLE|ALTER\s+TABLE\s+[^;]+\s+DROP\s+COLUMN|DELETE\s+FROM)\b/i;
 for (const file of files) {
   const sql = await readFile(join(migrationDirectory, file), "utf8");
+  const statements = splitPostgresStatements(sql);
+  if (!statements.length) throw new Error(`${file} não contém comandos SQL executáveis.`);
   if (destructive.test(sql) && !sql.includes("allow-destructive-migration")) {
     throw new Error(`${file} contém uma operação destrutiva sem autorização explícita.`);
   }

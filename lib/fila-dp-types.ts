@@ -180,6 +180,10 @@ export type Card = {
   slaTargetMinutes: number;
   slaPausedMinutes: number;
   slaEscalationLevel: number;
+  competence: string;
+  legalDueAt: string | null;
+  processTemplateId: string | null;
+  closedAt: string | null;
 };
 
 export type BoardList = {

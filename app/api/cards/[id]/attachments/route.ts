@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { getAttachmentsBucket } from "@/db";
 
@@ -23,7 +23,7 @@ export async function POST(request: Request, context: RouteContext) {
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const card = await d1.prepare("SELECT id FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first();
-    if (!card) throw new Error("Demanda não encontrada.");
+    if (!card) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File) || file.size === 0) return Response.json({ error: "Selecione um arquivo válido." }, { status: 400 });
@@ -42,8 +42,8 @@ export async function POST(request: Request, context: RouteContext) {
     });
     try {
       await d1.prepare(`INSERT INTO fdp_card_attachments
-        (id, card_id, object_key, filename, content_type, size_bytes, uploaded_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(attachmentId, id, objectKey, file.name.slice(0, 220), file.type, file.size, auth.user.email).run();
+        (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(attachmentId, workspace.id, id, objectKey, file.name.slice(0, 220), file.type, file.size, auth.user.email).run();
     } catch (error) {
       await bucket.delete(objectKey).catch(() => undefined);
       throw error;

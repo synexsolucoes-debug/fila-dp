@@ -1,4 +1,4 @@
-import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
+import { ApiError, apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot } from "@/lib/fila-dp-db";
 
 export async function POST(request: Request) {
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const membership = await d1.prepare("SELECT 1 FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = ?")
       .bind(workspaceId, user.id)
       .first();
-    if (!membership) throw new Error("Workspace não encontrado.");
+    if (!membership) throw ApiError.notFound("Workspace não encontrado.", "WORKSPACE_NOT_FOUND");
     await d1.prepare(
       `INSERT INTO fdp_user_workspace_preferences (user_id, active_workspace_id, updated_at)
        VALUES (?, ?, CURRENT_TIMESTAMP)

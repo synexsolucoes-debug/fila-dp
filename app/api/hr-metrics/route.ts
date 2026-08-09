@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
-import { getCompanyAccessScope, getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 function metricNumber(value: unknown) {
   const parsed = Number(value);
@@ -11,6 +12,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace.role, "hr.read");
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     const url = new URL(request.url);
     const from = /^\d{4}-\d{2}$/.test(url.searchParams.get("from") ?? "") ? url.searchParams.get("from")! : "0000-01";
@@ -32,7 +34,7 @@ export async function POST(request: Request) {
     const companyId = text(body.companyId, 120);
     if (!/^\d{4}-\d{2}$/.test(period) || !companyId) return Response.json({ error: "Informe empresa e competência no formato AAAA-MM." }, { status: 400 });
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace.role, "hr.write");
     const company = await d1.prepare("SELECT id FROM fdp_companies WHERE id = ? AND workspace_id = ?").bind(companyId, workspace.id).first<{ id: string }>();
     if (!company) return Response.json({ error: "Empresa não encontrada neste workspace." }, { status: 404 });
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);

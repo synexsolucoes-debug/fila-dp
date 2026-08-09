@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { neon } from "@neondatabase/serverless";
+import { splitPostgresStatements } from "./sql-statements.mjs";
 
 const migrationDirectory = join(process.cwd(), "drizzle", "postgres");
 const baselineExisting = process.argv.includes("--baseline-existing");
@@ -81,11 +82,7 @@ for (const file of files) {
     continue;
   }
 
-  const statements = source
-    .split("--> statement-breakpoint")
-    .flatMap((block) => block.split(/;\s*(?:\r?\n|$)/))
-    .map((statement) => statement.trim())
-    .filter(Boolean);
+  const statements = splitPostgresStatements(source);
   await sql.transaction([
     sql.query("SELECT pg_advisory_xact_lock(81902141)", []),
     ...statements.map((statement) => sql.query(statement, [])),

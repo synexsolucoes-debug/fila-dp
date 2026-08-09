@@ -1,11 +1,13 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 export async function GET(request: Request) {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace.role, "reports.read");
     const companyAccess = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     const url = new URL(request.url);
     const to = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("to") ?? "") ? url.searchParams.get("to")! : new Date().toISOString().slice(0, 10);

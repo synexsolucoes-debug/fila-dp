@@ -12,9 +12,12 @@ anexos usam Vercel Blob privado.
 3. Conecte o banco ao projeto e habilite **Production** e **Preview**.
 4. Confirme que `DATABASE_URL` foi criada nas Environment Variables.
 5. Crie um Blob privado e confirme `BLOB_READ_WRITE_TOKEN`.
-6. Defina `FDP_AUTH_SECRET` com pelo menos 32 bytes aleatorios.
-7. Faca um novo deploy. O schema e criado de forma idempotente na primeira
-   requisicao autenticada.
+6. Defina `FDP_AUTH_SECRET`, `FDP_PII_HASH_SECRET`, `FDP_INTEGRATION_VAULT_KEY` e `FDP_INTEGRATION_WORKER_SECRET` com valores aleatorios e diferentes. A chave do cofre deve representar exatamente 32 bytes em base64; o segredo do executor deve ter ao menos 32 caracteres.
+7. Em uma branch/banco Neon dedicado a testes, defina `FDP_PHASE2_TEST_DATABASE_URL`
+   e `FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true` e execute `npm run db:rehearse-phase2`.
+   O ensaio cria e remove somente um schema aleatório com prefixo `fdp_phase2_`.
+8. Antes do deploy da aplicação, execute `npm run db:migrate` em um job
+   controlado. Nunca crie ou altere schema na primeira requisição.
 
 O codigo tambem aceita `POSTGRES_URL` ou `NEON_DATABASE_URL`, mas
 `DATABASE_URL` e a variavel padrao da integracao da Vercel.
@@ -25,51 +28,52 @@ O codigo tambem aceita `POSTGRES_URL` ou `NEON_DATABASE_URL`, mas
 DATABASE_URL=postgresql://...neon.tech/...
 BLOB_READ_WRITE_TOKEN=...
 FDP_AUTH_SECRET=...
+FDP_PII_HASH_SECRET=...
+FDP_INTEGRATION_VAULT_KEY=...base64-de-32-bytes...
+FDP_INTEGRATION_VAULT_KEY_VERSION=1
+FDP_INTEGRATION_WORKER_SECRET=...
 ```
 
 Nao compartilhe esses valores no chat ou no repositorio.
 
 ## Dados existentes
 
-A troca do provedor nao copia automaticamente os dados do Turso. O banco Neon
-novo inicia vazio e o Fila DP cria suas tabelas no primeiro login. Se precisar
-preservar dados, sera necessario exportar o Turso e importar os registros para
-o Neon antes de liberar o acesso da equipe.
+A troca do provedor nao copia automaticamente os dados do Turso. Antes de
+liberar o acesso da equipe, exporte e valide os registros legados, execute
+`npm run db:migrate:baseline` uma única vez no Neon que já contenha tabelas e
+depois execute `npm run db:migrate`. Bancos vazios usam apenas `db:migrate`.
 
 ## Integrações externas
 
-As telas de integrações guardam apenas o endpoint e a conta. Os tokens devem
-ser adicionados nas Environment Variables da Vercel, nunca no formulário:
+Endpoints e parâmetros não secretos ficam na configuração do conector. Tokens,
+client secrets e chaves entram no diálogo de credenciais e são cifrados no
+PostgreSQL com AES-256-GCM; o navegador nunca recebe o valor novamente. A chave
+mestra e o segredo do executor ficam exclusivamente nas Environment Variables:
 
 ```text
-FDP_EMAIL_TOKEN
-FDP_WHATSAPP_TOKEN
-FDP_TEAMS_TOKEN
-FDP_DRIVE_TOKEN
-FDP_ONEDRIVE_TOKEN
-FDP_ERP_TOKEN
-FDP_MICROSOFT_CLIENT_ID
-FDP_MICROSOFT_TENANT_ID
-FDP_MICROSOFT_CLIENT_SECRET
-FDP_TEAMS_ENDPOINT
-FDP_ONEDRIVE_ENDPOINT
-FDP_SANKHYA_BASE_URL
-FDP_SANKHYA_CLIENT_ID
-FDP_SANKHYA_CLIENT_SECRET
-FDP_SANKHYA_X_TOKEN
-FDP_SANKHYA_REQUEST_BODY
-FDP_SANKHYA_METRIC_FIELD_MAP
+FDP_INTEGRATION_VAULT_KEY
+FDP_INTEGRATION_VAULT_KEY_VERSION
+FDP_INTEGRATION_VAULT_KEYS
+FDP_INTEGRATION_WORKER_SECRET
 FDP_INTEGRATION_ALLOWED_HOSTS
 FDP_EMAIL_WEBHOOK_SECRET
 FDP_WHATSAPP_WEBHOOK_SECRET
 FDP_TEAMS_WEBHOOK_SECRET
+FDP_EMAIL_WEBHOOK_SECRET_WORKSPACE_ID
+FDP_WHATSAPP_WEBHOOK_SECRET_WORKSPACE_ID
+FDP_TEAMS_WEBHOOK_SECRET_WORKSPACE_ID
 FDP_EMAIL_WEBHOOK_SECRETS
 FDP_WHATSAPP_WEBHOOK_SECRETS
 FDP_TEAMS_WEBHOOK_SECRETS
 ```
 
-O botão **Sincronizar agora** espera que o endpoint configurado devolva JSON no
-formato `{ "items": [...] }`. Para entrada por webhook, use
+O botão **Sincronizar agora** cria uma execução idempotente e um job; ele não
+chama o provedor dentro da requisição do navegador. Acione
+`POST /api/integrations/worker` com `x-fila-dp-worker-secret` e `workspaceId`
+por um scheduler protegido. Cada chamada processa no máximo um job, com lease,
+backoff exponencial e dead-letter. O endpoint do conector deve devolver JSON no
+formato `{ "items": [...] }`, `{ "records": [...] }` ou o formato oficial
+normalizado pelo mapeamento ativo. Para entrada por webhook, use
 `/api/integrations/webhook/email`, `/api/integrations/webhook/whatsapp` ou
 `/api/integrations/webhook/teams`, enviando o segredo no header
 `x-fila-dp-secret` e um corpo com `senderName`, `subject` e `body`.
@@ -82,8 +86,8 @@ Em uma instalação com vários workspaces, use os segredos por workspace. O val
 ```
 
 Por exemplo, o mapa do Teams fica em `FDP_TEAMS_WEBHOOK_SECRETS`. O segredo
-global antigo continua aceito apenas quando existe um único workspace ativo no
-canal, para não interromper integrações já publicadas. Endpoints de saída só
+global antigo continua aceito apenas quando está vinculado explicitamente ao
+workspace por `FDP_<CANAL>_WEBHOOK_SECRET_WORKSPACE_ID`. Endpoints de saída só
 podem usar domínios oficiais, o mesmo domínio definido em
 `FDP_<CANAL>_ENDPOINT`, ou hosts aprovados em
 `FDP_INTEGRATION_ALLOWED_HOSTS`.
@@ -95,13 +99,12 @@ permanece corretamente como **Aguardando credenciais**.
 
 ### Microsoft Teams e OneDrive com as credenciais do aplicativo
 
-Para Teams e OneDrive, o Fila DP troca automaticamente `client_id`, `tenant_id`
-e `client_secret` por um token temporario usando o fluxo `client_credentials`.
-Nunca coloque o `client_secret` no formulario do sistema ou no codigo-fonte.
+Para Teams e OneDrive, o Fila DP troca `clientId`, `tenantId` e `clientSecret`
+por um token temporário usando `client_credentials`. Esses valores são salvos
+somente pelo diálogo de credenciais e permanecem cifrados no cofre.
 
-1. Na Vercel, adicione `FDP_MICROSOFT_CLIENT_ID`,
-   `FDP_MICROSOFT_TENANT_ID` e `FDP_MICROSOFT_CLIENT_SECRET` em **Production**
-   (e tambem em **Preview**, se for testar em preview).
+1. Na Central de Integrações, use **Rotacionar credencial** e informe
+   `clientId`, `tenantId` e `clientSecret`; depois execute **Verificar conexão**.
 2. No Microsoft Entra, em **API permissions**, inclua as permissoes de
    aplicacao necessarias para os recursos escolhidos e clique em **Grant admin
    consent**. A permissao minima varia conforme o endpoint e a politica do
@@ -113,9 +116,8 @@ Nunca coloque o `client_secret` no formulario do sistema ou no codigo-fonte.
    - Teams (chat): `https://graph.microsoft.com/v1.0/chats/CHAT_ID/messages` — exige a permissão de aplicação `ChatMessage.Read.All` (ou `Chat.Read.All`)
    - OneDrive: `https://graph.microsoft.com/v1.0/drives/DRIVE_ID/root/children`
 
-4. Publique um novo deploy e clique em **Sincronizar agora**. A resposta `value`
-   do Graph e convertida em itens da Inbox; respostas genericas continuam usando
-   o formato `{ "items": [...] }`.
+4. Publique um mapeamento, clique em **Sincronizar agora** e deixe o executor
+   processar o job. A resposta `value` do Graph passa pelo mapeamento ativo.
 
 O endpoint precisa ser acessivel pelo servidor e o aplicativo precisa ter acesso
 ao time/canal ou drive indicado. Essas credenciais permitem leitura e
@@ -124,11 +126,10 @@ volta no Microsoft 365.
 
 ### Folha e custo de pessoal via Sankhya
 
-O conector ERP aceita o fluxo OAuth 2.0 do Sankhya. A autenticacao usa
-`FDP_SANKHYA_CLIENT_ID`, `FDP_SANKHYA_CLIENT_SECRET` e `FDP_SANKHYA_X_TOKEN`;
-o token temporario e gerado pelo servidor em `POST /authenticate`. O Gateway
-oficial usa endpoints `https://api.sankhya.com.br/gateway/v1/mge/service.sbr`
-ou o ambiente sandbox, conforme a documentacao do cliente.
+O conector ERP aceita token/API key ou os campos `clientId`, `clientSecret` e
+`xToken`, armazenados no cofre. O endpoint deve pertencer ao domínio oficial ou
+à allowlist operacional. Confirme o endpoint e o contrato na documentação da
+conta do cliente antes de ativar o mapeamento.
 
 Para consultar a folha, salve no cartao **ERP / Folha** o endpoint de consulta
 e, quando necessario, o corpo JSON da requisicao Sankhya. A resposta normalizada
@@ -154,16 +155,15 @@ Assim o custo fica vinculado a empresa e alimenta Turnover, custo por periodo
 e relatorios gerenciais. A API Sankhya exige permissao do usuario de integracao
 para o servico/entidade consultado; nao usamos acesso direto ao banco.
 
-Quando a resposta do Sankhya usar nomes de campos diferentes, configure
-`FDP_SANKHYA_METRIC_FIELD_MAP` como JSON, por exemplo:
+Quando a resposta usar nomes diferentes, crie um mapeamento estruturado e
+publique uma nova versão, por exemplo:
 
 ```json
-{"companyId":"CODEMP","period":"PERREF","headcount":"QTDPESSOAS","admissions":"ADMISSOES","terminations":"DESLIGAMENTOS","payrollCost":"VLRFOLHA"}
+{"externalIdField":"ID","fields":[{"source":"CODEMP","target":"companyId","transform":"identity","required":true},{"source":"PERREF","target":"period","transform":"date","required":true}]}
 ```
 
-O corpo da chamada Gateway pode ficar em `FDP_SANKHYA_REQUEST_BODY` como segredo
-ou na configuracao do conector. A consulta deve retornar os campos da folha
-necessarios para o mapeamento.
+Um corpo JSON sem segredos pode ficar na configuração do conector. Tokens,
+chaves e senhas são rejeitados nessa configuração e devem permanecer no cofre.
 
 Planilhas Sankhya devem seguir o layout fornecido pelo proprio ERP (cabecalhos,
 ordem e campos obrigatorios). O Fila DP pode receber um CSV normalizado, mas a
@@ -178,6 +178,8 @@ vercel link
 vercel env add DATABASE_URL production
 vercel env add BLOB_READ_WRITE_TOKEN production
 vercel env add FDP_AUTH_SECRET production
+vercel env add FDP_INTEGRATION_VAULT_KEY production
+vercel env add FDP_INTEGRATION_WORKER_SECRET production
 vercel --prod
 ```
 

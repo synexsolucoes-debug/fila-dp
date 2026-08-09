@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const board = await d1.prepare("SELECT id FROM fdp_boards WHERE id = ? AND workspace_id = ?").bind(boardId, workspace.id).first();
     if (!board) return Response.json({ error: "Quadro não encontrado." }, { status: 404 });
     const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS value FROM fdp_lists WHERE board_id = ?").bind(boardId).first<{ value: number }>();
-    await d1.prepare("INSERT INTO fdp_lists (id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), boardId, name, `${kind}-${crypto.randomUUID().slice(0, 6)}`, Number(position?.value ?? 0) + 1000, slaBehavior).run();
+    await d1.prepare("INSERT INTO fdp_lists (id, workspace_id, board_id, name, kind, position, sla_behavior) VALUES (?, ?, ?, ?, ?, ?, ?)").bind(crypto.randomUUID(), workspace.id, boardId, name, `${kind}-${crypto.randomUUID().slice(0, 6)}`, Number(position?.value ?? 0) + 1000, slaBehavior).run();
     await recordActivity(workspace.id, null, auth.user.email, "list.created", { boardId, name });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {

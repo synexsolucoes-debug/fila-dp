@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -14,7 +14,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const result = await d1.prepare("UPDATE fdp_automation_rules SET enabled = ? WHERE id = ? AND workspace_id = ?")
       .bind(body.enabled ? 1 : 0, id, workspace.id)
       .run();
-    if (!result.meta.changes) throw new Error("Regra não encontrada.");
+    if (!result.meta.changes) throw ApiError.notFound("Regra não encontrada.", "RULE_NOT_FOUND");
     return Response.json(await getWorkspaceSnapshot(auth.user));
   } catch (error) {
     return apiError(error);

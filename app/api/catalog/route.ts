@@ -1,4 +1,4 @@
-import { apiError, getApiUser, text, validDate } from "@/lib/fila-dp-api";
+import { apiError, getApiUser, text, validDate, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 const colors = new Set(["#dc2626", "#ea580c", "#d97706", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#64748b"]);
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       if (operation === "delete") await d1.prepare("DELETE FROM fdp_process_templates WHERE id = ? AND workspace_id = ?").bind(id, workspace.id).run();
       else {
         const name = text(body.name, 80);
-        const processType = text(body.processType, 40).toUpperCase() || "OUTROS";
+        const processType = validProcessType(body.processType);
         const checklist = Array.isArray(body.checklist) ? body.checklist.map((item) => text(item, 180)).filter(Boolean).slice(0, 30) : [];
         const days = Math.min(60, Math.max(1, Number(body.defaultSlaDays) || 3));
         if (!name || !checklist.length) return Response.json({ error: "Informe nome e etapas do template." }, { status: 400 });
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       if (operation === "delete") await d1.prepare("DELETE FROM fdp_business_holidays WHERE workspace_id = ? AND holiday_date = ?").bind(workspace.id, date).run();
       else await d1.prepare("INSERT INTO fdp_business_holidays (workspace_id, holiday_date, name) VALUES (?, ?, ?) ON CONFLICT(workspace_id, holiday_date) DO UPDATE SET name = excluded.name").bind(workspace.id, date, text(body.name, 100) || "Feriado").run();
     } else if (resource === "sla") {
-      const processType = text(body.processType, 40).toUpperCase();
+      const processType = validProcessType(body.processType);
       const target = Math.min(60, Math.max(1, Number(body.targetBusinessDays) || 3));
       const warningValue = Number(body.warningBusinessDays);
       const warning = Math.min(target, Math.max(0, Number.isFinite(warningValue) ? warningValue : 1));
@@ -76,16 +76,14 @@ export async function POST(request: Request) {
       const realtime = Math.min(120, Math.max(5, Number(body.realtimeSeconds) || 30));
       await d1.prepare("UPDATE fdp_workspace_settings SET business_days_json = ?, day_start = ?, day_end = ?, realtime_seconds = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ?").bind(JSON.stringify(businessDays), dayStart, dayEnd, realtime, workspace.id).run();
     } else if (resource === "integration") {
-      const config = body.config && typeof body.config === "object" && !Array.isArray(body.config) ? body.config as Record<string, unknown> : {};
-      if (Object.keys(config).some((key) => /token|password|secret|senha|chave/i.test(key))) return Response.json({ error: "Credenciais secretas devem ser configuradas no ambiente seguro, não nesta tela." }, { status: 400 });
-      const status = ["needs_credentials", "paused"].includes(String(body.status)) ? String(body.status) : "needs_credentials";
-      await d1.prepare("UPDATE fdp_integrations SET config_json = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND workspace_id = ?").bind(JSON.stringify(config), status, id, workspace.id).run();
+      return Response.json({ error: "Use a Central de Integrações para configurar conectores, credenciais e mapeamentos.", code: "INTEGRATION_RESOURCE_API_REQUIRED" }, { status: 410 });
     } else if (resource === "rule") {
       if (operation === "delete") await d1.prepare("DELETE FROM fdp_automation_rules WHERE id = ? AND workspace_id = ?").bind(id, workspace.id).run();
       else {
         const name = text(body.name, 120);
         const trigger = ["card.created", "card.moved", "assignee.added", "checklist.completed", "sla.tick"].includes(String(body.trigger)) ? String(body.trigger) : "card.created";
-        const condition = body.condition && typeof body.condition === "object" ? body.condition : {};
+        const condition = body.condition && typeof body.condition === "object" ? body.condition as Record<string, unknown> : {};
+        if (condition.processType !== undefined) condition.processType = validProcessType(condition.processType);
         const action = body.action && typeof body.action === "object" ? body.action : {};
         if (!name) return Response.json({ error: "Informe o nome da automação." }, { status: 400 });
         if (id) await d1.prepare("UPDATE fdp_automation_rules SET name = ?, trigger = ?, condition_json = ?, action_json = ?, enabled = ? WHERE id = ? AND workspace_id = ?").bind(name, trigger, JSON.stringify(condition), JSON.stringify(action), body.enabled === false ? 0 : 1, id, workspace.id).run();

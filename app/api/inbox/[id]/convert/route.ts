@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -13,18 +13,18 @@ export async function POST(_request: Request, context: RouteContext) {
     // um membro poderia criar uma demanda sem escopo empresarial visível.
     requireWorkspaceRole(workspace.role, ["admin"]);
     const item = await d1.prepare("SELECT * FROM fdp_workspace_inbox_items WHERE id = ? AND workspace_id = ? AND status = 'new'").bind(id, workspace.id).first<Record<string, unknown>>();
-    if (!item) throw new Error("Solicitação não encontrada ou já convertida.");
+    if (!item) throw ApiError.notFound("Solicitação não encontrada ou já convertida.", "INBOX_ITEM_NOT_FOUND");
     const list = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'new'").bind(board.id).first<{ id: string }>();
-    if (!list) throw new Error("Coluna inicial não encontrada.");
+    if (!list) throw ApiError.notFound("Coluna inicial não encontrada.", "LIST_NOT_FOUND");
     const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS max_position FROM fdp_cards WHERE list_id = ? AND archived = 0").bind(list.id).first<{ max_position: number }>();
     const cardId = crypto.randomUUID();
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
-        (id, board_id, list_id, title, description, company, process_type, priority, assignee_name, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, 'OUTROS', 'normal', '', 'safe', ?, ?, ?)`)
-        .bind(cardId, board.id, list.id, String(item.subject), String(item.body ?? ""), String(item.sender_name), Number(position?.max_position ?? 0) + 1000, String(item.channel), auth.user.email),
-      d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Analisar solicitação', 0, 1000)").bind(crypto.randomUUID(), cardId),
-      d1.prepare("INSERT INTO fdp_checklist_items (id, card_id, title, completed, position) VALUES (?, ?, 'Executar atividade', 0, 2000)").bind(crypto.randomUUID(), cardId),
+        (id, workspace_id, board_id, list_id, title, description, company, process_type, priority, assignee_name, sla_status, position, source_type, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'OUTROS', 'normal', '', 'safe', ?, ?, ?)`)
+        .bind(cardId, workspace.id, board.id, list.id, String(item.subject), String(item.body ?? ""), String(item.sender_name), Number(position?.max_position ?? 0) + 1000, String(item.channel), auth.user.email),
+      d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, 'Analisar solicitação', 0, 1000)").bind(crypto.randomUUID(), workspace.id, cardId),
+      d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, 'Executar atividade', 0, 2000)").bind(crypto.randomUUID(), workspace.id, cardId),
       d1.prepare("UPDATE fdp_workspace_inbox_items SET status = 'converted', converted_card_id = ? WHERE id = ? AND workspace_id = ?").bind(cardId, id, workspace.id),
     ]);
     await recordActivity(workspace.id, cardId, auth.user.email, "inbox.item_converted", { inboxItemId: id });
