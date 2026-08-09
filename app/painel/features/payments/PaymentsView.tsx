@@ -1,0 +1,597 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertOctagon, ArrowRight, Calculator, CircleDot, Coins, Download, FileText, LoaderCircle, LockKeyhole,
+  Plus, RefreshCw, RotateCcw, ShieldCheck, Stethoscope, WalletCards,
+} from "lucide-react";
+import type { WorkspaceRole } from "@/lib/fila-dp-types";
+import { PaymentDialog as PaymentDialogView } from "./PaymentDialogs";
+import {
+  normalizeCompany, normalizeContractorOverview, normalizePsychologyOverview, requestJson, type Row,
+} from "./payments.api";
+import type {
+  CompanyOption, ContractorOverview, EmployeeOption, PaymentDialog, PaymentModule, PsychologyOverview,
+} from "./payments.types";
+import styles from "./payments.module.css";
+
+const moduleConfig: Record<PaymentModule, { title: string; eyebrow: string; description: string; icon: typeof Stethoscope }> = {
+  psychology: {
+    title: "Pagamento de Psicólogos",
+    eyebrow: "CONTROLE FINANCEIRO",
+    description: "Quantas consultas válidas cada psicólogo realizou na competência e quanto devemos pagar.",
+    icon: Stethoscope,
+  },
+  contractors: {
+    title: "Pagamentos PJ",
+    eyebrow: "CONTROLE DE PAGAMENTO",
+    description: "Quanto o prestador tem a receber, quanto deve emitir de nota e quanto vai para o meio complementar.",
+    icon: WalletCards,
+  },
+};
+
+const statusLabels: Record<string, string> = {
+  open: "Aberto", review: "Conferência", approval: "Aprovação", approved: "Aprovado", scheduled: "Programado",
+  invoice_pending: "Aguardando nota", ready_to_pay: "Pronto para pagar", paid: "Pago", closed: "Fechado", reopened: "Reaberto",
+  pending: "Pendente", not_required: "Não se aplica", received: "Recebida", validated: "Conferida", divergent: "Divergente",
+  reconciled: "Conciliado", sent: "Enviado", processed: "Processado", error: "Erro", canceled: "Cancelado",
+};
+const limitSourceLabels: Record<string, string> = {
+  none: "Sem limite configurado", workspace: "Workspace", company: "Empresa", contract: "Contrato", provider: "Prestador",
+};
+const complementLabels: Record<string, string> = {
+  none: "Não configurado", caju_saldo_livre: "Caju Saldo Livre", other_benefit_card: "Outro cartão", manual_transfer: "Transferência",
+};
+
+const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
+const currentCompetence = () => new Date().toISOString().slice(0, 7);
+const field = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
+const numeric = (form: FormData, name: string) => {
+  const raw = field(form, name);
+  return raw === "" ? null : Number(raw);
+};
+const competenceLabel = (value: string) => {
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(Number(year), Number(month) - 1, 1));
+};
+
+export function PaymentsView({ role, module }: { role: WorkspaceRole; module: PaymentModule }) {
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [companyId, setCompanyId] = useState("");
+  const [competence, setCompetence] = useState(currentCompetence);
+  const [psychology, setPsychology] = useState<PsychologyOverview | null>(null);
+  const [contractors, setContractors] = useState<ContractorOverview | null>(null);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [dialog, setDialog] = useState<PaymentDialog>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+
+  const config = moduleConfig[module];
+  const permissions = module === "psychology" ? psychology?.permissions : contractors?.permissions;
+  const cycle = module === "psychology" ? psychology?.cycle ?? null : contractors?.cycle ?? null;
+  const cycles = useMemo(
+    () => (module === "psychology" ? psychology?.cycles : contractors?.cycles) ?? [],
+    [contractors?.cycles, module, psychology?.cycles],
+  );
+  const canManage = Boolean(permissions?.manage && cycle && cycle.status !== "closed");
+
+  const loadCompanies = useCallback(async () => {
+    setLoading(true);
+    try {
+      const payload = await requestJson<{ companies?: Row[] }>("/api/companies");
+      const next = (payload.companies ?? []).map(normalizeCompany).filter((item) => item.status === "active");
+      setCompanies(next);
+      setCompanyId((current) => (next.some((item) => item.id === current) ? current : next[0]?.id ?? ""));
+      setError("");
+      if (!next.length) setLoading(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao carregar empresas.");
+      setLoading(false);
+    }
+  }, []);
+
+  const loadOverview = useCallback(async (selectedCompany: string, selectedCompetence: string, quiet = false) => {
+    if (!selectedCompany) return;
+    if (quiet) setRefreshing(true); else setLoading(true);
+    try {
+      const params = new URLSearchParams({ module, companyId: selectedCompany, competence: selectedCompetence });
+      const payload = await requestJson<Row>(`/api/payments/overview?${params}`);
+      if (module === "psychology") setPsychology(normalizePsychologyOverview(payload));
+      else setContractors(normalizeContractorOverview(payload));
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao carregar o módulo de pagamento.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [module]);
+
+  const loadEmployees = useCallback(async (selectedCompany: string) => {
+    if (!selectedCompany || module !== "psychology") return;
+    try {
+      const params = new URLSearchParams({ companyId: selectedCompany, status: "active", limit: "100" });
+      const payload = await requestJson<{ employees?: Row[] }>(`/api/employees?${params}`);
+      setEmployees((payload.employees ?? []).map((row) => ({
+        id: String(row.id ?? ""),
+        name: String(row.full_name ?? row.fullName ?? ""),
+        registrationNumber: String(row.registration_number ?? row.registrationNumber ?? ""),
+      })));
+    } catch {
+      setEmployees([]);
+    }
+  }, [module]);
+
+  useEffect(() => { const frame = window.requestAnimationFrame(() => void loadCompanies()); return () => window.cancelAnimationFrame(frame); }, [loadCompanies]);
+  useEffect(() => {
+    if (!companyId) return;
+    const frame = window.requestAnimationFrame(() => { void loadOverview(companyId, competence); void loadEmployees(companyId); });
+    return () => window.cancelAnimationFrame(frame);
+  }, [companyId, competence, loadEmployees, loadOverview]);
+  useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 3800); return () => window.clearTimeout(timer); }, [toast]);
+
+  const competenceOptions = useMemo(() => {
+    const known = cycles.map((item) => item.competence);
+    return known.includes(competence) ? known : [competence, ...known];
+  }, [competence, cycles]);
+
+  async function mutate<T>(url: string, init: RequestInit, success: string): Promise<T | null> {
+    setBusy(true);
+    try {
+      const result = await requestJson<T>(url, init);
+      setError("");
+      setToast(success);
+      await loadOverview(companyId, competence, true);
+      return result;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível concluir a operação.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function recalculate(providerId?: string) {
+    const path = module === "psychology" ? "/api/payments/psychology/closings" : "/api/payments/contractors/closings";
+    const body: Record<string, unknown> = { companyId, competenceId: cycle?.id };
+    if (providerId) body[module === "psychology" ? "psychologistId" : "contractorId"] = providerId;
+    await mutate(path, { method: "POST", body: JSON.stringify(body) }, "Apuração atualizada.");
+  }
+
+  async function transition(closingId: string, status: string, reason?: string) {
+    const path = module === "psychology"
+      ? `/api/payments/psychology/closings/${closingId}/transition`
+      : `/api/payments/contractors/closings/${closingId}/transition`;
+    await mutate(path, { method: "POST", body: JSON.stringify({ status, reason }) }, `Fechamento atualizado para ${statusLabels[status] ?? status}.`);
+  }
+
+  async function submitDialog(active: NonNullable<PaymentDialog>, form: FormData) {
+    const payout = {
+      pixKey: field(form, "pixKey"), bankCode: field(form, "bankCode"),
+      bankBranch: field(form, "bankBranch"), bankAccount: field(form, "bankAccount"),
+    };
+    const hasPayout = Object.values(payout).some(Boolean);
+
+    if (active.kind === "psychologist") {
+      const result = await mutate("/api/payments/psychologists", {
+        method: "POST",
+        body: JSON.stringify({
+          legalName: field(form, "legalName"), taxId: field(form, "taxId"), email: field(form, "email"), phone: field(form, "phone"),
+          defaultSessionAmount: numeric(form, "defaultSessionAmount") ?? 0,
+          administrativeNotes: field(form, "administrativeNotes"),
+          ...(hasPayout ? { payout } : {}),
+        }),
+      }, "Psicólogo cadastrado.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "session") {
+      const result = await mutate("/api/payments/psychology/sessions", {
+        method: "POST",
+        body: JSON.stringify({
+          companyId, competenceId: cycle?.id, psychologistId: field(form, "psychologistId"), employeeId: field(form, "employeeId"),
+          sessionDate: field(form, "sessionDate"), quantity: numeric(form, "quantity") ?? 1,
+          unitAmount: numeric(form, "unitAmount"), administrativeNote: field(form, "administrativeNote"),
+        }),
+      }, "Consulta lançada para pagamento.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "adjustment") {
+      const result = await mutate(`/api/payments/psychology/closings/${active.closing.id}/adjustments`, {
+        method: "POST",
+        body: JSON.stringify({ kind: field(form, "kind"), amount: numeric(form, "amount") ?? 0, reason: field(form, "reason") }),
+      }, "Ajuste registrado.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "psychology-payment") {
+      const result = await mutate(`/api/payments/psychology/closings/${active.closing.id}/payment`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: numeric(form, "amount"), method: field(form, "method"), status: field(form, "status"),
+          scheduledDate: field(form, "scheduledDate"), paidDate: field(form, "paidDate"),
+          invoiceNumber: field(form, "invoiceNumber"), invoiceAmount: numeric(form, "invoiceAmount") ?? 0,
+          invoiceIssueDate: field(form, "invoiceIssueDate"), receiptReference: field(form, "receiptReference"),
+        }),
+      }, "Pagamento registrado.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "contractor") {
+      const result = await mutate("/api/payments/contractors", {
+        method: "POST",
+        body: JSON.stringify({
+          companyId, legalName: field(form, "legalName"), taxId: field(form, "taxId"),
+          contractReference: field(form, "contractReference"), roleTitle: field(form, "roleTitle"),
+          contractStart: field(form, "contractStart"), contractEnd: field(form, "contractEnd"),
+          baseAmount: numeric(form, "baseAmount") ?? 0, invoiceLimitOverride: numeric(form, "invoiceLimitOverride"),
+          complementMethod: field(form, "complementMethod"), complementExternalId: field(form, "complementExternalId"),
+          ...(hasPayout ? { payout } : {}),
+        }),
+      }, "Prestador PJ cadastrado.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "component") {
+      const result = await mutate("/api/payments/contractors/components", {
+        method: "POST",
+        body: JSON.stringify({
+          contractorId: field(form, "contractorId"), competenceId: cycle?.id, componentType: field(form, "componentType"),
+          amount: numeric(form, "amount") ?? 0, description: field(form, "description"), documentReference: field(form, "documentReference"),
+        }),
+      }, "Componente lançado na competência.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "invoice") {
+      const result = await mutate(`/api/payments/contractors/closings/${active.closing.id}/invoice`, {
+        method: "POST",
+        body: JSON.stringify({
+          invoiceNumber: field(form, "invoiceNumber"), receivedAmount: numeric(form, "receivedAmount") ?? 0,
+          issueDate: field(form, "issueDate"), attachmentReference: field(form, "attachmentReference"),
+        }),
+      }, "Nota fiscal registrada.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "complement") {
+      const result = await mutate(`/api/payments/contractors/closings/${active.closing.id}/caju`, {
+        method: "POST",
+        body: JSON.stringify({
+          status: field(form, "status"), batchReference: field(form, "batchReference"),
+          externalId: field(form, "externalId"), paidAmount: numeric(form, "paidAmount"), error: field(form, "error"),
+        }),
+      }, "Complemento atualizado.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "limit") {
+      const result = await mutate("/api/payments/contractors/limits", {
+        method: "POST",
+        body: JSON.stringify({
+          scope: field(form, "scope"), companyId, providerId: field(form, "providerId"),
+          contractReference: field(form, "contractReference"), amount: numeric(form, "amount") ?? 0,
+          effectiveFrom: field(form, "effectiveFrom"), note: field(form, "note"),
+        }),
+      }, "Política de limite publicada.");
+      if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "reopen") {
+      await transition(active.closingId, "reopened", field(form, "reason"));
+      setDialog(null);
+    }
+  }
+
+  const reportUrl = (report: string) => {
+    const params = new URLSearchParams({ report, competence, format: "csv" });
+    if (companyId) params.set("companyId", companyId);
+    return `/api/payments/reports?${params}`;
+  };
+
+  if (role === "guest") {
+    return <section className={styles.workspace} data-module={module}><p className={styles.emptyState}>Seu perfil não tem acesso ao controle de pagamentos.</p></section>;
+  }
+
+  const Icon = config.icon;
+
+  return (
+    <section className={styles.workspace} data-module={module} aria-busy={loading}>
+      <header className={styles.commandBar}>
+        <div className={styles.commandSelectors}>
+          <label>
+            <span className={styles.eyebrow}>EMPRESA</span>
+            <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} disabled={!companies.length}>
+              {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className={styles.eyebrow}>COMPETÊNCIA</span>
+            <select value={competence} onChange={(event) => setCompetence(event.target.value)}>
+              {competenceOptions.map((item) => <option key={item} value={item}>{competenceLabel(item)}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className={styles.commandActions}>
+          <button className={styles.secondaryButton} type="button" onClick={() => void loadOverview(companyId, competence, true)} disabled={refreshing || !companyId}>
+            <RefreshCw aria-hidden="true" /> {refreshing ? "Atualizando…" : "Atualizar"}
+          </button>
+          {canManage && (
+            <button className={styles.secondaryButton} type="button" onClick={() => void recalculate()} disabled={busy || !cycle}>
+              <Calculator aria-hidden="true" /> Apurar competência
+            </button>
+          )}
+          {canManage && module === "psychology" && (
+            <>
+              <button className={styles.secondaryButton} type="button" onClick={() => setDialog({ kind: "psychologist" })}>
+                <Plus aria-hidden="true" /> Psicólogo
+              </button>
+              <button className={styles.primaryButton} type="button" onClick={() => setDialog({ kind: "session", psychologists: psychology?.psychologists ?? [], employees })}>
+                <Plus aria-hidden="true" /> Lançar consulta
+              </button>
+            </>
+          )}
+          {canManage && module === "contractors" && (
+            <>
+              {permissions?.manageLimits && (
+                <button className={styles.secondaryButton} type="button" onClick={() => setDialog({ kind: "limit", contractors: contractors?.contractors ?? [] })}>
+                  <ShieldCheck aria-hidden="true" /> Limite da nota
+                </button>
+              )}
+              <button className={styles.secondaryButton} type="button" onClick={() => setDialog({ kind: "contractor" })}>
+                <Plus aria-hidden="true" /> Prestador
+              </button>
+              <button className={styles.primaryButton} type="button" onClick={() => setDialog({ kind: "component", contractors: contractors?.contractors ?? [] })}>
+                <Plus aria-hidden="true" /> Crédito/desconto
+              </button>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className={styles.moduleHeadline}>
+        <span className={styles.moduleIcon} aria-hidden="true"><Icon /></span>
+        <div>
+          <span className={styles.eyebrow}>{config.eyebrow}</span>
+          <h2>{config.title}</h2>
+          <p>{config.description}</p>
+        </div>
+        {cycle && (
+          <span className={styles.cycleBadge} data-locked={cycle.status === "closed" ? "true" : "false"}>
+            {cycle.status === "closed" ? <LockKeyhole aria-hidden="true" /> : <CircleDot aria-hidden="true" />}
+            Competência {statusLabels[cycle.status] ?? cycle.status}
+          </span>
+        )}
+      </div>
+
+      {module === "psychology" && psychology?.privacyBoundary && (
+        <p className={styles.privacyNotice}><ShieldCheck aria-hidden="true" /><span>{psychology.privacyBoundary}</span></p>
+      )}
+
+      {error && <p className={styles.errorState} role="alert"><AlertOctagon aria-hidden="true" /> {error}</p>}
+      {loading && <p className={styles.loadingState}><LoaderCircle aria-hidden="true" className={styles.spin} /> Carregando dados da competência…</p>}
+
+      {!loading && !companies.length && (
+        <p className={styles.emptyState}>Cadastre uma empresa para controlar pagamentos.</p>
+      )}
+
+      {!loading && companies.length > 0 && !cycle && (
+        <p className={styles.emptyState}>
+          A competência {competenceLabel(competence)} ainda não foi aberta para esta empresa. Abra-a em Operação DP para lançar pagamentos.
+        </p>
+      )}
+
+      {!loading && module === "contractors" && contractors && cycle && (
+        <>
+          <div className={styles.summaryGrid}>
+            <article><span>Líquido devido</span><strong>{money(contractors.totals.netAmount)}</strong></article>
+            <article><span>Notas esperadas</span><strong>{money(contractors.totals.invoiceExpectedAmount)}</strong></article>
+            <article><span>Complemento</span><strong>{money(contractors.totals.complementAmount)}</strong></article>
+            <article><span>Caju Saldo Livre</span><strong>{money(contractors.totals.cajuAmount)}</strong></article>
+            <article data-alert={contractors.totals.divergentCount > 0 ? "true" : "false"}>
+              <span>Divergências</span><strong>{contractors.totals.divergentCount}</strong>
+            </article>
+          </div>
+
+          {contractors.closings.length === 0 ? (
+            <p className={styles.emptyState}>
+              Nenhum fechamento apurado nesta competência. Lance os créditos e descontos e use <b>Apurar competência</b>.
+            </p>
+          ) : (
+            <div className={styles.tableScroll}>
+              <table className={styles.table}>
+                <caption className={styles.tableCaption}>Fechamento PJ de {competenceLabel(competence)}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Prestador</th>
+                    <th scope="col">Base</th>
+                    <th scope="col">Créditos</th>
+                    <th scope="col">Descontos</th>
+                    <th scope="col">Líquido</th>
+                    <th scope="col">Limite NF</th>
+                    <th scope="col">NF esperada</th>
+                    <th scope="col">Complemento</th>
+                    <th scope="col">Status NF</th>
+                    <th scope="col">Status complemento</th>
+                    <th scope="col">Conciliação</th>
+                    <th scope="col">Fechamento</th>
+                    <th scope="col">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contractors.closings.map((row) => (
+                    <tr key={row.id}>
+                      <th scope="row">
+                        {row.contractorName}
+                        <small>{row.contractReference || row.contractorCode}</small>
+                      </th>
+                      <td>{money(row.baseAmount)}</td>
+                      <td>{money(row.creditsAmount)}</td>
+                      <td className={styles.negative}>{money(row.debitsAmount)}</td>
+                      <td><strong>{money(row.netAmount)}</strong></td>
+                      <td>
+                        {row.invoiceLimitAmount === null ? "—" : money(row.invoiceLimitAmount)}
+                        <small>{limitSourceLabels[row.invoiceLimitSource] ?? row.invoiceLimitSource}</small>
+                      </td>
+                      <td><strong>{money(row.invoiceExpectedAmount)}</strong>{row.invoiceNumber && <small>NF {row.invoiceNumber}</small>}</td>
+                      <td>
+                        <strong>{money(row.complementAmount)}</strong>
+                        <small>{complementLabels[row.complementMethod] ?? row.complementMethod}</small>
+                      </td>
+                      <td><span className={styles.badge} data-tone={row.invoiceStatus}>{statusLabels[row.invoiceStatus] ?? row.invoiceStatus}</span></td>
+                      <td><span className={styles.badge} data-tone={row.cajuStatus}>{statusLabels[row.cajuStatus] ?? row.cajuStatus}</span></td>
+                      <td>
+                        <span className={styles.badge} data-tone={row.reconciliationStatus}>{statusLabels[row.reconciliationStatus] ?? row.reconciliationStatus}</span>
+                        {row.reconciliationDifference !== 0 && <small>{money(row.reconciliationDifference)}</small>}
+                      </td>
+                      <td><span className={styles.badge} data-tone={row.status}>{statusLabels[row.status] ?? row.status}</span></td>
+                      <td className={styles.rowActions}>
+                        {permissions?.manage && row.status !== "closed" && row.status !== "paid" && (
+                          <>
+                            <button type="button" onClick={() => setDialog({ kind: "invoice", closing: row })} disabled={busy}>Nota</button>
+                            {row.complementAmount > 0 && (
+                              <button type="button" onClick={() => setDialog({ kind: "complement", closing: row })} disabled={busy}>Complemento</button>
+                            )}
+                            <button type="button" onClick={() => void recalculate(row.providerId)} disabled={busy}>Reapurar</button>
+                            <button type="button" onClick={() => void transition(row.id, nextContractorStatus(row.status))} disabled={busy}>
+                              {statusLabels[nextContractorStatus(row.status)] ?? "Avançar"} <ArrowRight aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                        {permissions?.close && row.status === "paid" && (
+                          <button type="button" onClick={() => void transition(row.id, "closed")} disabled={busy}>Fechar</button>
+                        )}
+                        {permissions?.reopen && (row.status === "closed" || row.status === "paid") && (
+                          <button type="button" onClick={() => setDialog({ kind: "reopen", closingId: row.id, module })} disabled={busy}>
+                            <RotateCcw aria-hidden="true" /> Reabrir
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <footer className={styles.reportBar}>
+            <a className={styles.secondaryButton} href={reportUrl("contractor-closing")}><Download aria-hidden="true" /> Fechamento (CSV)</a>
+            <a className={styles.secondaryButton} href={reportUrl("contractor-divergences")}><FileText aria-hidden="true" /> Divergências (CSV)</a>
+          </footer>
+        </>
+      )}
+
+      {!loading && module === "psychology" && psychology && cycle && (
+        <>
+          {psychology.unassignedSessions.length > 0 && (
+            <p className={styles.warningState}>
+              <Coins aria-hidden="true" />
+              Há consultas lançadas sem apuração nesta competência. Use <b>Apurar competência</b> para gerar os fechamentos.
+            </p>
+          )}
+
+          {psychology.closings.length === 0 ? (
+            <p className={styles.emptyState}>
+              Nenhum fechamento apurado. Lance as consultas realizadas e use <b>Apurar competência</b> para saber quanto pagar a cada psicólogo.
+            </p>
+          ) : (
+            <div className={styles.tableScroll}>
+              <table className={styles.table}>
+                <caption className={styles.tableCaption}>Pagamento de psicólogos em {competenceLabel(competence)}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Psicólogo</th>
+                    <th scope="col">Consultas</th>
+                    <th scope="col">Colaboradores</th>
+                    <th scope="col">Bruto</th>
+                    <th scope="col">Ajustes</th>
+                    <th scope="col">A pagar</th>
+                    <th scope="col">Pagamento</th>
+                    <th scope="col">Nota</th>
+                    <th scope="col">Fechamento</th>
+                    <th scope="col">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {psychology.closings.map((row) => (
+                    <tr key={row.id}>
+                      <th scope="row">{row.psychologistName}<small>{row.calcVersion}</small></th>
+                      <td>{row.sessionsCount}</td>
+                      <td>{row.employeesCount}</td>
+                      <td>{money(row.grossAmount)}</td>
+                      <td className={row.adjustmentsAmount < 0 ? styles.negative : undefined}>{money(row.adjustmentsAmount)}</td>
+                      <td><strong>{money(row.netAmount)}</strong></td>
+                      <td>
+                        <span className={styles.badge} data-tone={row.paymentStatus || "pending"}>{statusLabels[row.paymentStatus] ?? "Sem registro"}</span>
+                        {row.paymentAmount > 0 && <small>{money(row.paymentAmount)}</small>}
+                      </td>
+                      <td><span className={styles.badge} data-tone={row.invoiceStatus || "not_required"}>{statusLabels[row.invoiceStatus] ?? "—"}</span></td>
+                      <td><span className={styles.badge} data-tone={row.status}>{statusLabels[row.status] ?? row.status}</span></td>
+                      <td className={styles.rowActions}>
+                        {permissions?.manage && row.status !== "closed" && row.status !== "paid" && (
+                          <>
+                            <button type="button" onClick={() => setDialog({ kind: "adjustment", closing: row })} disabled={busy}>Ajustar</button>
+                            <button type="button" onClick={() => setDialog({ kind: "psychology-payment", closing: row })} disabled={busy}>Pagamento</button>
+                            <button type="button" onClick={() => void recalculate(row.providerId)} disabled={busy}>Reapurar</button>
+                            <button type="button" onClick={() => void transition(row.id, nextPsychologyStatus(row.status))} disabled={busy}>
+                              {statusLabels[nextPsychologyStatus(row.status)] ?? "Avançar"} <ArrowRight aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                        {permissions?.close && row.status === "paid" && (
+                          <button type="button" onClick={() => void transition(row.id, "closed")} disabled={busy}>Fechar</button>
+                        )}
+                        {permissions?.reopen && (row.status === "closed" || row.status === "paid") && (
+                          <button type="button" onClick={() => setDialog({ kind: "reopen", closingId: row.id, module })} disabled={busy}>
+                            <RotateCcw aria-hidden="true" /> Reabrir
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <footer className={styles.reportBar}>
+            <a className={styles.secondaryButton} href={reportUrl("psychology-by-psychologist")}><Download aria-hidden="true" /> Pagamentos por psicólogo (CSV)</a>
+            <a className={styles.secondaryButton} href={reportUrl("psychology-by-employee")}><FileText aria-hidden="true" /> Consultas por colaborador (CSV)</a>
+          </footer>
+        </>
+      )}
+
+      {toast && <p className={styles.toast} role="status">{toast}</p>}
+      {dialog && <PaymentDialogView dialog={dialog} busy={busy} onClose={() => setDialog(null)} onSubmit={submitDialog} />}
+    </section>
+  );
+}
+
+function nextContractorStatus(status: string) {
+  const flow: Record<string, string> = {
+    open: "review", review: "approval", approval: "approved", approved: "invoice_pending",
+    invoice_pending: "ready_to_pay", ready_to_pay: "paid", reopened: "review",
+  };
+  return flow[status] ?? "review";
+}
+
+function nextPsychologyStatus(status: string) {
+  const flow: Record<string, string> = {
+    open: "review", review: "approval", approval: "scheduled", scheduled: "paid", reopened: "review",
+  };
+  return flow[status] ?? "review";
+}

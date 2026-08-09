@@ -31,11 +31,13 @@ import {
   PanelLeftOpen,
   Paperclip,
   Plus,
+  Receipt,
   RefreshCw,
   Search,
   Settings,
   Sparkles,
   Smartphone,
+  Stethoscope,
   Sun,
   Trash2,
   Users,
@@ -43,14 +45,17 @@ import {
   X,
 } from "lucide-react";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { RegistrationsView } from "./features/registrations";
 import { OperationsView } from "./features/operations";
 import { AuxiliaryModulesView } from "./features/auxiliary";
 import { IntegrationsView } from "./features/integrations";
 import { SaasView } from "./features/saas";
+import { PaymentsView } from "./features/payments";
+import { ActionCenter } from "./features/action-center";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "integrations" | "registrations" | "saas" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "integrations" | "registrations" | "saas" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -58,6 +63,7 @@ type SettingsSection = "general" | "companies" | "columns" | "team" | "security"
 type RealtimeStatus = "syncing" | "current" | "delayed";
 type User = { displayName: string; email: string; fullName: string | null };
 type SearchResult = { id: string; title: string; company: string; processType: string; priority: string; slaStatus: string; dueAt: string | null; assigneeName: string; archived: boolean; listId: string };
+type SearchRecord = { kind: string; id: string; title: string; subtitle: string; badge: string; target: ActionTarget | "registrations" };
 type CatalogHandler = (payload: Record<string, unknown>, message: string) => Promise<WorkspaceSnapshot | null>;
 type SnapshotMutation = (url: string, options: RequestInit, message?: string) => Promise<WorkspaceSnapshot | null>;
 type ConfirmationRequest = {
@@ -120,11 +126,22 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   planner: { eyebrow: "AGENDA DO ANALISTA", title: "Meu planner", description: "Organize sua execução a partir dos prazos da operação." },
   processes: { eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento", description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides." },
   auxiliary: { eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares", description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ." },
+  psychologistPayments: { eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos", description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro." },
+  contractorPayments: { eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ", description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado." },
   integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Central de integrações", description: "Configure conectores, publique mapeamentos e acompanhe execuções e conciliações com segurança." },
   registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
   saas: { eyebrow: "ADMINISTRAÇÃO SAAS", title: "Plano e ativação", description: "Conclua a implantação do workspace, acompanhe limites, assinatura e cobranças." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
+};
+
+const searchRecordLabels: Record<string, string> = {
+  company: "Empresa", employee: "Colaborador", psychologist: "Psicólogo",
+  contractor: "Prestador PJ", competence: "Competência", integration: "Integração",
+};
+const searchRecordColors: Record<string, string> = {
+  company: "blue", employee: "green", psychologist: "purple",
+  contractor: "orange", competence: "blue", integration: "gray",
 };
 
 const roleLabels: Record<WorkspaceRole, string> = {
@@ -373,6 +390,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchRecords, setSearchRecords] = useState<SearchRecord[]>([]);
+  const searchPanelRef = useRef<HTMLElement>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationRequest | null>(null);
@@ -487,12 +506,41 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     return () => window.removeEventListener("keydown", openSearch);
   }, []);
 
+  // A paleta de busca é um diálogo modal: Esc fecha, Tab fica preso dentro dela
+  // e o foco volta para onde estava. O rótulo ESC do cabeçalho precisa funcionar.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const panel = searchPanelRef.current;
+    const selector = "button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex='-1'])";
+    const focusables = () => Array.from(panel?.querySelectorAll<HTMLElement>(selector) ?? []).filter((item) => item.getClientRects().length > 0);
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setSearchOpen(false); return; }
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items.at(-1)!;
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !panel?.contains(active))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (active === last || !panel?.contains(active))) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => { window.removeEventListener("keydown", keydown); previous?.focus(); };
+  }, [searchOpen]);
+
   useEffect(() => {
     if (!searchOpen) return;
     const timeout = window.setTimeout(() => {
       const params = new URLSearchParams();
       if (searchQuery.trim()) params.set("q", searchQuery.trim());
-      void fetch(`/api/search?${params}`).then((response) => response.json()).then((payload: { results?: SearchResult[] }) => setSearchResults(payload.results ?? [])).catch(() => setSearchResults([]));
+      void fetch(`/api/search?${params}`)
+        .then((response) => response.json())
+        .then((payload: { results?: SearchResult[]; records?: SearchRecord[] }) => {
+          setSearchResults(payload.results ?? []);
+          setSearchRecords(payload.records ?? []);
+        })
+        .catch(() => { setSearchResults([]); setSearchRecords([]); });
     }, 220);
     return () => window.clearTimeout(timeout);
   }, [searchOpen, searchQuery]);
@@ -1002,6 +1050,11 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     return mutate("/api/hr-metrics", { method: "POST", body: JSON.stringify(payload) }, "Indicadores da folha atualizados.");
   }
 
+  function openSearchRecord(record: SearchRecord) {
+    setSearchOpen(false);
+    setView(record.target as View);
+  }
+
   function openSearchResult(result: SearchResult) {
     const card = allCards.find((item) => item.id === result.id);
     if (card) {
@@ -1057,6 +1110,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>
           <button title="Operação DP" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Operação DP</button>
           {snapshot.workspace.role !== "guest" && <button title="Módulos auxiliares" className={view === "auxiliary" ? "active" : ""} onClick={() => setView("auxiliary")}><span aria-hidden="true"><Blocks /></span> Módulos auxiliares</button>}
+          {snapshot.workspace.role !== "guest" && snapshot.workspace.role !== "observer" && <button title="Pagamento de Psicólogos" className={view === "psychologistPayments" ? "active" : ""} onClick={() => setView("psychologistPayments")}><span aria-hidden="true"><Stethoscope /></span> Pagamento de Psicólogos</button>}
+          {snapshot.workspace.role !== "guest" && <button title="Pagamentos PJ" className={view === "contractorPayments" ? "active" : ""} onClick={() => setView("contractorPayments")}><span aria-hidden="true"><Receipt /></span> Pagamentos PJ</button>}
           {snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
           {snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
           <span className="sidebar-nav-section management">GESTÃO</span>
@@ -1086,7 +1141,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
             <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
-            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "saas" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
+            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "saas" && view !== "psychologistPayments" && view !== "contractorPayments" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
           </div>
         </header>
 
@@ -1096,11 +1151,15 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
 
-          {view === "overview" && <OverviewView cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} />}
+          {view === "overview" && <OverviewView onNavigate={(target) => setView(target)} cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} />}
 
           {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
 
           {view === "auxiliary" && <AuxiliaryModulesView role={snapshot.workspace.role} />}
+
+          {view === "psychologistPayments" && <PaymentsView role={snapshot.workspace.role} module="psychology" />}
+
+          {view === "contractorPayments" && <PaymentsView role={snapshot.workspace.role} module="contractors" />}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
 
@@ -1218,11 +1277,14 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
       {searchOpen && (
         <div className="workspace-modal-backdrop search-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}>
-          <section className="search-palette" role="dialog" aria-modal="true" aria-labelledby="search-title">
+          <section className="search-palette" ref={searchPanelRef} role="dialog" aria-modal="true" aria-labelledby="search-title">
             <header><span aria-hidden="true">⌕</span><input id="search-title" autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar demanda, empresa, responsável, etiqueta…" /><kbd>ESC</kbd></header>
-            <div className="search-results">
-              {searchResults.length === 0 && <div className="empty-view"><span>⌕</span><strong>{searchQuery ? "Nenhum resultado" : "Busca operacional"}</strong><p>{searchQuery ? "Tente outro termo ou verifique os filtros do quadro." : "Digite para localizar demandas ativas ou arquivadas."}</p></div>}
+            <div className="search-results" role="listbox" aria-label="Resultados da busca">
+              {searchResults.length === 0 && searchRecords.length === 0 && <div className="empty-view"><span>⌕</span><strong>{searchQuery ? "Nenhum resultado" : "Busca operacional"}</strong><p>{searchQuery ? "Tente outro termo: nome, matrícula, CPF, empresa, competência ou prestador." : "Digite para localizar demandas, empresas, colaboradores, psicólogos, prestadores PJ, competências e integrações."}</p></div>}
+              {searchResults.length > 0 && <p className="search-group-label" id="search-group-demands">Demandas</p>}
               {searchResults.map((result) => <button key={result.id} onClick={() => openSearchResult(result)}><i className={processColors[result.processType] ?? "gray"} /><span><strong>{result.title}</strong><small>{result.company || result.processType} • {result.assigneeName || "Sem responsável"}</small></span><em className={result.slaStatus}>{result.archived ? "Arquivada" : compactSlaLabel(result.slaStatus, result.dueAt)}</em></button>)}
+              {searchRecords.length > 0 && <p className="search-group-label">Registros da operação</p>}
+              {searchRecords.map((record) => <button key={`${record.kind}:${record.id}`} onClick={() => openSearchRecord(record)}><i className={searchRecordColors[record.kind] ?? "gray"} /><span><strong>{record.title}</strong><small>{record.subtitle}</small></span><em>{searchRecordLabels[record.kind] ?? record.kind}</em></button>)}
             </div>
             <footer><span>Atalho global</span><kbd>Ctrl</kbd><b>+</b><kbd>K</kbd></footer>
           </section>
@@ -1383,7 +1445,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   );
 }
 
-function OverviewView({ cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit }: {
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit }: {
+  onNavigate: (target: ActionTarget) => void;
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
@@ -1402,6 +1465,8 @@ function OverviewView({ cards, companies, lists, activities, stats, onOpen, onOp
   const visibleColumns = lists.slice(0, 3);
 
   return <div className="overview-layout">
+    <ActionCenter onNavigate={onNavigate} />
+
     <section className="overview-hero">
       <div><span>RESUMO OPERACIONAL</span><strong>{stats.active ? `${stats.active} demanda(s) em andamento.` : "Tudo sob controle por enquanto."}</strong><p>Priorize o que vence primeiro e mantenha cada empresa atualizada sem abrir planilhas paralelas.</p></div>
       {canEdit && <button className="primary-button overview-new-demand" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}

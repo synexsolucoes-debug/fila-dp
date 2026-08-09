@@ -1415,3 +1415,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .companies-list > article, .metrics-list > article { grid-template-columns: minmax(0, 1fr) auto; }
   .companies-list article > span, .metrics-list article > span, .metrics-list article > b { grid-column: 1; }
 }
+
+.search-group-label { margin: 8px 10px 4px; color: #7c8896; font-size: 7.5px; font-weight: 820; letter-spacing: .1em; text-transform: uppercase; }
+.theme-dark .search-group-label { color: #93a3b5; }

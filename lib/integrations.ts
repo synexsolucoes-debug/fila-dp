@@ -62,12 +62,20 @@ function vaultKeys() {
   return result;
 }
 
-function currentVaultKey() {
+/** Returns the active vault key so other domains can seal secrets with the same rotation policy. */
+export function currentVaultKey() {
   const keys = vaultKeys();
   const requested = Number(process.env.FDP_INTEGRATION_VAULT_KEY_VERSION || Math.max(...keys.keys()));
   const key = keys.get(requested);
   if (!key) throw new ApiError(500, "VAULT_KEY_VERSION_MISSING", "A versão ativa do cofre não está disponível.");
   return { key, version: requested };
+}
+
+/** Returns a previously used vault key so sealed payloads survive key rotation. */
+export function vaultKeyByVersion(version: number) {
+  const key = vaultKeys().get(version);
+  if (!key) throw new ApiError(500, "VAULT_KEY_VERSION_MISSING", "A chave necessária para abrir o dado protegido não está disponível.");
+  return key;
 }
 
 export function sanitizeCredentials(channelValue: unknown, value: unknown) {

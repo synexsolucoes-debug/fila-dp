@@ -216,9 +216,64 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Limites de empresas, usuários e integrações são aplicados no servidor sob advisory lock; esconder uma ação na interface não é usado como controle de plano.
 - Gate operacional antes do deploy: aplicar a migration `0017_saas_foundation`, configurar URL pública/Stripe/operadores, executar o rehearsal multi-tenant, homologar checkout e portal no modo teste e só então avaliar `FDP_ALLOW_SELF_SIGNUP=true`.
 
-### Fases 8 a 10 — Experiência, escala e comercialização
+### Fase 5.1 — Controle de pagamento de psicólogos e PJ
 
-- Redesign modular e acessível; filas/observabilidade/backups/API; site, suporte, LGPD e documentação comercial.
+- Concluída no repositório: os módulos de Psicologia e Prestadores PJ deixaram de ser apenas
+  entregas genéricas do motor auxiliar e passaram a ter o modelo de pagamento exigido pelo produto.
+- Psicólogos: cadastro administrativo/financeiro, lançamento de consulta com valor unitário
+  histórico, fechamento por profissional e competência, ajustes append-only com motivo,
+  pagamento com nota opcional e relatórios.
+- PJ: cadastro com contrato e meio complementar, políticas versionadas de limite da nota
+  (prestador → contrato → empresa → workspace), créditos e descontos tipados, apuração na ordem
+  obrigatória (créditos e descontos antes do limite), nota esperada, complemento, controle
+  assistido do Caju, conciliação e snapshot imutável.
+- Nenhum limite fixo em código: `R$ 6.000,00` deixou de ser regra embutida e passou a ser
+  política configurável e versionada.
+- O complemento não declara integração pronta: a resposta da API informa `connected: false` e a
+  documentação registra exatamente o que falta para tornar o conector operacional.
+- Validação executada: lint, `db:check` (21 migrations), 93 testes e build aprovados; além disso
+  `npm run db:rehearse-payments` aplicou as migrations em PostgreSQL 16 real e verificou
+  constraints, imutabilidade de fechamento, ajustes append-only e isolamento multi-tenant sob RLS
+  com papel sem superusuário.
+- Detalhamento, permissões, rollback e pendências: `docs/pagamentos-psicologos-e-pj.md`.
+
+### Fase 8 — Experiência
+
+- Concluída no repositório: central de ação no painel, busca global multi-domínio e correções de
+  acessibilidade nas superfícies novas.
+- O painel responde "o que precisa ser feito agora?" com indicadores clicáveis derivados de
+  consultas reais, filtrados por capability e escopo de empresa, agregados em uma única ida ao banco.
+- Indicadores zerados não são exibidos e o módulo de Ponto — inexistente no produto — não é
+  simulado: a resposta declara o que não é coberto.
+- A busca passou a cobrir empresas, colaboradores (matrícula e CPF por HMAC, exibido mascarado),
+  psicólogos, prestadores PJ, competências e integrações, sempre respeitando permissão.
+- A paleta de busca virou um diálogo modal de verdade: `Esc` fecha, `Tab` fica preso e o foco
+  retorna — o rótulo `ESC` do cabeçalho era uma afordância falsa até aqui.
+- Validação: lint, `db:check`, 102 testes e build aprovados; consultas conferidas contra
+  PostgreSQL 16 real com dados semeados.
+- Detalhamento e pendências: `docs/fase-8-experiencia.md`.
+
+### Fase 9 — Escala
+
+- Concluída no repositório: observabilidade estruturada, outbox transacional, webhooks de saída
+  assinados e API pública versionada.
+- Logs estruturados carregam correlação (`requestId`, `workspaceId`, `syncRunId`, `jobId`,
+  `deliveryId`, `apiKeyId`) e recusam PII por lista de bloqueio no próprio logger.
+- O evento de domínio é gravado no mesmo lote da mutação que o originou; é append-only e imutável
+  depois de publicado. O publicador roda fora da requisição e é idempotente por endpoint/evento.
+- Entregas de webhook usam assinatura HMAC sobre `<timestamp>.<corpo>`, lease com
+  `FOR UPDATE SKIP LOCKED`, backoff exponencial, dead-letter e log de entrega; o destino é
+  restrito a HTTPS público, sem rede interna.
+- A API `/api/v1` autentica por chave com escopos, limita por minuto no banco, aplica idempotência
+  nas escritas e pagina por cursor. A escrita reusa o serviço interno em vez de duplicar regra.
+- O OpenAPI descreve apenas endpoints implementados.
+- Validação: lint, `db:check` (22 migrations), 118 testes e build aprovados; ensaio contra
+  PostgreSQL 16 real cobrindo outbox, lease, limites, idempotência e isolamento.
+- Detalhamento e pendências: `docs/fase-9-escala.md`.
+
+### Fase 10 — Comercialização
+
+- Site, suporte, LGPD e documentação comercial.
 
 ## Alterações implementadas nesta fase
 

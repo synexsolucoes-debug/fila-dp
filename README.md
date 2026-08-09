@@ -55,6 +55,25 @@ Benefícios, Psicologia e Prestadores PJ compartilham um fluxo controlado por em
 - Psicologia armazena somente quantidades e protocolos administrativos agregados. Diagnóstico, CID, prontuário, medicação e notas clínicas são proibidos.
 - Aprovações validam responsável atribuído, acesso à empresa e segregação contra autoaprovação.
 
+## Central de ação e busca global
+
+O painel abre respondendo **o que precisa ser feito agora**: indicadores clicáveis de demandas vencidas, aprovações atribuídas a você, pendências bloqueantes, itens de fechamento, obrigações no radar, pagamentos e fechamentos pendentes, notas divergentes, complemento a carregar e erros de integração. Detalhes em `docs/fase-8-experiencia.md`.
+
+- Cada indicador vem de uma consulta real, respeita a capability do papel e o escopo de empresa do membro, e leva ao módulo responsável. Indicadores zerados não aparecem.
+- O módulo de Ponto ainda não existe no produto e por isso não há indicador de ponto — a API declara o que não é coberto em vez de simular.
+- A busca global (`Ctrl`+`K`) cobre demandas, empresas, colaboradores, psicólogos, prestadores PJ, competências e integrações. CPF é pesquisado por HMAC e exibido sempre mascarado.
+
+## Controle de pagamento: Psicólogos e PJ
+
+Dois módulos dedicados respondem às perguntas financeiras da operação. Documentação completa em `docs/pagamentos-psicologos-e-pj.md`.
+
+- **Psicólogos**: quantas consultas válidas cada profissional realizou na competência e quanto pagar. O valor unitário é congelado no lançamento — reajustar a tabela não altera consultas antigas. Ajustes são append-only, com motivo e autor. O módulo é exclusivamente administrativo e financeiro: nenhum dado clínico é aceito.
+- **PJ**: quanto o prestador tem a receber, quanto deve emitir de nota e quanto vai para o meio complementar. A ordem do cálculo é obrigatória — `líquido = base + créditos - descontos`, depois `nota = mínimo(líquido, limite)`, depois `complemento = líquido - nota`, e o Caju Saldo Livre recebe o complemento quando configurado.
+- O limite da nota não é constante de código: políticas versionadas por workspace, empresa, contrato e prestador são resolvidas na ordem prestador → contrato → empresa → workspace, e competências já apuradas mantêm o limite que usaram.
+- Concluir um fechamento grava snapshot imutável; reabrir exige capability própria e justificativa, garantidas também por trigger no PostgreSQL.
+- O complemento em cartão de benefício é controle assistido com exportação: **não há integração oficial implementada** com a plataforma.
+- Ensaio contra PostgreSQL real: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse-payments`.
+
 ## Central de Integrações
 
 A fase 6 substitui sincronizações longas dentro da requisição por um motor rastreável: conectores usam credenciais criptografadas por workspace, mapeamentos versionados, execuções e itens idempotentes, fila com lease/backoff/dead-letter e conciliação explícita.
@@ -77,6 +96,18 @@ A Fase 7 transforma o provisionamento singleton em cadastro multi-workspace e ad
 - Eventos financeiros e auditoria global são append-only; cartão, chave secreta e payload bruto do provedor não são persistidos.
 - Limites de usuários, empresas e integrações são aplicados no servidor sob lock transacional.
 - Planos pagos nascem como rascunho. Um operador da plataforma deve configurar preços `price_...`, valores e ativá-los antes da oferta.
+
+## API pública e webhooks
+
+A API `/api/v1` e os webhooks de saída abrem a operação para integração programática. Documentação completa em `docs/fase-9-escala.md`.
+
+- Autenticação por chave (`Authorization: Bearer fdp_...`) com escopos, limite por minuto, idempotência nas escritas e paginação por cursor. A chave é guardada apenas como HMAC e exibida uma única vez.
+- `GET /api/v1/openapi.json` descreve **somente** os endpoints implementados: empresas, colaboradores, competências, fechamentos PJ e lançamento de créditos/descontos PJ.
+- A escrita reusa o mesmo serviço da interface: competência fechada e fechamento concluído recusam o lançamento igual. `Idempotency-Key` e `externalId` impedem duplicidade.
+- Webhooks são assinados com HMAC sobre `<timestamp>.<corpo>` em `X-Fila-DP-Signature`. Recuse entregas com mais de 300 segundos e deduplique por `X-Fila-DP-Event-Id`.
+- Eventos nascem em outbox transacional, no mesmo lote do fato; entregas têm lease, backoff exponencial e dead-letter.
+- Configure `FDP_API_KEY_SECRET` para emitir chaves; o executor de entregas usa `FDP_INTEGRATION_WORKER_SECRET`.
+- Ensaio de banco: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse` (exige banco vazio e descartável).
 
 ## Autenticação
 
