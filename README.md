@@ -55,6 +55,14 @@ Benefícios, Psicologia e Prestadores PJ compartilham um fluxo controlado por em
 - Psicologia armazena somente quantidades e protocolos administrativos agregados. Diagnóstico, CID, prontuário, medicação e notas clínicas são proibidos.
 - Aprovações validam responsável atribuído, acesso à empresa e segregação contra autoaprovação.
 
+## Central de ação e busca global
+
+O painel abre respondendo **o que precisa ser feito agora**: indicadores clicáveis de demandas vencidas, aprovações atribuídas a você, pendências bloqueantes, itens de fechamento, obrigações no radar, pagamentos e fechamentos pendentes, notas divergentes, complemento a carregar e erros de integração. Detalhes em `docs/fase-8-experiencia.md`.
+
+- Cada indicador vem de uma consulta real, respeita a capability do papel e o escopo de empresa do membro, e leva ao módulo responsável. Indicadores zerados não aparecem.
+- O módulo de Ponto ainda não existe no produto e por isso não há indicador de ponto — a API declara o que não é coberto em vez de simular.
+- A busca global (`Ctrl`+`K`) cobre demandas, empresas, colaboradores, psicólogos, prestadores PJ, competências e integrações. CPF é pesquisado por HMAC e exibido sempre mascarado.
+
 ## Controle de pagamento: Psicólogos e PJ
 
 Dois módulos dedicados respondem às perguntas financeiras da operação. Documentação completa em `docs/pagamentos-psicologos-e-pj.md`.

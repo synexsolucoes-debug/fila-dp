@@ -237,9 +237,25 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
   com papel sem superusuário.
 - Detalhamento, permissões, rollback e pendências: `docs/pagamentos-psicologos-e-pj.md`.
 
-### Fases 8 a 10 — Experiência, escala e comercialização
+### Fase 8 — Experiência
 
-- Redesign modular e acessível; filas/observabilidade/backups/API; site, suporte, LGPD e documentação comercial.
+- Concluída no repositório: central de ação no painel, busca global multi-domínio e correções de
+  acessibilidade nas superfícies novas.
+- O painel responde "o que precisa ser feito agora?" com indicadores clicáveis derivados de
+  consultas reais, filtrados por capability e escopo de empresa, agregados em uma única ida ao banco.
+- Indicadores zerados não são exibidos e o módulo de Ponto — inexistente no produto — não é
+  simulado: a resposta declara o que não é coberto.
+- A busca passou a cobrir empresas, colaboradores (matrícula e CPF por HMAC, exibido mascarado),
+  psicólogos, prestadores PJ, competências e integrações, sempre respeitando permissão.
+- A paleta de busca virou um diálogo modal de verdade: `Esc` fecha, `Tab` fica preso e o foco
+  retorna — o rótulo `ESC` do cabeçalho era uma afordância falsa até aqui.
+- Validação: lint, `db:check`, 102 testes e build aprovados; consultas conferidas contra
+  PostgreSQL 16 real com dados semeados.
+- Detalhamento e pendências: `docs/fase-8-experiencia.md`.
+
+### Fases 9 e 10 — Escala e comercialização
+
+- Filas/observabilidade/backups/API; site, suporte, LGPD e documentação comercial.
 
 ## Alterações implementadas nesta fase
 
