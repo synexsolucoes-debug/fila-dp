@@ -147,14 +147,15 @@ export default function Home() {
           <span>Fila <strong>DP</strong></span>
         </a>
         <nav aria-label="Navegação principal">
-          <a href="#produto">Produto</a>
-          <a href="#como-funciona">Como funciona</a>
-          <a href="#recursos">Recursos</a>
-          <a href="#planos">Planos</a>
+          <a href="/solucao">Solução</a>
+          <a href="/funcionalidades">Funcionalidades</a>
+          <a href="/integracoes">Integrações</a>
+          <a href="/planos">Planos</a>
+          <a href="/faq">FAQ</a>
         </nav>
         <div className="header-actions">
           <a className="login-link" href="/login">Entrar</a>
-          <a className="button button-small" href="/login">Solicitar acesso</a>
+          <a className="button button-small" href="/contato?assunto=demonstracao">Falar com a equipe</a>
         </div>
       </header>
 
@@ -168,12 +169,12 @@ export default function Home() {
             Centralize solicitações, acompanhe SLAs e organize férias, rescisões, conciliações e outras rotinas em um quadro visual simples de usar.
           </p>
           <div className="hero-actions">
-            <a className="button" href="/login">Solicitar acesso <Chevron /></a>
-            <a className="button button-secondary" href="#como-funciona">Ver como funciona</a>
+            <a className="button" href="/contato?assunto=demonstracao">Agendar demonstração <Chevron /></a>
+            <a className="button button-secondary" href="/solucao">Conhecer a solução</a>
           </div>
           <div className="hero-notes">
-            <span><CheckIcon /> Plano gratuito para começar</span>
-            <span><CheckIcon /> Sem cartão de crédito</span>
+            <span><CheckIcon /> A admissão digital permanece na Sólides</span>
+            <span><CheckIcon /> A folha oficial permanece no seu ERP</span>
           </div>
         </div>
         <div className="hero-product"><ProductBoard /></div>
@@ -249,16 +250,16 @@ export default function Home() {
       <section className="section plans-section" id="planos">
         <div className="center-heading">
           <div className="section-kicker">Cresce com a sua operação</div>
-          <h2>Comece simples. Evolua sem trocar de ferramenta.</h2>
-          <p>Escolha o nível de controle adequado para o momento da sua equipe.</p>
+          <h2>Condições combinadas com a sua realidade.</h2>
+          <p>As condições comerciais publicadas ficam na página de planos, junto com o que está incluído em qualquer contrato.</p>
         </div>
         <div className="plans-grid">
-          <article><span className="plan-name">Gratuito</span><h3>Para experimentar</h3><p>O essencial para organizar uma pequena fila e validar o método com a equipe.</p><a href="/login">Começar grátis <Chevron /></a></article>
-          <article><span className="plan-name">Standard</span><h3>Para organizar</h3><p>Mais controle, colaboração e capacidade para operações em crescimento.</p><a href="#contato">Conhecer o plano <Chevron /></a></article>
-          <article className="featured-plan"><span className="recommended">Mais completo</span><span className="plan-name">Premium</span><h3>Para gerir e otimizar</h3><p>Dashboards, automações avançadas e inteligência aplicada à rotina.</p><a href="#contato">Falar com especialista <Chevron /></a></article>
-          <article><span className="plan-name">Enterprise</span><h3>Para escalar</h3><p>Permissões, integrações e implantação alinhadas a operações complexas.</p><a href="#contato">Agendar conversa <Chevron /></a></article>
+          <article><span className="plan-name">Planos</span><h3>Ver condições publicadas</h3><p>Limites de usuários, empresas, integrações e armazenamento de cada plano ativo no catálogo.</p><a href="/planos">Ver planos <Chevron /></a></article>
+          <article><span className="plan-name">Demonstração</span><h3>Ver o produto na sua operação</h3><p>Uma conversa sobre os seus processos, com o produto aberto e sem usar dados reais do seu DP.</p><a href="/demonstracao">Agendar <Chevron /></a></article>
+          <article><span className="plan-name">Integrações</span><h3>Conferir o que já existe</h3><p>O estado real de cada integração: disponível, parcial ou apenas preparada.</p><a href="/integracoes">Ver integrações <Chevron /></a></article>
+          <article><span className="plan-name">Contato</span><h3>Falar com a equipe</h3><p>Dúvidas sobre escopo, segurança, LGPD ou implantação antes de contratar.</p><a href="/contato">Enviar contato <Chevron /></a></article>
         </div>
-        <p className="plans-note">Recursos e condições comerciais são definidos na apresentação de cada plano.</p>
+        <p className="plans-note">Nenhuma condição comercial é anunciada aqui antes de estar publicada e cobrável no produto.</p>
       </section>
 
       <section className="section faq-section">
@@ -282,9 +283,9 @@ export default function Home() {
           <h2>Seu DP já tem demandas demais. Organizar a fila não precisa ser mais uma delas.</h2>
         </div>
         <div className="final-cta-actions">
-          <a className="button button-light" href="/login">Solicitar acesso <Chevron /></a>
+          <a className="button button-light" href="/contato?assunto=demonstracao">Agendar demonstração <Chevron /></a>
           <a className="demo-link" href="/login">Acessar minha conta</a>
-          <p>Comece pelo plano gratuito e evolua quando precisar.</p>
+          <p>Combinamos a condição comercial depois de entender a sua operação.</p>
         </div>
       </section>
 
@@ -294,7 +295,15 @@ export default function Home() {
           <span>Fila <strong>DP</strong></span>
         </a>
         <p>Gestão visual de demandas para Departamento Pessoal e RH.</p>
-        <div><a href="#recursos">Recursos</a><a href="#planos">Planos</a><a href="#inicio">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a></div>
+        <div>
+          <a href="/solucao">Solução</a><a href="/funcionalidades">Funcionalidades</a><a href="/integracoes">Integrações</a>
+          <a href="/planos">Planos</a><a href="/faq">FAQ</a><a href="/contato">Contato</a>
+          <a href="/termos">Termos</a><a href="/privacidade">Privacidade</a><a href="/subprocessadores">Subprocessadores</a>
+          <a href="#inicio">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a>
+        </div>
+        <p className="site-boundary-note">
+          O Fila DP não executa admissão digital, não guarda prontuário psicológico e não faz cálculo tributário nem emite nota fiscal.
+        </p>
       </footer>
     </main>
   );

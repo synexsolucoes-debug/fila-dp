@@ -97,6 +97,16 @@ A Fase 7 transforma o provisionamento singleton em cadastro multi-workspace e ad
 - Limites de usuários, empresas e integrações são aplicados no servidor sob lock transacional.
 - Planos pagos nascem como rascunho. Um operador da plataforma deve configurar preços `price_...`, valores e ativá-los antes da oferta.
 
+## Site comercial
+
+O site publica apenas o que o produto faz. Detalhes e checklist em `docs/fase-10-comercializacao.md`.
+
+- Páginas: Solução, Funcionalidades, Integrações, Planos, Demonstração, FAQ, Contato, Termos, Privacidade e Subprocessadores/DPA.
+- A página de planos lê o catálogo persistido e só mostra preço quando o plano está ativo e é cobrável; caso contrário, condição sob consulta.
+- As integrações aparecem com estado real — disponível, parcial ou preparado. Sólides e Caju são declarados como preparados, sem integração oficial implementada.
+- O formulário de contato grava um registro real com consentimento, limite por endereço e protocolo. Os contatos são lidos apenas pela administração da plataforma.
+- `findProhibitedClaims` em `lib/marketing.ts` reprova o build se alguma página anunciar admissão digital própria, prontuário, cálculo tributário ou substituição de ERP.
+
 ## API pública e webhooks
 
 A API `/api/v1` e os webhooks de saída abrem a operação para integração programática. Documentação completa em `docs/fase-9-escala.md`.

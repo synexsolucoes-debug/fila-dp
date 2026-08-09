@@ -1418,3 +1418,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 .search-group-label { margin: 8px 10px 4px; color: #7c8896; font-size: 7.5px; font-weight: 820; letter-spacing: .1em; text-transform: uppercase; }
 .theme-dark .search-group-label { color: #93a3b5; }
+
+.site-boundary-note { max-width: 720px; margin: 14px auto 0; color: #7b8794; font-size: 8.5px; line-height: 1.7; text-align: center; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

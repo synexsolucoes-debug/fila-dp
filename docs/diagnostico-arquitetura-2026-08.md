@@ -273,7 +273,22 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 
 ### Fase 10 — Comercialização
 
-- Site, suporte, LGPD e documentação comercial.
+- Concluída no repositório: site comercial completo, captação de contato funcional e documentos legais.
+- A auditoria do site anterior encontrou promessas incompatíveis com o produto — plano gratuito e
+  quatro planos fixos em código — e elas foram removidas.
+- A página de planos passou a ler o catálogo persistido e só exibe preço quando o plano é cobrável;
+  sem isso, mostra condição sob consulta.
+- As integrações são publicadas com estado real: Sólides e Caju aparecem como preparados, com a
+  observação de que não há integração oficial implementada.
+- O formulário de contato grava registro real com consentimento, limite por endereço e protocolo; os
+  contatos são visíveis apenas para a administração da plataforma, com RLS verificada em banco real.
+- Termos, Política de privacidade e DPA cobrem escopo, bases legais, retenção, direitos do titular,
+  incidentes e subprocessadores. Backup não é declarado testado.
+- Uma guarda automática verifica todas as páginas contra as promessas proibidas pelo §90 e distingue
+  a negativa obrigatória da oferta.
+- Validação: lint, `db:check` (23 migrations), 131 testes e build aprovados; ensaio contra PostgreSQL
+  16 real com verificação do isolamento dos contatos.
+- Detalhamento, checklist e pendências: `docs/fase-10-comercializacao.md`.
 
 ## Alterações implementadas nesta fase
 

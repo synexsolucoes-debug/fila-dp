@@ -1831,3 +1831,30 @@ export const apiIdempotencyRecords = pgTable("fdp_api_idempotency_records", {
   index("fdp_api_idempotency_expires_idx").on(table.expiresAt),
   foreignKey({ name: "fdp_api_idempotency_workspace_key_fk", columns: [table.workspaceId, table.apiKeyId], foreignColumns: [apiKeys.workspaceId, apiKeys.id] }).onDelete("cascade"),
 ]);
+
+/* -------------------------------------------------------------------------- */
+/* Site comercial — contatos recebidos antes de existir workspace              */
+/* -------------------------------------------------------------------------- */
+
+export const marketingLeads = pgTable("fdp_marketing_leads", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  company: text("company").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  headcount: text("headcount").notNull().default(""),
+  interest: text("interest").notNull(),
+  message: text("message").notNull().default(""),
+  consentAt: timestamp("consent_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  sourcePath: text("source_path").notNull().default(""),
+  status: text("status").notNull().default("new"),
+  handledBy: text("handled_by"),
+  handledAt: timestamp("handled_at", { withTimezone: true, mode: "string" }),
+  requestId: text("request_id").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_marketing_leads_created_idx").on(table.createdAt),
+  index("fdp_marketing_leads_status_idx").on(table.status, table.createdAt),
+  check("fdp_marketing_leads_status_check", sql`${table.status} IN ('new', 'contacted', 'qualified', 'discarded')`),
+  check("fdp_marketing_leads_interest_check", sql`${table.interest} IN ('demonstracao', 'planos', 'integracoes', 'suporte', 'outro')`),
+]);
