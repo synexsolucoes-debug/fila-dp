@@ -148,6 +148,13 @@
       "when": 1786238000000,
       "tag": "0018_payment_control_modules",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786239000000,
+      "tag": "0019_outbox_webhooks_public_api",
+      "breakpoints": true
     }
   ]
 }

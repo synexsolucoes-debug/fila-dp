@@ -97,6 +97,18 @@ A Fase 7 transforma o provisionamento singleton em cadastro multi-workspace e ad
 - Limites de usuários, empresas e integrações são aplicados no servidor sob lock transacional.
 - Planos pagos nascem como rascunho. Um operador da plataforma deve configurar preços `price_...`, valores e ativá-los antes da oferta.
 
+## API pública e webhooks
+
+A API `/api/v1` e os webhooks de saída abrem a operação para integração programática. Documentação completa em `docs/fase-9-escala.md`.
+
+- Autenticação por chave (`Authorization: Bearer fdp_...`) com escopos, limite por minuto, idempotência nas escritas e paginação por cursor. A chave é guardada apenas como HMAC e exibida uma única vez.
+- `GET /api/v1/openapi.json` descreve **somente** os endpoints implementados: empresas, colaboradores, competências, fechamentos PJ e lançamento de créditos/descontos PJ.
+- A escrita reusa o mesmo serviço da interface: competência fechada e fechamento concluído recusam o lançamento igual. `Idempotency-Key` e `externalId` impedem duplicidade.
+- Webhooks são assinados com HMAC sobre `<timestamp>.<corpo>` em `X-Fila-DP-Signature`. Recuse entregas com mais de 300 segundos e deduplique por `X-Fila-DP-Event-Id`.
+- Eventos nascem em outbox transacional, no mesmo lote do fato; entregas têm lease, backoff exponencial e dead-letter.
+- Configure `FDP_API_KEY_SECRET` para emitir chaves; o executor de entregas usa `FDP_INTEGRATION_WORKER_SECRET`.
+- Ensaio de banco: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse` (exige banco vazio e descartável).
+
 ## Autenticação
 
 OpenAI workspace sites can read the current user's email from

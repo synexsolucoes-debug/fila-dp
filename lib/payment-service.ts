@@ -2,9 +2,12 @@ import type { getD1 } from "../db";
 import { ApiError } from "./api-errors.ts";
 import {
   CONTRACTOR_CALC_VERSION,
+  componentDirectionFor,
   type ComplementMethod,
   type ContractorComponentDirection,
+  type ContractorComponentType,
   type InvoiceLimitCandidate,
+  type PaymentOrigin,
   calculateContractorClosing,
   calculatePsychologyClosing,
   invoiceComparison,
@@ -254,6 +257,62 @@ export async function upsertContractorClosing(d1: Database, input: {
     WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ? AND closing_id IS DISTINCT FROM ?`)
     .bind(closingId, input.workspaceId, input.profile.provider_id, input.cycle.id, closingId).run();
   return { closingId, calculation, limitPolicyId, componentCount, created: !existing };
+}
+
+/**
+ * Cria um crédito ou desconto na competência do prestador.
+ *
+ * Compartilhado entre a interface interna e a API pública: a regra de
+ * competência fechada, fechamento concluído e direção do componente vale igual
+ * para quem opera na tela e para quem integra por API.
+ */
+export async function createContractorComponent(d1: Database, input: {
+  workspaceId: string;
+  profile: ContractorProfileRow;
+  cycle: CycleRow;
+  componentType: ContractorComponentType;
+  amount: number;
+  description?: string;
+  quantity?: number;
+  origin?: PaymentOrigin;
+  documentReference?: string;
+  note?: string;
+  externalId?: string;
+  createdBy: string;
+}) {
+  if (input.cycle.status === "closed") throw ApiError.badRequest("A competência está fechada.", "COMPETENCE_CLOSED");
+  const direction = componentDirectionFor(input.componentType);
+  if (input.amount <= 0) throw ApiError.badRequest("Informe um valor maior que zero.", "COMPONENT_AMOUNT_REQUIRED");
+
+  const closing = await d1.prepare("SELECT id, status FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?")
+    .bind(input.workspaceId, input.profile.provider_id, input.cycle.id).first<{ id: string; status: string }>();
+  if (closing && (closing.status === "closed" || closing.status === "paid")) {
+    throw ApiError.badRequest("O fechamento desta competência está concluído. Reabra com justificativa para lançar componentes.", "PAYMENT_CLOSING_LOCKED");
+  }
+
+  // Reenvio do mesmo identificador externo devolve o lançamento já criado.
+  const externalId = input.externalId ?? "";
+  if (externalId) {
+    const duplicate = await d1.prepare("SELECT id, direction, component_type, amount FROM fdp_contractor_components WHERE workspace_id = ? AND external_id = ?")
+      .bind(input.workspaceId, externalId).first<{ id: string; direction: string; component_type: string; amount: string | number }>();
+    if (duplicate) {
+      return {
+        id: String(duplicate.id), direction: String(duplicate.direction), componentType: String(duplicate.component_type),
+        amount: Number(duplicate.amount), competence: input.cycle.competence, duplicated: true,
+      };
+    }
+  }
+
+  const id = crypto.randomUUID();
+  await d1.prepare(`INSERT INTO fdp_contractor_components (id, workspace_id, company_id, provider_id, payroll_cycle_id, closing_id, competence,
+      direction, component_type, description, component_quantity, amount, origin, document_reference, note, status, external_id, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`)
+    .bind(id, input.workspaceId, input.profile.company_id, input.profile.provider_id, input.cycle.id, closing?.id ?? null,
+      input.cycle.competence, direction, input.componentType, input.description ?? "", Math.max(input.quantity ?? 1, 0),
+      input.amount, input.origin ?? "manual", input.documentReference ?? "", input.note ?? "", externalId, input.createdBy)
+    .run();
+
+  return { id, direction, componentType: input.componentType, amount: input.amount, competence: input.cycle.competence, duplicated: false };
 }
 
 /** Conciliação PJ: nota recebida + complemento pago devem fechar o líquido devido. */

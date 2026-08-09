@@ -4,6 +4,7 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { assertTransition, psychologyClosingStatuses, psychologyTransitions, requiredPaymentEnum, requiredReason } from "@/lib/payments";
 import { findPsychologyClosing, psychologyClosingSnapshot } from "@/lib/payment-service";
+import { prepareDomainEvent } from "@/lib/outbox";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -45,13 +46,31 @@ export async function POST(request: Request, { params }: Params) {
       .first<{ id: string; status: string }>();
     if (!updated) throw new ApiError(409, "PAYMENT_CLOSING_CONFLICT", "O fechamento mudou de estado. Recarregue e tente novamente.");
 
-    await prepareAuditEvent({
+    const statements = [prepareAuditEvent({
       workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
       action: `psychology_closing.${target}`, entityType: "psychology_closing", entityId: id,
       before: { status: closing.status }, after: { status: target, netAmount: Number(closing.net_amount) },
       metadata: { reasonProvided: Boolean(reason), snapshotStored: Boolean(snapshot) },
       requestId: request.headers.get("x-fila-dp-request-id"),
-    }).run();
+    })];
+
+    // Outbox: o evento nasce na mesma transação do fato que o originou.
+    if (target === "closed" || target === "reopened") {
+      statements.push(prepareDomainEvent(d1, {
+        workspaceId: workspace.id,
+        eventType: target === "closed" ? "psychology_closing.closed" : "psychology_closing.reopened",
+        entityType: "psychology_closing",
+        entityId: id,
+        payload: {
+          competence: closing.competence, companyId: closing.company_id, providerId: closing.provider_id,
+          status: target, previousStatus: closing.status,
+          netAmount: Number(closing.net_amount), grossAmount: Number(closing.gross_amount),
+        },
+        actorUserId: user.id,
+        requestId: request.headers.get("x-fila-dp-request-id"),
+      }));
+    }
+    await d1.batch(statements);
 
     return Response.json({ closing: updated });
   } catch (error) {

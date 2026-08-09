@@ -4,7 +4,7 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import {
-  componentDirectionFor,
+
   contractorCreditTypes,
   contractorDebitTypes,
   paymentEnum,
@@ -13,7 +13,7 @@ import {
   requiredPaymentEnum,
   type ContractorComponentType,
 } from "@/lib/payments";
-import { requireContractorProfile, requireOpenCycle } from "@/lib/payment-service";
+import { createContractorComponent, requireContractorProfile, requireOpenCycle } from "@/lib/payment-service";
 
 const componentTypes = [...contractorCreditTypes, ...contractorDebitTypes] as const;
 
@@ -72,34 +72,32 @@ export async function POST(request: Request) {
     const cycle = await requireOpenCycle(d1, workspace.id, profile.company_id, cycleId);
 
     const componentType = requiredPaymentEnum(body.componentType, componentTypes, "Tipo do componente") as ContractorComponentType;
-    const direction = componentDirectionFor(componentType);
     const amount = positiveMoney(body.amount, "Valor do componente");
-    if (amount <= 0) throw ApiError.badRequest("Informe um valor maior que zero.", "COMPONENT_AMOUNT_REQUIRED");
 
-    const closing = await d1.prepare("SELECT id, status FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?")
-      .bind(workspace.id, providerId, cycleId).first<{ id: string; status: string }>();
-    if (closing && (closing.status === "closed" || closing.status === "paid")) {
-      throw ApiError.badRequest("O fechamento desta competência está concluído. Reabra com justificativa para lançar componentes.", "PAYMENT_CLOSING_LOCKED");
-    }
+    const component = await createContractorComponent(d1, {
+      workspaceId: workspace.id,
+      profile,
+      cycle,
+      componentType,
+      amount,
+      description: cleanText(body.description, 240),
+      quantity: Math.max(Number(body.quantity) || 1, 0),
+      origin: paymentEnum(body.origin, paymentOrigins, "manual"),
+      documentReference: cleanText(body.documentReference, 160),
+      note: cleanText(body.note, 300),
+      externalId: cleanText(body.externalId, 160),
+      createdBy: user.id,
+    });
 
-    const id = crypto.randomUUID();
-    await d1.batch([
-      d1.prepare(`INSERT INTO fdp_contractor_components (id, workspace_id, company_id, provider_id, payroll_cycle_id, closing_id, competence,
-          direction, component_type, description, component_quantity, amount, origin, document_reference, note, status, external_id, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`)
-        .bind(id, workspace.id, profile.company_id, providerId, cycleId, closing?.id ?? null, cycle.competence, direction, componentType,
-          cleanText(body.description, 240), Math.max(Number(body.quantity) || 1, 0), amount,
-          paymentEnum(body.origin, paymentOrigins, "manual"), cleanText(body.documentReference, 160), cleanText(body.note, 300),
-          cleanText(body.externalId, 160), user.id),
-      prepareAuditEvent({
-        workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
-        action: "contractor_component.created", entityType: "contractor_component", entityId: id,
-        after: { providerId, competence: cycle.competence, direction, componentType, amount },
-        requestId: request.headers.get("x-fila-dp-request-id"),
-      }),
-    ]);
+    await prepareAuditEvent({
+      workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
+      action: "contractor_component.created", entityType: "contractor_component", entityId: component.id,
+      after: { providerId, competence: cycle.competence, direction: component.direction, componentType, amount },
+      metadata: { duplicated: component.duplicated },
+      requestId: request.headers.get("x-fila-dp-request-id"),
+    }).run();
 
-    return Response.json({ component: { id, direction, componentType, amount, competence: cycle.competence } }, { status: 201 });
+    return Response.json({ component }, { status: 201 });
   } catch (error) {
     return apiError(error);
   }

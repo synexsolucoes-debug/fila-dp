@@ -1,11 +1,14 @@
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+// Clientes servidor-a-servidor não enviam Origin. Estas rotas se autenticam por
+// segredo próprio (chave de API ou segredo do executor), nunca por cookie de sessão.
 const ORIGIN_EXEMPT_PATHS = new Set([
   "/api/integrations/worker",
   "/api/saas/webhook/stripe",
+  "/api/webhooks/worker",
 ]);
 
-const ORIGIN_EXEMPT_PATH_PREFIXES = ["/api/integrations/webhook/"];
+const ORIGIN_EXEMPT_PATH_PREFIXES = ["/api/integrations/webhook/", "/api/v1/"];
 
 function parseOrigin(value: string | null) {
   if (!value || value === "null") return null;

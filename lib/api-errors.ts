@@ -1,3 +1,5 @@
+import { log } from "./observability.ts";
+
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
@@ -37,7 +39,11 @@ export function apiErrorResponse(error: unknown) {
     );
   }
   const requestId = crypto.randomUUID();
-  console.error("[fila-dp][api] unexpected error", { requestId, error });
+  log("error", "api.unhandled_error", { requestId }, {
+    errorName: error instanceof Error ? error.name : "UnknownError",
+    // A mensagem fica só no servidor; o cliente recebe apenas o requestId.
+    errorMessage: error instanceof Error ? error.message.slice(0, 300) : undefined,
+  });
   return Response.json(
     { error: "Não foi possível concluir a operação.", code: "INTERNAL_ERROR", requestId },
     { status: 500, headers: { "Cache-Control": "no-store" } },

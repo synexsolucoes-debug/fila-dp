@@ -253,9 +253,27 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
   PostgreSQL 16 real com dados semeados.
 - Detalhamento e pendências: `docs/fase-8-experiencia.md`.
 
-### Fases 9 e 10 — Escala e comercialização
+### Fase 9 — Escala
 
-- Filas/observabilidade/backups/API; site, suporte, LGPD e documentação comercial.
+- Concluída no repositório: observabilidade estruturada, outbox transacional, webhooks de saída
+  assinados e API pública versionada.
+- Logs estruturados carregam correlação (`requestId`, `workspaceId`, `syncRunId`, `jobId`,
+  `deliveryId`, `apiKeyId`) e recusam PII por lista de bloqueio no próprio logger.
+- O evento de domínio é gravado no mesmo lote da mutação que o originou; é append-only e imutável
+  depois de publicado. O publicador roda fora da requisição e é idempotente por endpoint/evento.
+- Entregas de webhook usam assinatura HMAC sobre `<timestamp>.<corpo>`, lease com
+  `FOR UPDATE SKIP LOCKED`, backoff exponencial, dead-letter e log de entrega; o destino é
+  restrito a HTTPS público, sem rede interna.
+- A API `/api/v1` autentica por chave com escopos, limita por minuto no banco, aplica idempotência
+  nas escritas e pagina por cursor. A escrita reusa o serviço interno em vez de duplicar regra.
+- O OpenAPI descreve apenas endpoints implementados.
+- Validação: lint, `db:check` (22 migrations), 118 testes e build aprovados; ensaio contra
+  PostgreSQL 16 real cobrindo outbox, lease, limites, idempotência e isolamento.
+- Detalhamento e pendências: `docs/fase-9-escala.md`.
+
+### Fase 10 — Comercialização
+
+- Site, suporte, LGPD e documentação comercial.
 
 ## Alterações implementadas nesta fase
 

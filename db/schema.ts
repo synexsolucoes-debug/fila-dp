@@ -1701,3 +1701,133 @@ export const contractorComponents = pgTable("fdp_contractor_components", {
   check("fdp_contractor_components_type_check", sql`(${table.direction} = 'credit' AND ${table.componentType} IN ('base', 'commission', 'bonus', 'award', 'reimbursement', 'additional', 'positive_adjustment', 'other_credit'))
     OR (${table.direction} = 'debit' AND ${table.componentType} IN ('health_plan', 'dental_plan', 'benefit', 'coparticipation', 'equipment', 'advance', 'absence', 'loan', 'negative_adjustment', 'other_debit'))`),
 ]);
+
+/* -------------------------------------------------------------------------- */
+/* Escala — outbox transacional, webhooks de saída e API pública               */
+/* -------------------------------------------------------------------------- */
+
+export const domainEvents = pgTable("fdp_domain_events", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull().default(""),
+  payloadJson: jsonb("payload_json").$type<Record<string, unknown>>().notNull().default({}),
+  status: text("status").notNull().default("pending"),
+  actorUserId: text("actor_user_id"),
+  requestId: text("request_id").notNull().default(""),
+  occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  publishedAt: timestamp("published_at", { withTimezone: true, mode: "string" }),
+  deliveriesCount: integer("deliveries_count").notNull().default(0),
+}, (table) => [
+  uniqueIndex("fdp_domain_events_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_domain_events_pending_idx").on(table.workspaceId, table.status, table.occurredAt),
+  index("fdp_domain_events_type_idx").on(table.workspaceId, table.eventType, table.occurredAt),
+  check("fdp_domain_events_status_check", sql`${table.status} IN ('pending', 'published', 'skipped')`),
+]);
+
+export const webhookEndpoints = pgTable("fdp_webhook_endpoints", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  secretEncrypted: text("secret_encrypted").notNull(),
+  secretIv: text("secret_iv").notNull(),
+  secretTag: text("secret_tag").notNull(),
+  secretKeyVersion: integer("secret_key_version").notNull().default(1),
+  eventTypesJson: jsonb("event_types_json").$type<string[]>().notNull().default([]),
+  status: text("status").notNull().default("active"),
+  failureCount: integer("failure_count").notNull().default(0),
+  lastDeliveryAt: timestamp("last_delivery_at", { withTimezone: true, mode: "string" }),
+  lastFailureAt: timestamp("last_failure_at", { withTimezone: true, mode: "string" }),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_webhook_endpoints_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_webhook_endpoints_workspace_url_uq").on(table.workspaceId, table.url),
+  index("fdp_webhook_endpoints_status_idx").on(table.workspaceId, table.status),
+  check("fdp_webhook_endpoints_status_check", sql`${table.status} IN ('active', 'paused', 'disabled')`),
+  check("fdp_webhook_endpoints_url_check", sql`${table.url} LIKE 'https://%'`),
+]);
+
+export const webhookDeliveries = pgTable("fdp_webhook_deliveries", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  endpointId: text("endpoint_id").notNull().references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+  eventId: text("event_id").notNull().references(() => domainEvents.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  status: text("status").notNull().default("pending"),
+  attempt: integer("attempt").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(6),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  leaseToken: text("lease_token").notNull().default(""),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true, mode: "string" }),
+  responseStatus: integer("response_status").notNull().default(0),
+  responseSnippet: text("response_snippet").notNull().default(""),
+  errorCode: text("error_code").notNull().default(""),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_webhook_deliveries_endpoint_event_uq").on(table.workspaceId, table.endpointId, table.eventId),
+  uniqueIndex("fdp_webhook_deliveries_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_webhook_deliveries_queue_idx").on(table.workspaceId, table.status, table.nextAttemptAt),
+  foreignKey({ name: "fdp_webhook_deliveries_workspace_endpoint_fk", columns: [table.workspaceId, table.endpointId], foreignColumns: [webhookEndpoints.workspaceId, webhookEndpoints.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_webhook_deliveries_workspace_event_fk", columns: [table.workspaceId, table.eventId], foreignColumns: [domainEvents.workspaceId, domainEvents.id] }).onDelete("cascade"),
+  check("fdp_webhook_deliveries_status_check", sql`${table.status} IN ('pending', 'delivering', 'delivered', 'failed', 'dead_letter', 'canceled')`),
+  check("fdp_webhook_deliveries_attempt_check", sql`${table.attempt} >= 0 AND ${table.maxAttempts} > 0`),
+]);
+
+export const apiKeys = pgTable("fdp_api_keys", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  prefix: text("prefix").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  scopesJson: jsonb("scopes_json").$type<string[]>().notNull().default([]),
+  rateLimitPerMinute: integer("rate_limit_per_minute").notNull().default(120),
+  status: text("status").notNull().default("active"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "string" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
+  revokedBy: text("revoked_by"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_api_keys_prefix_uq").on(table.prefix),
+  uniqueIndex("fdp_api_keys_token_hash_uq").on(table.tokenHash),
+  uniqueIndex("fdp_api_keys_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_api_keys_workspace_status_idx").on(table.workspaceId, table.status),
+  check("fdp_api_keys_status_check", sql`${table.status} IN ('active', 'revoked')`),
+  check("fdp_api_keys_rate_check", sql`${table.rateLimitPerMinute} > 0 AND ${table.rateLimitPerMinute} <= 6000`),
+]);
+
+export const apiRateLimits = pgTable("fdp_api_rate_limits", {
+  keyHash: text("key_hash").primaryKey(),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  requestCount: integer("request_count").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_api_rate_limits_window_idx").on(table.windowStartedAt),
+  check("fdp_api_rate_limits_count_check", sql`${table.requestCount} >= 0`),
+]);
+
+export const apiIdempotencyRecords = pgTable("fdp_api_idempotency_records", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  apiKeyId: text("api_key_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  requestHash: text("request_hash").notNull(),
+  responseStatus: integer("response_status").notNull().default(0),
+  responseBody: text("response_body").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+}, (table) => [
+  uniqueIndex("fdp_api_idempotency_key_uq").on(table.workspaceId, table.apiKeyId, table.idempotencyKey),
+  uniqueIndex("fdp_api_idempotency_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_api_idempotency_expires_idx").on(table.expiresAt),
+  foreignKey({ name: "fdp_api_idempotency_workspace_key_fk", columns: [table.workspaceId, table.apiKeyId], foreignColumns: [apiKeys.workspaceId, apiKeys.id] }).onDelete("cascade"),
+]);

@@ -1,10 +1,12 @@
 /**
- * Ensaio dos módulos de pagamento contra um PostgreSQL real.
+ * Ensaio do banco contra um PostgreSQL real.
  *
  * Aplica todas as migrations em um banco descartável e verifica, com SQL de
  * verdade, o que os testes de unidade não conseguem provar: constraints do
- * cálculo PJ, imutabilidade dos fechamentos concluídos, ajustes append-only e
- * isolamento multi-tenant sob RLS usando um papel sem superusuário.
+ * cálculo PJ, imutabilidade dos fechamentos concluídos, ajustes append-only,
+ * outbox imutável, lease das entregas de webhook, unicidade das chaves de API,
+ * janela do limite por minuto, idempotência e isolamento multi-tenant sob RLS
+ * usando um papel sem superusuário.
  *
  * Uso:
  *   FDP_PAYMENTS_TEST_DATABASE_URL="postgres://user@host:5432/scratch" \
@@ -67,6 +69,19 @@ function psql(file) {
   if (result.status !== 0) throw new Error(`psql falhou ao executar ${file}.`);
 }
 
+// O ensaio semeia identificadores fixos: precisa de um banco vazio para que uma
+// segunda execução não falhe por chave duplicada e confunda o diagnóstico.
+const guardFile = join(workingDirectory, "guard.sql");
+await writeFile(guardFile, `DO $$
+BEGIN
+  IF to_regclass('public.fdp_workspaces') IS NOT NULL THEN
+    RAISE EXCEPTION 'O banco informado ja contem tabelas do Fila DP. Use um banco vazio e descartavel para o ensaio.';
+  END IF;
+END;
+$$;
+`);
+psql(guardFile);
 psql(migrationsFile);
 psql(join(root, "scripts", "payments-db-rehearsal.sql"));
-console.log("Ensaio dos módulos de pagamento concluído: migrations, constraints, imutabilidade e isolamento verificados.");
+psql(join(root, "scripts", "scale-db-rehearsal.sql"));
+console.log("Ensaio concluído: migrations, constraints de pagamento, outbox/webhooks/API e isolamento multi-tenant verificados.");
