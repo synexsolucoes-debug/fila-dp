@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --test tests/authorization-and-errors.test.mts tests/auxiliary-phase5.test.mts tests/integration-security.test.mts tests/integrations-phase6.test.mts tests/operations-phase4.test.mts tests/registrations-phase3.test.mts tests/release-foundation.test.mts tests/request-security.test.mts tests/structured-audit.test.mts tests/tenant-context.test.mts tests/tenant-child-rls.test.mts tests/sql-statements.test.mjs tests/rendered-html.test.mjs",
+    "test": "node --experimental-strip-types --test tests/authorization-and-errors.test.mts tests/auxiliary-phase5.test.mts tests/integration-security.test.mts tests/integrations-phase6.test.mts tests/operations-phase4.test.mts tests/registrations-phase3.test.mts tests/release-foundation.test.mts tests/request-security.test.mts tests/saas-phase7.test.mts tests/structured-audit.test.mts tests/tenant-context.test.mts tests/tenant-child-rls.test.mts tests/sql-statements.test.mjs tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:check": "node scripts/check-migrations.mjs",
@@ -27,6 +27,7 @@
     "next": "16.2.12",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "stripe": "^22.4.0",
     "ws": "8.21.1"
   },
   "devDependencies": {

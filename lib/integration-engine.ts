@@ -306,9 +306,25 @@ export async function verifyIntegration(d1: Database, workspaceId: string, integ
     ORDER BY created_at DESC LIMIT 1`).bind(workspaceId, integrationId).first<CredentialRow>();
   if (!credential) throw new ApiError(409, "INTEGRATION_CREDENTIAL_REQUIRED", "O conector não possui uma credencial ativa.");
   await requestProvider(integration, credential);
-  await d1.batch([
-    d1.prepare("UPDATE fdp_integration_credentials SET verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?").bind(workspaceId, credential.id),
-    d1.prepare("UPDATE fdp_integrations SET status = 'connected', last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?").bind(workspaceId, integrationId),
-  ]);
+  const activated = await d1.prepare(`WITH lock AS (
+      SELECT pg_advisory_xact_lock(hashtext(?))
+    ), entitlement AS (
+      SELECT plan.integration_limit FROM fdp_workspace_subscriptions subscription
+      JOIN fdp_saas_plans plan ON plan.id = subscription.plan_id, lock
+      WHERE subscription.workspace_id = ? AND subscription.status IN ('trialing', 'active')
+    ), integration_updated AS (
+      UPDATE fdp_integrations target SET status = 'connected', last_error = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE target.workspace_id = ? AND target.id = ? AND (
+        target.status = 'connected' OR
+        (SELECT COUNT(*) FROM fdp_integrations connected WHERE connected.workspace_id = ? AND connected.status = 'connected') < COALESCE((SELECT integration_limit FROM entitlement), 0)
+      ) RETURNING target.id
+    ), credential_updated AS (
+      UPDATE fdp_integration_credentials SET verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND id = ? AND EXISTS (SELECT 1 FROM integration_updated)
+      RETURNING id
+    ) SELECT id FROM integration_updated`)
+    .bind(workspaceId, workspaceId, workspaceId, integrationId, workspaceId, workspaceId, credential.id)
+    .first<{ id: string }>();
+  if (!activated) throw new ApiError(409, "PLAN_INTEGRATION_LIMIT", "O plano atual atingiu o limite de integrações conectadas.");
   return { connected: true, verifiedAt: new Date().toISOString() };
 }

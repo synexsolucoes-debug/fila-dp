@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Sparkles,
   Smartphone,
   Sun,
   Trash2,
@@ -47,8 +48,9 @@ import { RegistrationsView } from "./features/registrations";
 import { OperationsView } from "./features/operations";
 import { AuxiliaryModulesView } from "./features/auxiliary";
 import { IntegrationsView } from "./features/integrations";
+import { SaasView } from "./features/saas";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "integrations" | "registrations" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "integrations" | "registrations" | "saas" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -120,6 +122,7 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   auxiliary: { eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares", description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ." },
   integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Central de integrações", description: "Configure conectores, publique mapeamentos e acompanhe execuções e conciliações com segurança." },
   registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
+  saas: { eyebrow: "ADMINISTRAÇÃO SAAS", title: "Plano e ativação", description: "Conclua a implantação do workspace, acompanhe limites, assinatura e cobranças." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
 };
@@ -1057,6 +1060,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
           {snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
           <span className="sidebar-nav-section management">GESTÃO</span>
+          {isAdmin && <button title="Plano e ativação" className={view === "saas" ? "active" : ""} onClick={() => setView("saas")}><span aria-hidden="true"><Sparkles /></span> Plano e ativação</button>}
           <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>
           <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>
           {isAdmin && <button title="Configurações" onClick={() => { setSettingsSection("general"); openWorkspaceSettings(); }}><span aria-hidden="true"><Settings /></span> Configurações</button>}
@@ -1082,7 +1086,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
             <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
-            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
+            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "saas" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
           </div>
         </header>
 
@@ -1099,6 +1103,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "auxiliary" && <AuxiliaryModulesView role={snapshot.workspace.role} />}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
+
+          {view === "saas" && <SaasView role={snapshot.workspace.role} />}
 
           {view === "registrations" && <RegistrationsView role={snapshot.workspace.role} />}
 

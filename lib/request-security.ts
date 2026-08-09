@@ -1,9 +1,11 @@
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-const ORIGIN_EXEMPT_PATH_PREFIXES = [
-  "/api/integrations/webhook/",
+const ORIGIN_EXEMPT_PATHS = new Set([
   "/api/integrations/worker",
-];
+  "/api/saas/webhook/stripe",
+]);
+
+const ORIGIN_EXEMPT_PATH_PREFIXES = ["/api/integrations/webhook/"];
 
 function parseOrigin(value: string | null) {
   if (!value || value === "null") return null;
@@ -16,7 +18,7 @@ function parseOrigin(value: string | null) {
 
 export function requiresSameOrigin(method: string, pathname: string) {
   if (!MUTATING_METHODS.has(method.toUpperCase())) return false;
-  return !ORIGIN_EXEMPT_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  return !ORIGIN_EXEMPT_PATHS.has(pathname) && !ORIGIN_EXEMPT_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
 export function isAllowedRequestOrigin(input: {

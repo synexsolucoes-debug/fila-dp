@@ -66,6 +66,18 @@ A fase 6 substitui sincronizações longas dentro da requisição por um motor r
 - Webhooks assinados usam a mesma trilha de runs/items e deduplicação forte por identificador externo ou hash do payload.
 - A Sólides permanece como origem da admissão digital e nunca é marcada como conectada sem recurso oficial confirmado, credencial e teste real de autenticação.
 
+## Plataforma SaaS
+
+A Fase 7 transforma o provisionamento singleton em cadastro multi-workspace e adiciona onboarding, catálogo de planos, quotas, assinatura e administração global separada dos papéis de cada cliente.
+
+- `FDP_ALLOW_SELF_SIGNUP=true` habilita a criação pública de contas e grupos; em produção ela permanece desligada por padrão.
+- `FDP_PLATFORM_ADMIN_EMAILS` define os operadores globais. Ser administrador de um workspace não concede acesso a `/plataforma`.
+- Checkout e portal usam Stripe no servidor. O navegador escolhe apenas plano e periodicidade; os IDs de preço são resolvidos pelo catálogo persistido.
+- O webhook `/api/saas/webhook/stripe` valida a assinatura sobre o corpo bruto antes de acessar o banco e deduplica eventos por workspace.
+- Eventos financeiros e auditoria global são append-only; cartão, chave secreta e payload bruto do provedor não são persistidos.
+- Limites de usuários, empresas e integrações são aplicados no servidor sob lock transacional.
+- Planos pagos nascem como rascunho. Um operador da plataforma deve configurar preços `price_...`, valores e ativá-los antes da oferta.
+
 ## Autenticação
 
 OpenAI workspace sites can read the current user's email from
@@ -132,7 +144,7 @@ deploys devem usar a sessão própria e a validação de membros do workspace.
 - `npm test`: executar testes de segurança, tenancy, migrations e HTML renderizado
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 - `npm run db:check`: validar journal, metadados e operações destrutivas
-- `npm run db:rehearse-phase2`: aplicar todas as migrations em schema efêmero e testar dois tenants nas Fases 2 a 6, inclusive cofre, integrações idempotentes e imutabilidade; exige `FDP_PHASE2_TEST_DATABASE_URL` e `FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true`
+- `npm run db:rehearse-phase2`: aplicar todas as migrations em schema efêmero e testar dois tenants nas Fases 2 a 7, inclusive SaaS, cobrança idempotente, cofre e imutabilidade; exige `FDP_PHASE2_TEST_DATABASE_URL` e `FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true`
 - `npm run db:migrate`: aplicar migrations em banco PostgreSQL vazio ou versionado
 - `npm run db:migrate:baseline`: registrar uma instalação legado existente antes da primeira migration controlada
 

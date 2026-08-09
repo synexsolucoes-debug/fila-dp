@@ -24,4 +24,6 @@ test("keeps signed provider webhooks outside browser-origin enforcement", () => 
     origin: null,
     requestOrigin: "https://fila.example.com",
   }), true);
+  assert.equal(requiresSameOrigin("POST", "/api/saas/webhook/stripe"), false);
+  assert.equal(requiresSameOrigin("POST", "/api/saas/webhook/stripe-fake"), true);
 });

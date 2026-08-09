@@ -2,6 +2,7 @@ import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { createRecoveryToken } from "@/lib/fila-dp-recovery";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
+import { ApiError } from "@/lib/api-errors";
 
 const memberRoles: WorkspaceRole[] = ["admin", "member", "observer", "guest"];
 
@@ -21,6 +22,19 @@ export async function POST(request: Request) {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
 
+    const currentMembership = await d1.prepare("SELECT 1 AS member FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = (SELECT id FROM fdp_users WHERE email = ?)")
+      .bind(workspace.id, email).first<{ member: number }>();
+    if (!currentMembership) {
+      const allowance = await d1.prepare(`SELECT GREATEST(subscription.seat_quantity, plan.included_seats)::integer AS seat_limit,
+          (SELECT COUNT(*)::integer FROM fdp_workspace_members WHERE workspace_id = ?) AS used
+        FROM fdp_workspace_subscriptions subscription JOIN fdp_saas_plans plan ON plan.id = subscription.plan_id
+        WHERE subscription.workspace_id = ? AND subscription.status IN ('trialing', 'active')`)
+        .bind(workspace.id, workspace.id).first<{ seat_limit: number; used: number }>();
+      if (!allowance || Number(allowance.used) >= Number(allowance.seat_limit)) {
+        throw new ApiError(409, "PLAN_SEAT_LIMIT", "O plano atual atingiu o limite de usuários.");
+      }
+    }
+
     let invitedUser = await d1.prepare("SELECT id, password_hash FROM fdp_users WHERE email = ?").bind(email).first<{ id: string; password_hash: string | null }>();
     const createdNow = !invitedUser;
     if (!invitedUser) {
@@ -37,9 +51,24 @@ export async function POST(request: Request) {
       : { results: [] as { id: string }[] };
     if (validCompanies.results.length !== companyIds.length) return Response.json({ error: "Uma ou mais empresas selecionadas não pertencem a este grupo." }, { status: 400 });
 
+    const membership = await d1.prepare(`WITH lock AS (
+        SELECT pg_advisory_xact_lock(hashtext(?))
+      ), entitlement AS (
+        SELECT GREATEST(subscription.seat_quantity, plan.included_seats)::integer AS seat_limit
+        FROM fdp_workspace_subscriptions subscription JOIN fdp_saas_plans plan ON plan.id = subscription.plan_id, lock
+        WHERE subscription.workspace_id = ? AND subscription.status IN ('trialing', 'active')
+      )
+      INSERT INTO fdp_workspace_members (workspace_id, user_id, role)
+      SELECT ?, ?, ? FROM entitlement
+      WHERE EXISTS (SELECT 1 FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = ?)
+         OR (SELECT COUNT(*) FROM fdp_workspace_members WHERE workspace_id = ?) < entitlement.seat_limit
+      ON CONFLICT(workspace_id, user_id) DO UPDATE SET role = excluded.role
+      RETURNING user_id`)
+      .bind(workspace.id, workspace.id, workspace.id, invitedUser.id, role, workspace.id, invitedUser.id, workspace.id)
+      .first<{ user_id: string }>();
+    if (!membership) throw new ApiError(409, "PLAN_SEAT_LIMIT", "O plano atual atingiu o limite de usuários.");
+
     await d1.batch([
-      d1.prepare(`INSERT INTO fdp_workspace_members (workspace_id, user_id, role)
-        VALUES (?, ?, ?) ON CONFLICT(workspace_id, user_id) DO UPDATE SET role = excluded.role`).bind(workspace.id, invitedUser.id, role),
       d1.prepare("DELETE FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ?").bind(workspace.id, invitedUser.id),
       ...companyIds.map((companyId) => d1.prepare("INSERT INTO fdp_member_company_access (workspace_id, user_id, company_id) VALUES (?, ?, ?)").bind(workspace.id, invitedUser!.id, companyId)),
     ]);

@@ -97,7 +97,11 @@ const nativeTemplates = [
   { key: "beneficios", name: "Benefícios", process: "BENEFÍCIOS", days: 3, checklist: ["Elegibilidade validada", "Documentos conferidos", "Solicitação enviada à operadora"] },
 ] as const;
 
-export async function provisionWorkspaceDefaults(d1: ReturnType<typeof getD1>, workspaceId: string) {
+export async function provisionWorkspaceDefaults(
+  d1: ReturnType<typeof getD1>,
+  workspaceId: string,
+  initialStatements: D1PreparedStatement[] = [],
+) {
   const defaultLabels = [
     ["critico", "Crítico", "#dc2626"],
     ["documentos", "Documentos", "#2563eb"],
@@ -117,6 +121,7 @@ export async function provisionWorkspaceDefaults(d1: ReturnType<typeof getD1>, w
   ] as const;
 
   await d1.batch([
+    ...initialStatements,
     d1.prepare("INSERT INTO fdp_workspace_settings (workspace_id) VALUES (?) ON CONFLICT DO NOTHING").bind(workspaceId),
     ...defaultLabels.map(([key, name, color], index) => d1.prepare("INSERT INTO fdp_labels (id, workspace_id, name, color, position) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:label:${key}`, workspaceId, name, color, (index + 1) * 1000)),
     ...defaultFields.map(([key, name, type, options], index) => d1.prepare("INSERT INTO fdp_custom_fields (id, workspace_id, name, field_key, field_type, options_json, position) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:field:${key}`, workspaceId, name, key, type, options, (index + 1) * 1000)),
