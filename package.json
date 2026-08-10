@@ -15,6 +15,8 @@
     "db:check": "node scripts/check-migrations.mjs",
     "smoke": "node scripts/smoke-http.mjs",
     "browser-check": "node scripts/browser-check.mjs",
+    "verify:isolation": "node --experimental-strip-types scripts/verify-tenant-isolation.mjs",
+    "neon-bridge": "node scripts/neon-http-bridge.mjs",
     "db:rehearse-phase2": "node scripts/rehearse-phase2-db.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:migrate:baseline": "node scripts/migrate.mjs --baseline-existing",
