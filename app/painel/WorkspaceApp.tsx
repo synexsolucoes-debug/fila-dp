@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowRight,
@@ -605,6 +605,13 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const canEdit = snapshot ? ["admin", "member"].includes(snapshot.workspace.role) : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
+  // O menu reflete o plano contratado: um módulo fora do plano não vira botão.
+  // A proteção real continua no servidor; isto evita oferecer o que não existe.
+  const enabledModules = useMemo(
+    () => new Set((snapshot?.modules ?? []).filter((item) => item.allowed).map((item) => item.route)),
+    [snapshot?.modules],
+  );
+  const hasModule = useCallback((route: string) => enabledModules.size === 0 || enabledModules.has(route), [enabledModules]);
   const currentMemberName = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.name ?? user.displayName;
 
   const stats = useMemo(() => {
@@ -1109,19 +1116,19 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <span className="sidebar-nav-section">OPERAÇÃO</span>
           <button title="Visão geral" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span aria-hidden="true"><LayoutDashboard /></span> Visão geral</button>
           <button title="Demandas" className={view === "board" ? "active" : ""} onClick={() => setView("board")}><span aria-hidden="true"><ListChecks /></span> Demandas</button>
-          <button title="Inbox" className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true"><Inbox /></span> Inbox <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>
-          <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>
-          <button title="Operação DP" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Operação DP</button>
-          {snapshot.workspace.role !== "guest" && <button title="Módulos auxiliares" className={view === "auxiliary" ? "active" : ""} onClick={() => setView("auxiliary")}><span aria-hidden="true"><Blocks /></span> Módulos auxiliares</button>}
-          {snapshot.workspace.role !== "guest" && snapshot.workspace.role !== "observer" && <button title="Pagamento de Psicólogos" className={view === "psychologistPayments" ? "active" : ""} onClick={() => setView("psychologistPayments")}><span aria-hidden="true"><Stethoscope /></span> Pagamento de Psicólogos</button>}
-          {snapshot.workspace.role !== "guest" && <button title="Pagamentos PJ" className={view === "contractorPayments" ? "active" : ""} onClick={() => setView("contractorPayments")}><span aria-hidden="true"><Receipt /></span> Pagamentos PJ</button>}
-          {snapshot.workspace.role !== "guest" && <button title="Ponto" className={view === "timeTracking" ? "active" : ""} onClick={() => setView("timeTracking")}><span aria-hidden="true"><Timer /></span> Ponto</button>}
-          {snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
-          {snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
+          {hasModule("inbox") && <button title="Inbox" className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true"><Inbox /></span> Inbox <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>}
+          {hasModule("planner") && <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>}
+          {hasModule("processes") && <button title="Operação DP" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Operação DP</button>}
+          {hasModule("auxiliary") && snapshot.workspace.role !== "guest" && <button title="Módulos auxiliares" className={view === "auxiliary" ? "active" : ""} onClick={() => setView("auxiliary")}><span aria-hidden="true"><Blocks /></span> Módulos auxiliares</button>}
+          {hasModule("psychologistPayments") && snapshot.workspace.role !== "guest" && snapshot.workspace.role !== "observer" && <button title="Pagamento de Psicólogos" className={view === "psychologistPayments" ? "active" : ""} onClick={() => setView("psychologistPayments")}><span aria-hidden="true"><Stethoscope /></span> Pagamento de Psicólogos</button>}
+          {hasModule("contractorPayments") && snapshot.workspace.role !== "guest" && <button title="Pagamentos PJ" className={view === "contractorPayments" ? "active" : ""} onClick={() => setView("contractorPayments")}><span aria-hidden="true"><Receipt /></span> Pagamentos PJ</button>}
+          {hasModule("timeTracking") && snapshot.workspace.role !== "guest" && <button title="Ponto" className={view === "timeTracking" ? "active" : ""} onClick={() => setView("timeTracking")}><span aria-hidden="true"><Timer /></span> Ponto</button>}
+          {hasModule("integrations") && snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
+          {hasModule("registrations") && snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
           <span className="sidebar-nav-section management">GESTÃO</span>
-          {isAdmin && <button title="Plano e ativação" className={view === "saas" ? "active" : ""} onClick={() => setView("saas")}><span aria-hidden="true"><Sparkles /></span> Plano e ativação</button>}
-          <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>
-          <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>
+          {hasModule("saas") && isAdmin && <button title="Plano e ativação" className={view === "saas" ? "active" : ""} onClick={() => setView("saas")}><span aria-hidden="true"><Sparkles /></span> Plano e ativação</button>}
+          {hasModule("payroll") && <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>}
+          {hasModule("indicators") && <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>}
           {isAdmin && <button title="Configurações" onClick={() => { setSettingsSection("general"); openWorkspaceSettings(); }}><span aria-hidden="true"><Settings /></span> Configurações</button>}
         </nav>
         <div className="sidebar-workspace">

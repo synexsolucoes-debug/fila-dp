@@ -183,6 +183,13 @@
       "when": 1786243000000,
       "tag": "0023_platform_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786244000000,
+      "tag": "0024_module_catalog",
+      "breakpoints": true
     }
   ]
 }

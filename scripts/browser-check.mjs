@@ -68,6 +68,8 @@ if (password && await emailField.count()) {
     await page.locator('[role="tablist"]').count() > 0,
     (await page.locator("h1").first().innerText().catch(() => "")).slice(0, 60));
 
+  // A tabela carrega por fetch: contar antes da resposta mediria o vazio.
+  await page.waitForSelector("table tbody tr", { timeout: 20000 }).catch(() => undefined);
   const workspaceRows = await page.locator("table tbody tr").count();
   record("a aba de workspaces lista clientes", workspaceRows > 0, `${workspaceRows} linha(s)`);
 
@@ -88,7 +90,7 @@ if (password && await emailField.count()) {
 
   // Aba de usuários
   await page.getByRole("tab", { name: /Usuários/u }).click();
-  await page.waitForTimeout(1200);
+  await page.waitForSelector("table tbody tr", { timeout: 20000 }).catch(() => undefined);
   const userRows = await page.locator("table tbody tr").count();
   record("a aba de usuários lista contas globais", userRows > 0, `${userRows} linha(s)`);
   const usersText = await page.locator("table").innerText().catch(() => "");
@@ -103,6 +105,30 @@ if (password && await emailField.count()) {
   }
 } else {
   record("credenciais do administrador não informadas", false, "defina VINCULATO_ADMIN_PASSWORD");
+}
+
+// 4b. Liberação por plano: o menu do painel reflete o plano contratado.
+if (password) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  const menu = await page.locator("nav[aria-label='Navegação do painel'] button").allInnerTexts();
+  const menuText = menu.join(" | ");
+  const snapshot = await page.evaluate(async () => {
+    const response = await fetch("/api/workspace", { cache: "no-store" });
+    const payload = await response.json();
+    return (payload.modules ?? []).map((item) => ({ key: item.key, allowed: item.allowed, reason: item.reason }));
+  });
+  const allowed = new Set(snapshot.filter((item) => item.allowed).map((item) => item.key));
+  const blocked = snapshot.filter((item) => !item.allowed);
+  record("o painel resolve o catálogo de módulos", snapshot.length > 0, `${allowed.size} liberado(s), ${blocked.length} bloqueado(s)`);
+  // O grupo do administrador está no Starter: ponto e pagamentos ficam fora.
+  record("módulo fora do plano não aparece no menu",
+    !allowed.has("time_tracking") ? !/Ponto/u.test(menuText) : true,
+    menuText.slice(0, 120));
+  record("módulo bloqueado explica o motivo em vez de sumir calado",
+    blocked.every((item) => item.reason && item.reason !== "ok"),
+    blocked.map((item) => `${item.key}:${item.reason}`).slice(0, 4).join(", "));
 }
 
 // 5. Responsividade do site público

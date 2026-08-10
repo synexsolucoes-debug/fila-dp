@@ -4,6 +4,7 @@ import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 import { getTenantContext, setTenantContext } from "./tenant-context";
 import { hasCapability } from "./authorization";
+import { resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 
@@ -205,12 +206,54 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   return { d1: scopedD1, user: userRow, workspace, board };
 }
 
+/**
+ * Módulos liberados para o workspace, na ordem do §8.
+ *
+ * Devolve também os bloqueados, com o motivo: esconder sem explicação faz o
+ * cliente achar que o produto quebrou, quando na verdade é o plano dele.
+ */
+export async function getWorkspaceModules(
+  d1: ReturnType<typeof getD1>,
+  workspaceId: string,
+  role: WorkspaceRole,
+  workspaceStatus: string,
+) {
+  const [catalog, planModules, grants, subscription] = await Promise.all([
+    d1.prepare(`SELECT key, name, description, category, route, required_capability, depends_on, status, position
+      FROM fdp_modules ORDER BY position, key`).all<Record<string, unknown>>(),
+    d1.prepare(`SELECT pm.module_key FROM fdp_plan_modules pm
+      JOIN fdp_workspace_subscriptions s ON s.plan_id = pm.plan_id
+      WHERE s.workspace_id = ?`).bind(workspaceId).all<{ module_key: string }>(),
+    d1.prepare("SELECT module_key, granted FROM fdp_workspace_module_grants WHERE workspace_id = ? AND (expires_at IS NULL OR expires_at > now())")
+      .bind(workspaceId).all<{ module_key: string; granted: number }>(),
+    d1.prepare("SELECT status FROM fdp_workspace_subscriptions WHERE workspace_id = ?")
+      .bind(workspaceId).first<{ status: string }>(),
+  ]);
+
+  const modules: ModuleDefinition[] = catalog.results.map((row) => ({
+    key: String(row.key), name: String(row.name), description: String(row.description),
+    category: String(row.category) as ModuleCategory, route: String(row.route),
+    requiredCapability: String(row.required_capability), dependsOn: String(row.depends_on),
+    status: String(row.status) === "active" ? "active" : "inactive", position: Number(row.position),
+  }));
+
+  return resolveModules({
+    modules,
+    planModules: new Set(planModules.results.map((row) => String(row.module_key))),
+    workspaceGrants: new Map(grants.results.map((row) => [String(row.module_key), Number(row.granted) === 1])),
+    role,
+    workspaceStatus,
+    subscriptionStatus: String(subscription?.status ?? "inactive"),
+  });
+}
+
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow } = await getWorkspaceContext(user);
   const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
   const canManageMembers = hasCapability(workspace.role, "members.manage");
   const canReadHr = hasCapability(workspace.role, "hr.read");
   const canManageIntegrations = hasCapability(workspace.role, "integrations.manage");
+  const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role, String((workspace as Record<string, unknown>).status ?? "active"));
   const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
@@ -408,6 +451,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
 
   return {
     workspace: { ...workspace, role: workspace.role, companyScope: companyAccess.unrestricted ? "all" : "restricted" },
+    // O menu passa a refletir o plano contratado, não só a capability do papel.
+    modules: resolvedModules,
     board,
     boards: (boardsResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id), name: String(row.name), description: String(row.description ?? ""), boardType: String(row.board_type ?? "general"),

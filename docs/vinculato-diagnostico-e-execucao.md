@@ -121,16 +121,18 @@ do site.
 ## 6. Validação executada
 
 - `npm run lint`: aprovado.
-- `npm test`: **182 testes**, 0 falhas.
-- `npm run db:check`: 26 migrations validadas.
+- `npm test`: **195 testes**, 0 falhas.
+- `npm run db:check`: 27 migrations validadas.
 - `npm run build`: build de produção aprovado.
 - `npm run db:rehearse`: PostgreSQL 16 real, papel sem superusuário — constraints
   de pagamento, regra do §22 do ponto, outbox/webhooks/API e isolamento
   multi-tenant aprovados.
-- `npm run browser-check`: **20 verificações em Chromium real** — site público,
+- `npm run browser-check`: **23 verificações em Chromium real** — site público,
   login pela interface, console global, criação de workspace **pela tela**, aba
   de usuários sem material de senha, ausência de erro de JavaScript e ausência
-  de rolagem horizontal em **390, 768, 1280 e 1440 px**.
+  de rolagem horizontal em **390, 768, 1280 e 1440 px** — e a prova de que o
+  menu do painel reflete o plano: no Starter aparecem 5 módulos e os 8 restantes
+  vêm marcados `not_in_plan`.
 - `npm run smoke`: **35 verificações HTTP** contra a aplicação em execução,
   incluindo cadastro, empresa, ciclo completo de competência (criar, listar,
   abrir, avançar, fechar, reabrir com justificativa), colaborador, central de
@@ -151,9 +153,6 @@ Estes itens do pedido continuam pendentes. Nenhum deles foi simulado.
    papéis fixos (`admin`, `member`, `observer`, `guest`) e ~70 capabilities
    mapeadas por papel. Não há criação de função pelo assinante, nem matriz de
    permissões por módulo/ação, nem cópia de permissões entre usuários.
-2. **Hierarquia de liberação de módulos.** Não existe catálogo global de módulos,
-   nem módulos por plano, nem liberação especial por workspace. O menu é
-   filtrado por capability, não por contratação.
 3. **Tela de usuários e permissões do workspace.** Convite, suspensão,
    reenvio/cancelamento de convite, limite por empresa e permissões efetivas não
    têm interface; parte existe só via API.
@@ -199,7 +198,7 @@ Estes itens do pedido continuam pendentes. Nenhum deles foi simulado.
 | 6 | Administrador global cria e administra workspaces | APROVADO — API e interface, verificado em navegador |
 | 7 | Assinante administra seu workspace | PARCIAL |
 | 8 | Área de usuários e permissões completa | **BLOQUEADO** |
-| 9 | Liberação por módulo | **BLOQUEADO** |
+| 9 | Liberação por módulo | APROVADO — catálogo global, inclusão por plano, liberação/revogação especial e menu filtrado, verificado em navegador |
 | 10 | Permissões validadas no servidor | APROVADO |
 | 11 | Limite de assentos funciona | APROVADO |
 | 12 | Quatro planos cadastrados | APROVADO |
@@ -230,7 +229,28 @@ Recomendação de sequência: (1) tela de usuários e permissões do workspace;
 (2) catálogo de módulos com liberação por plano; (3) site público e redesign;
 (4) homologação de cobrança e provedor de e-mail.
 
-## 11. Achado do ensaio de navegador
+## 11. Liberação de módulos (§8)
+
+A ordem é fixa e cada etapa recusa com motivo próprio:
+
+1. módulo ativo no catálogo global (`fdp_modules`);
+2. workspace e assinatura ativos;
+3. módulo incluído no plano **ou** com liberação especial (`fdp_workspace_module_grants`);
+4. plataforma não revogou o módulo para aquele workspace;
+5. dependência declarada liberada;
+6. papel do usuário com a capability do módulo.
+
+O administrador do workspace **nunca** libera um módulo fora do plano: a etapa 3
+acontece antes da 6, e ele não controla nenhuma das duas primeiras.
+
+Módulos bloqueados continuam na resposta com o motivo — `not_in_plan` (pede
+upgrade) é diferente de `missing_capability` (pede acesso ao administrador do
+grupo). Esconder sem explicar é o que faz o cliente achar que o produto quebrou.
+
+Escada de planos semeada: Starter 5 módulos, Standard 8, Premium 11,
+Enterprise 13 (catálogo inteiro).
+
+## 12. Achado do ensaio de navegador
 
 A renomeação textual não pegou a marca **partida entre elementos**
 (`<span>Fila <strong>DP</strong></span>`), presente no cabeçalho do site, do
