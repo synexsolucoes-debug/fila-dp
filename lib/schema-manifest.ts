@@ -1,0 +1,38 @@
+/**
+ * ARQUIVO GERADO — não edite à mão.
+ *
+ * Lista das migrations que esta versão do aplicativo espera encontrar aplicadas.
+ * Regenerar com: npm run schema:manifest
+ */
+export const expectedMigrations = [
+  "0000_romantic_ken_ellis.sql",
+  "0001_0_prepare_legacy_defaults.sql",
+  "0001_normalize_existing_neon.sql",
+  "0001_z_restore_timestamp_defaults.sql",
+  "0002_chief_venom.sql",
+  "0003_revocable_sessions_and_solides_boundary.sql",
+  "0004_auth_rate_limits.sql",
+  "0005_tenant_integrity_constraints.sql",
+  "0006_bootstrap_guard.sql",
+  "0007_companies_rls.sql",
+  "0008_direct_workspace_rls.sql",
+  "0009_webhook_tenant_rls.sql",
+  "0010_child_tenant_rls.sql",
+  "0011_session_management.sql",
+  "0012_structured_audit.sql",
+  "0013_registrations_foundation.sql",
+  "0014_operation_dp_foundation.sql",
+  "0015_auxiliary_modules_foundation.sql",
+  "0016_integrations_engine.sql",
+  "0017_saas_foundation.sql",
+  "0018_payment_control_modules.sql",
+  "0019_outbox_webhooks_public_api.sql",
+  "0020_marketing_leads.sql",
+  "0021_time_tracking.sql",
+  "0022_plan_catalog_pricing.sql",
+  "0023_platform_lifecycle.sql",
+  "0024_module_catalog.sql",
+] as const;
+
+/** Última migration conhecida por esta versão. */
+export const latestMigration = expectedMigrations[expectedMigrations.length - 1];

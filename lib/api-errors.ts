@@ -1,4 +1,5 @@
 import { log } from "./observability.ts";
+import { classifyInfrastructureFault } from "./infrastructure-errors.ts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -39,6 +40,24 @@ export function apiErrorResponse(error: unknown) {
     );
   }
   const requestId = crypto.randomUUID();
+
+  // Falha operacional conhecida (banco desatualizado, banco fora do ar) recebe
+  // uma resposta que diz o que houve. Continua sem SQL, sem nome de tabela e sem
+  // stack trace — o que muda é o cliente saber que não é erro dele e o operador
+  // saber o que corrigir.
+  const fault = classifyInfrastructureFault(error);
+  if (fault) {
+    log("error", "api.infrastructure_fault", { requestId }, {
+      faultCode: fault.code,
+      reason: fault.reason,
+      errorMessage: error instanceof Error ? error.message.slice(0, 300) : undefined,
+    });
+    return Response.json(
+      { error: fault.message, code: fault.code, requestId },
+      { status: fault.status, headers: { "Cache-Control": "no-store", "Retry-After": "30" } },
+    );
+  }
+
   log("error", "api.unhandled_error", { requestId }, {
     errorName: error instanceof Error ? error.name : "UnknownError",
     // A mensagem fica só no servidor; o cliente recebe apenas o requestId.

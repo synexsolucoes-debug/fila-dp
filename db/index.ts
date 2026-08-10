@@ -1,9 +1,9 @@
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
-import { createLocalSql, shouldUseLocalDriver, type LocalSql } from "./local-postgres";
+import { neon, neonConfig, type NeonQueryFunction } from "@neondatabase/serverless";
+import { createLocalSql, shouldUseLocalDriver, type LocalSql } from "./local-postgres.ts";
 import { del, get, put } from "@vercel/blob";
-import { toPostgresParameters } from "../lib/postgres-parameters";
-import { getPlatformContext } from "../lib/platform-context";
-import { getTenantContext, type TenantContext } from "../lib/tenant-context";
+import { toPostgresParameters } from "../lib/postgres-parameters.ts";
+import { getPlatformContext } from "../lib/platform-context.ts";
+import { getTenantContext, type TenantContext } from "../lib/tenant-context.ts";
 
 type SqlValue = unknown;
 
@@ -15,28 +15,43 @@ function isPostgresUrl(url: string) {
 
 /** PostgreSQL-only adapter exposed through the application's prepared-query API. */
 class NeonPreparedStatement implements D1PreparedStatement {
+  private readonly sql: NeonSql;
+  private readonly query: string;
+  private readonly args: SqlValue[];
+  /**
+   * Contexto de tenant explícito.
+   *
+   * O contexto por AsyncLocalStorage não sobrevive ao retorno de uma função
+   * `async`: quem chama volta a executar no contexto anterior ao `enterWith`.
+   * Depender só dele deixava as consultas da rota sem `app.workspace_id`, e
+   * com RLS ativo isso significa "nenhuma linha" — silenciosamente.
+   * Por isso a conexão devolvida por `getWorkspaceContext` carrega o tenant.
+   */
+  private readonly boundContext: TenantContext | null;
+  /**
+   * Provisionamento feito pela administração da plataforma precisa dos dois
+   * contextos na MESMA transação: o tenant, para as tabelas do cliente, e a
+   * marca de plataforma, para a trilha global. Sem isso, criar um workspace
+   * era recusado pelo RLS das tabelas de tenant.
+   */
+  private readonly withPlatformFlag: boolean;
+
+  // Campos declarados explicitamente, sem parameter properties: assim o módulo
+  // carrega no runtime que apenas remove tipos, e o adaptador de verdade pode
+  // ser exercitado por ensaios fora do Next.
   constructor(
-    private readonly sql: NeonSql,
-    private readonly query: string,
-    private readonly args: SqlValue[] = [],
-    /**
-     * Contexto de tenant explícito.
-     *
-     * O contexto por AsyncLocalStorage não sobrevive ao retorno de uma função
-     * `async`: quem chama volta a executar no contexto anterior ao `enterWith`.
-     * Depender só dele deixava as consultas da rota sem `app.workspace_id`, e
-     * com RLS ativo isso significa "nenhuma linha" — silenciosamente.
-     * Por isso a conexão devolvida por `getWorkspaceContext` carrega o tenant.
-     */
-    private readonly boundContext: TenantContext | null = null,
-    /**
-     * Provisionamento feito pela administração da plataforma precisa dos dois
-     * contextos na MESMA transação: o tenant, para as tabelas do cliente, e a
-     * marca de plataforma, para a trilha global. Sem isso, criar um workspace
-     * era recusado pelo RLS das tabelas de tenant.
-     */
-    private readonly withPlatformFlag = false,
-  ) {}
+    sql: NeonSql,
+    query: string,
+    args: SqlValue[] = [],
+    boundContext: TenantContext | null = null,
+    withPlatformFlag = false,
+  ) {
+    this.sql = sql;
+    this.query = query;
+    this.args = args;
+    this.boundContext = boundContext;
+    this.withPlatformFlag = withPlatformFlag;
+  }
 
   bind(...values: unknown[]) {
     return new NeonPreparedStatement(this.sql, this.query, values, this.boundContext, this.withPlatformFlag);
@@ -99,11 +114,15 @@ class NeonPreparedStatement implements D1PreparedStatement {
 }
 
 class NeonDatabase implements D1Database {
-  constructor(
-    private readonly sql: NeonSql,
-    private readonly boundContext: TenantContext | null = null,
-    private readonly withPlatformFlag = false,
-  ) {}
+  private readonly sql: NeonSql;
+  private readonly boundContext: TenantContext | null;
+  private readonly withPlatformFlag: boolean;
+
+  constructor(sql: NeonSql, boundContext: TenantContext | null = null, withPlatformFlag = false) {
+    this.sql = sql;
+    this.boundContext = boundContext;
+    this.withPlatformFlag = withPlatformFlag;
+  }
 
   prepare(query: string) {
     return new NeonPreparedStatement(this.sql, query, [], this.boundContext, this.withPlatformFlag);
@@ -182,7 +201,16 @@ function getNeonSql() {
   if (!url || !isPostgresUrl(url)) {
     throw new Error("Banco não configurado. Defina DATABASE_URL com uma conexão PostgreSQL/Neon.");
   }
-  neonSql = shouldUseLocalDriver(url) ? localSqlFacade(url) : neon(url, { fullResults: true });
+  if (shouldUseLocalDriver(url)) {
+    neonSql = localSqlFacade(url);
+    return neonSql;
+  }
+  // Escape hatch de teste: aponta o driver HTTP do Neon para outro endpoint.
+  // Serve para exercitar o caminho de produção contra um PostgreSQL de ensaio.
+  // Em produção a variável não existe e o driver usa o endpoint do próprio Neon.
+  const endpoint = String(process.env.FDP_NEON_FETCH_ENDPOINT ?? "").trim();
+  if (endpoint) neonConfig.fetchEndpoint = endpoint;
+  neonSql = neon(url, { fullResults: true });
   return neonSql;
 }
 

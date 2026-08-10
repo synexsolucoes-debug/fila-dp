@@ -1,229 +1,266 @@
-import { ArrowRight, ArrowUp, Check, Clock3, MoreHorizontal, Paperclip, Plus, Search, SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowRight, ArrowUp, Check, CircleAlert, Clock3, FileCheck2, LockKeyhole, Plug, Plus, ShieldCheck, Workflow,
+} from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
+import { getD1 } from "@/db";
+import { selfSignupEnabled } from "@/lib/saas";
+import {
+  faqEntries, featureHighlights, integrationCatalog, integrationStateLabels, pluralize, productBoundaries,
+  productPositioning, siteNavigation,
+} from "@/lib/marketing";
+
+export const dynamic = "force-dynamic";
 
 const Chevron = () => <ArrowRight className="inline-icon" aria-hidden="true" />;
-const ClockIcon = () => <Clock3 className="mini-icon" aria-hidden="true" />;
 const CheckIcon = () => <Check className="mini-icon" aria-hidden="true" />;
-const PaperclipIcon = () => <Paperclip className="mini-icon" aria-hidden="true" />;
 
-const featureItems = [
+type PlanRow = {
+  code: string; name: string; description: string; currency: string;
+  monthly_price_cents: number; included_seats: number; company_limit: number;
+  integration_limit: number; storage_limit_mb: number; stripe_monthly_price_id: string;
+};
+
+const money = (cents: number, currency: string) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
+
+/**
+ * A home lê o mesmo catálogo que a página de planos e que a cobrança.
+ *
+ * Nenhum preço é escrito no código desta página: se o catálogo mudar, a home
+ * muda junto. Sem banco disponível na renderização, a seção não inventa
+ * condição comercial — ela remete à página de planos.
+ */
+async function loadPlans(): Promise<PlanRow[]> {
+  try {
+    const d1 = getD1();
+    const rows = await d1.prepare(`SELECT code, name, description, currency, monthly_price_cents,
+        included_seats, company_limit, integration_limit, storage_limit_mb, stripe_monthly_price_id
+      FROM fdp_saas_plans WHERE status = 'active' ORDER BY position, monthly_price_cents`).all<PlanRow>();
+    return rows.results;
+  } catch {
+    return [];
+  }
+}
+
+/** Cada passo do fluxo real: demanda → competência → conferência → fechamento. */
+const workflowSteps = [
   {
-    number: "01",
-    title: "Quadro visual de demandas",
-    text: "Organize o trabalho em colunas personalizadas e enxergue o andamento da operação sem abrir planilhas paralelas.",
+    step: "01",
+    title: "Receba e organize",
+    text: "Solicitações chegam pela caixa de entrada, por e-mail, Teams, WhatsApp ou registro manual e viram demanda com responsável, prazo e histórico.",
   },
   {
-    number: "02",
-    title: "Caixa de entrada multicanal",
-    text: "Centralize pedidos recebidos por e-mail, Teams, WhatsApp ou registro manual e transforme cada solicitação em uma demanda rastreável.",
+    step: "02",
+    title: "Trabalhe por competência",
+    text: "Cada empresa tem seu ciclo mensal, com movimentações, obrigações e pendências reunidas no mesmo lugar.",
   },
   {
-    number: "03",
-    title: "SLA visível no cartão",
-    text: "Identifique o que está no prazo, próximo do vencimento ou atrasado por meio de alertas objetivos.",
+    step: "03",
+    title: "Confira antes de fechar",
+    text: "O sistema compara o que foi enviado com o que voltou do ERP e transforma divergência em item tratável, não em planilha paralela.",
   },
   {
-    number: "04",
-    title: "Checklists por processo",
-    text: "Padronize férias, rescisões, conciliações cadastrais e outras rotinas com etapas obrigatórias que ninguém precisa decorar.",
-  },
-  {
-    number: "05",
-    title: "Automações sem código",
-    text: "Movimente cartões, aplique etiquetas e avise responsáveis automaticamente, sem depender da equipe técnica.",
-  },
-  {
-    number: "06",
-    title: "Visão para cada necessidade",
-    text: "Alterne entre Quadro, Tabela, Calendário, Linha do Tempo e Dashboard conforme a decisão que precisa tomar.",
+    step: "04",
+    title: "Feche com trilha",
+    text: "O fechamento só avança quando os bloqueios são resolvidos, e cada aprovação, reabertura e ajuste fica registrada com autor, antes e depois.",
   },
 ];
 
-const comparisons = [
-  ["Visão do andamento", "Fragmentada", "Visual", "Visual e adaptada ao DP"],
-  ["Gestão de SLA", "Manual", "Exige configuração", "Integrada ao fluxo"],
-  ["Entrada multicanal", "Pedidos espalhados", "Depende de integrações", "Inbox preparada para triagem"],
-  ["Processos de DP", "Montagem manual", "Precisam ser modelados", "Campos e fluxos do setor"],
-  ["Rastreabilidade", "Histórico disperso", "Histórico por cartão", "Demanda, SLA e responsáveis"],
+const painPoints = [
+  { number: "01", title: "Pedido sem dono", text: "A solicitação chega por mensagem, some na conversa e volta como urgência dias depois." },
+  { number: "02", title: "Competência sem visão", text: "O que falta para fechar o mês vive em planilhas, e-mails e na memória de quem está de férias." },
+  { number: "03", title: "Conferência manual", text: "A comparação entre o que foi enviado e o que a folha devolveu é refeita à mão a cada competência." },
 ];
 
-const faqs = [
-  [
-    "O Vinculato substitui meu sistema de folha?",
-    "Não. O Vinculato organiza demandas, tarefas, prazos e processos operacionais. Ele complementa sistemas de folha, ERPs e outras ferramentas utilizadas pela empresa.",
-  ],
-  [
-    "Como o Vinculato trabalha com admissões feitas na Sólides?",
-    "A admissão digital continua integralmente na Sólides. O Vinculato prepara a integração dos dados concluídos, a vinculação com o ERP e a conciliação cadastral, quando houver um meio oficial disponível.",
-  ],
-  [
-    "Como o sistema controla os prazos?",
-    "Cada demanda pode receber um prazo ou uma política de SLA. O cartão sinaliza quando o vencimento se aproxima, está pausado ou foi ultrapassado.",
-  ],
-  [
-    "Posso convidar gestores e auditores?",
-    "Sim. Perfis de observador e convidado podem receber permissões específicas para consulta ou interação limitada.",
-  ],
+const securityItems = [
+  {
+    icon: LockKeyhole,
+    title: "Isolamento imposto no banco",
+    text: "Cada registro pertence a um workspace e a separação é aplicada por Row Level Security, além da validação na aplicação. Há verificação automatizada que tenta o acesso cruzado e exige que ele seja negado.",
+  },
+  {
+    icon: FileCheck2,
+    title: "Trilha com antes e depois",
+    text: "Mudanças administrativas, fechamentos, pagamentos e exportações registram ator, ação, estado anterior e estado posterior.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Permissões por papel e por empresa",
+    text: "O acesso é concedido por capacidade e pode ser restrito às empresas que a pessoa realmente atende.",
+  },
+  {
+    icon: Clock3,
+    title: "Acesso de suporte controlado",
+    text: "O acesso da nossa equipe aos dados do cliente é autorizado, temporário, justificado e auditado. Ele não é concedido por padrão.",
+  },
 ];
 
-function ProductBoard() {
+/** Ilustração da tela de fechamento — exemplo de interface, não dado de cliente. */
+function ClosingPanel() {
   return (
-    <div className="board-shell" aria-label="Exemplo de quadro de demandas do Departamento Pessoal">
-      <div className="board-topbar">
-        <div>
-          <span className="board-breadcrumb">Departamento Pessoal /</span>
-          <strong> Fila geral</strong>
-        </div>
-        <div className="board-actions" aria-hidden="true">
-          <span><Search /></span><span><SlidersHorizontal /></span><span><MoreHorizontal /></span>
-        </div>
+    <div className="product-panel" aria-label="Exemplo da tela de fechamento de competência">
+      <div className="product-panel-bar">
+        <span className="product-panel-path">Competências /</span>
+        <strong>Agosto 2026</strong>
+        <span className="product-panel-tag">Em conferência</span>
       </div>
-      <div className="board-filters">
-        <span className="filter-active">Quadro</span>
-        <span>Tabela</span>
-        <span>Calendário</span>
-        <span className="board-spacer" />
-        <span>Filtrar</span>
-      </div>
-      <div className="kanban" role="list">
-        <div className="kanban-column" role="listitem">
-          <div className="column-title"><span>Novas demandas</span><b>3</b></div>
-          <article className="task-card">
-            <div className="labels"><span className="label label-blue">CONCILIAÇÃO</span><span className="label label-red">URGENTE</span></div>
-            <h3>Vincular colaborador ao ERP</h3>
-            <p className="company">Synex Soluções • Ago/26</p>
-            <div className="task-meta"><span className="sla sla-warning"><ClockIcon /> vence hoje</span><span className="avatar avatar-a">AM</span></div>
-          </article>
-          <article className="task-card">
-            <div className="labels"><span className="label label-purple">FÉRIAS</span></div>
-            <h3>Aviso de férias — João Lima</h3>
-            <p className="company">Unidade São Paulo</p>
-            <div className="task-meta"><span><CheckIcon /> 2/5</span><span className="avatar avatar-b">RC</span></div>
-          </article>
-          <button className="add-card"><Plus /> Adicionar demanda</button>
-        </div>
 
-        <div className="kanban-column" role="listitem">
-          <div className="column-title"><span>Em análise</span><b>2</b></div>
-          <article className="task-card task-highlight">
-            <div className="labels"><span className="label label-green">BENEFÍCIOS</span></div>
-            <h3>Inclusão no plano de saúde</h3>
-            <p className="company">Matrícula 0482</p>
-            <div className="progress"><span style={{ width: "68%" }} /></div>
-            <div className="task-meta"><span><CheckIcon /> 4/6</span><span><PaperclipIcon /> 2</span><span className="avatar avatar-c">LS</span></div>
-          </article>
-          <article className="task-card">
-            <div className="labels"><span className="label label-orange">RESCISÃO</span></div>
-            <h3>Conferência de cálculo rescisório</h3>
-            <div className="task-meta"><span className="sla sla-safe"><ClockIcon /> 2 dias</span><span className="avatar avatar-a">AM</span></div>
-          </article>
-        </div>
-
-        <div className="kanban-column" role="listitem">
-          <div className="column-title"><span>Em execução</span><b>2</b></div>
-          <article className="task-card">
-            <div className="labels"><span className="label label-blue">CONCILIAÇÃO</span></div>
-            <h3>Conferir vínculo Sólides × ERP</h3>
-            <p className="company">Dados concluídos na origem</p>
-            <div className="task-meta"><span className="sla sla-safe"><ClockIcon /> 1 dia</span><span className="avatar avatar-b">RC</span></div>
-          </article>
-          <article className="task-card">
-            <div className="labels"><span className="label label-gray">CADASTRO</span></div>
-            <h3>Atualização de dados bancários</h3>
-            <div className="task-meta"><span><PaperclipIcon /> 1</span><span className="avatar avatar-c">LS</span></div>
-          </article>
-        </div>
+      <div className="product-panel-grid">
+        <article className="product-metric">
+          <span>Movimentações</span>
+          <strong>Preparadas</strong>
+          <p>Férias, afastamentos, desligamentos e alterações aprovadas antes do envio.</p>
+        </article>
+        <article className="product-metric">
+          <span>Conferência</span>
+          <strong>Com divergência</strong>
+          <p>O retorno do ERP é comparado item a item e o que não bate vira pendência com responsável.</p>
+        </article>
       </div>
-      <div className="board-status"><span><i className="status-dot" /> 7 demandas ativas</span><span>Atualizado agora</span></div>
+
+      <ul className="product-checklist">
+        <li className="is-done"><CheckIcon /> Movimentações aprovadas</li>
+        <li className="is-done"><CheckIcon /> Documentos anexados</li>
+        <li className="is-blocked"><CircleAlert className="mini-icon" aria-hidden="true" /> Divergência de conferência em aberto</li>
+      </ul>
+
+      <div className="product-panel-foot">
+        <span>Fechamento bloqueado até a última pendência ser tratada</span>
+        <span className="product-panel-action">Ver pendências</span>
+      </div>
     </div>
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const plans = await loadPlans();
+  const signupOpen = selfSignupEnabled();
+  const freePlan = plans.find((plan) => plan.monthly_price_cents === 0);
+  // A oferta sem custo só aparece quando existe plano de preço zero publicado no
+  // catálogo E a criação de conta está habilitada. Fora disso a home não promete
+  // um caminho que o produto recusaria.
+  const freeSignup = signupOpen && Boolean(freePlan);
+
   return (
-    <main>
+    <main className="home">
+      <a className="home-skip" href="#conteudo">Ir para o conteúdo</a>
+
       <header className="site-header">
-        <a className="brand" href="#inicio" aria-label="Vinculato — início">
+        <Link className="brand" href="/" aria-label="Vinculato — início">
           <VinculatoLogo size={30} priority />
-        </a>
+        </Link>
         <nav aria-label="Navegação principal">
-          <a href="/solucao">Solução</a>
-          <a href="/funcionalidades">Funcionalidades</a>
-          <a href="/integracoes">Integrações</a>
-          <a href="/planos">Planos</a>
-          <a href="/faq">FAQ</a>
+          {siteNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
         </nav>
         <div className="header-actions">
-          <a className="login-link" href="/login">Entrar</a>
-          <a className="button button-small" href="/contato?assunto=demonstracao">Falar com a equipe</a>
+          <Link className="login-link" href="/login">Entrar</Link>
+          <Link className="button button-small" href="/contato?assunto=demonstracao">Falar com um especialista</Link>
         </div>
       </header>
 
-      <section className="hero" id="inicio">
+      <section className="hero" id="conteudo">
         <div className="hero-glow" aria-hidden="true" />
         <div className="hero-copy">
-          <div className="eyebrow"><i className="eyebrow-dot" /> Gestão visual criada para DP e RH</div>
-          <h1>Toda demanda do DP na fila certa.</h1>
-          <p className="hero-lead">Com responsável, prazo e próximo passo.</p>
+          <div className="eyebrow"><i className="eyebrow-dot" /> Plataforma para Departamento Pessoal</div>
+          <h1>Sua operação, conectada.</h1>
           <p className="hero-description">
-            Centralize solicitações, acompanhe SLAs e organize férias, rescisões, conciliações e outras rotinas em um quadro visual simples de usar.
+            Centralize processos, demandas, documentos e integrações em uma plataforma criada para organizar a operação
+            do seu Departamento Pessoal.
           </p>
           <div className="hero-actions">
-            <a className="button" href="/contato?assunto=demonstracao">Agendar demonstração <Chevron /></a>
-            <a className="button button-secondary" href="/solucao">Conhecer a solução</a>
+            {freeSignup
+              ? <Link className="button" href="/login?modo=criar">Começar grátis <Chevron /></Link>
+              : <Link className="button" href="/contato?assunto=demonstracao">Falar com um especialista <Chevron /></Link>}
+            {freeSignup
+              ? <Link className="button button-secondary" href="/contato?assunto=demonstracao">Falar com um especialista</Link>
+              : <Link className="button button-secondary" href="/planos">Ver planos</Link>}
+            <Link className="hero-login" href="/login">Entrar</Link>
           </div>
           <div className="hero-notes">
-            <span><CheckIcon /> A admissão digital permanece na Sólides</span>
             <span><CheckIcon /> A folha oficial permanece no seu ERP</span>
+            <span><CheckIcon /> A admissão digital continua integralmente na Sólides</span>
           </div>
         </div>
-        <div className="hero-product"><ProductBoard /></div>
+        <div className="hero-product"><ClosingPanel /></div>
       </section>
 
-      <section className="proof-bar" aria-label="Benefícios principais">
-        <p>Menos cobrança por status.</p>
-        <p>Menos prazo escondido.</p>
-        <p>Mais previsibilidade.</p>
+      <section className="proof-bar" aria-label="Garantias da plataforma">
+        <p><LockKeyhole className="mini-icon" aria-hidden="true" /> Isolamento entre clientes aplicado no banco</p>
+        <p><FileCheck2 className="mini-icon" aria-hidden="true" /> Trilha de auditoria com antes e depois</p>
+        <p><Plug className="mini-icon" aria-hidden="true" /> API e webhooks assinados</p>
       </section>
 
-      <section className="section problem-section" id="produto">
-        <div className="section-kicker">O problema que ninguém deveria normalizar</div>
+      <section className="section problem-section">
+        <div className="section-kicker">O problema que a operação normalizou</div>
         <div className="split-heading">
-          <h2>Seu DP não precisa trabalhar no escuro.</h2>
-          <p>Quando os pedidos chegam por todos os lados, a equipe perde tempo procurando contexto — e a gestão perde visibilidade sobre a operação.</p>
+          <h2>O trabalho do DP não cabe em conversa solta.</h2>
+          <p>
+            Quando pedido, prazo, documento e conferência vivem em ferramentas diferentes, a equipe gasta o dia
+            procurando contexto — e a gestão descobre o problema quando já virou risco.
+          </p>
         </div>
         <div className="pain-grid">
-          <article><span className="pain-icon">01</span><h3>Demandas espalhadas</h3><p>E-mail, WhatsApp, Teams, planilhas e conversas formam uma fila invisível.</p></article>
-          <article><span className="pain-icon">02</span><h3>Prazos difíceis de acompanhar</h3><p>Sem alertas claros, uma pendência simples pode virar urgência.</p></article>
-          <article><span className="pain-icon">03</span><h3>Processos sem padrão</h3><p>Etapas importantes dependem da memória e da experiência de cada analista.</p></article>
-          <article className="solution-card"><span className="solution-label">A resposta</span><h3>Uma fila clara, rastreável e fácil de priorizar.</h3><p>O Vinculato reúne cada solicitação com contexto, responsável e SLA.</p><a href="#como-funciona">Conheça o fluxo <Chevron /></a></article>
+          {painPoints.map((item) => (
+            <article key={item.number}>
+              <span className="pain-icon">{item.number}</span>
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </article>
+          ))}
+          <article className="solution-card">
+            <span className="solution-label">A proposta</span>
+            <h3>Uma plataforma que conecta o trabalho, não mais uma caixa de entrada.</h3>
+            <p>{productPositioning.summary}</p>
+            <Link href="/solucao">Conhecer a solução <Chevron /></Link>
+          </article>
         </div>
       </section>
 
       <section className="section workflow-section" id="como-funciona">
         <div className="workflow-intro">
           <div className="section-kicker light">Como funciona</div>
-          <h2>Do pedido recebido à demanda concluída.</h2>
-          <p>Um fluxo simples o bastante para o dia a dia e estruturado o bastante para a gestão.</p>
+          <h2>Do pedido recebido à competência fechada.</h2>
+          <p>Um caminho só, com responsável e prazo em cada etapa, e um fechamento que não avança com pendência aberta.</p>
         </div>
         <ol className="workflow-list">
-          <li><span>01</span><div><h3>Centralize</h3><p>As solicitações chegam à Inbox do Vinculato.</p></div></li>
-          <li><span>02</span><div><h3>Faça a triagem</h3><p>Defina processo, responsável, prioridade e prazo.</p></div></li>
-          <li><span>03</span><div><h3>Execute com clareza</h3><p>Movimente o cartão, conclua etapas e anexe documentos.</p></div></li>
-          <li><span>04</span><div><h3>Acompanhe e melhore</h3><p>Enxergue atrasos, volume e gargalos da operação.</p></div></li>
+          {workflowSteps.map((item) => (
+            <li key={item.step}>
+              <span>{item.step}</span>
+              <div><h3>{item.title}</h3><p>{item.text}</p></div>
+            </li>
+          ))}
         </ol>
       </section>
 
       <section className="section features-section" id="recursos">
-        <div className="section-kicker">Recursos essenciais</div>
+        <div className="section-kicker">O que já está no produto</div>
         <div className="split-heading">
-          <h2>Tudo o que o DP precisa. Sem complicar a rotina.</h2>
-          <p>Alta densidade de informação, controles específicos e uma interface que a equipe entende rapidamente.</p>
+          <h2>Recursos disponíveis hoje, não roteiro de futuro.</h2>
+          <p>Cada item abaixo corresponde a um módulo entregue. O que ainda não existe aparece como preparado, nunca como pronto.</p>
         </div>
         <div className="feature-grid">
-          {featureItems.map((item) => (
-            <article key={item.number}>
-              <span>{item.number}</span>
+          {featureHighlights.map((item, index) => (
+            <article key={item.title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </article>
+          ))}
+        </div>
+        <p className="feature-note">
+          <Link href="/funcionalidades">Ver todas as funcionalidades <Chevron /></Link>
+        </p>
+      </section>
+
+      <section className="section boundaries-section">
+        <div className="split-heading">
+          <h2>E o que o Vinculato não faz.</h2>
+          <p>Dizer o limite antes da contratação evita a frustração depois. Estas fronteiras são parte do produto.</p>
+        </div>
+        <div className="boundary-grid">
+          {productBoundaries.map((item) => (
+            <article key={item.title}>
               <h3>{item.title}</h3>
               <p>{item.text}</p>
             </article>
@@ -231,47 +268,112 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section comparison-section">
-        <div className="section-kicker">Feito para o trabalho real do DP</div>
+      <section className="section integrations-section" id="integracoes">
+        <div className="section-kicker">Integrações</div>
         <div className="split-heading">
-          <h2>Visual como um Kanban. Especializado como sua operação exige.</h2>
-          <p>O Vinculato reduz a configuração necessária para transformar um quadro genérico em um processo seguro para o setor.</p>
+          <h2>Conectado ao que sua operação já usa.</h2>
+          <p>Cada conector aparece com o estado real: disponível, parcial ou apenas preparado. Nada é anunciado como pronto antes de funcionar de ponta a ponta.</p>
         </div>
-        <div className="comparison-wrap">
-          <table>
-            <thead><tr><th>Necessidade</th><th>Planilhas e mensagens</th><th>Kanban genérico</th><th className="highlight-col">Vinculato</th></tr></thead>
-            <tbody>
-              {comparisons.map((row) => <tr key={row[0]}>{row.map((cell, index) => <td className={index === 3 ? "highlight-col" : ""} key={cell}>{index === 3 && <CheckIcon />}{cell}</td>)}</tr>)}
-            </tbody>
-          </table>
+        <div className="integration-grid">
+          {integrationCatalog.map((item) => (
+            <article key={item.name} className={`integration-card state-${item.state}`}>
+              <div className="integration-head">
+                <h3>{item.name}</h3>
+                <span className={`integration-state state-${item.state}`}>{integrationStateLabels[item.state]}</span>
+              </div>
+              <p className="integration-category">{item.category}</p>
+              <p>{item.note}</p>
+            </article>
+          ))}
+        </div>
+        <p className="feature-note"><Link href="/integracoes">Ver detalhes das integrações <Chevron /></Link></p>
+      </section>
+
+      <section className="section security-section">
+        <div className="section-kicker light">Segurança e rastreabilidade</div>
+        <div className="split-heading">
+          <h2>Dado de cliente não se mistura.</h2>
+          <p>Multi-tenant de verdade significa separação verificada, permissão granular e histórico que sobrevive à auditoria.</p>
+        </div>
+        <div className="security-grid">
+          {securityItems.map((item) => (
+            <article key={item.title}>
+              <item.icon className="security-icon" aria-hidden="true" />
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </article>
+          ))}
         </div>
       </section>
 
       <section className="section plans-section" id="planos">
         <div className="center-heading">
-          <div className="section-kicker">Cresce com a sua operação</div>
-          <h2>Condições combinadas com a sua realidade.</h2>
-          <p>As condições comerciais publicadas ficam na página de planos, junto com o que está incluído em qualquer contrato.</p>
+          <div className="section-kicker">Planos</div>
+          <h2>Preço publicado, do catálogo do produto.</h2>
+          <p>
+            Os planos abaixo vêm do mesmo catálogo que a cobrança usa. Um plano só exibe contratação direta quando está
+            ativo e com preço configurado no provedor de pagamento.
+          </p>
         </div>
-        <div className="plans-grid">
-          <article><span className="plan-name">Planos</span><h3>Ver condições publicadas</h3><p>Limites de usuários, empresas, integrações e armazenamento de cada plano ativo no catálogo.</p><a href="/planos">Ver planos <Chevron /></a></article>
-          <article><span className="plan-name">Demonstração</span><h3>Ver o produto na sua operação</h3><p>Uma conversa sobre os seus processos, com o produto aberto e sem usar dados reais do seu DP.</p><a href="/demonstracao">Agendar <Chevron /></a></article>
-          <article><span className="plan-name">Integrações</span><h3>Conferir o que já existe</h3><p>O estado real de cada integração: disponível, parcial ou apenas preparada.</p><a href="/integracoes">Ver integrações <Chevron /></a></article>
-          <article><span className="plan-name">Contato</span><h3>Falar com a equipe</h3><p>Dúvidas sobre escopo, segurança, LGPD ou implantação antes de contratar.</p><a href="/contato">Enviar contato <Chevron /></a></article>
-        </div>
-        <p className="plans-note">Nenhuma condição comercial é anunciada aqui antes de estar publicada e cobrável no produto.</p>
+
+        {plans.length === 0 ? (
+          <div className="plans-empty">
+            <h3>Condições sob consulta</h3>
+            <p>Nenhum plano está publicado no catálogo neste momento. As condições são definidas com a equipe conforme empresas, volume e integrações.</p>
+            <Link className="button" href="/contato?assunto=planos">Falar sobre planos <Chevron /></Link>
+          </div>
+        ) : (
+          <div className="plans-grid">
+            {plans.map((plan) => {
+              const free = plan.monthly_price_cents === 0;
+              // O preço vem do catálogo e é exibido como está publicado. O que
+              // depende do provedor de pagamento é a contratação direta: sem
+              // preço configurado lá, o plano existe mas é contratado com a
+              // equipe — a página não simula um checkout que não funciona.
+              const payable = plan.monthly_price_cents > 0 && Boolean(plan.stripe_monthly_price_id);
+              const selfServe = signupOpen && (free || payable);
+              return (
+                <article key={plan.code} className="plan-card">
+                  <span className="plan-name">{plan.name}</span>
+                  <strong className="plan-price">
+                    {free ? "Grátis" : money(plan.monthly_price_cents, plan.currency)}
+                    <small>{free ? "para começar" : payable ? "por mês" : "por mês · contratação com a equipe"}</small>
+                  </strong>
+                  {plan.description && <p className="plan-description">{plan.description}</p>}
+                  <ul className="plan-list">
+                    <li><CheckIcon /> {pluralize(plan.included_seats, "usuário incluído", "usuários incluídos")}</li>
+                    <li><CheckIcon /> {pluralize(plan.company_limit, "empresa", "empresas")}</li>
+                    <li><CheckIcon /> {pluralize(plan.integration_limit, "integração", "integrações")}</li>
+                    <li><CheckIcon /> {Math.round(plan.storage_limit_mb / 1024 * 10) / 10} GB de anexos</li>
+                  </ul>
+                  <Link
+                    className="plan-action"
+                    href={selfServe ? "/login" : `/contato?assunto=planos&plano=${encodeURIComponent(plan.code)}`}
+                  >
+                    {selfServe ? (free ? "Criar conta" : "Contratar") : "Falar com a equipe"} <Chevron />
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="plans-note">
+          <Link href="/planos">Ver limites completos de cada plano <Chevron /></Link>
+        </p>
       </section>
 
       <section className="section faq-section">
         <div>
           <div className="section-kicker">Perguntas frequentes</div>
-          <h2>Antes de colocar sua fila em ordem.</h2>
+          <h2>O que costumam perguntar antes de contratar.</h2>
+          <p className="faq-aside">Se a sua dúvida não estiver aqui, fale com a equipe: respondemos com o que o produto faz hoje.</p>
         </div>
         <div className="faq-list">
-          {faqs.map(([question, answer], index) => (
-            <details key={question} open={index === 0}>
-              <summary>{question}<Plus className="faq-toggle-icon" aria-hidden="true" /></summary>
-              <p>{answer}</p>
+          {faqEntries.map((item, index) => (
+            <details key={item.question} open={index === 0}>
+              <summary>{item.question}<Plus className="faq-toggle-icon" aria-hidden="true" /></summary>
+              <p>{item.answer}</p>
             </details>
           ))}
         </div>
@@ -279,26 +381,29 @@ export default function Home() {
 
       <section className="final-cta" id="contato">
         <div>
-          <span className="cta-kicker">Sua operação pode ser mais previsível.</span>
-          <h2>Seu DP já tem demandas demais. Organizar a fila não precisa ser mais uma delas.</h2>
+          <span className="cta-kicker"><Workflow className="mini-icon" aria-hidden="true" /> Sua operação, conectada.</span>
+          <h2>Coloque processos, demandas e conferências no mesmo lugar.</h2>
         </div>
         <div className="final-cta-actions">
-          <a className="button button-light" href="/contato?assunto=demonstracao">Agendar demonstração <Chevron /></a>
-          <a className="demo-link" href="/login">Acessar minha conta</a>
-          <p>Combinamos a condição comercial depois de entender a sua operação.</p>
+          {freeSignup
+            ? <Link className="button button-light" href="/login?modo=criar">Começar grátis <Chevron /></Link>
+            : <Link className="button button-light" href="/contato?assunto=demonstracao">Falar com um especialista <Chevron /></Link>}
+          <Link className="demo-link" href="/login">Já sou cliente — entrar</Link>
+          <p>A conversa começa pela sua operação, com o produto aberto e sem usar dados reais do seu DP.</p>
         </div>
       </section>
 
-      <footer>
-        <a className="brand footer-brand" href="#inicio" aria-label="Vinculato — voltar ao início">
-          <VinculatoLogo size={26} />
-        </a>
-        <p>Gestão visual de demandas para Departamento Pessoal e RH.</p>
+      <footer className="home-footer">
+        <Link className="brand footer-brand" href="/" aria-label="Vinculato — voltar ao início">
+          <VinculatoLogo size={26} tone="light" />
+        </Link>
+        <p>Gestão, integração e conferência operacional para Departamento Pessoal.</p>
         <div>
-          <a href="/solucao">Solução</a><a href="/funcionalidades">Funcionalidades</a><a href="/integracoes">Integrações</a>
-          <a href="/planos">Planos</a><a href="/faq">FAQ</a><a href="/contato">Contato</a>
-          <a href="/termos">Termos</a><a href="/privacidade">Privacidade</a><a href="/subprocessadores">Subprocessadores</a>
-          <a href="#inicio">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a>
+          {siteNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
+          <Link href="/termos">Termos</Link>
+          <Link href="/privacidade">Privacidade</Link>
+          <Link href="/subprocessadores">Subprocessadores</Link>
+          <a href="#conteudo">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a>
         </div>
         <p className="site-boundary-note">
           O Vinculato não executa admissão digital, não guarda prontuário psicológico e não faz cálculo tributário nem emite nota fiscal.

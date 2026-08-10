@@ -2,7 +2,7 @@
   min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(520px, 1.08fr) minmax(440px, .92fr);
-  background: #f6f5ef;
+  background: var(--ui-bg);
 }
 
 .auth-brand-panel {
@@ -13,8 +13,8 @@
   flex-direction: column;
   overflow: hidden;
   background:
-    radial-gradient(circle at 90% 65%, rgba(35,216,161,.16), transparent 34%),
-    linear-gradient(145deg, #07182e 0%, #0a213c 100%);
+    radial-gradient(circle at 90% 65%, color-mix(in srgb, var(--brand-accent) 20%, transparent), transparent 34%),
+    linear-gradient(145deg, var(--brand-deep) 0%, var(--brand-strong) 100%);
   color: white;
 }
 
@@ -25,13 +25,13 @@
   height: 520px;
   left: -340px;
   bottom: -340px;
-  border: 1px solid rgba(35,216,161,.18);
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 22%, transparent);
   border-radius: 50%;
-  box-shadow: 0 0 0 70px rgba(35,216,161,.025), 0 0 0 140px rgba(35,216,161,.018);
+  box-shadow: 0 0 0 70px color-mix(in srgb, var(--brand-accent) 4%, transparent), 0 0 0 140px color-mix(in srgb, var(--brand-accent) 3%, transparent);
 }
 
 .auth-brand { color: white; }
-.auth-brand strong { color: #23d8a1; }
+.auth-brand strong { color: var(--brand-accent); }
 
 .auth-message {
   position: relative;
@@ -41,7 +41,7 @@
 }
 
 .auth-kicker {
-  color: #23d8a1;
+  color: var(--brand-accent);
   font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
   font-weight: 750;
@@ -163,11 +163,11 @@
   font-weight: 650;
 }
 
-.auth-back:hover { color: #087b63; }
+.auth-back:hover { color: var(--brand-accent); }
 .auth-back svg, .auth-preview-top svg { width: 16px; height: 16px; }
 .auth-form-card { width: 100%; max-width: 470px; margin: auto; }
-.auth-status { display: inline-flex; align-items: center; gap: 8px; color: #087b63; font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
-.auth-status i { width: 7px; height: 7px; border-radius: 50%; background: #23d8a1; box-shadow: 0 0 0 4px rgba(35,216,161,.15); }
+.auth-status { display: inline-flex; align-items: center; gap: 8px; color: var(--brand); font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.auth-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--brand-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-accent) 18%, transparent); }
 .auth-status.neutral { color: #718093; }
 
 .auth-form-card h2 {
@@ -209,7 +209,7 @@
   color: #607083;
 }
 
-.auth-security-note > svg { width: 24px; height: 24px; color: #087b63; }
+.auth-security-note > svg { width: 24px; height: 24px; color: var(--brand); }
 
 .auth-security-note p { margin: 0; font-size: 11px; line-height: 1.55; }
 .auth-secondary-link { margin-top: 20px; display: block; color: #526174; text-align: center; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
@@ -217,7 +217,7 @@
 .auth-login-form { margin-top: 26px; display: grid; gap: 15px; }
 .auth-login-form label { display: grid; gap: 7px; color: #425166; font-size: 12px; font-weight: 700; }
 .auth-login-form input { width: 100%; min-height: 48px; padding: 0 13px; border: 1px solid #ccd7d8; border-radius: 8px; background: rgba(255,255,255,.86); color: #0b1528; outline: none; font: inherit; font-weight: 500; }
-.auth-login-form input:focus { border-color: #23b98e; box-shadow: 0 0 0 3px rgba(35,216,161,.14); }
+.auth-login-form input:focus { border-color: var(--brand-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 18%, transparent); }
 .auth-login-form small { color: #84909d; font-size: 10px; font-weight: 500; }
 .auth-login-form .auth-primary { margin-top: 5px; border: 0; cursor: pointer; }
 .auth-login-form .auth-primary:disabled { opacity: .65; cursor: wait; }
@@ -225,8 +225,8 @@
 .auth-mode-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; font: inherit; }
 .auth-mode-switch { width: 100%; margin-top: 22px; padding: 4px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; border: 1px solid #d5dfe0; border-radius: 9px; background: #edf2f1; }
 .auth-mode-switch button { min-height: 38px; border: 0; border-radius: 6px; background: transparent; color: #687588; cursor: pointer; font-size: 12px; font-weight: 720; }
-.auth-mode-switch button[aria-pressed="true"] { background: #fff; color: #087b63; box-shadow: 0 2px 8px rgba(8,26,49,.08); }
-.auth-mode-switch button:focus-visible { outline: 3px solid rgba(35,216,161,.22); outline-offset: 1px; }
+.auth-mode-switch button[aria-pressed="true"] { background: var(--ui-surface); color: var(--brand); box-shadow: var(--shadow-soft); }
+.auth-mode-switch button:focus-visible { outline: 3px solid color-mix(in srgb, var(--brand-accent) 30%, transparent); outline-offset: 1px; }
 .auth-login-error { margin: 0; padding: 11px 12px; border: 1px solid #f0c8c8; border-radius: 7px; background: #fff3f3; color: #a23b3b; font-size: 12px; line-height: 1.45; }
 
 .dashboard-shell {
@@ -414,8 +414,12 @@
 }
 
 .workspace-loading .workspace-loading p { margin: 0; color: #91a5b7; font-size: 13px; }
-.workspace-loading.error-state { background: #f6f5ef; color: #0b1528; text-align: center; }
-.workspace-loading.error-state button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 7px; background: #081a31; color: white; cursor: pointer; font-weight: 700; }
+.workspace-loading.error-state { max-width: 520px; margin: 0 auto; padding: 0 20px; background: var(--ui-bg); color: var(--ui-text); text-align: center; }
+.workspace-loading.error-state strong { font-size: 20px; letter-spacing: -.02em; color: var(--brand-strong); }
+.workspace-loading.error-state p { max-width: 460px; color: var(--ui-text-soft); font-size: 13.5px; line-height: 1.6; }
+.workspace-loading.error-state .error-state-hint { color: var(--ui-text-soft); font-size: 12.5px; }
+.workspace-loading.error-state .error-state-reference { padding: 8px 12px; border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface); color: var(--ui-text-soft); font-family: var(--font-geist-mono), monospace; font-size: 11px; word-break: break-all; }
+.workspace-loading.error-state button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 7px; background: var(--brand-strong); color: var(--brand-contrast); cursor: pointer; font-weight: 700; }
 
 .dashboard-brand {
   border: 0;

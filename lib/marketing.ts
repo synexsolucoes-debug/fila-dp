@@ -151,6 +151,16 @@ export const faqEntries = [
   },
 ] as const;
 
+/**
+ * Concordância de número para os limites de plano.
+ *
+ * "1 integração(ões)" é ruído de gerador, não texto de produto. O site fala a
+ * mesma língua do cliente também nos detalhes.
+ */
+export function pluralize(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Captação de contato                                                         */
 /* -------------------------------------------------------------------------- */

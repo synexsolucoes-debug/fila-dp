@@ -54,6 +54,20 @@ function expect(name, actual, expected, extra = "") {
 
 const email = `smoke-${stamp}@vinculato.test`;
 
+// 0. Prontidão: se o banco estiver atrás desta versão ou o papel da aplicação
+//    não puder ler o schema, todo o resto falharia com erro genérico. O ensaio
+//    diz isso na primeira linha, em vez de deixar a causa escondida no meio.
+const readiness = await call("GET", "/api/health");
+record(
+  "o deployment está pronto para operar (schema aplicado e acessível)",
+  readiness.status === 200 && readiness.payload?.status === "ok",
+  `${readiness.payload?.database ?? "?"} — ${readiness.payload?.detail ?? ""}`.slice(0, 140),
+);
+if (readiness.status !== 200) {
+  console.log("\nEnsaio interrompido: o deployment não está pronto. Corrija o banco antes de seguir.");
+  process.exit(1);
+}
+
 // 1. Cadastro e sessão
 const signup = await call("POST", "/api/auth/signup", {
   name: "Operador Smoke", email, password: "SenhaForte#2026", groupName: `Grupo ${stamp}`,

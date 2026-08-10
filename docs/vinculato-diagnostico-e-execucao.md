@@ -276,3 +276,108 @@ padrão partido.
 **1280×800** — altura comum de notebook. A centralização passou a ser por margem
 automática, que zera quando falta espaço em vez de transbordar para cima. O
 `browser-check` mede a colisão em cinco proporções e reprova se ela voltar.
+
+## 13. Página inicial reconstruída (§21)
+
+O relato do cliente foi direto: *"a página inicial só mudou a logo"*. Estava
+certo. A home continuava sendo a página do posicionamento anterior — título
+"Toda demanda do DP na fila certa.", herói centrado em quadro kanban, tabela
+comparativa contra "kanban genérico", FAQ duplicada em texto fixo — com o
+logotipo novo por cima. Trocar a marca não é reposicionar o produto.
+
+**O que a página passou a ser.** Herói com o posicionamento atual ("Sua
+operação, conectada."), problema que o produto resolve, fluxo real do trabalho
+(demanda → competência → conferência → fechamento), recursos entregues,
+fronteiras declaradas, integrações com estado real, segurança e rastreabilidade,
+planos, perguntas frequentes e chamada final.
+
+**Conteúdo com fonte única.** Recursos, fronteiras, integrações, FAQ e navegação
+vêm de `lib/marketing.ts` — os mesmos objetos que as outras páginas comerciais
+consomem. A home não pode mais divergir do resto do site por esquecimento.
+
+**Planos lidos do catálogo.** A seção de planos consulta `fdp_saas_plans` na
+renderização. Nenhum preço, nome ou limite está escrito no código da página: o
+valor exibido é o `monthly_price_cents` persistido, convertido na hora. O
+`browser-check` compara o que a página mostra com o que `GET /api/site/plans`
+devolve e reprova qualquer divergência.
+
+**Preço publicado e contratação são coisas diferentes.** A regra anterior
+escondia o preço quando faltava configuração no provedor de pagamento, e um
+plano de R$ 97 aparecia como "sob consulta" — subentregando o catálogo. Agora o
+preço publicado é sempre exibido, e o que depende do provedor é o botão: sem
+preço configurado lá, o plano existe com o valor à vista e a contratação é
+assistida pela equipe. Nenhuma tela simula checkout inexistente.
+
+**Oferta grátis condicionada a duas verdades.** "Começar grátis" só aparece se
+existir plano de preço zero ativo no catálogo **e** o autocadastro estiver
+habilitado. O destino (`/login?modo=criar`) abre o formulário de criação apenas
+quando o próprio servidor confirma que a criação pública está ligada.
+
+**Identidade aplicada, não só o logotipo.** O site inteiro ainda usava a paleta
+verde-menta anterior. As cores passaram a ser consumidas por tokens: a home, as
+páginas comerciais (`site.module.css`) e as telas de acesso (`access.css`) leem
+`--brand*`, `--ui-*` e `--on-brand-*`. Também saíram do CSS global três seletores
+de elemento (`footer`, `table`, `th/td`) que vazavam para todas as páginas — o
+`min-width: 860px` em `table` era risco de rolagem horizontal em telas estreitas.
+
+**Sem prova social inventada.** A página não publica cliente, depoimento,
+número, certificação nem integração inexistente; o `browser-check` procura por
+esses padrões no texto renderizado e reprova se aparecerem.
+
+Validação desta fatia: `lint` limpo, 198 testes, 41 verificações de navegador
+(390/768/1280/1440, sem rolagem horizontal e sem erro de console), 23
+verificações de fumaça e 7 de isolamento, todas pelo driver que a aplicação usa
+em produção.
+
+## 14. "Não foi possível concluir a operação." — a falha que não dizia nada
+
+O cliente relatou a tela: **"Não foi possível abrir o Vinculato. / Não foi
+possível concluir a operação. / Tentar novamente"**.
+
+**Reproduzido antes de corrigir.** Simulei um banco atrás da versão do
+aplicativo — apaguei o registro da migração 0024 e o objeto que ela cria — e
+carreguei o painel pelo navegador. A tela saiu palavra por palavra igual à
+relatada, com `GET /api/workspace` respondendo `500 INTERNAL_ERROR`.
+
+**Causa.** Toda falha não prevista caía no mesmo caminho genérico. Isso é
+correto para um defeito de programação — não vaza SQL nem stack trace —, mas
+estava sendo usado também para falhas **operacionais**: banco atrás da versão,
+banco inacessível, papel da aplicação sem privilégio. Nesses casos a frase
+genérica esconde justamente a informação que resolveria o problema. O cliente
+não sabe que não é culpa dele; quem opera não sabe o que corrigir.
+
+**Correções.**
+
+1. `lib/infrastructure-errors.ts` classifica a falha pelo estado do PostgreSQL:
+   `SCHEMA_OUTDATED` (42P01, 42703, 42883, 42704, 3F000),
+   `DATABASE_PERMISSION_DENIED` (42501) e `DATABASE_UNAVAILABLE` (classe 08,
+   57Pxx, 53300, 28xxx, falha de rede). Cada uma responde **503** com uma
+   mensagem que diz o que aconteceu e o que resolve — sem nome de tabela, sem
+   comando, sem credencial. Defeito inesperado continua no caminho genérico.
+2. A tela do painel deixou de descartar o `code` e o `requestId` que a resposta
+   já trazia. Agora mostra "Informe ao suporte: código … · chamado …", e uma
+   falha de infraestrutura é apresentada como indisponibilidade da plataforma,
+   não como problema da conta do cliente.
+3. `GET /api/health` responde a pergunta que antes só o log do servidor
+   respondia: schema aplicado, acessível, e quantas migrações faltam. O nome das
+   migrações pendentes só aparece para quem administra a plataforma.
+4. `lib/schema-manifest.ts` é gerado (`npm run schema:manifest`) porque em
+   produção não existe diretório de migrations para ler em execução. Um teste
+   reprova se o manifesto divergir de `drizzle/postgres`.
+5. O ensaio de fumaça passou a checar prontidão **na primeira linha** e a parar
+   ali quando o deployment não está pronto — em vez de acumular falhas cuja
+   causa real ficaria escondida no meio da saída.
+
+**Um achado do próprio ensaio.** Depois de reaplicar a migração, o painel voltou
+a falhar — agora com `42501, permission denied`. Os objetos recriados não tinham
+privilégio para o papel da aplicação. O relatório de prontidão dizia "ok",
+porque só contava migrações. Foi por isso que a verificação passou a **sondar
+leitura** em tabelas centrais com `LIMIT 0`: histórico completo não prova que o
+aplicativo consegue ler o que foi criado.
+
+**Se a tela aparecer em produção**, o caminho agora é direto:
+
+```
+GET /api/health          → diz se o banco está atrás, inacessível ou sem permissão
+npm run db:migrate       → aplica as migrações pendentes (DATABASE_URL do ambiente)
+```
