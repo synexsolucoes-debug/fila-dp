@@ -39,7 +39,7 @@ test("o cálculo PJ mantém a ordem líquido → nota → Caju, em centavos", ()
   // Descontos entram ANTES do teto: inverter a ordem produziria nota errada.
   const comDesconto = calculateContractorClosing({
     baseAmount: 8000,
-    components: [{ type: "health_plan", direction: "debit", amount: 1500 }],
+    components: [{ componentType: "health_plan", direction: "debit", amount: 1500 }],
     complementMethod: "caju_saldo_livre",
     invoiceLimit: { amount: 6000, source: "workspace", policyId: null },
   });
@@ -50,7 +50,7 @@ test("o cálculo PJ mantém a ordem líquido → nota → Caju, em centavos", ()
   // Líquido negativo não vira Caju negativa.
   const negativo = calculateContractorClosing({
     baseAmount: 1000,
-    components: [{ type: "health_plan", direction: "debit", amount: 3000 }],
+    components: [{ componentType: "health_plan", direction: "debit", amount: 3000 }],
     complementMethod: "caju_saldo_livre",
     invoiceLimit: { amount: 6000, source: "workspace", policyId: null },
   });

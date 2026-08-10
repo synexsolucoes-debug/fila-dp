@@ -649,3 +649,40 @@ dito, se a intenção for creditar essa categoria. O mecanismo já funciona com 
 
 Validação: 243 testes, `npm run ci` completo, 50 verificações de navegador, 24
 de fumaça, 30 migrações validadas.
+
+## 19. Seletor de grupo no shell e aviso de troca de contexto
+
+A correção do bug de arquivamento (§16) deixou o dado pronto — `availableWorkspaces`
+com status e `switchedFrom` — mas a interface não usava nenhum dos dois. Duas
+lacunas fechadas:
+
+**O seletor estava enterrado no modal de configurações.** Trocar de grupo é ação
+de shell, não de configuração. Agora ele fica na barra lateral, em `<details>`
+nativo (teclado e leitor de tela funcionam sem estado extra), listando cada grupo
+com papel e — quando não operacional — o motivo pelo qual não abre.
+
+**Uma regra de CSS o teria escondido de novo.** `.sidebar-workspace { display: none }`
+dentro de `@media (min-width: 761px) and (max-width: 1499px)` apagava o bloco
+inteiro na faixa que cobre a maioria dos notebooks. Para o atalho de estrutura
+empresarial isso é aceitável; para o seletor de grupo, não — é ação essencial. O
+seletor passou a ser visível em toda largura, reduzido ao símbolo quando falta
+espaço, com a lista flutuando ao lado. O `browser-check` mede isso nas quatro
+larguras e reprova se sumir.
+
+**Troca automática deixou de ser silenciosa.** Quando o grupo ativo sai do ar, o
+painel abre o próximo elegível **e avisa**: "Grupo X está arquivado e não pode
+ser aberto. Você está trabalhando em Y." Trocar o contexto sem dizer faria a
+pessoa achar que perdeu dados.
+
+Percorrido no navegador com um usuário de dois grupos: seletor visível, os dois
+listados com papel, troca pela interface mudando o cabeçalho, e o aviso correto
+ao arquivar o grupo em uso.
+
+**Um defeito de processo corrigido junto.** `npm run ci` não rodava typecheck —
+rodava lint, migrations, testes e build. Como o build do Next não cobre os
+arquivos de teste, um erro de tipo que eu havia introduzido em
+`tests/caju-export.test.mts` passou despercebido: os testes passavam (o runtime
+apenas remove tipos) e o build também. `npm run typecheck` entrou no pipeline.
+
+Validação: 243 testes, `npm run ci` completo **agora com typecheck**, 51
+verificações de navegador.
