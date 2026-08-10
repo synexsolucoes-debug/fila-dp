@@ -17,6 +17,7 @@
     "schema:manifest": "node scripts/generate-schema-manifest.mjs",
     "smoke": "node scripts/smoke-http.mjs",
     "browser-check": "node scripts/browser-check.mjs",
+    "a11y-check": "node scripts/a11y-check.mjs",
     "verify:isolation": "node --experimental-strip-types scripts/verify-tenant-isolation.mjs",
     "neon-bridge": "node scripts/neon-http-bridge.mjs",
     "db:rehearse-phase2": "node scripts/rehearse-phase2-db.mjs",

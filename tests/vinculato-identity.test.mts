@@ -74,6 +74,42 @@ test("a marca usa os arquivos oficiais, não um redesenho", async () => {
   assert.ok(icon.size > 200, "o favicon precisa ser gerado do símbolo oficial");
 });
 
+test("o verde-menta da marca anterior não voltou pelas bordas", async () => {
+  // Restaram três acentos em telas escuras e um hover depois da troca de marca.
+  // Verde de sucesso continua permitido: o que não pode é menta como identidade.
+  const files = await walk(root, [".css"]);
+  const offenders: string[] = [];
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    for (const legacy of ["#45dcb0", "#8ae0c5", "#0E3B3B", "#0e3b3b"]) {
+      if (source.includes(legacy)) offenders.push(`${file.replace(root, "")} (${legacy})`);
+    }
+  }
+  assert.deepEqual(offenders, [], `menta da marca antiga ainda no CSS: ${offenders.join(", ")}`);
+});
+
+test("o azul vivo nunca é a cor do texto sobre superfície clara", async () => {
+  // --brand-accent puro fica em 3.39:1 sobre branco. Quem precisa de azul em
+  // texto usa --ui-mint-text (claro) ou --brand-accent-on-dark (escuro).
+  const dashboard = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
+  assert.ok(dashboard.includes("--ui-mint-text:"), "falta o par legível de --ui-mint");
+  assert.ok(dashboard.includes("--ui-on-mint:"), "falta a cor de texto sobre preenchimento --ui-mint");
+  const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.ok(globals.includes("--brand-accent-on-dark:"), "falta o acento legível sobre navy");
+});
+
+test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa", async () => {
+  const script = await readFile(new URL("../scripts/a11y-check.mjs", import.meta.url), "utf8");
+  // Gradiente medido de verdade: pular superfície com background-image foi o que
+  // deixou passar três textos entre 3.09:1 e 4.09:1 na primeira rodada.
+  assert.match(script, /gradientSurfaces/u);
+  assert.match(script, /process\.exit\(failures === 0 \? 0 : 1\)/u);
+  // As duas larguras: alvo de 24px muda com o layout.
+  assert.match(script, /width: 390/u);
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(pkg.scripts["a11y-check"], "node scripts/a11y-check.mjs");
+});
+
 test("nenhuma tela usa mais o marcador decorativo antigo", async () => {
   const files = await walk(root, [".tsx"]);
   const offenders = [];

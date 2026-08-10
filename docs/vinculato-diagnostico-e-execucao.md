@@ -686,3 +686,75 @@ apenas remove tipos) e o build também. `npm run typecheck` entrou no pipeline.
 
 Validação: 243 testes, `npm run ci` completo **agora com typecheck**, 51
 verificações de navegador.
+
+## 20. Acessibilidade WCAG 2.2 AA: medida, não declarada
+
+Esta é a parte da Fase 6 que tem critério objetivo, então comecei por ela — e
+comecei medindo, antes de mexer em cor.
+
+**A primeira medição estava errada, e errada para o lado ruim.** O auditor que
+escrevi pulava qualquer elemento sobre superfície com `background-image`,
+contando-o como "não avaliável". A justificativa era razoável (gradiente não tem
+cor única, medir contra o `backgroundColor` produz número inventado), mas o
+efeito prático era um passe livre: 13 textos ficavam fora da conta. Ao medir
+esses 13 à mão, três reprovavam de verdade — o selo do CTA final em 3.20:1, o
+texto de apoio do mesmo bloco em 4.09:1 e o kicker da tela de login em 3.09:1.
+Um critério que só avalia o que é fácil não é um critério.
+
+A conferência virou `scripts/a11y-check.mjs`, parte do repositório e não uma
+rodada avulsa. Ela extrai as paradas de cor do gradiente, compõe as camadas
+translúcidas sobre as opacas e mede o texto **contra a pior parada**. É
+conservador de propósito: uma aprovação precisa valer para o gradiente inteiro,
+não para o ponto médio. Só sobra como "não mensurável" o que é imagem de verdade
+(`url(...)`), e isso aparece no relatório em vez de sumir.
+
+**O que a varredura encontrou depois de ficar honesta.** Home 14 falhas de
+contraste e 2 alvos pequenos; Login 8 e 1; Painel 7 e 2; Console 0 e 1. Corrigi
+por token, não espalhando valores:
+
+- `--vin-text-soft` 4.48:1 → `#55627A`; `--ui-text-muted` 2.76:1 → `#626C7A`.
+- `--brand-accent-on-dark: #6FB4FF` para o azul da marca sobre navy — o
+  `--brand-accent` puro fica em 4.08:1 ali.
+- No painel, `--ui-mint` era usado como preenchimento **e** como cor de texto.
+  Sobre branco ele dá 3.39:1. Em vez de trocar o token (o que mudaria as barras,
+  bordas e ícones que dependem dele), separei os papéis: `--ui-mint-text` para
+  rótulo em superfície clara e `--ui-on-mint` para texto sobre o preenchimento.
+- A seção `.final-cta` redefine os próprios tokens de apoio, porque o gradiente
+  dela termina em `--brand`, bem mais claro que o navy do rodapé. Uma exceção
+  declarada no lugar certo, não exceções espalhadas pelas regras filhas.
+
+**Auditar uma tela do painel não é auditar o painel.** O painel troca de visão
+por estado, não por rota: `/painel` mostrava a visão geral e mais nada. Passei a
+percorrer a navegação lateral de verdade, clicando item a item, nas larguras
+1440 e 390. Isso mudou o resultado — apareceram falhas que a varredura de uma
+tela só não via, entre elas um defeito real de produção: o bloco "Calendários
+externos" do Planner foi escrito com os tokens de superfície clara mas mora
+dentro de um cartão navy. O título estava em **1.06:1**. Não é "contraste baixo";
+é texto invisível, e estava assim na tela.
+
+**Verde-menta da marca anterior.** Encontrei acentos remanescentes
+(`#45dcb0`, `#8ae0c5`, `#0E3B3B`, e os fallbacks do módulo de cadastros) em
+superfícies escuras da marca. Foram para a paleta azul. **Não** mexi no verde
+semântico de sucesso: o levantamento achou 154 ocorrências de cores
+esverdeadas no CSS, e a maioria é estado positivo, não identidade. Recolorir por
+matiz quebraria o significado — essa varredura fica para o passo de direção
+visual, com leitura de contexto, não com `sed`.
+
+**Guardas para não voltar.** Três testes novos em
+`tests/vinculato-identity.test.mts`: o menta antigo não pode reaparecer no CSS,
+o par legível de `--ui-mint` precisa existir, e a conferência WCAG precisa
+continuar medindo gradiente, rodando nas duas larguras e reprovando com código
+de saída diferente de zero. O primeiro deles já pegou uma ocorrência que eu
+tinha deixado passar em `registrations.module.css`.
+
+**Resultado medido.** 0 violação de contraste, 0 controle sem nome acessível e
+0 alvo abaixo de 24x24 nas 12 telas percorridas, em 1440 e 390 px.
+
+**Limite honesto desta rodada.** A conta de ensaio está no plano Starter, então
+a navegação lateral só expõe os módulos desse plano. Operação DP, Pagamentos PJ,
+Ponto, Integrações, Módulos auxiliares, Folha e Relatórios **não foram
+auditados** — não porque passaram, mas porque não apareceram. Fica para a rodada
+com uma conta em plano Enterprise.
+
+Validação: 246 testes, `npm run ci` completo, 51 verificações de navegador,
+`npm run a11y-check` em 12 telas × 2 larguras.

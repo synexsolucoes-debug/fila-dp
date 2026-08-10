@@ -1,7 +1,7 @@
 .root {
-  --reg-navy: var(--ui-brand, #0b1f33);
-  --reg-mint: var(--ui-primary, #087a63);
-  --reg-mint-soft: var(--ui-primary-soft, #e7f6f1);
+  --reg-navy: var(--ui-brand, #041B45);
+  --reg-mint: var(--ui-primary, #0857B2);
+  --reg-mint-soft: var(--ui-primary-soft, #E7F0FE);
   --reg-surface: var(--ui-surface, #fff);
   --reg-muted: var(--ui-surface-muted, #f0f4f6);
   --reg-border: var(--ui-border, #d8e0e7);
@@ -133,7 +133,7 @@
 .companyRow > svg { color: var(--reg-soft); }
 .principalMark,
 .branchMark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; }
-.principalMark { background: var(--reg-navy); color: #d4f5e9; }
+.principalMark { background: var(--reg-navy); color: #CFE4FF; }
 .branchMark { border: 1px solid var(--reg-border); background: var(--reg-muted); color: var(--reg-soft); }
 
 .detailPane { min-width: 0; padding: 26px clamp(22px, 3vw, 38px); background: var(--reg-surface); }
@@ -189,7 +189,7 @@
 .table td:last-child { width: 42px; padding-inline: 6px; }
 .table td:last-child button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--reg-soft); cursor: pointer; }
 .personCell { display: flex; align-items: center; gap: 10px; min-width: 190px; }
-.personCell > span { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; background: var(--reg-navy); color: #d4f5e9; font-size: .66rem; font-weight: 810; }
+.personCell > span { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; background: var(--reg-navy); color: #CFE4FF; font-size: .66rem; font-weight: 810; }
 .personCell > div { display: grid; gap: 4px; }
 .personCell strong { font-size: .79rem; }
 .personCell small { color: var(--reg-soft); font-size: .67rem; }
@@ -262,7 +262,7 @@
 .drawerHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 104px; padding: 18px 24px; border-bottom: 1px solid var(--reg-border); }
 .drawerHeader > div:last-child { display: flex; gap: 8px; }
 .employeeHero { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.employeeHero > span { display: grid; place-items: center; flex: 0 0 auto; width: 52px; height: 52px; border-radius: 10px; background: var(--reg-navy); color: #d4f5e9; font-size: .9rem; font-weight: 820; }
+.employeeHero > span { display: grid; place-items: center; flex: 0 0 auto; width: 52px; height: 52px; border-radius: 10px; background: var(--reg-navy); color: #CFE4FF; font-size: .9rem; font-weight: 820; }
 .employeeHero small { color: var(--reg-mint); font-size: .62rem; font-weight: 800; letter-spacing: .1em; }
 .employeeHero h2 { margin: 4px 0; overflow: hidden; font-size: 1.18rem; text-overflow: ellipsis; white-space: nowrap; }
 .employeeHero p { margin: 0; color: var(--reg-soft); font-size: .71rem; }
@@ -281,9 +281,9 @@
 .historyTrail { position: relative; max-width: 610px; margin: 0 auto; padding: 4px 0 30px; }
 .historyTrail > header { position: relative; display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding: 18px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--reg-mint) 30%, var(--reg-border)); border-radius: 10px; background: linear-gradient(110deg, var(--reg-navy), color-mix(in srgb, var(--reg-navy) 74%, var(--reg-mint))); color: #fff; }
 .historyTrail > header::after { content: ""; position: absolute; right: -24px; width: 130px; height: 130px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%; box-shadow: 0 0 0 24px rgba(255,255,255,.035), 0 0 0 48px rgba(255,255,255,.025); }
-.historyTrail > header > span { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.22); border-radius: 9px; background: rgba(255,255,255,.09); color: #8ae0c5; }
+.historyTrail > header > span { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.22); border-radius: 9px; background: rgba(255,255,255,.09); color: var(--brand-accent-on-dark); }
 .historyTrail > header > div { position: relative; z-index: 1; }
-.historyTrail > header small { color: #8ae0c5; font-size: .58rem; font-weight: 820; letter-spacing: .12em; }
+.historyTrail > header small { color: var(--brand-accent-on-dark); font-size: .58rem; font-weight: 820; letter-spacing: .12em; }
 .historyTrail > header h3 { margin: 3px 0; font-size: 1rem; }
 .historyTrail > header p { margin: 0; color: rgba(255,255,255,.68); font-size: .66rem; }
 .historyTrail ol { margin: 0; padding: 0; list-style: none; }

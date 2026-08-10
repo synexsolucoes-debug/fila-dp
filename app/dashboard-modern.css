@@ -139,7 +139,7 @@
 }
 
 .dashboard-sidebar nav button.active > span {
-  color: #45dcb0;
+  color: var(--brand-accent-on-dark);
 }
 
 .sidebar-collapsed .dashboard-sidebar nav button {
@@ -757,16 +757,20 @@
 .card-sla-target strong { color: var(--ui-primary); }
 .card-process-helper { margin-top: -1px; color: var(--ui-text-soft); font-size: 9px; font-weight: 600; line-height: 1.4; }
 
-.planner-connections { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--ui-border); }
+/* Este bloco mora dentro de `.planner-focus`, que é um cartão navy. Ele foi
+ * escrito com os tokens de superfície clara e por isso o título ficava em
+ * 1.06:1 — texto invisível de fato, não "contraste baixo". Aqui ele usa a
+ * paleta de superfície escura, igual ao resto do cartão que o contém. */
+.planner-connections { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--on-brand-line); }
 .planner-connections > header { min-height: auto !important; padding: 0 !important; display: flex; align-items: center; justify-content: space-between; border: 0 !important; }
-.planner-connections > header strong { color: var(--ui-text); font-size: 11px; }
-.planner-connections > header button { padding: 0; border: 0; background: transparent; color: var(--ui-primary); cursor: pointer; font: 700 10px var(--font-geist-sans), sans-serif; }
-.planner-connections > p { margin: 9px 0 0; color: var(--ui-text-soft); font-size: 10px; line-height: 1.45; }
+.planner-connections > header strong { color: var(--brand-contrast); font-size: 11px; }
+.planner-connections > header button { padding: 0; border: 0; background: transparent; color: var(--brand-accent-on-dark); cursor: pointer; font: 700 10px var(--font-geist-sans), sans-serif; }
+.planner-connections > p { margin: 9px 0 0; color: var(--on-brand-soft); font-size: 10px; line-height: 1.45; }
 .planner-connections article { margin-top: 9px; display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: center; }
-.planner-connections article > svg { width: 16px; color: var(--ui-primary); }
+.planner-connections article > svg { width: 16px; color: var(--brand-accent-on-dark); }
 .planner-connections article strong, .planner-connections article small { display: block; }
-.planner-connections article strong { color: var(--ui-text); font-size: 10px; }
-.planner-connections article small { margin-top: 3px; color: var(--ui-text-soft); font-size: 9px; }
+.planner-connections article strong { color: var(--brand-contrast); font-size: 10px; }
+.planner-connections article small { margin-top: 3px; color: var(--on-brand-soft); font-size: 9px; }
 .planner-connections form { margin-top: 11px; display: grid; gap: 7px; }
 .planner-connections select, .planner-connections input { min-height: 34px; padding: 0 8px; border: 1px solid var(--ui-border-strong); border-radius: 7px; background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 10px; }
 .planner-connections form .secondary-button { min-height: 34px; font-size: 9px; }
@@ -1410,7 +1414,7 @@
 
 .inbox-summary > span,
 .planner-focus > span {
-  color: #45dcb0;
+  color: var(--brand-accent-on-dark);
   font-size: 10px;
 }
 
@@ -1629,7 +1633,7 @@
 }
 
 .planner-focus h2 {
-  color: #45dcb0;
+  color: var(--brand-accent-on-dark);
 }
 
 .planner-focus > p,
@@ -2605,6 +2609,11 @@
   --ui-primary-hover: var(--vin-navy);
   --ui-primary-soft: #e7f0fe;
   --ui-mint: var(--vin-blue-vivid);
+  /* O azul vivo é ótimo como preenchimento e péssimo como texto: sobre branco
+   * ele fica em 3.39:1. Estes dois pares existem para que rótulo e preenchimento
+   * possam usar a mesma cor de marca sem que a leitura pague o preço. */
+  --ui-mint-text: var(--vin-blue);
+  --ui-on-mint: #0A1E33;
   --ui-bg: var(--vin-bg);
   --ui-surface: var(--vin-surface);
   --ui-surface-muted: #eef2f8;
@@ -2629,6 +2638,8 @@
   --ui-primary-hover: #6cb8ff;
   --ui-primary-soft: #12294a;
   --ui-mint: var(--vin-blue-vivid);
+  --ui-mint-text: var(--brand-accent-on-dark);
+  --ui-on-mint: #0A1E33;
   --ui-bg: #0b1626;
   --ui-surface: #12203a;
   --ui-surface-muted: #182b48;
@@ -2693,11 +2704,14 @@
 .overview-layout { display: grid; gap: 18px; }
 .overview-hero { min-height: 136px; padding: 24px 26px; display: flex; align-items: center; justify-content: space-between; gap: 22px; overflow: hidden; border: 1px solid #2f6661; border-radius: 16px; background: var(--ui-brand); color: #fff; }
 .overview-hero > div { max-width: 720px; }
-.overview-hero span, .overview-panel header > div > span, .overview-sla-band > div:first-child > span { display: block; color: var(--ui-mint); font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+.overview-hero span, .overview-panel header > div > span, .overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+/* No herói o fundo é o navy, então o azul vivo já lê; nos painéis claros, não. */
+.overview-hero span { color: var(--ui-mint); }
+.overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-mint-text); }
 .overview-hero strong { display: block; margin-top: 7px; font-size: clamp(20px, 2vw, 27px); letter-spacing: -.04em; }
 .overview-hero p { margin: 7px 0 0; color: rgba(255,255,255,.73); font-size: 12px; line-height: 1.5; }
-.overview-hero .overview-new-demand { flex: 0 0 auto; border: 0; background: var(--ui-mint); color: #0E3B3B; box-shadow: none; }
-.overview-hero .overview-new-demand:hover { background: #8ae0c5; }
+.overview-hero .overview-new-demand { flex: 0 0 auto; border: 0; background: var(--ui-mint); color: var(--ui-on-mint); box-shadow: none; }
+.overview-hero .overview-new-demand:hover { background: #8CC4FF; }
 
 .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .overview-metrics article { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
@@ -2829,7 +2843,7 @@
 .demand-sla-state.completed strong { color: var(--ui-success); }
 .demand-quick-actions { display: flex; flex-wrap: wrap; align-content: start; align-items: center; gap: 6px; }
 .demand-quick-actions button { min-height: 28px; padding: 0 8px; border: 1px solid var(--ui-border-strong); border-radius: 8px; background: var(--ui-surface); color: var(--ui-primary); font: 750 9px Manrope, "Plus Jakarta Sans", sans-serif; cursor: pointer; }
-.demand-quick-actions .quick-complete { display: inline-flex; align-items: center; gap: 4px; border-color: var(--ui-mint); background: var(--ui-mint); color: #0E3B3B; }
+.demand-quick-actions .quick-complete { display: inline-flex; align-items: center; gap: 4px; border-color: var(--ui-mint); background: var(--ui-mint); color: var(--ui-on-mint); }
 .demand-quick-actions .quick-complete svg { width: 12px; height: 12px; }
 .demand-detail-modal .card-modal-body.single { padding: 18px 20px 22px; }
 .demand-detail-modal .card-dialog-tabs { padding-inline: 20px; background: var(--ui-surface); }
@@ -2897,12 +2911,12 @@
   text-align: center;
 }
 
-.panel-error-boundary span { color: #0E3B3B; font-size: 10px; font-weight: 850; letter-spacing: .13em; }
+.panel-error-boundary span { color: var(--brand-strong); font-size: 10px; font-weight: 850; letter-spacing: .13em; }
 .panel-error-boundary h1 { margin: 12px 0 0; font-size: 27px; letter-spacing: -.05em; }
 .panel-error-boundary p { margin: 10px 0 22px; color: #66716d; font-size: 13px; line-height: 1.55; }
-.panel-error-boundary button { min-height: 42px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 12px; background: #0E3B3B; color: #fff; font: 750 12px inherit; cursor: pointer; }
+.panel-error-boundary button { min-height: 42px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 12px; background: var(--brand-strong); color: #fff; font: 750 12px inherit; cursor: pointer; }
 .panel-error-boundary button svg { width: 15px; height: 15px; }
-.panel-error-boundary a { display: block; margin-top: 13px; color: #0E3B3B; font-size: 12px; font-weight: 750; }
+.panel-error-boundary a { display: block; margin-top: 13px; color: var(--brand-strong); font-size: 12px; font-weight: 750; }
 
 /* Grupo empresarial and navigation clarity. */
 .dashboard-sidebar { display: flex; flex-direction: column; gap: 0; }
@@ -2926,7 +2940,7 @@
 .companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
 .companies-list article > i { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 10px; font-style: normal; font-weight: 850; }
 .companies-list article.principal { border-left: 3px solid var(--ui-mint); }
-.companies-list article.principal > i { background: var(--ui-mint); color: #0E3B3B; }
+.companies-list article.principal > i { background: var(--ui-mint); color: var(--ui-on-mint); }
 .companies-list article.subsidiary > i { margin-left: 5px; }
 .companies-list article strong em { margin-left: 6px; color: var(--ui-primary); font-size: 8px; font-style: normal; font-weight: 850; }
 
@@ -3007,7 +3021,7 @@
 .board-manager, .workspace-switcher { border-color: var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 
 .access-admin-hero { padding: 17px 18px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid color-mix(in srgb, var(--ui-mint) 56%, var(--ui-border)); border-radius: 14px; background: color-mix(in srgb, var(--ui-mint) 10%, var(--ui-surface)); }
-.access-admin-hero > span { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--ui-mint); color: #0E3B3B; }
+.access-admin-hero > span { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--ui-mint); color: var(--ui-on-mint); }
 .access-admin-hero svg { width: 19px; height: 19px; }
 .access-admin-hero strong { color: var(--ui-text); font-size: 12px; }
 .access-admin-hero p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 9px; line-height: 1.5; }
@@ -3023,7 +3037,7 @@
 .workspace-member-list article > i { background: color-mix(in srgb, var(--ui-mint) 25%, var(--ui-surface)); color: var(--ui-primary); }
 .workspace-member-list article strong { color: var(--ui-text); font-size: 10px; }
 .workspace-member-list article small { color: var(--ui-text-soft); font-size: 8px; }
-.workspace-member-list article em { margin-left: 5px; padding: 3px 5px; border-radius: 5px; background: var(--ui-mint); color: #0E3B3B; font-size: 7px; font-style: normal; }
+.workspace-member-list article em { margin-left: 5px; padding: 3px 5px; border-radius: 5px; background: var(--ui-mint); color: var(--ui-on-mint); font-size: 7px; font-style: normal; }
 .member-activation-status { width: max-content; margin-top: 5px; padding: 3px 6px; display: block; border-radius: 99px; font-size: 7px; font-weight: 850; }
 .member-activation-status.active { background: color-mix(in srgb, var(--ui-mint) 28%, var(--ui-surface)); color: var(--ui-success); }
 .member-activation-status.pending { background: #fff2e3; color: #a75d21; }
@@ -3230,7 +3244,7 @@
 .company-settings-view, .payroll-view { display: grid; gap: 16px; }
 .company-settings-intro, .company-settings-access { padding: 16px; display: grid; align-items: center; gap: 12px; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface-muted); }
 .company-settings-intro { grid-template-columns: 38px minmax(0, 1fr) auto; border-color: color-mix(in srgb, var(--ui-mint) 45%, var(--ui-border)); }
-.company-settings-intro > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: var(--ui-mint); color: #0E3B3B; }
+.company-settings-intro > span { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: var(--ui-mint); color: var(--ui-on-mint); }
 .company-settings-intro svg { width: 18px; height: 18px; }
 .company-settings-intro strong, .company-settings-access strong { color: var(--ui-text); font-size: 12px; }
 .company-settings-intro p, .company-settings-access p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 9px; line-height: 1.5; }
@@ -3255,7 +3269,7 @@
 .company-settings-list > article:last-child { border-bottom: 0; }
 .company-settings-list > article > i { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 9px; font-style: normal; font-weight: 850; }
 .company-settings-list > article.principal { box-shadow: inset 3px 0 0 var(--ui-mint); }
-.company-settings-list > article.principal > i { background: var(--ui-mint); color: #0E3B3B; }
+.company-settings-list > article.principal > i { background: var(--ui-mint); color: var(--ui-on-mint); }
 .company-settings-list article strong, .company-settings-list article small, .company-settings-list article b { display: block; }
 .company-settings-list article strong { overflow: hidden; color: var(--ui-text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .company-settings-list article strong em { margin-left: 5px; padding: 3px 5px; border-radius: 5px; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 7px; font-style: normal; }
@@ -3384,3 +3398,10 @@
   .payroll-live-totals > span { padding: 0 0 8px; border-bottom: 1px solid var(--ui-border); }
   .payroll-live-totals > span:last-child { padding-bottom: 0; border-bottom: 0; }
 }
+
+
+/* Alvos interativos: mínimo de 24px (WCAG 2.2 AA — 2.5.8). Vários selects e
+   botões de apoio do painel mediam 15px de altura, o que é difícil de acertar
+   no toque e reprova na auditoria. */
+.dashboard-shell :is(select, button):not(.dashboard-sidebar button) { min-height: 24px; }
+.dashboard-shell :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
