@@ -9,8 +9,39 @@ export type ReadinessReport = {
   pendingMigrations: number;
   /** Nomes das migrations pendentes — só para quem administra a plataforma. */
   pendingMigrationIds?: string[];
+  /** Segredos ausentes desligam capacidades inteiras mesmo com o banco em dia. */
+  configuration: "ok" | "incomplete";
+  /** Quantas capacidades estão desligadas por falta de configuração. */
+  missingCapabilities: number;
+  /** Quais capacidades e quais variáveis — só para quem administra a plataforma. */
+  missingConfiguration?: Array<{ capability: string; keys: string[] }>;
   detail: string;
 };
+
+/**
+ * Segredos que, quando ausentes, desligam uma capacidade inteira em silêncio.
+ *
+ * O que motivou isso: sem `FDP_INTEGRATION_VAULT_KEY` o cofre recusa toda
+ * gravação de credencial, mas o relatório de prontidão dizia "ok" porque só
+ * olhava o banco. Quem opera via `Guardar credencial` só via a operação falhar,
+ * sem saber que faltava configuração no deployment.
+ *
+ * Cada entrada é satisfeita por QUALQUER uma das chaves, o que preserva os
+ * fallbacks já existentes no código (por exemplo, o CPF aceita o segredo de
+ * sessão quando não há um HMAC dedicado).
+ */
+const REQUIRED_CONFIGURATION: ReadonlyArray<{ capability: string; keys: string[] }> = [
+  { capability: "Sessões, recuperação de acesso e chaves de API", keys: ["FDP_AUTH_SECRET"] },
+  { capability: "Cofre de credenciais das integrações", keys: ["FDP_INTEGRATION_VAULT_KEY", "FDP_INTEGRATION_VAULT_KEYS"] },
+  { capability: "Executor assíncrono de integrações e webhooks", keys: ["FDP_INTEGRATION_WORKER_SECRET"] },
+  { capability: "Anexos das demandas", keys: ["BLOB_READ_WRITE_TOKEN"] },
+  { capability: "Proteção de CPF no cadastro de pessoas", keys: ["FDP_PII_HASH_SECRET", "FDP_AUTH_SECRET"] },
+];
+
+/** Capacidades desligadas por falta de segredo neste deployment. */
+export function missingConfiguration() {
+  return REQUIRED_CONFIGURATION.filter((entry) => !entry.keys.some((key) => String(process.env[key] ?? "").trim()));
+}
 
 /**
  * Diz se este deployment consegue operar contra o banco que ele enxerga.
@@ -28,7 +59,9 @@ export type ReadinessReport = {
  */
 const CORE_TABLES = ["fdp_workspaces", "fdp_modules", "fdp_saas_plans"] as const;
 
-async function probeReadAccess(): Promise<ReadinessReport | null> {
+type DatabaseVerdict = Omit<ReadinessReport, "configuration" | "missingCapabilities">;
+
+async function probeReadAccess(): Promise<DatabaseVerdict | null> {
   const d1 = getD1();
   for (const table of CORE_TABLES) {
     try {
@@ -64,6 +97,25 @@ async function probeReadAccess(): Promise<ReadinessReport | null> {
 }
 
 export async function checkReadiness(includeDetail: boolean): Promise<ReadinessReport> {
+  const gaps = missingConfiguration();
+  /**
+   * O veredito do banco e o da configuração são independentes: um deployment
+   * com o schema em dia continua degradado se não consegue selar credencial.
+   */
+  const withConfiguration = (report: DatabaseVerdict): ReadinessReport => {
+    if (!gaps.length) return { ...report, configuration: "ok", missingCapabilities: 0 };
+    const detail = report.status === "ok"
+      ? `Banco em dia, mas ${gaps.length === 1 ? "uma capacidade está desligada" : `${gaps.length} capacidades estão desligadas`} por falta de configuração neste deployment.`
+      : `${report.detail} Além disso, ${gaps.length === 1 ? "uma capacidade está desligada" : `${gaps.length} capacidades estão desligadas`} por falta de configuração.`;
+    return {
+      ...report,
+      status: "degraded",
+      configuration: "incomplete",
+      missingCapabilities: gaps.length,
+      ...(includeDetail ? { missingConfiguration: gaps.map((entry) => ({ capability: entry.capability, keys: [...entry.keys] })) } : {}),
+      detail,
+    };
+  };
   try {
     const d1 = getD1();
     const applied = await d1.prepare("SELECT id FROM fdp_schema_migrations").all<{ id: string }>();
@@ -76,34 +128,34 @@ export async function checkReadiness(includeDetail: boolean): Promise<ReadinessR
       // privilégio para ele. Sem esta sondagem o relatório diria "ok" enquanto
       // toda a operação falhava.
       const access = await probeReadAccess();
-      if (access) return access;
-      return { status: "ok", database: "ok", pendingMigrations: 0, detail: "Banco na mesma versão do aplicativo." };
+      if (access) return withConfiguration(access);
+      return withConfiguration({ status: "ok", database: "ok", pendingMigrations: 0, detail: "Banco na mesma versão do aplicativo." });
     }
-    return {
+    return withConfiguration({
       status: "degraded",
       database: "outdated",
       pendingMigrations: pending.length,
       ...(includeDetail ? { pendingMigrationIds: [...pending] } : {}),
       detail: "O banco está atrás desta versão do aplicativo. Aplique as migrações pendentes com `npm run db:migrate`.",
-    };
+    });
   } catch (error) {
     const fault = classifyInfrastructureFault(error);
     // Sem a tabela de histórico o banco não passou por nenhuma migração: isso é
     // desatualização, não indisponibilidade.
     if (fault?.code === "SCHEMA_OUTDATED") {
-      return {
+      return withConfiguration({
         status: "degraded",
         database: "outdated",
         pendingMigrations: expectedMigrations.length,
         ...(includeDetail ? { pendingMigrationIds: [...expectedMigrations] } : {}),
         detail: "O banco não possui histórico de migrações. Execute `npm run db:migrate` apontando para ele.",
-      };
+      });
     }
-    return {
+    return withConfiguration({
       status: "degraded",
       database: "unreachable",
       pendingMigrations: -1,
       detail: "Não foi possível falar com o banco de dados a partir deste deployment.",
-    };
+    });
   }
 }
