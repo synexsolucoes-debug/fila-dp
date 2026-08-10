@@ -59,7 +59,9 @@ function vaultKeys() {
     }
   }
   if (!result.size && process.env.FDP_INTEGRATION_VAULT_KEY) result.set(1, decodeVaultKey(process.env.FDP_INTEGRATION_VAULT_KEY));
-  if (!result.size) throw new ApiError(503, "VAULT_NOT_CONFIGURED", "Configure o cofre de credenciais antes de salvar segredos.");
+  // Nomear a variável é o que transforma "não salva" em algo acionável: quem vê
+  // esta mensagem administra integrações e precisa saber o que falta no deployment.
+  if (!result.size) throw new ApiError(503, "VAULT_NOT_CONFIGURED", "Cofre de credenciais não configurado neste deployment: defina FDP_INTEGRATION_VAULT_KEY (chave AES-256 em base64) e publique novamente antes de guardar segredos.");
   return result;
 }
 
