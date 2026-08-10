@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, MoreHorizontal } from "lucide-react";
-import { chatGPTSignOutPath, getChatGPTUser } from "../chatgpt-auth";
+import { getChatGPTUser } from "../chatgpt-auth";
 import { LoginForm } from "./LoginForm";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 
@@ -12,8 +12,12 @@ export const metadata: Metadata = {
   description: "Acesse seu ambiente de gestão de demandas do Departamento Pessoal.",
 };
 
-export default async function LoginPage() {
-  const user = await getChatGPTUser();
+export default async function LoginPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const query = await searchParams;
+  // "Entrar em outra conta" chega aqui com a sessão já encerrada. Mesmo assim a
+  // tela nunca deve oferecer "continuar": a intenção era trocar de identidade.
+  const switching = query.trocar === "1";
+  const user = switching ? null : await getChatGPTUser();
 
   return (
     <main className="auth-page">
@@ -48,7 +52,10 @@ export default async function LoginPage() {
               <h2>Bem-vindo de volta.</h2>
               <p>Você está conectado como <strong>{user.displayName}</strong>.</p>
               <a className="button auth-primary" href="/painel">Continuar para o painel <ArrowRight aria-hidden="true" /></a>
-              <a className="auth-secondary-link" href={chatGPTSignOutPath("/login")}>Entrar com outra conta</a>
+              <form method="post" action="/api/auth/logout">
+                <input type="hidden" name="trocar" value="1" />
+                <button type="submit" className="auth-secondary-link">Entrar em outra conta</button>
+              </form>
             </>
           ) : <LoginForm />}
         </div>

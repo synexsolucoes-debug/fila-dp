@@ -435,3 +435,326 @@ Validação: 214 testes, 50 verificações de navegador (incluindo criar usuári
 pela interface e as quatro larguras), 24 de fumaça e 7 de isolamento — estas
 últimas com o papel `vinculato_app`, **sem** superusuário, para que o RLS
 realmente valesse durante o ensaio.
+
+## 16. Bloqueio por workspace arquivado e "Entrar em outra conta"
+
+Dois defeitos reproduzidos no navegador antes de qualquer alteração.
+
+### Causa raiz 1 — arquivar um grupo trancava o usuário para fora de todos
+
+`getWorkspaceContext` resolvia o contexto em três passos: lia a *preferência*
+do usuário (`active_workspace_id`) **sem olhar o ciclo de vida do workspace**;
+só caía para outra associação quando a preferência não existia; e então, se o
+workspace resolvido não estivesse ativo, lançava `WORKSPACE_SUSPENDED`.
+
+O resultado: com o grupo preferido arquivado, o primeiro passo achava o grupo
+parado, o fallback nunca rodava, e a requisição inteira era recusada — mesmo com
+associação ativa em outro grupo. Reprodução: usuário em A (arquivado, preferido)
+e B (ativo) recebia *"Não foi possível abrir o Vinculato — Este grupo está
+arquivado"* e `GET /api/workspace → 403`.
+
+**Correção.** `lib/workspace-access.ts` passa a ser o cálculo único de
+workspaces acessíveis, usado pela resolução de contexto e pelo seletor:
+
+1. a preferência só vale se o workspace continuar associado **e** operacional;
+2. caindo fora, escolhe o melhor candidato operacional de forma determinística
+   (proprietário primeiro, depois associação mais antiga) e anuncia a troca em
+   `switchedFrom`, para a interface não mudar o contexto em silêncio;
+3. sem nenhum operacional, devolve `NO_ACTIVE_WORKSPACE` **com a lista dos
+   grupos e o estado de cada um**, em vez de uma recusa genérica.
+
+Só `active` é contexto operacional; suspenso, cancelado e arquivado não operam.
+Arquivar um grupo deixou de ter qualquer efeito sobre as outras associações.
+
+Verificado no navegador: o mesmo usuário que antes via a tela de erro agora
+entra direto no grupo ativo, com `GET /api/workspace → 200`.
+
+O snapshot passou a expor `availableWorkspaces` com status, motivo e papel — a
+lista sai do serviço central, e a consulta paralela que existia só para isso foi
+removida (uma ida ao banco a menos por carregamento do painel).
+
+### Causa raiz 2 — a troca de conta era um link GET para uma rota só-POST
+
+Na tela de login, "Entrar com outra conta" era
+`<a href="/api/auth/logout?return_to=/">`. A rota exportava apenas `POST`.
+O navegador recebia **HTTP 405**, a sessão nunca era encerrada e o usuário
+voltava para a mesma conta — exatamente o sintoma relatado.
+
+**Correção, e por que não foi só adicionar um GET.** A primeira versão desta
+correção adicionou `export async function GET`. Um teste existente reprovou, com
+razão: logout por GET é disparado por prefetch, por `<img src=…>` ou por
+qualquer scanner de link, derrubando a sessão sem o usuário pedir. A solução
+final mantém a proibição e resolve por **formulário POST**:
+
+- o painel e a tela de login enviam `POST /api/auth/logout` com `trocar=1`;
+- envio de formulário recebe **303** e o navegador segue sozinho; o `fetch` do
+  botão "Sair" continua recebendo JSON;
+- o destino da troca é a constante `/login?trocar=1` — não passa pelo
+  `return_to` do usuário, então não vira redirecionamento aberto;
+- com `trocar=1`, a tela de login não oferece "continuar" com a identidade
+  encerrada: mostra o formulário vazio.
+
+"Sair" e "Entrar em outra conta" viraram dois comandos distintos e visíveis no
+rodapé da barra lateral.
+
+Verificado no navegador, em sequência: sessão ativa (200) → troca → destino
+`/login?trocar=1`, sessão encerrada (401), formulário vazio, sem oferta de
+continuar → autenticação de uma segunda identidade concluída com sucesso.
+
+### Um caso-limite que a correção tornou visível
+
+Ao entrar com uma conta cujo único grupo estava arquivado, a resposta passou a
+ser: *"Nenhum dos seus grupos está operando no momento: Synex (arquivado)."* —
+em vez da recusa genérica anterior. Nega o acesso do mesmo jeito, mas diz qual
+grupo e em que estado.
+
+## 17. Console da plataforma: administrar de verdade
+
+**Causa raiz.** A API já fazia mais do que a interface deixava fazer.
+`PATCH /api/platform/workspaces/[id]` sempre soube trocar plano e assentos,
+transferir propriedade e mudar situação — com validação de downgrade, exigência
+de motivo e auditoria. `PATCH /api/platform/users/[id]` já bloqueava (derrubando
+sessões e protegendo proprietários) e vinculava/desvinculava de workspaces. O
+console expunha apenas suspender, arquivar, bloquear e criar workspace. A queixa
+"só dá para arquivar" era da interface, não do backend.
+
+**O que faltava mesmo no backend:** abrir um cliente ou uma identidade. Não
+existia rota de detalhe, então não havia como ver membros, empresas, módulos,
+assinatura ou histórico antes de decidir.
+
+**Entregue.**
+
+- `GET /api/platform/workspaces/[id]/detail` — ficha, assinatura, plano e
+  limites, membros com último acesso, empresas, módulos (no plano × liberação
+  manual) e os últimos 50 eventos de auditoria do workspace. Não devolve dado
+  operacional do cliente: administrar contrato não é motivo para ler demandas,
+  documentos ou competências alheias.
+- `GET /api/platform/users/[id]/detail` — identidade global **separada** de cada
+  associação de workspace, com sessões ativas e histórico administrativo. A
+  sessão aparece sem token e sem endereço completo: dá para revogar sem expor o
+  que identificaria o dispositivo.
+- `PATCH /api/platform/users/[id]` ganhou editar nome e revogar sessão (uma ou
+  todas). O **e-mail continua não editável**: é a chave de login e de convite, e
+  trocá-lo sem fluxo de verificação deixaria a pessoa sem acesso e sem aviso.
+- Console: botão "Abrir" nas duas tabelas e dois drawers. No workspace, abas de
+  visão geral, membros, empresas, módulos e auditoria, com troca de plano e as
+  transições de ciclo de vida exigindo motivo. No usuário, papel por associação
+  (alterar em um grupo não toca nos outros), vincular/desvincular, revogar
+  sessões e bloquear/desbloquear.
+
+**Um defeito encontrado pelo próprio ensaio.** A primeira versão da rota de
+detalhe consultava `s.current_period_end`; a coluna real é
+`current_period_ends_at`. O erro apareceu como **503 `SCHEMA_OUTDATED`** no
+console do navegador — a classificação de falhas de infraestrutura entregue
+antes fez o defeito se identificar sozinho, em vez de virar tela vazia.
+
+Validação: 225 testes, 50 verificações de navegador, 24 de fumaça, `npm run ci`
+completo. O detalhe foi percorrido no Chromium: ficha com proprietário, plano,
+assentos, empresas e valor contratado; as quatro abas com conteúdo; edição de
+nome, vínculo e revogação de sessão disponíveis; nenhum hash de senha na tela;
+zero rolagem horizontal em 390/768/1280/1440 e nenhum erro de console.
+
+## 18. PJ → Caju: o que dá para fazer sem o modelo oficial
+
+**O cálculo já estava certo.** `calculateContractorClosing` (lib/payments.ts)
+resolve, nesta ordem e em centavos: líquido = max(base + créditos − descontos, 0)
+→ nota = min(líquido, limite configurado) → complemento = max(líquido − nota, 0)
+→ Caju = complemento quando o meio complementar é Saldo Livre. O teto **não é
+fixo em código**: vem de política por prestador, contrato, empresa ou workspace,
+nessa ordem de prioridade — R$ 6.000 é exemplo da especificação, não constante.
+Há teste que reprova se alguém chumbar o valor.
+
+**O que faltava.** Selecionar o que entra no arquivo, conferir antes de gerar, e
+recusar quando não dá para gerar direito.
+
+- `lib/caju-export.ts` monta a prévia: exclui quem tem Caju zero (regra de
+  negócio, não erro) e **bloqueia** cálculo não aprovado, CPF ausente ou
+  inválido e CPF repetido na mesma empresa e competência. O mesmo CPF em
+  empresas diferentes não é duplicidade. O total da prévia é a soma inteira em
+  centavos do que iria no arquivo — a tela e o arquivo não podem divergir.
+- Códigos de recusa específicos: `CAJU_TEMPLATE_MISSING`, `CAJU_EXPORT_INVALID`
+  e `CAJU_EXPORT_EMPTY`, cada um dizendo o que resolve.
+- Migração `0026_caju_templates.sql`: catálogo do arquivo oficial da Caju,
+  versionado, com checksum, mapeamento de colunas, RLS por workspace e índice
+  parcial garantindo **um modelo ativo por vez**.
+- Capacidade `contractors.export_caju`, concedida só ao administrador: exportar
+  dinheiro para um meio de pagamento externo não é ação de operação diária.
+
+**Por que a exportação ainda não gera arquivo.** A Central de Ajuda da Caju
+orienta baixar o modelo dentro do próprio portal, e cabeçalhos, abas e
+validações mudam sem aviso. Gerar um XLSX "parecido" seria prometer uma
+compatibilidade que ninguém verificou — e o arquivo seria recusado na
+importação, ou pior, aceito errado. O produto guarda o arquivo oficial que o
+administrador subir; enquanto não houver um ativo, a exportação recusa com
+`CAJU_TEMPLATE_MISSING` e diz onde configurá-lo.
+
+**Pendência do proprietário:** subir o `.xlsx` oficial de importação de Saldo
+Livre, baixado do portal da Caju. Com ele entram a leitura/validação do layout,
+o mapeamento de colunas e a escrita do arquivo (que exigirá uma biblioteca de
+planilha — o projeto ainda não tem nenhuma, e adicionar uma antes de conhecer o
+formato seria adivinhação).
+
+Validação: 237 testes, `npm run ci` completo, 29 migrações validadas.
+
+### 18.1 O modelo oficial chegou — e ele não é XLSX
+
+O cliente enviou `pedidosexemplo.csv`, o modelo de pedidos da Caju. Duas
+descobertas que mudam a implementação para melhor:
+
+**Não é planilha binária.** É texto separado por `;`, ASCII, sem BOM, sem aspas,
+com `\n`. Isso dispensa a biblioteca de planilha que eu havia previsto — o
+produto gera o arquivo com o que já tem.
+
+```
+CPF;Matricula (opcional);Valor Fixo em Auxilio Alimentacao
+12345678901;;0
+```
+
+**O exemplo é de outra categoria.** A coluna de valor é
+`Valor Fixo em Auxilio Alimentacao`, não Saldo Livre. A Caju publica um modelo
+por categoria de benefício, e exportar Saldo Livre usando o modelo de Auxílio
+Alimentação creditaria o benefício errado — a Caju não tem como adivinhar a
+intenção a partir do arquivo.
+
+Por isso `templateCategory` deduz a categoria do rótulo da coluna de valor e a
+guarda junto do modelo (migração 0027). A tela pode avisar quando o modelo
+cadastrado é de categoria diferente da exportação pedida, em vez de gerar um
+crédito silenciosamente errado.
+
+**O que ficou pronto.** `lib/caju-template.ts` lê o modelo (detecta delimitador,
+extrai cabeçalhos, localiza CPF e valor) e escreve o arquivo com os **mesmos
+cabeçalhos, na mesma ordem e com o mesmo delimitador** — nenhum rótulo da Caju
+está escrito no código, porque eles mudam sem aviso. Há teste que reprova se
+alguém chumbar um.
+
+Garantias cobertas por teste, usando o arquivo real como fixture:
+
+- CPF sai só com dígitos e **preserva zero à esquerda** (`01234567890`) — perder
+  o primeiro dígito troca a pessoa;
+- valor sai decimal com duas casas, a partir de centavos inteiros, sem `R$` e
+  sem separador de milhar;
+- colunas opcionais saem vazias, como no exemplo oficial;
+- nenhuma coluna extra de auditoria entra no arquivo de importação;
+- a linha de exemplo do modelo (CPF fictício `12345678901`) **nunca** vira
+  pedido real;
+- modelo vazio, editado, sem CPF ou sem coluna de valor é recusado com código
+  próprio (`CAJU_TEMPLATE_EMPTY`, `_INVALID`, `_NO_TAX_ID`, `_NO_AMOUNT`).
+
+O nome do arquivo passou a acompanhar a extensão do modelo (`.csv`), e nem o
+nome da empresa nem a extensão aceitam texto que escape do diretório.
+
+**Ainda pendente do proprietário:** o modelo de **Saldo Livre** propriamente
+dito, se a intenção for creditar essa categoria. O mecanismo já funciona com ele
+— basta cadastrá-lo — mas o arquivo recebido é de Auxílio Alimentação.
+
+Validação: 243 testes, `npm run ci` completo, 50 verificações de navegador, 24
+de fumaça, 30 migrações validadas.
+
+## 19. Seletor de grupo no shell e aviso de troca de contexto
+
+A correção do bug de arquivamento (§16) deixou o dado pronto — `availableWorkspaces`
+com status e `switchedFrom` — mas a interface não usava nenhum dos dois. Duas
+lacunas fechadas:
+
+**O seletor estava enterrado no modal de configurações.** Trocar de grupo é ação
+de shell, não de configuração. Agora ele fica na barra lateral, em `<details>`
+nativo (teclado e leitor de tela funcionam sem estado extra), listando cada grupo
+com papel e — quando não operacional — o motivo pelo qual não abre.
+
+**Uma regra de CSS o teria escondido de novo.** `.sidebar-workspace { display: none }`
+dentro de `@media (min-width: 761px) and (max-width: 1499px)` apagava o bloco
+inteiro na faixa que cobre a maioria dos notebooks. Para o atalho de estrutura
+empresarial isso é aceitável; para o seletor de grupo, não — é ação essencial. O
+seletor passou a ser visível em toda largura, reduzido ao símbolo quando falta
+espaço, com a lista flutuando ao lado. O `browser-check` mede isso nas quatro
+larguras e reprova se sumir.
+
+**Troca automática deixou de ser silenciosa.** Quando o grupo ativo sai do ar, o
+painel abre o próximo elegível **e avisa**: "Grupo X está arquivado e não pode
+ser aberto. Você está trabalhando em Y." Trocar o contexto sem dizer faria a
+pessoa achar que perdeu dados.
+
+Percorrido no navegador com um usuário de dois grupos: seletor visível, os dois
+listados com papel, troca pela interface mudando o cabeçalho, e o aviso correto
+ao arquivar o grupo em uso.
+
+**Um defeito de processo corrigido junto.** `npm run ci` não rodava typecheck —
+rodava lint, migrations, testes e build. Como o build do Next não cobre os
+arquivos de teste, um erro de tipo que eu havia introduzido em
+`tests/caju-export.test.mts` passou despercebido: os testes passavam (o runtime
+apenas remove tipos) e o build também. `npm run typecheck` entrou no pipeline.
+
+Validação: 243 testes, `npm run ci` completo **agora com typecheck**, 51
+verificações de navegador.
+
+## 20. Acessibilidade WCAG 2.2 AA: medida, não declarada
+
+Esta é a parte da Fase 6 que tem critério objetivo, então comecei por ela — e
+comecei medindo, antes de mexer em cor.
+
+**A primeira medição estava errada, e errada para o lado ruim.** O auditor que
+escrevi pulava qualquer elemento sobre superfície com `background-image`,
+contando-o como "não avaliável". A justificativa era razoável (gradiente não tem
+cor única, medir contra o `backgroundColor` produz número inventado), mas o
+efeito prático era um passe livre: 13 textos ficavam fora da conta. Ao medir
+esses 13 à mão, três reprovavam de verdade — o selo do CTA final em 3.20:1, o
+texto de apoio do mesmo bloco em 4.09:1 e o kicker da tela de login em 3.09:1.
+Um critério que só avalia o que é fácil não é um critério.
+
+A conferência virou `scripts/a11y-check.mjs`, parte do repositório e não uma
+rodada avulsa. Ela extrai as paradas de cor do gradiente, compõe as camadas
+translúcidas sobre as opacas e mede o texto **contra a pior parada**. É
+conservador de propósito: uma aprovação precisa valer para o gradiente inteiro,
+não para o ponto médio. Só sobra como "não mensurável" o que é imagem de verdade
+(`url(...)`), e isso aparece no relatório em vez de sumir.
+
+**O que a varredura encontrou depois de ficar honesta.** Home 14 falhas de
+contraste e 2 alvos pequenos; Login 8 e 1; Painel 7 e 2; Console 0 e 1. Corrigi
+por token, não espalhando valores:
+
+- `--vin-text-soft` 4.48:1 → `#55627A`; `--ui-text-muted` 2.76:1 → `#626C7A`.
+- `--brand-accent-on-dark: #6FB4FF` para o azul da marca sobre navy — o
+  `--brand-accent` puro fica em 4.08:1 ali.
+- No painel, `--ui-mint` era usado como preenchimento **e** como cor de texto.
+  Sobre branco ele dá 3.39:1. Em vez de trocar o token (o que mudaria as barras,
+  bordas e ícones que dependem dele), separei os papéis: `--ui-mint-text` para
+  rótulo em superfície clara e `--ui-on-mint` para texto sobre o preenchimento.
+- A seção `.final-cta` redefine os próprios tokens de apoio, porque o gradiente
+  dela termina em `--brand`, bem mais claro que o navy do rodapé. Uma exceção
+  declarada no lugar certo, não exceções espalhadas pelas regras filhas.
+
+**Auditar uma tela do painel não é auditar o painel.** O painel troca de visão
+por estado, não por rota: `/painel` mostrava a visão geral e mais nada. Passei a
+percorrer a navegação lateral de verdade, clicando item a item, nas larguras
+1440 e 390. Isso mudou o resultado — apareceram falhas que a varredura de uma
+tela só não via, entre elas um defeito real de produção: o bloco "Calendários
+externos" do Planner foi escrito com os tokens de superfície clara mas mora
+dentro de um cartão navy. O título estava em **1.06:1**. Não é "contraste baixo";
+é texto invisível, e estava assim na tela.
+
+**Verde-menta da marca anterior.** Encontrei acentos remanescentes
+(`#45dcb0`, `#8ae0c5`, `#0E3B3B`, e os fallbacks do módulo de cadastros) em
+superfícies escuras da marca. Foram para a paleta azul. **Não** mexi no verde
+semântico de sucesso: o levantamento achou 154 ocorrências de cores
+esverdeadas no CSS, e a maioria é estado positivo, não identidade. Recolorir por
+matiz quebraria o significado — essa varredura fica para o passo de direção
+visual, com leitura de contexto, não com `sed`.
+
+**Guardas para não voltar.** Três testes novos em
+`tests/vinculato-identity.test.mts`: o menta antigo não pode reaparecer no CSS,
+o par legível de `--ui-mint` precisa existir, e a conferência WCAG precisa
+continuar medindo gradiente, rodando nas duas larguras e reprovando com código
+de saída diferente de zero. O primeiro deles já pegou uma ocorrência que eu
+tinha deixado passar em `registrations.module.css`.
+
+**Resultado medido.** 0 violação de contraste, 0 controle sem nome acessível e
+0 alvo abaixo de 24x24 nas 12 telas percorridas, em 1440 e 390 px.
+
+**Limite honesto desta rodada.** A conta de ensaio está no plano Starter, então
+a navegação lateral só expõe os módulos desse plano. Operação DP, Pagamentos PJ,
+Ponto, Integrações, Módulos auxiliares, Folha e Relatórios **não foram
+auditados** — não porque passaram, mas porque não apareceram. Fica para a rodada
+com uma conta em plano Enterprise.
+
+Validação: 246 testes, `npm run ci` completo, 51 verificações de navegador,
+`npm run a11y-check` em 12 telas × 2 larguras.

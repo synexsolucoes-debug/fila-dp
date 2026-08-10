@@ -210,6 +210,30 @@ if (password) {
   }
 }
 
+// 4a-bis. O seletor de grupo precisa estar no shell, em toda largura. Ele já
+//         esteve escondido entre 761px e 1499px — a faixa da maioria dos
+//         notebooks —, o que tirava do ar uma ação essencial.
+if (password) {
+  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  const multi = await page.evaluate(async () => {
+    const response = await fetch("/api/workspace", { cache: "no-store" });
+    const payload = await response.json();
+    return (payload.availableWorkspaces ?? []).length;
+  });
+  if (multi > 1) {
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(300);
+      const visible = await page.locator(".sidebar-workspace-switcher").isVisible().catch(() => false);
+      record(`seletor de grupo disponível em ${width}px`, visible);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  } else {
+    record("conta de ensaio pertence a um grupo só: seletor não se aplica", true, `${multi} grupo(s)`);
+  }
+}
+
 // 4b. Liberação por plano: o menu do painel reflete o plano contratado.
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });

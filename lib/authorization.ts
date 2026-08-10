@@ -58,6 +58,7 @@ export const capabilities = [
   "contractors.payments.manage",
   "contractors.payments.close",
   "contractors.limits.manage",
+  "contractors.export_caju",
   "payments.reopen",
   "time.read",
   "time.manage",

@@ -2,9 +2,10 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Ban, Building2, CheckCircle2, CircleAlert, LoaderCircle, Plus, RefreshCw, Search, ShieldCheck, Trash2, UserCheck, Users,
+  Ban, Building2, CheckCircle2, CircleAlert, ExternalLink, LoaderCircle, Plus, RefreshCw, Search, ShieldCheck, Trash2, UserCheck, Users,
 } from "lucide-react";
 import styles from "./platform.module.css";
+import { UserDetailDrawer, WorkspaceDetailDrawer } from "./PlatformDetail";
 
 /**
  * Console global do Vinculato — administração do SaaS.
@@ -87,6 +88,9 @@ export function PlatformConsole({ plans }: { plans: { code: string; name: string
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [creating, setCreating] = useState(false);
+  // Abrir um cliente ou uma identidade: o console listava sem permitir entrar.
+  const [openWorkspace, setOpenWorkspace] = useState("");
+  const [openUser, setOpenUser] = useState("");
 
   const load = useCallback(async (activeTab: Tab, search: string, status: string) => {
     setLoading(true);
@@ -255,6 +259,9 @@ export function PlatformConsole({ plans }: { plans: { code: string; name: string
                         <td><time>{when(workspace.createdAt)}</time></td>
                         <td>
                           <div className={styles.rowActions}>
+                            <button type="button" onClick={() => setOpenWorkspace(workspace.id)}>
+                              <ExternalLink aria-hidden="true" /> Abrir
+                            </button>
                             {workspace.status === "active" ? (
                               <button type="button" data-danger="true" disabled={busy === workspace.id}
                                 onClick={() => withReason(`Suspender ${workspace.name}`,
@@ -324,6 +331,9 @@ export function PlatformConsole({ plans }: { plans: { code: string; name: string
                     </td>
                     <td>
                       <div className={styles.rowActions}>
+                        <button type="button" onClick={() => setOpenUser(user.id)}>
+                          <ExternalLink aria-hidden="true" /> Abrir
+                        </button>
                         {user.status === "active" ? (
                           <button type="button" data-danger="true" disabled={busy === user.id}
                             onClick={() => withReason(`Bloquear ${user.email}`,
@@ -398,6 +408,20 @@ export function PlatformConsole({ plans }: { plans: { code: string; name: string
               </footer>
             </form>
           </div>
+        </div>
+      )}
+
+      {openWorkspace && (
+        <div className={styles.drawerBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenWorkspace(""); }}>
+          <WorkspaceDetailDrawer id={openWorkspace} plans={plans}
+            onClose={() => setOpenWorkspace("")} onChanged={() => void load(tab, query, statusFilter)} />
+        </div>
+      )}
+
+      {openUser && (
+        <div className={styles.drawerBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) setOpenUser(""); }}>
+          <UserDetailDrawer id={openUser} workspaces={workspaces.map((item) => ({ id: item.id, name: item.name }))}
+            onClose={() => setOpenUser("")} onChanged={() => void load(tab, query, statusFilter)} />
         </div>
       )}
 

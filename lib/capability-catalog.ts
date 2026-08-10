@@ -79,6 +79,7 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "contractors.payments.manage": { area: "payments", label: "Lançar pagamentos PJ" },
   "contractors.payments.close": { area: "payments", label: "Fechar pagamentos PJ" },
   "contractors.limits.manage": { area: "payments", label: "Configurar o limite de nota fiscal" },
+  "contractors.export_caju": { area: "payments", label: "Exportar a diferença PJ para importação na Caju" },
   "payments.reopen": { area: "payments", label: "Reabrir pagamento fechado, com justificativa" },
 
   "time.read": { area: "time", label: "Ver marcações e conferências de ponto" },

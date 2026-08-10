@@ -164,6 +164,9 @@ test("bootstrap and redirects have race and open-redirect defenses", async () =>
   assert.match(logout, /safeRelativeReturnPath/);
   assert.match(limiter, /process\.env\.VERCEL/);
   assert.match(migration, /fdp_bootstrap_guard_singleton_ck/);
+  // Logout por GET seria disparado por prefetch, <img> ou scanner de link: a
+  // pessoa cairia da sessão sem ter pedido. "Entrar em outra conta" resolve por
+  // formulário POST, não reabrindo esse caminho.
   assert.doesNotMatch(logout, /export async function GET/);
   assert.match(logout, /export async function POST/);
 });
