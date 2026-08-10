@@ -4,6 +4,51 @@ import { join } from "node:path";
 import { neon } from "@neondatabase/serverless";
 import { splitPostgresStatements } from "./sql-statements.mjs";
 
+/**
+ * O executor de migrations aceita os dois drivers: Neon por HTTP em produção e
+ * PostgreSQL direto em desenvolvimento. Sem isso não é possível aplicar o
+ * schema em um banco local para reproduzir erros antes de corrigi-los.
+ */
+async function createMigrationSql(url) {
+  const explicit = String(process.env.FDP_DB_DRIVER ?? "").trim().toLowerCase();
+  const host = (() => { try { return new URL(url).hostname; } catch { return ""; } })();
+  const local = explicit === "pg" || (explicit !== "neon" && !process.env.VERCEL && ["localhost", "127.0.0.1", "::1"].includes(host));
+  if (!local) return neon(url, { fullResults: true });
+
+  const { Pool } = await import("pg");
+  const pool = new Pool({ connectionString: url, max: 4 });
+  const normalize = (result) => ({ rows: result.rows ?? [], rowCount: result.rowCount ?? 0 });
+  // Consulta preguiçosa, igual à do Neon: descreve e só executa quando aguardada
+  // ou quando entra em transaction(). Executar na criação dispararia os comandos
+  // da migration fora da transação e fora de ordem.
+  const lazy = (text, values) => ({
+    text,
+    values,
+    then: (resolve, reject) => pool.query(text, values).then((result) => resolve(normalize(result)), reject),
+  });
+  const sql = (strings, ...values) => lazy(
+    strings.reduce((acc, part, index) => acc + part + (index < values.length ? `$${index + 1}` : ""), ""),
+    values,
+  );
+  sql.query = (text, values = []) => lazy(text, values);
+  sql.transaction = async (queries) => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const results = [];
+      for (const query of queries) results.push(normalize(await client.query(query.text, query.values)));
+      await client.query("COMMIT");
+      return results;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  };
+  return sql;
+}
+
 const migrationDirectory = join(process.cwd(), "drizzle", "postgres");
 const baselineExisting = process.argv.includes("--baseline-existing");
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.NEON_DATABASE_URL;
@@ -12,7 +57,8 @@ if (!databaseUrl?.startsWith("postgres")) {
   throw new Error("Defina DATABASE_URL com uma conexão PostgreSQL/Neon antes de executar as migrations.");
 }
 
-const sql = neon(databaseUrl, { fullResults: true });
+// Desenvolvimento local usa o driver PostgreSQL direto; produção continua no Neon.
+const sql = await createMigrationSql(databaseUrl);
 const files = (await readdir(migrationDirectory)).filter((file) => /^\d{4}_.+\.sql$/.test(file)).sort();
 if (!files.length) throw new Error("Nenhuma migration PostgreSQL foi encontrada.");
 

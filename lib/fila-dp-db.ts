@@ -1,4 +1,4 @@
-import { getD1 } from "../db";
+import { getD1, getScopedD1 } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
@@ -162,7 +162,12 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
   if (!workspace) throw ApiError.forbidden("Sem permissão para acessar este grupo. Peça ao administrador para liberar seu usuário.", "WORKSPACE_ACCESS_DENIED");
 
-  setTenantContext({ workspaceId: workspace.id, userId: userRow.id });
+  // O AsyncLocalStorage continua sendo preenchido para o código que já depende
+  // dele dentro desta própria função; a garantia real de isolamento, porém, é a
+  // conexão devolvida abaixo, que carrega o tenant explicitamente.
+  const tenant = { workspaceId: workspace.id, userId: userRow.id };
+  setTenantContext(tenant);
+  const scopedD1 = getScopedD1(tenant);
 
   await d1.prepare(
     `INSERT INTO fdp_user_workspace_preferences (user_id, active_workspace_id, updated_at)
@@ -180,7 +185,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
   await d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(board.id, userRow.id, workspace.id).run();
 
-  return { d1, user: userRow, workspace, board };
+  return { d1: scopedD1, user: userRow, workspace, board };
 }
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
@@ -500,10 +505,23 @@ export async function runAutomations(
   return executed;
 }
 
-function assertTenantWorkspace(workspaceId: string) {
-  if (getTenantContext()?.workspaceId !== workspaceId) {
+/**
+ * Recusa registrar evento em outro workspace.
+ *
+ * A checagem agora é contra o workspace pedido pelo chamador e o contexto
+ * assíncrono só é usado quando existe — antes, a ausência do contexto (que é o
+ * estado normal dentro de uma rota) reprovava toda gravação legítima.
+ */
+function tenantWorkspaceGuard(workspaceId: string) {
+  const workspace = String(workspaceId ?? "").trim();
+  if (!workspace) {
     throw ApiError.forbidden("Contexto tenant inválido para registrar atividade.", "TENANT_CONTEXT_MISMATCH");
   }
+  const context = getTenantContext();
+  if (context && context.workspaceId !== workspace) {
+    throw ApiError.forbidden("Contexto tenant inválido para registrar atividade.", "TENANT_CONTEXT_MISMATCH");
+  }
+  return { workspaceId: workspace, userId: context?.userId ?? null };
 }
 
 function publicIntegrationConfig(value: string) {
@@ -514,8 +532,7 @@ function publicIntegrationConfig(value: string) {
 }
 
 export function prepareActivity(workspaceId: string, cardId: string | null, actorEmail: string, eventType: string, payload: Record<string, unknown> = {}) {
-  assertTenantWorkspace(workspaceId);
-  const d1 = getD1();
+  const d1 = getScopedD1(tenantWorkspaceGuard(workspaceId));
   return d1.prepare("INSERT INTO fdp_activity_events (id, workspace_id, card_id, actor_email, event_type, payload_json) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(crypto.randomUUID(), workspaceId, cardId, actorEmail, eventType, JSON.stringify(payload));
 }
@@ -556,8 +573,7 @@ function auditJson(value: Record<string, unknown> | null | undefined) {
 }
 
 export function prepareAuditEvent(input: AuditEventInput) {
-  assertTenantWorkspace(input.workspaceId);
-  const d1 = getD1();
+  const d1 = getScopedD1(tenantWorkspaceGuard(input.workspaceId));
   return d1.prepare(`INSERT INTO fdp_audit_events
     (id, workspace_id, actor_type, actor_user_id, actor_email, action, outcome, entity_type, entity_id, before_json, after_json, metadata_json, request_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?)`)

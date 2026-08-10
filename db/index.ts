@@ -1,8 +1,9 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { createLocalSql, shouldUseLocalDriver, type LocalSql } from "./local-postgres";
 import { del, get, put } from "@vercel/blob";
 import { toPostgresParameters } from "../lib/postgres-parameters";
 import { getPlatformContext } from "../lib/platform-context";
-import { getTenantContext } from "../lib/tenant-context";
+import { getTenantContext, type TenantContext } from "../lib/tenant-context";
 
 type SqlValue = unknown;
 
@@ -18,10 +19,20 @@ class NeonPreparedStatement implements D1PreparedStatement {
     private readonly sql: NeonSql,
     private readonly query: string,
     private readonly args: SqlValue[] = [],
+    /**
+     * Contexto de tenant explícito.
+     *
+     * O contexto por AsyncLocalStorage não sobrevive ao retorno de uma função
+     * `async`: quem chama volta a executar no contexto anterior ao `enterWith`.
+     * Depender só dele deixava as consultas da rota sem `app.workspace_id`, e
+     * com RLS ativo isso significa "nenhuma linha" — silenciosamente.
+     * Por isso a conexão devolvida por `getWorkspaceContext` carrega o tenant.
+     */
+    private readonly boundContext: TenantContext | null = null,
   ) {}
 
   bind(...values: unknown[]) {
-    return new NeonPreparedStatement(this.sql, this.query, values);
+    return new NeonPreparedStatement(this.sql, this.query, values, this.boundContext);
   }
 
   private async execute() {
@@ -33,7 +44,7 @@ class NeonPreparedStatement implements D1PreparedStatement {
       ] as never, { fullResults: true } as never);
       return results[1];
     }
-    const context = getTenantContext();
+    const context = this.boundContext ?? getTenantContext();
     if (!context) return this.sql.query(toPostgresParameters(this.query), this.args);
     const results = await this.sql.transaction([
       this.sql`SELECT set_config('app.workspace_id', ${context.workspaceId}, true), set_config('app.user_id', ${context.userId ?? ""}, true)`,
@@ -74,10 +85,10 @@ class NeonPreparedStatement implements D1PreparedStatement {
 }
 
 class NeonDatabase implements D1Database {
-  constructor(private readonly sql: NeonSql) {}
+  constructor(private readonly sql: NeonSql, private readonly boundContext: TenantContext | null = null) {}
 
   prepare(query: string) {
-    return new NeonPreparedStatement(this.sql, query);
+    return new NeonPreparedStatement(this.sql, query, [], this.boundContext);
   }
 
   async batch<T = Record<string, unknown>>(statements: D1PreparedStatement[]) {
@@ -86,7 +97,7 @@ class NeonDatabase implements D1Database {
       return statement.toNeonQuery();
     });
     const platformContext = getPlatformContext();
-    const context = getTenantContext();
+    const context = this.boundContext ?? getTenantContext();
     const transaction = platformContext
       ? [this.sql`SELECT set_config('app.platform_admin', 'true', true), set_config('app.user_id', ${platformContext.userId}, true)`, ...prepared]
       : context
@@ -105,19 +116,61 @@ class NeonDatabase implements D1Database {
 let neonDatabase: NeonDatabase | null = null;
 let neonSql: NeonSql | null = null;
 
+/**
+ * Fachada síncrona sobre o driver PostgreSQL direto.
+ *
+ * `getD1()` é síncrono, mas abrir o pool local é assíncrono. As chamadas
+ * resolvem o pool sob demanda — o comportamento visível é idêntico ao do Neon.
+ */
+function localSqlFacade(url: string): NeonSql {
+  let pending: Promise<LocalSql> | null = null;
+  const resolve = () => (pending ??= createLocalSql(url));
+
+  // A consulta precisa continuar preguiçosa mesmo atrás da fachada: devolver uma
+  // Promise aqui faria cada comando de um batch executar sozinho, fora da
+  // transação — e cada um falharia por não enxergar o anterior.
+  const lazy = (text: string, values: unknown[]) => ({
+    text,
+    values,
+    then(onFulfilled: (value: unknown) => unknown, onRejected: (reason: unknown) => unknown) {
+      return resolve().then((sql) => sql.query(text, values)).then(onFulfilled, onRejected);
+    },
+  });
+
+  // A fachada imita a superfície do driver Neon; o `unknown` isola a conversão
+  // em um ponto só, em vez de espalhar `any` pelo adaptador.
+  const facade = ((strings: TemplateStringsArray, ...values: unknown[]) =>
+    lazy(strings.reduce((acc, part, index) => acc + part + (index < values.length ? `$${index + 1}` : ""), ""), values)
+  ) as unknown as Record<string, unknown>;
+  facade.query = (text: string, args: unknown[] = []) => lazy(text, args);
+  facade.transaction = async (queries: unknown[]) => (await resolve()).transaction(queries as never);
+  return facade as unknown as NeonSql;
+}
+
 function getNeonSql() {
   if (neonSql) return neonSql;
   const url = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.NEON_DATABASE_URL;
   if (!url || !isPostgresUrl(url)) {
-    throw new Error("Banco Neon não configurado. Conecte o Neon à Vercel e defina DATABASE_URL.");
+    throw new Error("Banco não configurado. Defina DATABASE_URL com uma conexão PostgreSQL/Neon.");
   }
-  neonSql = neon(url, { fullResults: true });
+  neonSql = shouldUseLocalDriver(url) ? localSqlFacade(url) : neon(url, { fullResults: true });
   return neonSql;
 }
 
 export function getD1(): D1Database {
   if (!neonDatabase) neonDatabase = new NeonDatabase(getNeonSql());
   return neonDatabase;
+}
+
+/**
+ * Conexão com o tenant preso na instância.
+ *
+ * Toda consulta feita por aqui envia `app.workspace_id` junto, na mesma
+ * transação — não há caminho para uma consulta de rota escapar do isolamento
+ * porque o contexto assíncrono se perdeu no meio do caminho.
+ */
+export function getScopedD1(context: TenantContext): D1Database {
+  return new NeonDatabase(getNeonSql(), context);
 }
 
 type VercelBlobObject = R2ObjectBody;

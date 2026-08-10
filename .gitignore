@@ -44,3 +44,6 @@ next-env.d.ts
 /.data/
 /outputs/
 /work/
+
+# Ambiente local (nao versionar)
+.env.local
