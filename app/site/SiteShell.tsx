@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { legalNavigation, siteNavigation } from "@/lib/marketing";
 import styles from "./site.module.css";
+import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 
 /**
  * Moldura das páginas comerciais: cabeçalho, navegação, rodapé e área de
@@ -14,9 +15,8 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
 
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <Link className={styles.brand} href="/">
-            <span className={styles.brandMark} aria-hidden="true"><i /><i /><i /></span>
-            Vinculato
+          <Link className={styles.brand} href="/" aria-label="Vinculato — início">
+            <VinculatoLogo size={28} priority />
           </Link>
           <nav className={styles.nav} aria-label="Navegação do site">
             {siteNavigation.map((item) => (

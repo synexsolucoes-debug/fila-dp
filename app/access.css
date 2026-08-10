@@ -138,11 +138,18 @@
 .auth-form-panel {
   position: relative;
   min-height: 100vh;
-  padding: 44px clamp(38px, 6vw, 110px);
+  /* O topo reserva a faixa do link "Voltar para o site", que é posicionado
+     de forma absoluta. Sem essa reserva o cartão centralizado passava por
+     cima dele em telas de altura comum (1280x800). */
+  padding: 104px clamp(38px, 6vw, 110px) 44px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
 }
+
+/* Centraliza por margem automática em vez de justify-content: quando o cartão
+   é mais alto que o espaço livre, a margem simplesmente zera — o conteúdo não
+   transborda para cima nem cobre o link. */
+.auth-form-panel > .auth-form-card { margin-block: auto; }
 
 .auth-back {
   position: absolute;
@@ -406,8 +413,7 @@
   color: white;
 }
 
-.workspace-loading .brand-mark { width: 46px; height: 46px; padding: 10px; }
-.workspace-loading p { margin: 0; color: #91a5b7; font-size: 13px; }
+.workspace-loading .workspace-loading p { margin: 0; color: #91a5b7; font-size: 13px; }
 .workspace-loading.error-state { background: #f6f5ef; color: #0b1528; text-align: center; }
 .workspace-loading.error-state button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 7px; background: #081a31; color: white; cursor: pointer; font-weight: 700; }
 

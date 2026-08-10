@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, MoreHorizontal } from "lucide-react";
 import { chatGPTSignOutPath, getChatGPTUser } from "../chatgpt-auth";
 import { LoginForm } from "./LoginForm";
+import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 
 export const dynamic = "force-dynamic";
 
@@ -18,14 +19,13 @@ export default async function LoginPage() {
     <main className="auth-page">
       <section className="auth-brand-panel">
         <Link className="brand auth-brand" href="/#inicio" aria-label="Vinculato — início">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Vinculato</span>
+          <VinculatoLogo size={32} tone="light" priority />
         </Link>
 
         <div className="auth-message">
           <span className="auth-kicker">Acesso seguro à sua operação</span>
-          <h1>Sua fila continua de onde parou.</h1>
-          <p>Entre para acompanhar demandas, responsáveis, checklists e prazos do Departamento Pessoal.</p>
+          <h1>Sua operação continua de onde parou.</h1>
+          <p>Entre para acompanhar processos, demandas, documentos e prazos do Departamento Pessoal.</p>
         </div>
 
         <div className="auth-preview" aria-hidden="true">

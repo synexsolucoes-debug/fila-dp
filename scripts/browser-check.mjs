@@ -52,6 +52,23 @@ const emailField = page.locator('input[type="email"], input[name="email"]').firs
 const passwordField = page.locator('input[type="password"]').first();
 record("a tela de login apresenta e-mail e senha", await emailField.count() > 0 && await passwordField.count() > 0);
 
+// O cartão de login era centralizado por justify-content e passava por cima do
+// link "Voltar para o site" em 1280x800 — altura comum de notebook.
+for (const [width, height] of [[390, 844], [768, 1024], [1280, 800], [1440, 900], [1280, 620]]) {
+  await page.setViewportSize({ width, height });
+  await page.goto(`${base}/login`, { waitUntil: "domcontentloaded" });
+  const collides = await page.evaluate(() => {
+    const back = document.querySelector(".auth-back");
+    const card = document.querySelector(".auth-form-card");
+    if (!back || !card) return false;
+    const a = back.getBoundingClientRect();
+    const b = card.getBoundingClientRect();
+    return !(a.bottom <= b.top || a.top >= b.bottom || a.right <= b.left || a.left >= b.right);
+  });
+  record(`login sem sobreposição de elementos em ${width}x${height}`, !collides);
+}
+await page.setViewportSize({ width: 1440, height: 900 });
+
 if (password && await emailField.count()) {
   await emailField.fill(email);
   await passwordField.fill(password);
@@ -139,6 +156,18 @@ for (const width of widths) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   record(`site público sem rolagem horizontal em ${width}px`, overflow <= 1, `sobra ${overflow}px`);
 }
+
+// A marca precisa aparecer como arquivo oficial, e em branco sobre fundo escuro.
+await page.goto(`${base}/login`, { waitUntil: "networkidle" });
+const brandSources = await page.evaluate(() => [...document.querySelectorAll("img")].map((img) => img.getAttribute("src") ?? ""));
+record("o login usa o logotipo oficial na variante clara",
+  brandSources.some((src) => src.includes("vinculato-logo-light")),
+  brandSources.join(" ").slice(0, 120));
+await page.goto(`${base}/`, { waitUntil: "networkidle" });
+const siteSources = await page.evaluate(() => [...document.querySelectorAll("img")].map((img) => img.getAttribute("src") ?? ""));
+record("o site usa o logotipo oficial colorido",
+  siteSources.some((src) => src.includes("vinculato-logo")),
+  siteSources.join(" ").slice(0, 120));
 
 record("nenhum erro de JavaScript no console do navegador", consoleErrors.length === 0, consoleErrors.slice(0, 2).join(" | "));
 

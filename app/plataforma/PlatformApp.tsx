@@ -6,6 +6,7 @@ import {
   Activity, ArrowLeft, BadgeCheck, Building2, CheckCircle2, CircleAlert, CircleDot, CreditCard,
   FileClock, LoaderCircle, Pencil, RefreshCw, Save, ShieldAlert, ShieldCheck, X,
 } from "lucide-react";
+import { VinculatoMark } from "@/app/components/VinculatoLogo";
 import styles from "./platform.module.css";
 import { PlatformConsole } from "./PlatformConsole";
 
@@ -62,7 +63,7 @@ export function PlatformApp() {
   if (!overview) return <main className={styles.state} role="alert"><CircleAlert aria-hidden="true" /><strong>Console indisponível</strong><p>{error}</p><button type="button" onClick={() => void load()}><RefreshCw aria-hidden="true" /> Tentar novamente</button></main>;
 
   return <main className={styles.console}>
-    <header className={styles.topbar}><Link href="/painel" aria-label="Voltar ao painel"><span className={styles.brandMark} aria-hidden="true"><i /><i /><i /></span><strong>Vinculato</strong><small>CONTROLE GLOBAL</small></Link><div><ShieldCheck aria-hidden="true" /><span><strong>Contexto de plataforma</strong><small>Autorização independente do papel no workspace</small></span></div></header>
+    <header className={styles.topbar}><Link href="/painel" aria-label="Voltar ao painel"><VinculatoMark size={26} title="" /><strong>Vinculato</strong><small>CONTROLE GLOBAL</small></Link><div><ShieldCheck aria-hidden="true" /><span><strong>Contexto de plataforma</strong><small>Autorização independente do papel no workspace</small></span></div></header>
     <section className={styles.content}>
       <header className={styles.hero}><div><span>OPERAÇÃO MULTI-WORKSPACE</span><h1>Console global</h1><p>Monitore clientes, assinaturas e catálogo de planos com uma trilha auditável.</p></div><button type="button" disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? styles.spin : ""} aria-hidden="true" /> Atualizar</button></header>
       <div className={styles.scopeWarning}><ShieldAlert aria-hidden="true" /><div><strong>Atenção: esta tela cruza workspaces</strong><span>Os dados abaixo pertencem a diferentes clientes. Use este acesso apenas para administração autorizada da plataforma.</span></div><b>ESCOPO GLOBAL</b></div>

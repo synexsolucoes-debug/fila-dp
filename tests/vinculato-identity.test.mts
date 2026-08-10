@@ -44,8 +44,9 @@ test("identificadores técnicos foram preservados na renomeação", async () => 
 
 test("a identidade visual vive em tokens, não espalhada em HEX", async () => {
   const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  for (const token of ["--vin-navy-deep: #030A30", "--vin-navy: #102D5F", "--vin-blue: #0857B2",
-    "--vin-blue-vivid: #0B86FE", "--vin-bg: #F6F8FC", "--vin-border: #DCE3ED"]) {
+  // Os dois azuis vêm dos pixels do símbolo oficial, não de estimativa.
+  for (const token of ["--vin-navy: #062B60", "--vin-blue-vivid: #168CFD",
+    "--vin-bg: #F6F8FC", "--vin-border: #DCE3ED"]) {
     assert.ok(globals.includes(token), `token ausente: ${token}`);
   }
   for (const semantic of ["--brand:", "--brand-strong:", "--brand-accent:", "--ui-surface:", "--ui-text:"]) {
@@ -53,13 +54,35 @@ test("a identidade visual vive em tokens, não espalhada em HEX", async () => {
   }
 });
 
-test("a marca tem símbolo isolado e versão horizontal, e usa os tokens", async () => {
+test("a marca usa os arquivos oficiais, não um redesenho", async () => {
   const logo = await readFile(new URL("../app/components/VinculatoLogo.tsx", import.meta.url), "utf8");
   assert.match(logo, /export function VinculatoMark/);
   assert.match(logo, /export function VinculatoLogo/);
-  assert.match(logo, /var\(--vin-navy-deep/);
-  assert.match(logo, /var\(--vin-blue-vivid/);
+  // Arquivo oficial recortado, servido por next/image — sem path desenhado à mão.
+  assert.match(logo, /markSource: "\/brand\/vinculato-mark\.png"/);
+  assert.match(logo, /logoSource: "\/brand\/vinculato-logo\.png"/);
+  assert.doesNotMatch(logo, /<path\s/u);
   assert.match(logo, /VINCULATO_TAGLINE = "Sua operação, conectada\."/);
+
+  const [mark, wordmark, icon] = await Promise.all([
+    stat(new URL("../public/brand/vinculato-mark.png", import.meta.url)),
+    stat(new URL("../public/brand/vinculato-logo.png", import.meta.url)),
+    stat(new URL("../app/icon.png", import.meta.url)),
+  ]);
+  assert.ok(mark.size > 1000, "o símbolo oficial precisa existir em public/brand");
+  assert.ok(wordmark.size > 1000, "o logotipo oficial precisa existir em public/brand");
+  assert.ok(icon.size > 200, "o favicon precisa ser gerado do símbolo oficial");
+});
+
+test("nenhuma tela usa mais o marcador decorativo antigo", async () => {
+  const files = await walk(root, [".tsx"]);
+  const offenders = [];
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    // O bloco de três barrinhas era um placeholder; a marca real substituiu.
+    if (/brand-mark|brandMark/u.test(source)) offenders.push(file.replace(root, ""));
+  }
+  assert.deepEqual(offenders, [], `telas ainda com o marcador antigo: ${offenders.join(", ")}`);
 });
 
 test("o catálogo de planos publica os quatro planos de lançamento em centavos", async () => {

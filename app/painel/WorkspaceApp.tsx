@@ -45,6 +45,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
@@ -1085,7 +1086,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }
 
   if (loading) {
-    return <main className="workspace-loading"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><p>Preparando sua fila…</p></main>;
+    return <main className="workspace-loading"><VinculatoLogo size={30} tone="light" /><p>Preparando sua operação…</p></main>;
   }
 
   if (!snapshot) {
@@ -1104,8 +1105,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Vinculato</span>
+          <VinculatoLogo size={28} tone="light" />
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>

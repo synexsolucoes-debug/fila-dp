@@ -3,10 +3,11 @@
 :root {
   /* Identidade Vinculato — extraída da marca. Os componentes usam os tokens
      semânticos abaixo; valores HEX não devem ser repetidos fora deste bloco. */
-  --vin-navy-deep: #030A30;
-  --vin-navy: #102D5F;
+  /* Extraídos dos pixels do símbolo oficial, não estimados. */
+  --vin-navy-deep: #041B45;
+  --vin-navy: #062B60;
   --vin-blue: #0857B2;
-  --vin-blue-vivid: #0B86FE;
+  --vin-blue-vivid: #168CFD;
   --vin-bg: #F6F8FC;
   --vin-surface: #FFFFFF;
   --vin-text: #0F172A;
@@ -84,11 +85,6 @@ button, summary { font: inherit; }
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 650; letter-spacing: -.04em; white-space: nowrap; }
 .brand strong { color: var(--mint-dark); }
-.brand-mark { width: 30px; height: 30px; padding: 6px; border-radius: 8px; display: flex; gap: 3px; align-items: flex-end; background: var(--navy); }
-.brand-mark i { display: block; width: 4px; border-radius: 4px; background: var(--mint); }
-.brand-mark i:nth-child(1) { height: 10px; }
-.brand-mark i:nth-child(2) { height: 17px; }
-.brand-mark i:nth-child(3) { height: 13px; }
 .site-header nav { display: flex; align-items: center; gap: 30px; margin-left: auto; }
 .site-header nav a, .login-link { font-size: 14px; color: #46546a; transition: color .2s ease; }
 .site-header nav a:hover, .login-link:hover { color: var(--mint-dark); }
@@ -314,7 +310,6 @@ footer .inline-icon { width: 14px; height: 14px; }
 
 @media (max-width: 560px) {
   .brand { font-size: 18px; }
-  .brand-mark { width: 27px; height: 27px; }
   .header-actions { gap: 0; }
   .button-small { font-size: 11px; }
   .hero { padding-top: 56px; }

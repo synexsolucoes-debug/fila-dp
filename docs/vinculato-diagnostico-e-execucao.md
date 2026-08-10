@@ -96,10 +96,20 @@ erros legítimos voltam a chegar com código e texto próprios (`COMPETENCE_BLOC
   `--ui-surface`, `--ui-text`…) em bloco único.
 - `VinculatoMark` e `VinculatoLogo` desenhados sobre os tokens.
 
-> **Ressalva honesta:** o símbolo em `app/components/VinculatoLogo.tsx` é um
-> desenho vetorial feito a partir da referência visual, **não** o arquivo oficial.
-> Ele deve ser substituído pelo SVG exportado pelo estúdio. A API do componente
-> foi mantida estável para que a troca seja indolor.
+Os **arquivos oficiais** da marca substituíram o desenho provisório. Eles vivem
+em `public/brand/` e passaram por três tratamentos necessários para uso em tela:
+
+1. **recorte** da margem branca do arquivo original;
+2. **remoção do fundo branco** desfazendo a mistura com o fundo (em vez de
+   recortar por limiar), o que evita a franja clara nas bordas suavizadas — sem
+   isso a marca virava uma etiqueta branca sobre o painel escuro do login;
+3. **variante clara** do logotipo, com o azul-marinho convertido em branco: o
+   logotipo original é ilegível sobre fundo escuro.
+
+Favicon e ícone de aplicativo são gerados do símbolo oficial, com transparência.
+
+As cores dos tokens foram **extraídas dos pixels** do símbolo — `#062B60` e
+`#168CFD` —, não estimadas a olho.
 
 ## 5. Planos publicados
 
@@ -121,13 +131,13 @@ do site.
 ## 6. Validação executada
 
 - `npm run lint`: aprovado.
-- `npm test`: **195 testes**, 0 falhas.
+- `npm test`: **196 testes**, 0 falhas.
 - `npm run db:check`: 27 migrations validadas.
 - `npm run build`: build de produção aprovado.
 - `npm run db:rehearse`: PostgreSQL 16 real, papel sem superusuário — constraints
   de pagamento, regra do §22 do ponto, outbox/webhooks/API e isolamento
   multi-tenant aprovados.
-- `npm run browser-check`: **23 verificações em Chromium real** — site público,
+- `npm run browser-check`: **30 verificações em Chromium real** — site público,
   login pela interface, console global, criação de workspace **pela tela**, aba
   de usuários sem material de senha, ausência de erro de JavaScript e ausência
   de rolagem horizontal em **390, 768, 1280 e 1440 px** — e a prova de que o
@@ -250,7 +260,9 @@ grupo). Esconder sem explicar é o que faz o cliente achar que o produto quebrou
 Escada de planos semeada: Starter 5 módulos, Standard 8, Premium 11,
 Enterprise 13 (catálogo inteiro).
 
-## 12. Achado do ensaio de navegador
+## 12. Achados do ensaio de navegador
+
+Dois defeitos que só apareceram olhando a tela renderizada:
 
 A renomeação textual não pegou a marca **partida entre elementos**
 (`<span>Fila <strong>DP</strong></span>`), presente no cabeçalho do site, do
@@ -258,3 +270,9 @@ painel, do login e da recuperação de acesso. Só apareceu quando o texto foi l
 do DOM renderizado, no navegador — busca por texto-fonte não encontraria.
 Corrigido nos cinco arquivos, e o teste de renomeação passou a cobrir também o
 padrão partido.
+
+**Sobreposição no login.** O cartão de acesso era centralizado por
+`justify-content: center` e passava por cima do link "Voltar para o site" em
+**1280×800** — altura comum de notebook. A centralização passou a ser por margem
+automática, que zera quando falta espaço em vez de transbordar para cima. O
+`browser-check` mede a colisão em cinco proporções e reprova se ela voltar.

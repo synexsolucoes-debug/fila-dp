@@ -1,69 +1,66 @@
-/**
- * Marca do Vinculato.
- *
- * O símbolo é o traço em "V" (azul-marinho) encontrando o arco (azul vivo) — a
- * ideia de vínculo entre duas partes. Existem duas composições, como na marca:
- *
- * - `mark`: só o símbolo, para favicon, sidebar recolhida e espaços compactos;
- * - `full`: símbolo + logotipo, para login, cadastro, sidebar expandida e site.
- *
- * As cores vêm dos tokens da identidade; não há HEX repetido nos componentes que
- * consomem este arquivo.
- *
- * IMPORTANTE: este é um desenho vetorial da marca feito a partir da referência.
- * Quando os arquivos oficiais (SVG/PNG exportados pelo estúdio) estiverem
- * disponíveis, substitua o conteúdo de `VinculatoMark` por eles — a API do
- * componente foi mantida estável justamente para essa troca ser indolor.
- */
-type MarkProps = { size?: number; title?: string; className?: string };
+import Image from "next/image";
 
-export function VinculatoMark({ size = 32, title = "Vinculato", className }: MarkProps) {
+/**
+ * Marca do Vinculato — arquivos oficiais.
+ *
+ * As duas composições vêm dos arquivos entregues pela marca, recortados sem
+ * margem branca em `public/brand/`. Não há redesenho: o que aparece na tela é o
+ * arquivo original.
+ *
+ * - `VinculatoMark`: só o símbolo, para favicon, sidebar recolhida e áreas compactas;
+ * - `VinculatoLogo`: símbolo + logotipo, para login, cadastro, sidebar expandida,
+ *   site público e áreas institucionais.
+ *
+ * As cores da identidade vivem em tokens (`--vin-*`) e foram extraídas dos
+ * próprios pixels do símbolo, não estimadas.
+ */
+export const VINCULATO_BRAND = {
+  navy: "#062B60",
+  blue: "#168CFD",
+  markSource: "/brand/vinculato-mark.png",
+  logoSource: "/brand/vinculato-logo.png",
+  /** Sobre fundo escuro o logotipo azul-marinho fica ilegível. */
+  logoLightSource: "/brand/vinculato-logo-light.png",
+  /** Proporções reais dos arquivos recortados. */
+  markRatio: 512 / 459,
+  logoRatio: 960 / 178,
+} as const;
+
+type MarkProps = { size?: number; title?: string; className?: string; priority?: boolean };
+
+export function VinculatoMark({ size = 32, title = "Vinculato", className, priority }: MarkProps) {
   return (
-    <svg
+    <Image
       className={className}
-      width={size}
+      src={VINCULATO_BRAND.markSource}
+      alt={title}
+      width={Math.round(size * VINCULATO_BRAND.markRatio)}
       height={size}
-      viewBox="0 0 64 64"
-      role="img"
-      aria-label={title}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* Traço descendente do V, em azul-marinho profundo. */}
-      <path
-        d="M14 20c3.6-6.4 12-6 14.6.6L41 51c-4.6 3.6-11.4 2-13.8-3.6L14 20Z"
-        fill="var(--vin-navy-deep, #030A30)"
-      />
-      {/* Arco de retorno, em azul vivo: a outra ponta do vínculo. */}
-      <path
-        d="M34 16c9.8 0 17.6 8 17.6 17.8 0 7.6-4.6 14.2-11.4 16.8l-5-11.4c2.8-1.2 4.8-4 4.8-7.2 0-4.2-3.4-7.6-7.6-7.6h-2.6L34 16Z"
-        fill="var(--vin-blue-vivid, #0B86FE)"
-      />
-    </svg>
+      priority={priority}
+      style={{ width: "auto", height: size }}
+    />
   );
 }
 
-type LogoProps = MarkProps & { compact?: boolean };
+type LogoProps = MarkProps & {
+  compact?: boolean;
+  /** `light` usa o logotipo em branco, para superfícies escuras. */
+  tone?: "color" | "light";
+};
 
-export function VinculatoLogo({ size = 34, compact = false, className }: LogoProps) {
-  if (compact) return <VinculatoMark size={size} className={className} />;
+/** Versão horizontal. `compact` devolve só o símbolo, para sidebar recolhida. */
+export function VinculatoLogo({ size = 34, compact = false, className, title = "Vinculato", priority, tone = "color" }: LogoProps) {
+  if (compact) return <VinculatoMark size={size} title={title} className={className} priority={priority} />;
   return (
-    <span
+    <Image
       className={className}
-      style={{ display: "inline-flex", alignItems: "center", gap: 10, lineHeight: 1 }}
-    >
-      <VinculatoMark size={size} title="" />
-      <span
-        style={{
-          fontSize: size * 0.72,
-          fontWeight: 700,
-          letterSpacing: "-0.02em",
-          color: "var(--vin-navy-deep, #030A30)",
-        }}
-      >
-        Vinculato
-      </span>
-    </span>
+      src={tone === "light" ? VINCULATO_BRAND.logoLightSource : VINCULATO_BRAND.logoSource}
+      alt={title}
+      width={Math.round(size * VINCULATO_BRAND.logoRatio)}
+      height={size}
+      priority={priority}
+      style={{ width: "auto", height: size }}
+    />
   );
 }
 

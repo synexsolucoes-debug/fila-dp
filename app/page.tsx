@@ -1,4 +1,5 @@
 import { ArrowRight, ArrowUp, Check, Clock3, MoreHorizontal, Paperclip, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 
 const Chevron = () => <ArrowRight className="inline-icon" aria-hidden="true" />;
 const ClockIcon = () => <Clock3 className="mini-icon" aria-hidden="true" />;
@@ -143,8 +144,7 @@ export default function Home() {
     <main>
       <header className="site-header">
         <a className="brand" href="#inicio" aria-label="Vinculato — início">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Vinculato</span>
+          <VinculatoLogo size={30} priority />
         </a>
         <nav aria-label="Navegação principal">
           <a href="/solucao">Solução</a>
@@ -291,8 +291,7 @@ export default function Home() {
 
       <footer>
         <a className="brand footer-brand" href="#inicio" aria-label="Vinculato — voltar ao início">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Vinculato</span>
+          <VinculatoLogo size={26} />
         </a>
         <p>Gestão visual de demandas para Departamento Pessoal e RH.</p>
         <div>
