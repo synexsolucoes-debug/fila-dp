@@ -114,3 +114,41 @@ test("o módulo de usuários é liberado em todos os planos", async () => {
   assert.match(migration, /SELECT p\."id", 'access' FROM "fdp_saas_plans" p\s*\nON CONFLICT DO NOTHING;/u);
   assert.doesNotMatch(migration, /WHERE p\."code"/u, "nenhum plano pode ficar sem a administração de usuários");
 });
+
+test("o console da plataforma abre workspace e usuário, não só arquiva", async () => {
+  const console_ = await source("../app/plataforma/PlatformConsole.tsx");
+  const detail = await source("../app/plataforma/PlatformDetail.tsx");
+  // O console listava e oferecia quase só arquivar: administrar exigia adivinhar
+  // quem estava dentro do cliente e o que já tinha acontecido.
+  assert.match(console_, /WorkspaceDetailDrawer/u);
+  assert.match(console_, /UserDetailDrawer/u);
+  assert.match(console_, /setOpenWorkspace\(workspace\.id\)/u);
+  assert.match(console_, /setOpenUser\(user\.id\)/u);
+
+  // Workspace: ficha, abas e ações de plano e ciclo de vida.
+  for (const marker of ["Plano e limites", "Ciclo de vida", "Membros", "Empresas", "Módulos", "Auditoria"]) {
+    assert.ok(detail.includes(marker), `detalhe do workspace sem "${marker}"`);
+  }
+  // Usuário: identidade e associações são coisas distintas.
+  for (const marker of ["Associações de workspace", "Sessões ativas", "Histórico administrativo"]) {
+    assert.ok(detail.includes(marker), `detalhe do usuário sem "${marker}"`);
+  }
+  // Papel muda só na associação alterada.
+  assert.match(detail, /workspaceId: membership\.workspaceId, membership: "link", role: event\.target\.value/u);
+  // O e-mail não é editável por aqui: é chave de login e de convite.
+  assert.doesNotMatch(detail, /patch\(\{ email:/u);
+});
+
+test("as rotas de detalhe exigem administrador de plataforma e não vazam credencial", async () => {
+  const workspace = await source("../app/api/platform/workspaces/[id]/detail/route.ts");
+  const user = await source("../app/api/platform/users/[id]/detail/route.ts");
+  for (const [name, route] of [["workspace", workspace], ["usuário", user]] as const) {
+    assert.match(route, /requirePlatformAdmin\(auth\.user\)/u, `rota de ${name} sem autorização de plataforma`);
+    assert.match(route, /withPlatformContext/u);
+    assert.doesNotMatch(route, /token_hash|password_hash:|passwordHash/u, `rota de ${name} não pode devolver credencial`);
+  }
+  // A sessão aparece para poder ser revogada, mas sem o token que a identifica.
+  assert.match(user, /SELECT id, device_label, created_at, last_seen_at, expires_at/u);
+  // Administrar contrato não é motivo para ler a operação do cliente.
+  assert.doesNotMatch(workspace, /FROM fdp_cards|FROM fdp_competences/u);
+});

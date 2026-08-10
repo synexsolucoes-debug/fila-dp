@@ -81,7 +81,7 @@ calendário e os feriados do workspace, resolvidos uma vez por execução.
 
 ## 6. Gate operacional antes de liberar para o cliente
 
-1. Aplicar a migration `0026_solides_admission_connector` em PostgreSQL de homologação.
+1. Aplicar a migration `0028_solides_admission_connector` em PostgreSQL de homologação.
 2. Confirmar que o workspace tem quadro com coluna de entrada e a política de SLA de
    `CONCILIAÇÃO CADASTRAL` ativa.
 3. Guardar o token do cliente e executar **Verificar** contra a conta real — sem isso o conector

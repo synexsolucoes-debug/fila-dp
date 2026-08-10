@@ -35,7 +35,9 @@ import {
   RefreshCw,
   Search,
   Settings,
+  AlertTriangle,
   ShieldCheck,
+  UserRoundCog,
   Sparkles,
   Smartphone,
   Stethoscope,
@@ -141,6 +143,12 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   saas: { eyebrow: "ADMINISTRAÇÃO SAAS", title: "Plano e ativação", description: "Conclua a implantação do workspace, acompanhe limites, assinatura e cobranças." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
+};
+
+/** Estados do ciclo de vida do workspace, para o seletor dizer por que um grupo
+    não pode ser aberto em vez de apenas desabilitar o botão. */
+const workspaceStatusLabels: Record<string, string> = {
+  active: "Ativo", suspended: "Suspenso", canceled: "Cancelado", archived: "Arquivado",
 };
 
 const searchRecordLabels: Record<string, string> = {
@@ -1152,6 +1160,37 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {hasModule("indicators") && <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>}
           {isAdmin && <button title="Configurações" onClick={() => { setSettingsSection("general"); openWorkspaceSettings(); }}><span aria-hidden="true"><Settings /></span> Configurações</button>}
         </nav>
+        {snapshot.availableWorkspaces.length > 1 && (
+          <div className="sidebar-workspace sidebar-workspace-switcher">
+            <span>GRUPO ATUAL</span>
+            {/* `details` nativo: teclado e leitor de tela funcionam sem estado
+                extra. Trocar de grupo é troca de contexto, não de identidade —
+                por isso fica aqui e não junto de "entrar em outra conta". */}
+            <details>
+              <summary>
+                <i>{workspaceInitials}</i>
+                <span><strong>{snapshot.workspace.name}</strong><small>{roleLabels[snapshot.workspace.role]}</small></span>
+                <ChevronDown aria-hidden="true" />
+              </summary>
+              <ul>
+                {snapshot.availableWorkspaces.map((item) => (
+                  <li key={item.id}>
+                    <button type="button" disabled={busy || item.id === snapshot.workspace.id || !item.operational}
+                      aria-current={item.id === snapshot.workspace.id ? "true" : undefined}
+                      onClick={() => void switchWorkspace(item.id)}>
+                      <i>{initials(item.name)}</i>
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>{roleLabels[item.role]}{item.operational ? "" : ` · ${workspaceStatusLabels[item.status] ?? item.status}`}</small>
+                      </span>
+                      {item.id === snapshot.workspace.id && <b>Atual</b>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        )}
         <div className="sidebar-workspace">
           <span>ESTRUTURA EMPRESARIAL</span>
           <button type="button" onClick={() => { if (isAdmin) { setSettingsSection("companies"); openWorkspaceSettings(); } else setToast("As empresas do grupo são administradas pelo administrador do workspace."); }}><i>{workspaceInitials}</i><span><strong>{principalCompany?.tradeName || principalCompany?.legalName || "Sem principal"}</strong><small>{snapshot.companies.length} empresa(s) no grupo</small></span><ChevronDown aria-hidden="true" /></button>
@@ -1159,7 +1198,16 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
           <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
-          <button type="button" className="sign-out-button" disabled={busy} onClick={() => void signOut()} aria-label="Sair do Vinculato" title="Sair"><LogOut aria-hidden="true" /></button>
+          <div className="sidebar-account-actions">
+            {/* Dois comandos distintos: sair encerra e volta ao site; trocar de
+                conta encerra e já abre a autenticação de outra identidade. */}
+            <form method="post" action="/api/auth/logout">
+              <input type="hidden" name="trocar" value="1" />
+              <button type="submit" className="switch-account-button"
+                aria-label="Entrar em outra conta" title="Entrar em outra conta"><UserRoundCog aria-hidden="true" /></button>
+            </form>
+            <button type="button" className="sign-out-button" disabled={busy} onClick={() => void signOut()} aria-label="Sair do Vinculato" title="Sair"><LogOut aria-hidden="true" /></button>
+          </div>
         </div>
       </aside>
 
@@ -1178,6 +1226,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         </header>
 
         <div className="dashboard-content">
+          {/* O contexto pode ter mudado sozinho porque o grupo anterior saiu do
+              ar. Trocar em silêncio faria a pessoa achar que perdeu dados. */}
+          {snapshot.switchedFrom && (
+            <p className="workspace-switched-notice" role="status">
+              <AlertTriangle aria-hidden="true" />
+              <span>
+                <strong>{snapshot.switchedFrom.name}</strong> está {(workspaceStatusLabels[snapshot.switchedFrom.status] ?? snapshot.switchedFrom.status).toLowerCase()} e não pode ser aberto.
+                Você está trabalhando em <strong>{snapshot.workspace.name}</strong>.
+              </span>
+            </p>
+          )}
           <div className="dashboard-heading">
             <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{view === "overview" ? `Olá, ${user.displayName.split(" ")[0] || "equipe"}.` : header.title}</h1><p>{view === "overview" ? "Veja as prioridades da operação e avance com segurança." : header.description}</p><div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div></div>
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>

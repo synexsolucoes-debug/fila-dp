@@ -7,6 +7,7 @@ import { hasCapability } from "./authorization";
 import { resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
+import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
 
 
 function safeJson(value: string) {
@@ -145,40 +146,16 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
     throw ApiError.forbidden("Seu acesso está bloqueado. Fale com o administrador da plataforma.", "USER_BLOCKED");
   }
 
-  let workspace = await d1.prepare(
-    `SELECT w.id, w.name, w.timezone, w.status, w.status_reason, wm.role
-     FROM fdp_user_workspace_preferences p
-     JOIN fdp_workspaces w ON w.id = p.active_workspace_id
-     JOIN fdp_workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = p.user_id
-     WHERE p.user_id = ?
-     LIMIT 1`,
-  ).bind(userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
-
-  if (!workspace) {
-    workspace = await d1.prepare(
-      `SELECT w.id, w.name, w.timezone, w.status, w.status_reason, wm.role
-       FROM fdp_workspaces w
-       JOIN fdp_workspace_members wm ON wm.workspace_id = w.id
-       WHERE wm.user_id = ?
-       ORDER BY CASE WHEN w.owner_user_id = ? THEN 0 ELSE 1 END, wm.joined_at
-       LIMIT 1`,
-    ).bind(userRow.id, userRow.id).first<{ id: string; name: string; timezone: string; role: WorkspaceRole }>();
-  }
-
-  if (!workspace) throw ApiError.forbidden("Sem permissão para acessar este grupo. Peça ao administrador para liberar seu usuário.", "WORKSPACE_ACCESS_DENIED");
-  // Workspace suspenso, cancelado ou arquivado não opera: a recusa diz o estado
-  // e o motivo registrado, em vez de devolver telas vazias.
-  const workspaceStatus = String((workspace as Record<string, unknown>).status ?? "active");
-  if (workspaceStatus !== "active") {
-    const labels: Record<string, string> = {
-      suspended: "Este grupo está suspenso", canceled: "Este grupo está cancelado", archived: "Este grupo está arquivado",
-    };
-    const reason = String((workspace as Record<string, unknown>).status_reason ?? "").trim();
-    throw ApiError.forbidden(
-      `${labels[workspaceStatus] ?? "Este grupo está indisponível"}.${reason ? ` Motivo: ${reason}.` : ""} Fale com o administrador da plataforma.`,
-      "WORKSPACE_SUSPENDED",
-    );
-  }
+  // A escolha do contexto passa pelo serviço central: preferência só vale se o
+  // workspace continuar associado E operacional. Antes, um grupo arquivado na
+  // preferência derrubava a sessão inteira, mesmo com outro grupo ativo.
+  const accessible = await listAccessibleWorkspaces(d1, userRow.id);
+  const preference = await d1.prepare("SELECT active_workspace_id FROM fdp_user_workspace_preferences WHERE user_id = ?")
+    .bind(userRow.id).first<{ active_workspace_id: string | null }>();
+  const resolution = resolveActiveWorkspace(accessible, preference?.active_workspace_id ?? null);
+  if (resolution.kind === "none") throw noAccessibleWorkspaceError(resolution.blocked);
+  const workspace = resolution.workspace;
+  const switchedFrom = resolution.switchedFrom;
 
   // O AsyncLocalStorage continua sendo preenchido para o código que já depende
   // dele dentro desta própria função; a garantia real de isolamento, porém, é a
@@ -203,7 +180,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
   await d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(board.id, userRow.id, workspace.id).run();
 
-  return { d1: scopedD1, user: userRow, workspace, board };
+  return { d1: scopedD1, user: userRow, workspace, board, accessible, switchedFrom };
 }
 
 /**
@@ -248,13 +225,13 @@ export async function getWorkspaceModules(
 }
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
-  const { d1, workspace, board, user: userRow } = await getWorkspaceContext(user);
+  const { d1, workspace, board, user: userRow, accessible, switchedFrom } = await getWorkspaceContext(user);
   const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
   const canManageMembers = hasCapability(workspace.role, "members.manage");
   const canReadHr = hasCapability(workspace.role, "hr.read");
   const canManageIntegrations = hasCapability(workspace.role, "integrations.manage");
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role, String((workspace as Record<string, unknown>).status ?? "active"));
-  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
+  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
@@ -282,11 +259,6 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       JOIN fdp_workspaces w ON w.id = wm.workspace_id
       WHERE wm.workspace_id = ?
       ORDER BY is_owner DESC, u.name`).bind(workspace.id).all(),
-    d1.prepare(`SELECT w.id, w.name, wm.role
-      FROM fdp_workspace_members wm
-      JOIN fdp_workspaces w ON w.id = wm.workspace_id
-      WHERE wm.user_id = ?
-      ORDER BY w.name`).bind(userRow.id).all(),
     d1.prepare("SELECT id, name, color, position FROM fdp_labels WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare(`SELECT cl.card_id, l.id, l.name, l.color
       FROM fdp_card_labels cl JOIN fdp_labels l ON l.id = cl.label_id
@@ -496,11 +468,20 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       isActivated: canManageMembers ? Boolean(row.is_activated) : false,
       companyIds: canManageMembers ? (memberCompanyIds.get(String(row.user_id)) ?? []) : [],
     })),
-    availableWorkspaces: (workspacesResult.results as Array<Record<string, unknown>>).map((row) => ({
-      id: String(row.id),
-      name: String(row.name),
-      role: String(row.role) as WorkspaceRole,
+    // A lista vem do serviço central, não de uma consulta paralela: inclui o
+    // status para o seletor poder dizer por que um grupo não está disponível.
+    availableWorkspaces: accessible.map((item) => ({
+      id: item.id,
+      name: item.name,
+      role: item.role,
+      status: item.status,
+      statusReason: item.statusReason,
+      isOwner: item.isOwner,
+      operational: item.operational,
     })),
+    // Quando o grupo preferido saiu do ar, a interface avisa em vez de trocar o
+    // contexto por baixo do usuário sem explicação.
+    switchedFrom: switchedFrom ? { id: switchedFrom.id, name: switchedFrom.name, status: switchedFrom.status } : null,
     archivedCards: cards.filter((card) => card.archived),
     labels: (labelsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), name: String(row.name), color: String(row.color) })),
     customFields: (customFieldsResult.results as Array<Record<string, unknown>>).map((row) => ({

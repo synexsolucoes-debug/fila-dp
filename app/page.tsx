@@ -286,7 +286,7 @@ export default async function Home() {
             </article>
           ))}
         </div>
-        <p className="feature-note"><Link href="/integracoes">Ver detalhes das integrações <Chevron /></Link></p>
+        <p className="integration-note"><Link href="/integracoes">Ver detalhes das integrações <Chevron /></Link></p>
       </section>
 
       <section className="section security-section">

@@ -1,5 +1,7 @@
 .console { --navy: #07182a; --blue: #3159b7; --green: #137a4f; --amber: #a15c07; --red: #b42318; --surface: #fff; --muted: #f1f4f7; --border: #d7e0e8; --text: #172235; --soft: #5e6d7f; min-height: 100vh; background: #edf1f5; color: var(--text); }
-.console button, .console input, .console select, .console textarea { font: inherit; }.console svg { width: 17px; height: 17px; }.console :is(a, button, input, select, textarea):focus-visible { outline: 3px solid #6386db55; outline-offset: 2px; }
+.console button, .console input, .console select, .console textarea { font: inherit; }
+/* WCAG 2.5.8: nenhum controle do console pode ficar abaixo de 24x24 CSS px. */
+.console :is(button, input, select, textarea, a[href]) { min-height: 24px; }.console svg { width: 17px; height: 17px; }.console :is(a, button, input, select, textarea):focus-visible { outline: 3px solid #6386db55; outline-offset: 2px; }
 .topbar { position: sticky; z-index: 20; top: 0; min-height: 64px; padding: 0 clamp(18px, 4vw, 58px); display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--navy); color: #fff; box-shadow: 0 1px 0 #ffffff14; }.topbar > a { display: flex; align-items: center; gap: 9px; }.topbar > a > strong { font-size: .8rem; }.topbar > a > small { margin-left: 5px; padding-left: 12px; border-left: 1px solid #ffffff2b; color: #8eade9; font-size: .6875rem; font-weight: 800; letter-spacing: .11em; }.topbar > div { display: flex; align-items: center; gap: 8px; }.topbar > div > svg { color: #8eade9; }.topbar > div > span { display: grid; gap: 2px; }.topbar > div strong { font-size: .6875rem; }.topbar > div small { color: #9dafc1; font-size: .6875rem; }
 .content { width: min(1500px, calc(100% - clamp(26px, 6vw, 88px))); margin: 0 auto; padding: 30px 0 50px; }.hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 15px; }.hero span, .panelHeader span { color: var(--blue); font-size: .6875rem; font-weight: 820; letter-spacing: .11em; }.hero h1 { margin: 5px 0 3px; font-size: clamp(1.7rem, 3vw, 2.5rem); letter-spacing: -.045em; }.hero p, .panelHeader p { margin: 0; color: var(--soft); font-size: .6875rem; line-height: 1.5; }.hero button, .state button { display: inline-flex; align-items: center; gap: 7px; min-height: 39px; padding: 0 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--soft); font-size: .6875rem; font-weight: 720; cursor: pointer; }
 .scopeWarning { display: grid; grid-template-columns: 31px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-bottom: 13px; padding: 10px 12px; border: 1px solid #d7b376; border-left: 4px solid var(--amber); background: #fff9ee; color: var(--amber); }.scopeWarning > div { display: grid; gap: 2px; }.scopeWarning strong { color: var(--text); font-size: .6875rem; }.scopeWarning span { color: #75654d; font-size: .6875rem; line-height: 1.4; }.scopeWarning b { padding: 4px 7px; border: 1px solid #d7b376; font-size: .6875rem; letter-spacing: .08em; }.error { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; padding: 9px 11px; border: 1px solid #e3aaa6; background: #fff4f3; color: var(--red); font-size: .6875rem; }.error button { margin-left: auto; border: 0; background: transparent; color: inherit; cursor: pointer; }
@@ -23,3 +25,30 @@
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 11px; }.toolbar input, .toolbar select { min-height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }.toolbar input { min-width: 240px; flex: 1 1 240px; }.toolbar .primary { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font-weight: 740; cursor: pointer; }.toolbar .primary:disabled { opacity: .55; cursor: wait; }
 .rowActions { display: flex; flex-wrap: wrap; gap: 5px; }.rowActions button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--soft); font-weight: 720; cursor: pointer; }.rowActions button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }.rowActions button:disabled { opacity: .45; cursor: not-allowed; }.rowActions button[data-danger="true"]:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
 .seatBar { display: grid; gap: 3px; min-width: 96px; }.seatBar > span { height: 5px; border-radius: 3px; background: var(--muted); overflow: hidden; }.seatBar > span > i { display: block; height: 100%; background: var(--green); }.seatBar[data-full="true"] > span > i { background: var(--red); }
+
+/* Detalhe administrativo: abas, ficha e tabelas internas do drawer. */
+.detailTabs { display: flex; gap: 2px; padding: 0 15px; border-bottom: 1px solid var(--border); background: var(--muted); }
+.detailTabs button { min-height: 38px; padding: 0 11px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--soft); font-size: .69rem; font-weight: 720; cursor: pointer; }
+.detailTabs button:hover { color: var(--brand, #0857b2); }
+.detailTabs .activeTab { border-bottom-color: var(--brand, #0857b2); color: var(--brand, #0857b2); }
+
+.detailGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; margin: 0 0 14px; border: 1px solid var(--border); background: var(--border); }
+.detailGrid > div { padding: 10px 12px; background: var(--surface); }
+.detailGrid dt { color: var(--soft); font-size: .6rem; font-weight: 780; text-transform: uppercase; letter-spacing: .05em; }
+.detailGrid dd { margin: 4px 0 0; font-size: .75rem; font-weight: 680; }
+.detailGrid dd small { display: block; margin-top: 2px; color: var(--soft); font-size: .65rem; font-weight: 500; }
+
+.detailActions { margin-bottom: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.detailActions h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: .78rem; }
+.detailActions h3 svg { width: 14px; height: 14px; }
+.detailActions > p { margin: 0 0 10px; color: var(--soft); font-size: .66rem; line-height: 1.5; }
+.detailActions label { display: inline-grid; gap: 4px; color: var(--soft); font-size: .64rem; font-weight: 700; }
+.detailActions select { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); font-size: .7rem; }
+
+.detailTable { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.detailTable th, .detailTable td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: .68rem; vertical-align: middle; }
+.detailTable thead th { color: var(--soft); font-size: .6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.detailTable td strong { display: block; font-size: .7rem; }
+.detailTable td small { display: block; margin-top: 2px; color: var(--soft); font-size: .62rem; }
+.detailTable select { min-height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); font-size: .66rem; }
+.drawerBackdrop { position: fixed; inset: 0; z-index: 190; display: flex; justify-content: flex-end; background: #04162c8c; backdrop-filter: blur(2px); }

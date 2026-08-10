@@ -131,12 +131,12 @@ test("o executor trata a Sólides com o contrato dela e abre a conciliação", a
 test("o recurso admissions está liberado no banco e no manifesto de migrations", async () => {
   const [schema, migration, manifest] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
-    readFile(new URL("../drizzle/postgres/0026_solides_admission_connector.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/postgres/0028_solides_admission_connector.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/schema-manifest.ts", import.meta.url), "utf8"),
   ]);
   assert.match(schema, /'inbox', 'employees', 'hr_metrics', 'files', 'admissions'/u);
   assert.match(migration, /fdp_integration_mappings_resource_check/u);
   assert.match(migration, /'admissions'/u);
   assert.match(migration, /CONCILIAÇÃO CADASTRAL/u);
-  assert.match(manifest, /0026_solides_admission_connector\.sql/u);
+  assert.match(manifest, /0028_solides_admission_connector\.sql/u);
 });

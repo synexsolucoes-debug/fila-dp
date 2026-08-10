@@ -240,6 +240,11 @@ export type AvailableWorkspace = {
   id: string;
   name: string;
   role: WorkspaceRole;
+  /** Ciclo de vida do workspace: só `active` é contexto operacional. */
+  status: string;
+  statusReason: string;
+  isOwner: boolean;
+  operational: boolean;
 };
 
 export type WorkspaceSnapshot = {
@@ -256,6 +261,8 @@ export type WorkspaceSnapshot = {
   rules: AutomationRule[];
   members: WorkspaceMember[];
   availableWorkspaces: AvailableWorkspace[];
+  /** Grupo que deixou de operar e provocou a troca automática de contexto. */
+  switchedFrom: { id: string; name: string; status: string } | null;
   archivedCards: Card[];
   labels: CardLabel[];
   customFields: CustomFieldDefinition[];
