@@ -104,7 +104,7 @@ export const integrationCatalog = [
   { name: "Sankhya", category: "ERP", state: "partial", note: "Conector com credencial por workspace; requer endpoint e homologação com o cliente." },
   { name: "API pública Vinculato", category: "Plataforma", state: "available", note: "Leitura da operação e envio de créditos/descontos PJ, com escopos e idempotência." },
   { name: "Webhooks de saída", category: "Plataforma", state: "available", note: "Eventos assinados com HMAC, repetição e log de entrega." },
-  { name: "Sólides", category: "Admissão", state: "planned", note: "Aguarda recurso oficial e credenciais. A admissão permanece na Sólides." },
+  { name: "Sólides", category: "Admissão", state: "partial", note: "Conector oficial de colaboradores: quem é admitido na Sólides vira conciliação no Vinculato. Exige token do cliente e homologação; os arquivos dos documentos permanecem na Sólides. A admissão permanece na Sólides." },
   { name: "Caju", category: "Benefícios", state: "planned", note: "Complemento é controle assistido com exportação; não há integração oficial implementada." },
   { name: "Domínio, Senior, TOTVS, Alterdata e outros ERPs", category: "ERP", state: "planned", note: "Arquitetura de conectores pronta; cada integração exige documentação e homologação." },
   { name: "Sistemas de ponto", category: "Ponto", state: "planned", note: "Importação para conferência; o módulo de ponto ainda não faz parte do produto." },

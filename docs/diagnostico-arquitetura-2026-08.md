@@ -205,7 +205,7 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Concluída no repositório: arquitetura de conectores, cofre AES-256-GCM por workspace com rotação de chave, mapeamentos versionados e imutáveis após publicação, sync runs/items, fila com lease, idempotência, backoff, dead-letter e conciliação auditável.
 - Sincronizações manuais apenas enfileiram trabalho; o executor autenticado realiza I/O com provedores fora da requisição do navegador e limita resposta, redirecionamento e endpoint.
 - Webhooks assinados registram runs/items e deduplicam por chave externa ou hash, sem depender de tags inseridas no corpo da mensagem.
-- Sólides continua aguardando credenciais até confirmar recurso oficial; a API impede estado conectado sem autenticação e teste real.
+- Sólides passou a ter conector oficial: `GET /colaboradores` autenticado com `Token token=`, filtrado por `data_admissao`, abrindo conciliação cadastral de quem já foi admitido. O endpoint é restrito à lista oficial de hosts e a API continua impedindo estado conectado sem autenticação e teste real. Os arquivos dos documentos permanecem na Sólides, porque a API oficial não expõe download de anexos. Ver `docs/integracao-solides.md`.
 - Gate operacional antes do deploy: aplicar a migration `0016_integrations_engine`, configurar as chaves do cofre/executor, executar `npm run db:rehearse-phase2` em PostgreSQL de homologação e testar cada conector contra a conta sandbox/oficial do cliente.
 
 ### Fase 7 — Plataforma SaaS
