@@ -46,6 +46,46 @@ record("o título traz a nova marca", (await page.title()).includes("Vinculato")
 const bodyText = await page.locator("body").innerText();
 record("o nome antigo não aparece na página inicial", !/Fila DP/u.test(bodyText));
 
+// A home precisa ter sido reconstruída, não apenas trocado o logotipo: o
+// posicionamento, as seções e os planos vêm do produto atual.
+record("o herói traz o posicionamento Vinculato",
+  (await page.locator("h1").first().innerText()).trim() === "Sua operação, conectada.",
+  (await page.locator("h1").first().innerText()).trim());
+record("o posicionamento anterior saiu da página", !/fila certa|Kanban gen[ée]rico/iu.test(bodyText));
+// O texto renderizado sobe para maiúsculas em alguns rótulos por CSS; a
+// comparação é insensível a caixa para medir o conteúdo, não o estilo.
+const homeText = bodyText.toLocaleLowerCase("pt-BR");
+for (const heading of ["Como funciona", "E o que o Vinculato não faz", "Integrações", "Planos", "Perguntas frequentes"]) {
+  record(`a home apresenta a seção "${heading}"`, homeText.includes(heading.toLocaleLowerCase("pt-BR")));
+}
+
+// Os planos exibidos são os do catálogo, lidos do banco — não texto fixo.
+const planNames = await page.locator(".plan-card .plan-name").allInnerTexts();
+const catalog = await page.evaluate(async () => {
+  const response = await fetch("/api/site/plans", { cache: "no-store" }).catch(() => null);
+  return response?.ok ? await response.json() : null;
+});
+record("a home lista os planos publicados no catálogo", planNames.length >= 1, planNames.join(", "));
+if (catalog?.plans) {
+  const expected = catalog.plans.map((plan) => plan.name);
+  record("os planos da home são exatamente os do catálogo",
+    JSON.stringify(planNames.map((name) => name.trim().toLocaleLowerCase("pt-BR")))
+      === JSON.stringify(expected.map((name) => name.toLocaleLowerCase("pt-BR"))),
+    `home: ${planNames.join(", ")} | catálogo: ${expected.join(", ")}`);
+  const prices = await page.locator(".plan-card .plan-price").allInnerTexts();
+  const paidInCatalog = catalog.plans.filter((plan) => plan.monthlyPriceCents > 0);
+  record("o preço exibido é o preço do catálogo, em centavos convertidos",
+    paidInCatalog.every((plan) => {
+      const shown = prices[catalog.plans.indexOf(plan)] ?? "";
+      return shown.replace(/\s/gu, "").includes(String(Math.trunc(plan.monthlyPriceCents / 100)));
+    }) && paidInCatalog.length > 0,
+    prices.map((price) => price.split("\n")[0]).join(" | "));
+}
+
+// Nada de prova social inventada: cliente, depoimento, número ou certificação.
+record("a home não publica cliente, depoimento, número ou certificação fictícios",
+  !/depoimento|clientes atendidos|empresas confiam|casos de sucesso|ISO\s?\d|certificad[oa] (?:ISO|SOC)/iu.test(bodyText));
+
 // 2. Login pela interface
 await page.goto(`${base}/login`, { waitUntil: "domcontentloaded" });
 const emailField = page.locator('input[type="email"], input[name="email"]').first();

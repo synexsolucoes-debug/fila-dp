@@ -19,7 +19,15 @@ export function LoginForm() {
     void fetch("/api/auth/setup-status")
       .then((response) => response.json())
       .then((payload: { setupRequired?: boolean; signupEnabled?: boolean }) => {
-        if (active) { setSetupRequired(Boolean(payload.setupRequired)); setSignupEnabled(Boolean(payload.signupEnabled)); }
+        if (!active) return;
+        setSetupRequired(Boolean(payload.setupRequired));
+        setSignupEnabled(Boolean(payload.signupEnabled));
+        // O site pode chegar aqui pedindo o cadastro. A intenção só vira modo de
+        // criação se a criação pública estiver mesmo habilitada — caso contrário
+        // a tela continua sendo a de entrada, sem prometer um caminho inexistente.
+        if (payload.signupEnabled && new URLSearchParams(window.location.search).get("modo") === "criar") {
+          setMode("signup");
+        }
       })
       .catch(() => { if (active) { setSetupRequired(false); setSignupEnabled(false); } });
     return () => { active = false; };

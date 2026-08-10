@@ -70,25 +70,57 @@ test("o site declara as fronteiras do produto em vez de escondê-las", async () 
   assert.match(shell, /não substitui contador nem emite nota fiscal/u);
 });
 
-test("a home deixou de anunciar plano gratuito e aponta para o catálogo real", async () => {
+test("a home lê o catálogo real e não escreve preço no código", async () => {
   const home = await readPage("../app/page.tsx");
-  assert.doesNotMatch(home, /plano gratuito/iu);
-  assert.doesNotMatch(home, /Começar grátis/iu);
-  assert.doesNotMatch(home, /Sem cartão de crédito/iu);
-  // Os antigos cartões de plano fixos saíram.
+  // Nenhum preço, nome de plano ou limite fixo no código da página.
+  assert.doesNotMatch(home, /R\$\s?\d/u);
   assert.doesNotMatch(home, /plan-name">Standard/u);
   assert.doesNotMatch(home, /plan-name">Premium/u);
+  assert.match(home, /FROM fdp_saas_plans WHERE status = 'active'/);
+  assert.match(home, /monthly_price_cents/);
+  // Sem catálogo, a seção remete à equipe em vez de inventar condição.
+  assert.match(home, /Condições sob consulta/);
   assert.match(home, /href="\/planos"/);
   assert.match(home, /href="\/contato/);
   assert.match(home, /site-boundary-note/);
 });
 
+test("a home só oferece cadastro grátis quando existe plano sem custo e autocadastro habilitado", async () => {
+  const home = await readPage("../app/page.tsx");
+  // A oferta é condicional às duas verdades, não um texto solto no herói.
+  assert.match(home, /const freePlan = plans\.find\(\(plan\) => plan\.monthly_price_cents === 0\)/);
+  assert.match(home, /const freeSignup = signupOpen && Boolean\(freePlan\)/);
+  assert.match(home, /freeSignup[\s\S]{0,120}Começar grátis/u);
+  // "Começar grátis" nunca aparece fora da condição.
+  const offers = [...home.matchAll(/Começar grátis/gu)];
+  assert.equal(offers.length, 2, "a oferta grátis deve existir só nos dois CTAs condicionais");
+  for (const offer of offers) {
+    const before = home.slice(Math.max(0, (offer.index ?? 0) - 200), offer.index);
+    assert.match(before, /freeSignup/u, "oferta grátis sem a condição do catálogo");
+  }
+});
+
+test("a home entrega o posicionamento Vinculato, não o texto anterior", async () => {
+  const home = await readPage("../app/page.tsx");
+  assert.match(home, /<h1>Sua operação, conectada\.<\/h1>/u);
+  assert.match(home, /Centralize processos, demandas, documentos e integrações/u);
+  // O posicionamento antigo, centrado em fila e quadro kanban, saiu.
+  assert.doesNotMatch(home, /Toda demanda do DP na fila certa/u);
+  assert.doesNotMatch(home, /kanban/iu);
+  // O conteúdo vem da fonte única de marketing, não duplicado na página.
+  for (const symbol of ["featureHighlights", "productBoundaries", "integrationCatalog", "faqEntries", "siteNavigation"]) {
+    assert.match(home, new RegExp(symbol), `a home precisa consumir ${symbol} de lib/marketing`);
+  }
+});
+
 test("a página de planos lê o catálogo persistido e não inventa preço", async () => {
   const source = await readPage("../app/planos/page.tsx");
   assert.match(source, /FROM fdp_saas_plans WHERE status = 'active'/);
-  // Preço só aparece quando o plano é cobrável de verdade.
+  // O preço vem do catálogo; o que depende do provedor de pagamento é a
+  // contratação direta, não a exibição do valor publicado.
   assert.match(source, /const payable = plan\.monthly_price_cents > 0 && Boolean\(plan\.stripe_monthly_price_id\)/);
-  assert.match(source, /Sob consulta/);
+  assert.match(source, /contratação com a equipe/);
+  assert.match(source, /Falar com a equipe/);
   assert.match(source, /selfSignupEnabled/);
   // Sem catálogo, a página não mostra tabela de preços fabricada.
   assert.match(source, /Condições sob consulta/);

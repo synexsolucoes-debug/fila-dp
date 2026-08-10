@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getD1 } from "@/db";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 import { selfSignupEnabled } from "@/lib/saas";
+import { pluralize } from "@/lib/marketing";
 
 export const metadata: Metadata = {
   title: "Planos | Vinculato",
@@ -68,34 +69,33 @@ export default async function PlanosPage() {
         ) : (
           <div className={styles.planGrid}>
             {plans.map((plan) => {
+              const free = plan.monthly_price_cents === 0;
+              // Preço publicado é mostrado como está no catálogo. A contratação
+              // direta é que depende do provedor de pagamento configurado.
               const payable = plan.monthly_price_cents > 0 && Boolean(plan.stripe_monthly_price_id);
+              const annual = plan.annual_price_cents > 0 ? ` · ${money(plan.annual_price_cents, plan.currency)} no plano anual` : "";
               return (
                 <article key={plan.code} className={styles.plan}>
                   <h3>{plan.name}</h3>
-                  {payable ? (
-                    <span className={styles.planPrice}>
-                      {money(plan.monthly_price_cents, plan.currency)}
-                      <small>por mês{plan.annual_price_cents > 0 ? ` · ${money(plan.annual_price_cents, plan.currency)} no plano anual` : ""}</small>
-                    </span>
-                  ) : (
-                    <span className={styles.planPrice}>
-                      Sob consulta
-                      <small>condição combinada com a equipe</small>
-                    </span>
-                  )}
+                  <span className={styles.planPrice}>
+                    {free ? "Grátis" : money(plan.monthly_price_cents, plan.currency)}
+                    <small>
+                      {free ? "para começar" : payable ? `por mês${annual}` : `por mês${annual} · contratação com a equipe`}
+                    </small>
+                  </span>
                   {plan.description && <p style={{ color: "var(--site-soft)", fontSize: ".88rem", margin: 0 }}>{plan.description}</p>}
                   <ul className={styles.planList}>
-                    <li>{plan.included_seats} usuário(s) incluídos</li>
-                    <li>{plan.company_limit} empresa(s)</li>
-                    <li>{plan.integration_limit} integração(ões)</li>
+                    <li>{pluralize(plan.included_seats, "usuário incluído", "usuários incluídos")}</li>
+                    <li>{pluralize(plan.company_limit, "empresa", "empresas")}</li>
+                    <li>{pluralize(plan.integration_limit, "integração", "integrações")}</li>
                     <li>{Math.round(plan.storage_limit_mb / 1024 * 10) / 10} GB de anexos</li>
-                    {plan.trial_days > 0 && <li>{plan.trial_days} dias de avaliação</li>}
+                    {plan.trial_days > 0 && <li>{pluralize(plan.trial_days, "dia de avaliação", "dias de avaliação")}</li>}
                   </ul>
                   <Link
-                    className={payable && signupOpen ? styles.primaryButton : styles.ghostButton}
-                    href={payable && signupOpen ? "/login" : `/contato?assunto=planos&plano=${encodeURIComponent(plan.code)}`}
+                    className={signupOpen && (free || payable) ? styles.primaryButton : styles.ghostButton}
+                    href={signupOpen && (free || payable) ? "/login?modo=criar" : `/contato?assunto=planos&plano=${encodeURIComponent(plan.code)}`}
                   >
-                    {payable && signupOpen ? "Começar agora" : "Falar com a equipe"}
+                    {signupOpen && free ? "Criar conta" : signupOpen && payable ? "Começar agora" : "Falar com a equipe"}
                   </Link>
                 </article>
               );

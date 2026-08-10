@@ -276,3 +276,55 @@ padrão partido.
 **1280×800** — altura comum de notebook. A centralização passou a ser por margem
 automática, que zera quando falta espaço em vez de transbordar para cima. O
 `browser-check` mede a colisão em cinco proporções e reprova se ela voltar.
+
+## 13. Página inicial reconstruída (§21)
+
+O relato do cliente foi direto: *"a página inicial só mudou a logo"*. Estava
+certo. A home continuava sendo a página do posicionamento anterior — título
+"Toda demanda do DP na fila certa.", herói centrado em quadro kanban, tabela
+comparativa contra "kanban genérico", FAQ duplicada em texto fixo — com o
+logotipo novo por cima. Trocar a marca não é reposicionar o produto.
+
+**O que a página passou a ser.** Herói com o posicionamento atual ("Sua
+operação, conectada."), problema que o produto resolve, fluxo real do trabalho
+(demanda → competência → conferência → fechamento), recursos entregues,
+fronteiras declaradas, integrações com estado real, segurança e rastreabilidade,
+planos, perguntas frequentes e chamada final.
+
+**Conteúdo com fonte única.** Recursos, fronteiras, integrações, FAQ e navegação
+vêm de `lib/marketing.ts` — os mesmos objetos que as outras páginas comerciais
+consomem. A home não pode mais divergir do resto do site por esquecimento.
+
+**Planos lidos do catálogo.** A seção de planos consulta `fdp_saas_plans` na
+renderização. Nenhum preço, nome ou limite está escrito no código da página: o
+valor exibido é o `monthly_price_cents` persistido, convertido na hora. O
+`browser-check` compara o que a página mostra com o que `GET /api/site/plans`
+devolve e reprova qualquer divergência.
+
+**Preço publicado e contratação são coisas diferentes.** A regra anterior
+escondia o preço quando faltava configuração no provedor de pagamento, e um
+plano de R$ 97 aparecia como "sob consulta" — subentregando o catálogo. Agora o
+preço publicado é sempre exibido, e o que depende do provedor é o botão: sem
+preço configurado lá, o plano existe com o valor à vista e a contratação é
+assistida pela equipe. Nenhuma tela simula checkout inexistente.
+
+**Oferta grátis condicionada a duas verdades.** "Começar grátis" só aparece se
+existir plano de preço zero ativo no catálogo **e** o autocadastro estiver
+habilitado. O destino (`/login?modo=criar`) abre o formulário de criação apenas
+quando o próprio servidor confirma que a criação pública está ligada.
+
+**Identidade aplicada, não só o logotipo.** O site inteiro ainda usava a paleta
+verde-menta anterior. As cores passaram a ser consumidas por tokens: a home, as
+páginas comerciais (`site.module.css`) e as telas de acesso (`access.css`) leem
+`--brand*`, `--ui-*` e `--on-brand-*`. Também saíram do CSS global três seletores
+de elemento (`footer`, `table`, `th/td`) que vazavam para todas as páginas — o
+`min-width: 860px` em `table` era risco de rolagem horizontal em telas estreitas.
+
+**Sem prova social inventada.** A página não publica cliente, depoimento,
+número, certificação nem integração inexistente; o `browser-check` procura por
+esses padrões no texto renderizado e reprova se aparecerem.
+
+Validação desta fatia: `lint` limpo, 198 testes, 41 verificações de navegador
+(390/768/1280/1440, sem rolagem horizontal e sem erro de console), 23
+verificações de fumaça e 7 de isolamento, todas pelo driver que a aplicação usa
+em produção.

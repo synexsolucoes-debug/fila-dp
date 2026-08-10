@@ -1,13 +1,15 @@
 .site {
-  --site-bg: #f6f8f9;
-  --site-surface: #fff;
-  --site-border: #dce3e8;
-  --site-text: #16222f;
-  --site-soft: #58697a;
-  --site-accent: #0f6b53;
-  --site-accent-soft: #e7f3ef;
-  --site-warning: #a15c07;
-  --site-danger: #b42318;
+  /* As páginas comerciais consomem a identidade pelos tokens globais da marca:
+     nenhum valor de cor é redefinido aqui. */
+  --site-bg: var(--ui-bg);
+  --site-surface: var(--ui-surface);
+  --site-border: var(--ui-border);
+  --site-text: var(--ui-text);
+  --site-soft: var(--ui-text-soft);
+  --site-accent: var(--brand);
+  --site-accent-soft: var(--brand-soft);
+  --site-warning: var(--ui-warning);
+  --site-danger: var(--ui-danger);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -22,7 +24,7 @@
 
 .skipLink {
   position: absolute; left: -9999px; top: 8px; z-index: 20; padding: 10px 14px;
-  border-radius: 8px; background: var(--site-accent); color: #fff; font-weight: 700;
+  border-radius: 8px; background: var(--site-accent); color: var(--brand-contrast); font-weight: 700;
 }
 .skipLink:focus { left: 12px; }
 
@@ -40,8 +42,8 @@
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; padding: 0 16px;
   border-radius: 8px; font-size: .82rem; font-weight: 700; text-decoration: none; cursor: pointer;
 }
-.primaryButton { border: 1px solid var(--site-accent); background: var(--site-accent); color: #fff; }
-.primaryButton:hover { background: color-mix(in srgb, var(--site-accent) 88%, #000); }
+.primaryButton { border: 1px solid var(--site-accent); background: var(--site-accent); color: var(--brand-contrast); }
+.primaryButton:hover { background: color-mix(in srgb, var(--site-accent) 84%, var(--brand-strong)); }
 .ghostButton { border: 1px solid var(--site-border); background: var(--site-surface); color: var(--site-text); }
 .ghostButton:hover { border-color: var(--site-accent); color: var(--site-accent); }
 
@@ -67,10 +69,10 @@
 .tableWrap { overflow-x: auto; border: 1px solid var(--site-border); border-radius: 12px; background: var(--site-surface); }
 .table { width: 100%; border-collapse: collapse; font-size: .87rem; }
 .table th, .table td { padding: 11px 14px; text-align: left; border-top: 1px solid var(--site-border); vertical-align: top; }
-.table thead th { border-top: 0; background: #f1f5f6; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--site-soft); }
+.table thead th { border-top: 0; background: var(--ui-surface-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--site-soft); }
 .badge { display: inline-block; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--site-border); font-size: .7rem; font-weight: 720; white-space: nowrap; }
 .badge[data-state="available"] { border-color: color-mix(in srgb, var(--site-accent) 45%, transparent); color: var(--site-accent); background: var(--site-accent-soft); }
-.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--site-warning); background: #fdf3e6; }
+.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--site-warning); background: color-mix(in srgb, var(--site-warning) 12%, var(--site-surface)); }
 .badge[data-state="planned"] { color: var(--site-soft); }
 
 .planGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(272px, 1fr)); gap: 14px; }
@@ -105,7 +107,7 @@
 .consent input { min-height: 0; width: 17px; height: 17px; margin-top: 2px; }
 .formStatus { margin: 0; padding: 12px 14px; border-radius: 9px; font-size: .86rem; }
 .formStatus[data-tone="success"] { border: 1px solid color-mix(in srgb, var(--site-accent) 45%, transparent); background: var(--site-accent-soft); color: var(--site-accent); }
-.formStatus[data-tone="error"] { border: 1px solid color-mix(in srgb, var(--site-danger) 45%, transparent); background: #fdecea; color: var(--site-danger); }
+.formStatus[data-tone="error"] { border: 1px solid color-mix(in srgb, var(--site-danger) 45%, transparent); background: color-mix(in srgb, var(--site-danger) 10%, var(--site-surface)); color: var(--site-danger); }
 
 .footer { border-top: 1px solid var(--site-border); background: var(--site-surface); }
 .footerInner {
