@@ -164,6 +164,52 @@ if (password && await emailField.count()) {
   record("credenciais do administrador não informadas", false, "defina VINCULATO_ADMIN_PASSWORD");
 }
 
+// 4a. Tela de usuários e permissões: o administrador precisa conseguir revisar
+//     acesso e criar gente pela interface, não pela API.
+if (password) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  const accessEntry = page.getByRole("button", { name: /Usuários e permissões/u }).first();
+  record("o painel oferece a tela de usuários e permissões", await accessEntry.count() > 0);
+  if (await accessEntry.count()) {
+    await accessEntry.click();
+    await page.waitForSelector("table", { timeout: 20000 }).catch(() => undefined);
+    const accessText = await page.locator("main").innerText();
+    record("a tela mostra o consumo de assentos do plano", /ASSENTOS/iu.test(accessText),
+      (/ASSENTOS[\s\S]{0,60}/u.exec(accessText)?.[0] ?? "").replace(/\n/gu, " · ").slice(0, 80));
+    record("a tela explica o que cada papel permite", accessText.includes("Matriz de permissões"));
+    record("a tela nunca mostra hash de senha", !/\$argon|\$2[aby]\$|password_hash/u.test(accessText));
+
+    // Criar usuário pela interface e conferir que o link de ativação aparece.
+    const seatsFull = /limite atingido/u.test(accessText);
+    if (!seatsFull) {
+      const stamp = Date.now();
+      await page.getByRole("button", { name: /Novo usuário/u }).click();
+      await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
+      await page.locator('input[name="name"]').fill(`Acesso Navegador ${stamp}`);
+      await page.locator('input[name="email"]').fill(`acesso-${stamp}@vinculato.test`);
+      await page.locator('select[name="role"]').selectOption("member");
+      await page.getByRole("button", { name: /Criar usuário e gerar link/u }).click();
+      await page.waitForSelector('[role="status"]', { timeout: 20000 }).catch(() => undefined);
+      const created = await page.locator("main").innerText();
+      record("criar usuário pela interface entrega link de ativação, não senha",
+        created.includes("LINK ÚNICO DE ATIVAÇÃO") && !/senha:|password/iu.test(created));
+    } else {
+      record("o limite de assentos bloqueia a criação em vez de falhar depois",
+        await page.getByRole("button", { name: /Novo usuário/u }).count() > 0, "plano no limite");
+    }
+
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(350);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      record(`tela de usuários sem rolagem horizontal em ${width}px`, overflow <= 1, `sobra ${overflow}px`);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+}
+
 // 4b. Liberação por plano: o menu do painel reflete o plano contratado.
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });

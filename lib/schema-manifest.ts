@@ -32,6 +32,7 @@ export const expectedMigrations = [
   "0022_plan_catalog_pricing.sql",
   "0023_platform_lifecycle.sql",
   "0024_module_catalog.sql",
+  "0025_access_module.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

@@ -381,3 +381,57 @@ aplicativo consegue ler o que foi criado.
 GET /api/health          → diz se o banco está atrás, inacessível ou sem permissão
 npm run db:migrate       → aplica as migrações pendentes (DATABASE_URL do ambiente)
 ```
+
+## 15. Usuários e permissões (critério 8)
+
+Administrar acesso estava espremido numa aba do modal de configurações: dava
+para trocar o papel e marcar empresas, mas não para **revisar acesso**. Faltava
+o que a pergunta "quem ainda precisa disso?" exige — quantos assentos o plano
+concede, quantos estão em uso, quem nunca entrou, quem está com ativação
+pendente — e, principalmente, faltava dizer o que cada papel permite.
+
+**Tela própria.** `Usuários e permissões` virou uma visão do painel, liberada
+pelo catálogo de módulos (migração 0025) em **todos os planos**, inclusive o
+Starter: administrar o próprio grupo não é recurso pago. O que varia por plano é
+o limite de assentos, aplicado na criação.
+
+**Revisão de acesso.** A tela abre com o consumo de assentos (`2 / 3 · Plano
+Starter`), quantas pessoas nunca acessaram e quantas seguem sem ativar. A lista
+mostra papel, escopo por empresa e último acesso real, lido das sessões — não um
+campo decorativo.
+
+**Matriz de permissões.** As 62 capacidades do sistema aparecem traduzidas para
+linguagem de cliente, agrupadas por área, com uma coluna por papel. A matriz é
+gerada a partir de `capabilitiesForRole`, a mesma função que a autorização usa:
+se a permissão mudar no código, a tela muda junto — não existe descrição
+paralela para desatualizar.
+
+**Um achado ao escrever o teste.** Eu havia assumido que os papéis formavam uma
+escada (admin ⊃ member ⊃ observer ⊃ guest). O teste reprovou: **convidado não é
+um observador reduzido**. Ele enxerga menos, mas *pode comentar*; observador é
+consulta pura. O produto está certo e minha suposição estava errada — o teste
+passou a fixar a relação real, e os resumos na tela dizem isso com todas as
+letras, porque confundir os dois levaria o administrador a liberar escrita
+achando que libera leitura.
+
+**Senha continua fora.** A tela cria a pessoa e entrega um link único de
+ativação com validade e uso único. Nenhuma senha é gerada, exibida ou enviada
+por aqui, e há teste que reprova se o hash aparecer na resposta ou na interface.
+
+**Identidade aplicada ao painel.** Ao revisar a tela ficou evidente que o painel
+inteiro ainda usava a paleta verde-teal anterior. A causa era um segundo bloco
+de tokens `.dashboard-shell`, mais abaixo no arquivo, que sobrescrevia o
+primeiro — trocar o de cima não mudava nada na tela. Os dois passaram a consumir
+os tokens da marca, e os verdes remanescentes de `access.css` viraram
+`color-mix` sobre `--brand-accent`.
+
+**Uma rolagem horizontal que o olho não via.** A matriz cabia num contêiner com
+`overflow-x: auto`, e visualmente estava tudo certo — mas o documento crescia
+138px em 390px de largura. A correção não foi espremer a tabela: em tela
+estreita a matriz passa a ser uma lista, com os quatro papéis como etiquetas por
+permissão. Mais legível no celular e sem rolagem lateral.
+
+Validação: 214 testes, 50 verificações de navegador (incluindo criar usuário
+pela interface e as quatro larguras), 24 de fumaça e 7 de isolamento — estas
+últimas com o papel `vinculato_app`, **sem** superusuário, para que o RLS
+realmente valesse durante o ensaio.

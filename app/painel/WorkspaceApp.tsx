@@ -35,6 +35,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  ShieldCheck,
   Sparkles,
   Smartphone,
   Stethoscope,
@@ -50,6 +51,7 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, Wor
 import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
+import { AccessView } from "./features/access";
 import { RegistrationsView } from "./features/registrations";
 import { OperationsView } from "./features/operations";
 import { AuxiliaryModulesView } from "./features/auxiliary";
@@ -59,7 +61,7 @@ import { PaymentsView } from "./features/payments";
 import { TimeTrackingView } from "./features/time";
 import { ActionCenter } from "./features/action-center";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "integrations" | "registrations" | "saas" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "integrations" | "registrations" | "access" | "saas" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -135,6 +137,7 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   timeTracking: { eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto", description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada." },
   integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Central de integrações", description: "Configure conectores, publique mapeamentos e acompanhe execuções e conciliações com segurança." },
   registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
+  access: { eyebrow: "ACESSO DO GRUPO", title: "Usuários e permissões", description: "Defina quem entra, o papel de cada pessoa e as empresas que ela enxerga. Toda alteração fica na trilha de auditoria." },
   saas: { eyebrow: "ADMINISTRAÇÃO SAAS", title: "Plano e ativação", description: "Conclua a implantação do workspace, acompanhe limites, assinatura e cobranças." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
@@ -1143,6 +1146,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {hasModule("integrations") && snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
           {hasModule("registrations") && snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
           <span className="sidebar-nav-section management">GESTÃO</span>
+          {hasModule("access") && snapshot.workspace.role !== "guest" && <button title="Usuários e permissões" className={view === "access" ? "active" : ""} onClick={() => setView("access")}><span aria-hidden="true"><ShieldCheck /></span> Usuários e permissões</button>}
           {hasModule("saas") && isAdmin && <button title="Plano e ativação" className={view === "saas" ? "active" : ""} onClick={() => setView("saas")}><span aria-hidden="true"><Sparkles /></span> Plano e ativação</button>}
           {hasModule("payroll") && <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>}
           {hasModule("indicators") && <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>}
@@ -1193,6 +1197,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
 
+          {view === "access" && <AccessView role={snapshot.workspace.role} />}
           {view === "saas" && <SaasView role={snapshot.workspace.role} />}
 
           {view === "registrations" && <RegistrationsView role={snapshot.workspace.role} />}

@@ -106,3 +106,16 @@ export function requireCapability(role: string, capability: Capability) {
     throw ApiError.forbidden("Você não tem permissão para realizar esta ação.", "CAPABILITY_REQUIRED");
   }
 }
+
+/**
+ * Capacidades de um papel, em ordem estável.
+ *
+ * A tela de usuários precisa mostrar o que cada papel concede — sem isso o
+ * administrador escolhe "Membro" ou "Observador" no escuro. A lista sai daqui,
+ * da mesma estrutura que a autorização usa, e não de uma cópia em outro arquivo.
+ */
+export function capabilitiesForRole(role: WorkspaceRole): Capability[] {
+  return capabilities.filter((capability) => roleCapabilities[role].has(capability));
+}
+
+export const workspaceRoles = ["admin", "member", "observer", "guest"] as const;

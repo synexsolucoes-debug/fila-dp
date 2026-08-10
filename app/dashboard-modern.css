@@ -4,11 +4,13 @@
  * evolve without introducing another set of conflicting global overrides.
  */
 .dashboard-shell {
-  --ui-brand: #0b1f33;
-  --ui-brand-soft: #14314e;
-  --ui-primary: #087a63;
-  --ui-primary-hover: #06634f;
-  --ui-primary-soft: #e7f6f1;
+  /* A identidade vem dos tokens da marca definidos em globals.css: o painel não
+     mantém uma paleta própria concorrente. */
+  --ui-brand: var(--vin-navy-deep);
+  --ui-brand-soft: var(--vin-navy);
+  --ui-primary: var(--vin-blue);
+  --ui-primary-hover: var(--vin-navy);
+  --ui-primary-soft: #e7f0fe;
   --ui-bg: #f5f7f9;
   --ui-surface: #ffffff;
   --ui-surface-muted: #f0f4f6;
@@ -31,11 +33,11 @@
 }
 
 .dashboard-shell.theme-dark {
-  --ui-brand: #071422;
-  --ui-brand-soft: #122b43;
-  --ui-primary: #38d6a7;
-  --ui-primary-hover: #67e4bd;
-  --ui-primary-soft: #173b35;
+  --ui-brand: #03122c;
+  --ui-brand-soft: var(--vin-navy);
+  --ui-primary: var(--vin-blue-vivid);
+  --ui-primary-hover: #57adff;
+  --ui-primary-soft: #12294a;
   --ui-bg: #09131f;
   --ui-surface: #111e2c;
   --ui-surface-muted: #182838;
@@ -276,9 +278,9 @@
 }
 
 .theme-dark .dashboard-header-actions .new-demand {
-  border-color: #38d6a7;
-  background: #38d6a7;
-  color: #071b1b;
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: #04162c;
 }
 
 .dashboard-content {
@@ -2591,45 +2593,49 @@
   }
 }
 
-/* Vinculato design system — operational workspace refresh. */
+/* Identidade Vinculato aplicada ao painel.
+ *
+ * Este bloco é o que vale: ele vem depois do bloco de tokens do topo do arquivo
+ * e sobrescreve aquele. Os valores saem dos tokens da marca em globals.css —
+ * o painel não mantém uma paleta concorrente. */
 .dashboard-shell {
-  --ui-brand: #0E3B3B;
-  --ui-brand-soft: #174d4d;
-  --ui-primary: #0E3B3B;
-  --ui-primary-hover: #174d4d;
-  --ui-primary-soft: #e4f6ee;
-  --ui-mint: #62D5B2;
-  --ui-bg: #F6F3EC;
-  --ui-surface: #fffefa;
-  --ui-surface-muted: #f1eee6;
-  --ui-border: #d7ddd5;
-  --ui-border-strong: #bfcbbf;
-  --ui-text: #1F2937;
-  --ui-text-soft: #66716d;
-  --ui-success: #238568;
-  --ui-warning: #b56826;
-  --ui-danger: #c3443d;
+  --ui-brand: var(--vin-navy-deep);
+  --ui-brand-soft: var(--vin-navy);
+  --ui-primary: var(--vin-blue);
+  --ui-primary-hover: var(--vin-navy);
+  --ui-primary-soft: #e7f0fe;
+  --ui-mint: var(--vin-blue-vivid);
+  --ui-bg: var(--vin-bg);
+  --ui-surface: var(--vin-surface);
+  --ui-surface-muted: #eef2f8;
+  --ui-border: var(--vin-border);
+  --ui-border-strong: #c3cfe0;
+  --ui-text: var(--vin-text);
+  --ui-text-soft: var(--vin-text-soft);
+  --ui-success: #137a4f;
+  --ui-warning: #a15c07;
+  --ui-danger: #b42318;
   --ui-radius-sm: 12px;
   --ui-radius-md: 14px;
   --ui-radius-lg: 16px;
-  --ui-shadow-card: 0 1px 2px rgba(14, 59, 59, .025);
-  --ui-shadow-modal: 0 24px 72px rgba(14, 59, 59, .22);
+  --ui-shadow-card: 0 1px 2px rgba(6, 43, 96, .05);
+  --ui-shadow-modal: 0 24px 72px rgba(4, 27, 69, .24);
 }
 
 .dashboard-shell.theme-dark {
-  --ui-brand: #092e2e;
-  --ui-brand-soft: #124242;
-  --ui-primary: #8be4c8;
-  --ui-primary-hover: #b1efd9;
-  --ui-primary-soft: #143d37;
-  --ui-mint: #62D5B2;
-  --ui-bg: #101c1b;
-  --ui-surface: #172524;
-  --ui-surface-muted: #1d302e;
-  --ui-border: #36504c;
-  --ui-border-strong: #4d6964;
-  --ui-text: #edf5f0;
-  --ui-text-soft: #b5c5bf;
+  --ui-brand: #03122c;
+  --ui-brand-soft: var(--vin-navy);
+  --ui-primary: var(--vin-blue-vivid);
+  --ui-primary-hover: #6cb8ff;
+  --ui-primary-soft: #12294a;
+  --ui-mint: var(--vin-blue-vivid);
+  --ui-bg: #0b1626;
+  --ui-surface: #12203a;
+  --ui-surface-muted: #182b48;
+  --ui-border: #2c4266;
+  --ui-border-strong: #3f5a83;
+  --ui-text: #edf2fa;
+  --ui-text-soft: #b4c4dc;
   --ui-success: #79dfbe;
   --ui-warning: #f4b371;
   --ui-danger: #ff9a91;
