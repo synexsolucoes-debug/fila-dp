@@ -12,19 +12,22 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(origin),
-    title: "Fila DP | Gestão visual de demandas para Departamento Pessoal",
-    description: "Centralize solicitações, responsáveis, documentos e SLAs em uma plataforma visual criada para a rotina de DP e RH.",
+    title: "Vinculato | Sua operação, conectada.",
+    description: "Centralize processos, demandas, documentos e integrações em uma plataforma criada para organizar a operação do seu Departamento Pessoal.",
+    applicationName: "Vinculato",
+    alternates: { canonical: origin },
     openGraph: {
-      title: "Organize toda a fila de demandas do seu DP",
-      description: "Controle solicitações, processos e prazos em um quadro visual simples, rastreável e adaptado ao Departamento Pessoal.",
+      title: "Vinculato — Sua operação, conectada.",
+      description: "Centralize processos, demandas, documentos e integrações do Departamento Pessoal em uma plataforma só.",
+      siteName: "Vinculato",
       type: "website",
       locale: "pt_BR",
-      images: [{ url: `${origin}/og.png`, width: 1792, height: 917, alt: "Fila DP — toda demanda na fila certa" }],
+      images: [{ url: `${origin}/og.png`, width: 1792, height: 917, alt: "Vinculato — Sua operação, conectada." }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Fila DP — toda demanda na fila certa",
-      description: "Gestão visual de demandas, responsáveis e SLAs para DP e RH.",
+      title: "Vinculato — Sua operação, conectada.",
+      description: "Processos, demandas, documentos e integrações do DP em uma plataforma só.",
       images: [`${origin}/og.png`],
     },
   };

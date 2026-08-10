@@ -155,6 +155,41 @@
       "when": 1786239000000,
       "tag": "0019_outbox_webhooks_public_api",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786240000000,
+      "tag": "0020_marketing_leads",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786241000000,
+      "tag": "0021_time_tracking",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786242000000,
+      "tag": "0022_plan_catalog_pricing",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786243000000,
+      "tag": "0023_platform_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786244000000,
+      "tag": "0024_module_catalog",
+      "breakpoints": true
     }
   ]
 }

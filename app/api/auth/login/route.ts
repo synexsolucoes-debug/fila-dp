@@ -41,7 +41,15 @@ export async function POST(request: Request) {
     }
 
     const d1 = getD1();
-    const current = await d1.prepare("SELECT id, email, name, password_hash, password_salt FROM fdp_users WHERE email = ?").bind(email).first<UserRow>();
+    const current = await d1.prepare("SELECT id, email, name, password_hash, password_salt, status, status_reason FROM fdp_users WHERE email = ?").bind(email).first<UserRow & { status?: string; status_reason?: string }>();
+    // Usuário bloqueado pela plataforma não entra, mesmo com a senha correta.
+    if (current?.status === "blocked") {
+      await recordLoginFailure(email, address);
+      return Response.json(
+        { error: "Seu acesso está bloqueado. Fale com o administrador da plataforma.", code: "USER_BLOCKED" },
+        { status: 403 },
+      );
+    }
 
     if (mode === "bootstrap") {
       const existingWorkspace = await d1.prepare("SELECT id FROM fdp_workspaces LIMIT 1").first<{ id: string }>();
@@ -102,7 +110,7 @@ export async function POST(request: Request) {
     );
     return Response.json({ ok: true, redirectTo: cleanReturnTo(body.returnTo) });
   } catch (error) {
-    console.error("Fila DP login failed", error);
+    console.error("Vinculato login failed", error);
     return Response.json({ error: "Não foi possível iniciar a sessão. Tente novamente." }, { status: 500 });
   }
 }

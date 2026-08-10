@@ -1,4 +1,5 @@
 import { ArrowRight, ArrowUp, Check, Clock3, MoreHorizontal, Paperclip, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 
 const Chevron = () => <ArrowRight className="inline-icon" aria-hidden="true" />;
 const ClockIcon = () => <Clock3 className="mini-icon" aria-hidden="true" />;
@@ -48,12 +49,12 @@ const comparisons = [
 
 const faqs = [
   [
-    "O Fila DP substitui meu sistema de folha?",
-    "Não. O Fila DP organiza demandas, tarefas, prazos e processos operacionais. Ele complementa sistemas de folha, ERPs e outras ferramentas utilizadas pela empresa.",
+    "O Vinculato substitui meu sistema de folha?",
+    "Não. O Vinculato organiza demandas, tarefas, prazos e processos operacionais. Ele complementa sistemas de folha, ERPs e outras ferramentas utilizadas pela empresa.",
   ],
   [
-    "Como o Fila DP trabalha com admissões feitas na Sólides?",
-    "A admissão digital continua integralmente na Sólides. O Fila DP prepara a integração dos dados concluídos, a vinculação com o ERP e a conciliação cadastral, quando houver um meio oficial disponível.",
+    "Como o Vinculato trabalha com admissões feitas na Sólides?",
+    "A admissão digital continua integralmente na Sólides. O Vinculato prepara a integração dos dados concluídos, a vinculação com o ERP e a conciliação cadastral, quando houver um meio oficial disponível.",
   ],
   [
     "Como o sistema controla os prazos?",
@@ -142,19 +143,19 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <a className="brand" href="#inicio" aria-label="Fila DP — início">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Fila <strong>DP</strong></span>
+        <a className="brand" href="#inicio" aria-label="Vinculato — início">
+          <VinculatoLogo size={30} priority />
         </a>
         <nav aria-label="Navegação principal">
-          <a href="#produto">Produto</a>
-          <a href="#como-funciona">Como funciona</a>
-          <a href="#recursos">Recursos</a>
-          <a href="#planos">Planos</a>
+          <a href="/solucao">Solução</a>
+          <a href="/funcionalidades">Funcionalidades</a>
+          <a href="/integracoes">Integrações</a>
+          <a href="/planos">Planos</a>
+          <a href="/faq">FAQ</a>
         </nav>
         <div className="header-actions">
           <a className="login-link" href="/login">Entrar</a>
-          <a className="button button-small" href="/login">Solicitar acesso</a>
+          <a className="button button-small" href="/contato?assunto=demonstracao">Falar com a equipe</a>
         </div>
       </header>
 
@@ -168,12 +169,12 @@ export default function Home() {
             Centralize solicitações, acompanhe SLAs e organize férias, rescisões, conciliações e outras rotinas em um quadro visual simples de usar.
           </p>
           <div className="hero-actions">
-            <a className="button" href="/login">Solicitar acesso <Chevron /></a>
-            <a className="button button-secondary" href="#como-funciona">Ver como funciona</a>
+            <a className="button" href="/contato?assunto=demonstracao">Agendar demonstração <Chevron /></a>
+            <a className="button button-secondary" href="/solucao">Conhecer a solução</a>
           </div>
           <div className="hero-notes">
-            <span><CheckIcon /> Plano gratuito para começar</span>
-            <span><CheckIcon /> Sem cartão de crédito</span>
+            <span><CheckIcon /> A admissão digital permanece na Sólides</span>
+            <span><CheckIcon /> A folha oficial permanece no seu ERP</span>
           </div>
         </div>
         <div className="hero-product"><ProductBoard /></div>
@@ -195,7 +196,7 @@ export default function Home() {
           <article><span className="pain-icon">01</span><h3>Demandas espalhadas</h3><p>E-mail, WhatsApp, Teams, planilhas e conversas formam uma fila invisível.</p></article>
           <article><span className="pain-icon">02</span><h3>Prazos difíceis de acompanhar</h3><p>Sem alertas claros, uma pendência simples pode virar urgência.</p></article>
           <article><span className="pain-icon">03</span><h3>Processos sem padrão</h3><p>Etapas importantes dependem da memória e da experiência de cada analista.</p></article>
-          <article className="solution-card"><span className="solution-label">A resposta</span><h3>Uma fila clara, rastreável e fácil de priorizar.</h3><p>O Fila DP reúne cada solicitação com contexto, responsável e SLA.</p><a href="#como-funciona">Conheça o fluxo <Chevron /></a></article>
+          <article className="solution-card"><span className="solution-label">A resposta</span><h3>Uma fila clara, rastreável e fácil de priorizar.</h3><p>O Vinculato reúne cada solicitação com contexto, responsável e SLA.</p><a href="#como-funciona">Conheça o fluxo <Chevron /></a></article>
         </div>
       </section>
 
@@ -206,7 +207,7 @@ export default function Home() {
           <p>Um fluxo simples o bastante para o dia a dia e estruturado o bastante para a gestão.</p>
         </div>
         <ol className="workflow-list">
-          <li><span>01</span><div><h3>Centralize</h3><p>As solicitações chegam à Inbox do Fila DP.</p></div></li>
+          <li><span>01</span><div><h3>Centralize</h3><p>As solicitações chegam à Inbox do Vinculato.</p></div></li>
           <li><span>02</span><div><h3>Faça a triagem</h3><p>Defina processo, responsável, prioridade e prazo.</p></div></li>
           <li><span>03</span><div><h3>Execute com clareza</h3><p>Movimente o cartão, conclua etapas e anexe documentos.</p></div></li>
           <li><span>04</span><div><h3>Acompanhe e melhore</h3><p>Enxergue atrasos, volume e gargalos da operação.</p></div></li>
@@ -234,11 +235,11 @@ export default function Home() {
         <div className="section-kicker">Feito para o trabalho real do DP</div>
         <div className="split-heading">
           <h2>Visual como um Kanban. Especializado como sua operação exige.</h2>
-          <p>O Fila DP reduz a configuração necessária para transformar um quadro genérico em um processo seguro para o setor.</p>
+          <p>O Vinculato reduz a configuração necessária para transformar um quadro genérico em um processo seguro para o setor.</p>
         </div>
         <div className="comparison-wrap">
           <table>
-            <thead><tr><th>Necessidade</th><th>Planilhas e mensagens</th><th>Kanban genérico</th><th className="highlight-col">Fila DP</th></tr></thead>
+            <thead><tr><th>Necessidade</th><th>Planilhas e mensagens</th><th>Kanban genérico</th><th className="highlight-col">Vinculato</th></tr></thead>
             <tbody>
               {comparisons.map((row) => <tr key={row[0]}>{row.map((cell, index) => <td className={index === 3 ? "highlight-col" : ""} key={cell}>{index === 3 && <CheckIcon />}{cell}</td>)}</tr>)}
             </tbody>
@@ -249,16 +250,16 @@ export default function Home() {
       <section className="section plans-section" id="planos">
         <div className="center-heading">
           <div className="section-kicker">Cresce com a sua operação</div>
-          <h2>Comece simples. Evolua sem trocar de ferramenta.</h2>
-          <p>Escolha o nível de controle adequado para o momento da sua equipe.</p>
+          <h2>Condições combinadas com a sua realidade.</h2>
+          <p>As condições comerciais publicadas ficam na página de planos, junto com o que está incluído em qualquer contrato.</p>
         </div>
         <div className="plans-grid">
-          <article><span className="plan-name">Gratuito</span><h3>Para experimentar</h3><p>O essencial para organizar uma pequena fila e validar o método com a equipe.</p><a href="/login">Começar grátis <Chevron /></a></article>
-          <article><span className="plan-name">Standard</span><h3>Para organizar</h3><p>Mais controle, colaboração e capacidade para operações em crescimento.</p><a href="#contato">Conhecer o plano <Chevron /></a></article>
-          <article className="featured-plan"><span className="recommended">Mais completo</span><span className="plan-name">Premium</span><h3>Para gerir e otimizar</h3><p>Dashboards, automações avançadas e inteligência aplicada à rotina.</p><a href="#contato">Falar com especialista <Chevron /></a></article>
-          <article><span className="plan-name">Enterprise</span><h3>Para escalar</h3><p>Permissões, integrações e implantação alinhadas a operações complexas.</p><a href="#contato">Agendar conversa <Chevron /></a></article>
+          <article><span className="plan-name">Planos</span><h3>Ver condições publicadas</h3><p>Limites de usuários, empresas, integrações e armazenamento de cada plano ativo no catálogo.</p><a href="/planos">Ver planos <Chevron /></a></article>
+          <article><span className="plan-name">Demonstração</span><h3>Ver o produto na sua operação</h3><p>Uma conversa sobre os seus processos, com o produto aberto e sem usar dados reais do seu DP.</p><a href="/demonstracao">Agendar <Chevron /></a></article>
+          <article><span className="plan-name">Integrações</span><h3>Conferir o que já existe</h3><p>O estado real de cada integração: disponível, parcial ou apenas preparada.</p><a href="/integracoes">Ver integrações <Chevron /></a></article>
+          <article><span className="plan-name">Contato</span><h3>Falar com a equipe</h3><p>Dúvidas sobre escopo, segurança, LGPD ou implantação antes de contratar.</p><a href="/contato">Enviar contato <Chevron /></a></article>
         </div>
-        <p className="plans-note">Recursos e condições comerciais são definidos na apresentação de cada plano.</p>
+        <p className="plans-note">Nenhuma condição comercial é anunciada aqui antes de estar publicada e cobrável no produto.</p>
       </section>
 
       <section className="section faq-section">
@@ -282,19 +283,26 @@ export default function Home() {
           <h2>Seu DP já tem demandas demais. Organizar a fila não precisa ser mais uma delas.</h2>
         </div>
         <div className="final-cta-actions">
-          <a className="button button-light" href="/login">Solicitar acesso <Chevron /></a>
+          <a className="button button-light" href="/contato?assunto=demonstracao">Agendar demonstração <Chevron /></a>
           <a className="demo-link" href="/login">Acessar minha conta</a>
-          <p>Comece pelo plano gratuito e evolua quando precisar.</p>
+          <p>Combinamos a condição comercial depois de entender a sua operação.</p>
         </div>
       </section>
 
       <footer>
-        <a className="brand footer-brand" href="#inicio" aria-label="Fila DP — voltar ao início">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Fila <strong>DP</strong></span>
+        <a className="brand footer-brand" href="#inicio" aria-label="Vinculato — voltar ao início">
+          <VinculatoLogo size={26} />
         </a>
         <p>Gestão visual de demandas para Departamento Pessoal e RH.</p>
-        <div><a href="#recursos">Recursos</a><a href="#planos">Planos</a><a href="#inicio">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a></div>
+        <div>
+          <a href="/solucao">Solução</a><a href="/funcionalidades">Funcionalidades</a><a href="/integracoes">Integrações</a>
+          <a href="/planos">Planos</a><a href="/faq">FAQ</a><a href="/contato">Contato</a>
+          <a href="/termos">Termos</a><a href="/privacidade">Privacidade</a><a href="/subprocessadores">Subprocessadores</a>
+          <a href="#inicio">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a>
+        </div>
+        <p className="site-boundary-note">
+          O Vinculato não executa admissão digital, não guarda prontuário psicológico e não faz cálculo tributário nem emite nota fiscal.
+        </p>
       </footer>
     </main>
   );

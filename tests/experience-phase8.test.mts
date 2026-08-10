@@ -15,11 +15,12 @@ test("todo indicador da central de ação tem consulta real, destino e capabilit
     assert.ok(definition.description.length > 3, `${definition.key} precisa de descrição`);
     assert.ok(["critical", "warning", "neutral"].includes(definition.tone));
     // Destino real: cada indicador leva a uma tela existente do painel.
-    assert.ok(["processes", "auxiliary", "psychologistPayments", "contractorPayments", "integrations", "board"].includes(definition.target));
+    assert.ok(["processes", "auxiliary", "psychologistPayments", "contractorPayments", "timeTracking", "integrations", "board"].includes(definition.target));
     // Capability existente e sempre escopada ao workspace da sessão.
     assert.equal(hasCapability("admin", definition.capability as Capability), true, `${definition.key} usa capability inexistente`);
     assert.match(definition.sql, /workspace_id = \?/u, `${definition.key} não filtra por workspace`);
-    assert.match(definition.sql, /count\(\*\)::int AS total/u);
+    // O contrato do UNION é o formato da coluna, não a forma da contagem.
+    assert.match(definition.sql, /count\([^)]*\)::int AS total/u);
     assert.match(definition.sql, /AS earliest/u);
     assert.match(definition.sql, /AS amount/u);
     if (definition.companyColumn) assert.ok(definition.sql.includes("{{company}}"), `${definition.key} não aplica escopo de empresa`);
@@ -59,7 +60,7 @@ test("os indicadores financeiros expõem valor e os operacionais expõem prazo",
   assert.match(byKey.get("contractor_closings_pending")!.sql, /NOT IN \('paid', 'closed'\)/u);
 });
 
-test("a rota da central de ação agrega em uma consulta, valida chave e não simula módulo inexistente", async () => {
+test("a rota da central de ação agrega em uma consulta e valida a chave do indicador", async () => {
   const source = await readFile(new URL("../app/api/dashboard/action-center/route.ts", import.meta.url), "utf8");
   assert.match(source, /getWorkspaceContext/);
   assert.doesNotMatch(source, /getWorkspaceSnapshot/);
@@ -69,9 +70,6 @@ test("a rota da central de ação agrega em uma consulta, valida chave e não si
   // Uma única ida ao banco: os blocos são unidos, não consultados um a um.
   assert.match(source, /UNION ALL/);
   assert.match(source, /Indicador com chave inválida/);
-  // Ponto não existe no produto e não é simulado.
-  assert.match(source, /notCovered/);
-  assert.doesNotMatch(source, /fdp_time_tracking|fdp_timesheet/);
 });
 
 test("a busca global cobre os domínios do produto respeitando capability e escopo de empresa", async () => {

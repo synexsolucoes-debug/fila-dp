@@ -1,7 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --font-geist-sans: Manrope, "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Identidade Vinculato — extraída da marca. Os componentes usam os tokens
+     semânticos abaixo; valores HEX não devem ser repetidos fora deste bloco. */
+  /* Extraídos dos pixels do símbolo oficial, não estimados. */
+  --vin-navy-deep: #041B45;
+  --vin-navy: #062B60;
+  --vin-blue: #0857B2;
+  --vin-blue-vivid: #168CFD;
+  --vin-bg: #F6F8FC;
+  --vin-surface: #FFFFFF;
+  --vin-text: #0F172A;
+  --vin-text-soft: #64748B;
+  --vin-border: #DCE3ED;
+
+  /* Tokens semânticos: é por aqui que a interface consome a marca. */
+  --brand: var(--vin-blue);
+  --brand-strong: var(--vin-navy);
+  --brand-accent: var(--vin-blue-vivid);
+  --brand-contrast: #FFFFFF;
+  --ui-bg: var(--vin-bg);
+  --ui-surface: var(--vin-surface);
+  --ui-surface-muted: #EEF2F8;
+  --ui-border: var(--vin-border);
+  --ui-text: var(--vin-text);
+  --ui-text-soft: var(--vin-text-soft);
+  --ui-success: #137a4f;
+  --ui-warning: #a15c07;
+  --ui-danger: #b42318;
+
+  --font-geist-sans: Inter, Manrope, "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --ink: #0b1528;
   --ink-soft: #3d4c63;
@@ -14,7 +42,10 @@
   --line: #dce3e8;
   --orange: #f29e3d;
   --red: #ef5b5b;
-  --shadow: 0 20px 60px rgba(8, 26, 49, 0.12);
+  --shadow: 0 20px 60px rgba(3, 10, 48, 0.12);
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
 }
 
 * { box-sizing: border-box; }
@@ -54,11 +85,6 @@ button, summary { font: inherit; }
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 650; letter-spacing: -.04em; white-space: nowrap; }
 .brand strong { color: var(--mint-dark); }
-.brand-mark { width: 30px; height: 30px; padding: 6px; border-radius: 8px; display: flex; gap: 3px; align-items: flex-end; background: var(--navy); }
-.brand-mark i { display: block; width: 4px; border-radius: 4px; background: var(--mint); }
-.brand-mark i:nth-child(1) { height: 10px; }
-.brand-mark i:nth-child(2) { height: 17px; }
-.brand-mark i:nth-child(3) { height: 13px; }
 .site-header nav { display: flex; align-items: center; gap: 30px; margin-left: auto; }
 .site-header nav a, .login-link { font-size: 14px; color: #46546a; transition: color .2s ease; }
 .site-header nav a:hover, .login-link:hover { color: var(--mint-dark); }
@@ -284,7 +310,6 @@ footer .inline-icon { width: 14px; height: 14px; }
 
 @media (max-width: 560px) {
   .brand { font-size: 18px; }
-  .brand-mark { width: 27px; height: 27px; }
   .header-actions { gap: 0; }
   .button-small { font-size: 11px; }
   .hero { padding-top: 56px; }

@@ -1,9 +1,10 @@
-import { getD1 } from "../db";
+import { getD1, getScopedD1 } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 import { getTenantContext, setTenantContext } from "./tenant-context";
 import { hasCapability } from "./authorization";
+import { resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 
@@ -125,7 +126,7 @@ export async function provisionWorkspaceDefaults(
     d1.prepare("INSERT INTO fdp_workspace_settings (workspace_id) VALUES (?) ON CONFLICT DO NOTHING").bind(workspaceId),
     ...defaultLabels.map(([key, name, color], index) => d1.prepare("INSERT INTO fdp_labels (id, workspace_id, name, color, position) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:label:${key}`, workspaceId, name, color, (index + 1) * 1000)),
     ...defaultFields.map(([key, name, type, options], index) => d1.prepare("INSERT INTO fdp_custom_fields (id, workspace_id, name, field_key, field_type, options_json, position) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:field:${key}`, workspaceId, name, key, type, options, (index + 1) * 1000)),
-    ...nativeTemplates.map((template, index) => d1.prepare("INSERT INTO fdp_process_templates (id, workspace_id, name, process_type, description, checklist_json, default_sla_days, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:template:${template.key}`, workspaceId, template.name, template.process, `Fluxo padrão de ${template.name.toLowerCase()} do Fila DP.`, JSON.stringify(template.checklist), template.days, (index + 1) * 1000)),
+    ...nativeTemplates.map((template, index) => d1.prepare("INSERT INTO fdp_process_templates (id, workspace_id, name, process_type, description, checklist_json, default_sla_days, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:template:${template.key}`, workspaceId, template.name, template.process, `Fluxo padrão de ${template.name.toLowerCase()} do Vinculato.`, JSON.stringify(template.checklist), template.days, (index + 1) * 1000)),
     ...policies.map(([processType, target, warning]) => d1.prepare("INSERT INTO fdp_sla_policies (id, workspace_id, process_type, target_business_days, warning_business_days) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:sla:${processType}`, workspaceId, processType, target, warning)),
     ...integrationRows.map(([channel, displayName]) => d1.prepare("INSERT INTO fdp_integrations (id, workspace_id, channel, display_name) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:integration:${channel}`, workspaceId, channel, displayName)),
   ]);
@@ -135,13 +136,17 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   const d1 = getD1();
   const normalizedEmail = user.email.trim().toLowerCase();
 
-  const userRow = await d1.prepare("SELECT id, email, name FROM fdp_users WHERE email = ?")
+  const userRow = await d1.prepare("SELECT id, email, name, status, status_reason FROM fdp_users WHERE email = ?")
     .bind(normalizedEmail)
-    .first<{ id: string; email: string; name: string }>();
+    .first<{ id: string; email: string; name: string; status: string; status_reason: string }>();
   if (!userRow) throw ApiError.forbidden("Sem permissão para acessar este grupo.", "WORKSPACE_ACCESS_DENIED");
+  // Bloqueio administrado pela plataforma vale em toda requisição, não só no login.
+  if (userRow.status === "blocked") {
+    throw ApiError.forbidden("Seu acesso está bloqueado. Fale com o administrador da plataforma.", "USER_BLOCKED");
+  }
 
   let workspace = await d1.prepare(
-    `SELECT w.id, w.name, w.timezone, wm.role
+    `SELECT w.id, w.name, w.timezone, w.status, w.status_reason, wm.role
      FROM fdp_user_workspace_preferences p
      JOIN fdp_workspaces w ON w.id = p.active_workspace_id
      JOIN fdp_workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = p.user_id
@@ -151,7 +156,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
   if (!workspace) {
     workspace = await d1.prepare(
-      `SELECT w.id, w.name, w.timezone, wm.role
+      `SELECT w.id, w.name, w.timezone, w.status, w.status_reason, wm.role
        FROM fdp_workspaces w
        JOIN fdp_workspace_members wm ON wm.workspace_id = w.id
        WHERE wm.user_id = ?
@@ -161,8 +166,26 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   }
 
   if (!workspace) throw ApiError.forbidden("Sem permissão para acessar este grupo. Peça ao administrador para liberar seu usuário.", "WORKSPACE_ACCESS_DENIED");
+  // Workspace suspenso, cancelado ou arquivado não opera: a recusa diz o estado
+  // e o motivo registrado, em vez de devolver telas vazias.
+  const workspaceStatus = String((workspace as Record<string, unknown>).status ?? "active");
+  if (workspaceStatus !== "active") {
+    const labels: Record<string, string> = {
+      suspended: "Este grupo está suspenso", canceled: "Este grupo está cancelado", archived: "Este grupo está arquivado",
+    };
+    const reason = String((workspace as Record<string, unknown>).status_reason ?? "").trim();
+    throw ApiError.forbidden(
+      `${labels[workspaceStatus] ?? "Este grupo está indisponível"}.${reason ? ` Motivo: ${reason}.` : ""} Fale com o administrador da plataforma.`,
+      "WORKSPACE_SUSPENDED",
+    );
+  }
 
-  setTenantContext({ workspaceId: workspace.id, userId: userRow.id });
+  // O AsyncLocalStorage continua sendo preenchido para o código que já depende
+  // dele dentro desta própria função; a garantia real de isolamento, porém, é a
+  // conexão devolvida abaixo, que carrega o tenant explicitamente.
+  const tenant = { workspaceId: workspace.id, userId: userRow.id };
+  setTenantContext(tenant);
+  const scopedD1 = getScopedD1(tenant);
 
   await d1.prepare(
     `INSERT INTO fdp_user_workspace_preferences (user_id, active_workspace_id, updated_at)
@@ -180,7 +203,48 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
   await d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(board.id, userRow.id, workspace.id).run();
 
-  return { d1, user: userRow, workspace, board };
+  return { d1: scopedD1, user: userRow, workspace, board };
+}
+
+/**
+ * Módulos liberados para o workspace, na ordem do §8.
+ *
+ * Devolve também os bloqueados, com o motivo: esconder sem explicação faz o
+ * cliente achar que o produto quebrou, quando na verdade é o plano dele.
+ */
+export async function getWorkspaceModules(
+  d1: ReturnType<typeof getD1>,
+  workspaceId: string,
+  role: WorkspaceRole,
+  workspaceStatus: string,
+) {
+  const [catalog, planModules, grants, subscription] = await Promise.all([
+    d1.prepare(`SELECT key, name, description, category, route, required_capability, depends_on, status, position
+      FROM fdp_modules ORDER BY position, key`).all<Record<string, unknown>>(),
+    d1.prepare(`SELECT pm.module_key FROM fdp_plan_modules pm
+      JOIN fdp_workspace_subscriptions s ON s.plan_id = pm.plan_id
+      WHERE s.workspace_id = ?`).bind(workspaceId).all<{ module_key: string }>(),
+    d1.prepare("SELECT module_key, granted FROM fdp_workspace_module_grants WHERE workspace_id = ? AND (expires_at IS NULL OR expires_at > now())")
+      .bind(workspaceId).all<{ module_key: string; granted: number }>(),
+    d1.prepare("SELECT status FROM fdp_workspace_subscriptions WHERE workspace_id = ?")
+      .bind(workspaceId).first<{ status: string }>(),
+  ]);
+
+  const modules: ModuleDefinition[] = catalog.results.map((row) => ({
+    key: String(row.key), name: String(row.name), description: String(row.description),
+    category: String(row.category) as ModuleCategory, route: String(row.route),
+    requiredCapability: String(row.required_capability), dependsOn: String(row.depends_on),
+    status: String(row.status) === "active" ? "active" : "inactive", position: Number(row.position),
+  }));
+
+  return resolveModules({
+    modules,
+    planModules: new Set(planModules.results.map((row) => String(row.module_key))),
+    workspaceGrants: new Map(grants.results.map((row) => [String(row.module_key), Number(row.granted) === 1])),
+    role,
+    workspaceStatus,
+    subscriptionStatus: String(subscription?.status ?? "inactive"),
+  });
 }
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
@@ -189,6 +253,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const canManageMembers = hasCapability(workspace.role, "members.manage");
   const canReadHr = hasCapability(workspace.role, "hr.read");
   const canManageIntegrations = hasCapability(workspace.role, "integrations.manage");
+  const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role, String((workspace as Record<string, unknown>).status ?? "active"));
   const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, workspacesResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
@@ -386,6 +451,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
 
   return {
     workspace: { ...workspace, role: workspace.role, companyScope: companyAccess.unrestricted ? "all" : "restricted" },
+    // O menu passa a refletir o plano contratado, não só a capability do papel.
+    modules: resolvedModules,
     board,
     boards: (boardsResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id), name: String(row.name), description: String(row.description ?? ""), boardType: String(row.board_type ?? "general"),
@@ -500,10 +567,23 @@ export async function runAutomations(
   return executed;
 }
 
-function assertTenantWorkspace(workspaceId: string) {
-  if (getTenantContext()?.workspaceId !== workspaceId) {
+/**
+ * Recusa registrar evento em outro workspace.
+ *
+ * A checagem agora é contra o workspace pedido pelo chamador e o contexto
+ * assíncrono só é usado quando existe — antes, a ausência do contexto (que é o
+ * estado normal dentro de uma rota) reprovava toda gravação legítima.
+ */
+function tenantWorkspaceGuard(workspaceId: string) {
+  const workspace = String(workspaceId ?? "").trim();
+  if (!workspace) {
     throw ApiError.forbidden("Contexto tenant inválido para registrar atividade.", "TENANT_CONTEXT_MISMATCH");
   }
+  const context = getTenantContext();
+  if (context && context.workspaceId !== workspace) {
+    throw ApiError.forbidden("Contexto tenant inválido para registrar atividade.", "TENANT_CONTEXT_MISMATCH");
+  }
+  return { workspaceId: workspace, userId: context?.userId ?? null };
 }
 
 function publicIntegrationConfig(value: string) {
@@ -514,8 +594,7 @@ function publicIntegrationConfig(value: string) {
 }
 
 export function prepareActivity(workspaceId: string, cardId: string | null, actorEmail: string, eventType: string, payload: Record<string, unknown> = {}) {
-  assertTenantWorkspace(workspaceId);
-  const d1 = getD1();
+  const d1 = getScopedD1(tenantWorkspaceGuard(workspaceId));
   return d1.prepare("INSERT INTO fdp_activity_events (id, workspace_id, card_id, actor_email, event_type, payload_json) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(crypto.randomUUID(), workspaceId, cardId, actorEmail, eventType, JSON.stringify(payload));
 }
@@ -556,8 +635,7 @@ function auditJson(value: Record<string, unknown> | null | undefined) {
 }
 
 export function prepareAuditEvent(input: AuditEventInput) {
-  assertTenantWorkspace(input.workspaceId);
-  const d1 = getD1();
+  const d1 = getScopedD1(tenantWorkspaceGuard(input.workspaceId));
   return d1.prepare(`INSERT INTO fdp_audit_events
     (id, workspace_id, actor_type, actor_user_id, actor_email, action, outcome, entity_type, entity_id, before_json, after_json, metadata_json, request_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?)`)

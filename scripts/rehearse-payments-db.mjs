@@ -12,7 +12,7 @@
  *   FDP_PAYMENTS_TEST_DATABASE_URL="postgres://user@host:5432/scratch" \
  *   FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse-payments
  *
- * O banco informado é usado apenas para leitura/escrita das tabelas do Fila DP
+ * O banco informado é usado apenas para leitura/escrita das tabelas do Vinculato
  * e nunca deve apontar para produção.
  */
 import { spawnSync } from "node:child_process";
@@ -75,7 +75,7 @@ const guardFile = join(workingDirectory, "guard.sql");
 await writeFile(guardFile, `DO $$
 BEGIN
   IF to_regclass('public.fdp_workspaces') IS NOT NULL THEN
-    RAISE EXCEPTION 'O banco informado ja contem tabelas do Fila DP. Use um banco vazio e descartavel para o ensaio.';
+    RAISE EXCEPTION 'O banco informado ja contem tabelas do Vinculato. Use um banco vazio e descartavel para o ensaio.';
   END IF;
 END;
 $$;
@@ -84,4 +84,5 @@ psql(guardFile);
 psql(migrationsFile);
 psql(join(root, "scripts", "payments-db-rehearsal.sql"));
 psql(join(root, "scripts", "scale-db-rehearsal.sql"));
-console.log("Ensaio concluído: migrations, constraints de pagamento, outbox/webhooks/API e isolamento multi-tenant verificados.");
+psql(join(root, "scripts", "time-db-rehearsal.sql"));
+console.log("Ensaio concluído: migrations, constraints de pagamento, regra do §22 no ponto, outbox/webhooks/API e isolamento multi-tenant verificados.");

@@ -15,7 +15,7 @@ type Params = { params: Promise<{ id: string }> };
 
 /**
  * Registro do pagamento ao psicólogo e, quando aplicável, da nota fiscal.
- * O Fila DP não emite nota: ele compara o valor apurado com o valor informado
+ * O Vinculato não emite nota: ele compara o valor apurado com o valor informado
  * e expõe a divergência.
  */
 export async function POST(request: Request, { params }: Params) {

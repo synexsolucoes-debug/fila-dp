@@ -11,10 +11,10 @@ export const dynamic = "force-dynamic";
 const document = {
   openapi: "3.1.0",
   info: {
-    title: "Fila DP — API pública",
+    title: "Vinculato — API pública",
     version: API_VERSION,
     description: [
-      "API do Fila DP para leitura da operação de Departamento Pessoal e envio de créditos e descontos de prestadores PJ.",
+      "API do Vinculato para leitura da operação de Departamento Pessoal e envio de créditos e descontos de prestadores PJ.",
       "",
       "Autenticação: `Authorization: Bearer fdp_...`. Cada chave pertence a um workspace e carrega escopos próprios.",
       "Limite: por chave, por minuto; o excedente responde 429 com `Retry-After`.",

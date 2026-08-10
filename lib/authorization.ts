@@ -59,6 +59,11 @@ export const capabilities = [
   "contractors.payments.close",
   "contractors.limits.manage",
   "payments.reopen",
+  "time.read",
+  "time.manage",
+  "time.approve",
+  "time.export",
+  "time.mappings.manage",
 ] as const;
 
 export type Capability = typeof capabilities[number];
@@ -77,13 +82,14 @@ const roleCapabilities = {
     "contractors.read", "contractors.manage", "auxiliary.approvals.request", "auxiliary.approvals.decide", "auxiliary.close",
     "psychology.payments.read", "psychology.payments.manage", "psychology.payments.close",
     "contractors.payments.read", "contractors.payments.manage", "contractors.payments.close",
+    "time.read", "time.manage", "time.approve", "time.export",
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",
     "integrations.status.read",
     "companies.read", "employees.read",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
-    "benefits.read", "contractors.read", "contractors.payments.read",
+    "benefits.read", "contractors.read", "contractors.payments.read", "time.read",
   ]),
   guest: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "comments.write",

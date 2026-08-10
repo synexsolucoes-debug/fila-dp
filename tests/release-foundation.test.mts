@@ -168,14 +168,23 @@ test("bootstrap and redirects have race and open-redirect defenses", async () =>
   assert.match(logout, /export async function POST/);
 });
 
-test("workspace context is attached before downstream snapshot queries", async () => {
+test("a conexão devolvida ao pedido carrega o tenant, sem depender de contexto assíncrono", async () => {
   const [database, adapter] = await Promise.all([
     readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(database, /setTenantContext\(\{ workspaceId: workspace\.id, userId: userRow\.id \}\)/);
+  // O contexto por AsyncLocalStorage não sobrevive ao retorno de uma função async:
+  // quem chama volta ao contexto anterior. Depender só dele deixava as consultas
+  // da rota sem app.workspace_id — e, com RLS, sem nenhuma linha.
+  assert.match(database, /const scopedD1 = getScopedD1\(tenant\)/);
+  assert.match(database, /return \{ d1: scopedD1,/);
+  assert.match(adapter, /export function getScopedD1\(context: TenantContext\): D1Database/);
+  assert.match(adapter, /this\.boundContext \?\? getTenantContext\(\)/);
   assert.match(adapter, /set_config\('app\.workspace_id'/);
   assert.match(adapter, /set_config\('app\.user_id'/);
+  // Auditoria e atividade também gravam pela conexão com tenant explícito.
+  assert.match(database, /getScopedD1\(tenantWorkspaceGuard\(input\.workspaceId\)\)/);
+  assert.match(database, /getScopedD1\(tenantWorkspaceGuard\(workspaceId\)\)/);
 });
 
 test("the first RLS pilot denies company access without tenant context", async () => {

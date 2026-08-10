@@ -138,11 +138,18 @@
 .auth-form-panel {
   position: relative;
   min-height: 100vh;
-  padding: 44px clamp(38px, 6vw, 110px);
+  /* O topo reserva a faixa do link "Voltar para o site", que é posicionado
+     de forma absoluta. Sem essa reserva o cartão centralizado passava por
+     cima dele em telas de altura comum (1280x800). */
+  padding: 104px clamp(38px, 6vw, 110px) 44px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
 }
+
+/* Centraliza por margem automática em vez de justify-content: quando o cartão
+   é mais alto que o espaço livre, a margem simplesmente zera — o conteúdo não
+   transborda para cima nem cobre o link. */
+.auth-form-panel > .auth-form-card { margin-block: auto; }
 
 .auth-back {
   position: absolute;
@@ -406,8 +413,7 @@
   color: white;
 }
 
-.workspace-loading .brand-mark { width: 46px; height: 46px; padding: 10px; }
-.workspace-loading p { margin: 0; color: #91a5b7; font-size: 13px; }
+.workspace-loading .workspace-loading p { margin: 0; color: #91a5b7; font-size: 13px; }
 .workspace-loading.error-state { background: #f6f5ef; color: #0b1528; text-align: center; }
 .workspace-loading.error-state button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 7px; background: #081a31; color: white; cursor: pointer; font-weight: 700; }
 
@@ -1418,3 +1424,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 .search-group-label { margin: 8px 10px 4px; color: #7c8896; font-size: 7.5px; font-weight: 820; letter-spacing: .1em; text-transform: uppercase; }
 .theme-dark .search-group-label { color: #93a3b5; }
+
+.site-boundary-note { max-width: 720px; margin: 14px auto 0; color: #7b8794; font-size: 8.5px; line-height: 1.7; text-align: center; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

@@ -64,7 +64,7 @@ export function sanitizeProcessConfiguration(value: unknown) {
 export function assertNoAdmissionWorkflow(...values: unknown[]) {
   const haystack = values.map((value) => cleanText(value, 500).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()).join(" ");
   if (/\badmissao\b|\badmissional\b/.test(haystack)) {
-    throw ApiError.badRequest("A admissão digital é executada na Sólides. No Fila DP, use conciliação cadastral para dados já concluídos.", "SOLIDES_ADMISSION_BOUNDARY");
+    throw ApiError.badRequest("A admissão digital é executada na Sólides. No Vinculato, use conciliação cadastral para dados já concluídos.", "SOLIDES_ADMISSION_BOUNDARY");
   }
 }
 

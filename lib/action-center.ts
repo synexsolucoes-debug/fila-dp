@@ -6,15 +6,13 @@ import type { Capability } from "./authorization.ts";
  * Cada indicador aponta para o módulo responsável e declara a capability que o
  * usuário precisa ter. Nada aqui é decorativo: um indicador só existe quando há
  * uma consulta real por trás e uma tela para onde ir.
- *
- * O módulo de Ponto (§28 da especificação) ainda não existe no produto; por isso
- * não há indicador de "ponto aberto" — inventar um número seria pior que a ausência.
  */
 export type ActionTarget =
   | "processes"
   | "auxiliary"
   | "psychologistPayments"
   | "contractorPayments"
+  | "timeTracking"
   | "integrations"
   | "board";
 
@@ -187,6 +185,48 @@ export const actionDefinitions: readonly ActionDefinition[] = [
     sql: `SELECT count(*)::int AS total, NULL::date AS earliest, coalesce(sum(k.caju_amount), 0)::numeric AS amount
       FROM fdp_contractor_closings k
       WHERE k.workspace_id = ? AND k.caju_amount > 0 AND k.caju_status IN ('pending', 'approved', 'error') {{company}}`,
+  },
+  {
+    key: "time_blocking_inconsistencies",
+    label: "Ponto com inconsistência bloqueante",
+    description: "Impede a aprovação da folha de ponto",
+    capability: "time.read",
+    tone: "critical",
+    target: "timeTracking",
+    companyColumn: "s.company_id",
+    sql: `SELECT count(*)::int AS total, min(i.entry_date) AS earliest, 0::numeric AS amount
+      FROM fdp_time_inconsistencies i JOIN fdp_time_sheets s ON s.workspace_id = i.workspace_id AND s.id = i.time_sheet_id
+      WHERE i.workspace_id = ? AND i.status = 'open' AND i.severity = 'blocking' {{company}}`,
+  },
+  {
+    key: "time_sheets_pending",
+    label: "Ponto em conferência",
+    description: "Folhas ainda não aprovadas para a folha de pagamento",
+    capability: "time.read",
+    tone: "warning",
+    target: "timeTracking",
+    companyColumn: "s.company_id",
+    sql: `SELECT count(*)::int AS total, NULL::date AS earliest, 0::numeric AS amount
+      FROM fdp_time_sheets s
+      WHERE s.workspace_id = ? AND s.status IN ('draft', 'review', 'rejected') {{company}}`,
+  },
+  {
+    key: "time_export_blocked",
+    label: "Ponto aprovado sem rubrica configurada",
+    description: "Evento de hora apurado sem destino de exportação",
+    capability: "time.read",
+    tone: "critical",
+    target: "timeTracking",
+    companyColumn: "s.company_id",
+    sql: `SELECT count(DISTINCT v.event_code)::int AS total, NULL::date AS earliest, 0::numeric AS amount
+      FROM fdp_time_sheet_events v
+      JOIN fdp_time_sheets s ON s.workspace_id = v.workspace_id AND s.id = v.time_sheet_id
+      WHERE v.workspace_id = ? AND s.status = 'approved' AND v.minutes > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM fdp_hour_event_mappings m
+          WHERE m.workspace_id = v.workspace_id AND m.company_id = s.company_id
+            AND m.event_code = v.event_code AND m.status = 'active'
+        ) {{company}}`,
   },
   {
     key: "integration_errors",

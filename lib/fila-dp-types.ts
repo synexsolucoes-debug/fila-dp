@@ -244,6 +244,11 @@ export type AvailableWorkspace = {
 
 export type WorkspaceSnapshot = {
   workspace: { id: string; name: string; timezone: string; role: WorkspaceRole; companyScope: "all" | "restricted" };
+  /** Catálogo resolvido: liberados e bloqueados, cada um com o motivo. */
+  modules: {
+    key: string; name: string; description: string; category: string; route: string;
+    allowed: boolean; reason: string; message: string; upgradeable: boolean; position: number;
+  }[];
   board: { id: string; name: string; description: string };
   boards: BoardSummary[];
   lists: BoardList[];

@@ -1,4 +1,4 @@
-# Diagnóstico técnico e plano de evolução do Fila DP
+# Diagnóstico técnico e plano de evolução do Vinculato
 
 Data: 2026-08-08
 Repositório analisado: `synexsolucoes-debug/fila-dp`
@@ -6,7 +6,7 @@ Base: `main` em `955cf5c`
 
 ## Resumo executivo
 
-O Fila DP já é uma aplicação Next.js funcional para gestão visual de demandas, com PostgreSQL/Neon, anexos privados, workspaces, empresas, permissões básicas, quadro Kanban, inbox, planner, relatórios e conectores iniciais. A base é útil como release operacional inicial, mas ainda não é um SaaS multiempresa pronto para receber clientes pagantes.
+O Vinculato já é uma aplicação Next.js funcional para gestão visual de demandas, com PostgreSQL/Neon, anexos privados, workspaces, empresas, permissões básicas, quadro Kanban, inbox, planner, relatórios e conectores iniciais. A base é útil como release operacional inicial, mas ainda não é um SaaS multiempresa pronto para receber clientes pagantes.
 
 Os principais bloqueadores são: isolamento multi-tenant dependente apenas da aplicação e sem RLS; modelo de dados ainda centrado em quadros/cartões; autenticação sem rate limiting, MFA ou gestão completa de sessões; ausência dos cadastros centrais de colaboradores e estruturas do DP; integrações síncronas sem fila, execução, retentativa e conciliação; testes insuficientes para banco e isolamento; frontend monolítico; cobrança, planos, LGPD, backup testado e operação SaaS ainda inexistentes.
 
@@ -180,7 +180,7 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Concluída no repositório: empresas/estabelecimentos, colaboradores por abas, histórico auditável e cadastros auxiliares de departamentos, cargos, centros de custo e jornadas.
 - O diretório de colaboradores usa APIs paginadas e escopo por empresa, sem ampliar o snapshot central.
 - CPF é armazenado como HMAC e últimos quatro dígitos; o valor bruto não entra no banco, histórico, logs, URLs ou armazenamento local.
-- A Sólides permanece origem da admissão; o Fila DP recebe somente dados de pessoas com admissão concluída e não oferece fluxo concorrente de admissão digital.
+- A Sólides permanece origem da admissão; o Vinculato recebe somente dados de pessoas com admissão concluída e não oferece fluxo concorrente de admissão digital.
 - Gate operacional antes do deploy: aplicar a migration `0013_registrations_foundation` em PostgreSQL de homologação e executar o ensaio multi-tenant com backup restaurável.
 
 ### Fase 4 — Operação do DP
@@ -271,9 +271,35 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
   PostgreSQL 16 real cobrindo outbox, lease, limites, idempotência e isolamento.
 - Detalhamento e pendências: `docs/fase-9-escala.md`.
 
+### Continuidade e prontidão de cobrança
+
+- Concluído no repositório: ensaio executável de backup e restauração e diagnóstico de prontidão de cobrança.
+- O ensaio de restauração roda contra PostgreSQL real e verifica dados, RLS, triggers, constraints,
+  isolamento multi-tenant no banco restaurado e imutabilidade de fechamento concluído; foi executado
+  com aprovação e comprovado como não-vazio ao acusar vazamento com `BYPASSRLS`.
+- Os tempos medidos não são declarados como RTO de produção: falta ensaiar sobre volume representativo.
+- A prontidão de cobrança lista bloqueios objetivos e só declara `ready` quando todos caem, incluindo
+  as provas de que webhook e checkout funcionaram ao menos uma vez.
+- Detalhamento: `docs/continuidade-e-prontidao-de-cobranca.md`.
+
 ### Fase 10 — Comercialização
 
-- Site, suporte, LGPD e documentação comercial.
+- Concluída no repositório: site comercial completo, captação de contato funcional e documentos legais.
+- A auditoria do site anterior encontrou promessas incompatíveis com o produto — plano gratuito e
+  quatro planos fixos em código — e elas foram removidas.
+- A página de planos passou a ler o catálogo persistido e só exibe preço quando o plano é cobrável;
+  sem isso, mostra condição sob consulta.
+- As integrações são publicadas com estado real: Sólides e Caju aparecem como preparados, com a
+  observação de que não há integração oficial implementada.
+- O formulário de contato grava registro real com consentimento, limite por endereço e protocolo; os
+  contatos são visíveis apenas para a administração da plataforma, com RLS verificada em banco real.
+- Termos, Política de privacidade e DPA cobrem escopo, bases legais, retenção, direitos do titular,
+  incidentes e subprocessadores. Backup não é declarado testado.
+- Uma guarda automática verifica todas as páginas contra as promessas proibidas pelo §90 e distingue
+  a negativa obrigatória da oferta.
+- Validação: lint, `db:check` (23 migrations), 131 testes e build aprovados; ensaio contra PostgreSQL
+  16 real com verificação do isolamento dos contatos.
+- Detalhamento, checklist e pendências: `docs/fase-10-comercializacao.md`.
 
 ## Alterações implementadas nesta fase
 
@@ -289,7 +315,7 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Semente de admissão interna substituída por conciliação cadastral.
 - Sólides adicionada como integração externa em estado `needs_credentials`.
 - API bloqueia criação de demandas, templates, SLAs e condições de automação de admissão digital.
-- Site e exemplos visuais deixam de anunciar execução de admissão pelo Fila DP.
+- Site e exemplos visuais deixam de anunciar execução de admissão pelo Vinculato.
 - Migration preserva dados históricos, desativa apenas a semente/política interna legada e não executa `DELETE`.
 
 ## Rollback da migration 0003

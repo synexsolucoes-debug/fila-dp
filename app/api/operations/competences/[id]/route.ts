@@ -1,8 +1,71 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
-import { requireCapability } from "@/lib/authorization";
+import { hasCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText, optionalDate } from "@/lib/registrations";
+
+/**
+ * Detalhe da competência.
+ *
+ * A rota não existia: abrir uma competência respondia 405, e a tela não tinha
+ * de onde carregar itens de fechamento, movimentações e bloqueadores. Sem isso
+ * não há como saber por que um fechamento está travado.
+ */
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await getApiUser(); if (!auth.user) return auth.response;
+  try {
+    const { id } = await params;
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace.role, "competences.read");
+    const cycle = await d1.prepare(`SELECT c.*, co.legal_name AS company_legal_name, co.trade_name AS company_trade_name
+      FROM fdp_payroll_cycles c JOIN fdp_companies co ON co.workspace_id = c.workspace_id AND co.id = c.company_id
+      WHERE c.workspace_id = ? AND c.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
+    if (!cycle) throw ApiError.notFound("Competência não encontrada.", "COMPETENCE_NOT_FOUND");
+    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(cycle.company_id));
+
+    const [items, movements, obligations, pendingItems] = await Promise.all([
+      d1.prepare(`SELECT id, phase, category, title, status, owner_user_id, due_date, completed_at, notes, position
+        FROM fdp_payroll_cycle_items WHERE workspace_id = ? AND payroll_cycle_id = ? ORDER BY phase, position`)
+        .bind(workspace.id, id).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT id, employee_id, movement_type, effective_date, title, status
+        FROM fdp_employee_movements WHERE workspace_id = ? AND payroll_cycle_id = ? ORDER BY effective_date DESC LIMIT 200`)
+        .bind(workspace.id, id).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT id, obligation_type, title, due_date, status
+        FROM fdp_compliance_obligations WHERE workspace_id = ? AND payroll_cycle_id = ? ORDER BY due_date`)
+        .bind(workspace.id, id).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT id, title, status, blocking, due_date
+        FROM fdp_operational_pending_items WHERE workspace_id = ? AND payroll_cycle_id = ? ORDER BY blocking DESC, due_date`)
+        .bind(workspace.id, id).all<Record<string, unknown>>(),
+    ]);
+
+    // O que impede o fechamento é dito com nome, não escondido atrás de um 409 genérico.
+    const blockers = [
+      ...pendingItems.results.filter((row) => Number(row.blocking) === 1 && ["open", "in_progress"].includes(String(row.status)))
+        .map((row) => ({ kind: "pending_item", id: String(row.id), title: String(row.title) })),
+      ...movements.results.filter((row) => ["draft", "pending_approval", "rejected"].includes(String(row.status)))
+        .map((row) => ({ kind: "movement", id: String(row.id), title: String(row.title) })),
+      ...items.results.filter((row) => String(row.status) !== "completed")
+        .map((row) => ({ kind: "closing_item", id: String(row.id), title: String(row.title) })),
+      ...obligations.results.filter((row) => String(row.status) !== "completed")
+        .map((row) => ({ kind: "obligation", id: String(row.id), title: String(row.title) })),
+    ];
+
+    return Response.json({
+      competence: cycle,
+      items: items.results,
+      movements: movements.results,
+      obligations: obligations.results,
+      pendingItems: pendingItems.results,
+      blockers,
+      canClose: blockers.length === 0,
+      permissions: {
+        manage: hasCapability(workspace.role, "competences.manage"),
+        transition: hasCapability(workspace.role, "competences.transition"),
+        reopen: hasCapability(workspace.role, "competences.reopen"),
+      },
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) { return apiError(error); }
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;

@@ -5,7 +5,7 @@ import { WorkspaceApp } from "./WorkspaceApp";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Painel | Fila DP",
+  title: "Painel | Vinculato",
   description: "Acompanhe e execute a fila de demandas do Departamento Pessoal.",
 };
 

@@ -209,7 +209,7 @@ function ContextStrip({ icon: Icon, label, value }: { icon: typeof Cable; label:
 }
 
 function SolidesNotice() {
-  return <aside className={styles.solidesNotice}><AlertTriangle aria-hidden="true" /><div><strong>Fronteira Sólides</strong><span>Permanece aguardando credenciais até existir recurso oficial confirmado e autenticação real bem-sucedida. O Fila DP não realiza admissão digital.</span></div></aside>;
+  return <aside className={styles.solidesNotice}><AlertTriangle aria-hidden="true" /><div><strong>Fronteira Sólides</strong><span>Permanece aguardando credenciais até existir recurso oficial confirmado e autenticação real bem-sucedida. O Vinculato não realiza admissão digital.</span></div></aside>;
 }
 
 function StatusMark({ status }: { status: string }) {
