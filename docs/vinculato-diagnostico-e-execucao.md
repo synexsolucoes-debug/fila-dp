@@ -553,3 +553,45 @@ completo. O detalhe foi percorrido no Chromium: ficha com proprietário, plano,
 assentos, empresas e valor contratado; as quatro abas com conteúdo; edição de
 nome, vínculo e revogação de sessão disponíveis; nenhum hash de senha na tela;
 zero rolagem horizontal em 390/768/1280/1440 e nenhum erro de console.
+
+## 18. PJ → Caju: o que dá para fazer sem o modelo oficial
+
+**O cálculo já estava certo.** `calculateContractorClosing` (lib/payments.ts)
+resolve, nesta ordem e em centavos: líquido = max(base + créditos − descontos, 0)
+→ nota = min(líquido, limite configurado) → complemento = max(líquido − nota, 0)
+→ Caju = complemento quando o meio complementar é Saldo Livre. O teto **não é
+fixo em código**: vem de política por prestador, contrato, empresa ou workspace,
+nessa ordem de prioridade — R$ 6.000 é exemplo da especificação, não constante.
+Há teste que reprova se alguém chumbar o valor.
+
+**O que faltava.** Selecionar o que entra no arquivo, conferir antes de gerar, e
+recusar quando não dá para gerar direito.
+
+- `lib/caju-export.ts` monta a prévia: exclui quem tem Caju zero (regra de
+  negócio, não erro) e **bloqueia** cálculo não aprovado, CPF ausente ou
+  inválido e CPF repetido na mesma empresa e competência. O mesmo CPF em
+  empresas diferentes não é duplicidade. O total da prévia é a soma inteira em
+  centavos do que iria no arquivo — a tela e o arquivo não podem divergir.
+- Códigos de recusa específicos: `CAJU_TEMPLATE_MISSING`, `CAJU_EXPORT_INVALID`
+  e `CAJU_EXPORT_EMPTY`, cada um dizendo o que resolve.
+- Migração `0026_caju_templates.sql`: catálogo do arquivo oficial da Caju,
+  versionado, com checksum, mapeamento de colunas, RLS por workspace e índice
+  parcial garantindo **um modelo ativo por vez**.
+- Capacidade `contractors.export_caju`, concedida só ao administrador: exportar
+  dinheiro para um meio de pagamento externo não é ação de operação diária.
+
+**Por que a exportação ainda não gera arquivo.** A Central de Ajuda da Caju
+orienta baixar o modelo dentro do próprio portal, e cabeçalhos, abas e
+validações mudam sem aviso. Gerar um XLSX "parecido" seria prometer uma
+compatibilidade que ninguém verificou — e o arquivo seria recusado na
+importação, ou pior, aceito errado. O produto guarda o arquivo oficial que o
+administrador subir; enquanto não houver um ativo, a exportação recusa com
+`CAJU_TEMPLATE_MISSING` e diz onde configurá-lo.
+
+**Pendência do proprietário:** subir o `.xlsx` oficial de importação de Saldo
+Livre, baixado do portal da Caju. Com ele entram a leitura/validação do layout,
+o mapeamento de colunas e a escrita do arquivo (que exigirá uma biblioteca de
+planilha — o projeto ainda não tem nenhuma, e adicionar uma antes de conhecer o
+formato seria adivinhação).
+
+Validação: 237 testes, `npm run ci` completo, 29 migrações validadas.

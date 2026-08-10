@@ -33,6 +33,7 @@ export const expectedMigrations = [
   "0023_platform_lifecycle.sql",
   "0024_module_catalog.sql",
   "0025_access_module.sql",
+  "0026_caju_templates.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
