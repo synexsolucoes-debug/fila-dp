@@ -49,6 +49,7 @@ import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
+import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { RegistrationsView } from "./features/registrations";
 import { OperationsView } from "./features/operations";
 import { AuxiliaryModulesView } from "./features/auxiliary";
@@ -160,8 +161,8 @@ async function requestSnapshot(url: string, options?: RequestInit): Promise<Work
     ...options,
     headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
   });
-  const payload = await response.json() as WorkspaceSnapshot & { error?: string };
-  if (!response.ok) throw new Error(payload.error || "Não foi possível concluir a operação.");
+  const payload = await response.json() as WorkspaceSnapshot & Record<string, unknown>;
+  if (!response.ok) throw requestErrorFrom(response, payload);
   return normalizeWorkspaceSnapshot(payload);
 }
 
@@ -372,6 +373,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [startupFailure, setStartupFailure] = useState<unknown>(null);
   const [toast, setToast] = useState("");
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [cardModalOpen, setCardModalOpen] = useState(false);
@@ -454,7 +456,12 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         setRealtimeStatus("current");
         realtimeCursorRef.current = realtimeCursor();
       })
-      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Erro ao carregar o workspace."))
+      .catch((cause: unknown) => {
+        // O erro inteiro é guardado: a tela de falha precisa do código e do
+        // número de chamado para o usuário conseguir reportar o que aconteceu.
+        setStartupFailure(cause);
+        setError(cause instanceof Error ? cause.message : "Erro ao carregar o workspace.");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -1090,7 +1097,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }
 
   if (!snapshot) {
-    return <main className="workspace-loading error-state"><strong>Não foi possível abrir o Vinculato.</strong><p>{error}</p><button onClick={() => window.location.reload()}>Tentar novamente</button></main>;
+    const infrastructure = startupFailure instanceof RequestError && startupFailure.isInfrastructure;
+    const reference = supportReference(startupFailure);
+    return (
+      <main className="workspace-loading error-state" role="alert">
+        <strong>{infrastructure ? "O Vinculato está indisponível no momento." : "Não foi possível abrir o Vinculato."}</strong>
+        <p>{error}</p>
+        {infrastructure && <p className="error-state-hint">Não é um problema da sua conta nem dos seus dados. O acesso volta assim que a plataforma for regularizada.</p>}
+        {reference && <p className="error-state-reference">Informe ao suporte: {reference}</p>}
+        <button onClick={() => window.location.reload()}>Tentar novamente</button>
+      </main>
+    );
   }
 
   const header = viewContent[view];

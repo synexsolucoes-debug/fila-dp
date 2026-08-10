@@ -328,3 +328,56 @@ Validação desta fatia: `lint` limpo, 198 testes, 41 verificações de navegado
 (390/768/1280/1440, sem rolagem horizontal e sem erro de console), 23
 verificações de fumaça e 7 de isolamento, todas pelo driver que a aplicação usa
 em produção.
+
+## 14. "Não foi possível concluir a operação." — a falha que não dizia nada
+
+O cliente relatou a tela: **"Não foi possível abrir o Vinculato. / Não foi
+possível concluir a operação. / Tentar novamente"**.
+
+**Reproduzido antes de corrigir.** Simulei um banco atrás da versão do
+aplicativo — apaguei o registro da migração 0024 e o objeto que ela cria — e
+carreguei o painel pelo navegador. A tela saiu palavra por palavra igual à
+relatada, com `GET /api/workspace` respondendo `500 INTERNAL_ERROR`.
+
+**Causa.** Toda falha não prevista caía no mesmo caminho genérico. Isso é
+correto para um defeito de programação — não vaza SQL nem stack trace —, mas
+estava sendo usado também para falhas **operacionais**: banco atrás da versão,
+banco inacessível, papel da aplicação sem privilégio. Nesses casos a frase
+genérica esconde justamente a informação que resolveria o problema. O cliente
+não sabe que não é culpa dele; quem opera não sabe o que corrigir.
+
+**Correções.**
+
+1. `lib/infrastructure-errors.ts` classifica a falha pelo estado do PostgreSQL:
+   `SCHEMA_OUTDATED` (42P01, 42703, 42883, 42704, 3F000),
+   `DATABASE_PERMISSION_DENIED` (42501) e `DATABASE_UNAVAILABLE` (classe 08,
+   57Pxx, 53300, 28xxx, falha de rede). Cada uma responde **503** com uma
+   mensagem que diz o que aconteceu e o que resolve — sem nome de tabela, sem
+   comando, sem credencial. Defeito inesperado continua no caminho genérico.
+2. A tela do painel deixou de descartar o `code` e o `requestId` que a resposta
+   já trazia. Agora mostra "Informe ao suporte: código … · chamado …", e uma
+   falha de infraestrutura é apresentada como indisponibilidade da plataforma,
+   não como problema da conta do cliente.
+3. `GET /api/health` responde a pergunta que antes só o log do servidor
+   respondia: schema aplicado, acessível, e quantas migrações faltam. O nome das
+   migrações pendentes só aparece para quem administra a plataforma.
+4. `lib/schema-manifest.ts` é gerado (`npm run schema:manifest`) porque em
+   produção não existe diretório de migrations para ler em execução. Um teste
+   reprova se o manifesto divergir de `drizzle/postgres`.
+5. O ensaio de fumaça passou a checar prontidão **na primeira linha** e a parar
+   ali quando o deployment não está pronto — em vez de acumular falhas cuja
+   causa real ficaria escondida no meio da saída.
+
+**Um achado do próprio ensaio.** Depois de reaplicar a migração, o painel voltou
+a falhar — agora com `42501, permission denied`. Os objetos recriados não tinham
+privilégio para o papel da aplicação. O relatório de prontidão dizia "ok",
+porque só contava migrações. Foi por isso que a verificação passou a **sondar
+leitura** em tabelas centrais com `LIMIT 0`: histórico completo não prova que o
+aplicativo consegue ler o que foi criado.
+
+**Se a tela aparecer em produção**, o caminho agora é direto:
+
+```
+GET /api/health          → diz se o banco está atrás, inacessível ou sem permissão
+npm run db:migrate       → aplica as migrações pendentes (DATABASE_URL do ambiente)
+```

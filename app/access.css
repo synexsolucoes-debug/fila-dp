@@ -414,8 +414,12 @@
 }
 
 .workspace-loading .workspace-loading p { margin: 0; color: #91a5b7; font-size: 13px; }
-.workspace-loading.error-state { background: #f6f5ef; color: #0b1528; text-align: center; }
-.workspace-loading.error-state button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 7px; background: #081a31; color: white; cursor: pointer; font-weight: 700; }
+.workspace-loading.error-state { max-width: 520px; margin: 0 auto; padding: 0 20px; background: var(--ui-bg); color: var(--ui-text); text-align: center; }
+.workspace-loading.error-state strong { font-size: 20px; letter-spacing: -.02em; color: var(--brand-strong); }
+.workspace-loading.error-state p { max-width: 460px; color: var(--ui-text-soft); font-size: 13.5px; line-height: 1.6; }
+.workspace-loading.error-state .error-state-hint { color: var(--ui-text-soft); font-size: 12.5px; }
+.workspace-loading.error-state .error-state-reference { padding: 8px 12px; border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface); color: var(--ui-text-soft); font-family: var(--font-geist-mono), monospace; font-size: 11px; word-break: break-all; }
+.workspace-loading.error-state button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 7px; background: var(--brand-strong); color: var(--brand-contrast); cursor: pointer; font-weight: 700; }
 
 .dashboard-brand {
   border: 0;
