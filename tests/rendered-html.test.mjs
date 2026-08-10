@@ -8,7 +8,7 @@ async function source(path) {
   return readFile(new URL(path, root), "utf8");
 }
 
-test("ships the Fila DP product instead of the temporary starter", async () => {
+test("ships the Vinculato product instead of the temporary starter", async () => {
   const [landing, layout, dashboard, packageJson] = await Promise.all([
     source("app/page.tsx"),
     source("app/layout.tsx"),
@@ -16,8 +16,8 @@ test("ships the Fila DP product instead of the temporary starter", async () => {
     source("package.json"),
   ]);
 
-  assert.match(landing, /Fila DP/);
-  assert.match(layout, /Fila DP/);
+  assert.match(landing, /Vinculato/);
+  assert.match(layout, /Vinculato/);
   assert.match(dashboard, /Caixa de entrada/);
   assert.match(dashboard, /Meu planner/);
   assert.match(dashboard, /Indicadores/);

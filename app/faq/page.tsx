@@ -3,7 +3,7 @@ import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 import { faqEntries } from "@/lib/marketing";
 
 export const metadata: Metadata = {
-  title: "Perguntas frequentes | Fila DP",
+  title: "Perguntas frequentes | Vinculato",
   description: "Fronteiras do produto, isolamento entre clientes, módulos de pagamento, API e suporte.",
 };
 

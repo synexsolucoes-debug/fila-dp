@@ -2,7 +2,7 @@
 
 Data: 2026-08-09
 
-Este documento descreve o módulo de Ponto do Fila DP: o que ele faz, o que
+Este documento descreve o módulo de Ponto do Vinculato: o que ele faz, o que
 deliberadamente não faz, e como a regra do §22 é imposta em quatro camadas
 independentes.
 

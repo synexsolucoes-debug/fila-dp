@@ -46,14 +46,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       stripeMonthlyPriceId: priceId(body.stripeMonthlyPriceId),
       stripeAnnualPriceId: priceId(body.stripeAnnualPriceId),
     };
-    if (status === "active" && after.monthlyPriceCents > 0 && !after.stripeMonthlyPriceId) throw new Error("Plano mensal pago exige um preço Stripe.");
-    if (status === "active" && after.annualPriceCents > 0 && !after.stripeAnnualPriceId) throw new Error("Plano anual pago exige um preço Stripe.");
+    // Um plano pago pode ficar ativo sem preço no provedor: nesse caso ele é
+    // vendido por contato comercial, e o checkout aparece como indisponível.
+    // Bloquear a ativação obrigaria a esconder do site um plano que existe.
 
     return await withPlatformContext(platform, async () => {
       const d1 = getD1();
-      const before = await d1.prepare("SELECT id, code, status, monthly_price_cents, annual_price_cents, updated_at FROM fdp_saas_plans WHERE id = ?").bind(id).first<Record<string, unknown>>();
+      const before = await d1.prepare("SELECT id, code, status, currency, monthly_price_cents, annual_price_cents, included_seats, updated_at FROM fdp_saas_plans WHERE id = ?").bind(id).first<Record<string, unknown>>();
       if (!before) return Response.json({ error: "Plano não encontrado." }, { status: 404 });
+
+      // Mudança de preço nasce como nova versão. Assinaturas já contratadas
+      // continuam presas à versão anterior — o valor de um contrato antigo não
+      // muda porque alguém editou a tabela.
+      const priceChanged = Number(before.monthly_price_cents) !== after.monthlyPriceCents
+        || Number(before.annual_price_cents) !== after.annualPriceCents
+        || Number(before.included_seats) !== after.includedSeats;
+      const priceVersion = priceChanged
+        ? [d1.prepare(`INSERT INTO fdp_saas_plan_prices (id, plan_id, currency, monthly_price_cents, annual_price_cents, included_seats, note, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+            .bind(crypto.randomUUID(), id, String(before.currency ?? "brl"), after.monthlyPriceCents, after.annualPriceCents,
+              after.includedSeats, "Alteração pelo console global", platform.email)]
+        : [];
+
       await d1.batch([
+        ...priceVersion,
         d1.prepare(`UPDATE fdp_saas_plans SET status = ?, monthly_price_cents = ?, annual_price_cents = ?, trial_days = ?, included_seats = ?,
             company_limit = ?, integration_limit = ?, storage_limit_mb = ?, features_json = ?::jsonb,
             stripe_monthly_price_id = ?, stripe_annual_price_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
@@ -64,7 +80,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           VALUES (?, ?, ?, 'platform.plan_updated', 'saas_plan', ?, ?::jsonb, ?::jsonb, ?)`)
           .bind(crypto.randomUUID(), platform.userId, platform.email, id, JSON.stringify(before), JSON.stringify(after), request.headers.get("x-fila-dp-request-id") ?? ""),
       ]);
-      return Response.json({ ok: true, plan: { id, ...after } });
+      return Response.json({ ok: true, plan: { id, ...after }, newPriceVersion: priceChanged });
     });
   } catch (error) {
     if (error instanceof Error && /inválid|intervalo|exige|contém/u.test(error.message)) return Response.json({ error: error.message }, { status: 400 });

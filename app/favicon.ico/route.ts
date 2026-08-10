@@ -2,7 +2,7 @@ export const revalidate = 31536000;
 
 /**
  * A small, dependency-free ICO built at request/build time. Keeping this route
- * means browsers that still request `/favicon.ico` receive the Fila DP mark
+ * means browsers that still request `/favicon.ico` receive the Vinculato mark
  * instead of reaching the Next.js not-found route.
  */
 function createFavicon() {

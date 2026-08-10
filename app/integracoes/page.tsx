@@ -4,7 +4,7 @@ import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 import { integrationCatalog, integrationStateLabels } from "@/lib/marketing";
 
 export const metadata: Metadata = {
-  title: "Integrações | Fila DP",
+  title: "Integrações | Vinculato",
   description: "Estado real de cada integração: disponível, parcial ou apenas preparada. Logo de fornecedor não significa integração pronta.",
 };
 

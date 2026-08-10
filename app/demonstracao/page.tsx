@@ -4,7 +4,7 @@ import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 import { ContactForm } from "../contato/ContactForm";
 
 export const metadata: Metadata = {
-  title: "Demonstração | Fila DP",
+  title: "Demonstração | Vinculato",
   description: "Agende uma demonstração conduzida com a operação real do seu Departamento Pessoal.",
 };
 

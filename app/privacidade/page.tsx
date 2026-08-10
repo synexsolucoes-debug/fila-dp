@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 
 export const metadata: Metadata = {
-  title: "Política de privacidade | Fila DP",
-  description: "Como o Fila DP trata dados pessoais, com bases legais, retenção, direitos do titular e resposta a incidentes conforme a LGPD.",
+  title: "Política de privacidade | Vinculato",
+  description: "Como o Vinculato trata dados pessoais, com bases legais, retenção, direitos do titular e resposta a incidentes conforme a LGPD.",
 };
 
 const UPDATED_AT = "9 de agosto de 2026";
@@ -15,14 +15,14 @@ export default function PrivacidadePage() {
       <SiteHero
         eyebrow="Legal"
         title="Política de privacidade"
-        description="Tratamento de dados pessoais na plataforma Fila DP, conforme a Lei nº 13.709/2018 (LGPD)."
+        description="Tratamento de dados pessoais na plataforma Vinculato, conforme a Lei nº 13.709/2018 (LGPD)."
       />
 
       <section className={`${styles.section} ${styles.legal}`}>
         <p className={styles.legalMeta}>
           Última atualização: {UPDATED_AT}. Em relação aos dados da operação de DP, o cliente é o <strong>controlador</strong>
-          e o Fila DP atua como <strong>operador</strong>. Em relação aos dados de contato comercial e de usuários da própria
-          plataforma, o Fila DP é o controlador.
+          e o Vinculato atua como <strong>operador</strong>. Em relação aos dados de contato comercial e de usuários da própria
+          plataforma, o Vinculato é o controlador.
         </p>
 
         <h2>1. Princípio de minimização</h2>
@@ -75,7 +75,7 @@ export default function PrivacidadePage() {
           compartilhamento e revogação de consentimento.
         </p>
         <ul>
-          <li>Titulares vinculados à operação de um cliente devem procurar o próprio empregador, que é o controlador; o Fila DP atende como operador, mediante instrução.</li>
+          <li>Titulares vinculados à operação de um cliente devem procurar o próprio empregador, que é o controlador; o Vinculato atende como operador, mediante instrução.</li>
           <li>Pedidos podem ser enviados pela página de <Link href="/contato">Contato</Link> e são respondidos em até 15 dias.</li>
         </ul>
 

@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 
 export const metadata: Metadata = {
-  title: "Termos de uso | Fila DP",
-  description: "Condições de uso da plataforma Fila DP, incluindo escopo do serviço, responsabilidades e limites do produto.",
+  title: "Termos de uso | Vinculato",
+  description: "Condições de uso da plataforma Vinculato, incluindo escopo do serviço, responsabilidades e limites do produto.",
 };
 
 const UPDATED_AT = "9 de agosto de 2026";
@@ -12,7 +12,7 @@ const UPDATED_AT = "9 de agosto de 2026";
 export default function TermosPage() {
   return (
     <SiteShell>
-      <SiteHero eyebrow="Legal" title="Termos de uso" description="Condições que regem o uso da plataforma Fila DP." />
+      <SiteHero eyebrow="Legal" title="Termos de uso" description="Condições que regem o uso da plataforma Vinculato." />
 
       <section className={`${styles.section} ${styles.legal}`}>
         <p className={styles.legalMeta}>
@@ -22,7 +22,7 @@ export default function TermosPage() {
 
         <h2>1. O que é o serviço</h2>
         <p>
-          O Fila DP é uma plataforma de gestão, integração e conferência operacional para Departamento Pessoal, fornecida
+          O Vinculato é uma plataforma de gestão, integração e conferência operacional para Departamento Pessoal, fornecida
           como software como serviço. O cliente contrata acesso a um workspace isolado, com usuários, empresas e dados próprios.
         </p>
 

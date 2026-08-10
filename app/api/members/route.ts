@@ -26,12 +26,20 @@ export async function POST(request: Request) {
       .bind(workspace.id, email).first<{ member: number }>();
     if (!currentMembership) {
       const allowance = await d1.prepare(`SELECT GREATEST(subscription.seat_quantity, plan.included_seats)::integer AS seat_limit,
+          plan.name AS plan_name,
           (SELECT COUNT(*)::integer FROM fdp_workspace_members WHERE workspace_id = ?) AS used
         FROM fdp_workspace_subscriptions subscription JOIN fdp_saas_plans plan ON plan.id = subscription.plan_id
         WHERE subscription.workspace_id = ? AND subscription.status IN ('trialing', 'active')`)
-        .bind(workspace.id, workspace.id).first<{ seat_limit: number; used: number }>();
-      if (!allowance || Number(allowance.used) >= Number(allowance.seat_limit)) {
-        throw new ApiError(409, "PLAN_SEAT_LIMIT", "O plano atual atingiu o limite de usuários.");
+        .bind(workspace.id, workspace.id).first<{ seat_limit: number; used: number; plan_name: string }>();
+      if (!allowance) {
+        throw new ApiError(409, "SUBSCRIPTION_INACTIVE", "Este grupo não possui assinatura ativa. Fale com o administrador da plataforma para reativar o acesso.");
+      }
+      if (Number(allowance.used) >= Number(allowance.seat_limit)) {
+        // A mensagem diz o plano, o uso e o limite: "atingiu o limite" sozinho
+        // não permite ao administrador decidir o que fazer.
+        throw new ApiError(409, "PLAN_SEAT_LIMIT",
+          `O plano ${allowance.plan_name} permite ${allowance.seat_limit} usuário(s) e ${allowance.used} já estão em uso. Remova um usuário ou solicite a mudança de plano.`,
+          { planName: String(allowance.plan_name), seatLimit: Number(allowance.seat_limit), seatsUsed: Number(allowance.used) });
       }
     }
 
@@ -66,7 +74,7 @@ export async function POST(request: Request) {
       RETURNING user_id`)
       .bind(workspace.id, workspace.id, workspace.id, invitedUser.id, role, workspace.id, invitedUser.id, workspace.id)
       .first<{ user_id: string }>();
-    if (!membership) throw new ApiError(409, "PLAN_SEAT_LIMIT", "O plano atual atingiu o limite de usuários.");
+    if (!membership) throw new ApiError(409, "PLAN_SEAT_LIMIT", "O plano atual atingiu o limite de usuários. Remova um usuário ou solicite a mudança de plano.");
 
     await d1.batch([
       d1.prepare("DELETE FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ?").bind(workspace.id, invitedUser.id),

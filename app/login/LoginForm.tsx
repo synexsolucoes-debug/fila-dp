@@ -51,7 +51,7 @@ export function LoginForm() {
   return (
     <>
       <span className="auth-status neutral">{isSignup ? <UserPlus aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />} {isSignup ? "Novo workspace" : "Acesso administrado"}</span>
-      <h2>{isBootstrap ? "Configure o primeiro grupo" : isSignup ? "Crie sua conta" : "Entrar no Fila DP"}</h2>
+      <h2>{isBootstrap ? "Configure o primeiro grupo" : isSignup ? "Crie sua conta" : "Entrar no Vinculato"}</h2>
       <p>{isBootstrap ? "Crie o grupo empresarial e a primeira conta administradora. Os próximos usuários serão liberados por você." : isSignup ? "Abra um novo grupo e comece a ativação do seu workspace." : "Use o e-mail e a senha liberados pelo administrador do seu grupo."}</p>
       {!isBootstrap && signupEnabled && <div className="auth-mode-switch" role="group" aria-label="Modo de acesso"><button type="button" aria-pressed={!isSignup} onClick={() => { setMode("login"); setError(""); }}>Entrar</button><button type="button" aria-pressed={isSignup} onClick={() => { setMode("signup"); setError(""); }}>Criar conta</button></div>}
       <form className="auth-login-form" onSubmit={submit}>

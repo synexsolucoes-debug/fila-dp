@@ -129,7 +129,7 @@ igual — a proteção contra CSRF não foi afrouxada.
   unicidade do hash da chave, a contagem e o reinício da janela do limite, a unicidade da
   idempotência e o isolamento multi-tenant com papel sem `SUPERUSER`/`BYPASSRLS`.
 
-O ensaio recusa rodar em banco que já contenha tabelas do Fila DP: ele semeia identificadores
+O ensaio recusa rodar em banco que já contenha tabelas do Vinculato: ele semeia identificadores
 fixos e precisa de um banco vazio e descartável.
 
 ## 7. Pendências desta fase

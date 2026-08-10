@@ -161,7 +161,7 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
 
     <ConnectionRail connectors={overview.connectors} activeMappings={activeMappings.length} queueCount={queueCount + liveRuns} reconciliations={overview.reconciliations.length} />
     <Kpis connected={connected} attention={connectorAttention} mappings={activeMappings.length} runs={liveRuns + queueCount} reconciliations={overview.reconciliations.length} />
-    <aside className={styles.solidesBoundary}><ShieldAlert aria-hidden="true" /><div><strong>Sólides · fronteira permanente</strong><span>{overview.solidesBoundary || "Aguardando credenciais até a confirmação de recurso oficial e autenticação real bem-sucedida."} O Fila DP não realiza admissão digital.</span></div><b>SEM ATALHOS</b></aside>
+    <aside className={styles.solidesBoundary}><ShieldAlert aria-hidden="true" /><div><strong>Sólides · fronteira permanente</strong><span>{overview.solidesBoundary || "Aguardando credenciais até a confirmação de recurso oficial e autenticação real bem-sucedida."} O Vinculato não realiza admissão digital.</span></div><b>SEM ATALHOS</b></aside>
 
     <div className={styles.tabs} role="tablist" aria-label="Áreas da Central de Integrações">
       {tabs.map((item, index) => { const Icon = item.icon; const selected = item.id === tab; return <button key={item.id} id={`integrations-tab-${item.id}`} role="tab" type="button" aria-selected={selected} aria-controls={`integrations-panel-${item.id}`} tabIndex={selected ? 0 : -1} className={selected ? styles.activeTab : ""} onClick={() => setTab(item.id)} onKeyDown={(event) => tabKeydown(event, index)}><Icon aria-hidden="true" />{item.label}<b>{tabCount(item.id, overview)}</b></button>; })}

@@ -11,7 +11,7 @@ type Params = { params: Promise<{ id: string }> };
 /**
  * Registro da nota fiscal recebida do prestador.
  *
- * O Fila DP não emite nota e nunca ajusta o cálculo por causa dela: informa o
+ * O Vinculato não emite nota e nunca ajusta o cálculo por causa dela: informa o
  * valor esperado, guarda o valor recebido e transforma a diferença em divergência.
  */
 export async function POST(request: Request, { params }: Params) {

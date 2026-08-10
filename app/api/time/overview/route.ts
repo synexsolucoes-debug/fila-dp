@@ -111,7 +111,7 @@ export async function GET(request: Request) {
         export: hasCapability(workspace.role, "time.export"),
         manageMappings: hasCapability(workspace.role, "time.mappings.manage"),
       },
-      boundary: "O Fila DP confere horas e prepara o envio para a folha. A conversão de hora em dinheiro pertence ao sistema de folha.",
+      boundary: "O Vinculato confere horas e prepara o envio para a folha. A conversão de hora em dinheiro pertence ao sistema de folha.",
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return apiError(error);

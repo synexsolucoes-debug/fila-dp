@@ -100,7 +100,7 @@ test("o catálogo de integrações declara estado real e não promete fornecedor
   assert.equal(byName.get("Sólides")?.state, "planned");
   assert.equal(byName.get("Caju")?.state, "planned");
   assert.equal(byName.get("Sankhya")?.state, "partial");
-  assert.equal(byName.get("API pública Fila DP")?.state, "available");
+  assert.equal(byName.get("API pública Vinculato")?.state, "available");
   for (const item of integrationCatalog) {
     assert.ok(["available", "partial", "planned"].includes(item.state), `${item.name} com estado inválido`);
     assert.ok(item.note.length > 10, `${item.name} precisa explicar o estado`);

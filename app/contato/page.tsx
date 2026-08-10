@@ -5,8 +5,8 @@ import { leadInterests, type LeadInterest } from "@/lib/marketing";
 import { ContactForm } from "./ContactForm";
 
 export const metadata: Metadata = {
-  title: "Contato | Fila DP",
-  description: "Fale com a equipe do Fila DP sobre demonstração, planos, integrações ou suporte.",
+  title: "Contato | Vinculato",
+  description: "Fale com a equipe do Vinculato sobre demonstração, planos, integrações ou suporte.",
 };
 
 export default async function ContatoPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {

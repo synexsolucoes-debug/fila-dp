@@ -5,7 +5,7 @@ import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 import { selfSignupEnabled } from "@/lib/saas";
 
 export const metadata: Metadata = {
-  title: "Planos | Fila DP",
+  title: "Planos | Vinculato",
   description: "Planos publicados no catálogo do produto. Condições comerciais que ainda não estão ativas aparecem como conversa com a equipe, não como oferta.",
 };
 

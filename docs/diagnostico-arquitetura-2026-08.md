@@ -1,4 +1,4 @@
-# Diagnóstico técnico e plano de evolução do Fila DP
+# Diagnóstico técnico e plano de evolução do Vinculato
 
 Data: 2026-08-08
 Repositório analisado: `synexsolucoes-debug/fila-dp`
@@ -6,7 +6,7 @@ Base: `main` em `955cf5c`
 
 ## Resumo executivo
 
-O Fila DP já é uma aplicação Next.js funcional para gestão visual de demandas, com PostgreSQL/Neon, anexos privados, workspaces, empresas, permissões básicas, quadro Kanban, inbox, planner, relatórios e conectores iniciais. A base é útil como release operacional inicial, mas ainda não é um SaaS multiempresa pronto para receber clientes pagantes.
+O Vinculato já é uma aplicação Next.js funcional para gestão visual de demandas, com PostgreSQL/Neon, anexos privados, workspaces, empresas, permissões básicas, quadro Kanban, inbox, planner, relatórios e conectores iniciais. A base é útil como release operacional inicial, mas ainda não é um SaaS multiempresa pronto para receber clientes pagantes.
 
 Os principais bloqueadores são: isolamento multi-tenant dependente apenas da aplicação e sem RLS; modelo de dados ainda centrado em quadros/cartões; autenticação sem rate limiting, MFA ou gestão completa de sessões; ausência dos cadastros centrais de colaboradores e estruturas do DP; integrações síncronas sem fila, execução, retentativa e conciliação; testes insuficientes para banco e isolamento; frontend monolítico; cobrança, planos, LGPD, backup testado e operação SaaS ainda inexistentes.
 
@@ -180,7 +180,7 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Concluída no repositório: empresas/estabelecimentos, colaboradores por abas, histórico auditável e cadastros auxiliares de departamentos, cargos, centros de custo e jornadas.
 - O diretório de colaboradores usa APIs paginadas e escopo por empresa, sem ampliar o snapshot central.
 - CPF é armazenado como HMAC e últimos quatro dígitos; o valor bruto não entra no banco, histórico, logs, URLs ou armazenamento local.
-- A Sólides permanece origem da admissão; o Fila DP recebe somente dados de pessoas com admissão concluída e não oferece fluxo concorrente de admissão digital.
+- A Sólides permanece origem da admissão; o Vinculato recebe somente dados de pessoas com admissão concluída e não oferece fluxo concorrente de admissão digital.
 - Gate operacional antes do deploy: aplicar a migration `0013_registrations_foundation` em PostgreSQL de homologação e executar o ensaio multi-tenant com backup restaurável.
 
 ### Fase 4 — Operação do DP
@@ -315,7 +315,7 @@ Esta fase introduz sessões persistidas e revogáveis e corrige o limite de prod
 - Semente de admissão interna substituída por conciliação cadastral.
 - Sólides adicionada como integração externa em estado `needs_credentials`.
 - API bloqueia criação de demandas, templates, SLAs e condições de automação de admissão digital.
-- Site e exemplos visuais deixam de anunciar execução de admissão pelo Fila DP.
+- Site e exemplos visuais deixam de anunciar execução de admissão pelo Vinculato.
 - Migration preserva dados históricos, desativa apenas a semente/política interna legada e não executa `DELETE`.
 
 ## Rollback da migration 0003

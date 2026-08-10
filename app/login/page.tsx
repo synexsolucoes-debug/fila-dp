@@ -7,7 +7,7 @@ import { LoginForm } from "./LoginForm";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Entrar | Fila DP",
+  title: "Entrar | Vinculato",
   description: "Acesse seu ambiente de gestão de demandas do Departamento Pessoal.",
 };
 
@@ -17,7 +17,7 @@ export default async function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-brand-panel">
-        <Link className="brand auth-brand" href="/#inicio" aria-label="Fila DP — início">
+        <Link className="brand auth-brand" href="/#inicio" aria-label="Vinculato — início">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Fila <strong>DP</strong></span>
         </Link>

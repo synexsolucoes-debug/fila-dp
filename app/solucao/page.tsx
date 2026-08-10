@@ -4,7 +4,7 @@ import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 import { productBoundaries, productPositioning } from "@/lib/marketing";
 
 export const metadata: Metadata = {
-  title: "Solução | Fila DP",
+  title: "Solução | Vinculato",
   description: productPositioning.headline,
 };
 
@@ -43,7 +43,7 @@ export default function SolucaoPage() {
       </section>
 
       <section className={styles.section}>
-        <h2>O que o Fila DP não é</h2>
+        <h2>O que o Vinculato não é</h2>
         <p>Dizer o que o produto não faz evita implantação frustrada e é parte do contrato.</p>
         <div className={styles.cardGrid}>
           {productBoundaries.map((boundary) => (

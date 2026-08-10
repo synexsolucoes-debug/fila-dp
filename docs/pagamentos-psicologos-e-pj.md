@@ -4,8 +4,8 @@ Data: 2026-08-09
 Migration: `0018_payment_control_modules`
 Versões de cálculo: `psychology-payment-1.0.0`, `contractor-payment-1.0.0`
 
-Este documento descreve os dois módulos de controle de pagamento do Fila DP. Ambos são
-**administrativos e financeiros**. O Fila DP não emite nota fiscal, não substitui contador,
+Este documento descreve os dois módulos de controle de pagamento do Vinculato. Ambos são
+**administrativos e financeiros**. O Vinculato não emite nota fiscal, não substitui contador,
 sistema financeiro, plataforma de benefício ou prontuário.
 
 ## 1. Fronteiras do produto

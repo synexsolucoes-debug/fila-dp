@@ -48,12 +48,12 @@ const comparisons = [
 
 const faqs = [
   [
-    "O Fila DP substitui meu sistema de folha?",
-    "Não. O Fila DP organiza demandas, tarefas, prazos e processos operacionais. Ele complementa sistemas de folha, ERPs e outras ferramentas utilizadas pela empresa.",
+    "O Vinculato substitui meu sistema de folha?",
+    "Não. O Vinculato organiza demandas, tarefas, prazos e processos operacionais. Ele complementa sistemas de folha, ERPs e outras ferramentas utilizadas pela empresa.",
   ],
   [
-    "Como o Fila DP trabalha com admissões feitas na Sólides?",
-    "A admissão digital continua integralmente na Sólides. O Fila DP prepara a integração dos dados concluídos, a vinculação com o ERP e a conciliação cadastral, quando houver um meio oficial disponível.",
+    "Como o Vinculato trabalha com admissões feitas na Sólides?",
+    "A admissão digital continua integralmente na Sólides. O Vinculato prepara a integração dos dados concluídos, a vinculação com o ERP e a conciliação cadastral, quando houver um meio oficial disponível.",
   ],
   [
     "Como o sistema controla os prazos?",
@@ -142,7 +142,7 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <a className="brand" href="#inicio" aria-label="Fila DP — início">
+        <a className="brand" href="#inicio" aria-label="Vinculato — início">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Fila <strong>DP</strong></span>
         </a>
@@ -196,7 +196,7 @@ export default function Home() {
           <article><span className="pain-icon">01</span><h3>Demandas espalhadas</h3><p>E-mail, WhatsApp, Teams, planilhas e conversas formam uma fila invisível.</p></article>
           <article><span className="pain-icon">02</span><h3>Prazos difíceis de acompanhar</h3><p>Sem alertas claros, uma pendência simples pode virar urgência.</p></article>
           <article><span className="pain-icon">03</span><h3>Processos sem padrão</h3><p>Etapas importantes dependem da memória e da experiência de cada analista.</p></article>
-          <article className="solution-card"><span className="solution-label">A resposta</span><h3>Uma fila clara, rastreável e fácil de priorizar.</h3><p>O Fila DP reúne cada solicitação com contexto, responsável e SLA.</p><a href="#como-funciona">Conheça o fluxo <Chevron /></a></article>
+          <article className="solution-card"><span className="solution-label">A resposta</span><h3>Uma fila clara, rastreável e fácil de priorizar.</h3><p>O Vinculato reúne cada solicitação com contexto, responsável e SLA.</p><a href="#como-funciona">Conheça o fluxo <Chevron /></a></article>
         </div>
       </section>
 
@@ -207,7 +207,7 @@ export default function Home() {
           <p>Um fluxo simples o bastante para o dia a dia e estruturado o bastante para a gestão.</p>
         </div>
         <ol className="workflow-list">
-          <li><span>01</span><div><h3>Centralize</h3><p>As solicitações chegam à Inbox do Fila DP.</p></div></li>
+          <li><span>01</span><div><h3>Centralize</h3><p>As solicitações chegam à Inbox do Vinculato.</p></div></li>
           <li><span>02</span><div><h3>Faça a triagem</h3><p>Defina processo, responsável, prioridade e prazo.</p></div></li>
           <li><span>03</span><div><h3>Execute com clareza</h3><p>Movimente o cartão, conclua etapas e anexe documentos.</p></div></li>
           <li><span>04</span><div><h3>Acompanhe e melhore</h3><p>Enxergue atrasos, volume e gargalos da operação.</p></div></li>
@@ -235,11 +235,11 @@ export default function Home() {
         <div className="section-kicker">Feito para o trabalho real do DP</div>
         <div className="split-heading">
           <h2>Visual como um Kanban. Especializado como sua operação exige.</h2>
-          <p>O Fila DP reduz a configuração necessária para transformar um quadro genérico em um processo seguro para o setor.</p>
+          <p>O Vinculato reduz a configuração necessária para transformar um quadro genérico em um processo seguro para o setor.</p>
         </div>
         <div className="comparison-wrap">
           <table>
-            <thead><tr><th>Necessidade</th><th>Planilhas e mensagens</th><th>Kanban genérico</th><th className="highlight-col">Fila DP</th></tr></thead>
+            <thead><tr><th>Necessidade</th><th>Planilhas e mensagens</th><th>Kanban genérico</th><th className="highlight-col">Vinculato</th></tr></thead>
             <tbody>
               {comparisons.map((row) => <tr key={row[0]}>{row.map((cell, index) => <td className={index === 3 ? "highlight-col" : ""} key={cell}>{index === 3 && <CheckIcon />}{cell}</td>)}</tr>)}
             </tbody>
@@ -290,7 +290,7 @@ export default function Home() {
       </section>
 
       <footer>
-        <a className="brand footer-brand" href="#inicio" aria-label="Fila DP — voltar ao início">
+        <a className="brand footer-brand" href="#inicio" aria-label="Vinculato — voltar ao início">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Fila <strong>DP</strong></span>
         </a>
@@ -302,7 +302,7 @@ export default function Home() {
           <a href="#inicio">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a>
         </div>
         <p className="site-boundary-note">
-          O Fila DP não executa admissão digital, não guarda prontuário psicológico e não faz cálculo tributário nem emite nota fiscal.
+          O Vinculato não executa admissão digital, não guarda prontuário psicológico e não faz cálculo tributário nem emite nota fiscal.
         </p>
       </footer>
     </main>

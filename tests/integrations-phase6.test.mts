@@ -123,5 +123,5 @@ test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessibl
   assert.doesNotMatch(workspace, /function IntegrationsSettings|syncIntegration\(/);
   const featureSource = `${view}\n${drawers}\n${api}`;
   assert.doesNotMatch(featureSource, /localStorage|sessionStorage|location\.reload|encrypted_value|initialization_vector|auth_tag/);
-  assert.match(featureSource, /O Fila DP não realiza admissão digital/);
+  assert.match(featureSource, /O Vinculato não realiza admissão digital/);
 });

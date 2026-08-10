@@ -79,7 +79,7 @@ export function ContactForm({ defaultInterest }: { defaultInterest: LeadInterest
       <label className={styles.consent}>
         <input type="checkbox" name="consent" required />
         <span>
-          Concordo que o Fila DP use estes dados para retornar o contato, conforme a Política de privacidade.
+          Concordo que o Vinculato use estes dados para retornar o contato, conforme a Política de privacidade.
           Os dados não são vendidos nem usados para outra finalidade.
         </span>
       </label>

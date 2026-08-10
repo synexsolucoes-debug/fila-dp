@@ -169,6 +169,13 @@
       "when": 1786241000000,
       "tag": "0021_time_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786242000000,
+      "tag": "0022_plan_catalog_pricing",
+      "breakpoints": true
     }
   ]
 }

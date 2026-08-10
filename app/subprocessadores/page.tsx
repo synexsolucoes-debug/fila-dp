@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 
 export const metadata: Metadata = {
-  title: "Subprocessadores e DPA | Fila DP",
+  title: "Subprocessadores e DPA | Vinculato",
   description: "Subprocessadores utilizados pela plataforma e as condições de tratamento de dados entre controlador e operador.",
 };
 
@@ -51,12 +51,12 @@ export default function SubprocessadoresPage() {
         </div>
         <p>
           Integrações que o cliente configurar por conta própria — ERP, ponto, plataformas de benefício, mensageria — não são
-          subprocessadores do Fila DP: o envio ocorre por decisão e credencial do cliente, sob sua responsabilidade.
+          subprocessadores do Vinculato: o envio ocorre por decisão e credencial do cliente, sob sua responsabilidade.
         </p>
 
         <h2>2. Papéis</h2>
         <p>
-          Para os dados da operação de DP, o cliente é o controlador e o Fila DP é o operador, tratando dados apenas conforme
+          Para os dados da operação de DP, o cliente é o controlador e o Vinculato é o operador, tratando dados apenas conforme
           instrução documentada — o uso da plataforma e as configurações escolhidas pelo cliente.
         </p>
 

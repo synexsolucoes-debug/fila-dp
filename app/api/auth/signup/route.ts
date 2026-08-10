@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     await setAuthSession({ id: userId, email, displayName: name, fullName: name }, { address, userAgent: request.headers.get("user-agent") ?? "" });
     return Response.json({ ok: true, redirectTo: "/painel?onboarding=1" }, { status: 201 });
   } catch (error) {
-    console.error("Fila DP signup failed", error);
+    console.error("Vinculato signup failed", error);
     return Response.json({ error: "Não foi possível criar a conta. Verifique os dados e tente novamente." }, { status: 500 });
   }
 }

@@ -116,7 +116,7 @@ export function TimeDialog({ dialog, busy, hourEvents, onClose, onSubmit }: Prop
                 </fieldset>
                 <label>Justificativa (obrigatória quando houver hora extra)<textarea name="justification" maxLength={500} /></label>
                 <p className={styles.hint}>
-                  As horas trabalhadas são apuradas a partir das marcações. O Fila DP confere horas; a conversão em dinheiro é da folha.
+                  As horas trabalhadas são apuradas a partir das marcações. O Vinculato confere horas; a conversão em dinheiro é da folha.
                 </p>
               </>
             )}

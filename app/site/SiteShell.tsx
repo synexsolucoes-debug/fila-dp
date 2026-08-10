@@ -37,7 +37,7 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div>
-            <strong>Fila DP</strong>
+            <strong>Vinculato</strong>
             <p>Gestão, integração e conferência operacional para Departamento Pessoal.</p>
           </div>
           <nav aria-label="Páginas do produto">

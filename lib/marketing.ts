@@ -28,7 +28,7 @@ export const legalNavigation = [
 export const productPositioning = {
   headline: "Plataforma de gestão, integração e conferência operacional para Departamento Pessoal.",
   summary: [
-    "O Fila DP organiza demandas, prazos, competências, conferências e pagamentos auxiliares do DP,",
+    "O Vinculato organiza demandas, prazos, competências, conferências e pagamentos auxiliares do DP,",
     "e conecta os sistemas que sua operação já usa. Ele não substitui o ERP de folha, o sistema de ponto,",
     "a Sólides nem o sistema contábil: ele coordena o trabalho entre eles.",
   ].join(" "),
@@ -38,11 +38,11 @@ export const productPositioning = {
 export const productBoundaries = [
   {
     title: "Não é ERP de folha",
-    text: "O cálculo oficial da folha continua no seu ERP. O Fila DP prepara movimentações, confere o resultado e registra divergências.",
+    text: "O cálculo oficial da folha continua no seu ERP. O Vinculato prepara movimentações, confere o resultado e registra divergências.",
   },
   {
     title: "Não faz admissão digital",
-    text: "A admissão digital é executada integralmente na Sólides. O Fila DP recebe dados de pessoas já admitidas e concilia com o ERP.",
+    text: "A admissão digital é executada integralmente na Sólides. O Vinculato recebe dados de pessoas já admitidas e concilia com o ERP.",
   },
   {
     title: "Não é sistema clínico",
@@ -54,7 +54,7 @@ export const productBoundaries = [
   },
   {
     title: "Não é sistema de ponto",
-    text: "As marcações oficiais continuam no seu sistema de ponto. O Fila DP importa o resultado para conferência.",
+    text: "As marcações oficiais continuam no seu sistema de ponto. O Vinculato importa o resultado para conferência.",
   },
 ] as const;
 
@@ -102,7 +102,7 @@ export const integrationCatalog = [
   { name: "E-mail corporativo", category: "Comunicação", state: "available", note: "Caixa de entrada operacional por webhook." },
   { name: "WhatsApp Business", category: "Comunicação", state: "available", note: "Recebimento de solicitações por webhook." },
   { name: "Sankhya", category: "ERP", state: "partial", note: "Conector com credencial por workspace; requer endpoint e homologação com o cliente." },
-  { name: "API pública Fila DP", category: "Plataforma", state: "available", note: "Leitura da operação e envio de créditos/descontos PJ, com escopos e idempotência." },
+  { name: "API pública Vinculato", category: "Plataforma", state: "available", note: "Leitura da operação e envio de créditos/descontos PJ, com escopos e idempotência." },
   { name: "Webhooks de saída", category: "Plataforma", state: "available", note: "Eventos assinados com HMAC, repetição e log de entrega." },
   { name: "Sólides", category: "Admissão", state: "planned", note: "Aguarda recurso oficial e credenciais. A admissão permanece na Sólides." },
   { name: "Caju", category: "Benefícios", state: "planned", note: "Complemento é controle assistido com exportação; não há integração oficial implementada." },
@@ -118,12 +118,12 @@ export const integrationStateLabels: Record<string, string> = {
 
 export const faqEntries = [
   {
-    question: "O Fila DP substitui meu sistema de folha?",
-    answer: "Não. O cálculo oficial continua no seu ERP. O Fila DP organiza as demandas e movimentações que alimentam a folha e confere o resultado que volta dela.",
+    question: "O Vinculato substitui meu sistema de folha?",
+    answer: "Não. O cálculo oficial continua no seu ERP. O Vinculato organiza as demandas e movimentações que alimentam a folha e confere o resultado que volta dela.",
   },
   {
     question: "Como fica a admissão feita na Sólides?",
-    answer: "A admissão digital é executada integralmente na Sólides. O Fila DP não cria fluxo concorrente: ele recebe os dados de quem já foi admitido e concilia com o ERP quando houver meio oficial de integração.",
+    answer: "A admissão digital é executada integralmente na Sólides. O Vinculato não cria fluxo concorrente: ele recebe os dados de quem já foi admitido e concilia com o ERP quando houver meio oficial de integração.",
   },
   {
     question: "O módulo de Psicólogos guarda informação clínica?",

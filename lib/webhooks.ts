@@ -205,7 +205,7 @@ export async function processNextWebhookDelivery(d1: Database, workspaceId: stri
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "User-Agent": "FilaDP-Webhooks/1",
+        "User-Agent": "Vinculato-Webhooks/1",
         [SIGNATURE_HEADER]: signatureHeader(secret, timestamp, body),
         [EVENT_ID_HEADER]: String(delivery.event_id),
         [EVENT_TYPE_HEADER]: String(delivery.event_type),

@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     );
     return Response.json({ ok: true, redirectTo: cleanReturnTo(body.returnTo) });
   } catch (error) {
-    console.error("Fila DP login failed", error);
+    console.error("Vinculato login failed", error);
     return Response.json({ error: "Não foi possível iniciar a sessão. Tente novamente." }, { status: 500 });
   }
 }

@@ -1082,7 +1082,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }
 
   if (!snapshot) {
-    return <main className="workspace-loading error-state"><strong>Não foi possível abrir o Fila DP.</strong><p>{error}</p><button onClick={() => window.location.reload()}>Tentar novamente</button></main>;
+    return <main className="workspace-loading error-state"><strong>Não foi possível abrir o Vinculato.</strong><p>{error}</p><button onClick={() => window.location.reload()}>Tentar novamente</button></main>;
   }
 
   const header = viewContent[view];
@@ -1096,7 +1096,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
-        <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Fila DP — visão geral">
+        <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>Fila <strong>DP</strong></span>
         </button>
@@ -1131,7 +1131,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
           <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
-          <button type="button" className="sign-out-button" disabled={busy} onClick={() => void signOut()} aria-label="Sair do Fila DP" title="Sair"><LogOut aria-hidden="true" /></button>
+          <button type="button" className="sign-out-button" disabled={busy} onClick={() => void signOut()} aria-label="Sair do Vinculato" title="Sair"><LogOut aria-hidden="true" /></button>
         </div>
       </aside>
 

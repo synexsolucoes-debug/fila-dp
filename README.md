@@ -1,4 +1,4 @@
-# Fila DP
+# Vinculato
 
 Plataforma full-stack de gestão, integração e conferência operacional para
 Departamento Pessoal. O deploy de produção usa Next.js na Vercel,
@@ -34,7 +34,7 @@ A área **Cadastros** administra empresas/estabelecimentos, colaboradores, depar
 - CPF é validado e persistido somente como HMAC e quatro últimos dígitos; configure `FDP_PII_HASH_SECRET`.
 - Alterações de empresa, colaborador e catálogos geram auditoria estruturada no mesmo lote da mutação.
 - Exclusão de cadastro mestre é inativação, preservando vínculos e histórico.
-- A Sólides permanece a origem da admissão digital. Inclusões manuais no Fila DP representam apenas pessoas já admitidas.
+- A Sólides permanece a origem da admissão digital. Inclusões manuais no Vinculato representam apenas pessoas já admitidas.
 
 ## Operação DP
 

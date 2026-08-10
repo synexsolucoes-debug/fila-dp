@@ -1,4 +1,4 @@
-# Publicacao do Fila DP na Vercel
+# Publicacao do Vinculato na Vercel
 
 O runtime de producao e o Next.js nativo. O banco recomendado agora e o Neon
 Postgres pelo Marketplace da Vercel; o app mantem uma camada de compatibilidade
@@ -119,7 +119,7 @@ permanece corretamente como **Aguardando credenciais**.
 
 ### Microsoft Teams e OneDrive com as credenciais do aplicativo
 
-Para Teams e OneDrive, o Fila DP troca `clientId`, `tenantId` e `clientSecret`
+Para Teams e OneDrive, o Vinculato troca `clientId`, `tenantId` e `clientSecret`
 por um token temporário usando `client_credentials`. Esses valores são salvos
 somente pelo diálogo de credenciais e permanecem cifrados no cofre.
 
@@ -186,7 +186,7 @@ Um corpo JSON sem segredos pode ficar na configuração do conector. Tokens,
 chaves e senhas são rejeitados nessa configuração e devem permanecer no cofre.
 
 Planilhas Sankhya devem seguir o layout fornecido pelo proprio ERP (cabecalhos,
-ordem e campos obrigatorios). O Fila DP pode receber um CSV normalizado, mas a
+ordem e campos obrigatorios). O Vinculato pode receber um CSV normalizado, mas a
 importacao XLSX do Sankhya continua dependendo do modelo da tela de destino.
 
 ## Publicacao via CLI
