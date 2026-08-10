@@ -75,6 +75,17 @@ test("o manifesto de schema acompanha o diretório de migrations", async () => {
   assert.deepEqual([...expectedMigrations], files,
     "regenerar com `npm run schema:manifest` — a aplicação precisa saber qual schema ela espera");
   assert.equal(latestMigration, files.at(-1));
+
+  // O journal do Drizzle precisa listar as mesmas migrations, na mesma ordem.
+  // Escrever o .sql à mão e esquecer o journal passa despercebido em toda
+  // verificação local e só reprova no `db:check` da integração — tarde demais.
+  const journal = JSON.parse(await readFile(new URL("meta/_journal.json", directory), "utf8")) as {
+    entries: { idx: number; tag: string }[];
+  };
+  const tags = [...journal.entries].sort((left, right) => left.idx - right.idx).map((entry) => entry.tag);
+  assert.deepEqual(tags, files.map((file) => file.replace(/\.sql$/u, "")),
+    "migration fora do journal do Drizzle: adicione a entrada em drizzle/postgres/meta/_journal.json");
+  assert.ok(journal.entries.every((entry, index) => entry.idx === index), "os índices do journal precisam ser sequenciais");
 });
 
 test("a prontidão confere acesso, não só o histórico de migrações", async () => {
