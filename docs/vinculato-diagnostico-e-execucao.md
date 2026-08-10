@@ -507,3 +507,49 @@ Ao entrar com uma conta cujo único grupo estava arquivado, a resposta passou a
 ser: *"Nenhum dos seus grupos está operando no momento: Synex (arquivado)."* —
 em vez da recusa genérica anterior. Nega o acesso do mesmo jeito, mas diz qual
 grupo e em que estado.
+
+## 17. Console da plataforma: administrar de verdade
+
+**Causa raiz.** A API já fazia mais do que a interface deixava fazer.
+`PATCH /api/platform/workspaces/[id]` sempre soube trocar plano e assentos,
+transferir propriedade e mudar situação — com validação de downgrade, exigência
+de motivo e auditoria. `PATCH /api/platform/users/[id]` já bloqueava (derrubando
+sessões e protegendo proprietários) e vinculava/desvinculava de workspaces. O
+console expunha apenas suspender, arquivar, bloquear e criar workspace. A queixa
+"só dá para arquivar" era da interface, não do backend.
+
+**O que faltava mesmo no backend:** abrir um cliente ou uma identidade. Não
+existia rota de detalhe, então não havia como ver membros, empresas, módulos,
+assinatura ou histórico antes de decidir.
+
+**Entregue.**
+
+- `GET /api/platform/workspaces/[id]/detail` — ficha, assinatura, plano e
+  limites, membros com último acesso, empresas, módulos (no plano × liberação
+  manual) e os últimos 50 eventos de auditoria do workspace. Não devolve dado
+  operacional do cliente: administrar contrato não é motivo para ler demandas,
+  documentos ou competências alheias.
+- `GET /api/platform/users/[id]/detail` — identidade global **separada** de cada
+  associação de workspace, com sessões ativas e histórico administrativo. A
+  sessão aparece sem token e sem endereço completo: dá para revogar sem expor o
+  que identificaria o dispositivo.
+- `PATCH /api/platform/users/[id]` ganhou editar nome e revogar sessão (uma ou
+  todas). O **e-mail continua não editável**: é a chave de login e de convite, e
+  trocá-lo sem fluxo de verificação deixaria a pessoa sem acesso e sem aviso.
+- Console: botão "Abrir" nas duas tabelas e dois drawers. No workspace, abas de
+  visão geral, membros, empresas, módulos e auditoria, com troca de plano e as
+  transições de ciclo de vida exigindo motivo. No usuário, papel por associação
+  (alterar em um grupo não toca nos outros), vincular/desvincular, revogar
+  sessões e bloquear/desbloquear.
+
+**Um defeito encontrado pelo próprio ensaio.** A primeira versão da rota de
+detalhe consultava `s.current_period_end`; a coluna real é
+`current_period_ends_at`. O erro apareceu como **503 `SCHEMA_OUTDATED`** no
+console do navegador — a classificação de falhas de infraestrutura entregue
+antes fez o defeito se identificar sozinho, em vez de virar tela vazia.
+
+Validação: 225 testes, 50 verificações de navegador, 24 de fumaça, `npm run ci`
+completo. O detalhe foi percorrido no Chromium: ficha com proprietário, plano,
+assentos, empresas e valor contratado; as quatro abas com conteúdo; edição de
+nome, vínculo e revogação de sessão disponíveis; nenhum hash de senha na tela;
+zero rolagem horizontal em 390/768/1280/1440 e nenhum erro de console.

@@ -23,3 +23,30 @@
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 11px; }.toolbar input, .toolbar select { min-height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }.toolbar input { min-width: 240px; flex: 1 1 240px; }.toolbar .primary { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font-weight: 740; cursor: pointer; }.toolbar .primary:disabled { opacity: .55; cursor: wait; }
 .rowActions { display: flex; flex-wrap: wrap; gap: 5px; }.rowActions button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--soft); font-weight: 720; cursor: pointer; }.rowActions button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }.rowActions button:disabled { opacity: .45; cursor: not-allowed; }.rowActions button[data-danger="true"]:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
 .seatBar { display: grid; gap: 3px; min-width: 96px; }.seatBar > span { height: 5px; border-radius: 3px; background: var(--muted); overflow: hidden; }.seatBar > span > i { display: block; height: 100%; background: var(--green); }.seatBar[data-full="true"] > span > i { background: var(--red); }
+
+/* Detalhe administrativo: abas, ficha e tabelas internas do drawer. */
+.detailTabs { display: flex; gap: 2px; padding: 0 15px; border-bottom: 1px solid var(--border); background: var(--muted); }
+.detailTabs button { min-height: 38px; padding: 0 11px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--soft); font-size: .69rem; font-weight: 720; cursor: pointer; }
+.detailTabs button:hover { color: var(--brand, #0857b2); }
+.detailTabs .activeTab { border-bottom-color: var(--brand, #0857b2); color: var(--brand, #0857b2); }
+
+.detailGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; margin: 0 0 14px; border: 1px solid var(--border); background: var(--border); }
+.detailGrid > div { padding: 10px 12px; background: var(--surface); }
+.detailGrid dt { color: var(--soft); font-size: .6rem; font-weight: 780; text-transform: uppercase; letter-spacing: .05em; }
+.detailGrid dd { margin: 4px 0 0; font-size: .75rem; font-weight: 680; }
+.detailGrid dd small { display: block; margin-top: 2px; color: var(--soft); font-size: .65rem; font-weight: 500; }
+
+.detailActions { margin-bottom: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.detailActions h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: .78rem; }
+.detailActions h3 svg { width: 14px; height: 14px; }
+.detailActions > p { margin: 0 0 10px; color: var(--soft); font-size: .66rem; line-height: 1.5; }
+.detailActions label { display: inline-grid; gap: 4px; color: var(--soft); font-size: .64rem; font-weight: 700; }
+.detailActions select { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); font-size: .7rem; }
+
+.detailTable { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+.detailTable th, .detailTable td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: .68rem; vertical-align: middle; }
+.detailTable thead th { color: var(--soft); font-size: .6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.detailTable td strong { display: block; font-size: .7rem; }
+.detailTable td small { display: block; margin-top: 2px; color: var(--soft); font-size: .62rem; }
+.detailTable select { min-height: 30px; padding: 0 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); font-size: .66rem; }
+.drawerBackdrop { position: fixed; inset: 0; z-index: 190; display: flex; justify-content: flex-end; background: #04162c8c; backdrop-filter: blur(2px); }

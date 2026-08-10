@@ -74,6 +74,32 @@ export async function PATCH(request: Request, { params }: Params) {
         }
       }
 
+      // Editar o nome da identidade global. O e-mail não é editável aqui: ele é
+      // a chave de login e de convite, e trocá-lo sem um fluxo de verificação
+      // deixaria a pessoa sem acesso e sem aviso.
+      if (body.name !== undefined) {
+        const name = cleanText(body.name, 160);
+        if (name.length < 2) throw ApiError.badRequest("Informe um nome com pelo menos 2 caracteres.", "INVALID_USER_NAME");
+        statements.push(d1.prepare("UPDATE fdp_users SET name = ? WHERE id = ?").bind(name, id));
+        after.name = name;
+      }
+
+      // Revogar sessões: uma específica ou todas. Serve para tirar um
+      // dispositivo perdido do ar sem precisar bloquear a conta inteira.
+      if (body.revokeSession !== undefined) {
+        const sessionId = cleanText(body.revokeSession, 120);
+        if (sessionId === "all") {
+          statements.push(d1.prepare("UPDATE fdp_auth_sessions SET revoked_at = now() WHERE user_id = ? AND revoked_at IS NULL").bind(id));
+          after.revokedSessions = "all";
+        } else {
+          const session = await d1.prepare("SELECT id FROM fdp_auth_sessions WHERE id = ? AND user_id = ?")
+            .bind(sessionId, id).first<{ id: string }>();
+          if (!session) throw ApiError.notFound("Sessão não encontrada para este usuário.", "SESSION_NOT_FOUND");
+          statements.push(d1.prepare("UPDATE fdp_auth_sessions SET revoked_at = now() WHERE id = ?").bind(sessionId));
+          after.revokedSessions = sessionId;
+        }
+      }
+
       if (!statements.length) throw ApiError.badRequest("Nada para alterar.", "EMPTY_UPDATE");
 
       statements.push(d1.prepare(`INSERT INTO fdp_platform_audit_events
