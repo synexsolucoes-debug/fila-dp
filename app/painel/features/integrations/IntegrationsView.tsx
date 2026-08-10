@@ -32,7 +32,7 @@ const statusLabels: Record<string, string> = {
   succeeded: "Concluída", partial: "Parcial", failed: "Falhou", dead_letter: "Dead-letter",
   conflict: "Conflito", unmatched: "Sem vínculo", manual: "Manual", webhook: "Webhook",
 };
-const resourceLabels: Record<string, string> = { inbox: "Inbox", employees: "Colaboradores", hr_metrics: "Indicadores de RH", files: "Arquivos" };
+const resourceLabels: Record<string, string> = { inbox: "Inbox", employees: "Colaboradores", hr_metrics: "Indicadores de RH", files: "Arquivos", admissions: "Admissões concluídas" };
 const directionLabels: Record<string, string> = { inbound: "Entrada", outbound: "Saída", bidirectional: "Bidirecional" };
 const credentialNames = ["token", "apiKey", "clientId", "clientSecret", "tenantId", "refreshToken", "phoneNumberId", "serviceAccount", "xToken"];
 const field = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
@@ -95,7 +95,9 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
   async function submit(nextEditor: NonNullable<IntegrationEditor>, form: FormData) {
     if (nextEditor.kind === "configure") {
       const endpoint = field(form, "endpoint"); const accountReference = field(form, "accountReference");
-      await mutate(() => requestJson(`/api/integrations/${nextEditor.connector.id}`, { method: "PATCH", body: JSON.stringify({ displayName: field(form, "displayName"), status: field(form, "status"), ...(endpoint ? { endpoint } : {}), ...(accountReference ? { accountReference } : {}) }) }), "Configuração salva. A conexão ainda precisa ser verificada.");
+      const admissionsSince = field(form, "admissionsSince"); const boardId = field(form, "boardId");
+      const companyId = field(form, "companyId"); const pageSize = field(form, "pageSize");
+      await mutate(() => requestJson(`/api/integrations/${nextEditor.connector.id}`, { method: "PATCH", body: JSON.stringify({ displayName: field(form, "displayName"), status: field(form, "status"), ...(endpoint ? { endpoint } : {}), ...(accountReference ? { accountReference } : {}), ...(admissionsSince ? { admissionsSince } : {}), ...(boardId ? { boardId } : {}), ...(companyId ? { companyId } : {}), ...(pageSize ? { pageSize: Number(pageSize) } : {}) }) }), "Configuração salva. A conexão ainda precisa ser verificada.");
       return;
     }
     if (nextEditor.kind === "credentials") {
@@ -161,7 +163,7 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
 
     <ConnectionRail connectors={overview.connectors} activeMappings={activeMappings.length} queueCount={queueCount + liveRuns} reconciliations={overview.reconciliations.length} />
     <Kpis connected={connected} attention={connectorAttention} mappings={activeMappings.length} runs={liveRuns + queueCount} reconciliations={overview.reconciliations.length} />
-    <aside className={styles.solidesBoundary}><ShieldAlert aria-hidden="true" /><div><strong>Sólides · fronteira permanente</strong><span>{overview.solidesBoundary || "Aguardando credenciais até a confirmação de recurso oficial e autenticação real bem-sucedida."} O Vinculato não realiza admissão digital.</span></div><b>SEM ATALHOS</b></aside>
+    <aside className={styles.solidesBoundary}><ShieldAlert aria-hidden="true" /><div><strong>Sólides · fronteira permanente</strong><span>{overview.solidesBoundary || "O conector consome o recurso oficial de colaboradores e abre a conciliação de quem já foi admitido."} O Vinculato não realiza admissão digital.</span></div><b>SEM ATALHOS</b></aside>
 
     <div className={styles.tabs} role="tablist" aria-label="Áreas da Central de Integrações">
       {tabs.map((item, index) => { const Icon = item.icon; const selected = item.id === tab; return <button key={item.id} id={`integrations-tab-${item.id}`} role="tab" type="button" aria-selected={selected} aria-controls={`integrations-panel-${item.id}`} tabIndex={selected ? 0 : -1} className={selected ? styles.activeTab : ""} onClick={() => setTab(item.id)} onKeyDown={(event) => tabKeydown(event, index)}><Icon aria-hidden="true" />{item.label}<b>{tabCount(item.id, overview)}</b></button>; })}
@@ -205,7 +207,7 @@ function ConnectorsPanel({ overview, busy, onEdit, onVerify }: { overview: Integ
       <header><span className={styles.connectorIcon}><Icon aria-hidden="true" /></span><div><small>{connector.channel.toUpperCase()}</small><strong>{connector.displayName}</strong></div><StatusPill status={connector.status} /></header>
       <dl><div><dt>Credencial</dt><dd>{connector.hasCredentials ? <><KeyRound aria-hidden="true" /> v{connector.keyVersion} · {connector.fingerprint || "fingerprint protegido"}</> : <><Unplug aria-hidden="true" /> Não armazenada</>}</dd></div><div><dt>Verificação real</dt><dd>{formatDate(connector.verifiedAt)}</dd></div><div><dt>Última sincronização</dt><dd>{formatDate(connector.lastSyncAt)}</dd></div><div><dt>Mapeamentos ativos</dt><dd>{active}</dd></div></dl>
       {connector.lastError && <div className={styles.safeError}><AlertTriangle aria-hidden="true" /><span><strong>Resumo seguro</strong>{connector.lastError}</span></div>}
-      {connector.channel === "solides" && <div className={styles.connectorBoundary}>Sem admissão digital · sem endpoint especulativo</div>}
+      {connector.channel === "solides" && <div className={styles.connectorBoundary}>Sem admissão digital · somente recurso oficial</div>}
       {overview.permissions.manage && <footer><button type="button" onClick={() => onEdit({ kind: "configure", connector })}><Settings2 aria-hidden="true" /> Configurar</button><button type="button" onClick={() => onEdit({ kind: "credentials", connector })}><RotateCw aria-hidden="true" />{connector.hasCredentials ? "Rotacionar" : "Credencial"}</button>{connector.hasCredentials && <button type="button" onClick={() => onEdit({ kind: "revoke", connector })}><Unplug aria-hidden="true" /> Revogar</button>}<button className={styles.verifyButton} type="button" disabled={!connector.hasCredentials || busy} onClick={() => onVerify(connector)}><ShieldCheck aria-hidden="true" /> Verificar</button></footer>}
     </article>; })}</div> : <EmptyState icon={Cable} title="Nenhum conector provisionado" text="Os conectores aparecerão aqui depois do provisionamento do workspace." />}
   </>;

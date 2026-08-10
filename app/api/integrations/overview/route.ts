@@ -53,7 +53,7 @@ export async function GET() {
         run: hasCapability(workspace.role, "integrations.run"),
         reconcile: hasCapability(workspace.role, "integrations.reconcile"),
       },
-      solidesBoundary: "A Sólides só poderá ficar conectada depois da confirmação de recurso oficial, autenticação e teste real.",
+      solidesBoundary: "O conector usa o recurso oficial de colaboradores e abre a conciliação de quem já foi admitido; conectar continua exigindo autenticação e teste real, e os arquivos dos documentos permanecem na Sólides.",
     });
   } catch (error) { return apiError(error); }
 }

@@ -129,7 +129,10 @@ test("a página de planos lê o catálogo persistido e não inventa preço", asy
 
 test("o catálogo de integrações declara estado real e não promete fornecedor não integrado", () => {
   const byName = new Map(integrationCatalog.map((item) => [item.name, item]));
-  assert.equal(byName.get("Sólides")?.state, "planned");
+  // A Sólides deixou de ser "preparado" quando o conector oficial passou a existir, mas
+  // continua parcial: depende do token do cliente e não traz os arquivos dos documentos.
+  assert.equal(byName.get("Sólides")?.state, "partial");
+  assert.match(byName.get("Sólides")!.note, /admissão permanece na Sólides/u);
   assert.equal(byName.get("Caju")?.state, "planned");
   assert.equal(byName.get("Sankhya")?.state, "partial");
   assert.equal(byName.get("API pública Vinculato")?.state, "available");

@@ -1,10 +1,11 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 import { ApiError } from "./api-errors.ts";
 import { validateIntegrationEndpoint } from "./integration-security.ts";
+import { validateSolidesEndpoint } from "./solides.ts";
 
 export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "erp"] as const;
 export type IntegrationChannel = typeof integrationChannels[number];
-export const integrationResources = ["inbox", "employees", "hr_metrics", "files"] as const;
+export const integrationResources = ["inbox", "employees", "hr_metrics", "files", "admissions"] as const;
 export type IntegrationResource = typeof integrationResources[number];
 
 const allowedCredentialKeys: Record<IntegrationChannel, ReadonlySet<string>> = {
@@ -164,7 +165,7 @@ export function mappingDirection(value: unknown) {
 }
 
 export function validateConnectorEndpoint(channel: string, value: unknown) {
-  if (channel === "solides") throw new ApiError(409, "SOLIDES_OFFICIAL_RESOURCE_REQUIRED", "A Sólides permanecerá aguardando credenciais até a confirmação de um recurso oficial e um teste real de autenticação.");
+  if (channel === "solides") return validateSolidesEndpoint(value);
   const endpoint = typeof value === "string" ? value.trim().slice(0, 500) : "";
   if (!endpoint) throw ApiError.badRequest("Configure o endpoint oficial do conector.", "INTEGRATION_ENDPOINT_REQUIRED");
   const upper = channel.toUpperCase();
