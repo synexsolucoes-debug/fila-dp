@@ -277,7 +277,11 @@
 .sidebar-workspace button i { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--brand-accent); color: #081a31; font-style: normal; font-size: 9px; font-weight: 800; }
 .sidebar-workspace button span { margin-left: auto; color: #71869a; }
 
-.sidebar-account { padding: 14px 6px 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) 20px; gap: 9px; align-items: center; border-top: 1px solid rgba(255,255,255,.1); }
+.sidebar-account { padding: 14px 6px 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 9px; align-items: center; border-top: 1px solid rgba(255,255,255,.1); }
+.sidebar-account-actions { display: inline-flex; align-items: center; gap: 4px; }
+.switch-account-button { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; color: inherit; opacity: .75; }
+.switch-account-button:hover { background: color-mix(in srgb, var(--brand-accent) 18%, transparent); color: var(--brand-accent); opacity: 1; }
+.switch-account-button svg { width: 15px; height: 15px; }
 .user-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #d9f6ed; color: var(--brand); font-size: 10px; font-weight: 800; }
 .sidebar-account > span:nth-child(2) { min-width: 0; }
 .sidebar-account strong, .sidebar-account small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

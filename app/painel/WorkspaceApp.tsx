@@ -36,6 +36,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  UserRoundCog,
   Sparkles,
   Smartphone,
   Stethoscope,
@@ -1159,7 +1160,16 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
           <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
-          <button type="button" className="sign-out-button" disabled={busy} onClick={() => void signOut()} aria-label="Sair do Vinculato" title="Sair"><LogOut aria-hidden="true" /></button>
+          <div className="sidebar-account-actions">
+            {/* Dois comandos distintos: sair encerra e volta ao site; trocar de
+                conta encerra e já abre a autenticação de outra identidade. */}
+            <form method="post" action="/api/auth/logout">
+              <input type="hidden" name="trocar" value="1" />
+              <button type="submit" className="switch-account-button"
+                aria-label="Entrar em outra conta" title="Entrar em outra conta"><UserRoundCog aria-hidden="true" /></button>
+            </form>
+            <button type="button" className="sign-out-button" disabled={busy} onClick={() => void signOut()} aria-label="Sair do Vinculato" title="Sair"><LogOut aria-hidden="true" /></button>
+          </div>
         </div>
       </aside>
 

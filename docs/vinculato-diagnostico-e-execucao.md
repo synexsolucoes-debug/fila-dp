@@ -435,3 +435,75 @@ Validação: 214 testes, 50 verificações de navegador (incluindo criar usuári
 pela interface e as quatro larguras), 24 de fumaça e 7 de isolamento — estas
 últimas com o papel `vinculato_app`, **sem** superusuário, para que o RLS
 realmente valesse durante o ensaio.
+
+## 16. Bloqueio por workspace arquivado e "Entrar em outra conta"
+
+Dois defeitos reproduzidos no navegador antes de qualquer alteração.
+
+### Causa raiz 1 — arquivar um grupo trancava o usuário para fora de todos
+
+`getWorkspaceContext` resolvia o contexto em três passos: lia a *preferência*
+do usuário (`active_workspace_id`) **sem olhar o ciclo de vida do workspace**;
+só caía para outra associação quando a preferência não existia; e então, se o
+workspace resolvido não estivesse ativo, lançava `WORKSPACE_SUSPENDED`.
+
+O resultado: com o grupo preferido arquivado, o primeiro passo achava o grupo
+parado, o fallback nunca rodava, e a requisição inteira era recusada — mesmo com
+associação ativa em outro grupo. Reprodução: usuário em A (arquivado, preferido)
+e B (ativo) recebia *"Não foi possível abrir o Vinculato — Este grupo está
+arquivado"* e `GET /api/workspace → 403`.
+
+**Correção.** `lib/workspace-access.ts` passa a ser o cálculo único de
+workspaces acessíveis, usado pela resolução de contexto e pelo seletor:
+
+1. a preferência só vale se o workspace continuar associado **e** operacional;
+2. caindo fora, escolhe o melhor candidato operacional de forma determinística
+   (proprietário primeiro, depois associação mais antiga) e anuncia a troca em
+   `switchedFrom`, para a interface não mudar o contexto em silêncio;
+3. sem nenhum operacional, devolve `NO_ACTIVE_WORKSPACE` **com a lista dos
+   grupos e o estado de cada um**, em vez de uma recusa genérica.
+
+Só `active` é contexto operacional; suspenso, cancelado e arquivado não operam.
+Arquivar um grupo deixou de ter qualquer efeito sobre as outras associações.
+
+Verificado no navegador: o mesmo usuário que antes via a tela de erro agora
+entra direto no grupo ativo, com `GET /api/workspace → 200`.
+
+O snapshot passou a expor `availableWorkspaces` com status, motivo e papel — a
+lista sai do serviço central, e a consulta paralela que existia só para isso foi
+removida (uma ida ao banco a menos por carregamento do painel).
+
+### Causa raiz 2 — a troca de conta era um link GET para uma rota só-POST
+
+Na tela de login, "Entrar com outra conta" era
+`<a href="/api/auth/logout?return_to=/">`. A rota exportava apenas `POST`.
+O navegador recebia **HTTP 405**, a sessão nunca era encerrada e o usuário
+voltava para a mesma conta — exatamente o sintoma relatado.
+
+**Correção, e por que não foi só adicionar um GET.** A primeira versão desta
+correção adicionou `export async function GET`. Um teste existente reprovou, com
+razão: logout por GET é disparado por prefetch, por `<img src=…>` ou por
+qualquer scanner de link, derrubando a sessão sem o usuário pedir. A solução
+final mantém a proibição e resolve por **formulário POST**:
+
+- o painel e a tela de login enviam `POST /api/auth/logout` com `trocar=1`;
+- envio de formulário recebe **303** e o navegador segue sozinho; o `fetch` do
+  botão "Sair" continua recebendo JSON;
+- o destino da troca é a constante `/login?trocar=1` — não passa pelo
+  `return_to` do usuário, então não vira redirecionamento aberto;
+- com `trocar=1`, a tela de login não oferece "continuar" com a identidade
+  encerrada: mostra o formulário vazio.
+
+"Sair" e "Entrar em outra conta" viraram dois comandos distintos e visíveis no
+rodapé da barra lateral.
+
+Verificado no navegador, em sequência: sessão ativa (200) → troca → destino
+`/login?trocar=1`, sessão encerrada (401), formulário vazio, sem oferta de
+continuar → autenticação de uma segunda identidade concluída com sucesso.
+
+### Um caso-limite que a correção tornou visível
+
+Ao entrar com uma conta cujo único grupo estava arquivado, a resposta passou a
+ser: *"Nenhum dos seus grupos está operando no momento: Synex (arquivado)."* —
+em vez da recusa genérica anterior. Nega o acesso do mesmo jeito, mas diz qual
+grupo e em que estado.

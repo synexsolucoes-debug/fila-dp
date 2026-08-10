@@ -158,8 +158,14 @@ test("usuário bloqueado e workspace suspenso perdem acesso de verdade", async (
   ]);
   // Vale em toda requisição, não só no login.
   assert.match(database, /USER_BLOCKED/);
-  assert.match(database, /WORKSPACE_SUSPENDED/);
   assert.match(login, /USER_BLOCKED/);
+  // Workspace fora do ar continua sem operar — mas a recusa deixou de derrubar
+  // a sessão inteira. Quem tem outro grupo ativo entra nele; quem não tem
+  // recebe NO_ACTIVE_WORKSPACE dizendo qual grupo está em qual estado.
+  const access = await readFile(new URL("../lib/workspace-access.ts", import.meta.url), "utf8");
+  assert.match(access, /OPERATIONAL_WORKSPACE_STATUSES = new Set\(\["active"\]\)/u);
+  assert.match(database, /noAccessibleWorkspaceError/u);
+  assert.match(access, /"NO_ACTIVE_WORKSPACE"/u);
   // O banco exige motivo registrado para qualquer estado que corte acesso.
   assert.match(migration, /"fdp_workspaces_status_reason_check"/);
   assert.match(migration, /"fdp_users_status_reason_check"/);
