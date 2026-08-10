@@ -29,13 +29,27 @@ class NeonPreparedStatement implements D1PreparedStatement {
      * Por isso a conexão devolvida por `getWorkspaceContext` carrega o tenant.
      */
     private readonly boundContext: TenantContext | null = null,
+    /**
+     * Provisionamento feito pela administração da plataforma precisa dos dois
+     * contextos na MESMA transação: o tenant, para as tabelas do cliente, e a
+     * marca de plataforma, para a trilha global. Sem isso, criar um workspace
+     * era recusado pelo RLS das tabelas de tenant.
+     */
+    private readonly withPlatformFlag = false,
   ) {}
 
   bind(...values: unknown[]) {
-    return new NeonPreparedStatement(this.sql, this.query, values, this.boundContext);
+    return new NeonPreparedStatement(this.sql, this.query, values, this.boundContext, this.withPlatformFlag);
   }
 
   private async execute() {
+    if (this.boundContext && this.withPlatformFlag) {
+      const results = await this.sql.transaction([
+        this.sql`SELECT set_config('app.workspace_id', ${this.boundContext.workspaceId}, true), set_config('app.user_id', ${this.boundContext.userId ?? ""}, true), set_config('app.platform_admin', 'true', true)`,
+        this.sql.query(toPostgresParameters(this.query), this.args),
+      ] as never, { fullResults: true } as never);
+      return results[1];
+    }
     const platformContext = getPlatformContext();
     if (platformContext) {
       const results = await this.sql.transaction([
@@ -85,10 +99,14 @@ class NeonPreparedStatement implements D1PreparedStatement {
 }
 
 class NeonDatabase implements D1Database {
-  constructor(private readonly sql: NeonSql, private readonly boundContext: TenantContext | null = null) {}
+  constructor(
+    private readonly sql: NeonSql,
+    private readonly boundContext: TenantContext | null = null,
+    private readonly withPlatformFlag = false,
+  ) {}
 
   prepare(query: string) {
-    return new NeonPreparedStatement(this.sql, query, [], this.boundContext);
+    return new NeonPreparedStatement(this.sql, query, [], this.boundContext, this.withPlatformFlag);
   }
 
   async batch<T = Record<string, unknown>>(statements: D1PreparedStatement[]) {
@@ -98,6 +116,17 @@ class NeonDatabase implements D1Database {
     });
     const platformContext = getPlatformContext();
     const context = this.boundContext ?? getTenantContext();
+    if (context && this.withPlatformFlag) {
+      const results = await this.sql.transaction([
+        this.sql`SELECT set_config('app.workspace_id', ${context.workspaceId}, true), set_config('app.user_id', ${context.userId ?? ""}, true), set_config('app.platform_admin', 'true', true)`,
+        ...prepared,
+      ] as never, { fullResults: true } as never);
+      return results.slice(1).map((result) => ({
+        results: result.rows as T[],
+        success: true,
+        meta: { changes: result.rowCount, rows_read: result.rows.length, rows_written: result.rowCount },
+      }));
+    }
     const transaction = platformContext
       ? [this.sql`SELECT set_config('app.platform_admin', 'true', true), set_config('app.user_id', ${platformContext.userId}, true)`, ...prepared]
       : context
@@ -171,6 +200,17 @@ export function getD1(): D1Database {
  */
 export function getScopedD1(context: TenantContext): D1Database {
   return new NeonDatabase(getNeonSql(), context);
+}
+
+/**
+ * Conexão para provisionamento feito pela plataforma dentro de um workspace.
+ *
+ * Emite o tenant e a marca de plataforma na mesma transação. Isso não afrouxa
+ * nenhuma política: as tabelas do cliente continuam exigindo o workspace certo,
+ * e a trilha global continua exigindo a marca de plataforma.
+ */
+export function getPlatformScopedD1(context: TenantContext): D1Database {
+  return new NeonDatabase(getNeonSql(), context, true);
 }
 
 type VercelBlobObject = R2ObjectBody;

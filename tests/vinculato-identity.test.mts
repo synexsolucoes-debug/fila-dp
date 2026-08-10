@@ -92,3 +92,60 @@ test("o limite de assentos explica plano, uso e limite", async () => {
   // A trava contra corrida continua no banco, não só na checagem prévia.
   assert.match(route, /pg_advisory_xact_lock/);
 });
+
+test("a administração da plataforma administra de verdade, e sempre com trilha", async () => {
+  const [list, detail, users, userDetail] = await Promise.all([
+    readFile(new URL("../app/api/platform/workspaces/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/workspaces/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/users/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/users/[id]/route.ts", import.meta.url), "utf8"),
+  ]);
+  for (const source of [list, detail, users, userDetail]) {
+    assert.match(source, /requirePlatformAdmin/);
+    assert.match(source, /withPlatformContext/);
+  }
+  // Criar workspace é transacional e nasce com proprietário, papel e assinatura.
+  assert.match(list, /provisionWorkspaceDefaults\(tenant, workspaceId, statements\)/);
+  assert.match(list, /INSERT INTO fdp_workspace_members \(workspace_id, user_id, role\) VALUES \(\?, \?, 'admin'\)/);
+  assert.match(list, /INSERT INTO fdp_workspace_subscriptions/);
+  // Senha nunca é inventada: o proprietário novo entra pela recuperação de acesso.
+  assert.match(list, /Nunca criamos senha padrão nem senha em texto aberto/u);
+  // Toda alteração administrativa grava na trilha global.
+  for (const source of [list, detail, userDetail]) {
+    assert.match(source, /INSERT INTO fdp_platform_audit_events/);
+  }
+  // Salvaguardas exigidas antes de liberar o produto.
+  assert.match(detail, /PLAN_DOWNGRADE_BLOCKED/);
+  assert.match(detail, /STATUS_REASON_REQUIRED/);
+  assert.match(userDetail, /OWNER_BLOCK_BLOCKED/);
+  assert.match(userDetail, /OWNER_UNLINK_BLOCKED/);
+  // Bloquear derruba as sessões abertas: sem isso o bloqueio só valeria no próximo login.
+  assert.match(userDetail, /DELETE FROM fdp_auth_sessions WHERE user_id = \?/);
+  // A listagem global não projeta material de senha.
+  assert.doesNotMatch(users, /password_hash AS|password_salt/);
+});
+
+test("usuário bloqueado e workspace suspenso perdem acesso de verdade", async () => {
+  const [database, login, migration] = await Promise.all([
+    readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/postgres/0023_platform_lifecycle.sql", import.meta.url), "utf8"),
+  ]);
+  // Vale em toda requisição, não só no login.
+  assert.match(database, /USER_BLOCKED/);
+  assert.match(database, /WORKSPACE_SUSPENDED/);
+  assert.match(login, /USER_BLOCKED/);
+  // O banco exige motivo registrado para qualquer estado que corte acesso.
+  assert.match(migration, /"fdp_workspaces_status_reason_check"/);
+  assert.match(migration, /"fdp_users_status_reason_check"/);
+  assert.match(migration, /"status" IN \('active', 'suspended', 'canceled', 'archived'\)/);
+});
+
+test("provisionar pela plataforma usa os dois contextos na mesma transação", async () => {
+  const adapter = await readFile(new URL("../db/index.ts", import.meta.url), "utf8");
+  assert.match(adapter, /export function getPlatformScopedD1/);
+  assert.match(adapter, /set_config\('app\.workspace_id', \$\{this\.boundContext\.workspaceId\}, true\)[\s\S]{0,120}set_config\('app\.platform_admin', 'true', true\)/);
+  // Não existe caminho que dispense o workspace: a marca de plataforma sozinha
+  // continua sem acesso às tabelas do cliente.
+  assert.match(adapter, /if \(this\.boundContext && this\.withPlatformFlag\)/);
+});

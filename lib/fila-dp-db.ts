@@ -135,13 +135,17 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   const d1 = getD1();
   const normalizedEmail = user.email.trim().toLowerCase();
 
-  const userRow = await d1.prepare("SELECT id, email, name FROM fdp_users WHERE email = ?")
+  const userRow = await d1.prepare("SELECT id, email, name, status, status_reason FROM fdp_users WHERE email = ?")
     .bind(normalizedEmail)
-    .first<{ id: string; email: string; name: string }>();
+    .first<{ id: string; email: string; name: string; status: string; status_reason: string }>();
   if (!userRow) throw ApiError.forbidden("Sem permissão para acessar este grupo.", "WORKSPACE_ACCESS_DENIED");
+  // Bloqueio administrado pela plataforma vale em toda requisição, não só no login.
+  if (userRow.status === "blocked") {
+    throw ApiError.forbidden("Seu acesso está bloqueado. Fale com o administrador da plataforma.", "USER_BLOCKED");
+  }
 
   let workspace = await d1.prepare(
-    `SELECT w.id, w.name, w.timezone, wm.role
+    `SELECT w.id, w.name, w.timezone, w.status, w.status_reason, wm.role
      FROM fdp_user_workspace_preferences p
      JOIN fdp_workspaces w ON w.id = p.active_workspace_id
      JOIN fdp_workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = p.user_id
@@ -151,7 +155,7 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
   if (!workspace) {
     workspace = await d1.prepare(
-      `SELECT w.id, w.name, w.timezone, wm.role
+      `SELECT w.id, w.name, w.timezone, w.status, w.status_reason, wm.role
        FROM fdp_workspaces w
        JOIN fdp_workspace_members wm ON wm.workspace_id = w.id
        WHERE wm.user_id = ?
@@ -161,6 +165,19 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   }
 
   if (!workspace) throw ApiError.forbidden("Sem permissão para acessar este grupo. Peça ao administrador para liberar seu usuário.", "WORKSPACE_ACCESS_DENIED");
+  // Workspace suspenso, cancelado ou arquivado não opera: a recusa diz o estado
+  // e o motivo registrado, em vez de devolver telas vazias.
+  const workspaceStatus = String((workspace as Record<string, unknown>).status ?? "active");
+  if (workspaceStatus !== "active") {
+    const labels: Record<string, string> = {
+      suspended: "Este grupo está suspenso", canceled: "Este grupo está cancelado", archived: "Este grupo está arquivado",
+    };
+    const reason = String((workspace as Record<string, unknown>).status_reason ?? "").trim();
+    throw ApiError.forbidden(
+      `${labels[workspaceStatus] ?? "Este grupo está indisponível"}.${reason ? ` Motivo: ${reason}.` : ""} Fale com o administrador da plataforma.`,
+      "WORKSPACE_SUSPENDED",
+    );
+  }
 
   // O AsyncLocalStorage continua sendo preenchido para o código que já depende
   // dele dentro desta própria função; a garantia real de isolamento, porém, é a

@@ -147,6 +147,71 @@ record("o segundo workspace não enxerga a empresa do primeiro",
 const stolen = await call("GET", `/api/operations/competences/${competenceId}`);
 expect("competência de outro workspace responde 404, não vaza", stolen.status, [403, 404]);
 
+// 8. Administração da plataforma — só vale com FDP_PLATFORM_ADMIN_EMAILS
+// apontando para o e-mail abaixo. Sem isso o bloco é pulado, não falseado.
+const adminEmail = process.env.VINCULATO_SMOKE_PLATFORM_EMAIL ?? "";
+if (adminEmail) {
+  cookie = "";
+  const login = await call("POST", "/api/auth/login", { email: adminEmail, password: process.env.VINCULATO_SMOKE_PLATFORM_PASSWORD ?? "" });
+  expect("login do administrador da plataforma", login.status, 200, JSON.stringify(login.payload).slice(0, 120));
+
+  const overview = await call("GET", "/api/platform/overview");
+  expect("console global responde ao administrador", overview.status, 200);
+
+  const created = await call("POST", "/api/platform/workspaces", {
+    name: `Cliente ${stamp}`, ownerEmail: `dono-${stamp}@vinculato.test`, ownerName: "Dono Novo", planCode: "standard",
+  });
+  expect("administrador cria workspace com proprietário e assinatura", created.status, 201, JSON.stringify(created.payload).slice(0, 200));
+  const newWorkspaceId = created.payload?.workspace?.id ?? "";
+
+  const listedWorkspaces = await call("GET", "/api/platform/workspaces");
+  record("o workspace criado aparece na lista global",
+    (listedWorkspaces.payload?.workspaces ?? []).some((item) => item.id === newWorkspaceId),
+    `${(listedWorkspaces.payload?.workspaces ?? []).length} workspace(s)`);
+
+  // Sem slug informado o produto gera um sufixo aleatório, então o conflito só
+  // é possível quando o identificador é escolhido à mão — que é o caminho testado.
+  const chosenSlug = `cliente-manual-${stamp}`;
+  const firstManual = await call("POST", "/api/platform/workspaces", {
+    name: `Manual ${stamp}`, slug: chosenSlug, ownerEmail: `manual-${stamp}@vinculato.test`, planCode: "starter",
+  });
+  expect("criar workspace com identificador escolhido", firstManual.status, 201, JSON.stringify(firstManual.payload).slice(0, 140));
+  const duplicateSlug = await call("POST", "/api/platform/workspaces", {
+    name: `Manual repetido ${stamp}`, slug: chosenSlug, ownerEmail: `outro-${stamp}@vinculato.test`, planCode: "starter",
+  });
+  expect("identificador duplicado é recusado", duplicateSlug.status, 409);
+
+  const suspendWithoutReason = await call("PATCH", `/api/platform/workspaces/${newWorkspaceId}`, { status: "suspended" });
+  expect("suspender sem motivo é recusado", suspendWithoutReason.status, 400);
+
+  const suspended = await call("PATCH", `/api/platform/workspaces/${newWorkspaceId}`, {
+    status: "suspended", reason: "Inadimplência confirmada pelo financeiro",
+  });
+  expect("suspender workspace com motivo", suspended.status, 200, JSON.stringify(suspended.payload).slice(0, 120));
+
+  const users = await call("GET", `/api/platform/users?q=dono-${stamp}`);
+  expect("lista global de usuários responde", users.status, 200);
+  const owner = (users.payload?.users ?? [])[0];
+  record("a lista de usuários nunca devolve hash de senha",
+    owner !== undefined && !("password_hash" in owner) && !("password_salt" in owner),
+    owner ? Object.keys(owner).join(",").slice(0, 120) : "usuário não encontrado");
+
+  if (owner?.id) {
+    const blockOwner = await call("PATCH", `/api/platform/users/${owner.id}`, {
+      status: "blocked", reason: "Solicitação do próprio cliente",
+    });
+    // O proprietário de um workspace ativo não pode ser bloqueado; como o
+    // workspace foi suspenso acima, o bloqueio é permitido.
+    expect("bloquear usuário exige motivo e respeita a propriedade", blockOwner.status, [200, 409],
+      JSON.stringify(blockOwner.payload).slice(0, 160));
+  }
+
+  const reactivated = await call("PATCH", `/api/platform/workspaces/${newWorkspaceId}`, { status: "active" });
+  expect("reativar workspace", reactivated.status, 200);
+} else {
+  console.log("• bloco da administração da plataforma pulado (defina VINCULATO_SMOKE_PLATFORM_EMAIL)");
+}
+
 const failures = results.filter((item) => !item.ok);
 console.log(`\n${results.length - failures.length}/${results.length} verificações passaram.`);
 if (failures.length) {

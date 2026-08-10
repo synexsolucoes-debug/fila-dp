@@ -176,6 +176,13 @@
       "when": 1786242000000,
       "tag": "0022_plan_catalog_pricing",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786243000000,
+      "tag": "0023_platform_lifecycle",
+      "breakpoints": true
     }
   ]
 }
