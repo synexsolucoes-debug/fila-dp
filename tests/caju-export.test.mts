@@ -149,10 +149,13 @@ test("validação de CPF recusa sequência e dígito verificador errado", () => 
 });
 
 test("o nome do arquivo é previsível e não depende de texto livre do usuário", () => {
-  const name = cajuFileName("Synex Soluções Ltda", "2026-08", new Date("2026-08-10T12:00:00Z"));
-  assert.equal(name, "caju_saldo_livre_synex-solucoes-ltda_2026-08_2026-08-10.xlsx");
+  const name = cajuFileName("Synex Soluções Ltda", "2026-08", "csv", new Date("2026-08-10T12:00:00Z"));
+  // O modelo oficial é planilha de texto separada por ";", não XLSX.
+  assert.equal(name, "caju_saldo_livre_synex-solucoes-ltda_2026-08_2026-08-10.csv");
   // Nada de caminho, barra ou caractere que escape do diretório.
   assert.doesNotMatch(cajuFileName("../../etc/passwd", "2026-08"), /\.\.|\//u);
+  // Extensão também não aceita texto livre.
+  assert.doesNotMatch(cajuFileName("empresa", "2026-08", "../sh"), /\.\.|\//u);
 });
 
 test("o catálogo de modelos guarda o arquivo oficial, versionado e isolado", async () => {
@@ -173,4 +176,95 @@ test("exportar para a Caju exige capacidade própria, negada por padrão", async
     assert.ok(!capabilitiesForRole(role).includes("contractors.export_caju"),
       `${role} não pode exportar dinheiro para meio de pagamento externo`);
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/* Modelo oficial da Caju — arquivo real fornecido pelo cliente                */
+/* -------------------------------------------------------------------------- */
+
+const templateFixture = () => readFile(new URL("./fixtures/caju-pedidos-exemplo.csv", import.meta.url), "utf8");
+
+test("o modelo oficial é lido do arquivo, sem nome de coluna chumbado no código", async () => {
+  const { parseCajuTemplate } = await import("../lib/caju-template.ts");
+  const shape = parseCajuTemplate(await templateFixture());
+
+  // Cabeçalhos exatamente como vieram, na ordem original.
+  assert.deepEqual(shape.headers, ["CPF", "Matricula (opcional)", "Valor Fixo em Auxilio Alimentacao"]);
+  assert.equal(shape.delimiter, ";");
+  assert.equal(shape.taxIdIndex, 0);
+  assert.equal(shape.amountIndex, 2);
+  // A matrícula é opcional e sai vazia, como no exemplo oficial.
+  assert.deepEqual(shape.emptyIndexes, [1]);
+
+  const source = await readFile(new URL("../lib/caju-template.ts", import.meta.url), "utf8");
+  // Nenhum rótulo da Caju escrito no código: eles mudam sem aviso.
+  assert.doesNotMatch(source, /"Valor Fixo em|"Matricula \(opcional\)"/u);
+});
+
+test("o modelo declara sua categoria — exportar Saldo Livre com modelo de alimentação credita errado", async () => {
+  const { parseCajuTemplate, templateCategory } = await import("../lib/caju-template.ts");
+  const shape = parseCajuTemplate(await templateFixture());
+  // O arquivo de exemplo recebido é de Auxílio Alimentação, não de Saldo Livre.
+  assert.equal(templateCategory(shape).key, "alimentacao");
+
+  const saldoLivre = parseCajuTemplate("CPF;Matricula (opcional);Valor Fixo em Saldo Livre\n12345678901;;0");
+  assert.equal(templateCategory(saldoLivre).key, "saldo_livre");
+  assert.equal(saldoLivre.amountIndex, 2);
+});
+
+test("o arquivo gerado repete cabeçalho, ordem e delimitador do modelo", async () => {
+  const { buildCajuFile, parseCajuTemplate } = await import("../lib/caju-template.ts");
+  const shape = parseCajuTemplate(await templateFixture());
+  const file = buildCajuFile(shape, [
+    { taxId: "529.982.247-25", amountCents: 123456 },
+    { taxId: "01234567890", amountCents: 50 },
+  ]);
+  const lines = file.split("\n");
+
+  assert.equal(lines[0], "CPF;Matricula (opcional);Valor Fixo em Auxilio Alimentacao");
+  // CPF só com dígitos; valor decimal com duas casas, sem R$ e sem milhar.
+  assert.equal(lines[1], "529982247251;;1234.56".replace("529982247251", "52998224725"));
+  // Zero à esquerda preservado: perder o primeiro dígito troca a pessoa.
+  assert.equal(lines[2], "01234567890;;0.50");
+  assert.equal(lines.length, 3, "sem linha em branco no fim");
+  // Nenhuma coluna extra de auditoria dentro do arquivo de importação.
+  for (const line of lines) assert.equal(line.split(";").length, 3);
+});
+
+test("valor é formatado a partir de centavos inteiros, sem ponto flutuante", async () => {
+  const { formatAmount } = await import("../lib/caju-template.ts");
+  assert.equal(formatAmount(0), "0.00");
+  assert.equal(formatAmount(5), "0.05");
+  assert.equal(formatAmount(199), "1.99");
+  assert.equal(formatAmount(100000), "1000.00");
+  // 0.1 + 0.2 em ponto flutuante daria 0.30000000000000004; em centavos, não.
+  assert.equal(formatAmount(10 + 20), "0.30");
+  assert.throws(() => formatAmount(12.5), (error: { code: string }) => error.code === "CAJU_AMOUNT_INVALID");
+});
+
+test("modelo editado ou de outra planilha é recusado com motivo", async () => {
+  const { parseCajuTemplate } = await import("../lib/caju-template.ts");
+  const cases: Array<[string, string]> = [
+    ["", "CAJU_TEMPLATE_EMPTY"],
+    ["planilha sem colunas", "CAJU_TEMPLATE_INVALID"],
+    ["CPF;;Valor", "CAJU_TEMPLATE_INVALID"],
+    ["Nome;Matricula;Valor Fixo em Saldo Livre", "CAJU_TEMPLATE_NO_TAX_ID"],
+    ["CPF;Matricula;Observacao", "CAJU_TEMPLATE_NO_AMOUNT"],
+  ];
+  for (const [content, code] of cases) {
+    assert.throws(() => parseCajuTemplate(content), (error: { code: string }) => {
+      assert.equal(error.code, code, `"${content.slice(0, 30)}" deveria recusar com ${code}`);
+      return true;
+    });
+  }
+});
+
+test("a linha de exemplo do modelo nunca vira pedido real", async () => {
+  const { buildCajuFile, parseCajuTemplate } = await import("../lib/caju-template.ts");
+  const shape = parseCajuTemplate(await templateFixture());
+  // O modelo traz 12345678901 como exemplo; o arquivo gerado só contém quem foi
+  // passado explicitamente.
+  const file = buildCajuFile(shape, [{ taxId: "52998224725", amountCents: 100 }]);
+  assert.doesNotMatch(file, /12345678901/u);
+  assert.equal(file.split("\n").length, 2);
 });

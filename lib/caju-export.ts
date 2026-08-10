@@ -141,10 +141,16 @@ export function assertExportable(preview: CajuPreview, templateVersion: number |
   }
 }
 
-/** Nome previsível e seguro, sem depender de texto digitado pelo usuário. */
-export function cajuFileName(companySlug: string, competence: string, generatedAt = new Date()) {
+/**
+ * Nome previsível e seguro, sem depender de texto digitado pelo usuário.
+ *
+ * A extensão acompanha o modelo cadastrado: o arquivo de pedidos da Caju é uma
+ * planilha de texto separada por `;`, não um XLSX.
+ */
+export function cajuFileName(companySlug: string, competence: string, extension = "csv", generatedAt = new Date()) {
   const safe = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/gu, "")
     .toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/(^-|-$)/gu, "").slice(0, 40) || "empresa";
   const date = generatedAt.toISOString().slice(0, 10);
-  return `caju_saldo_livre_${safe(companySlug)}_${safe(competence)}_${date}.xlsx`;
+  const safeExtension = /^[a-z0-9]{2,4}$/u.test(extension) ? extension : "csv";
+  return `caju_saldo_livre_${safe(companySlug)}_${safe(competence)}_${date}.${safeExtension}`;
 }

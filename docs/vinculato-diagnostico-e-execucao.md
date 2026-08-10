@@ -595,3 +595,57 @@ planilha — o projeto ainda não tem nenhuma, e adicionar uma antes de conhecer
 formato seria adivinhação).
 
 Validação: 237 testes, `npm run ci` completo, 29 migrações validadas.
+
+### 18.1 O modelo oficial chegou — e ele não é XLSX
+
+O cliente enviou `pedidosexemplo.csv`, o modelo de pedidos da Caju. Duas
+descobertas que mudam a implementação para melhor:
+
+**Não é planilha binária.** É texto separado por `;`, ASCII, sem BOM, sem aspas,
+com `\n`. Isso dispensa a biblioteca de planilha que eu havia previsto — o
+produto gera o arquivo com o que já tem.
+
+```
+CPF;Matricula (opcional);Valor Fixo em Auxilio Alimentacao
+12345678901;;0
+```
+
+**O exemplo é de outra categoria.** A coluna de valor é
+`Valor Fixo em Auxilio Alimentacao`, não Saldo Livre. A Caju publica um modelo
+por categoria de benefício, e exportar Saldo Livre usando o modelo de Auxílio
+Alimentação creditaria o benefício errado — a Caju não tem como adivinhar a
+intenção a partir do arquivo.
+
+Por isso `templateCategory` deduz a categoria do rótulo da coluna de valor e a
+guarda junto do modelo (migração 0027). A tela pode avisar quando o modelo
+cadastrado é de categoria diferente da exportação pedida, em vez de gerar um
+crédito silenciosamente errado.
+
+**O que ficou pronto.** `lib/caju-template.ts` lê o modelo (detecta delimitador,
+extrai cabeçalhos, localiza CPF e valor) e escreve o arquivo com os **mesmos
+cabeçalhos, na mesma ordem e com o mesmo delimitador** — nenhum rótulo da Caju
+está escrito no código, porque eles mudam sem aviso. Há teste que reprova se
+alguém chumbar um.
+
+Garantias cobertas por teste, usando o arquivo real como fixture:
+
+- CPF sai só com dígitos e **preserva zero à esquerda** (`01234567890`) — perder
+  o primeiro dígito troca a pessoa;
+- valor sai decimal com duas casas, a partir de centavos inteiros, sem `R$` e
+  sem separador de milhar;
+- colunas opcionais saem vazias, como no exemplo oficial;
+- nenhuma coluna extra de auditoria entra no arquivo de importação;
+- a linha de exemplo do modelo (CPF fictício `12345678901`) **nunca** vira
+  pedido real;
+- modelo vazio, editado, sem CPF ou sem coluna de valor é recusado com código
+  próprio (`CAJU_TEMPLATE_EMPTY`, `_INVALID`, `_NO_TAX_ID`, `_NO_AMOUNT`).
+
+O nome do arquivo passou a acompanhar a extensão do modelo (`.csv`), e nem o
+nome da empresa nem a extensão aceitam texto que escape do diretório.
+
+**Ainda pendente do proprietário:** o modelo de **Saldo Livre** propriamente
+dito, se a intenção for creditar essa categoria. O mecanismo já funciona com ele
+— basta cadastrá-lo — mas o arquivo recebido é de Auxílio Alimentação.
+
+Validação: 243 testes, `npm run ci` completo, 50 verificações de navegador, 24
+de fumaça, 30 migrações validadas.

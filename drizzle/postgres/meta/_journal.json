@@ -204,6 +204,13 @@
       "when": 1786246000000,
       "tag": "0026_caju_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786247000000,
+      "tag": "0027_caju_template_format",
+      "breakpoints": true
     }
   ]
 }
