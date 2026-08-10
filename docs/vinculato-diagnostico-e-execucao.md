@@ -127,6 +127,10 @@ do site.
 - `npm run db:rehearse`: PostgreSQL 16 real, papel sem superusuário — constraints
   de pagamento, regra do §22 do ponto, outbox/webhooks/API e isolamento
   multi-tenant aprovados.
+- `npm run browser-check`: **20 verificações em Chromium real** — site público,
+  login pela interface, console global, criação de workspace **pela tela**, aba
+  de usuários sem material de senha, ausência de erro de JavaScript e ausência
+  de rolagem horizontal em **390, 768, 1280 e 1440 px**.
 - `npm run smoke`: **35 verificações HTTP** contra a aplicação em execução,
   incluindo cadastro, empresa, ciclo completo de competência (criar, listar,
   abrir, avançar, fechar, reabrir com justificativa), colaborador, central de
@@ -153,10 +157,6 @@ Estes itens do pedido continuam pendentes. Nenhum deles foi simulado.
 3. **Tela de usuários e permissões do workspace.** Convite, suspensão,
    reenvio/cancelamento de convite, limite por empresa e permissões efetivas não
    têm interface; parte existe só via API.
-4. **Console global (interface).** As rotas de administração foram criadas e
-   testadas, mas a tela `/plataforma` ainda não as consome — ela lista e edita
-   planos, e não tem os fluxos de criar/suspender workspace e administrar
-   usuários.
 5. **Site público reconstruído.** As páginas existentes foram renomeadas, mas o
    hero, as seções e o layout pedidos não foram refeitos.
 6. **Redesign integral.** Os tokens de identidade existem; a aplicação das telas
@@ -165,7 +165,6 @@ Estes itens do pedido continuam pendentes. Nenhum deles foi simulado.
    guiado não.
 8. **Navegação reorganizada** nos grupos pedidos (Operação, Folha e competências,
    Pessoas, Gestão).
-9. **Testes de navegador e validação responsiva** nas larguras 390/768/1280/1440.
 
 ### Bloqueios externos
 
@@ -181,8 +180,10 @@ Estes itens do pedido continuam pendentes. Nenhum deles foi simulado.
 - **A correção da seção 2 foi validada contra PostgreSQL local com RLS ativo.**
   Ela precisa ser reexecutada contra o Neon antes da liberação — o driver é
   outro, ainda que a semântica de `set_config` seja a mesma.
-- O `smoke` roda contra a aplicação em execução e **não** substitui teste de
-  navegador: ele não cobre renderização, foco, teclado nem responsividade.
+- O `browser-check` cobre o console global e o site público. Os fluxos do
+  workspace (competência, ponto, pagamentos) continuam validados só por HTTP.
+- Não houve auditoria de acessibilidade (contraste, leitor de tela, navegação
+  por teclado ponta a ponta) — só a checagem de rolagem horizontal.
 - A allowlist de administradores da plataforma continua em variável de ambiente,
   exigindo redeploy para mudar quem tem acesso global, e sem segundo fator.
 
@@ -195,7 +196,7 @@ Estes itens do pedido continuam pendentes. Nenhum deles foi simulado.
 | 3 | Site público reconstruído | **BLOQUEADO** |
 | 4 | Cadastro Starter funciona | APROVADO |
 | 5 | Painel global separado do workspace | APROVADO |
-| 6 | Administrador global cria e administra workspaces | APROVADO (API) / **BLOQUEADO** (interface) |
+| 6 | Administrador global cria e administra workspaces | APROVADO — API e interface, verificado em navegador |
 | 7 | Assinante administra seu workspace | PARCIAL |
 | 8 | Área de usuários e permissões completa | **BLOQUEADO** |
 | 9 | Liberação por módulo | **BLOQUEADO** |
@@ -205,11 +206,11 @@ Estes itens do pedido continuam pendentes. Nenhum deles foi simulado.
 | 13 | Competências abrem corretamente | APROVADO |
 | 14 | Mensagens genéricas com causa corrigida | APROVADO |
 | 15 | Sem vazamento entre workspaces | APROVADO (verificado sob RLS com papel sem superusuário) |
-| 16 | Sem botões falsos ou rotas quebradas | PARCIAL — o console global tem rotas sem interface |
-| 17 | Interface responsiva e acessível | **BLOQUEADO** — não validado nesta rodada |
+| 16 | Sem botões falsos ou rotas quebradas | PARCIAL — as rotas do console têm interface; demais módulos não auditados um a um |
+| 17 | Interface responsiva e acessível | PARCIAL — console e site sem rolagem horizontal em 390/768/1280/1440; auditoria de acessibilidade não feita |
 | 18 | Migrations preservam dados | APROVADO — 0022 e 0023 são aditivas |
 | 19 | Lint, testes, tipos e build passam | APROVADO |
-| 20 | Fluxos críticos validados no navegador | PARCIAL — validados por HTTP, não por navegador |
+| 20 | Fluxos críticos validados no navegador | PARCIAL — login, console global e criação de workspace validados em Chromium; fluxos do workspace só por HTTP |
 
 ## 10. Veredito
 
@@ -225,7 +226,15 @@ produto** (permissões granulares, liberação por módulo, tela de usuários, s
 público, redesign) e falta **homologação de cobrança e e-mail**, que dependem de
 credenciais externas.
 
-Recomendação de sequência: (1) interface do console global sobre as rotas já
-prontas; (2) tela de usuários e permissões; (3) catálogo de módulos com
-liberação por plano; (4) site público e redesign; (5) homologação de cobrança e
-provedor de e-mail.
+Recomendação de sequência: (1) tela de usuários e permissões do workspace;
+(2) catálogo de módulos com liberação por plano; (3) site público e redesign;
+(4) homologação de cobrança e provedor de e-mail.
+
+## 11. Achado do ensaio de navegador
+
+A renomeação textual não pegou a marca **partida entre elementos**
+(`<span>Fila <strong>DP</strong></span>`), presente no cabeçalho do site, do
+painel, do login e da recuperação de acesso. Só apareceu quando o texto foi lido
+do DOM renderizado, no navegador — busca por texto-fonte não encontraria.
+Corrigido nos cinco arquivos, e o teste de renomeação passou a cobrir também o
+padrão partido.

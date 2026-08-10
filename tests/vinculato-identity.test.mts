@@ -24,7 +24,9 @@ test("nenhum texto de interface ainda diz o nome antigo", async () => {
   const offenders: string[] = [];
   for (const file of files) {
     const source = await readFile(file, "utf8");
-    if (/Fila DP|FilaDP/u.test(source)) offenders.push(file.replace(root, ""));
+    // A marca também aparecia partida entre elementos ("Fila <strong>DP</strong>"),
+    // que a busca por texto corrido não pegava. O padrão abaixo cobre os dois casos.
+    if (/Fila DP|FilaDP|Fila\s*<(?:strong|b)>\s*DP/u.test(source)) offenders.push(file.replace(root, ""));
   }
   assert.deepEqual(offenders, [], `arquivos com o nome antigo: ${offenders.join(", ")}`);
 });

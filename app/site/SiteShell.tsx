@@ -16,7 +16,7 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
         <div className={styles.headerInner}>
           <Link className={styles.brand} href="/">
             <span className={styles.brandMark} aria-hidden="true"><i /><i /><i /></span>
-            Fila <strong>DP</strong>
+            Vinculato
           </Link>
           <nav className={styles.nav} aria-label="Navegação do site">
             {siteNavigation.map((item) => (

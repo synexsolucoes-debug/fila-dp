@@ -19,7 +19,7 @@ export default async function LoginPage() {
       <section className="auth-brand-panel">
         <Link className="brand auth-brand" href="/#inicio" aria-label="Vinculato — início">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Fila <strong>DP</strong></span>
+          <span>Vinculato</span>
         </Link>
 
         <div className="auth-message">

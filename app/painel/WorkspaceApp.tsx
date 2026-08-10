@@ -1098,7 +1098,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         </button>
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>Fila <strong>DP</strong></span>
+          <span>Vinculato</span>
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>
