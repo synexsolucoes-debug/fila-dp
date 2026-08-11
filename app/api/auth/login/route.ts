@@ -60,8 +60,19 @@ export async function POST(request: Request) {
       if (groupName.length < 2) return Response.json({ error: "Informe o nome do grupo empresarial." }, { status: 400 });
       const credentials = await hashPassword(password);
       const userId = current?.id ?? crypto.randomUUID();
+      // Conta que existe sem nenhum grupo é o estado em que o sistema fica
+      // depois que o último grupo é excluído: não há workspace, então a primeira
+      // instalação está aberta, mas o e-mail continua cadastrado. Recusar aqui
+      // trancaria a instalação sem saída pela interface.
+      //
+      // A senha correta é o que autoriza: quem prova ser o dono da conta pode
+      // reivindicar o primeiro grupo. Senha errada continua sendo recusa.
       if (current?.password_hash) {
-        return Response.json({ error: "Este e-mail já possui uma conta. Entre com sua senha." }, { status: 409 });
+        const owns = Boolean(current.password_salt)
+          && await verifyPassword(password, current.password_salt ?? "", current.password_hash);
+        if (!owns) {
+          return Response.json({ error: "Este e-mail já possui uma conta. Entre com sua senha." }, { status: 409 });
+        }
       }
       const workspaceId = crypto.randomUUID();
       // A conta entra na MESMA transação do grupo. Fora dela, qualquer falha

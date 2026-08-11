@@ -41,6 +41,7 @@ export const expectedMigrations = [
   "0031_caju_template_source.sql",
   "0032_contractor_registry.sql",
   "0033_member_module_grants.sql",
+  "0034_workspace_deletion_ledger.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

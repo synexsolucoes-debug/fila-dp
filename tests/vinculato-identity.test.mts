@@ -216,3 +216,51 @@ test("provisionar pela plataforma usa os dois contextos na mesma transação", a
   // continua sem acesso às tabelas do cliente.
   assert.match(adapter, /if \(this\.boundContext && this\.withPlatformFlag\)/);
 });
+
+test("excluir um grupo é irreversível, então exige quatro portas antes", async () => {
+  const source = await readFile(new URL("../app/api/platform/workspaces/[id]/delete/route.ts", import.meta.url), "utf8");
+  assert.match(source, /requirePlatformAdmin\(/u);
+  // Não se exclui um grupo em operação por engano.
+  assert.match(source, /WORKSPACE_NOT_ARCHIVED/u);
+  // O identificador digitado por extenso impede que o clique caia no grupo errado.
+  assert.match(source, /confirmation !== workspace\.slug/u);
+  assert.match(source, /WORKSPACE_DELETE_REASON_REQUIRED/u);
+});
+
+test("a contagem da exclusão roda dentro do escopo do tenant", async () => {
+  const source = await readFile(new URL("../app/api/platform/workspaces/[id]/delete/route.ts", import.meta.url), "utf8");
+  // Contando pela conexão de plataforma a RLS esconde as linhas do cliente e o
+  // COUNT devolve zero sem erro: o registro anotou 4 linhas onde havia 6 no
+  // primeiro ensaio. Número inventado é pior que número nenhum num registro que
+  // existe para ser prova.
+  assert.match(source, /const scoped = getPlatformScopedD1\(/u);
+  assert.match(source, /scoped\.prepare\(`SELECT COUNT\(\*\) AS total FROM \$\{table\}/u);
+  const countAt = source.indexOf("const counts: Record<string, number> = {}");
+  const deleteAt = source.indexOf("DELETE FROM fdp_workspaces");
+  assert.ok(countAt > 0 && deleteAt > countAt, "a contagem precisa acontecer antes da remoção");
+});
+
+test("a trilha do grupo é removida explicitamente, e o registro de exclusão é imutável", async () => {
+  const source = await readFile(new URL("../app/api/platform/workspaces/[id]/delete/route.ts", import.meta.url), "utf8");
+  // Uma exclusão de auditoria precisa estar escrita no código de quem a fez,
+  // não escondida numa constraint CASCADE.
+  assert.match(source, /DELETE FROM fdp_audit_events WHERE workspace_id = \?/u);
+  assert.match(source, /set_config\('app\.audit_maintenance', 'on', true\)/u);
+
+  const migration = await readFile(new URL("../drizzle/postgres/0034_workspace_deletion_ledger.sql", import.meta.url), "utf8");
+  // Sem FK para o grupo: ele deixa de existir, e o registro precisa sobreviver.
+  assert.doesNotMatch(migration, /REFERENCES "public"\."fdp_workspaces"[\s\S]{0,80}fdp_workspace_deletions/u);
+  assert.match(migration, /workspace deletion records are immutable/u);
+  assert.match(migration, /BEFORE UPDATE OR DELETE ON "fdp_workspace_deletions"/u);
+});
+
+test("excluir o último grupo não tranca a instalação", async () => {
+  const route = await readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8");
+  const bootstrap = route.slice(route.indexOf("const credentials = await hashPassword"), route.indexOf("const claimedWorkspace"));
+  // Depois de excluir o último grupo, a conta do dono sobrevive sem workspace:
+  // a primeira instalação fica aberta e o e-mail continua cadastrado. Recusar
+  // ali trancaria o sistema sem saída pela interface — a senha correta é o que
+  // autoriza reivindicar o primeiro grupo.
+  assert.match(bootstrap, /verifyPassword\(password, current\.password_salt/u);
+  assert.match(bootstrap, /Este e-mail já possui uma conta/u);
+});
