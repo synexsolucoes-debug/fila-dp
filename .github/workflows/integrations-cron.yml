@@ -1,4 +1,4 @@
-# Disparo agendado do executor de integrações.
+# Disparo agendado da consulta da Sólides DP e do executor de integrações.
 #
 # Por que não fica no vercel.json: a conta é Hobby, e a Vercel recusa qualquer
 # cron que rode mais de uma vez por dia — o deploy inteiro falha, não só o cron.
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Drenar a fila de integrações
+      - name: Consultar a Sólides DP e drenar a fila
         env:
           ENDPOINT: ${{ secrets.INTEGRATIONS_CRON_URL }}
           SECRET: ${{ secrets.INTEGRATIONS_CRON_SECRET }}

@@ -9,6 +9,7 @@ import {
   tangerinoDateToIso,
   tangerinoDocumentFields,
   tangerinoEmployeesUrl,
+  tangerinoErpReadiness,
   tangerinoRecords,
   tangerinoSkipReason,
   validateTangerinoEndpoint,
@@ -111,6 +112,19 @@ test("a ficha da Sólides DP é normalizada sem inventar campo", () => {
   assert.equal(admission.documentsPresent.length + admission.documentsMissing.length, tangerinoDocumentFields.length);
 });
 
+test("a demanda só fica pronta quando os dados contratuais mínimos chegaram", () => {
+  const ready = normalizeTangerinoAdmission(tangerinoEmployee);
+  assert.deepEqual(tangerinoErpReadiness(ready), []);
+
+  const waiting = normalizeTangerinoAdmission({
+    ...tangerinoEmployee,
+    cpf: "",
+    currentWorkSchedule: null,
+    jobRoleDTO: { id: 12, description: "", salary: { value: 0 } },
+  });
+  assert.deepEqual(tangerinoErpReadiness(waiting), ["CPF", "cargo", "jornada", "salário"]);
+});
+
 test("a janela de atualização não transforma desligamento nem cadastro antigo em admissão", () => {
   const admission = normalizeTangerinoAdmission(tangerinoEmployee);
   assert.equal(tangerinoSkipReason(tangerinoEmployee, admission, "2026-01-01"), "");
@@ -123,11 +137,14 @@ test("a janela de atualização não transforma desligamento nem cadastro antigo
 
 test("a tarefa nomeia a Sólides DP e não copia valor de documento", () => {
   const draft = admissionTaskDraft(normalizeTangerinoAdmission(tangerinoEmployee));
-  assert.equal(draft.title, "Conciliação cadastral — Marina Rocha");
-  assert.match(draft.description, /admitido na Sólides DP em 2026-02-03/u);
+  assert.equal(draft.title, "Admissão ERP — Marina Rocha");
+  assert.match(draft.description, /Dados contratuais disponíveis na Sólides DP/u);
+  assert.match(draft.description, /Salário contratual: R\$\s*4\.250,50/u);
   assert.doesNotMatch(draft.description, /529\.982\.247-25|9988776/u);
   assert.match(draft.description, /não expõe download de anexos/u);
-  assert.ok(draft.checklist.includes("Obter na Sólides DP: PIS/PASEP"));
+  assert.ok(draft.checklist.includes("Conferir na Sólides DP: PIS/PASEP"));
+  assert.ok(draft.checklist.includes("Realizar a admissão no ERP"));
+  assert.ok(draft.checklist.includes("Concluir manualmente a demanda no Vinculato"));
 });
 
 test("o executor e o provisionamento conhecem o canal da Sólides DP", async () => {
@@ -140,6 +157,9 @@ test("o executor e o provisionamento conhecem o canal da Sólides DP", async () 
   assert.match(engine, /tangerinoEmployeesUrl\(endpoint/u);
   // O recorte precisa rodar antes de abrir a tarefa.
   assert.match(engine, /tangerinoSkipReason\(input\.raw, admission, context\.since\)/u);
+  assert.match(engine, /tangerinoErpReadiness\(admission\)/u);
+  assert.match(engine, /aguardando dados contratuais para o ERP/u);
+  assert.match(engine, /`\$\{admission\.externalId\}:\$\{admission\.admissionDate\}`/u);
   assert.match(seed, /\["tangerino", "Sólides DP \(Tangerino\)"\]/u);
   assert.match(migration, /'tangerino'/u);
 });

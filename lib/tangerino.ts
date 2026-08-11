@@ -19,7 +19,7 @@
  *    são foto do colaborador (só upload), imagem de assinatura e espelho de ponto
  *    via GED. Os documentos da admissão continuam sendo obtidos na Sólides.
  */
-import { admissionTaskDraft as buildAdmissionTask, admissionText, emptyAdmission, type AdmissionRecord, type AdmissionSource } from "./admissions.ts";
+import { erpAdmissionTaskDraft as buildErpAdmissionTask, admissionText, emptyAdmission, type AdmissionRecord, type AdmissionSource } from "./admissions.ts";
 import { ApiError } from "./api-errors.ts";
 
 export const tangerinoSource: AdmissionSource = {
@@ -170,6 +170,25 @@ export function normalizeTangerinoAdmission(raw: unknown): AdmissionRecord {
 }
 
 /**
+ * Campos que tornam a ficha utilizável para executar a admissão no ERP.
+ * Matrícula, PIS e CTPS continuam no checklist: eles podem ser gerados ou
+ * complementados durante o cadastro e, por isso, não bloqueiam a demanda.
+ */
+export function tangerinoErpReadiness(admission: AdmissionRecord) {
+  const missing: string[] = [];
+  if (!admission.externalId) missing.push("identificador na Sólides DP");
+  if (!admission.fullName) missing.push("nome");
+  if (!admission.cpf) missing.push("CPF");
+  if (!admission.admissionDate) missing.push("data de admissão");
+  if (!admission.departmentName) missing.push("empresa");
+  if (!admission.positionName) missing.push("cargo");
+  if (!admission.unityName) missing.push("local de trabalho");
+  if (!admission.workShift) missing.push("jornada");
+  if (!(admission.salary > 0)) missing.push("salário");
+  return missing;
+}
+
+/**
  * Por que um registro recebido não vira tarefa.
  *
  * O filtro oficial é por atualização, não por admissão: a mesma janela traz
@@ -186,5 +205,5 @@ export function tangerinoSkipReason(raw: unknown, admission: AdmissionRecord, si
 
 /** Rascunho da tarefa, com a Sólides DP nomeada como origem. */
 export function admissionTaskDraft(admission: AdmissionRecord) {
-  return buildAdmissionTask(admission, tangerinoSource, tangerinoDocumentFields.length);
+  return buildErpAdmissionTask(admission, tangerinoSource, tangerinoDocumentFields.length);
 }

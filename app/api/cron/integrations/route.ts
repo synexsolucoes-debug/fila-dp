@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { getScopedD1 } from "@/db";
 import { apiError } from "@/lib/fila-dp-api";
-import { processNextIntegrationJob } from "@/lib/integration-engine";
+import { processNextIntegrationJob, queueIntegrationRun } from "@/lib/integration-engine";
 import { log } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -9,12 +9,14 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Disparo agendado do executor de integrações.
+ * Disparo agendado da consulta da Sólides DP e do executor de integrações.
  *
  * O que motivou isto: `/api/integrations/worker` só processa um job e exige que
  * quem chama informe o workspace. Nada chamava esse endpoint, então sincronizar
  * enfileirava trabalho que nunca saía da fila — o sintoma era "a sincronização
- * não anda", sem erro em lugar nenhum.
+ * não anda", sem erro em lugar nenhum. A varredura agora também cria uma
+ * execução para cada conector Tangerino pronto, de modo que novas fichas não
+ * dependam do botão de sincronização.
  *
  * Este endpoint existe para a Vercel Cron, que só faz GET e não envia cabeçalho
  * próprio nem corpo: ela manda `Authorization: Bearer <CRON_SECRET>`. Por isso a
@@ -25,6 +27,13 @@ const MINIMUM_SECRET_LENGTH = 32;
 const TIME_BUDGET_MS = 45_000;
 /** Teto por workspace: um tenant com fila grande não pode consumir a janela inteira. */
 const MAX_JOBS_PER_WORKSPACE = 25;
+/** Mesma cadência do workflow; a chave torna duas chamadas no mesmo intervalo idempotentes. */
+const SCHEDULE_INTERVAL_MS = 5 * 60 * 1000;
+
+function scheduledRunKey(now = Date.now()) {
+  const intervalStart = Math.floor(now / SCHEDULE_INTERVAL_MS) * SCHEDULE_INTERVAL_MS;
+  return `scheduled:${new Date(intervalStart).toISOString()}`;
+}
 
 function matchesSecret(received: string, expected: string) {
   if (received.length < MINIMUM_SECRET_LENGTH || expected.length < MINIMUM_SECRET_LENGTH) return false;
@@ -57,10 +66,53 @@ export async function GET(request: Request) {
 
     let processed = 0;
     let failed = 0;
+    let scheduled = 0;
+    let scheduleFailed = 0;
     const touched: string[] = [];
+    const idempotencyKey = scheduledRunKey();
     for (const workspace of workspaces.results) {
       if (Date.now() >= deadline) break;
       const scoped = getScopedD1({ workspaceId: workspace.id, userId: null });
+
+      // O cron também inicia a consulta: antes ele apenas drenava jobs criados
+      // manualmente. Só entra o conector Tangerino conectado, com mapeamento de
+      // admissões ativo e sem outra execução pendente, evitando acúmulo de fila.
+      const integrations = await scoped.prepare(`SELECT integration.id, mapping.id AS mapping_id
+        FROM fdp_integrations integration
+        JOIN LATERAL (
+          SELECT candidate.id FROM fdp_integration_mappings candidate
+          WHERE candidate.workspace_id = integration.workspace_id AND candidate.integration_id = integration.id
+            AND candidate.status = 'active' AND candidate.resource_type = 'admissions'
+            AND candidate.direction IN ('inbound', 'bidirectional')
+          ORDER BY candidate.published_at DESC NULLS LAST, candidate.created_at DESC LIMIT 1
+        ) mapping ON TRUE
+        WHERE integration.workspace_id = ? AND integration.channel = 'tangerino' AND integration.status = 'connected'
+          AND NOT EXISTS (
+            SELECT 1 FROM fdp_integration_jobs pending
+            WHERE pending.workspace_id = integration.workspace_id AND pending.integration_id = integration.id
+              AND pending.status IN ('queued', 'leased')
+          ) ORDER BY integration.created_at`).bind(workspace.id).all<{ id: string; mapping_id: string }>();
+      for (const integration of integrations.results) {
+        if (Date.now() >= deadline) break;
+        try {
+          await queueIntegrationRun(scoped, {
+            workspaceId: workspace.id,
+            integrationId: integration.id,
+            mappingId: integration.mapping_id,
+            triggerType: "scheduled",
+            requestedBy: null,
+            idempotencyKey,
+          });
+          scheduled += 1;
+        } catch (error) {
+          scheduleFailed += 1;
+          log("warn", "integrations.cron_schedule_failed", { workspaceId: workspace.id, connectorId: integration.id }, {
+            errorName: error instanceof Error ? error.name : "UnknownError",
+            errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
+          });
+        }
+      }
+
       let handled = 0;
       while (handled < MAX_JOBS_PER_WORKSPACE && Date.now() < deadline) {
         // Um job com defeito não pode parar a varredura dos demais workspaces:
@@ -73,7 +125,7 @@ export async function GET(request: Request) {
       if (handled) touched.push(workspace.id);
     }
 
-    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, processed, failed });
-    return Response.json({ swept: workspaces.results.length, touched: touched.length, processed, failed }, { headers: { "Cache-Control": "no-store" } });
+    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, scheduleFailed, processed, failed });
+    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, scheduleFailed, processed, failed }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
 }
