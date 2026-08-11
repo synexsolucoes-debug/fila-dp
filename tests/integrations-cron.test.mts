@@ -29,6 +29,7 @@ test("o disparo agendado exige segredo e respeita o isolamento por workspace", a
   assert.match(route, /timingSafeEqual/u, "comparação de segredo precisa ser em tempo constante");
   assert.match(route, /CRON_SECRET/u);
   assert.match(route, /FDP_INTEGRATION_WORKER_SECRET/u);
+  assert.match(route, /GITHUB_INTEGRATIONS_CRON_SECRET/u);
   assert.match(route, /status: 401/u);
   // Segredo curto não é aceito nem quando confere.
   assert.match(route, /MINIMUM_SECRET_LENGTH = 32/u);
