@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.read");
+    requireCapability(workspace, "contractors.payments.read");
     const closing = await findContractorClosing(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, closing.company_id);
 
@@ -33,9 +33,9 @@ export async function GET(_request: Request, { params }: Params) {
       provider,
       components: components.results,
       permissions: {
-        manage: hasCapability(workspace.role, "contractors.payments.manage"),
-        close: hasCapability(workspace.role, "contractors.payments.close"),
-        reopen: hasCapability(workspace.role, "payments.reopen"),
+        manage: hasCapability(workspace, "contractors.payments.manage"),
+        close: hasCapability(workspace, "contractors.payments.close"),
+        reopen: hasCapability(workspace, "payments.reopen"),
       },
     });
   } catch (error) {

@@ -66,7 +66,7 @@ test("a rota da central de ação agrega em uma consulta e valida a chave do ind
   assert.doesNotMatch(source, /getWorkspaceSnapshot/);
   assert.match(source, /getCompanyAccessScope/);
   assert.match(source, /requireCompanyAccess/);
-  assert.match(source, /hasCapability\(workspace\.role, definition\.capability\)/);
+  assert.match(source, /hasCapability\(workspace, definition\.capability\)/);
   // Uma única ida ao banco: os blocos são unidos, não consultados um a um.
   assert.match(source, /UNION ALL/);
   assert.match(source, /Indicador com chave inválida/);
@@ -82,7 +82,7 @@ test("a busca global cobre os domínios do produto respeitando capability e esco
     ["competences.read", "fdp_payroll_cycles"],
     ["integrations.status.read", "fdp_integrations"],
   ] as const) {
-    assert.ok(source.includes(`hasCapability(workspace.role, "${capability}")`), `busca não protege ${capability}`);
+    assert.ok(source.includes(`hasCapability(workspace, "${capability}")`), `busca não protege ${capability}`);
     assert.ok(source.includes(table), `busca não cobre ${table}`);
   }
   assert.match(source, /companyFilter\("e\.company_id"\)/);

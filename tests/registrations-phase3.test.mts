@@ -52,7 +52,7 @@ test("employee resource APIs apply company scope, capability checks and structur
     readFile(new URL("../app/api/registrations/catalogs/[resource]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(collection, /requireCapability\(workspace\.role, "employees\.read"\)/);
+  assert.match(collection, /requireCapability\(workspace, "employees\.read"\)/);
   assert.match(collection, /requireCompanyAccess/);
   assert.match(collection, /prepareAuditEvent/);
   assert.match(detail, /requireCompanyAccess/);

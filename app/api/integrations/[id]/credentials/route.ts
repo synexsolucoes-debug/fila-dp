@@ -12,7 +12,7 @@ export async function PUT(request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const integration = await d1.prepare("SELECT id, channel FROM fdp_integrations WHERE workspace_id = ? AND id = ?")
       .bind(workspace.id, id).first<{ id: string; channel: string }>();
     if (!integration) throw ApiError.notFound("Integração não encontrada.", "INTEGRATION_NOT_FOUND");
@@ -42,7 +42,7 @@ export async function DELETE(request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const integration = await d1.prepare("SELECT id FROM fdp_integrations WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first();
     if (!integration) throw ApiError.notFound("Integração não encontrada.", "INTEGRATION_NOT_FOUND");
     await d1.batch([

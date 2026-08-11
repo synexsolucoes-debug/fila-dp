@@ -24,7 +24,7 @@ export async function POST(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "time.manage");
+    requireCapability(workspace, "time.manage");
 
     const sheet = await findTimeSheet(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, sheet.company_id);
@@ -35,7 +35,7 @@ export async function POST(request: Request, { params }: Params) {
     }
     assertTimeTransition(sheet.status, target);
 
-    if (target === "approved" || target === "rejected") requireCapability(workspace.role, "time.approve");
+    if (target === "approved" || target === "rejected") requireCapability(workspace, "time.approve");
     const reopening = (sheet.status === "exported" || sheet.status === "closed") && target === "review";
     const reason = reopening ? requiredReason(body.reason, "TIME_REOPEN_REASON_REQUIRED") : "";
     const rejectedReason = target === "rejected" ? requiredReason(body.reason, "TIME_REJECT_REASON_REQUIRED") : "";

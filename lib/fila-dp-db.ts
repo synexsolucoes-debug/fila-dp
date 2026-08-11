@@ -180,7 +180,17 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
 
   await d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?").bind(board.id, userRow.id, workspace.id).run();
 
-  return { d1: scopedD1, user: userRow, workspace, board, accessible, switchedFrom };
+  // Exceções individuais viram capacidades efetivas aqui, uma vez por
+  // requisição. Resolver isso em cada rota faria a permissão valer em umas e
+  // não em outras — meia permissão é pior que nenhuma.
+  const memberGrants = await loadMemberModuleGrants(scopedD1, workspace.id, userRow.id);
+  const authorized = Object.assign(workspace, {
+    memberGrants: memberGrants.byModule,
+    extraCapabilities: memberGrants.extraCapabilities,
+    deniedCapabilities: memberGrants.deniedCapabilities,
+  });
+
+  return { d1: scopedD1, user: userRow, workspace: authorized, board, accessible, switchedFrom };
 }
 
 /**
@@ -194,6 +204,7 @@ export async function getWorkspaceModules(
   workspaceId: string,
   role: WorkspaceRole,
   workspaceStatus: string,
+  memberGrants?: ReadonlyMap<string, boolean>,
 ) {
   const [catalog, planModules, grants, subscription] = await Promise.all([
     d1.prepare(`SELECT key, name, description, category, route, required_capability, depends_on, status, position
@@ -218,10 +229,46 @@ export async function getWorkspaceModules(
     modules,
     planModules: new Set(planModules.results.map((row) => String(row.module_key))),
     workspaceGrants: new Map(grants.results.map((row) => [String(row.module_key), Number(row.granted) === 1])),
+    memberGrants,
     role,
     workspaceStatus,
     subscriptionStatus: String(subscription?.status ?? "inactive"),
   });
+}
+
+/**
+ * Exceções de módulo concedidas ou negadas a este usuário neste grupo.
+ *
+ * Traduz a linha da tabela em três coisas que a autorização entende: o mapa por
+ * módulo (para o menu), as capacidades extras (para liberar a leitura de um
+ * módulo que o papel não daria) e as negadas (para bloquear mesmo quando o
+ * papel daria).
+ *
+ * A capacidade que uma liberação concede é só a de **leitura** do módulo. As
+ * ações de escrita continuam vindo do papel: liberar a tela sem as ações
+ * entregaria uma tela decorativa, e liberar as ações junto transformaria um
+ * ajuste de visibilidade em promoção silenciosa.
+ */
+export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, workspaceId: string, userId: string) {
+  const rows = await d1.prepare(`SELECT g.module_key, g.granted, m.required_capability
+    FROM fdp_member_module_grants g
+    JOIN fdp_modules m ON m.key = g.module_key
+    WHERE g.workspace_id = ? AND g.user_id = ?`)
+    .bind(workspaceId, userId)
+    .all<{ module_key: string; granted: boolean | number; required_capability: string }>();
+
+  const byModule = new Map<string, boolean>();
+  const extraCapabilities = new Set<string>();
+  const deniedCapabilities = new Set<string>();
+  for (const row of rows.results) {
+    const granted = row.granted === true || Number(row.granted) === 1;
+    byModule.set(String(row.module_key), granted);
+    const capability = String(row.required_capability ?? "");
+    if (!capability) continue;
+    if (granted) extraCapabilities.add(capability);
+    else deniedCapabilities.add(capability);
+  }
+  return { byModule, extraCapabilities, deniedCapabilities };
 }
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
@@ -230,7 +277,9 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const canManageMembers = hasCapability(workspace.role, "members.manage");
   const canReadHr = hasCapability(workspace.role, "hr.read");
   const canManageIntegrations = hasCapability(workspace.role, "integrations.manage");
-  const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role, String((workspace as Record<string, unknown>).status ?? "active"));
+  const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
+    String((workspace as Record<string, unknown>).status ?? "active"),
+    (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants);
   const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),

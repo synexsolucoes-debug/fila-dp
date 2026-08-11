@@ -351,7 +351,7 @@ test("a recusa por coluna não identificada diz quais colunas encontrou", async 
 
 test("cadastrar modelo exige capacidade própria e interpreta antes de gravar", async () => {
   const source = await readFile(new URL("../app/api/payments/caju/templates/route.ts", import.meta.url), "utf8");
-  assert.match(source, /requireCapability\(workspace\.role, "contractors\.export_caju"\)/u);
+  assert.match(source, /requireCapability\(workspace, "contractors\.export_caju"\)/u);
   // Interpretar antes de persistir: modelo ilegível não entra no catálogo nem
   // como rascunho.
   const parseAt = source.indexOf("parseCajuTemplate(content)");
@@ -366,7 +366,7 @@ test("cadastrar modelo exige capacidade própria e interpreta antes de gravar", 
 
 test("gerar o arquivo exige competência acessível e recusa antes de escrever linha", async () => {
   const source = await readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8");
-  assert.match(source, /requireCapability\(workspace\.role, "contractors\.export_caju"\)/u);
+  assert.match(source, /requireCapability\(workspace, "contractors\.export_caju"\)/u);
   assert.match(source, /requireCompanyAccess\(/u);
   // A recusa vem antes da escrita: com bloqueio pendente não existe arquivo parcial.
   const assertAt = source.indexOf("assertExportable(preview");

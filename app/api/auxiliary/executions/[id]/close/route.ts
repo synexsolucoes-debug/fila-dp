@@ -8,12 +8,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { id } = await params; const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "auxiliary.close");
+    requireCapability(workspace, "auxiliary.close");
     const current = await d1.prepare(`SELECT e.*, r.status AS revision_status
       FROM fdp_auxiliary_executions e JOIN fdp_auxiliary_execution_revisions r ON r.workspace_id = e.workspace_id AND r.execution_id = e.id AND r.revision = e.current_revision
       WHERE e.workspace_id = ? AND e.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Lançamento auxiliar não encontrado.", "AUXILIARY_EXECUTION_NOT_FOUND");
-    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace.role, auxiliaryCapability(moduleType, "manage"));
+    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace, auxiliaryCapability(moduleType, "manage"));
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     if (current.status !== "approved" || current.revision_status !== "approved") throw ApiError.badRequest("Somente um lançamento aprovado pode ser fechado.", "AUXILIARY_NOT_APPROVED");
     const closed = await d1.prepare(`WITH updated AS (

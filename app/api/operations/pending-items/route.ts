@@ -7,7 +7,7 @@ import { cleanText, optionalDate } from "@/lib/registrations";
 export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "pending_items.read");
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "pending_items.read");
     const url = new URL(request.url); const companyId = cleanText(url.searchParams.get("companyId"), 120); const cycleId = cleanText(url.searchParams.get("competenceId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED"); await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const result = await d1.prepare(`SELECT * FROM fdp_operational_pending_items WHERE workspace_id = ? AND company_id = ? ${cycleId ? "AND payroll_cycle_id = ?" : ""} ORDER BY blocking DESC, due_date, created_at`)
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "pending_items.manage");
+    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "pending_items.manage");
     const companyId = cleanText(body.companyId, 120); const cycleId = cleanText(body.competenceId ?? body.payrollCycleId, 120); const title = cleanText(body.title, 180);
     const sourceType = ["movement", "approval", "obligation", "cycle", "card"].includes(String(body.sourceType)) ? String(body.sourceType) : "cycle"; const sourceId = cleanText(body.sourceId, 120) || cycleId;
     if (!companyId || !cycleId || !title || !sourceId) throw ApiError.badRequest("Empresa, competência e título são obrigatórios.", "PENDING_ITEM_REQUIRED_FIELDS");

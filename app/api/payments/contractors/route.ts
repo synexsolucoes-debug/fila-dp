@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.read");
+    requireCapability(workspace, "contractors.payments.read");
     const url = new URL(request.url);
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
@@ -47,9 +47,9 @@ export async function GET(request: Request) {
         };
       }),
       permissions: {
-        manage: hasCapability(workspace.role, "contractors.payments.manage"),
-        close: hasCapability(workspace.role, "contractors.payments.close"),
-        manageLimits: hasCapability(workspace.role, "contractors.limits.manage"),
+        manage: hasCapability(workspace, "contractors.payments.manage"),
+        close: hasCapability(workspace, "contractors.payments.close"),
+        manageLimits: hasCapability(workspace, "contractors.limits.manage"),
       },
     });
   } catch (error) {
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.manage");
+    requireCapability(workspace, "contractors.payments.manage");
 
     const companyId = cleanText(body.companyId, 120);
     const legalName = cleanText(body.legalName, 180);

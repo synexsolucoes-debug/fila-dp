@@ -12,7 +12,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const [endpoints, deliveries] = await Promise.all([
       d1.prepare(`SELECT id, name, url, event_types_json, status, failure_count, last_delivery_at, last_failure_at, created_at
         FROM fdp_webhook_endpoints WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 50`).bind(workspace.id).all<Record<string, unknown>>(),
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
 
     const name = cleanText(body.name, 120);
     if (!name) throw ApiError.badRequest("Informe um nome para o endpoint.", "WEBHOOK_NAME_REQUIRED");

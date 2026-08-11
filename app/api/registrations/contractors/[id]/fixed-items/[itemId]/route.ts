@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id, itemId } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.manage");
+    requireCapability(workspace, "contractors.manage");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);

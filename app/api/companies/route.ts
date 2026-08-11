@@ -11,7 +11,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "companies.read");
+    requireCapability(workspace, "companies.read");
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     const result = await d1.prepare(`SELECT ${companyColumns} FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name`).bind(workspace.id).all();
     return Response.json({ companies: result.results.filter((company) => access.unrestricted || access.companyIds.has(String(company.id))) });
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const taxId = text(body.taxId ?? body.cnpj, 30);
     if (!legalName) throw ApiError.badRequest("Informe a razão social da empresa.", "COMPANY_LEGAL_NAME_REQUIRED");
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "companies.manage");
+    requireCapability(workspace, "companies.manage");
     if (taxId && await d1.prepare("SELECT id FROM fdp_companies WHERE workspace_id = ? AND tax_id = ?").bind(workspace.id, taxId).first()) {
       throw new ApiError(409, "COMPANY_TAX_ID_CONFLICT", "Já existe uma empresa com este CNPJ no workspace.");
     }

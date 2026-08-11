@@ -12,7 +12,7 @@ export async function PATCH(request: Request, context: Context) {
     const { id } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "companies.manage");
+    requireCapability(workspace, "companies.manage");
     const current = await d1.prepare("SELECT * FROM fdp_companies WHERE id = ? AND workspace_id = ?").bind(id, workspace.id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Empresa não encontrada neste grupo.", "COMPANY_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
@@ -49,7 +49,7 @@ export async function DELETE(request: Request, context: Context) {
   try {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "companies.manage");
+    requireCapability(workspace, "companies.manage");
     const current = await d1.prepare("SELECT * FROM fdp_companies WHERE id = ? AND workspace_id = ?").bind(id, workspace.id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Empresa não encontrada neste grupo.", "COMPANY_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, id);

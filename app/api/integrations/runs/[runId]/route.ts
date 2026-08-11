@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: Context) {
   try {
     const { runId } = await params;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.status.read");
+    requireCapability(workspace, "integrations.status.read");
     const run = await d1.prepare(`SELECT run.*, integration.display_name, integration.channel, mapping.resource_type, mapping.direction, mapping.version AS mapping_version
       FROM fdp_integration_sync_runs run
       JOIN fdp_integrations integration ON integration.workspace_id = run.workspace_id AND integration.id = run.integration_id

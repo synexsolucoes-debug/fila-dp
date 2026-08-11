@@ -7,7 +7,7 @@ import { cleanText, optionalDate } from "@/lib/registrations";
 export async function POST(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "competences.manage");
+    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "competences.manage");
     const companyId = cleanText(body.companyId, 120); const cycleId = cleanText(body.competenceId ?? body.payrollCycleId, 120); const title = cleanText(body.title, 180);
     const phase = body.phase === "post_closing" ? "post_closing" : "pre_closing"; if (!companyId || !cycleId || !title) throw ApiError.badRequest("Empresa, competência e título são obrigatórios.", "CLOSING_ITEM_REQUIRED_FIELDS");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId); if (!await d1.prepare("SELECT id FROM fdp_payroll_cycles WHERE workspace_id = ? AND company_id = ? AND id = ?").bind(workspace.id, companyId, cycleId).first()) throw ApiError.badRequest("Competência inválida.", "INVALID_CLOSING_COMPETENCE");

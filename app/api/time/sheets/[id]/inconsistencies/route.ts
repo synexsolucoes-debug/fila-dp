@@ -22,7 +22,7 @@ export async function POST(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "time.manage");
+    requireCapability(workspace, "time.manage");
 
     const sheet = await findTimeSheet(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, sheet.company_id);
@@ -71,7 +71,7 @@ export async function PUT(request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "time.manage");
+    requireCapability(workspace, "time.manage");
     const sheet = await findTimeSheet(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, sheet.company_id);
     assertTimeSheetMutable(sheet.status);

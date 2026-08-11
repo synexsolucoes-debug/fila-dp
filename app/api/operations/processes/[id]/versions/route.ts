@@ -7,7 +7,7 @@ import { sanitizeProcessConfiguration } from "@/lib/operations";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "processes.manage");
+    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "processes.manage");
     if (!await d1.prepare("SELECT id FROM fdp_process_definitions WHERE workspace_id = ? AND id = ? AND status = 'active'").bind(workspace.id, id).first()) throw ApiError.notFound("Processo ativo não encontrado.", "PROCESS_NOT_FOUND");
     const latest = await d1.prepare("SELECT version, configuration_json FROM fdp_process_versions WHERE workspace_id = ? AND definition_id = ? ORDER BY version DESC LIMIT 1").bind(workspace.id, id).first<{ version: number; configuration_json: Record<string, unknown> }>();
     const configuration = Object.hasOwn(body, "configuration") ? sanitizeProcessConfiguration(body.configuration) : sanitizeProcessConfiguration(latest?.configuration_json ?? {}); const version = Number(latest?.version ?? 0) + 1; const versionId = crypto.randomUUID();

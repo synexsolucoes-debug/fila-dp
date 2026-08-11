@@ -13,7 +13,7 @@ export async function GET(request: Request, context: Context) {
     const { resource: key } = await context.params;
     const resource = getCatalogResource(key);
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "employees.read");
+    requireCapability(workspace, "employees.read");
     const companyId = cleanText(new URL(request.url).searchParams.get("companyId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
@@ -32,7 +32,7 @@ export async function POST(request: Request, context: Context) {
     const resource = getCatalogResource(key);
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "registrations.catalogs.manage");
+    requireCapability(workspace, "registrations.catalogs.manage");
     const companyId = cleanText(body.companyId, 120);
     const code = cleanText(body.code, 50);
     const name = cleanText(body.name, 160);

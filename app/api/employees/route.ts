@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "employees.read");
+    requireCapability(workspace, "employees.read");
     const url = new URL(request.url);
     const search = cleanText(url.searchParams.get("search"), 120);
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "employees.manage");
+    requireCapability(workspace, "employees.manage");
     const companyId = cleanText(body.companyId, 120);
     const fullName = cleanText(body.fullName, 160);
     const registrationNumber = cleanText(body.registrationNumber, 60);

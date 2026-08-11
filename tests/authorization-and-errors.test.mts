@@ -51,7 +51,7 @@ test("structured audit is tenant-scoped, append-only and admin-readable", async 
   assert.match(migration, /FORCE ROW LEVEL SECURITY/);
   assert.match(migration, /fdp_audit_events_append_only/);
   assert.match(migration, /ON DELETE RESTRICT/);
-  assert.match(route, /requireCapability\(workspace\.role, "audit\.read"\)/);
+  assert.match(route, /requireCapability\(workspace, "audit\.read"\)/);
   assert.match(route, /workspace_id = \?/);
   assert.match(memberRoute, /prepareAuditEvent/);
   assert.ok(memberRoute.indexOf("prepareAuditEvent") < memberRoute.indexOf("await d1.batch(statements)"));

@@ -8,7 +8,7 @@ import { validRequiredDate } from "@/lib/operations";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "obligations.manage");
+    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "obligations.manage");
     const current = await d1.prepare("SELECT * FROM fdp_compliance_obligations WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Obrigação não encontrada.", "OBLIGATION_NOT_FOUND"); await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     const status = ["open", "in_progress", "blocked", "completed"].includes(String(body.status)) ? String(body.status) : String(current.status);

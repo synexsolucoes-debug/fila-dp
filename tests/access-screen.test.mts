@@ -1,8 +1,21 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import test from "node:test";
 import { capabilities, capabilitiesForRole, workspaceRoles } from "../lib/authorization.ts";
 import { capabilitiesOfArea, capabilityAreas, capabilityCatalog, roleSummaries } from "../lib/capability-catalog.ts";
+
+async function walk(directory: string, extensions: string[]): Promise<string[]> {
+  const entries = await readdir(directory);
+  const files: string[] = [];
+  for (const entry of entries) {
+    const path = join(directory, entry);
+    const info = await stat(path);
+    if (info.isDirectory()) files.push(...await walk(path, extensions));
+    else if (extensions.some((extension) => entry.endsWith(extension))) files.push(path);
+  }
+  return files;
+}
 
 const source = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
@@ -99,7 +112,7 @@ test("a tela de usuários nunca cria, exibe ou envia senha", async () => {
 
 test("a rota de acesso exige permissão e devolve o limite real do plano", async () => {
   const route = await source("../app/api/members/access/route.ts");
-  assert.match(route, /requireCapability\(workspace\.role, "members\.directory\.read"\)/u);
+  assert.match(route, /requireCapability\(workspace, "members\.directory\.read"\)/u);
   assert.match(route, /GREATEST\(s\.seat_quantity, p\.included_seats\)/u);
   // Sem assinatura o produto não inventa limite.
   assert.match(route, /subscriptionStatus: "none"/u);
@@ -151,4 +164,105 @@ test("as rotas de detalhe exigem administrador de plataforma e não vazam creden
   assert.match(user, /SELECT id, device_label, created_at, last_seen_at, expires_at/u);
   // Administrar contrato não é motivo para ler a operação do cliente.
   assert.doesNotMatch(workspace, /FROM fdp_cards|FROM fdp_competences/u);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Permissão individual, além do papel                                        */
+/* -------------------------------------------------------------------------- */
+
+test("bloqueio individual vence o papel, e liberação individual não vira promoção", async () => {
+  const { hasCapability } = await import("../lib/authorization.ts");
+
+  // O papel sozinho continua valendo onde não há exceção.
+  assert.equal(hasCapability("admin", "members.manage"), true);
+  assert.equal(hasCapability("observer", "members.manage"), false);
+
+  // Negar é a exceção restritiva: uma restrição contornável não é restrição.
+  assert.equal(hasCapability({ role: "admin", deniedCapabilities: new Set(["members.manage"]) }, "members.manage"), false);
+  // Liberar concede só o que foi concedido — não abre o resto do papel superior.
+  const liberado = { role: "member", extraCapabilities: new Set(["hr.read"]) };
+  assert.equal(hasCapability(liberado, "hr.read"), true);
+  assert.equal(hasCapability(liberado, "members.manage"), false, "liberar um módulo não pode promover a administrador");
+  // Negar vence liberar quando os dois aparecem: o restritivo tem precedência.
+  assert.equal(hasCapability({
+    role: "member",
+    extraCapabilities: new Set(["hr.read"]),
+    deniedCapabilities: new Set(["hr.read"]),
+  }, "hr.read"), false);
+});
+
+test("o módulo bloqueado individualmente diz que foi o administrador do grupo", async () => {
+  const { resolveModules, moduleAccessMessages } = await import("../lib/modules.ts");
+  const modules = [{
+    key: "payroll", name: "Folha", description: "", category: "folha" as const, route: "/painel",
+    requiredCapability: "hr.read", dependsOn: "", status: "active" as const, position: 100,
+  }];
+  const base = {
+    modules,
+    planModules: new Set(["payroll"]),
+    workspaceGrants: new Map<string, boolean>(),
+    workspaceStatus: "active",
+    subscriptionStatus: "active",
+  };
+
+  const semExcecao = resolveModules({ ...base, role: "admin" });
+  assert.equal(semExcecao[0].allowed, true);
+
+  const bloqueado = resolveModules({ ...base, role: "admin", memberGrants: new Map([["payroll", false]]) });
+  assert.equal(bloqueado[0].allowed, false);
+  assert.equal(bloqueado[0].reason, "denied_for_member");
+  // O motivo aponta quem decidiu: "não está no plano" mandaria a pessoa cobrar
+  // a empresa errada.
+  assert.match(moduleAccessMessages.denied_for_member, /administrador do grupo/u);
+
+  // Liberar supre a capacidade de leitura que o papel não tem.
+  const semPapel = resolveModules({ ...base, role: "guest" });
+  assert.equal(semPapel[0].allowed, false);
+  assert.equal(semPapel[0].reason, "missing_capability");
+  const liberado = resolveModules({ ...base, role: "guest", memberGrants: new Map([["payroll", true]]) });
+  assert.equal(liberado[0].allowed, true);
+});
+
+test("liberação individual não passa por cima do plano", async () => {
+  const { resolveModules } = await import("../lib/modules.ts");
+  const modules = [{
+    key: "payroll", name: "Folha", description: "", category: "folha" as const, route: "/painel",
+    requiredCapability: "hr.read", dependsOn: "", status: "active" as const, position: 100,
+  }];
+  // Liberar para uma pessoa o que o grupo não contratou seria vender por dentro
+  // da tela. O plano continua acima da exceção.
+  const foraDoPlano = resolveModules({
+    modules,
+    planModules: new Set<string>(),
+    workspaceGrants: new Map<string, boolean>(),
+    memberGrants: new Map([["payroll", true]]),
+    role: "admin",
+    workspaceStatus: "active",
+    subscriptionStatus: "active",
+  });
+  assert.equal(foraDoPlano[0].allowed, false);
+  assert.equal(foraDoPlano[0].reason, "not_in_plan");
+});
+
+test("a permissão individual vale em todos os pontos de checagem, não em alguns", async () => {
+  const files = await walk(new URL("../app/api", import.meta.url).pathname, [".ts"]);
+  const offenders: string[] = [];
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    // Passar apenas o papel ignoraria a exceção individual naquele ponto —
+    // permissão que vale em alguns lugares e não em outros é pior que nenhuma.
+    if (/(?:require|has)Capability\(workspace\.role,/u.test(source)) offenders.push(file.split("/app/")[1]);
+  }
+  assert.deepEqual(offenders, [], `rotas ainda autorizando só pelo papel: ${offenders.join(", ")}`);
+});
+
+test("a rota de acesso individual respeita plano, capacidade e trava de auto-bloqueio", async () => {
+  const source = await readFile(new URL("../app/api/members/[id]/modules/route.ts", import.meta.url), "utf8");
+  assert.match(source, /requireCapability\(workspace, "members\.directory\.read"\)/u);
+  assert.match(source, /requireCapability\(workspace, "members\.manage"\)/u);
+  assert.match(source, /MODULE_NOT_CONTRACTED/u);
+  // Sem esta trava o grupo pode ficar sem ninguém capaz de devolver a permissão.
+  assert.match(source, /SELF_LOCKOUT/u);
+  // Exceção de acesso sem trilha vira mistério na próxima revisão.
+  assert.match(source, /member_module\.(granted|denied|cleared)/u);
 });

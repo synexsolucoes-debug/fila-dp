@@ -8,7 +8,7 @@ import { assertNoAdmissionWorkflow, sanitizeProcessConfiguration } from "@/lib/o
 export async function GET() {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { d1, workspace } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "processes.read");
+    const { d1, workspace } = await getWorkspaceContext(auth.user); requireCapability(workspace, "processes.read");
     const [definitions, versions] = await Promise.all([
       d1.prepare("SELECT * FROM fdp_process_definitions WHERE workspace_id = ? ORDER BY status, name").bind(workspace.id).all(),
       d1.prepare("SELECT * FROM fdp_process_versions WHERE workspace_id = ? ORDER BY definition_id, version DESC").bind(workspace.id).all(),
@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "processes.manage");
+    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "processes.manage");
     const code = cleanText(body.code, 60).toUpperCase().replace(/[^A-Z0-9_-]/g, "_"); const name = cleanText(body.name, 160); const category = cleanText(body.category, 80) || "general";
     if (!code || !name) throw ApiError.badRequest("Código e nome são obrigatórios.", "PROCESS_REQUIRED_FIELDS"); assertNoAdmissionWorkflow(code, name, category);
     if (await d1.prepare("SELECT id FROM fdp_process_definitions WHERE workspace_id = ? AND code = ?").bind(workspace.id, code).first()) throw new ApiError(409, "PROCESS_CODE_CONFLICT", "Já existe um processo com este código.");

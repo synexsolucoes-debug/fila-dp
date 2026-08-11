@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api-errors";
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { id } = await params; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "processes.publish");
+    const { id } = await params; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "processes.publish");
     const version = await d1.prepare("SELECT * FROM fdp_process_versions WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!version) throw ApiError.notFound("Versão não encontrada.", "PROCESS_VERSION_NOT_FOUND"); if (version.status !== "draft") throw ApiError.badRequest("Somente uma versão em rascunho pode ser publicada.", "PROCESS_VERSION_NOT_DRAFT");
     const configuration = version.configuration_json as Record<string, unknown>; if (!Array.isArray(configuration.steps) || configuration.steps.length === 0) throw ApiError.badRequest("Inclua ao menos uma etapa antes de publicar.", "PROCESS_STEPS_REQUIRED");

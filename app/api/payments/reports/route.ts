@@ -75,7 +75,7 @@ export async function GET(request: Request) {
     const key = cleanText(url.searchParams.get("report"), 60) as ReportKey;
     const report = reports[key];
     if (!report) throw ApiError.notFound("Relatório não encontrado.", "PAYMENT_REPORT_NOT_FOUND");
-    requireCapability(workspace.role, report.capability);
+    requireCapability(workspace, report.capability);
 
     const competence = validCompetence(url.searchParams.get("competence"));
     const companyId = cleanText(url.searchParams.get("companyId"), 120);

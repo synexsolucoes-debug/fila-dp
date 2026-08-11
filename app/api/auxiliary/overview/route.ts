@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     const url = new URL(request.url);
     const moduleType = parseAuxiliaryModule(url.searchParams.get("module"));
-    requireCapability(workspace.role, auxiliaryCapability(moduleType, "read"));
+    requireCapability(workspace, auxiliaryCapability(moduleType, "read"));
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
@@ -47,10 +47,10 @@ export async function GET(request: Request) {
     return Response.json({
       module: moduleType, competence, cycle, cycles: cycles.results, executions: executions.results, providers: providers.results, approvers: approvers.results,
       permissions: {
-        manage: hasCapability(workspace.role, auxiliaryCapability(moduleType, "manage")),
-        requestApproval: hasCapability(workspace.role, "auxiliary.approvals.request"),
-        decideApproval: hasCapability(workspace.role, "auxiliary.approvals.decide"),
-        close: hasCapability(workspace.role, "auxiliary.close"),
+        manage: hasCapability(workspace, auxiliaryCapability(moduleType, "manage")),
+        requestApproval: hasCapability(workspace, "auxiliary.approvals.request"),
+        decideApproval: hasCapability(workspace, "auxiliary.approvals.decide"),
+        close: hasCapability(workspace, "auxiliary.close"),
       },
       privacyBoundary: moduleType === "psychology" ? "Somente dados administrativos agregados; dados clínicos são proibidos." : null,
     });

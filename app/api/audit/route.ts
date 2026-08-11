@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const auth = await getApiUser();
     if (!auth.user) return auth.response;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "audit.read");
+    requireCapability(workspace, "audit.read");
 
     const search = new URL(request.url).searchParams;
     const limitValue = Number(search.get("limit") ?? 50);

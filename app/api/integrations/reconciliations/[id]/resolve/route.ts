@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.reconcile");
+    requireCapability(workspace, "integrations.reconcile");
     const body = await request.json() as Record<string, unknown>;
     const resolution = String(body.resolution ?? "");
     if (!["link", "accept_external", "keep_internal", "ignore"].includes(resolution)) throw ApiError.badRequest("Resolução inválida.", "RECONCILIATION_RESOLUTION_INVALID");

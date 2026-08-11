@@ -14,7 +14,7 @@ export async function PATCH(request: Request, context: Context) {
     const resource = getCatalogResource(key);
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "registrations.catalogs.manage");
+    requireCapability(workspace, "registrations.catalogs.manage");
     const current = await d1.prepare(`SELECT * FROM ${resource.table} WHERE workspace_id = ? AND id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound(`${resource.label} não encontrado.`, "CATALOG_ITEM_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
@@ -54,7 +54,7 @@ export async function DELETE(request: Request, context: Context) {
     const { resource: key, id } = await context.params;
     const resource = getCatalogResource(key);
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "registrations.catalogs.manage");
+    requireCapability(workspace, "registrations.catalogs.manage");
     const current = await d1.prepare(`SELECT * FROM ${resource.table} WHERE workspace_id = ? AND id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound(`${resource.label} não encontrado.`, "CATALOG_ITEM_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));

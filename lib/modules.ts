@@ -40,6 +40,8 @@ export type ModuleAccessInput = {
   planModules: ReadonlySet<string>;
   /** Liberações e bloqueios especiais concedidos pela plataforma ao workspace. */
   workspaceGrants: ReadonlyMap<string, boolean>;
+  /** Exceções individuais do usuário dentro do grupo. */
+  memberGrants?: ReadonlyMap<string, boolean>;
   role: string;
   workspaceStatus: string;
   subscriptionStatus: string;
@@ -55,7 +57,8 @@ export type ModuleAccessReason =
   | "not_in_plan"
   | "revoked_by_platform"
   | "dependency_missing"
-  | "missing_capability";
+  | "missing_capability"
+  | "denied_for_member";
 
 export type ModuleAccess = { allowed: boolean; reason: ModuleAccessReason; upgradeable: boolean };
 
@@ -69,6 +72,7 @@ export const moduleAccessMessages: Record<ModuleAccessReason, string> = {
   revoked_by_platform: "O acesso a este módulo foi bloqueado pela administração da plataforma.",
   dependency_missing: "Este módulo depende de outro que não está liberado.",
   missing_capability: "Seu perfil não tem permissão para este módulo. Peça ao administrador do grupo.",
+  denied_for_member: "O administrador do grupo bloqueou este módulo para o seu acesso.",
 };
 
 /**
@@ -98,10 +102,19 @@ export function resolveModuleAccess(input: ModuleAccessInput): ModuleAccess {
   const contracted = input.planModules.has(definition.key) || grant === true;
   if (!contracted) return { allowed: false, reason: "not_in_plan", upgradeable: true };
 
+  // Bloqueio individual vem depois do plano e antes de tudo mais: é exceção do
+  // grupo sobre a pessoa, não sobre o contrato.
+  const memberGrant = input.memberGrants?.get(definition.key);
+  if (memberGrant === false) return { allowed: false, reason: "denied_for_member", upgradeable: false };
+
   if (definition.dependsOn && !input.enabledKeys.has(definition.dependsOn)) {
     return { allowed: false, reason: "dependency_missing", upgradeable: true };
   }
-  if (definition.requiredCapability && !hasCapability(input.role, definition.requiredCapability as Capability)) {
+  // Liberação individual supre a capacidade de leitura que o papel não tem. As
+  // ações de escrita continuam vindo do papel — liberar a tela sem as ações
+  // entregaria uma tela decorativa.
+  if (definition.requiredCapability && memberGrant !== true
+    && !hasCapability(input.role, definition.requiredCapability as Capability)) {
     return { allowed: false, reason: "missing_capability", upgradeable: false };
   }
   return { allowed: true, reason: "ok", upgradeable: false };
@@ -125,6 +138,7 @@ export function resolveModules(input: {
   modules: readonly ModuleDefinition[];
   planModules: ReadonlySet<string>;
   workspaceGrants: ReadonlyMap<string, boolean>;
+  memberGrants?: ReadonlyMap<string, boolean>;
   role: string;
   workspaceStatus: string;
   subscriptionStatus: string;
@@ -137,6 +151,7 @@ export function resolveModules(input: {
       module: definition,
       planModules: input.planModules,
       workspaceGrants: input.workspaceGrants,
+      memberGrants: input.memberGrants,
       role: input.role,
       workspaceStatus: input.workspaceStatus,
       subscriptionStatus: input.subscriptionStatus,

@@ -105,7 +105,7 @@ async function searchRecords(
 
   const tasks: Promise<SearchRecord[]>[] = [];
 
-  if (hasCapability(workspace.role, "companies.read")) {
+  if (hasCapability(workspace, "companies.read")) {
     tasks.push(d1.prepare(`SELECT id, legal_name, trade_name, tax_id, status FROM fdp_companies
       WHERE workspace_id = ? AND (legal_name ILIKE ? OR trade_name ILIKE ? OR tax_id ILIKE ?)${companyFilter("id")}
       ORDER BY trade_name LIMIT 8`)
@@ -120,7 +120,7 @@ async function searchRecords(
       }))));
   }
 
-  if (hasCapability(workspace.role, "employees.read")) {
+  if (hasCapability(workspace, "employees.read")) {
     const { hash, last4 } = cpfLookup(q);
     const cpfCondition = hash ? " OR e.cpf_hash = ?" : last4 ? " OR e.cpf_last4 = ?" : "";
     const cpfValue = hash ? [hash] : last4 ? [last4] : [];
@@ -139,7 +139,7 @@ async function searchRecords(
       }))));
   }
 
-  if (hasCapability(workspace.role, "psychology.payments.read")) {
+  if (hasCapability(workspace, "psychology.payments.read")) {
     tasks.push(d1.prepare(`SELECT id, code, legal_name, status FROM fdp_auxiliary_providers
       WHERE workspace_id = ? AND provider_type = 'psychologist' AND (legal_name ILIKE ? OR code ILIKE ?)
       ORDER BY legal_name LIMIT 5`)
@@ -154,7 +154,7 @@ async function searchRecords(
       }))));
   }
 
-  if (hasCapability(workspace.role, "contractors.payments.read")) {
+  if (hasCapability(workspace, "contractors.payments.read")) {
     tasks.push(d1.prepare(`SELECT a.id, a.code, a.legal_name, p.contract_reference, p.status
       FROM fdp_auxiliary_providers a JOIN fdp_contractor_profiles p ON p.workspace_id = a.workspace_id AND p.provider_id = a.id
       WHERE a.workspace_id = ? AND (a.legal_name ILIKE ? OR a.code ILIKE ? OR p.contract_reference ILIKE ?)${companyFilter("p.company_id")}
@@ -170,7 +170,7 @@ async function searchRecords(
       }))));
   }
 
-  if (hasCapability(workspace.role, "competences.read")) {
+  if (hasCapability(workspace, "competences.read")) {
     tasks.push(d1.prepare(`SELECT k.id, k.competence, k.status, c.trade_name AS company_name FROM fdp_payroll_cycles k
       JOIN fdp_companies c ON c.workspace_id = k.workspace_id AND c.id = k.company_id
       WHERE k.workspace_id = ? AND k.competence ILIKE ?${companyFilter("k.company_id")}
@@ -186,7 +186,7 @@ async function searchRecords(
       }))));
   }
 
-  if (hasCapability(workspace.role, "integrations.status.read")) {
+  if (hasCapability(workspace, "integrations.status.read")) {
     tasks.push(d1.prepare(`SELECT id, channel, display_name, status FROM fdp_integrations
       WHERE workspace_id = ? AND (display_name ILIKE ? OR channel ILIKE ?)
       ORDER BY display_name LIMIT 5`)

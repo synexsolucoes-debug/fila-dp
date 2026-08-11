@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const { id, mappingId } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const published = await d1.prepare(`WITH target AS (
         SELECT id, resource_type, direction, version, checksum FROM fdp_integration_mappings
         WHERE workspace_id = ? AND integration_id = ? AND id = ? AND status = 'draft'

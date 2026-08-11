@@ -97,13 +97,38 @@ const roleCapabilities = {
   ]),
 } satisfies Record<WorkspaceRole, ReadonlySet<Capability>>;
 
-export function hasCapability(role: string, capability: Capability) {
+/**
+ * Quem está sendo autorizado.
+ *
+ * Ou o papel sozinho — a forma antiga, ainda usada onde não há exceção
+ * individual — ou o contexto do workspace, que carrega as capacidades extras
+ * concedidas àquela pessoa. Aceitar as duas formas evita que a permissão por
+ * usuário valha em alguns pontos e não em outros, que é pior que não existir.
+ */
+export type AuthorizationSubject = string | {
+  role: string;
+  /** Capacidades concedidas ao usuário além do papel. */
+  extraCapabilities?: ReadonlySet<string>;
+  /** Módulos bloqueados para o usuário, mesmo que o papel permita. */
+  deniedCapabilities?: ReadonlySet<string>;
+};
+
+function subjectOf(subject: AuthorizationSubject) {
+  return typeof subject === "string" ? { role: subject } : subject;
+}
+
+export function hasCapability(subject: AuthorizationSubject, capability: Capability) {
+  const { role, extraCapabilities, deniedCapabilities } = subjectOf(subject);
+  // A negação individual vence o papel: é a exceção restritiva, e uma exceção
+  // restritiva que pode ser contornada não é restrição.
+  if (deniedCapabilities?.has(capability)) return false;
+  if (extraCapabilities?.has(capability)) return true;
   if (!Object.hasOwn(roleCapabilities, role)) return false;
   return roleCapabilities[role as WorkspaceRole].has(capability);
 }
 
-export function requireCapability(role: string, capability: Capability) {
-  if (!hasCapability(role, capability)) {
+export function requireCapability(subject: AuthorizationSubject, capability: Capability) {
+  if (!hasCapability(subject, capability)) {
     throw ApiError.forbidden("Você não tem permissão para realizar esta ação.", "CAPABILITY_REQUIRED");
   }
 }

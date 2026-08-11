@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.manage");
     const row = await d1.prepare(`SELECT a.id, a.code, a.legal_name, a.trade_name, a.tax_id, a.email, a.phone,
         p.default_session_amount, p.administrative_notes, p.status, p.payout_encrypted, p.payout_iv, p.payout_tag, p.payout_key_version
       FROM fdp_auxiliary_providers a
@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.manage");
 
     const current = await d1.prepare(`SELECT a.id, a.legal_name, a.status AS provider_status, p.default_session_amount, p.status
       FROM fdp_auxiliary_providers a

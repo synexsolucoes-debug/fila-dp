@@ -21,7 +21,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "time.mappings.manage");
+    requireCapability(workspace, "time.mappings.manage");
 
     const current = await d1.prepare(`SELECT id, company_id, destination, event_code, rubric_code, target_field, unit, status
       FROM fdp_hour_event_mappings WHERE workspace_id = ? AND id = ?`)

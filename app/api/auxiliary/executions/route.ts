@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user); const url = new URL(request.url);
-    const moduleType = parseAuxiliaryModule(url.searchParams.get("module")); requireCapability(workspace.role, auxiliaryCapability(moduleType, "read"));
+    const moduleType = parseAuxiliaryModule(url.searchParams.get("module")); requireCapability(workspace, auxiliaryCapability(moduleType, "read"));
     const companyId = cleanText(url.searchParams.get("companyId"), 120); const cycleId = cleanText(url.searchParams.get("competenceId"), 120);
     const cursor = cleanText(url.searchParams.get("cursor"), 120); const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 40, 1), 100);
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    const moduleType = parseAuxiliaryModule(body.module); requireCapability(workspace.role, auxiliaryCapability(moduleType, "manage"));
+    const moduleType = parseAuxiliaryModule(body.module); requireCapability(workspace, auxiliaryCapability(moduleType, "manage"));
     const companyId = cleanText(body.companyId, 120); const cycleId = cleanText(body.competenceId ?? body.payrollCycleId, 120);
     const providerId = cleanText(body.providerId, 120) || null; const title = cleanText(body.title, 180); const reference = referenceCode(body.referenceCode);
     if (!companyId || !cycleId || !title) throw ApiError.badRequest("Empresa, competência, referência e título são obrigatórios.", "AUXILIARY_REQUIRED_FIELDS");

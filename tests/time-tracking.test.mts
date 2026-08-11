@@ -370,7 +370,7 @@ test("a rota de exportação exige capability própria e não aceita exportar pe
     readFile(new URL("../app/api/time/export/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/time/sheets/[id]/transition/route.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(exportRoute, /requireCapability\(workspace\.role, "time\.export"\)/);
+  assert.match(exportRoute, /requireCapability\(workspace, "time\.export"\)/);
   assert.match(exportRoute, /runTimeExport/);
   assert.match(transitionRoute, /TIME_EXPORT_ROUTE_REQUIRED/);
   assert.match(transitionRoute, /assertApprovable/);

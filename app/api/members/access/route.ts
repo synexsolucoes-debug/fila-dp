@@ -24,7 +24,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "members.directory.read");
+    requireCapability(workspace, "members.directory.read");
 
     const [members, seats, companies] = await Promise.all([
       d1.prepare(`SELECT wm.user_id, u.email, u.name, wm.role, wm.joined_at,

@@ -7,7 +7,7 @@ import { cleanText } from "@/lib/registrations";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "pending_items.manage");
+    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "pending_items.manage");
     const current = await d1.prepare("SELECT * FROM fdp_operational_pending_items WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Pendência não encontrada.", "PENDING_ITEM_NOT_FOUND"); await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     const status = ["open", "in_progress", "resolved", "waived"].includes(String(body.status)) ? String(body.status) : String(current.status); const resolution = Object.hasOwn(body, "resolution") ? cleanText(body.resolution, 1000) : String(current.resolution);

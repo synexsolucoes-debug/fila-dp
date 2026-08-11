@@ -46,7 +46,7 @@ export async function PATCH(request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const current = await d1.prepare("SELECT id, channel, display_name, status, config_json FROM fdp_integrations WHERE workspace_id = ? AND id = ?")
       .bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Integração não encontrada.", "INTEGRATION_NOT_FOUND");

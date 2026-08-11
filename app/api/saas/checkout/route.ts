@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "saas.manage");
+    requireCapability(workspace, "saas.manage");
     const body = await request.json() as Body;
     const planCode = validPlanCode(body.planCode);
     const billingInterval = validBillingInterval(body.billingInterval);

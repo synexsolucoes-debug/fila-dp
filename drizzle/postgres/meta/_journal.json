@@ -246,6 +246,20 @@
       "when": 1786249003000,
       "tag": "0032_contractor_registry",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1786249004000,
+      "tag": "0033_member_module_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786249005000,
+      "tag": "0034_workspace_deletion_ledger",
+      "breakpoints": true
     }
   ]
 }
