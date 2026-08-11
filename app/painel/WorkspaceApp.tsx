@@ -54,6 +54,7 @@ import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AccessView } from "./features/access";
+import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
 import { OperationsView } from "./features/operations";
 import { AuxiliaryModulesView } from "./features/auxiliary";
@@ -143,6 +144,15 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   saas: { eyebrow: "ADMINISTRAÇÃO SAAS", title: "Plano e ativação", description: "Conclua a implantação do workspace, acompanhe limites, assinatura e cobranças." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
+};
+
+/** Nome da tela atual, para o assistente saber onde a pessoa está. */
+const viewTitles: Record<string, string> = {
+  overview: "Visão geral", board: "Demandas", inbox: "Inbox", planner: "Planner",
+  processes: "Operação DP", auxiliary: "Módulos auxiliares", psychologistPayments: "Pagamento de Psicólogos",
+  contractorPayments: "Pagamentos PJ", timeTracking: "Ponto", integrations: "Integrações",
+  registrations: "Cadastros", access: "Usuários e permissões", saas: "Plano e ativação",
+  payroll: "Folha", indicators: "Relatórios",
 };
 
 /** Estados do ciclo de vida do workspace, para o seletor dizer por que um grupo
@@ -1535,6 +1545,10 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           </section>
         </div>
       )}
+
+      {/* Recolhido por padrão: um copiloto que ocupa espaço sem ter sido pedido
+          atrapalha justamente quem já sabe o que fazer. */}
+      <AssistantPanel screen={viewTitles[view] ?? "Painel"} />
     </main>
   );
 }

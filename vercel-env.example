@@ -55,3 +55,9 @@ FDP_TEAMS_WEBHOOK_SECRET=
 FDP_EMAIL_WEBHOOK_SECRETS={}
 FDP_WHATSAPP_WEBHOOK_SECRETS={}
 FDP_TEAMS_WEBHOOK_SECRETS={}
+
+# Assistente do painel (opcional). Ausente, o assistente informa que não está
+# configurado em vez de responder qualquer coisa.
+FDP_ASSISTANT_PROVIDER=
+FDP_ASSISTANT_API_KEY=
+FDP_ASSISTANT_MODEL=
