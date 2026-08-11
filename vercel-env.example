@@ -20,6 +20,11 @@ FDP_INTEGRATION_VAULT_KEYS=
 # Sem ele /api/integrations/worker e /api/webhooks/worker recusam a chamada.
 FDP_INTEGRATION_WORKER_SECRET=gere-um-segredo-para-o-executor
 
+# Segredo que a Vercel Cron envia em Authorization: Bearer ao chamar
+# /api/cron/integrations a cada 5 minutos. SEM ELE A FILA NAO ANDA:
+# sincronizar enfileira e nada executa. Pode ser o mesmo valor do executor.
+CRON_SECRET=gere-um-segredo-com-32-caracteres-ou-mais
+
 # Opcionais: webhooks e sincronizacoes externas
 FDP_EMAIL_TOKEN=
 FDP_WHATSAPP_TOKEN=
