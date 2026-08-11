@@ -36,6 +36,7 @@ export const expectedMigrations = [
   "0026_caju_templates.sql",
   "0027_caju_template_format.sql",
   "0028_solides_admission_connector.sql",
+  "0029_tangerino_connector.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

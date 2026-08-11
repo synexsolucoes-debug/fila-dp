@@ -2,8 +2,9 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes }
 import { ApiError } from "./api-errors.ts";
 import { validateIntegrationEndpoint } from "./integration-security.ts";
 import { validateSolidesEndpoint } from "./solides.ts";
+import { validateTangerinoEndpoint } from "./tangerino.ts";
 
-export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "erp"] as const;
+export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "erp"] as const;
 export type IntegrationChannel = typeof integrationChannels[number];
 export const integrationResources = ["inbox", "employees", "hr_metrics", "files", "admissions"] as const;
 export type IntegrationResource = typeof integrationResources[number];
@@ -15,6 +16,7 @@ const allowedCredentialKeys: Record<IntegrationChannel, ReadonlySet<string>> = {
   drive: new Set(["token", "apiKey", "clientId", "clientSecret", "refreshToken", "serviceAccount"]),
   onedrive: new Set(["token", "clientId", "clientSecret", "tenantId", "refreshToken"]),
   solides: new Set(["token", "apiKey", "clientId", "clientSecret", "refreshToken"]),
+  tangerino: new Set(["token", "apiKey"]),
   erp: new Set(["token", "apiKey", "clientId", "clientSecret", "xToken"]),
 };
 
@@ -168,6 +170,7 @@ export function mappingDirection(value: unknown) {
 
 export function validateConnectorEndpoint(channel: string, value: unknown) {
   if (channel === "solides") return validateSolidesEndpoint(value);
+  if (channel === "tangerino") return validateTangerinoEndpoint(value);
   const endpoint = typeof value === "string" ? value.trim().slice(0, 500) : "";
   if (!endpoint) throw ApiError.badRequest("Configure o endpoint oficial do conector.", "INTEGRATION_ENDPOINT_REQUIRED");
   const upper = channel.toUpperCase();

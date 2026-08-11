@@ -90,11 +90,54 @@ calendário e os feriados do workspace, resolvidos uma vez por execução.
    valor de documento na auditoria.
 5. Só então ampliar o corte histórico em **Admitidos a partir de**.
 
-## 7. Fora de escopo nesta entrega
+## 7. Sólides DP (Tangerino) — o outro produto
 
-- **Sólides DP / Tangerino** (`https://employer.tangerino.com.br`, autenticação `Basic`): é outra API,
-  com endpoints próprios de ponto e espelho. O módulo de tempo do Vinculato não consome essa API.
+A Sólides tem **dois produtos com APIs distintas**, e o cliente pode usar só um deles. O conector da
+Sólides DP vive em `lib/tangerino.ts` e é um canal separado (`tangerino`).
+
+| Item | Gestão | DP (Tangerino) |
+| --- | --- | --- |
+| Base | `app.solides.com/{locale}/api/v1/` | `employer.tangerino.com.br` |
+| Autenticação | `Authorization: Token token=<token>` | `Authorization: Basic <token>` |
+| Recurso | `GET /colaboradores` | `GET /employee/find-all` |
+| Filtro | `data_admissao` (`DD/MM/AAAA`) | `lastUpdate` (epoch em ms) |
+| Paginação | `page` (base 1) / `page_size` | `page` (base 0) / `size` |
+| Resposta | array na raiz | envelope `Page` do Spring (`content`) |
+| Token | Ativar API de Integração | Empregador → Integrações |
+
+Especificação: <https://employer.tangerino.com.br/v2/api-docs>
+
+### Por que o recorte de admissão é feito aqui
+
+O Tangerino **não tem filtro por data de admissão**. O oficial é `lastUpdate`, que devolve quem foi
+ATUALIZADO desde então — na mesma janela chegam desligamento, correção de cadastro e admissão antiga.
+O conector recebe a janela e descarta, registrando o motivo no item de sincronização:
+
+- quem está `fired` ou tem `resignationDate` → `desligado`;
+- quem tem `admissionDate` anterior ao corte configurado → `admitido antes do corte`.
+
+Sem esse recorte, corrigir o telefone de alguém admitido há dois anos abriria uma conciliação de
+admissão. O token é colado de Empregador → Integrações; se vier com o prefixo `Basic`, o conector
+aceita mesmo assim, em vez de montar um `Basic Basic ...` que o provedor recusaria sem explicar.
+
+### Documentos: mesma limitação
+
+A API do Tangerino também **não expõe download de documento**. Os únicos arquivos que ela manipula são
+foto do colaborador (só upload), imagem de assinatura digital e espelho de ponto via GED. Os campos
+documentais disponíveis no DTO são CPF, CTPS, série da CTPS e PIS — e, como no Gestão, só a presença
+ou ausência de cada um entra na tarefa.
+
+### Ativação
+
+Migration `0029_tangerino_connector` provisiona o conector. O resto do fluxo é idêntico ao do Gestão:
+configurar recurso oficial e corte, guardar o token, publicar mapeamento `admissions` e **Verificar**.
+
+## 8. Fora de escopo nesta entrega
+
+- **Ponto e espelho do Tangerino** (`GET /punch/`, `GET /time-sheet`): o módulo de tempo do Vinculato
+  não consome essa API. Só a listagem de colaboradores é usada.
 - **Webhooks da Sólides** (`novo_colaborador`, `edicao_colaborador`, `demissao_colaborador`): a
   documentação pública lista os nomes dos eventos, mas não o payload nem o registro do endpoint.
   Enquanto isso não estiver documentado, a carga é por consulta agendada, não por evento.
 - **Escrita de volta na Sólides**: o executor processa apenas mapeamentos de entrada ou bidirecionais.
+- **Documentos como arquivo**: nenhum dos dois produtos expõe download de anexo na API oficial.

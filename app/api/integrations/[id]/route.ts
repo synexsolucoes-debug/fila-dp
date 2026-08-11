@@ -25,8 +25,8 @@ function safeRequestBody(value: unknown) {
   return value as Record<string, unknown>;
 }
 
-/** Destino e recorte das conciliações vindas da Sólides. Nenhum destes campos é segredo. */
-function solidesSyncConfig(body: Record<string, unknown>) {
+/** Destino e recorte das conciliações vindas da Sólides (Gestão ou DP). Nenhum destes campos é segredo. */
+function admissionSyncConfig(body: Record<string, unknown>) {
   const admissionsSince = solidesDateToIso(body.admissionsSince);
   if (text(body.admissionsSince, 40) && !admissionsSince) {
     throw ApiError.badRequest("Informe a data de corte das admissões no formato AAAA-MM-DD.", "SOLIDES_ADMISSIONS_SINCE_INVALID");
@@ -59,8 +59,8 @@ export async function PATCH(request: Request, { params }: Context) {
     const config = {
       ...(endpoint ? { endpoint } : {}),
       ...(body.requestBody ? { requestBody: safeRequestBody(body.requestBody) } : {}),
-      ...(channel === "solides" && text(body.accountReference, 160) ? { accountReference: text(body.accountReference, 160) } : {}),
-      ...(channel === "solides" ? solidesSyncConfig(body) : {}),
+      ...((channel === "solides" || channel === "tangerino") && text(body.accountReference, 160) ? { accountReference: text(body.accountReference, 160) } : {}),
+      ...(channel === "solides" || channel === "tangerino" ? admissionSyncConfig(body) : {}),
     };
     await d1.batch([
       d1.prepare("UPDATE fdp_integrations SET display_name = ?, status = ?, config_json = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
