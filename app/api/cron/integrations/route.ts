@@ -50,7 +50,7 @@ function matchesSecret(received: string, expected: string) {
 function authorized(request: Request) {
   const received = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/iu, "").trim();
   if (!received) return false;
-  return [process.env.CRON_SECRET, process.env.FDP_INTEGRATION_WORKER_SECRET]
+  return [process.env.CRON_SECRET, process.env.FDP_INTEGRATION_WORKER_SECRET, process.env.GITHUB_INTEGRATIONS_CRON_SECRET]
     .some((expected) => typeof expected === "string" && matchesSecret(received, expected.trim()));
 }
 
