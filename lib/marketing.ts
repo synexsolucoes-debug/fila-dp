@@ -107,6 +107,7 @@ export const integrationCatalog = [
   { name: "Sólides", category: "Admissão", state: "partial", note: "Conector oficial de colaboradores: quem é admitido na Sólides vira conciliação no Vinculato. Exige token do cliente e homologação; os arquivos dos documentos permanecem na Sólides. A admissão permanece na Sólides." },
   { name: "Caju", category: "Benefícios", state: "planned", note: "Complemento é controle assistido com exportação; não há integração oficial implementada." },
   { name: "Domínio, Senior, TOTVS, Alterdata e outros ERPs", category: "ERP", state: "planned", note: "Arquitetura de conectores pronta; cada integração exige documentação e homologação." },
+  { name: "Sólides DP (Tangerino)", category: "Admissão", state: "partial", note: "Conector oficial de colaboradores: quem é admitido na Sólides DP vira conciliação no Vinculato. Exige token do cliente e homologação; os arquivos dos documentos permanecem na Sólides." },
   { name: "Sistemas de ponto", category: "Ponto", state: "planned", note: "Importação para conferência; o módulo de ponto ainda não faz parte do produto." },
 ] as const;
 

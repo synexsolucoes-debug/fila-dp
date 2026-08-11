@@ -17,7 +17,7 @@ const object = (input: unknown): Row => {
   return {};
 };
 
-const channels = new Set(["email", "whatsapp", "teams", "drive", "onedrive", "solides", "erp"]);
+const channels = new Set(["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "erp"]);
 const connectorStatuses = new Set(["connected", "needs_credentials", "paused", "error"]);
 const mappingStatuses = new Set(["draft", "active", "archived"]);
 const runStatuses = new Set(["queued", "running", "succeeded", "partial", "failed"]);

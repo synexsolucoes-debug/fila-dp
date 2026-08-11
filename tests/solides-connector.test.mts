@@ -114,8 +114,9 @@ test("a tarefa aberta concilia a admissão sem copiar valor de documento", () =>
 
 test("o executor trata a Sólides com o contrato dela e abre a conciliação", async () => {
   const engine = await readFile(new URL("../lib/integration-engine.ts", import.meta.url), "utf8");
-  // Autenticação própria: a Sólides não usa Bearer.
-  assert.match(engine, /solides \? solidesAuthorization\(token\) : `Bearer \$\{token\}`/u);
+  // Autenticação própria: a Sólides Gestão não usa Bearer, e cada produto tem a sua.
+  assert.match(engine, /solides \? solidesAuthorization\(token\)/u);
+  assert.match(engine, /`Bearer \$\{token\}`/u);
   assert.match(engine, /solidesAdmissionsUrl\(endpoint/u);
   // A resposta da Sólides é um array na raiz.
   assert.match(engine, /Array\.isArray\(parsed\) \? \{ items: parsed \} : asRecord\(parsed\)/u);

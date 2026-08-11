@@ -4,7 +4,9 @@ import { ApiError } from "./api-errors";
 import { computeSlaStatus } from "./fila-dp-api";
 import { addBusinessDays } from "./fila-dp-relations";
 import { workingDayMinutes } from "./fila-dp-sla";
-import { admissionIsComplete, admissionTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
+import { admissionIsComplete } from "./admissions";
+import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
+import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
 import {
   mappingDirection,
   mappingResource,
@@ -79,6 +81,9 @@ function mapRecord(record: Record<string, unknown>, fields: MappingField[]) {
 
 function providerRecords(payload: Record<string, unknown>) {
   const responseBody = asRecord(payload.responseBody);
+  // A Sólides DP responde com o envelope `Page` do Spring: os registros vêm em `content`.
+  const fromPage = tangerinoRecords(payload);
+  if (fromPage.length) return fromPage.slice(0, 500);
   const records = Array.isArray(payload.items) ? payload.items
     : Array.isArray(payload.value) ? payload.value
       : Array.isArray(payload.records) ? payload.records
@@ -114,17 +119,21 @@ async function requestProvider(integration: IntegrationRow, credential: Credenti
   const token = await microsoftAccessToken(integration.channel, credentials) || credentials.token || credentials.apiKey;
   if (!token) throw new ApiError(409, "INTEGRATION_CREDENTIAL_INCOMPLETE", "A credencial armazenada não possui um token utilizável.");
   const solides = integration.channel === "solides";
-  // A Sólides filtra admissões pela data de corte configurada e autentica com `Token token=`.
+  const tangerino = integration.channel === "tangerino";
+  // Cada produto da Sólides tem filtro próprio: Gestão corta por data de admissão,
+  // DP/Tangerino corta por data de atualização (epoch em milissegundos).
   const requestUrl = solides
     ? solidesAdmissionsUrl(endpoint, { since: config.admissionsSince, pageSize: Number(config.pageSize) || 150, includeInactive: config.includeInactive === true })
-    : endpoint;
+    : tangerino
+      ? tangerinoEmployeesUrl(endpoint, { since: config.admissionsSince, pageSize: Number(config.pageSize) || 100, includeFired: false })
+      : endpoint;
   const rawBody = integration.channel === "erp" ? config.requestBody : undefined;
   const requestBody = rawBody && typeof rawBody === "object" ? stableJson(rawBody) : typeof rawBody === "string" && rawBody.trim() ? rawBody.slice(0, 32_000) : undefined;
   const response = await fetch(requestUrl, {
     method: requestBody ? "POST" : "GET",
     headers: {
       Accept: "application/json",
-      Authorization: solides ? solidesAuthorization(token) : `Bearer ${token}`,
+      Authorization: solides ? solidesAuthorization(token) : tangerino ? tangerinoAuthorization(token) : `Bearer ${token}`,
       ...(credentials.xToken ? { "X-Token": credentials.xToken } : {}),
       ...(requestBody ? { "Content-Type": "application/json" } : {}),
     },
@@ -188,6 +197,8 @@ export async function queueIntegrationRun(d1: Database, input: {
 const admissionProcessType = "CONCILIAÇÃO CADASTRAL";
 
 type AdmissionContext = {
+  /** Data de corte configurada; o Tangerino precisa dela para separar admissão de atualização. */
+  since: string;
   boardId: string;
   listId: string;
   slaBehavior: string;
@@ -201,7 +212,7 @@ type AdmissionContext = {
 type ItemInput = {
   workspaceId: string; integrationId: string; runId: string; mappingId: string; itemKey: string; externalId: string;
   payloadHash: string; resource: string; mapped: Record<string, unknown>; missing: string[];
-  raw: Record<string, unknown>; admission: AdmissionContext | null;
+  raw: Record<string, unknown>; admission: AdmissionContext | null; channel: string;
 };
 
 /**
@@ -235,6 +246,7 @@ async function loadAdmissionContext(d1: Database, workspaceId: string, config: R
   const dayEnd = settings?.day_end ?? "18:00";
   const targetDays = Number(template?.default_sla_days ?? policy?.target_business_days ?? 2);
   return {
+    since: text(config.admissionsSince, 10),
     boardId: target.board_id,
     listId: target.list_id,
     slaBehavior: target.sla_behavior,
@@ -300,16 +312,28 @@ async function insertInboxItem(d1: Database, input: Parameters<typeof insertGene
 async function insertAdmissionItem(d1: Database, input: ItemInput) {
   const context = input.admission;
   if (!context) throw new ApiError(409, "INTEGRATION_TARGET_BOARD_MISSING", "Configure o destino das conciliações da Sólides antes de sincronizar.");
-  const admission = normalizeSolidesAdmission(input.raw);
+  const tangerino = input.channel === "tangerino";
+  const admission = tangerino ? normalizeTangerinoAdmission(input.raw) : normalizeSolidesAdmission(input.raw);
   const incomplete = admissionIsComplete(admission);
   if (incomplete.length) return insertGenericItem(d1, { ...input, missing: [...input.missing, ...incomplete] });
+  // O filtro oficial do Tangerino é por atualização, não por admissão: desligamento
+  // e correção de cadastro chegam na mesma janela e não podem virar conciliação.
+  const skipReason = tangerino ? tangerinoSkipReason(input.raw, admission, context.since) : "";
+  if (skipReason) {
+    await d1.prepare(`INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, metadata_json, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, ?, ?::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
+      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, input.resource,
+        JSON.stringify({ source: input.channel, skipped: skipReason })).run();
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
 
   const previous = await d1.prepare(`SELECT target_id FROM fdp_integration_sync_items
     WHERE workspace_id = ? AND integration_id = ? AND external_id = ? AND target_type = 'card' AND COALESCE(target_id, '') <> ''
     ORDER BY created_at LIMIT 1`).bind(input.workspaceId, input.integrationId, input.externalId).first<{ target_id: string }>();
   const cardId = previous?.target_id ?? crypto.randomUUID();
   const metadata = JSON.stringify({
-    source: "solides",
+    source: input.channel,
     admissionDate: admission.admissionDate,
     registrationNumber: admission.registrationNumber,
     documentsPresent: admission.documentsPresent,
@@ -325,7 +349,7 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
     return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
   }
 
-  const draft = admissionTaskDraft(admission);
+  const draft = tangerino ? tangerinoTaskDraft(admission) : solidesTaskDraft(admission);
   const created = await d1.prepare(`WITH inserted AS (
       INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, target_id, metadata_json, processed_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'processed', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
@@ -340,7 +364,7 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
     .bind(
       crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, cardId, metadata,
       cardId, input.workspaceId, context.boardId, context.listId, draft.title, draft.description, context.companyId, context.companyName || admission.unityName,
-      admissionProcessType, context.dueAt, computeSlaStatus(context.dueAt, context.slaBehavior), context.listId, "integracao:solides", context.slaTargetMinutes, context.templateId,
+      admissionProcessType, context.dueAt, computeSlaStatus(context.dueAt, context.slaBehavior), context.listId, `integracao:${input.channel}`, context.slaTargetMinutes, context.templateId,
     )
     .first<{ id: string }>();
   if (!created) return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
@@ -386,7 +410,7 @@ async function executeRun(d1: Database, workspaceId: string, job: JobRow) {
     // Admissões usam o registro original no hash: mudanças na ficha precisam ser percebidas
     // mesmo quando o mapeamento publicado cobre poucos campos.
     const payloadHash = createHash("sha256").update(stableJson(resource === "admissions" ? record : mapped)).digest("hex");
-    const common = { workspaceId, integrationId: integration.id, runId: job.run_id, mappingId: mapping.id, itemKey: `${externalId}:${payloadHash.slice(0, 16)}`, externalId, payloadHash, resource, mapped, missing, raw: record, admission: admissionContext };
+    const common = { workspaceId, integrationId: integration.id, runId: job.run_id, mappingId: mapping.id, itemKey: `${externalId}:${payloadHash.slice(0, 16)}`, externalId, payloadHash, resource, mapped, missing, raw: record, admission: admissionContext, channel: integration.channel };
     const result = resource === "inbox" ? await insertInboxItem(d1, common)
       : resource === "admissions" ? await insertAdmissionItem(d1, common)
         : await insertGenericItem(d1, common);

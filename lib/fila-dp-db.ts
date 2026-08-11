@@ -119,7 +119,7 @@ export async function provisionWorkspaceDefaults(
     ["CONCILIAÇÃO CADASTRAL", 2, 1], ["RESCISÃO", 2, 1], ["FÉRIAS", 5, 2], ["BENEFÍCIOS", 3, 1], ["FOLHA", 2, 1], ["OUTROS", 3, 1],
   ] as const;
   const integrationRows = [
-    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["teams", "Microsoft Teams"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["solides", "Sólides"], ["erp", "ERP / Folha"],
+    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["teams", "Microsoft Teams"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["solides", "Sólides"], ["tangerino", "Sólides DP (Tangerino)"], ["erp", "ERP / Folha"],
   ] as const;
 
   await d1.batch([

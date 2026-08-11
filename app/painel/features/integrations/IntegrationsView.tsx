@@ -24,7 +24,7 @@ const tabs: Array<{ id: IntegrationTab; label: string; icon: typeof Cable }> = [
 
 const channelIcons: Record<Connector["channel"], typeof Mail> = {
   email: Mail, whatsapp: MessageCircle, teams: UsersRound, drive: HardDrive,
-  onedrive: HardDrive, solides: ShieldAlert, erp: Database,
+  onedrive: HardDrive, solides: ShieldAlert, tangerino: ShieldAlert, erp: Database,
 };
 const statusLabels: Record<string, string> = {
   connected: "Conectado", needs_credentials: "Aguardando credenciais", paused: "Pausado", error: "Atenção",
@@ -207,7 +207,7 @@ function ConnectorsPanel({ overview, busy, onEdit, onVerify }: { overview: Integ
       <header><span className={styles.connectorIcon}><Icon aria-hidden="true" /></span><div><small>{connector.channel.toUpperCase()}</small><strong>{connector.displayName}</strong></div><StatusPill status={connector.status} /></header>
       <dl><div><dt>Credencial</dt><dd>{connector.hasCredentials ? <><KeyRound aria-hidden="true" /> v{connector.keyVersion} · {connector.fingerprint || "fingerprint protegido"}</> : <><Unplug aria-hidden="true" /> Não armazenada</>}</dd></div><div><dt>Verificação real</dt><dd>{formatDate(connector.verifiedAt)}</dd></div><div><dt>Última sincronização</dt><dd>{formatDate(connector.lastSyncAt)}</dd></div><div><dt>Mapeamentos ativos</dt><dd>{active}</dd></div></dl>
       {connector.lastError && <div className={styles.safeError}><AlertTriangle aria-hidden="true" /><span><strong>Resumo seguro</strong>{connector.lastError}</span></div>}
-      {connector.channel === "solides" && <div className={styles.connectorBoundary}>Sem admissão digital · somente recurso oficial</div>}
+      {(connector.channel === "solides" || connector.channel === "tangerino") && <div className={styles.connectorBoundary}>Sem admissão digital · somente recurso oficial</div>}
       {overview.permissions.manage && <footer><button type="button" onClick={() => onEdit({ kind: "configure", connector })}><Settings2 aria-hidden="true" /> Configurar</button><button type="button" onClick={() => onEdit({ kind: "credentials", connector })}><RotateCw aria-hidden="true" />{connector.hasCredentials ? "Rotacionar" : "Credencial"}</button>{connector.hasCredentials && <button type="button" onClick={() => onEdit({ kind: "revoke", connector })}><Unplug aria-hidden="true" /> Revogar</button>}<button className={styles.verifyButton} type="button" disabled={!connector.hasCredentials || busy} onClick={() => onVerify(connector)}><ShieldCheck aria-hidden="true" /> Verificar</button></footer>}
     </article>; })}</div> : <EmptyState icon={Cable} title="Nenhum conector provisionado" text="Os conectores aparecerão aqui depois do provisionamento do workspace." />}
   </>;

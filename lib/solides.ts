@@ -10,8 +10,17 @@
  * concilia a ficha e abre a tarefa; os arquivos continuam sendo obtidos na Sólides.
  * Nenhum endpoint especulativo é aceito — ver `validateSolidesEndpoint`.
  */
+import { admissionTaskDraft as buildAdmissionTask, admissionText, emptyAdmission, type AdmissionRecord, type AdmissionSource } from "./admissions.ts";
 import { ApiError } from "./api-errors.ts";
-import { cleanText } from "./registrations.ts";
+
+/** A regra de produto e o formato da tarefa são comuns aos dois produtos da Sólides. */
+export { admissionIsComplete } from "./admissions.ts";
+export type { AdmissionRecord } from "./admissions.ts";
+
+export const solidesSource: AdmissionSource = {
+  label: "Sólides",
+  documentsNote: "Os arquivos dos documentos permanecem na Sólides: a API oficial de Gestão não expõe download de anexos.",
+};
 
 export const solidesApiHosts = ["app.solides.com"] as const;
 export const solidesLocales = ["pt-BR", "es", "en"] as const;
@@ -43,9 +52,7 @@ function record(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function textValue(value: unknown, max = 160) {
-  return typeof value === "string" || typeof value === "number" ? cleanText(String(value), max) : "";
-}
+const textValue = admissionText;
 
 /** Converte `DD/MM/AAAA` (formato da Sólides) ou ISO em `AAAA-MM-DD`. */
 export function solidesDateToIso(value: unknown) {
@@ -116,33 +123,13 @@ export function solidesAuthorization(token: string) {
   return `Token token=${value}`;
 }
 
-export type SolidesAdmission = {
-  externalId: string;
-  fullName: string;
-  registrationNumber: string;
-  admissionDate: string;
-  birthDate: string;
-  email: string;
-  phone: string;
-  positionName: string;
-  departmentName: string;
-  unityName: string;
-  contractType: string;
-  contractStartDate: string;
-  contractExpirationDate: string;
-  workShift: string;
-  salary: number;
-  cpf: string;
-  documentsPresent: string[];
-  documentsMissing: string[];
-  dependents: number;
-};
+export type SolidesAdmission = AdmissionRecord;
 
 /**
  * Normaliza um colaborador da Sólides. O CPF sai em `cpf` apenas para ser convertido
  * em HMAC por `protectCpf` no momento da gravação; ele nunca é persistido em claro.
  */
-export function normalizeSolidesAdmission(raw: unknown): SolidesAdmission {
+export function normalizeSolidesAdmission(raw: unknown): AdmissionRecord {
   const source = record(raw);
   const documents = record(source.documents);
   const contact = record(source.contact);
@@ -156,6 +143,7 @@ export function normalizeSolidesAdmission(raw: unknown): SolidesAdmission {
   }
   const salary = Number(String(source.salary ?? "").replace(/\./gu, "").replace(",", ".")) || 0;
   return {
+    ...emptyAdmission(),
     externalId: textValue(source.id, 120),
     fullName: textValue(source.name, 160),
     registrationNumber: textValue(source.registration, 60),
@@ -178,44 +166,7 @@ export function normalizeSolidesAdmission(raw: unknown): SolidesAdmission {
   };
 }
 
-/** Só há admissão a conciliar quando a Sólides devolve identificador, nome e data de admissão. */
-export function admissionIsComplete(admission: SolidesAdmission) {
-  const missing: string[] = [];
-  if (!admission.externalId) missing.push("externalId");
-  if (!admission.fullName) missing.push("fullName");
-  if (!admission.admissionDate) missing.push("admissionDate");
-  return missing;
-}
-
-/**
- * Rascunho da tarefa aberta no Vinculato. O texto não carrega valor de documento:
- * lista apenas quais documentos vieram preenchidos e quais faltam.
- */
-export function admissionTaskDraft(admission: SolidesAdmission) {
-  const contract = [admission.contractType, admission.workShift].filter(Boolean).join(" · ") || "não informado";
-  const lotacao = [admission.positionName, admission.departmentName, admission.unityName].filter(Boolean).join(" · ") || "não informada";
-  const description = [
-    `Colaborador admitido na Sólides em ${admission.admissionDate}.`,
-    `Matrícula: ${admission.registrationNumber || "não informada"} · Registro Sólides: ${admission.externalId}`,
-    `Lotação: ${lotacao}`,
-    `Contrato: ${contract}`,
-    admission.contractExpirationDate ? `Vigência do contrato até ${admission.contractExpirationDate}.` : "",
-    `Dependentes informados: ${admission.dependents}`,
-    `Ficha documental recebida: ${admission.documentsPresent.length}/${solidesDocumentFields.length} campos.`,
-    admission.documentsMissing.length ? `Pendente na ficha: ${admission.documentsMissing.join(", ")}.` : "Ficha documental completa.",
-    "Os arquivos dos documentos permanecem na Sólides: a API oficial de Gestão não expõe download de anexos.",
-  ].filter(Boolean).join("\n");
-  const checklist = [
-    "Conferir a ficha recebida da Sólides",
-    ...admission.documentsMissing.slice(0, 12).map((label) => `Obter na Sólides: ${label}`),
-    "Baixar os arquivos dos documentos na Sólides e anexar à tarefa",
-    "Vincular o registro da Sólides ao ERP",
-    "Tratar divergências cadastrais",
-    "Registrar a sincronização concluída",
-  ];
-  return {
-    title: `Conciliação cadastral — ${admission.fullName}`.slice(0, 160),
-    description: description.slice(0, 4000),
-    checklist,
-  };
+/** Rascunho da tarefa, com a Sólides Gestão nomeada como origem. */
+export function admissionTaskDraft(admission: AdmissionRecord) {
+  return buildAdmissionTask(admission, solidesSource, solidesDocumentFields.length);
 }
