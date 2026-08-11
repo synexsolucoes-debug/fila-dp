@@ -166,6 +166,28 @@
 .employee_terminated { background: color-mix(in srgb, #697586 12%, var(--reg-surface)); color: var(--reg-soft); }
 .employee_on_leave { background: color-mix(in srgb, #c2720c 13%, var(--reg-surface)); color: #9c5808; }
 
+/* Estados por `data-status`.
+ *
+ * O padrão vem primeiro e de propósito: a versão anterior coloria só por classe
+ * (.statusActive/.statusInactive) e qualquer estado sem regra herdava a cor do
+ * contêiner — "Aplicada" saiu em 1.29:1, praticamente invisível. Com um padrão
+ * legível, um estado novo pode ficar sem cor própria, mas nunca sem contraste. */
+.statusPill[data-status] { background: color-mix(in srgb, #697586 12%, var(--reg-surface)); color: #4a5563; }
+.statusPill[data-status="active"],
+.statusPill[data-status="approved"],
+.statusPill[data-status="applied"],
+.statusPill[data-status="paid"],
+.statusPill[data-status="reconciled"] { background: color-mix(in srgb, #159566 12%, var(--reg-surface)); color: #076848; }
+.statusPill[data-status="suspended"],
+.statusPill[data-status="pending_approval"],
+.statusPill[data-status="review"],
+.statusPill[data-status="approval"],
+.statusPill[data-status="invoice_pending"],
+.statusPill[data-status="open"] { background: color-mix(in srgb, #c2720c 13%, var(--reg-surface)); color: #8a5007; }
+.statusPill[data-status="rejected"] { background: color-mix(in srgb, #b42318 11%, var(--reg-surface)); color: #962016; }
+.statusPill[data-status="ready_to_pay"],
+.statusPill[data-status="reopened"] { background: color-mix(in srgb, #0857b2 11%, var(--reg-surface)); color: #08529f; }
+
 .dataPanel { min-width: 0; min-height: 420px; border: 1px solid var(--reg-border); border-radius: 11px; overflow: hidden; background: var(--reg-surface); box-shadow: var(--ui-shadow-card, 0 4px 16px rgba(11,31,51,.04)); }
 .filters { display: flex; align-items: flex-end; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 55%, var(--reg-surface)); }
 .filters label { display: grid; gap: 5px; }

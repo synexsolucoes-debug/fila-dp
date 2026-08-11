@@ -37,6 +37,7 @@ export const expectedMigrations = [
   "0027_caju_template_format.sql",
   "0028_bootstrap_guard_deferrable.sql",
   "0029_caju_template_source.sql",
+  "0030_contractor_registry.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

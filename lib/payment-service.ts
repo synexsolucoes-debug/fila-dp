@@ -14,6 +14,16 @@ import {
   reconcileContractorClosing,
   resolveInvoiceLimit,
 } from "./payments.ts";
+import { centsFromDatabase, fromCents } from "./payments.ts";
+import {
+  apurationBlock,
+  assertWithinContract,
+  contractBalance,
+  fixedItemsForCompetence,
+  type ContractType,
+  type ContractorStatus,
+  type FixedItem,
+} from "./contractor-registry.ts";
 
 type Database = ReturnType<typeof getD1>;
 
@@ -127,12 +137,15 @@ export async function upsertPsychologyClosing(d1: Database, input: {
 export type ContractorProfileRow = {
   provider_id: string; company_id: string; contract_reference: string; base_amount: string | number;
   invoice_limit_override: string | number | null; complement_method: string; status: string;
+  contract_type: string; contract_start: string | null; contract_end: string | null;
+  contract_total_amount: string | number | null;
   legal_name?: string; trade_name?: string;
 };
 
 export async function requireContractorProfile(d1: Database, workspaceId: string, providerId: string) {
   const profile = await d1.prepare(`SELECT p.provider_id, p.company_id, p.contract_reference, p.base_amount, p.invoice_limit_override,
-      p.complement_method, p.status, a.legal_name, a.trade_name
+      p.complement_method, p.status, p.contract_type, p.contract_start, p.contract_end, p.contract_total_amount,
+      a.legal_name, a.trade_name
     FROM fdp_contractor_profiles p JOIN fdp_auxiliary_providers a ON a.workspace_id = p.workspace_id AND a.id = p.provider_id
     WHERE p.workspace_id = ? AND p.provider_id = ?`)
     .bind(workspaceId, providerId).first<ContractorProfileRow>();
@@ -191,6 +204,113 @@ export async function findContractorClosing(d1: Database, workspaceId: string, c
   return closing;
 }
 
+/** O nome que a operação usa para o prestador, sem cair em string vazia. */
+function contractorLabel(profile: ContractorProfileRow) {
+  return profile.trade_name || profile.legal_name || profile.contract_reference || "Prestador";
+}
+
+/**
+ * Quanto do contrato já foi consumido por competências comprometidas.
+ *
+ * Fechamento ainda em conferência não conta: ele pode mudar. Só entra o que já
+ * virou obrigação — daí a lista de situações abaixo. `excludeCycleId` tira a
+ * competência sendo recalculada, senão ela contaria duas vezes contra o saldo.
+ */
+export async function contractorConsumedCents(d1: Database, workspaceId: string, providerId: string, excludeCycleId?: string) {
+  const row = await d1.prepare(`SELECT COALESCE(SUM(net_amount), 0) AS consumed FROM fdp_contractor_closings
+    WHERE workspace_id = ? AND provider_id = ?
+      AND status IN ('approved', 'invoice_pending', 'ready_to_pay', 'paid', 'closed')
+      AND (? = '' OR payroll_cycle_id <> ?)`)
+    .bind(workspaceId, providerId, excludeCycleId ?? "", excludeCycleId ?? "")
+    .first<{ consumed: string | number }>();
+  return centsFromDatabase(row?.consumed ?? 0, "Consumo do contrato");
+}
+
+/** Saldo do contrato do prestador, pronto para a tela e para a recusa de apuração. */
+export async function contractorBalance(d1: Database, workspaceId: string, profile: ContractorProfileRow, excludeCycleId?: string) {
+  return contractBalance({
+    contractType: profile.contract_type as ContractType,
+    contractTotalCents: profile.contract_total_amount === null || profile.contract_total_amount === undefined
+      ? null
+      : centsFromDatabase(profile.contract_total_amount, "Valor do contrato"),
+    consumedCents: await contractorConsumedCents(d1, workspaceId, profile.provider_id, excludeCycleId),
+  });
+}
+
+/**
+ * Traz os valores fixos vigentes para dentro da competência, como componentes.
+ *
+ * A materialização existe para que o cálculo continue tendo uma fonte só:
+ * `calculateContractorClosing` lê componentes, e o valor fixo vira componente.
+ * Um segundo caminho de soma seria a maneira mais fácil de fazer a tela e o
+ * arquivo discordarem.
+ *
+ * Reapurar não duplica (índice único por item e competência) e item que saiu de
+ * vigência é cancelado com motivo, não apagado — o histórico da competência
+ * precisa continuar explicável.
+ */
+export async function materializeFixedItems(d1: Database, input: {
+  workspaceId: string; profile: ContractorProfileRow; cycle: CycleRow; userId: string;
+}) {
+  const rows = await d1.prepare(`SELECT id, direction, component_type, description, amount, effective_from, effective_to, status
+    FROM fdp_contractor_fixed_items WHERE workspace_id = ? AND provider_id = ?`)
+    .bind(input.workspaceId, input.profile.provider_id)
+    .all<{
+      id: string; direction: string; component_type: string; description: string;
+      amount: string | number; effective_from: string; effective_to: string | null; status: string;
+    }>();
+
+  const items: FixedItem[] = rows.results.map((row) => ({
+    id: String(row.id),
+    direction: row.direction === "debit" ? "debit" : "credit",
+    componentType: String(row.component_type),
+    description: String(row.description),
+    amountCents: centsFromDatabase(row.amount, "Valor fixo"),
+    effectiveFrom: String(row.effective_from),
+    effectiveTo: row.effective_to === null ? null : String(row.effective_to),
+    status: row.status === "ended" ? "ended" : "active",
+  }));
+  const effective = fixedItemsForCompetence(items, input.cycle.competence);
+  const effectiveIds = new Set(effective.map((item) => item.id));
+
+  const existing = await d1.prepare(`SELECT id, fixed_item_id, status FROM fdp_contractor_components
+    WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ? AND fixed_item_id IS NOT NULL`)
+    .bind(input.workspaceId, input.profile.provider_id, input.cycle.id)
+    .all<{ id: string; fixed_item_id: string; status: string }>();
+  const existingByItem = new Map(existing.results.map((row) => [String(row.fixed_item_id), row]));
+
+  const statements = [];
+  for (const item of effective) {
+    const current = existingByItem.get(item.id);
+    if (current) {
+      statements.push(d1.prepare(`UPDATE fdp_contractor_components
+          SET direction = ?, component_type = ?, description = ?, amount = ?, status = 'active', canceled_reason = '', updated_at = now()
+        WHERE workspace_id = ? AND id = ?`)
+        .bind(item.direction, item.componentType, item.description, fromCents(item.amountCents),
+          input.workspaceId, current.id));
+    } else {
+      statements.push(d1.prepare(`INSERT INTO fdp_contractor_components
+          (id, workspace_id, company_id, provider_id, payroll_cycle_id, competence, direction, component_type,
+           description, component_quantity, amount, origin, fixed_item_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'fixed_item', ?, ?)`)
+        .bind(crypto.randomUUID(), input.workspaceId, input.profile.company_id, input.profile.provider_id,
+          input.cycle.id, input.cycle.competence, item.direction, item.componentType, item.description,
+          fromCents(item.amountCents), item.id, input.userId));
+    }
+  }
+  for (const row of existing.results) {
+    if (effectiveIds.has(String(row.fixed_item_id)) || row.status === "canceled") continue;
+    // Cancelar, não apagar: a competência precisa continuar explicando o que
+    // entrou e o que saiu, e por quê.
+    statements.push(d1.prepare(`UPDATE fdp_contractor_components
+        SET status = 'canceled', canceled_reason = 'valor fixo fora da vigência desta competência', updated_at = now()
+      WHERE workspace_id = ? AND id = ?`).bind(input.workspaceId, row.id));
+  }
+
+  if (statements.length > 0) await d1.batch(statements);
+  return { applied: effective.length, removed: existing.results.length - effectiveIds.size };
+}
+
 /** Aplica a ordem obrigatória do cálculo PJ sobre os componentes vigentes da competência. */
 export async function computeContractorClosing(d1: Database, workspaceId: string, profile: ContractorProfileRow, cycle: CycleRow) {
   const components = await d1.prepare(`SELECT direction, component_type, amount, status FROM fdp_contractor_components
@@ -225,7 +345,32 @@ export async function upsertContractorClosing(d1: Database, input: {
   if (existing && (existing.status === "closed" || existing.status === "paid")) {
     throw ApiError.badRequest("O fechamento está concluído e não pode ser recalculado. Reabra com justificativa.", "PAYMENT_CLOSING_LOCKED");
   }
+
+  // Contrato suspenso, encerrado ou fora de vigência não vira apuração. Sem esta
+  // recusa, um prestador desligado continuaria gerando pagamento todo mês —
+  // silenciosamente, porque o cadastro sozinho não impede o cálculo.
+  const blocked = apurationBlock(
+    input.profile.status as ContractorStatus,
+    input.cycle.competence,
+    input.profile.contract_start,
+    input.profile.contract_end,
+  );
+  if (blocked) {
+    throw new ApiError(409, "CONTRACTOR_NOT_APURABLE",
+      `${contractorLabel(input.profile)} não entra na apuração de ${input.cycle.competence}: ${blocked}.`);
+  }
+
+  // Os valores fixos vigentes entram como componentes antes do cálculo, para o
+  // motor continuar com uma fonte só.
+  await materializeFixedItems(d1, input);
+
   const { calculation, limitPolicyId, componentCount } = await computeContractorClosing(d1, input.workspaceId, input.profile, input.cycle);
+
+  // O contrato por prazo determinado tem teto em valor, não só em data: ele pode
+  // acabar antes do prazo. Recusar aqui evita criar obrigação que o contrato não
+  // cobre — e a recusa acontece antes de qualquer escrita no fechamento.
+  const balance = await contractorBalance(d1, input.workspaceId, input.profile, input.cycle.id);
+  assertWithinContract(balance, centsFromDatabase(calculation.netAmount, "Líquido apurado"), contractorLabel(input.profile));
   const closingId = existing?.id ?? crypto.randomUUID();
   const cajuStatus = calculation.cajuAmount > 0 ? "pending" : "not_required";
   const invoiceStatus = calculation.invoiceExpectedAmount > 0 ? "pending" : "not_required";

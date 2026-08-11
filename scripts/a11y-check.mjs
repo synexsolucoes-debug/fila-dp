@@ -208,6 +208,23 @@ async function audit(label, path, setup) {
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
+/**
+ * Sub-abas de uma tela do painel.
+ *
+ * Auditar a visão de Cadastros cobria só a primeira aba. Prestadores PJ,
+ * Colaboradores e Cadastros auxiliares são telas diferentes com formulários
+ * diferentes — cada uma precisa passar por si.
+ */
+async function auditSubTabs(prefix, selector) {
+  const tabs = page.locator(selector);
+  const labels = (await tabs.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+  for (const label of labels) {
+    await tabs.filter({ hasText: label }).first().click().catch(() => undefined);
+    await page.waitForTimeout(1100);
+    await audit(`${prefix} › ${label}`, null);
+  }
+}
+
 async function signIn() {
   if (!page.url().includes("/login")) return;
   await page.locator('input[type="email"]').first().fill(EMAIL);
@@ -231,6 +248,9 @@ async function auditPanelViews() {
     await button.click().catch(() => undefined);
     await page.waitForTimeout(900);
     await audit(`Painel › ${label}`, null);
+    if (/Cadastros/u.test(label)) {
+      await auditSubTabs(`Painel › ${label}`, 'main [class*="tabs"] > button, [class*="__tabs"] > button');
+    }
     await page.keyboard.press("Escape").catch(() => undefined);
   }
 }

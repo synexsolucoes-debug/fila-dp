@@ -225,6 +225,13 @@
       "when": 1786247002000,
       "tag": "0029_caju_template_source",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1786247003000,
+      "tag": "0030_contractor_registry",
+      "breakpoints": true
     }
   ]
 }
