@@ -225,6 +225,26 @@ async function auditSubTabs(prefix, selector) {
   }
 }
 
+/**
+ * O assistente fica recolhido por padrão — então nunca entraria na varredura
+ * junto com a tela que o hospeda. Aqui ele é aberto de propósito: um painel que
+ * só aparece quando chamado ainda precisa ser legível quando aparece.
+ */
+async function auditAssistant() {
+  const launcher = page.locator('button[class*="launcher"]').filter({ hasText: /Assistente/u }).first();
+  if (await launcher.count() === 0) {
+    console.log("\n### Assistente — lançador não encontrado");
+    failures += 1;
+    return;
+  }
+  await launcher.click();
+  await page.locator('aside[aria-label="Assistente do Vinculato"]').waitFor({ state: "visible", timeout: 10000 });
+  await page.waitForTimeout(1200);
+  await audit("Painel › Assistente", null);
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.waitForTimeout(300);
+}
+
 async function signIn() {
   if (!page.url().includes("/login")) return;
   await page.locator('input[type="email"]').first().fill(EMAIL);
@@ -263,6 +283,7 @@ try {
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   });
   await auditPanelViews();
+  await auditAssistant();
   await audit("Console da plataforma", "/plataforma");
 } finally {
   await browser.close();

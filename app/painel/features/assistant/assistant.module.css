@@ -1,0 +1,169 @@
+/* Assistente: recolhido por padrão, sai da frente com Esc. */
+
+.launcher {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* `min-height` aqui perdia para `.dashboard-shell :is(select, button):not(...)`,
+     que é mais específico e derrubava o alvo para 26px de altura. `height` não
+     disputa com aquela regra: min-height só levanta, nunca encolhe. */
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--ui-border-strong, #c3cfe0);
+  border-radius: 999px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text, #0f172a);
+  box-shadow: 0 10px 28px rgba(6, 43, 96, .16);
+  font: 700 .82rem inherit;
+  cursor: pointer;
+}
+.launcher:hover { border-color: var(--ui-primary, #0857b2); color: var(--ui-primary, #0857b2); }
+.launcher svg { width: 17px; height: 17px; }
+
+.panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  width: min(390px, calc(100vw - 36px));
+  max-height: min(620px, calc(100vh - 36px));
+  overflow: hidden;
+  border: 1px solid var(--ui-border, #dce3ed);
+  border-radius: 14px;
+  background: var(--ui-surface, #fff);
+  box-shadow: 0 22px 60px rgba(6, 43, 96, .22);
+}
+.panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--ui-border, #dce3ed);
+  background: var(--ui-brand, #041b45);
+  color: #fff;
+}
+.panel > header > div { display: grid; gap: 2px; min-width: 0; }
+.panel > header strong { overflow: hidden; font-size: .84rem; text-overflow: ellipsis; white-space: nowrap; }
+.panel > header button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  cursor: pointer;
+}
+.panel > header button svg { width: 15px; height: 15px; }
+
+/* Sobre o navy do cabeçalho os tokens de superfície clara não leem. */
+.eyebrow { color: var(--brand-accent-on-dark, #6fb4ff); font-size: .6rem; font-weight: 820; letter-spacing: .12em; }
+
+.boundary {
+  /* Grid de duas colunas, não flex: em flex o `<b>` do meio da frase virava um
+     item próprio e a sentença quebrava em colunas. */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ui-border, #dce3ed);
+  background: var(--ui-surface-muted, #eef2f8);
+  color: var(--ui-text-soft, #55627a);
+  font-size: .69rem;
+  line-height: 1.45;
+}
+.boundary svg { width: 15px; height: 15px; margin-top: 1px; color: var(--ui-primary, #0857b2); }
+
+.unavailable {
+  display: flex;
+  gap: 10px;
+  padding: 18px 15px;
+  color: var(--ui-text-soft, #55627a);
+  font-size: .78rem;
+}
+.unavailable svg { flex: 0 0 auto; width: 18px; height: 18px; color: var(--ui-warning, #a15c07); }
+.unavailable strong { display: block; margin-bottom: 4px; color: var(--ui-text, #0f172a); font-size: .82rem; }
+.unavailable p { margin: 0; line-height: 1.5; }
+
+.thread { flex: 1; min-height: 140px; overflow-y: auto; padding: 13px 15px; display: grid; gap: 9px; align-content: start; }
+.empty { margin: 0; color: var(--ui-text-muted, #626c7a); font-size: .75rem; line-height: 1.5; }
+.mine, .theirs {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 11px;
+  font-size: .78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mine { justify-self: end; max-width: 88%; background: var(--ui-primary, #0857b2); color: #fff; }
+.theirs {
+  justify-self: start;
+  max-width: 92%;
+  border: 1px solid var(--ui-border, #dce3ed);
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text, #0f172a);
+}
+.theirs svg { width: 14px; height: 14px; vertical-align: -2px; }
+
+.notice, .error { margin: 0; padding: 9px 15px; font-size: .71rem; line-height: 1.45; }
+.notice { border-top: 1px solid var(--ui-border, #dce3ed); background: #f2f7fe; color: #08529f; }
+.error { border-top: 1px solid var(--ui-border, #dce3ed); background: #fff2f1; color: #962016; }
+
+.composer { display: grid; grid-template-columns: minmax(0, 1fr) 42px; gap: 8px; padding: 11px; border-top: 1px solid var(--ui-border, #dce3ed); }
+.composer textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--ui-border, #dce3ed);
+  border-radius: 9px;
+  background: var(--ui-surface, #fff);
+  color: var(--ui-text, #0f172a);
+  font: inherit;
+  font-size: .78rem;
+  resize: none;
+}
+.composer button {
+  display: grid;
+  place-items: center;
+  /* Mesmo motivo do lançador: a regra global do shell zera o `min-height`. */
+  height: 100%;
+  min-height: 42px;
+  border: 1px solid var(--ui-primary, #0857b2);
+  border-radius: 9px;
+  background: var(--ui-primary, #0857b2);
+  color: #fff;
+  cursor: pointer;
+}
+.composer button:disabled { opacity: .5; cursor: not-allowed; }
+.composer button svg { width: 16px; height: 16px; }
+
+.spin { animation: assistantSpin 1s linear infinite; }
+@keyframes assistantSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 520px) {
+  .panel { right: 10px; left: 10px; bottom: 10px; width: auto; max-height: calc(100vh - 20px); }
+  .launcher { right: 12px; bottom: 12px; }
+}
