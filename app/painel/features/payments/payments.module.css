@@ -161,3 +161,30 @@
   .moduleHeadline { flex-wrap: wrap; }
   .cycleBadge { margin-left: 0; }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Exportação Caju                                                            */
+/* -------------------------------------------------------------------------- */
+
+.cajuPanel {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 18px;
+  padding: 15px 17px;
+  border: 1px solid var(--pay-border);
+  border-radius: 12px;
+  background: var(--pay-surface);
+}
+.cajuPanel > header { display: grid; gap: 5px; }
+.cajuPanel .summaryGrid { margin: 0; }
+/* A lista de bloqueios cresce: o alinhamento ao topo evita o texto "flutuando"
+   ao lado do ícone quando são muitos registros. */
+.cajuBlocked { align-items: flex-start; margin: 0; }
+.cajuBlocked ul { margin: 6px 0 0; padding-left: 17px; display: grid; gap: 3px; }
+.cajuBlocked li { font-size: .73rem; }
+.cajuActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cajuLoading { display: flex; align-items: center; gap: 9px; }
+
+@media (max-width: 640px) {
+  .cajuActions > button { flex: 1 1 100%; justify-content: center; }
+}

@@ -60,14 +60,22 @@ export async function POST(request: Request) {
       if (groupName.length < 2) return Response.json({ error: "Informe o nome do grupo empresarial." }, { status: 400 });
       const credentials = await hashPassword(password);
       const userId = current?.id ?? crypto.randomUUID();
-      if (current) {
-        if (current.password_hash) return Response.json({ error: "Este e-mail já possui uma conta. Entre com sua senha." }, { status: 409 });
-        await d1.prepare("UPDATE fdp_users SET name = ?, password_hash = ?, password_salt = ? WHERE id = ?").bind(name, credentials.hash, credentials.salt, current.id).run();
-      } else {
-        await d1.prepare("INSERT INTO fdp_users (id, email, name, password_hash, password_salt) VALUES (?, ?, ?, ?, ?) ON CONFLICT (email) DO NOTHING").bind(userId, email, name, credentials.hash, credentials.salt).run();
+      if (current?.password_hash) {
+        return Response.json({ error: "Este e-mail já possui uma conta. Entre com sua senha." }, { status: 409 });
       }
       const workspaceId = crypto.randomUUID();
+      // A conta entra na MESMA transação do grupo. Fora dela, qualquer falha
+      // adiante deixava um usuário órfão: o app continuava em modo de primeira
+      // instalação e, ao mesmo tempo, recusava o e-mail por já existir — sem
+      // saída pela interface.
       await d1.batch([
+        current
+          ? d1.prepare("UPDATE fdp_users SET name = ?, password_hash = ?, password_salt = ? WHERE id = ?")
+            .bind(name, credentials.hash, credentials.salt, current.id)
+          : d1.prepare("INSERT INTO fdp_users (id, email, name, password_hash, password_salt) VALUES (?, ?, ?, ?, ?) ON CONFLICT (email) DO NOTHING")
+            .bind(userId, email, name, credentials.hash, credentials.salt),
+        // A disputa é resolvida aqui; a chave estrangeira do guard é adiada até
+        // o COMMIT (migração 0028) justamente para o workspace poder vir depois.
         d1.prepare("UPDATE fdp_bootstrap_guard SET workspace_id = ?, claimed_at = CURRENT_TIMESTAMP WHERE id = 1 AND workspace_id IS NULL").bind(workspaceId),
         d1.prepare("INSERT INTO fdp_workspaces (id, name, slug, owner_user_id) SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM fdp_bootstrap_guard WHERE id = 1 AND workspace_id = ?) AND NOT EXISTS (SELECT 1 FROM fdp_workspaces)").bind(workspaceId, groupName, workspaceSlug(groupName), userId, workspaceId),
         d1.prepare("INSERT INTO fdp_workspace_members (workspace_id, user_id, role) SELECT ?, ?, 'admin' WHERE EXISTS (SELECT 1 FROM fdp_bootstrap_guard WHERE id = 1 AND workspace_id = ?) ON CONFLICT DO NOTHING").bind(workspaceId, userId, workspaceId),

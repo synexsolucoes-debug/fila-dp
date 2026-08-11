@@ -114,6 +114,7 @@ export async function GET(request: Request) {
         close: hasCapability(workspace.role, "contractors.payments.close"),
         reopen: hasCapability(workspace.role, "payments.reopen"),
         manageLimits: hasCapability(workspace.role, "contractors.limits.manage"),
+        exportCaju: hasCapability(workspace.role, "contractors.export_caju"),
       },
     });
   } catch (error) {

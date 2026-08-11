@@ -758,3 +758,102 @@ com uma conta em plano Enterprise.
 
 Validação: 246 testes, `npm run ci` completo, 51 verificações de navegador,
 `npm run a11y-check` em 12 telas × 2 larguras.
+
+## 21. O segundo modelo da Caju, e o que ele derrubou
+
+O cliente enviou o modelo oficial de **Premiação** — o de Saldo Livre, que
+faltava. Ele recusou de cara: `CAJU_TEMPLATE_NO_AMOUNT`.
+
+**Eu tinha generalizado de uma amostra só.** Com o modelo de Auxílio
+Alimentação em mãos, escrevi a detecção da coluna de crédito procurando a
+palavra "valor" no cabeçalho. O modelo de Premiação chama a coluna apenas de
+`Saldo` — dois arquivos oficiais da mesma empresa, sem nenhuma palavra em comum
+na coluna que importa. A regra que eu tinha chamado de flexível era só uma
+suposição com uma amostra.
+
+A detecção agora usa dois sinais independentes e exige que não se contradigam:
+o vocabulário do cabeçalho (`valor`, `saldo`, `credito`, `premiacao`) e a linha
+de exemplo que a Caju inclui no modelo — a coluna que traz número e não é o CPF.
+Quando os dois discordam, ou quando nenhum resolve sozinho, a leitura **recusa
+dizendo quais colunas encontrou**. Escolher errado aqui credita dinheiro no
+campo errado; não é lugar para desempate por palpite.
+
+### O caminho até o arquivo não existia
+
+`lib/caju-export.ts` e `lib/caju-template.ts` tinham testes, e a tabela
+`fdp_caju_templates` existia — mas nenhuma rota cadastrava modelo nem gerava
+arquivo. Biblioteca com teste não é funcionalidade entregue. Entraram
+`POST/GET /api/payments/caju/templates`, `GET/POST /api/payments/caju/export` e
+o painel de exportação dentro de Pagamentos PJ.
+
+### Três defeitos que só apareceram ao rodar
+
+O banco local tinha se perdido no reciclo do contêiner. Reconstruí do zero — e
+foi essa reconstrução que expôs o que teste nenhum tinha pegado.
+
+**A primeira instalação nunca completava (P0).** Contra um banco vazio, o
+bootstrap falhava com 23503. O `fdp_bootstrap_guard` serializa a criação do
+primeiro grupo, então ele precisa ser reivindicado antes do workspace existir —
+mas a chave estrangeira era verificada na hora. Pior: o usuário era gravado
+**fora** da transação, então a falha deixava uma conta órfã. O app continuava em
+modo de primeira instalação e, ao mesmo tempo, recusava o e-mail por já existir.
+Instalação travada, sem saída pela interface. Migração 0028 torna a verificação
+adiável; a conta passou para dentro do mesmo `batch`.
+
+**Erro de 100× em dinheiro.** A prévia mostrava R$ 300.000,00 onde o fechamento
+era R$ 3.000,00. `toCents` interpreta valor digitado em pt-BR e trata o ponto
+como separador de milhar; o `numeric` do PostgreSQL volta como `"3000.00"`, que
+virava `300000` e depois `30000000` centavos. São duas origens diferentes e cada
+uma precisa do seu conversor — `centsFromDatabase` agora existe, com o teste que
+prova que os dois discordam de propósito.
+
+**Cadastrar modelo dependia do Vercel Blob.** Sem `BLOB_READ_WRITE_TOKEN` o
+helper lançava `Error` genérico e a tela dizia "Não foi possível concluir a
+operação" — exatamente a queixa que originou este trabalho. O modelo é um CSV de
+algumas dezenas de bytes e tudo que a geração precisa já ia para o banco;
+migração 0029 guarda o texto original em coluna própria e a dependência externa
+saiu do caminho de dinheiro.
+
+### Ensaio no navegador, com os três casos
+
+Banco vazio → primeira instalação pela tela → plano Enterprise → uma empresa,
+três prestadores: CPF válido, CPF inválido e diferença zero.
+
+- Prévia: 1 no arquivo, 1 bloqueado (*"Bruno Servicos — CPF ausente ou
+  inválido"*), 1 sem diferença. Botão de gerar **desabilitado**, com o motivo no
+  título.
+- Modelo de Premiação cadastrado: *"Modelo oficial v1 — Saldo Livre. Colunas:
+  CPF · Saldo."* — categoria deduzida do arquivo real.
+- CPF corrigido, arquivo gerado:
+  `caju_saldo_livre_ensaio-servicos_2026-08_2026-08-11.csv`, 49 bytes:
+
+      CPF;Saldo
+      52998224725;3000.00
+      11144477735;1000.00
+
+  Total na tela R$ 4.000,00; soma do arquivo, a mesma. O CPF de exemplo do
+  modelo não vazou.
+
+### A cobertura de acessibilidade que faltava
+
+Com a conta em Enterprise, os sete módulos que a rodada anterior **não** tinha
+auditado apareceram — e traziam defeito. Três, todos do mesmo tipo: contêiner
+escuro reusando token de superfície clara.
+
+- `.cycleRail` (Operação DP): kicker em 2.42:1.
+- `.moduleLenses` (Auxiliares): a regra escura `.activeLens > b small` perdia por
+  **especificidade** para `.moduleLenses button > b small`. Deixar a exceção
+  menos específica que a regra geral é um jeito silencioso de não corrigir nada.
+- `.moduleLenses button:hover` alcançava a lente selecionada e trocava o fundo
+  navy por claro mantendo o texto branco: passar o mouse sobre o item ativo o
+  apagava. Alcançável com o mouse, no desktop.
+
+E `.sidebar-toggle` encolhia de 34px para 20px de altura — `flex-shrink` no eixo
+principal da barra em coluna — ficando abaixo do alvo mínimo em todas as telas.
+
+Resultado: **0 violações em 19 telas × 2 larguras**, agora com o catálogo
+inteiro de módulos.
+
+Validação: 257 testes, `npm run ci` completo, 51 verificações de navegador,
+`npm run a11y-check` limpo, e a exportação percorrida ponta a ponta contra
+PostgreSQL real.

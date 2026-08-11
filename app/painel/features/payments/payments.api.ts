@@ -46,6 +46,7 @@ function normalizePermissions(row: Row): PaymentPermissions {
     close: source.close === true,
     reopen: source.reopen === true,
     manageLimits: source.manageLimits === true,
+    exportCaju: source.exportCaju === true,
   };
 }
 
