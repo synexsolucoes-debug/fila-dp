@@ -6,7 +6,7 @@ import { addBusinessDays } from "./fila-dp-relations";
 import { workingDayMinutes } from "./fila-dp-sla";
 import { admissionIsComplete } from "./admissions";
 import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
-import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
+import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoErpReadiness, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
 import {
   mappingDirection,
   mappingResource,
@@ -315,7 +315,9 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
   const tangerino = input.channel === "tangerino";
   const admission = tangerino ? normalizeTangerinoAdmission(input.raw) : normalizeSolidesAdmission(input.raw);
   const incomplete = admissionIsComplete(admission);
-  if (incomplete.length) return insertGenericItem(d1, { ...input, missing: [...input.missing, ...incomplete] });
+  // No Tangerino, ausência desses campos também pode ser apenas uma ficha ainda
+  // em preenchimento e será tratada pela regra de prontidão logo abaixo.
+  if (incomplete.length && !tangerino) return insertGenericItem(d1, { ...input, missing: [...input.missing, ...incomplete] });
   // O filtro oficial do Tangerino é por atualização, não por admissão: desligamento
   // e correção de cadastro chegam na mesma janela e não podem virar conciliação.
   const skipReason = tangerino ? tangerinoSkipReason(input.raw, admission, context.since) : "";
@@ -328,12 +330,33 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
     return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
   }
 
+  // O endpoint de colaboradores não expõe a etapa visual da Admissão Digital.
+  // Para a Sólides DP, a demanda nasce somente quando os dados contratuais que o
+  // ERP precisa já estão presentes. Ficha incompleta é espera normal, não falha.
+  const waitingFor = tangerino ? tangerinoErpReadiness(admission) : [];
+  if (waitingFor.length) {
+    await d1.prepare(`INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, metadata_json, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, ?, ?::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
+      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, input.resource,
+        JSON.stringify({ source: input.channel, skipped: "aguardando dados contratuais para o ERP", missingFields: waitingFor })).run();
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
+
+  // A mesma pessoa pode ser readmitida. O identificador da demanda combina o
+  // colaborador e a data de admissão; registros antigos sem a chave composta são
+  // reconhecidos pelo admissionDate guardado no metadata para não duplicar cartão.
+  const demandExternalId = tangerino ? `${admission.externalId}:${admission.admissionDate}` : input.externalId;
+  const demandItemKey = `${demandExternalId}:${input.payloadHash.slice(0, 16)}`;
   const previous = await d1.prepare(`SELECT target_id FROM fdp_integration_sync_items
-    WHERE workspace_id = ? AND integration_id = ? AND external_id = ? AND target_type = 'card' AND COALESCE(target_id, '') <> ''
-    ORDER BY created_at LIMIT 1`).bind(input.workspaceId, input.integrationId, input.externalId).first<{ target_id: string }>();
+    WHERE workspace_id = ? AND integration_id = ? AND target_type = 'card' AND COALESCE(target_id, '') <> ''
+      AND (external_id = ? OR (external_id = ? AND COALESCE(metadata_json->>'admissionDate', '') = ?))
+    ORDER BY created_at LIMIT 1`)
+    .bind(input.workspaceId, input.integrationId, demandExternalId, input.externalId, admission.admissionDate).first<{ target_id: string }>();
   const cardId = previous?.target_id ?? crypto.randomUUID();
   const metadata = JSON.stringify({
     source: input.channel,
+    sourceExternalId: admission.externalId,
     admissionDate: admission.admissionDate,
     registrationNumber: admission.registrationNumber,
     documentsPresent: admission.documentsPresent,
@@ -345,7 +368,7 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
     await d1.prepare(`INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, target_id, metadata_json, processed_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
       ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
-      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, cardId, metadata).run();
+      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, demandItemKey, demandExternalId, input.payloadHash, cardId, metadata).run();
     return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
   }
 
@@ -362,7 +385,7 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
       FROM inserted RETURNING id
     ) SELECT id FROM created`)
     .bind(
-      crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, cardId, metadata,
+      crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, demandItemKey, demandExternalId, input.payloadHash, cardId, metadata,
       cardId, input.workspaceId, context.boardId, context.listId, draft.title, draft.description, context.companyId, context.companyName || admission.unityName,
       admissionProcessType, context.dueAt, computeSlaStatus(context.dueAt, context.slaBehavior), context.listId, `integracao:${input.channel}`, context.slaTargetMinutes, context.templateId,
     )
