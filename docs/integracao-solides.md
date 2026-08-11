@@ -79,6 +79,26 @@ limitando resposta, redirecionamento e tempo. Por colaborador recebido:
 O prazo do cartão usa a política de SLA de `CONCILIAÇÃO CADASTRAL` (2 dias úteis por padrão) com o
 calendário e os feriados do workspace, resolvidos uma vez por execução.
 
+### Quem tira o trabalho da fila
+
+Sincronizar apenas **enfileira**. Quem executa é `GET /api/cron/integrations`, chamado a cada 5
+minutos pelo workflow `.github/workflows/integrations-cron.yml`. Antes disso não havia nada chamando
+o executor, e o sintoma era "a sincronização não anda", sem erro em lugar nenhum.
+
+O agendamento **não** fica no `vercel.json`: em conta Hobby a Vercel recusa cron que rode mais de uma
+vez por dia, e a recusa derruba o deploy inteiro, não apenas o cron. Uma varredura diária deixaria a
+admissão aparecer com até 24 h de atraso. Ao migrar para o plano Pro, mova para o `vercel.json` e
+desative o workflow, para ter um mecanismo só.
+
+A rota autentica por `Authorization: Bearer`, porque a Vercel Cron só faz GET e não envia cabeçalho
+próprio nem corpo. Ela aceita `CRON_SECRET` ou `FDP_INTEGRATION_WORKER_SECRET`, ambos com no mínimo
+32 caracteres e comparação em tempo constante. **É preciso definir `CRON_SECRET` no projeto Vercel** —
+é o valor que a plataforma envia; pode ser o mesmo do executor.
+
+A varredura lista os workspaces ativos e processa cada um com a conexão presa àquele tenant, com teto
+de 25 jobs por workspace e orçamento de 45 s por execução. O endpoint manual
+`POST /api/integrations/worker` continua existindo para depuração.
+
 ## 6. Gate operacional antes de liberar para o cliente
 
 1. Aplicar a migration `0028_solides_admission_connector` em PostgreSQL de homologação.
@@ -86,6 +106,8 @@ calendário e os feriados do workspace, resolvidos uma vez por execução.
    `CONCILIAÇÃO CADASTRAL` ativa.
 3. Guardar o token do cliente e executar **Verificar** contra a conta real — sem isso o conector
    permanece em `needs_credentials`.
+3.1. Definir `CRON_SECRET` no projeto Vercel e os segredos `INTEGRATIONS_CRON_URL` e
+   `INTEGRATIONS_CRON_SECRET` no repositório, senão a fila enfileira e não anda.
 4. Rodar uma sincronização com corte curto (poucos dias) e conferir tarefa, checklist e ausência de
    valor de documento na auditoria.
 5. Só então ampliar o corte histórico em **Admitidos a partir de**.
