@@ -44,6 +44,15 @@ test("o disparo agendado exige segredo e respeita o isolamento por workspace", a
   assert.match(route, /Date\.now\(\) < deadline/u);
   assert.match(route, /maxDuration/u);
 
+  // O agendamento precisa iniciar a consulta da Sólides DP; apenas drenar jobs
+  // manuais deixaria novas admissões invisíveis até alguém clicar em sincronizar.
+  assert.match(route, /queueIntegrationRun/u);
+  assert.match(route, /integration\.channel = 'tangerino'/u);
+  assert.match(route, /candidate\.resource_type = 'admissions'/u);
+  assert.match(route, /triggerType: "scheduled"/u);
+  assert.match(route, /SCHEDULE_INTERVAL_MS = 5 \* 60 \* 1000/u);
+  assert.match(route, /pending\.status IN \('queued', 'leased'\)/u, "não pode acumular consultas concorrentes do mesmo conector");
+
   // Nenhum segredo pode ir para o log.
   assert.doesNotMatch(route, /log\([^)]*SECRET/u);
 });

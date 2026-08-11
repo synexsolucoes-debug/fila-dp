@@ -90,3 +90,41 @@ export function admissionTaskDraft(admission: AdmissionRecord, source: Admission
     checklist,
   };
 }
+
+/**
+ * Demanda operacional aberta quando a ficha da Sólides DP já possui os dados
+ * mínimos para cadastrar a pessoa no ERP. Isso não replica a Admissão Digital:
+ * o Vinculato apenas acompanha o trabalho no ERP e o encerramento é manual.
+ */
+export function erpAdmissionTaskDraft(admission: AdmissionRecord, source: AdmissionSource, documentFieldCount: number) {
+  const companyAndWorkplace = [admission.departmentName, admission.unityName].filter(Boolean).join(" · ") || "não informados";
+  const salary = admission.salary > 0
+    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(admission.salary)
+    : "não informado";
+  const description = [
+    `Dados contratuais disponíveis na ${source.label} para realizar a admissão no ERP.`,
+    `Data de admissão: ${admission.admissionDate} · Registro ${source.label}: ${admission.externalId}`,
+    `Matrícula: ${admission.registrationNumber || "será registrada após o cadastro no ERP"}`,
+    `Empresa / local de trabalho: ${companyAndWorkplace}`,
+    `Cargo: ${admission.positionName || "não informado"} · Jornada: ${admission.workShift || "não informada"}`,
+    `Salário contratual: ${salary}`,
+    `Ficha documental recebida: ${admission.documentsPresent.length}/${documentFieldCount} campos.`,
+    admission.documentsMissing.length ? `Documentos pendentes na origem: ${admission.documentsMissing.join(", ")}.` : "Ficha documental completa.",
+    source.documentsNote,
+  ].filter(Boolean).join("\n");
+  const checklist = [
+    `Conferir os dados contratuais na ${source.label}`,
+    ...admission.documentsMissing.slice(0, 12).map((label) => `Conferir na ${source.label}: ${label}`),
+    `Baixar os arquivos necessários na ${source.label} e anexar à demanda`,
+    "Realizar a admissão no ERP",
+    "Conferir empresa, cargo, salário, jornada e data de admissão no ERP",
+    "Registrar no cartão a matrícula ou o código gerado pelo ERP",
+    "Tratar eventuais divergências cadastrais",
+    "Concluir manualmente a demanda no Vinculato",
+  ];
+  return {
+    title: `Admissão ERP — ${admission.fullName}`.slice(0, 160),
+    description: description.slice(0, 4000),
+    checklist,
+  };
+}
