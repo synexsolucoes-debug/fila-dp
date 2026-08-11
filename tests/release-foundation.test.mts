@@ -254,7 +254,7 @@ test("a primeira instalação é atômica e não trava o banco vazio", async () 
 
   // O guard resolve a disputa antes de o workspace existir, então a chave
   // estrangeira precisa ser verificada só no COMMIT.
-  const migration = await readFile(new URL("../drizzle/postgres/0028_bootstrap_guard_deferrable.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/postgres/0030_bootstrap_guard_deferrable.sql", import.meta.url), "utf8");
   assert.match(migration, /DEFERRABLE INITIALLY DEFERRED/u);
   const claimAt = bootstrap.indexOf("UPDATE fdp_bootstrap_guard");
   const workspaceAt = bootstrap.indexOf("INSERT INTO fdp_workspaces");

@@ -1,10 +1,12 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 import { ApiError } from "./api-errors.ts";
 import { validateIntegrationEndpoint } from "./integration-security.ts";
+import { validateSolidesEndpoint } from "./solides.ts";
+import { validateTangerinoEndpoint } from "./tangerino.ts";
 
-export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "erp"] as const;
+export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "erp"] as const;
 export type IntegrationChannel = typeof integrationChannels[number];
-export const integrationResources = ["inbox", "employees", "hr_metrics", "files"] as const;
+export const integrationResources = ["inbox", "employees", "hr_metrics", "files", "admissions"] as const;
 export type IntegrationResource = typeof integrationResources[number];
 
 const allowedCredentialKeys: Record<IntegrationChannel, ReadonlySet<string>> = {
@@ -14,6 +16,7 @@ const allowedCredentialKeys: Record<IntegrationChannel, ReadonlySet<string>> = {
   drive: new Set(["token", "apiKey", "clientId", "clientSecret", "refreshToken", "serviceAccount"]),
   onedrive: new Set(["token", "clientId", "clientSecret", "tenantId", "refreshToken"]),
   solides: new Set(["token", "apiKey", "clientId", "clientSecret", "refreshToken"]),
+  tangerino: new Set(["token", "apiKey"]),
   erp: new Set(["token", "apiKey", "clientId", "clientSecret", "xToken"]),
 };
 
@@ -58,7 +61,9 @@ function vaultKeys() {
     }
   }
   if (!result.size && process.env.FDP_INTEGRATION_VAULT_KEY) result.set(1, decodeVaultKey(process.env.FDP_INTEGRATION_VAULT_KEY));
-  if (!result.size) throw new ApiError(503, "VAULT_NOT_CONFIGURED", "Configure o cofre de credenciais antes de salvar segredos.");
+  // Nomear a variável é o que transforma "não salva" em algo acionável: quem vê
+  // esta mensagem administra integrações e precisa saber o que falta no deployment.
+  if (!result.size) throw new ApiError(503, "VAULT_NOT_CONFIGURED", "Cofre de credenciais não configurado neste deployment: defina FDP_INTEGRATION_VAULT_KEY (chave AES-256 em base64) e publique novamente antes de guardar segredos.");
   return result;
 }
 
@@ -164,7 +169,8 @@ export function mappingDirection(value: unknown) {
 }
 
 export function validateConnectorEndpoint(channel: string, value: unknown) {
-  if (channel === "solides") throw new ApiError(409, "SOLIDES_OFFICIAL_RESOURCE_REQUIRED", "A Sólides permanecerá aguardando credenciais até a confirmação de um recurso oficial e um teste real de autenticação.");
+  if (channel === "solides") return validateSolidesEndpoint(value);
+  if (channel === "tangerino") return validateTangerinoEndpoint(value);
   const endpoint = typeof value === "string" ? value.trim().slice(0, 500) : "";
   if (!endpoint) throw ApiError.badRequest("Configure o endpoint oficial do conector.", "INTEGRATION_ENDPOINT_REQUIRED");
   const upper = channel.toUpperCase();

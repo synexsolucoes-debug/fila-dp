@@ -117,6 +117,55 @@ test("a tela de falha do painel identifica a causa e dá referência de suporte"
   assert.match(source, /Não é um problema da sua conta/u);
 });
 
+/**
+ * O defeito que este teste protege: sem `FDP_INTEGRATION_VAULT_KEY` o cofre
+ * recusava toda gravação de credencial com 503, mas `/api/health` respondia
+ * "ok" porque só olhava o banco. Quem operava via apenas "não salva".
+ */
+test("a prontidão acusa capacidade desligada por segredo ausente", async () => {
+  const { missingConfiguration } = await import("../lib/readiness.ts");
+  const keys = ["FDP_AUTH_SECRET", "FDP_PII_HASH_SECRET", "FDP_INTEGRATION_VAULT_KEY", "FDP_INTEGRATION_VAULT_KEYS", "FDP_INTEGRATION_WORKER_SECRET", "BLOB_READ_WRITE_TOKEN"];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+  const restore = () => {
+    for (const key of keys) {
+      if (previous.get(key) === undefined) delete process.env[key]; else process.env[key] = previous.get(key);
+    }
+  };
+  try {
+    for (const key of keys) delete process.env[key];
+    const capabilities = missingConfiguration().map((entry) => entry.capability);
+    assert.ok(capabilities.includes("Cofre de credenciais das integrações"));
+    assert.ok(capabilities.includes("Executor assíncrono de integrações e webhooks"));
+    assert.ok(capabilities.includes("Anexos das demandas"));
+
+    // Só o cofre configurado já religa a gravação de credencial.
+    process.env.FDP_INTEGRATION_VAULT_KEY = Buffer.alloc(32, 3).toString("base64");
+    assert.ok(!missingConfiguration().some((entry) => entry.capability === "Cofre de credenciais das integrações"));
+
+    // O fallback declarado no código é respeitado: o CPF aceita o segredo de sessão.
+    process.env.FDP_AUTH_SECRET = "segredo-de-sessao-suficientemente-longo";
+    assert.ok(!missingConfiguration().some((entry) => entry.capability === "Proteção de CPF no cadastro de pessoas"));
+
+    // Com tudo configurado, nada é reportado como desligado.
+    process.env.FDP_INTEGRATION_WORKER_SECRET = "segredo-do-executor";
+    process.env.BLOB_READ_WRITE_TOKEN = "token-do-blob";
+    assert.deepEqual(missingConfiguration(), []);
+  } finally {
+    restore();
+  }
+});
+
+test("o cofre recusado nomeia a variável que falta em vez de só falhar", async () => {
+  const source = await readFile(new URL("../lib/integrations.ts", import.meta.url), "utf8");
+  assert.match(source, /VAULT_NOT_CONFIGURED/u);
+  assert.match(source, /FDP_INTEGRATION_VAULT_KEY/u);
+  // O template de produção precisa listar o que o deployment exige de verdade.
+  const template = await readFile(new URL("../vercel-env.example", import.meta.url), "utf8");
+  for (const key of ["FDP_INTEGRATION_VAULT_KEY", "FDP_INTEGRATION_WORKER_SECRET", "FDP_PII_HASH_SECRET"]) {
+    assert.match(template, new RegExp(key), `${key} precisa estar no template de produção`);
+  }
+});
+
 test("todo arquivo de teste está na lista que o npm test executa", async () => {
   // O script enumera os arquivos um a um. Um teste novo fica invisível até ser
   // registrado — passa a suíte inteira sem nunca ter rodado. Já aconteceu com

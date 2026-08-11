@@ -33,6 +33,7 @@ const credentialFields: Record<Connector["channel"], Array<{ name: string; label
   drive: [{ name: "token", label: "Token de acesso" }],
   onedrive: [{ name: "clientId", label: "Client ID" }, { name: "clientSecret", label: "Client secret" }, { name: "tenantId", label: "Tenant ID" }],
   solides: [{ name: "token", label: "Token oficial" }],
+  tangerino: [{ name: "token", label: "Token de integração (Empregador → Integrações)" }],
   erp: [{ name: "apiKey", label: "Chave da API" }, { name: "xToken", label: "X-Token" }],
 };
 
@@ -122,11 +123,19 @@ function ConfigureFields({ connector }: { connector: Connector }) {
     <ContextStrip icon={Cable} label="CONECTOR" value={`${connector.displayName} · ${connector.channel}`} />
     <section className={styles.formSection}><header><strong>Identificação e operação</strong><span>Salvar configurações nunca comprova uma conexão.</span></header><div className={styles.formGrid}>
       <label className={styles.fieldWide}><span>Nome de exibição</span><input name="displayName" defaultValue={connector.displayName} maxLength={120} required /></label>
-      {connector.channel !== "solides" && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" placeholder="https://api.fornecedor.com/v1/recurso" required /></label>}
-      {connector.channel === "solides" && <label className={styles.fieldWide}><span>Referência da conta</span><input name="accountReference" maxLength={160} placeholder="Referência administrativa, sem endpoint especulativo" /></label>}
+      {!isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" placeholder="https://api.fornecedor.com/v1/recurso" required /></label>}
+      {connector.channel === "solides" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides</span><input name="endpoint" type="url" inputMode="url" defaultValue="https://app.solides.com/pt-BR/api/v1/colaboradores" pattern="https://app\.solides\.com/(pt-BR|es|en)/api/v1/colaboradores" required /></label>}
+      {connector.channel === "tangerino" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides DP</span><input name="endpoint" type="url" inputMode="url" defaultValue="https://employer.tangerino.com.br/employee/find-all" pattern="https://(employer|api)\.tangerino\.com\.br(/api/employer)?/employee/find-all" required /></label>}
+      {isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Referência da conta</span><input name="accountReference" maxLength={160} placeholder="Referência administrativa da conta" /></label>}
       <label><span>Estado operacional</span><select name="status" defaultValue={connector.status === "paused" ? "paused" : "needs_credentials"}><option value="needs_credentials">Aguardando verificação</option><option value="paused">Pausado</option></select></label>
     </div></section>
-    {connector.channel === "solides" && <SolidesNotice />}
+    {isAdmissionSource(connector.channel) && <section className={styles.formSection}><header><strong>Destino das conciliações</strong><span>Onde as admissões concluídas na Sólides viram tarefa.</span></header><div className={styles.formGrid}>
+      <label><span>Admitidos a partir de</span><input name="admissionsSince" type="date" required /></label>
+      <label><span>Colaboradores por página</span><input name="pageSize" type="number" min={1} max={150} defaultValue={150} /></label>
+      <label className={styles.fieldWide}><span>Quadro de destino</span><input name="boardId" maxLength={80} placeholder="Vazio usa o primeiro quadro com coluna de entrada" /></label>
+      <label className={styles.fieldWide}><span>Empresa</span><input name="companyId" maxLength={80} placeholder="Vazio usa a unidade informada pela Sólides" /></label>
+    </div></section>}
+    {isAdmissionSource(connector.channel) && <SolidesNotice channel={connector.channel} />}
   </>;
 }
 
@@ -138,7 +147,7 @@ function CredentialFields({ connector }: { connector: Connector }) {
     <section className={styles.formSection}><header><strong>Credenciais do provedor</strong><span>Informe o conjunto emitido pelo canal oficial.</span></header><div className={styles.formGrid}>
       {fields.map((field, index) => <label className={styles.fieldWide} key={field.name}><span>{field.label}</span><input name={field.name} type="password" autoComplete="new-password" minLength={8} maxLength={16000} required={index === 0} /></label>)}
     </div></section>
-    {connector.channel === "solides" && <SolidesNotice />}
+    {isAdmissionSource(connector.channel) && <SolidesNotice channel={connector.channel} />}
   </>;
 }
 
@@ -151,7 +160,7 @@ function MappingFields({ connectors, initialConnectorId }: { connectors: Connect
   return <>
     <section className={styles.formSection}><header><strong>Escopo do mapeamento</strong><span>Cada publicação cria uma versão rastreável.</span></header><div className={styles.formGrid}>
       <label className={styles.fieldWide}><span>Conector</span><select name="integrationId" defaultValue={initialConnectorId} required><option value="">Selecione</option>{connectors.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>
-      <label><span>Recurso</span><select name="resourceType" defaultValue="employees"><option value="inbox">Inbox</option><option value="employees">Colaboradores</option><option value="hr_metrics">Indicadores de RH</option><option value="files">Arquivos</option></select></label>
+      <label><span>Recurso</span><select name="resourceType" defaultValue="employees"><option value="inbox">Inbox</option><option value="employees">Colaboradores</option><option value="admissions">Admissões concluídas</option><option value="hr_metrics">Indicadores de RH</option><option value="files">Arquivos</option></select></label>
       <label><span>Direção</span><select name="direction" defaultValue="inbound"><option value="inbound">Entrada</option><option value="outbound">Saída</option><option value="bidirectional">Bidirecional</option></select></label>
       <label className={styles.fieldWide}><span>Identificador externo</span><input name="externalIdField" defaultValue="id" pattern="[A-Za-z][A-Za-z0-9_.-]{0,79}" required /></label>
     </div></section>
@@ -208,8 +217,17 @@ function ContextStrip({ icon: Icon, label, value }: { icon: typeof Cable; label:
   return <div className={styles.contextStrip}><Icon aria-hidden="true" /><span><small>{label}</small><strong>{value}</strong></span></div>;
 }
 
-function SolidesNotice() {
-  return <aside className={styles.solidesNotice}><AlertTriangle aria-hidden="true" /><div><strong>Fronteira Sólides</strong><span>Permanece aguardando credenciais até existir recurso oficial confirmado e autenticação real bem-sucedida. O Vinculato não realiza admissão digital.</span></div></aside>;
+/** Os dois produtos da Sólides alimentam conciliação de admissão; o resto do catálogo, não. */
+function isAdmissionSource(channel: Connector["channel"]) {
+  return channel === "solides" || channel === "tangerino";
+}
+
+function SolidesNotice({ channel }: { channel: Connector["channel"] }) {
+  const product = channel === "tangerino" ? "Sólides DP (Tangerino)" : "Sólides Gestão";
+  const filter = channel === "tangerino"
+    ? "O recurso oficial filtra por data de atualização, não de admissão: o Vinculato recebe a janela e mantém apenas quem foi admitido a partir do corte e não está desligado."
+    : "O recurso oficial filtra diretamente pela data de admissão configurada.";
+  return <aside className={styles.solidesNotice}><AlertTriangle aria-hidden="true" /><div><strong>Fronteira {product}</strong><span>O conector lê o recurso oficial de colaboradores e abre a conciliação de quem já foi admitido. {filter} A admissão digital continua sendo executada na Sólides, e os arquivos dos documentos permanecem lá: a API oficial não expõe download de anexos. Só uma autenticação real conecta o conector.</span></div></aside>;
 }
 
 function StatusMark({ status }: { status: string }) {

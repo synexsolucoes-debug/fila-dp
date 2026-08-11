@@ -1051,7 +1051,7 @@ export const integrationMappings = pgTable("fdp_integration_mappings", {
   foreignKey({ name: "fdp_integration_mappings_workspace_integration_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }).onDelete("cascade"),
   foreignKey({ name: "fdp_integration_mappings_workspace_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
   foreignKey({ name: "fdp_integration_mappings_workspace_publisher_fk", columns: [table.workspaceId, table.publishedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
-  check("fdp_integration_mappings_resource_check", sql`${table.resourceType} IN ('inbox', 'employees', 'hr_metrics', 'files')`),
+  check("fdp_integration_mappings_resource_check", sql`${table.resourceType} IN ('inbox', 'employees', 'hr_metrics', 'files', 'admissions')`),
   check("fdp_integration_mappings_direction_check", sql`${table.direction} IN ('inbound', 'outbound', 'bidirectional')`),
   check("fdp_integration_mappings_status_check", sql`${table.status} IN ('draft', 'active', 'archived')`),
   check("fdp_integration_mappings_version_check", sql`${table.version} > 0`),

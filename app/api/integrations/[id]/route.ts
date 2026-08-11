@@ -3,6 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { validateConnectorEndpoint } from "@/lib/integrations";
+import { solidesDateToIso } from "@/lib/solides";
 
 type Context = { params: Promise<{ id: string }> };
 const sensitiveKey = /token|password|secret|senha|chave|authorization|cookie|api.?key/iu;
@@ -24,6 +25,21 @@ function safeRequestBody(value: unknown) {
   return value as Record<string, unknown>;
 }
 
+/** Destino e recorte das conciliações vindas da Sólides (Gestão ou DP). Nenhum destes campos é segredo. */
+function admissionSyncConfig(body: Record<string, unknown>) {
+  const admissionsSince = solidesDateToIso(body.admissionsSince);
+  if (text(body.admissionsSince, 40) && !admissionsSince) {
+    throw ApiError.badRequest("Informe a data de corte das admissões no formato AAAA-MM-DD.", "SOLIDES_ADMISSIONS_SINCE_INVALID");
+  }
+  const pageSize = Math.trunc(Number(body.pageSize) || 0);
+  return {
+    ...(admissionsSince ? { admissionsSince } : {}),
+    ...(text(body.boardId, 80) ? { boardId: text(body.boardId, 80) } : {}),
+    ...(text(body.companyId, 80) ? { companyId: text(body.companyId, 80) } : {}),
+    ...(pageSize > 0 ? { pageSize: Math.min(150, pageSize) } : {}),
+  };
+}
+
 export async function PATCH(request: Request, { params }: Context) {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
@@ -43,7 +59,8 @@ export async function PATCH(request: Request, { params }: Context) {
     const config = {
       ...(endpoint ? { endpoint } : {}),
       ...(body.requestBody ? { requestBody: safeRequestBody(body.requestBody) } : {}),
-      ...(channel === "solides" && text(body.accountReference, 160) ? { accountReference: text(body.accountReference, 160) } : {}),
+      ...((channel === "solides" || channel === "tangerino") && text(body.accountReference, 160) ? { accountReference: text(body.accountReference, 160) } : {}),
+      ...(channel === "solides" || channel === "tangerino" ? admissionSyncConfig(body) : {}),
     };
     await d1.batch([
       d1.prepare("UPDATE fdp_integrations SET display_name = ?, status = ?, config_json = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")

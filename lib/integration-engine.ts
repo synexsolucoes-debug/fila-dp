@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
 import { getD1 } from "@/db";
 import { ApiError } from "./api-errors";
+import { computeSlaStatus } from "./fila-dp-api";
+import { addBusinessDays } from "./fila-dp-relations";
+import { workingDayMinutes } from "./fila-dp-sla";
+import { admissionIsComplete } from "./admissions";
+import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
+import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
 import {
   mappingDirection,
   mappingResource,
@@ -75,6 +81,9 @@ function mapRecord(record: Record<string, unknown>, fields: MappingField[]) {
 
 function providerRecords(payload: Record<string, unknown>) {
   const responseBody = asRecord(payload.responseBody);
+  // A Sólides DP responde com o envelope `Page` do Spring: os registros vêm em `content`.
+  const fromPage = tangerinoRecords(payload);
+  if (fromPage.length) return fromPage.slice(0, 500);
   const records = Array.isArray(payload.items) ? payload.items
     : Array.isArray(payload.value) ? payload.value
       : Array.isArray(payload.records) ? payload.records
@@ -109,13 +118,22 @@ async function requestProvider(integration: IntegrationRow, credential: Credenti
   });
   const token = await microsoftAccessToken(integration.channel, credentials) || credentials.token || credentials.apiKey;
   if (!token) throw new ApiError(409, "INTEGRATION_CREDENTIAL_INCOMPLETE", "A credencial armazenada não possui um token utilizável.");
+  const solides = integration.channel === "solides";
+  const tangerino = integration.channel === "tangerino";
+  // Cada produto da Sólides tem filtro próprio: Gestão corta por data de admissão,
+  // DP/Tangerino corta por data de atualização (epoch em milissegundos).
+  const requestUrl = solides
+    ? solidesAdmissionsUrl(endpoint, { since: config.admissionsSince, pageSize: Number(config.pageSize) || 150, includeInactive: config.includeInactive === true })
+    : tangerino
+      ? tangerinoEmployeesUrl(endpoint, { since: config.admissionsSince, pageSize: Number(config.pageSize) || 100, includeFired: false })
+      : endpoint;
   const rawBody = integration.channel === "erp" ? config.requestBody : undefined;
   const requestBody = rawBody && typeof rawBody === "object" ? stableJson(rawBody) : typeof rawBody === "string" && rawBody.trim() ? rawBody.slice(0, 32_000) : undefined;
-  const response = await fetch(endpoint, {
+  const response = await fetch(requestUrl, {
     method: requestBody ? "POST" : "GET",
     headers: {
       Accept: "application/json",
-      Authorization: `Bearer ${token}`,
+      Authorization: solides ? solidesAuthorization(token) : tangerino ? tangerinoAuthorization(token) : `Bearer ${token}`,
       ...(credentials.xToken ? { "X-Token": credentials.xToken } : {}),
       ...(requestBody ? { "Content-Type": "application/json" } : {}),
     },
@@ -128,7 +146,11 @@ async function requestProvider(integration: IntegrationRow, credential: Credenti
   if (declaredLength > 2 * 1024 * 1024) throw new ApiError(502, "PROVIDER_RESPONSE_TOO_LARGE", "A resposta do provedor excedeu 2 MB.");
   const raw = await response.text();
   if (Buffer.byteLength(raw, "utf8") > 2 * 1024 * 1024) throw new ApiError(502, "PROVIDER_RESPONSE_TOO_LARGE", "A resposta do provedor excedeu 2 MB.");
-  try { return asRecord(JSON.parse(raw)); } catch { throw new ApiError(502, "PROVIDER_RESPONSE_INVALID", "O provedor retornou uma resposta JSON inválida."); }
+  // A Sólides responde com um array na raiz; os demais conectores respondem com objeto.
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? { items: parsed } : asRecord(parsed);
+  } catch { throw new ApiError(502, "PROVIDER_RESPONSE_INVALID", "O provedor retornou uma resposta JSON inválida."); }
 }
 
 export async function queueIntegrationRun(d1: Database, input: {
@@ -171,6 +193,71 @@ export async function queueIntegrationRun(d1: Database, input: {
   return row;
 }
 
+/** Processo do Vinculato que recebe as admissões concluídas na Sólides. A admissão digital continua na Sólides. */
+const admissionProcessType = "CONCILIAÇÃO CADASTRAL";
+
+type AdmissionContext = {
+  /** Data de corte configurada; o Tangerino precisa dela para separar admissão de atualização. */
+  since: string;
+  boardId: string;
+  listId: string;
+  slaBehavior: string;
+  companyId: string | null;
+  companyName: string;
+  dueAt: string;
+  slaTargetMinutes: number;
+  templateId: string | null;
+};
+
+type ItemInput = {
+  workspaceId: string; integrationId: string; runId: string; mappingId: string; itemKey: string; externalId: string;
+  payloadHash: string; resource: string; mapped: Record<string, unknown>; missing: string[];
+  raw: Record<string, unknown>; admission: AdmissionContext | null; channel: string;
+};
+
+/**
+ * Resolve uma vez por execução o quadro, a coluna de entrada, a empresa e o prazo das
+ * tarefas de conciliação, em vez de repetir as consultas a cada colaborador recebido.
+ */
+async function loadAdmissionContext(d1: Database, workspaceId: string, config: Record<string, unknown>): Promise<AdmissionContext> {
+  const requestedBoardId = text(config.boardId, 80);
+  const requestedCompanyId = text(config.companyId, 80);
+  const [target, settings, holidays, policy, template, company] = await Promise.all([
+    d1.prepare(`SELECT board.id AS board_id, list.id AS list_id, list.sla_behavior FROM fdp_boards board
+      JOIN fdp_lists list ON list.workspace_id = board.workspace_id AND list.board_id = board.id AND list.kind = 'new'
+      WHERE board.workspace_id = ? AND (? = '' OR board.id = ?) ORDER BY board.created_at, board.name LIMIT 1`)
+      .bind(workspaceId, requestedBoardId, requestedBoardId).first<{ board_id: string; list_id: string; sla_behavior: string }>(),
+    d1.prepare("SELECT business_days_json, day_start, day_end FROM fdp_workspace_settings WHERE workspace_id = ?").bind(workspaceId).first<{ business_days_json: string; day_start: string; day_end: string }>(),
+    d1.prepare("SELECT holiday_date FROM fdp_business_holidays WHERE workspace_id = ?").bind(workspaceId).all<{ holiday_date: string }>(),
+    d1.prepare("SELECT target_business_days FROM fdp_sla_policies WHERE workspace_id = ? AND process_type = ? AND active = 1").bind(workspaceId, admissionProcessType).first<{ target_business_days: number }>(),
+    d1.prepare("SELECT id, default_sla_days FROM fdp_process_templates WHERE workspace_id = ? AND process_type = ? AND active = 1 ORDER BY position LIMIT 1").bind(workspaceId, admissionProcessType).first<{ id: string; default_sla_days: number }>(),
+    requestedCompanyId
+      ? d1.prepare("SELECT id, trade_name, legal_name FROM fdp_companies WHERE workspace_id = ? AND id = ?").bind(workspaceId, requestedCompanyId).first<{ id: string; trade_name: string; legal_name: string }>()
+      : Promise.resolve(null),
+  ]);
+  if (!target) {
+    throw new ApiError(409, "INTEGRATION_TARGET_BOARD_MISSING", "Configure um quadro com coluna de entrada para receber as conciliações da Sólides.");
+  }
+  if (requestedCompanyId && !company) {
+    throw new ApiError(409, "INTEGRATION_TARGET_COMPANY_MISSING", "A empresa configurada para as conciliações da Sólides não existe neste workspace.");
+  }
+  const businessDays = settings ? (JSON.parse(settings.business_days_json) as number[]) : [1, 2, 3, 4, 5];
+  const holidaySet = new Set(holidays.results.map((item) => item.holiday_date));
+  const dayEnd = settings?.day_end ?? "18:00";
+  const targetDays = Number(template?.default_sla_days ?? policy?.target_business_days ?? 2);
+  return {
+    since: text(config.admissionsSince, 10),
+    boardId: target.board_id,
+    listId: target.list_id,
+    slaBehavior: target.sla_behavior,
+    companyId: company?.id ?? null,
+    companyName: company ? (company.trade_name || company.legal_name) : "",
+    dueAt: `${addBusinessDays(new Date().toISOString().slice(0, 10), targetDays, businessDays, holidaySet)}T${dayEnd}`,
+    slaTargetMinutes: targetDays * workingDayMinutes({ dayStart: settings?.day_start ?? "08:00", dayEnd }),
+    templateId: template?.id ?? null,
+  };
+}
+
 async function insertGenericItem(d1: Database, input: {
   workspaceId: string; integrationId: string; runId: string; mappingId: string; itemKey: string; externalId: string;
   payloadHash: string; resource: string; mapped: Record<string, unknown>; missing: string[];
@@ -189,7 +276,7 @@ async function insertGenericItem(d1: Database, input: {
     .bind(itemId, input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, status, input.payloadHash, input.resource,
       JSON.stringify({ mappedFields: Object.keys(input.mapped), missingFields: input.missing }), input.missing.length ? "MAPPING_REQUIRED_FIELD_MISSING" : "RECONCILIATION_REQUIRED",
       input.missing.length ? "Campos obrigatórios ausentes no payload externo." : "Item aguardando conciliação.", reconciliationId, input.workspaceId, input.integrationId, input.runId,
-      input.resource === "employees" ? "employee" : input.resource === "hr_metrics" ? "hr_metric" : input.resource === "files" ? "file" : "inbox",
+      input.resource === "employees" || input.resource === "admissions" ? "employee" : input.resource === "hr_metrics" ? "hr_metric" : input.resource === "files" ? "file" : "inbox",
       input.externalId, input.missing.length ? "conflict" : "unmatched", JSON.stringify({ fields: Object.keys(input.mapped), missingFields: input.missing }))
     .first<{ id: string }>();
   return row ? { processed: 0, skipped: 0, conflict: 1, failed: input.missing.length ? 1 : 0 } : { processed: 0, skipped: 1, conflict: 0, failed: 0 };
@@ -215,6 +302,76 @@ async function insertInboxItem(d1: Database, input: Parameters<typeof insertGene
       JSON.stringify({ mappedFields: Object.keys(input.mapped) }), inboxId, input.workspaceId, senderName, subject, body)
     .first<{ id: string }>();
   return row ? { processed: 1, skipped: 0, conflict: 0, failed: 0 } : { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+}
+
+/**
+ * Abre no Vinculato a tarefa de conciliação de um colaborador já admitido na Sólides.
+ * O Vinculato não executa admissão digital: ele recebe o que a Sólides concluiu.
+ * Uma admissão repetida reaproveita a tarefa existente em vez de duplicar trabalho.
+ */
+async function insertAdmissionItem(d1: Database, input: ItemInput) {
+  const context = input.admission;
+  if (!context) throw new ApiError(409, "INTEGRATION_TARGET_BOARD_MISSING", "Configure o destino das conciliações da Sólides antes de sincronizar.");
+  const tangerino = input.channel === "tangerino";
+  const admission = tangerino ? normalizeTangerinoAdmission(input.raw) : normalizeSolidesAdmission(input.raw);
+  const incomplete = admissionIsComplete(admission);
+  if (incomplete.length) return insertGenericItem(d1, { ...input, missing: [...input.missing, ...incomplete] });
+  // O filtro oficial do Tangerino é por atualização, não por admissão: desligamento
+  // e correção de cadastro chegam na mesma janela e não podem virar conciliação.
+  const skipReason = tangerino ? tangerinoSkipReason(input.raw, admission, context.since) : "";
+  if (skipReason) {
+    await d1.prepare(`INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, metadata_json, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, ?, ?::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
+      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, input.resource,
+        JSON.stringify({ source: input.channel, skipped: skipReason })).run();
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
+
+  const previous = await d1.prepare(`SELECT target_id FROM fdp_integration_sync_items
+    WHERE workspace_id = ? AND integration_id = ? AND external_id = ? AND target_type = 'card' AND COALESCE(target_id, '') <> ''
+    ORDER BY created_at LIMIT 1`).bind(input.workspaceId, input.integrationId, input.externalId).first<{ target_id: string }>();
+  const cardId = previous?.target_id ?? crypto.randomUUID();
+  const metadata = JSON.stringify({
+    source: input.channel,
+    admissionDate: admission.admissionDate,
+    registrationNumber: admission.registrationNumber,
+    documentsPresent: admission.documentsPresent,
+    documentsMissing: admission.documentsMissing,
+    cardId,
+  });
+
+  if (previous) {
+    await d1.prepare(`INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, target_id, metadata_json, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
+      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, cardId, metadata).run();
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
+
+  const draft = tangerino ? tangerinoTaskDraft(admission) : solidesTaskDraft(admission);
+  const created = await d1.prepare(`WITH inserted AS (
+      INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, target_id, metadata_json, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'processed', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING RETURNING id
+    ), created AS (
+      INSERT INTO fdp_cards (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority, due_at, sla_status, position, source_type, created_by, sla_target_minutes, sla_started_at, process_template_id)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'normal', ?, ?,
+        COALESCE((SELECT MAX(position) FROM fdp_cards WHERE list_id = ? AND archived = 0), 0) + 1000,
+        'integration', ?, ?, CURRENT_TIMESTAMP, ?
+      FROM inserted RETURNING id
+    ) SELECT id FROM created`)
+    .bind(
+      crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, input.itemKey, input.externalId, input.payloadHash, cardId, metadata,
+      cardId, input.workspaceId, context.boardId, context.listId, draft.title, draft.description, context.companyId, context.companyName || admission.unityName,
+      admissionProcessType, context.dueAt, computeSlaStatus(context.dueAt, context.slaBehavior), context.listId, `integracao:${input.channel}`, context.slaTargetMinutes, context.templateId,
+    )
+    .first<{ id: string }>();
+  if (!created) return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+
+  await d1.batch(draft.checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
+    .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)));
+  return { processed: 1, skipped: 0, conflict: 0, failed: 0 };
 }
 
 async function executeRun(d1: Database, workspaceId: string, job: JobRow) {
@@ -243,14 +400,20 @@ async function executeRun(d1: Database, workspaceId: string, job: JobRow) {
   const direction = mappingDirection(mapping.direction);
   if (direction === "outbound") throw new ApiError(409, "OUTBOUND_EXECUTOR_NOT_AVAILABLE", "Este executor processa somente mapeamentos de entrada ou bidirecionais.");
   const records = providerRecords(payload);
+  // O destino das conciliações é resolvido uma única vez, e não a cada colaborador recebido.
+  const admissionContext = resource === "admissions" ? await loadAdmissionContext(d1, workspaceId, parseJsonObject(integration.config_json)) : null;
   const totals = { processed: 0, skipped: 0, conflict: 0, failed: 0 };
   for (let index = 0; index < records.length; index += 1) {
     const record = records[index];
     const externalId = text(readPath(record, safeMapping.externalIdField), 180) || `row-${index + 1}`;
     const { mapped, missing } = mapRecord(record, safeMapping.fields);
-    const payloadHash = createHash("sha256").update(stableJson(mapped)).digest("hex");
-    const common = { workspaceId, integrationId: integration.id, runId: job.run_id, mappingId: mapping.id, itemKey: `${externalId}:${payloadHash.slice(0, 16)}`, externalId, payloadHash, resource, mapped, missing };
-    const result = resource === "inbox" ? await insertInboxItem(d1, common) : await insertGenericItem(d1, common);
+    // Admissões usam o registro original no hash: mudanças na ficha precisam ser percebidas
+    // mesmo quando o mapeamento publicado cobre poucos campos.
+    const payloadHash = createHash("sha256").update(stableJson(resource === "admissions" ? record : mapped)).digest("hex");
+    const common = { workspaceId, integrationId: integration.id, runId: job.run_id, mappingId: mapping.id, itemKey: `${externalId}:${payloadHash.slice(0, 16)}`, externalId, payloadHash, resource, mapped, missing, raw: record, admission: admissionContext, channel: integration.channel };
+    const result = resource === "inbox" ? await insertInboxItem(d1, common)
+      : resource === "admissions" ? await insertAdmissionItem(d1, common)
+        : await insertGenericItem(d1, common);
     totals.processed += result.processed;
     totals.skipped += result.skipped;
     totals.conflict += result.conflict;

@@ -215,22 +215,36 @@
     {
       "idx": 30,
       "version": "7",
-      "when": 1786247001000,
-      "tag": "0028_bootstrap_guard_deferrable",
+      "when": 1786248000000,
+      "tag": "0028_solides_admission_connector",
       "breakpoints": true
     },
     {
       "idx": 31,
       "version": "7",
-      "when": 1786247002000,
-      "tag": "0029_caju_template_source",
+      "when": 1786249000000,
+      "tag": "0029_tangerino_connector",
       "breakpoints": true
     },
     {
       "idx": 32,
       "version": "7",
-      "when": 1786247003000,
-      "tag": "0030_contractor_registry",
+      "when": 1786249001000,
+      "tag": "0030_bootstrap_guard_deferrable",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786249002000,
+      "tag": "0031_caju_template_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786249003000,
+      "tag": "0032_contractor_registry",
       "breakpoints": true
     }
   ]

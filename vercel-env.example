@@ -4,6 +4,22 @@ DATABASE_URL=postgresql://usuario:senha@host.neon.tech/neondb?sslmode=require
 BLOB_READ_WRITE_TOKEN=seu-token-do-vercel-blob
 FDP_AUTH_SECRET=gere-um-segredo-longo-e-aleatorio
 
+# HMAC dedicado para CPF e outros identificadores pessoais.
+# Sem ele o cadastro de pessoas cai no FDP_AUTH_SECRET; defina um proprio.
+FDP_PII_HASH_SECRET=gere-outro-segredo-longo-e-aleatorio
+
+# Cofre das credenciais de integracao. SEM ISTO NENHUMA CREDENCIAL E SALVA:
+# a API responde 503 VAULT_NOT_CONFIGURED em "Guardar credencial".
+# Gere com: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+FDP_INTEGRATION_VAULT_KEY=chave-aes-256-em-base64
+FDP_INTEGRATION_VAULT_KEY_VERSION=1
+# Rotacao sem indisponibilidade: JSON {"1":"base64","2":"base64"} no lugar da chave unica.
+FDP_INTEGRATION_VAULT_KEYS=
+
+# Segredo do executor assincrono de integracoes e webhooks.
+# Sem ele /api/integrations/worker e /api/webhooks/worker recusam a chamada.
+FDP_INTEGRATION_WORKER_SECRET=gere-um-segredo-para-o-executor
+
 # Opcionais: webhooks e sincronizacoes externas
 FDP_EMAIL_TOKEN=
 FDP_WHATSAPP_TOKEN=

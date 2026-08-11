@@ -409,7 +409,7 @@ test("o modelo é guardado no banco, sem depender de armazenamento externo", asy
   // erro genérico onde o armazenamento não estivesse configurado.
   assert.doesNotMatch(route, /getAttachmentsBucket|bucket\.put/u);
   assert.match(route, /source_text/u);
-  const migration = await readFile(new URL("../drizzle/postgres/0029_caju_template_source.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/postgres/0031_caju_template_source.sql", import.meta.url), "utf8");
   // O original fica guardado: conferir depois com qual planilha o pedido saiu.
   assert.match(migration, /ADD COLUMN IF NOT EXISTS "source_text"/u);
   assert.match(migration, /CHECK \("source_text" <> '' OR "storage_key" <> ''\)/u);

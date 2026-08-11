@@ -1,4 +1,4 @@
-export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "erp";
+export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "tangerino" | "erp";
 export type IntegrationTab = "connectors" | "mappings" | "runs" | "reconciliations";
 export type ConnectorStatus = "connected" | "needs_credentials" | "paused" | "error";
 export type MappingStatus = "draft" | "active" | "archived";

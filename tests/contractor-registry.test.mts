@@ -216,7 +216,7 @@ test("movimentação sem efeito não é aceita", () => {
 /* -------------------------------------------------------------------------- */
 
 test("as tabelas novas isolam por workspace e trancam movimentação aplicada", async () => {
-  const migration = await readFile(new URL("../drizzle/postgres/0030_contractor_registry.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/postgres/0032_contractor_registry.sql", import.meta.url), "utf8");
   for (const table of ["fdp_contractor_fixed_items", "fdp_contractor_movements"]) {
     assert.ok(migration.includes(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`), `${table} sem RLS`);
     assert.ok(migration.includes(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`), `${table} sem FORCE RLS`);
@@ -308,6 +308,6 @@ test("o tipo do valor fixo é o mesmo do componente da competência", async () =
   // constraint da outra tabela — aconteceu no ensaio.
   assert.match(input, /contractorCreditTypes, contractorDebitTypes/u);
   assert.match(input, /componentDirectionFor\(componentType/u);
-  const migration = await readFile(new URL("../drizzle/postgres/0030_contractor_registry.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../drizzle/postgres/0032_contractor_registry.sql", import.meta.url), "utf8");
   assert.match(migration, /fdp_contractor_fixed_items_type_check/u);
 });
