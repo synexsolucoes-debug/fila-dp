@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { PaymentDialog as PaymentDialogView } from "./PaymentDialogs";
+import { CajuExportPanel } from "./CajuExportPanel";
 import {
   normalizeCompany, normalizeContractorOverview, normalizePsychologyOverview, requestJson, type Row,
 } from "./payments.api";
@@ -406,6 +407,10 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
               <span>Divergências</span><strong>{contractors.totals.divergentCount}</strong>
             </article>
           </div>
+
+          {contractors.totals.cajuAmount > 0 && (
+            <CajuExportPanel competenceId={cycle.id} canExport={permissions?.exportCaju === true} />
+          )}
 
           {contractors.closings.length === 0 ? (
             <p className={styles.emptyState}>

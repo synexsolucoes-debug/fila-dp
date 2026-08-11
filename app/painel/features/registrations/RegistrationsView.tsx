@@ -5,7 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
-  Building2,
+  Briefcase, Building2,
   Check,
   ChevronRight,
   CircleAlert,
@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
+import { ContractorsPanel } from "./ContractorsPanel";
 import styles from "./registrations.module.css";
 import type {
   CatalogItem,
@@ -132,6 +133,9 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
   const canManageCompanies = role === "admin";
   const canManageRegistrations = role === "admin" || role === "member";
   const [tab, setTab] = useState<RegistrationTab>("companies");
+  // Contador, não booleano: dois cliques seguidos no mesmo botão precisam
+  // reabrir o formulário, e um booleano já ligado não avisaria a segunda vez.
+  const [contractorCreateSignal, setContractorCreateSignal] = useState(0);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [companiesLoading, setCompaniesLoading] = useState(true);
@@ -251,6 +255,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
     if (tab === "companies") setCompanyEditor("new");
     if (tab === "employees") openEmployee("new");
     if (tab === "catalogs") setCatalogEditor("new");
+    if (tab === "contractors") setContractorCreateSignal((current) => current + 1);
   }
 
   function selectCompany(id: string) { setSelectedCompanyId(id); setCursor(""); setCursorHistory([]); }
@@ -283,9 +288,10 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
         <nav className={styles.tabs} aria-label="Áreas de cadastro">
           <button className={tab === "companies" ? styles.activeTab : ""} onClick={() => setTab("companies")}><Building2 aria-hidden="true" /> Empresas <span>{companies.length}</span></button>
           <button className={tab === "employees" ? styles.activeTab : ""} onClick={() => setTab("employees")}><UsersRound aria-hidden="true" /> Colaboradores</button>
+          <button className={tab === "contractors" ? styles.activeTab : ""} onClick={() => setTab("contractors")}><Briefcase aria-hidden="true" /> Prestadores PJ</button>
           <button className={tab === "catalogs" ? styles.activeTab : ""} onClick={() => setTab("catalogs")}><SlidersHorizontal aria-hidden="true" /> Cadastros auxiliares</button>
         </nav>
-        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "companies" ? "Nova empresa" : tab === "employees" ? "Novo colaborador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
+        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "companies" ? "Nova empresa" : tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
       </header>
 
       {error && <div className={styles.errorBanner} role="alert"><CircleAlert aria-hidden="true" /><span>{error}</span><button onClick={() => setError("")} aria-label="Fechar aviso"><X /></button></div>}
@@ -298,6 +304,10 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
         <EmployeesPanel companies={companies} companyId={selectedCompanyId} onCompanyChange={selectCompany} status={employeeStatus} onStatusChange={selectEmployeeStatus}
           query={employeeSearch} onQueryChange={setEmployeeSearch} employees={visibleEmployees} loading={employeesLoading} onOpen={openEmployee} onCreate={contextualCreate}
           canManage={canManageRegistrations} canBack={cursorHistory.length > 0} canNext={Boolean(nextCursor)} onBack={goBack} onNext={goNext} />
+      )}
+
+      {tab === "contractors" && (
+        <ContractorsPanel canManage={canManageRegistrations} createSignal={contractorCreateSignal} />
       )}
 
       {tab === "catalogs" && (

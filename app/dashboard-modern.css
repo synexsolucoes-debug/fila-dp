@@ -74,6 +74,9 @@
 }
 
 .sidebar-toggle {
+  /* A barra lateral é um flex em coluna: sem `flex: 0 0 auto` o botão encolhia
+     de 34px para 20px de altura e caía abaixo do alvo mínimo da WCAG 2.5.8. */
+  flex: 0 0 auto;
   width: 34px;
   height: 34px;
   margin: -5px 0 10px auto;

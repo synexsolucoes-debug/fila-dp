@@ -1,4 +1,4 @@
-export type RegistrationTab = "companies" | "employees" | "catalogs";
+export type RegistrationTab = "companies" | "employees" | "contractors" | "catalogs";
 export type EmployeeDetailTab = "personal" | "employment" | "contact" | "history";
 export type CatalogResource = "departments" | "positions" | "cost-centers" | "work-schedules";
 export type RecordStatus = "active" | "inactive";

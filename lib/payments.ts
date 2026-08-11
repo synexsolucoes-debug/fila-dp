@@ -28,6 +28,23 @@ export function fromCents(cents: number) {
   return Math.round(cents) / 100;
 }
 
+/**
+ * Centavos a partir do decimal que o PostgreSQL devolve (`numeric` vira string
+ * tipo "3000.00").
+ *
+ * Não dá para reaproveitar `toCents` aqui: ela interpreta entrada digitada em
+ * pt-BR e remove o ponto como separador de milhar, então "3000.00" viraria
+ * 300000 e depois 30000000 centavos — um erro de 100× em cima de dinheiro. São
+ * duas origens diferentes e cada uma precisa do seu conversor.
+ */
+export function centsFromDatabase(value: unknown, field = "Valor") {
+  const number = typeof value === "number" ? value : Number(String(value ?? "0").trim());
+  if (!Number.isFinite(number) || Math.abs(number) > MAX_MONEY) {
+    throw ApiError.badRequest(`${field} inválido.`, "INVALID_MONEY");
+  }
+  return Math.round(number * 100);
+}
+
 /** Valor monetário não negativo, usado em bases, valores unitários e limites. */
 export function positiveMoney(value: unknown, field = "Valor") {
   const cents = toCents(value ?? 0, field);

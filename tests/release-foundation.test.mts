@@ -239,3 +239,24 @@ test("Sólides remains an external source instead of an admission workflow", asy
   assert.match(landing, /A admissão digital continua integralmente na Sólides/);
   assert.match(migration, /'solides', 'Sólides', 'needs_credentials'/);
 });
+
+test("a primeira instalação é atômica e não trava o banco vazio", async () => {
+  const route = await readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8");
+  const bootstrap = route.slice(route.indexOf("const credentials = await hashPassword"), route.indexOf("const claimedWorkspace"));
+
+  // A conta precisa entrar na MESMA transação do grupo. Fora dela, uma falha
+  // adiante deixava usuário órfão: o app seguia em modo de primeira instalação
+  // e ao mesmo tempo recusava o e-mail por já existir — sem saída pela interface.
+  assert.doesNotMatch(bootstrap, /INSERT INTO fdp_users[\s\S]{0,200}?\.run\(\)/u,
+    "o usuário não pode ser gravado fora do batch do bootstrap");
+  assert.match(bootstrap, /await d1\.batch\(\[[\s\S]*INSERT INTO fdp_users/u,
+    "o usuário precisa entrar no mesmo batch do grupo");
+
+  // O guard resolve a disputa antes de o workspace existir, então a chave
+  // estrangeira precisa ser verificada só no COMMIT.
+  const migration = await readFile(new URL("../drizzle/postgres/0030_bootstrap_guard_deferrable.sql", import.meta.url), "utf8");
+  assert.match(migration, /DEFERRABLE INITIALLY DEFERRED/u);
+  const claimAt = bootstrap.indexOf("UPDATE fdp_bootstrap_guard");
+  const workspaceAt = bootstrap.indexOf("INSERT INTO fdp_workspaces");
+  assert.ok(claimAt > 0 && workspaceAt > claimAt, "o guard decide o vencedor antes de criar o grupo");
+});

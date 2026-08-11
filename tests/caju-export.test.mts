@@ -197,8 +197,11 @@ test("o modelo oficial é lido do arquivo, sem nome de coluna chumbado no códig
   assert.deepEqual(shape.emptyIndexes, [1]);
 
   const source = await readFile(new URL("../lib/caju-template.ts", import.meta.url), "utf8");
-  // Nenhum rótulo da Caju escrito no código: eles mudam sem aviso.
-  assert.doesNotMatch(source, /"Valor Fixo em|"Matricula \(opcional\)"/u);
+  // Nenhum rótulo da Caju escrito na lógica: eles mudam sem aviso. Comentário
+  // citando o modelo real é o oposto do problema — é o que documenta por que a
+  // detecção precisa ser flexível —, então a checagem olha só o código.
+  const code = source.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/^\s*\/\/.*$/gmu, "");
+  assert.doesNotMatch(code, /"Valor Fixo em|"Matricula \(opcional\)"|"Saldo"/u);
 });
 
 test("o modelo declara sua categoria — exportar Saldo Livre com modelo de alimentação credita errado", async () => {
@@ -267,4 +270,147 @@ test("a linha de exemplo do modelo nunca vira pedido real", async () => {
   const file = buildCajuFile(shape, [{ taxId: "52998224725", amountCents: 100 }]);
   assert.doesNotMatch(file, /12345678901/u);
   assert.equal(file.split("\n").length, 2);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Modelo de Premiação (Saldo Livre) — segundo arquivo real do cliente         */
+/* -------------------------------------------------------------------------- */
+
+const premiacaoFixture = () => readFile(new URL("./fixtures/caju-pedidos-premiacao.csv", import.meta.url), "utf8");
+
+test("o modelo de Saldo Livre não diz 'valor' em lugar nenhum, e ainda assim é lido", async () => {
+  const { parseCajuTemplate, templateCategory } = await import("../lib/caju-template.ts");
+  // Este arquivo derrubou a primeira versão do parser: eu tinha generalizado de
+  // uma amostra só e assumido que a coluna de crédito sempre diz "Valor". O
+  // modelo oficial de Premiação chama a coluna apenas de "Saldo".
+  const shape = parseCajuTemplate(await premiacaoFixture());
+
+  assert.deepEqual(shape.headers, ["CPF", "Saldo"]);
+  assert.equal(shape.taxIdIndex, 0);
+  assert.equal(shape.amountIndex, 1);
+  assert.deepEqual(shape.emptyIndexes, []);
+  assert.equal(templateCategory(shape).key, "saldo_livre");
+});
+
+test("o arquivo de Saldo Livre sai com as duas colunas do modelo, sem sobra", async () => {
+  const { buildCajuFile, parseCajuTemplate } = await import("../lib/caju-template.ts");
+  const shape = parseCajuTemplate(await premiacaoFixture());
+  const file = buildCajuFile(shape, [
+    { taxId: "529.982.247-25", amountCents: 123456 },
+    { taxId: "01234567890", amountCents: 5 },
+  ]);
+  const lines = file.split("\n");
+
+  assert.equal(lines[0], "CPF;Saldo");
+  assert.equal(lines[1], "52998224725;1234.56");
+  // Zero à esquerda preservado também aqui: perder o dígito troca a pessoa.
+  assert.equal(lines[2], "01234567890;0.05");
+  assert.equal(lines.length, 3, "sem linha em branco no fim");
+  for (const line of lines) assert.equal(line.split(";").length, 2);
+  // A linha de exemplo do modelo não vaza para o pedido real.
+  assert.doesNotMatch(file, /12345678910/u);
+});
+
+test("a linha de exemplo do modelo confirma a coluna de crédito quando o rótulo não basta", async () => {
+  const { parseCajuTemplate } = await import("../lib/caju-template.ts");
+  // Sem vocabulário reconhecível no cabeçalho, o exemplo oficial resolve: a
+  // coluna que traz número e não é CPF é a de crédito.
+  const shape = parseCajuTemplate("CPF;Referencia;Montante\n12345678901;abc;10");
+  assert.equal(shape.amountIndex, 2);
+});
+
+test("cabeçalho e exemplo em desacordo recusam em vez de escolher um dos dois", async () => {
+  const { parseCajuTemplate } = await import("../lib/caju-template.ts");
+  // O rótulo aponta a coluna 1, o exemplo preenche a 2. Escolher qualquer uma
+  // credita dinheiro no campo errado — recusar é a única saída honesta.
+  assert.throws(
+    () => parseCajuTemplate("CPF;Valor;Outra\n12345678901;;10"),
+    (error: { code: string }) => error.code === "CAJU_TEMPLATE_AMBIGUOUS",
+  );
+  // Duas colunas de crédito no mesmo modelo: idem.
+  assert.throws(
+    () => parseCajuTemplate("CPF;Valor Fixo em Saldo Livre;Saldo"),
+    (error: { code: string }) => error.code === "CAJU_TEMPLATE_AMBIGUOUS",
+  );
+});
+
+test("a recusa por coluna não identificada diz quais colunas encontrou", async () => {
+  const { parseCajuTemplate } = await import("../lib/caju-template.ts");
+  assert.throws(() => parseCajuTemplate("CPF;Observacao;Setor"), (error: { code: string; message: string }) => {
+    assert.equal(error.code, "CAJU_TEMPLATE_NO_AMOUNT");
+    // Sem isso o administrador não descobre que baixou a planilha errada.
+    assert.match(error.message, /Observacao/u);
+    assert.match(error.message, /CPF \(CPF\)/u);
+    return true;
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Rotas: cadastro do modelo e geração do arquivo                             */
+/* -------------------------------------------------------------------------- */
+
+test("cadastrar modelo exige capacidade própria e interpreta antes de gravar", async () => {
+  const source = await readFile(new URL("../app/api/payments/caju/templates/route.ts", import.meta.url), "utf8");
+  assert.match(source, /requireCapability\(workspace\.role, "contractors\.export_caju"\)/u);
+  // Interpretar antes de persistir: modelo ilegível não entra no catálogo nem
+  // como rascunho.
+  const parseAt = source.indexOf("parseCajuTemplate(content)");
+  const writeAt = source.indexOf("INSERT INTO fdp_caju_templates");
+  assert.ok(parseAt > 0 && writeAt > parseAt, "o modelo precisa ser interpretado antes de gravar");
+  // Trocar o ativo é uma operação só: o índice parcial recusaria dois ativos.
+  assert.match(source, /d1\.batch\(\[/u);
+  assert.match(source, /status = 'retired'[\s\S]*?INSERT INTO fdp_caju_templates/u);
+  // Versão anterior é aposentada, nunca apagada.
+  assert.doesNotMatch(source, /DELETE FROM fdp_caju_templates/u);
+});
+
+test("gerar o arquivo exige competência acessível e recusa antes de escrever linha", async () => {
+  const source = await readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8");
+  assert.match(source, /requireCapability\(workspace\.role, "contractors\.export_caju"\)/u);
+  assert.match(source, /requireCompanyAccess\(/u);
+  // A recusa vem antes da escrita: com bloqueio pendente não existe arquivo parcial.
+  const assertAt = source.indexOf("assertExportable(preview");
+  const buildAt = source.indexOf("buildCajuFile(shape");
+  assert.ok(assertAt > 0 && buildAt > assertAt, "a conferência precisa vir antes da geração");
+});
+
+test("a trilha registra a exportação sem guardar CPF nem o conteúdo do arquivo", async () => {
+  const source = await readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8");
+  const audit = source.slice(source.indexOf("await prepareAuditEvent({"), source.indexOf("return new Response"));
+  // O que fica é o que permite conferir depois: linhas, total e versão do modelo.
+  assert.match(audit, /rows: preview\.eligible\.length/u);
+  assert.match(audit, /totalCents: preview\.totalCents/u);
+  assert.match(audit, /templateVersion: template\.version/u);
+  // O que não pode ficar: o conteúdo gerado e os CPFs dentro dele.
+  assert.doesNotMatch(audit, /\bcontent\b/u);
+  assert.doesNotMatch(audit, /taxId/u);
+});
+
+test("decimal do banco e valor digitado usam conversores diferentes", async () => {
+  const { centsFromDatabase, toCents } = await import("../lib/payments.ts");
+  // O `numeric` do PostgreSQL volta como "3000.00". `toCents` interpreta entrada
+  // em pt-BR e trata o ponto como separador de milhar — usá-la aqui multiplicava
+  // todo valor por 100. O ensaio no navegador mostrou R$ 300.000,00 no lugar de
+  // R$ 3.000,00 antes desta separação.
+  assert.equal(centsFromDatabase("3000.00"), 300000);
+  assert.equal(centsFromDatabase("0.05"), 5);
+  assert.equal(centsFromDatabase("1234.56"), 123456);
+  assert.equal(toCents("1.234,56"), 123456, "entrada digitada continua em pt-BR");
+  assert.notEqual(centsFromDatabase("3000.00"), toCents("3000.00"));
+
+  const route = await readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8");
+  assert.match(route, /centsFromDatabase\(row\.caju_amount/u);
+  assert.doesNotMatch(route, /toCents\(/u);
+});
+
+test("o modelo é guardado no banco, sem depender de armazenamento externo", async () => {
+  const route = await readFile(new URL("../app/api/payments/caju/templates/route.ts", import.meta.url), "utf8");
+  // Exigir Blob num caminho que mexe com dinheiro fazia o cadastro falhar com
+  // erro genérico onde o armazenamento não estivesse configurado.
+  assert.doesNotMatch(route, /getAttachmentsBucket|bucket\.put/u);
+  assert.match(route, /source_text/u);
+  const migration = await readFile(new URL("../drizzle/postgres/0031_caju_template_source.sql", import.meta.url), "utf8");
+  // O original fica guardado: conferir depois com qual planilha o pedido saiu.
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "source_text"/u);
+  assert.match(migration, /CHECK \("source_text" <> '' OR "storage_key" <> ''\)/u);
 });

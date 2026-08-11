@@ -9,6 +9,7 @@ export type PaymentPermissions = {
   close: boolean;
   reopen: boolean;
   manageLimits: boolean;
+  exportCaju: boolean;
 };
 
 export type Psychologist = {
