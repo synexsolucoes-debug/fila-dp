@@ -11,7 +11,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "saas.read");
+    requireCapability(workspace, "saas.read");
     const [plans, subscription, onboarding, invoices, usage] = await Promise.all([
       d1.prepare(`SELECT id, code, name, description, status, currency, monthly_price_cents, annual_price_cents,
           trial_days, included_seats, company_limit, integration_limit, storage_limit_mb, features_json,

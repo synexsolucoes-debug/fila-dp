@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.read");
+    requireCapability(workspace, "contractors.payments.read");
     const url = new URL(request.url);
     const includeHistory = url.searchParams.get("history") === "true";
     const rows = await d1.prepare(`SELECT p.id, p.scope, p.company_id, p.provider_id, p.contract_reference, p.amount, p.effective_from,
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.limits.manage");
+    requireCapability(workspace, "contractors.limits.manage");
 
     const scope = requiredPaymentEnum(body.scope, invoiceLimitScopes, "Escopo do limite");
     const amount = positiveMoney(body.amount, "Limite da nota");

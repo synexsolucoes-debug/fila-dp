@@ -8,7 +8,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.status.read");
+    requireCapability(workspace, "integrations.status.read");
     const [connectors, mappings, runs, reconciliations, queue] = await Promise.all([
       d1.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.last_sync_at, i.last_error, i.updated_at,
           credential.id AS credential_id, credential.fingerprint, credential.key_version, credential.verified_at, credential.expires_at,
@@ -40,18 +40,18 @@ export async function GET() {
       connectors: connectors.results.map((row) => ({
         ...row,
         fingerprint: row.fingerprint ? publicCredentialFingerprint(String(row.fingerprint)) : "",
-        last_error: hasCapability(workspace.role, "integrations.manage") && row.last_error
+        last_error: hasCapability(workspace, "integrations.manage") && row.last_error
           ? safeIntegrationError(new Error(String(row.last_error))).message
           : row.last_error ? "O conector requer atenção administrativa." : null,
       })),
       mappings: mappings.results,
       runs: runs.results,
-      reconciliations: hasCapability(workspace.role, "integrations.reconcile") ? reconciliations.results : [],
+      reconciliations: hasCapability(workspace, "integrations.reconcile") ? reconciliations.results : [],
       queue: queue.results,
       permissions: {
-        manage: hasCapability(workspace.role, "integrations.manage"),
-        run: hasCapability(workspace.role, "integrations.run"),
-        reconcile: hasCapability(workspace.role, "integrations.reconcile"),
+        manage: hasCapability(workspace, "integrations.manage"),
+        run: hasCapability(workspace, "integrations.run"),
+        reconcile: hasCapability(workspace, "integrations.reconcile"),
       },
       solidesBoundary: "O conector usa o recurso oficial de colaboradores e abre a conciliação de quem já foi admitido; conectar continua exigindo autenticação e teste real, e os arquivos dos documentos permanecem na Sólides.",
     });

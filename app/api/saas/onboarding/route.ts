@@ -10,7 +10,7 @@ export async function PATCH(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "saas.manage");
+    requireCapability(workspace, "saas.manage");
     const body = await request.json() as Body;
     const action = String(body.action ?? "");
     if (!new Set(["complete", "skip", "profile", "dismiss", "resume"]).has(action)) {

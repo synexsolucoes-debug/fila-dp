@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
 
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
-    const allowed = actionDefinitions.filter((definition) => hasCapability(workspace.role, definition.capability));
+    const allowed = actionDefinitions.filter((definition) => hasCapability(workspace, definition.capability));
     if (!allowed.length) return Response.json({ items: [], generatedAt: new Date().toISOString() });
 
     // Um membro sem nenhuma empresa autorizada não enxerga indicador de empresa.

@@ -12,7 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params; const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "competences.transition");
+    requireCapability(workspace, "competences.transition");
     const cycle = await d1.prepare("SELECT * FROM fdp_payroll_cycles WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!cycle) throw ApiError.notFound("Competência não encontrada.", "COMPETENCE_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(cycle.company_id));
@@ -21,7 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const reopening = cycle.status === "closed";
     const reason = cleanText(body.reason, 500);
     if (reopening) {
-      requireCapability(workspace.role, "competences.reopen");
+      requireCapability(workspace, "competences.reopen");
       if (!reason) throw ApiError.badRequest("Informe o motivo da reabertura.", "REOPEN_REASON_REQUIRED");
     }
     const blocksClosing = target === "processing" || target === "closed";

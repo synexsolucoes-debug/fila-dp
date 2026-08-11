@@ -23,7 +23,7 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "employees.read");
+    requireCapability(workspace, "employees.read");
     const employee = await getEmployee(d1, workspace.id, id);
     if (!employee) throw ApiError.notFound("Colaborador não encontrado.", "EMPLOYEE_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(employee.company_id));
@@ -38,7 +38,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "employees.manage");
+    requireCapability(workspace, "employees.manage");
     const current = await getEmployee(d1, workspace.id, id);
     if (!current) throw ApiError.notFound("Colaborador não encontrado.", "EMPLOYEE_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));

@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       FROM fdp_auxiliary_executions e JOIN fdp_auxiliary_execution_revisions r ON r.workspace_id = e.workspace_id AND r.execution_id = e.id AND r.revision = e.current_revision
       WHERE e.workspace_id = ? AND e.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Lançamento auxiliar não encontrado.", "AUXILIARY_EXECUTION_NOT_FOUND");
-    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace.role, auxiliaryCapability(moduleType, "manage"));
+    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace, auxiliaryCapability(moduleType, "manage"));
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     if (current.status !== "rejected" || current.revision_status !== "rejected") throw ApiError.badRequest("Uma nova revisão só pode ser criada após rejeição.", "AUXILIARY_REVISION_NOT_ALLOWED");
     const sanitized = sanitizeAuxiliaryPayload(moduleType, body.input ?? jsonObject(current.input_json), body.output ?? jsonObject(current.output_json));

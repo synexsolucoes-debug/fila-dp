@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const endpoint = await d1.prepare(`SELECT id, name, url, event_types_json, status, failure_count FROM fdp_webhook_endpoints
       WHERE workspace_id = ? AND id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!endpoint) throw ApiError.notFound("Endpoint não encontrado.", "WEBHOOK_ENDPOINT_NOT_FOUND");
@@ -33,7 +33,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
 
     const current = await d1.prepare("SELECT id, status, event_types_json FROM fdp_webhook_endpoints WHERE workspace_id = ? AND id = ?")
       .bind(workspace.id, id).first<{ id: string; status: string; event_types_json: unknown }>();
@@ -65,7 +65,7 @@ export async function DELETE(request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const disabled = await d1.prepare(`UPDATE fdp_webhook_endpoints SET status = 'disabled', updated_at = now()
       WHERE workspace_id = ? AND id = ? AND status <> 'disabled' RETURNING id`).bind(workspace.id, id).first();
     if (!disabled) throw ApiError.notFound("Endpoint não encontrado ou já desativado.", "WEBHOOK_ENDPOINT_NOT_FOUND");

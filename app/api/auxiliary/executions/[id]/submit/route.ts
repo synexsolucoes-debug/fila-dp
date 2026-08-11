@@ -9,12 +9,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "auxiliary.approvals.request");
+    requireCapability(workspace, "auxiliary.approvals.request");
     const current = await d1.prepare(`SELECT e.*, r.id AS revision_id, r.status AS revision_status
       FROM fdp_auxiliary_executions e JOIN fdp_auxiliary_execution_revisions r ON r.workspace_id = e.workspace_id AND r.execution_id = e.id AND r.revision = e.current_revision
       WHERE e.workspace_id = ? AND e.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Lançamento auxiliar não encontrado.", "AUXILIARY_EXECUTION_NOT_FOUND");
-    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace.role, auxiliaryCapability(moduleType, "manage"));
+    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace, auxiliaryCapability(moduleType, "manage"));
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     if (current.status !== "draft" || current.revision_status !== "draft") throw ApiError.badRequest("O lançamento não pode ser enviado neste estado.", "AUXILIARY_NOT_SUBMITTABLE");
     const approverUserId = cleanText(body.approverUserId, 120); if (!approverUserId) throw ApiError.badRequest("Selecione um aprovador.", "APPROVER_REQUIRED");

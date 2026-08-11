@@ -8,7 +8,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { id } = await params; const body = await request.json() as Record<string, unknown>;
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "approvals.decide");
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "approvals.decide");
     const approval = await d1.prepare(`SELECT a.*, m.company_id, m.requested_by, m.movement_type, m.status AS movement_status
       FROM fdp_movement_approval_steps a JOIN fdp_employee_movements m ON m.workspace_id = a.workspace_id AND m.id = a.movement_id
       WHERE a.workspace_id = ? AND a.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();

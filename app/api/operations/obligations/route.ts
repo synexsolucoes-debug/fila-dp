@@ -8,7 +8,7 @@ import { enumOr, obligationTypes, validRequiredDate } from "@/lib/operations";
 export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "obligations.read");
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "obligations.read");
     const url = new URL(request.url); const companyId = cleanText(url.searchParams.get("companyId"), 120); const cycleId = cleanText(url.searchParams.get("competenceId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED"); await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const result = await d1.prepare(`SELECT * FROM fdp_compliance_obligations WHERE workspace_id = ? AND company_id = ? ${cycleId ? "AND payroll_cycle_id = ?" : ""} ORDER BY due_date, title`)
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "obligations.manage");
+    const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "obligations.manage");
     const companyId = cleanText(body.companyId, 120); const cycleId = cleanText(body.competenceId ?? body.payrollCycleId, 120); const title = cleanText(body.title, 180); const dueDate = validRequiredDate(body.dueDate);
     if (!companyId || !cycleId || !title) throw ApiError.badRequest("Empresa, competência, título e prazo são obrigatórios.", "OBLIGATION_REQUIRED_FIELDS");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);

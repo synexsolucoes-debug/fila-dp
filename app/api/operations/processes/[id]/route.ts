@@ -8,7 +8,7 @@ import { assertNoAdmissionWorkflow } from "@/lib/operations";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "processes.manage");
+    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "processes.manage");
     const current = await d1.prepare("SELECT * FROM fdp_process_definitions WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Processo não encontrado.", "PROCESS_NOT_FOUND"); const name = cleanText(body.name, 160) || String(current.name); const category = cleanText(body.category, 80) || String(current.category); assertNoAdmissionWorkflow(current.code, name, category);
     const status = body.status === "inactive" ? "inactive" : body.status === "active" ? "active" : String(current.status);

@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     const providerType = parseProviderType(new URL(request.url).searchParams.get("providerType"));
-    requireCapability(workspace.role, auxiliaryCapability(moduleForProviderType(providerType), "read"));
+    requireCapability(workspace, auxiliaryCapability(moduleForProviderType(providerType), "read"));
     const result = await d1.prepare(`SELECT id, provider_type, code, legal_name, trade_name, tax_id, email, phone, status, created_at, updated_at
       FROM fdp_auxiliary_providers WHERE workspace_id = ? AND provider_type = ? ORDER BY status, legal_name`)
       .bind(workspace.id, providerType).all();
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     const providerType = parseProviderType(body.providerType);
-    requireCapability(workspace.role, auxiliaryCapability(moduleForProviderType(providerType), "manage"));
+    requireCapability(workspace, auxiliaryCapability(moduleForProviderType(providerType), "manage"));
     const code = sanitizeProviderCode(body.code); const legalName = cleanText(body.legalName, 180);
     if (!legalName) throw ApiError.badRequest("Informe a razão social ou nome profissional.", "PROVIDER_NAME_REQUIRED");
     if (await d1.prepare("SELECT id FROM fdp_auxiliary_providers WHERE workspace_id = ? AND code = ?").bind(workspace.id, code).first()) {

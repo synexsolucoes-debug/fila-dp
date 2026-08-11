@@ -9,7 +9,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "employees.read");
+    requireCapability(workspace, "employees.read");
     const employee = await d1.prepare("SELECT company_id FROM fdp_employees WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<{ company_id: string }>();
     if (!employee) throw ApiError.notFound("Colaborador não encontrado.", "EMPLOYEE_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, employee.company_id);

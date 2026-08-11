@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       FROM fdp_auxiliary_executions e LEFT JOIN fdp_auxiliary_providers p ON p.workspace_id = e.workspace_id AND p.id = e.provider_id
       WHERE e.workspace_id = ? AND e.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!execution) throw ApiError.notFound("Lançamento auxiliar não encontrado.", "AUXILIARY_EXECUTION_NOT_FOUND");
-    const moduleType = parseAuxiliaryModule(execution.module_type); requireCapability(workspace.role, auxiliaryCapability(moduleType, "read"));
+    const moduleType = parseAuxiliaryModule(execution.module_type); requireCapability(workspace, auxiliaryCapability(moduleType, "read"));
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(execution.company_id));
     const [revisions, approvals] = await Promise.all([
       d1.prepare("SELECT * FROM fdp_auxiliary_execution_revisions WHERE workspace_id = ? AND execution_id = ? ORDER BY revision DESC").bind(workspace.id, id).all(),
@@ -39,7 +39,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       FROM fdp_auxiliary_executions e JOIN fdp_auxiliary_execution_revisions r ON r.workspace_id = e.workspace_id AND r.execution_id = e.id AND r.revision = e.current_revision
       WHERE e.workspace_id = ? AND e.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Lançamento auxiliar não encontrado.", "AUXILIARY_EXECUTION_NOT_FOUND");
-    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace.role, auxiliaryCapability(moduleType, "manage"));
+    const moduleType = parseAuxiliaryModule(current.module_type); requireCapability(workspace, auxiliaryCapability(moduleType, "manage"));
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     if (current.status !== "draft" || current.revision_status !== "draft") throw ApiError.badRequest("Crie uma nova revisão para alterar um lançamento já enviado.", "AUXILIARY_REVISION_REQUIRED");
     const providerId = body.providerId === undefined ? (current.provider_id ? String(current.provider_id) : null) : cleanText(body.providerId, 120) || null;

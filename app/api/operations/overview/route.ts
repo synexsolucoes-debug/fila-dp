@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "competences.read");
+    requireCapability(workspace, "competences.read");
     const url = new URL(request.url);
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     ]);
     let movements: unknown[] = [];
     let approvals: unknown[] = [];
-    if (hasCapability(workspace.role, "movements.read") && cycleId) {
+    if (hasCapability(workspace, "movements.read") && cycleId) {
       const [movementRows, approvalRows] = await Promise.all([
         d1.prepare(`SELECT m.id, m.employee_id, e.full_name AS employee_name, e.social_name, m.movement_type, m.effective_date, m.title, m.status, m.created_at, m.updated_at
           FROM fdp_employee_movements m JOIN fdp_employees e ON e.workspace_id = m.workspace_id AND e.id = m.employee_id
@@ -62,10 +62,10 @@ export async function GET(request: Request) {
       closingItems: closingItems.results, pendingItems: pendingItems.results, processes: processes.results, movements, approvals,
       approvers: approvers.results,
       permissions: {
-        manageCompetences: hasCapability(workspace.role, "competences.manage"), transitionCompetences: hasCapability(workspace.role, "competences.transition"),
-        manageMovements: hasCapability(workspace.role, "movements.manage"), decideApprovals: hasCapability(workspace.role, "approvals.decide"),
-        manageObligations: hasCapability(workspace.role, "obligations.manage"), managePending: hasCapability(workspace.role, "pending_items.manage"),
-        manageProcesses: hasCapability(workspace.role, "processes.manage"), publishProcesses: hasCapability(workspace.role, "processes.publish"),
+        manageCompetences: hasCapability(workspace, "competences.manage"), transitionCompetences: hasCapability(workspace, "competences.transition"),
+        manageMovements: hasCapability(workspace, "movements.manage"), decideApprovals: hasCapability(workspace, "approvals.decide"),
+        manageObligations: hasCapability(workspace, "obligations.manage"), managePending: hasCapability(workspace, "pending_items.manage"),
+        manageProcesses: hasCapability(workspace, "processes.manage"), publishProcesses: hasCapability(workspace, "processes.publish"),
       },
     });
   } catch (error) { return apiError(error); }

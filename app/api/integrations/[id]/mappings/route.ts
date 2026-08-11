@@ -12,7 +12,7 @@ export async function GET(_request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.status.read");
+    requireCapability(workspace, "integrations.status.read");
     const result = await d1.prepare(`SELECT id, resource_type, direction, version, status, mapping_json, checksum, published_at, created_at
       FROM fdp_integration_mappings WHERE workspace_id = ? AND integration_id = ? ORDER BY resource_type, direction, version DESC`).bind(workspace.id, id).all();
     return Response.json({ mappings: result.results });
@@ -25,7 +25,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const integration = await d1.prepare("SELECT id FROM fdp_integrations WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first();
     if (!integration) throw ApiError.notFound("Integração não encontrada.", "INTEGRATION_NOT_FOUND");
     const body = await request.json() as Record<string, unknown>;

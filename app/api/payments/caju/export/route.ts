@@ -75,7 +75,7 @@ async function loadContext(user: NonNullable<Awaited<ReturnType<typeof getApiUse
   if (!cycleId) throw ApiError.badRequest("Informe a competência a exportar.", "CAJU_COMPETENCE_REQUIRED");
 
   const { d1, workspace, user: actor } = await getWorkspaceContext(user);
-  requireCapability(workspace.role, "contractors.export_caju");
+  requireCapability(workspace, "contractors.export_caju");
 
   const cycle = await d1.prepare("SELECT id, company_id, competence FROM fdp_payroll_cycles WHERE workspace_id = ? AND id = ?")
     .bind(workspace.id, cycleId).first<{ id: string; company_id: string; competence: string }>();

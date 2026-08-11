@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "competences.read");
+    requireCapability(workspace, "competences.read");
     const companyId = cleanText(new URL(request.url).searchParams.get("companyId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "competences.manage");
+    requireCapability(workspace, "competences.manage");
     const companyId = cleanText(body.companyId, 120);
     const competence = validCompetence(body.competence);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");

@@ -34,7 +34,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.manage");
+    requireCapability(workspace, "contractors.payments.manage");
 
     const component = await loadComponent(d1, workspace.id, id);
     if (component.status !== "active") throw ApiError.badRequest("O componente está cancelado.", "COMPONENT_CANCELED");
@@ -69,7 +69,7 @@ export async function DELETE(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.manage");
+    requireCapability(workspace, "contractors.payments.manage");
 
     const component = await loadComponent(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, component.company_id);

@@ -8,7 +8,7 @@ import { enumOr, movementTypes, sanitizeMovementDetails, validRequiredDate } fro
 export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "movements.read");
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "movements.read");
     const url = new URL(request.url); const companyId = cleanText(url.searchParams.get("companyId"), 120); const cycleId = cleanText(url.searchParams.get("competenceId"), 120);
     const status = cleanText(url.searchParams.get("status"), 30); const cursor = cleanText(url.searchParams.get("cursor"), 120); const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 40, 1), 100);
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "movements.manage");
+    requireCapability(workspace, "movements.manage");
     const companyId = cleanText(body.companyId, 120); const employeeId = cleanText(body.employeeId, 120); const cycleId = cleanText(body.competenceId ?? body.payrollCycleId, 120) || null;
     const movementType = enumOr(body.movementType, movementTypes, "other"); const title = cleanText(body.title, 180); const effectiveDate = validRequiredDate(body.effectiveDate);
     if (!companyId || !employeeId || !title) throw ApiError.badRequest("Empresa, colaborador, título e vigência são obrigatórios.", "MOVEMENT_REQUIRED_FIELDS");

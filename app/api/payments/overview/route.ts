@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     const url = new URL(request.url);
     const moduleType = parseModule(url.searchParams.get("module"));
-    requireCapability(workspace.role, moduleType === "psychology" ? "psychology.payments.read" : "contractors.payments.read");
+    requireCapability(workspace, moduleType === "psychology" ? "psychology.payments.read" : "contractors.payments.read");
 
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");
@@ -69,9 +69,9 @@ export async function GET(request: Request) {
         module: moduleType, competence, cycle, cycles: cycles.results,
         closings: closings.results, psychologists: psychologists.results, unassignedSessions: pendingSessions.results,
         permissions: {
-          manage: hasCapability(workspace.role, "psychology.payments.manage"),
-          close: hasCapability(workspace.role, "psychology.payments.close"),
-          reopen: hasCapability(workspace.role, "payments.reopen"),
+          manage: hasCapability(workspace, "psychology.payments.manage"),
+          close: hasCapability(workspace, "psychology.payments.close"),
+          reopen: hasCapability(workspace, "payments.reopen"),
         },
         privacyBoundary: "Controle administrativo e financeiro do pagamento das consultas; nenhum dado clínico é armazenado.",
       });
@@ -110,11 +110,11 @@ export async function GET(request: Request) {
         divergentCount: rows.filter((row) => row.reconciliation_status === "divergent" || row.invoice_status === "divergent").length,
       },
       permissions: {
-        manage: hasCapability(workspace.role, "contractors.payments.manage"),
-        close: hasCapability(workspace.role, "contractors.payments.close"),
-        reopen: hasCapability(workspace.role, "payments.reopen"),
-        manageLimits: hasCapability(workspace.role, "contractors.limits.manage"),
-        exportCaju: hasCapability(workspace.role, "contractors.export_caju"),
+        manage: hasCapability(workspace, "contractors.payments.manage"),
+        close: hasCapability(workspace, "contractors.payments.close"),
+        reopen: hasCapability(workspace, "payments.reopen"),
+        manageLimits: hasCapability(workspace, "contractors.limits.manage"),
+        exportCaju: hasCapability(workspace, "contractors.export_caju"),
       },
     });
   } catch (error) {

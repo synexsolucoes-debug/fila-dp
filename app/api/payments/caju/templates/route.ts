@@ -77,7 +77,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.read");
+    requireCapability(workspace, "contractors.payments.read");
 
     const rows = await d1.prepare(`SELECT id, version, file_name, status, format, delimiter, category_key, amount_label,
         column_map_json, byte_size, note, uploaded_by, created_at, activated_at
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.export_caju");
+    requireCapability(workspace, "contractors.export_caju");
 
     const form = await request.formData();
     const file = form.get("file");

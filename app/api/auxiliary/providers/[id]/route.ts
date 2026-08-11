@@ -12,7 +12,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     const current = await d1.prepare("SELECT * FROM fdp_auxiliary_providers WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Fornecedor não encontrado.", "PROVIDER_NOT_FOUND");
-    const providerType = parseProviderType(current.provider_type); requireCapability(workspace.role, auxiliaryCapability(moduleForProviderType(providerType), "manage"));
+    const providerType = parseProviderType(current.provider_type); requireCapability(workspace, auxiliaryCapability(moduleForProviderType(providerType), "manage"));
     const legalName = body.legalName === undefined ? String(current.legal_name) : cleanText(body.legalName, 180);
     if (!legalName) throw ApiError.badRequest("Informe a razão social ou nome profissional.", "PROVIDER_NAME_REQUIRED");
     const next = {

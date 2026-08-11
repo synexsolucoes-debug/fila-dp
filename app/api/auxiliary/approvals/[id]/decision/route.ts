@@ -9,14 +9,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "auxiliary.approvals.decide");
+    requireCapability(workspace, "auxiliary.approvals.decide");
     const approval = await d1.prepare(`SELECT a.*, e.company_id, e.module_type, e.created_by, e.status AS execution_status, r.status AS revision_status
       FROM fdp_auxiliary_approval_steps a
       JOIN fdp_auxiliary_executions e ON e.workspace_id = a.workspace_id AND e.id = a.execution_id
       JOIN fdp_auxiliary_execution_revisions r ON r.workspace_id = a.workspace_id AND r.id = a.revision_id AND r.execution_id = a.execution_id
       WHERE a.workspace_id = ? AND a.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!approval) throw ApiError.notFound("Aprovação auxiliar não encontrada.", "AUXILIARY_APPROVAL_NOT_FOUND");
-    const moduleType = parseAuxiliaryModule(approval.module_type); requireCapability(workspace.role, auxiliaryCapability(moduleType, "read"));
+    const moduleType = parseAuxiliaryModule(approval.module_type); requireCapability(workspace, auxiliaryCapability(moduleType, "read"));
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(approval.company_id));
     if (approval.approver_user_id !== user.id) throw ApiError.forbidden("Esta aprovação está atribuída a outro responsável.", "APPROVAL_NOT_ASSIGNED");
     if (approval.created_by === user.id) throw ApiError.forbidden("Autoaprovação não é permitida.", "SELF_APPROVAL_FORBIDDEN");

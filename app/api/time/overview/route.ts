@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "time.read");
+    requireCapability(workspace, "time.read");
 
     const url = new URL(request.url);
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
@@ -106,10 +106,10 @@ export async function GET(request: Request) {
         inconsistencyLabels: timeInconsistencyLabels,
       },
       permissions: {
-        manage: hasCapability(workspace.role, "time.manage"),
-        approve: hasCapability(workspace.role, "time.approve"),
-        export: hasCapability(workspace.role, "time.export"),
-        manageMappings: hasCapability(workspace.role, "time.mappings.manage"),
+        manage: hasCapability(workspace, "time.manage"),
+        approve: hasCapability(workspace, "time.approve"),
+        export: hasCapability(workspace, "time.export"),
+        manageMappings: hasCapability(workspace, "time.mappings.manage"),
       },
       boundary: "O Vinculato confere horas e prepara o envio para a folha. A conversão de hora em dinheiro pertence ao sistema de folha.",
     }, { headers: { "Cache-Control": "no-store" } });

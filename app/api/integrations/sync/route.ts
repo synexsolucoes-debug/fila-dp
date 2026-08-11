@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const channel = text(body.channel, 40).toLowerCase();
     if (!channel) throw ApiError.badRequest("Informe o conector.", "INTEGRATION_CHANNEL_REQUIRED");
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.run");
+    requireCapability(workspace, "integrations.run");
     const integration = await d1.prepare("SELECT id FROM fdp_integrations WHERE workspace_id = ? AND channel = ?").bind(workspace.id, channel).first<{ id: string }>();
     if (!integration) throw ApiError.notFound("Integração não encontrada.", "INTEGRATION_NOT_FOUND");
     const idempotencyKey = text(request.headers.get("idempotency-key") ?? body.idempotencyKey, 180) || `manual:${crypto.randomUUID()}`;

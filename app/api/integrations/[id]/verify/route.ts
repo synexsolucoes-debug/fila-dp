@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const result = await verifyIntegration(d1, workspace.id, id);
     await prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "integration.connection_verified", entityType: "integration", entityId: id,
       after: { connected: true, verifiedAt: result.verifiedAt }, requestId: request.headers.get("x-fila-dp-request-id") }).run();

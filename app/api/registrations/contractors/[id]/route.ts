@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.read");
+    requireCapability(workspace, "contractors.read");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
@@ -115,7 +115,7 @@ export async function GET(request: Request, { params }: Params) {
         complementCents: centsFromDatabase(row.complement_amount, "Complemento"),
         cajuCents: centsFromDatabase(row.caju_amount, "Caju"),
       })),
-      permissions: { manage: hasCapability(workspace.role, "contractors.manage") },
+      permissions: { manage: hasCapability(workspace, "contractors.manage") },
     });
   } catch (error) {
     return apiError(error);
@@ -129,7 +129,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.manage");
+    requireCapability(workspace, "contractors.manage");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);

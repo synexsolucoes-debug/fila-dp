@@ -329,10 +329,10 @@ test("as APIs de pagamento validam tenant, competência fechada, permissão e au
   assert.match(transition, /INVOICE_VALIDATION_REQUIRED/);
   assert.match(transition, /RECONCILIATION_DIVERGENT/);
   assert.match(transition, /REOPEN_REASON_REQUIRED/);
-  assert.match(transition, /requireCapability\(workspace\.role, "payments\.reopen"\)/);
+  assert.match(transition, /requireCapability\(workspace, "payments\.reopen"\)/);
   assert.match(transition, /AND status = \?/);
   assert.match(invoice, /refreshContractorReconciliation/);
-  assert.match(limits, /requireCapability\(workspace\.role, "contractors\.limits\.manage"\)/);
+  assert.match(limits, /requireCapability\(workspace, "contractors\.limits\.manage"\)/);
   assert.match(limits, /effective_to = \?/);
   // O complemento é controle assistido: nenhuma integração é declarada pronta.
   assert.match(caju, /connected: false/);

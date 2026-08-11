@@ -20,15 +20,15 @@ export async function POST(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.payments.manage");
+    requireCapability(workspace, "contractors.payments.manage");
 
     const closing = await findContractorClosing(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, closing.company_id);
 
     const target = requiredPaymentEnum(body.status, contractorClosingStatuses, "Status do fechamento");
     assertTransition(contractorTransitions, closing.status, target);
-    if (target === "paid" || target === "closed") requireCapability(workspace.role, "contractors.payments.close");
-    if (target === "reopened") requireCapability(workspace.role, "payments.reopen");
+    if (target === "paid" || target === "closed") requireCapability(workspace, "contractors.payments.close");
+    if (target === "reopened") requireCapability(workspace, "payments.reopen");
 
     if (target === "ready_to_pay" || target === "paid") {
       if (Number(closing.complement_amount) > 0 && closing.complement_method === "none") {

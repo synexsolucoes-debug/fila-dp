@@ -16,7 +16,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return Response.json({ error: "Papel de acesso inválido." }, { status: 400 });
     }
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "members.manage");
+    requireCapability(workspace, "members.manage");
     const member = await d1.prepare(
       `SELECT u.email, wm.role, CASE WHEN w.owner_user_id = wm.user_id THEN 1 ELSE 0 END AS is_owner
        FROM fdp_workspace_members wm
@@ -77,7 +77,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "members.manage");
+    requireCapability(workspace, "members.manage");
     const member = await d1.prepare(
       `SELECT u.email, CASE WHEN w.owner_user_id = wm.user_id THEN 1 ELSE 0 END AS is_owner
        FROM fdp_workspace_members wm

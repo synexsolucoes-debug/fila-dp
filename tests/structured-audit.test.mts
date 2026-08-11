@@ -22,7 +22,7 @@ test("structured audit is tenant-isolated, append-only, and durable", async () =
 
 test("member authorization changes batch mutation, timeline, and audit together", async () => {
   const route = await readFile(new URL("../app/api/members/[id]/route.ts", import.meta.url), "utf8");
-  assert.match(route, /requireCapability\(workspace\.role, "members\.manage"\)/);
+  assert.match(route, /requireCapability\(workspace, "members\.manage"\)/);
   assert.match(route, /prepareActivity/);
   assert.match(route, /prepareAuditEvent/);
   assert.match(route, /await d1\.batch\(statements\)/);
@@ -37,5 +37,5 @@ test("sensitive snapshot projections and integration execution use capabilities"
   assert.match(database, /canManageMembers/);
   assert.match(database, /canManageIntegrations/);
   assert.match(database, /hrMetrics: canReadHr \?/);
-  assert.match(sync, /requireCapability\(workspace\.role, "integrations\.run"\)/);
+  assert.match(sync, /requireCapability\(workspace, "integrations\.run"\)/);
 });

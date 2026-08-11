@@ -36,7 +36,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.manage");
 
     const session = await loadSession(d1, workspace.id, id);
     if (session.status !== "registered") throw ApiError.badRequest("A consulta está cancelada.", "PSYCHOLOGY_SESSION_CANCELED");
@@ -75,7 +75,7 @@ export async function DELETE(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.manage");
 
     const session = await loadSession(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, session.company_id);

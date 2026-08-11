@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "saas.manage");
+    requireCapability(workspace, "saas.manage");
     const subscription = await d1.prepare(`SELECT id, external_customer_id FROM fdp_workspace_subscriptions
       WHERE workspace_id = ?`).bind(workspace.id).first<{ id: string; external_customer_id: string }>();
     if (!subscription?.external_customer_id) {

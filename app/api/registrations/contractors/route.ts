@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.read");
+    requireCapability(workspace, "contractors.read");
 
     const url = new URL(request.url);
     const companyFilter = url.searchParams.get("companyId") ?? "";
@@ -84,8 +84,8 @@ export async function GET(request: Request) {
         };
       }),
       permissions: {
-        manage: hasCapability(workspace.role, "contractors.manage"),
-        payments: hasCapability(workspace.role, "contractors.payments.read"),
+        manage: hasCapability(workspace, "contractors.manage"),
+        payments: hasCapability(workspace, "contractors.payments.read"),
       },
     });
   } catch (error) {
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "contractors.manage");
+    requireCapability(workspace, "contractors.manage");
 
     const input = readContractorInput(body, { requireCompany: true });
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, input.companyId);

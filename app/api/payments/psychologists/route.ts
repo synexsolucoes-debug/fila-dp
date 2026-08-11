@@ -15,8 +15,8 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.read");
-    const canManage = hasCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.read");
+    const canManage = hasCapability(workspace, "psychology.payments.manage");
     const rows = await d1.prepare(`SELECT a.id, a.code, a.legal_name, a.trade_name, a.tax_id, a.email, a.phone, a.status AS provider_status,
         p.default_session_amount, p.administrative_notes, p.status, p.payout_encrypted, p.payout_key_version, p.updated_at
       FROM fdp_auxiliary_providers a
@@ -33,7 +33,7 @@ export async function GET() {
           payout: payoutSummary(sealed ? { encryptedValue: String(sealed), initializationVector: "", authTag: "", keyVersion: Number(row.payout_key_version ?? 0) } : null, null),
         };
       }),
-      permissions: { manage: canManage, close: hasCapability(workspace.role, "psychology.payments.close") },
+      permissions: { manage: canManage, close: hasCapability(workspace, "psychology.payments.close") },
       privacyBoundary: "Módulo exclusivamente administrativo e financeiro: não armazena informação clínica.",
     });
   } catch (error) {
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.manage");
 
     const legalName = cleanText(body.legalName, 180);
     if (!legalName) throw ApiError.badRequest("Informe o nome do psicólogo.", "PSYCHOLOGIST_NAME_REQUIRED");

@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "time.read");
+    requireCapability(workspace, "time.read");
     const url = new URL(request.url);
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     const cycleId = cleanText(url.searchParams.get("competenceId"), 120);
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "time.manage");
+    requireCapability(workspace, "time.manage");
 
     const companyId = cleanText(body.companyId, 120);
     const cycleId = cleanText(body.competenceId ?? body.payrollCycleId, 120);

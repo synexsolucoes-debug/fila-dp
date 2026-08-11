@@ -19,15 +19,15 @@ export async function POST(request: Request, { params }: Params) {
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.manage");
 
     const closing = await findPsychologyClosing(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, closing.company_id);
 
     const target = requiredPaymentEnum(body.status, psychologyClosingStatuses, "Status do fechamento");
     assertTransition(psychologyTransitions, closing.status, target);
-    if (target === "closed" || target === "paid") requireCapability(workspace.role, "psychology.payments.close");
-    if (target === "reopened") requireCapability(workspace.role, "payments.reopen");
+    if (target === "closed" || target === "paid") requireCapability(workspace, "psychology.payments.close");
+    if (target === "reopened") requireCapability(workspace, "payments.reopen");
 
     const reason = target === "reopened" ? requiredReason(body.reason, "REOPEN_REASON_REQUIRED") : "";
     const snapshot = target === "closed" ? await psychologyClosingSnapshot(d1, workspace.id, id) : null;

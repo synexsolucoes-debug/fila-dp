@@ -12,7 +12,7 @@ export async function GET(_request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.read");
+    requireCapability(workspace, "psychology.payments.read");
     const closing = await findPsychologyClosing(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, closing.company_id);
 
@@ -37,9 +37,9 @@ export async function GET(_request: Request, { params }: Params) {
       adjustments: adjustments.results,
       payment,
       permissions: {
-        manage: hasCapability(workspace.role, "psychology.payments.manage"),
-        close: hasCapability(workspace.role, "psychology.payments.close"),
-        reopen: hasCapability(workspace.role, "payments.reopen"),
+        manage: hasCapability(workspace, "psychology.payments.manage"),
+        close: hasCapability(workspace, "psychology.payments.close"),
+        reopen: hasCapability(workspace, "payments.reopen"),
       },
       privacyBoundary: "Somente informação administrativa e financeira do pagamento das consultas.",
     });

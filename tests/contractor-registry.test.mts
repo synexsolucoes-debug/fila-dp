@@ -254,7 +254,7 @@ test("data vinda do banco é normalizada, venha como texto ou como Date", async 
 test("cadastrar e editar PJ exige capacidade, acesso à empresa e não vaza documento", async () => {
   for (const file of ["../app/api/registrations/contractors/route.ts", "../app/api/registrations/contractors/[id]/route.ts"]) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
-    assert.match(source, /requireCapability\(workspace\.role, "contractors\.(read|manage)"\)/u, `${file} sem capacidade`);
+    assert.match(source, /requireCapability\(workspace, "contractors\.(read|manage)"\)/u, `${file} sem capacidade`);
     assert.match(source, /requireCompanyAccess\(/u, `${file} sem escopo de empresa`);
     // Identidade e contrato nascem e mudam juntos.
     if (file.endsWith("contractors/route.ts")) assert.match(source, /await d1\.batch\(\[/u);

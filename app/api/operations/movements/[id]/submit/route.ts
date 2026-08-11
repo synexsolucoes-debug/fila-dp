@@ -8,7 +8,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { id } = await params; const body = await request.json() as Record<string, unknown>;
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "approvals.request");
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "approvals.request");
     const movement = await d1.prepare("SELECT * FROM fdp_employee_movements WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!movement) throw ApiError.notFound("Movimentação não encontrada.", "MOVEMENT_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(movement.company_id));

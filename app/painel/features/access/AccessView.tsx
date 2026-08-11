@@ -11,6 +11,7 @@ import {
   createActivationLink, inviteMember, loadAccessOverview, removeMember, updateMemberAccess,
 } from "./access.api";
 import type { AccessMember, AccessOverview, ActivationLink } from "./access.types";
+import { MemberModules } from "./MemberModules";
 import styles from "./access.module.css";
 
 const dateTime = (value: string | null) =>
@@ -397,6 +398,14 @@ export function AccessView({ role }: { role: WorkspaceRole }) {
               )}
             </>
           )}
+
+          {/* Escopo por empresa responde "quais CNPJs"; a matriz abaixo responde
+              "quais telas". As duas perguntas vivem na mesma ficha porque quem
+              revisa acesso precisa das duas ao mesmo tempo. */}
+          <div className={styles.detailNote}>
+            <span className={styles.eyebrow}>ACESSO A MÓDULOS</span>
+          </div>
+          <MemberModules memberId={selected.userId} memberName={selected.name} canManage={canManage} />
         </section>
       )}
 

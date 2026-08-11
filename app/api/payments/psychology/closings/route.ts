@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "psychology.payments.manage");
+    requireCapability(workspace, "psychology.payments.manage");
 
     const companyId = cleanText(body.companyId, 120);
     const cycleId = cleanText(body.competenceId ?? body.payrollCycleId, 120);

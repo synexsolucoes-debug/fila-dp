@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "competences.read");
+    requireCapability(workspace, "competences.read");
     const cycle = await d1.prepare(`SELECT c.*, co.legal_name AS company_legal_name, co.trade_name AS company_trade_name
       FROM fdp_payroll_cycles c JOIN fdp_companies co ON co.workspace_id = c.workspace_id AND co.id = c.company_id
       WHERE c.workspace_id = ? AND c.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
@@ -59,9 +59,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       blockers,
       canClose: blockers.length === 0,
       permissions: {
-        manage: hasCapability(workspace.role, "competences.manage"),
-        transition: hasCapability(workspace.role, "competences.transition"),
-        reopen: hasCapability(workspace.role, "competences.reopen"),
+        manage: hasCapability(workspace, "competences.manage"),
+        transition: hasCapability(workspace, "competences.transition"),
+        reopen: hasCapability(workspace, "competences.reopen"),
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
@@ -72,7 +72,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params; const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "competences.manage");
+    requireCapability(workspace, "competences.manage");
     const current = await d1.prepare("SELECT * FROM fdp_payroll_cycles WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Competência não encontrada.", "COMPETENCE_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));

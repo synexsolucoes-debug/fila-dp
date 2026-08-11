@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.run");
+    requireCapability(workspace, "integrations.run");
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const idempotencyKey = text(request.headers.get("idempotency-key") ?? body.idempotencyKey, 180) || `manual:${crypto.randomUUID()}`;
     const run = await queueIntegrationRun(d1, { workspaceId: workspace.id, integrationId: id, mappingId: text(body.mappingId, 120) || undefined, triggerType: "manual", requestedBy: user.id, idempotencyKey });

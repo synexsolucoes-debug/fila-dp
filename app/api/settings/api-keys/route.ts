@@ -11,7 +11,7 @@ export async function GET() {
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
     const rows = await d1.prepare(`SELECT id, name, prefix, scopes_json, rate_limit_per_minute, status, last_used_at, expires_at, revoked_at, created_at
       FROM fdp_api_keys WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 100`).bind(workspace.id).all<Record<string, unknown>>();
     return Response.json({
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
 
     const name = cleanText(body.name, 120);
     if (!name) throw ApiError.badRequest("Informe um nome para a chave.", "API_KEY_NAME_REQUIRED");

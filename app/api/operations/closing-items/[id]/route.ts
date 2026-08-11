@@ -8,7 +8,7 @@ import { enumOr, workItemStatuses } from "@/lib/operations";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "competences.manage");
+    const { id } = await params; const body = await request.json() as Record<string, unknown>; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "competences.manage");
     const current = await d1.prepare("SELECT * FROM fdp_payroll_cycle_items WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Item de fechamento não encontrado.", "CLOSING_ITEM_NOT_FOUND"); await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     const next = { title: cleanText(body.title, 180) || String(current.title), status: enumOr(body.status, workItemStatuses, current.status as typeof workItemStatuses[number]),

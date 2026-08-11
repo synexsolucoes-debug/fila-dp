@@ -12,7 +12,7 @@ export async function DELETE(request: Request, { params }: Params) {
   try {
     const { id } = await params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace.role, "integrations.manage");
+    requireCapability(workspace, "integrations.manage");
 
     const revoked = await d1.prepare(`UPDATE fdp_api_keys SET status = 'revoked', revoked_at = now(), revoked_by = ?
       WHERE workspace_id = ? AND id = ? AND status = 'active' RETURNING id, name, prefix`)

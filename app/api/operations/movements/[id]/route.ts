@@ -10,7 +10,7 @@ type Context = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, context: Context) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
-    const { id } = await context.params; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "movements.read");
+    const { id } = await context.params; const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "movements.read");
     const movement = await d1.prepare(`SELECT m.*, e.full_name AS employee_name, e.social_name, c.legal_name AS company_name
       FROM fdp_employee_movements m JOIN fdp_employees e ON e.workspace_id = m.workspace_id AND e.id = m.employee_id
       JOIN fdp_companies c ON c.workspace_id = m.workspace_id AND c.id = m.company_id WHERE m.workspace_id = ? AND m.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
@@ -25,7 +25,7 @@ export async function PATCH(request: Request, context: Context) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { id } = await context.params; const body = await request.json() as Record<string, unknown>;
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace.role, "movements.manage");
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireCapability(workspace, "movements.manage");
     const current = await d1.prepare("SELECT * FROM fdp_employee_movements WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Movimentação não encontrada.", "MOVEMENT_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
