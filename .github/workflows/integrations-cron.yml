@@ -1,0 +1,55 @@
+# Disparo agendado do executor de integrações.
+#
+# Por que não fica no vercel.json: a conta é Hobby, e a Vercel recusa qualquer
+# cron que rode mais de uma vez por dia — o deploy inteiro falha, não só o cron.
+# Uma varredura diária deixaria a admissão aparecer com até 24 h de atraso, o que
+# não serve. O agendador do GitHub entrega a cadência real sem custo.
+#
+# Ao migrar para o plano Pro, o caminho natural é mover isto de volta para
+# `vercel.json` (`{"crons":[{"path":"/api/cron/integrations","schedule":"*/5 * * * *"}]}`)
+# e desativar este workflow, para ter um mecanismo só.
+name: Executor de integrações
+
+on:
+  schedule:
+    # A menor granularidade do agendador do GitHub é 5 minutos, e ele atrasa sob
+    # carga: trate como "a cada poucos minutos", não como horário exato.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # Duas varreduras simultâneas não corrompem a fila — o lease usa FOR UPDATE
+  # SKIP LOCKED — mas gastam execução à toa.
+  group: integrations-cron
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Drenar a fila de integrações
+        env:
+          ENDPOINT: ${{ secrets.INTEGRATIONS_CRON_URL }}
+          SECRET: ${{ secrets.INTEGRATIONS_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ENDPOINT}" ] || [ -z "${SECRET}" ]; then
+            echo "Defina os segredos INTEGRATIONS_CRON_URL e INTEGRATIONS_CRON_SECRET no repositório." >&2
+            exit 1
+          fi
+          # -sS mantém o erro visível sem despejar corpo binário; o corpo da
+          # resposta é um resumo com contagens, sem dado de cliente.
+          codigo=$(curl -sS -o resposta.json -w "%{http_code}" \
+            --max-time 120 \
+            -H "Authorization: Bearer ${SECRET}" \
+            "${ENDPOINT}")
+          echo "HTTP ${codigo}"
+          cat resposta.json
+          echo
+          if [ "${codigo}" != "200" ]; then
+            echo "O executor respondeu ${codigo}." >&2
+            exit 1
+          fi

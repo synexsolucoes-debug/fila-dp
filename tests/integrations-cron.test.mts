@@ -8,10 +8,18 @@ import test from "node:test";
  * nenhum — a fila só não andava.
  */
 test("existe disparo agendado para o executor de integrações", async () => {
-  const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8")) as { crons?: Array<{ path: string; schedule: string }> };
-  const cron = (config.crons ?? []).find((entry) => entry.path === "/api/cron/integrations");
-  assert.ok(cron, "a fila depende de um agendamento declarado no vercel.json");
-  assert.match(cron.schedule, /^[\d*/,\- ]+$/u, "o agendamento precisa ser uma expressão cron válida");
+  const workflow = await readFile(new URL("../.github/workflows/integrations-cron.yml", import.meta.url), "utf8");
+  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/u, "a fila depende de um agendamento de poucos minutos");
+  assert.match(workflow, /Authorization: Bearer/u);
+  assert.match(workflow, /workflow_dispatch/u, "precisa ser disparável à mão para depuração");
+  // O passo tem de falhar quando o executor recusa, senão a fila para em silêncio de novo.
+  assert.match(workflow, /exit 1/u);
+});
+
+test("o vercel.json não declara cron: a conta Hobby recusa o deploy inteiro", async () => {
+  const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8")) as { crons?: unknown[] };
+  // "Hobby accounts are limited to daily cron jobs" derruba o build, não só o cron.
+  assert.equal(config.crons, undefined, "declarar cron aqui quebra o deploy enquanto a conta for Hobby");
 });
 
 test("o disparo agendado exige segredo e respeita o isolamento por workspace", async () => {
