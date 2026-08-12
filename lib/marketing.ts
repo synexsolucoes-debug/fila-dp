@@ -1,4 +1,4 @@
-import { cleanText } from "./registrations.ts";
+import { cleanText } from "./clean-text.ts";
 import { ApiError } from "./api-errors.ts";
 
 /**

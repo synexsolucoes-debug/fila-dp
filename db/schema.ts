@@ -25,7 +25,10 @@ export const users = pgTable("fdp_users", {
   passwordHash: text("password_hash"),
   passwordSalt: text("password_salt"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("fdp_users_email_uq").on(table.email)]);
+}, (table) => [
+  uniqueIndex("fdp_users_email_uq").on(table.email),
+  index("fdp_users_created_id_idx").on(table.createdAt, table.id),
+]);
 
 export const workspaces = pgTable("fdp_workspaces", {
   id: text("id").primaryKey(),
@@ -36,6 +39,7 @@ export const workspaces = pgTable("fdp_workspaces", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   index("fdp_workspaces_owner_idx").on(table.ownerUserId),
+  index("fdp_workspaces_created_id_idx").on(table.createdAt, table.id),
   uniqueIndex("fdp_workspaces_slug_uq").on(table.slug),
 ]);
 
@@ -1021,6 +1025,7 @@ export const integrationCredentials = pgTable("fdp_integration_credentials", {
   uniqueIndex("fdp_integration_credentials_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_credentials_active_uq").on(table.workspaceId, table.integrationId, table.credentialType).where(sql`${table.status} = 'active'`),
   index("fdp_integration_credentials_workspace_integration_idx").on(table.workspaceId, table.integrationId, table.status),
+  index("fdp_integration_credentials_expiry_idx").on(table.workspaceId, table.status, table.expiresAt),
   foreignKey({ name: "fdp_integration_credentials_workspace_integration_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }).onDelete("cascade"),
   foreignKey({ name: "fdp_integration_credentials_workspace_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
   check("fdp_integration_credentials_type_check", sql`${table.credentialType} IN ('provider_auth', 'webhook_signing')`),
@@ -1328,7 +1333,9 @@ export const platformAuditEvents = pgTable("fdp_platform_audit_events", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   index("fdp_platform_audit_created_idx").on(table.createdAt),
+  index("fdp_platform_audit_created_id_idx").on(table.createdAt, table.id),
   index("fdp_platform_audit_actor_idx").on(table.actorUserId, table.createdAt),
+  index("fdp_platform_audit_entity_created_idx").on(table.entityType, table.entityId, table.createdAt),
 ]);
 
 export const hrMetrics = pgTable("fdp_hr_metrics", {

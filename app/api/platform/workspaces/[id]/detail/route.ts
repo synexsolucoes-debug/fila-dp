@@ -1,4 +1,4 @@
-import { getD1 } from "@/db";
+import { getD1, getPlatformScopedD1 } from "@/db";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { ApiError } from "@/lib/api-errors";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
@@ -39,9 +39,10 @@ export async function GET(_request: Request, { params }: Params) {
         LEFT JOIN fdp_saas_plans p ON p.id = s.plan_id
         WHERE w.id = ?`).bind(id).first<Record<string, unknown>>();
       if (!workspace) throw ApiError.notFound("Workspace não encontrado.", "WORKSPACE_NOT_FOUND");
+      const scoped = getPlatformScopedD1({ workspaceId: id, userId: platform.userId });
 
       const [members, companies, audit, modules] = await Promise.all([
-        d1.prepare(`SELECT wm.user_id, u.email, u.name, wm.role, wm.joined_at, u.status,
+        scoped.prepare(`SELECT wm.user_id, u.email, u.name, wm.role, wm.joined_at, u.status,
             (w.owner_user_id = wm.user_id) AS is_owner,
             (u.password_hash IS NOT NULL) AS is_activated,
             (SELECT max(s.last_seen_at) FROM fdp_auth_sessions s WHERE s.user_id = wm.user_id) AS last_seen_at
@@ -50,13 +51,13 @@ export async function GET(_request: Request, { params }: Params) {
           JOIN fdp_workspaces w ON w.id = wm.workspace_id
           WHERE wm.workspace_id = ?
           ORDER BY (w.owner_user_id = wm.user_id) DESC, u.name`).bind(id).all<Record<string, unknown>>(),
-        d1.prepare("SELECT id, legal_name, trade_name, tax_id, is_principal, status FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name")
+        scoped.prepare("SELECT id, legal_name, trade_name, tax_id, is_principal, status FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name")
           .bind(id).all<Record<string, unknown>>(),
         d1.prepare(`SELECT id, actor_email, action, entity_type, entity_id, after_json, created_at
           FROM fdp_platform_audit_events
           WHERE entity_id = ? OR (entity_type = 'workspace' AND entity_id = ?)
           ORDER BY created_at DESC LIMIT 50`).bind(id, id).all<Record<string, unknown>>(),
-        d1.prepare(`SELECT m.key, m.name, m.category, (g.granted IS NOT NULL AND g.granted = 1) AS granted_override,
+        scoped.prepare(`SELECT m.key, m.name, m.category, (g.granted IS NOT NULL AND g.granted = 1) AS granted_override,
             (pm.module_key IS NOT NULL) AS in_plan
           FROM fdp_modules m
           LEFT JOIN fdp_plan_modules pm ON pm.module_key = m.key

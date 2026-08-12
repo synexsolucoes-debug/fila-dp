@@ -267,6 +267,13 @@
       "when": 1786249006000,
       "tag": "0035_assistant_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1786478400000,
+      "tag": "0036_platform_console_indexes",
+      "breakpoints": true
     }
   ]
 }

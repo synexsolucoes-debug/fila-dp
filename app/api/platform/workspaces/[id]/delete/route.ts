@@ -42,6 +42,7 @@ export async function POST(request: Request, { params }: Params) {
     const platform = requirePlatformAdmin(auth.user);
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
+    if (body.confirmed !== true) throw ApiError.badRequest("Confirme explicitamente a exclusão permanente.", "PLATFORM_CONFIRMATION_REQUIRED");
 
     return await withPlatformContext(platform, async () => {
       const d1 = getD1();
