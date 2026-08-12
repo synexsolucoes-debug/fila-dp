@@ -45,6 +45,19 @@ test("legacy timestamp defaults are bridged around the type conversion", async (
   assert.ok("0001_normalize_existing_neon.sql" < "0001_z_restore_timestamp_defaults.sql");
 });
 
+test("clean schema rehearsals skip the legacy timestamp normalization", async () => {
+  const rehearsal = await readFile(new URL("../scripts/rehearse-phase2-db.mjs", import.meta.url), "utf8");
+  assert.match(rehearsal, /let cleanBaseline = false/u);
+  assert.match(rehearsal, /file\.includes\("normalize_existing"\) && cleanBaseline/u);
+  assert.match(rehearsal, /file\.startsWith\("0000_"\)/u);
+  assert.match(rehearsal, /\^001\[4-7\]_/u);
+  assert.match(rehearsal, /CREATE UNIQUE INDEX/u);
+  assert.match(rehearsal, /firstForeignKey/u);
+  assert.match(rehearsal, /NOLOGIN NOSUPERUSER NOBYPASSRLS/u);
+  assert.match(rehearsal, /SET LOCAL ROLE/u);
+  assert.match(rehearsal, /DROP ROLE/u);
+});
+
 test("the legacy recovery author column is normalized instead of recreated", async () => {
   const migrator = await readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8");
   assert.match(migrator, /file === "0002_chief_venom\.sql"/);
