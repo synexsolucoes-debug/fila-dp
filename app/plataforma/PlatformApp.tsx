@@ -1,99 +1,69 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
-import {
-  Activity, ArrowLeft, BadgeCheck, Building2, CheckCircle2, CircleAlert, CircleDot, CreditCard,
-  FileClock, LoaderCircle, Pencil, RefreshCw, Save, ShieldAlert, ShieldCheck, X,
-} from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Activity, Blocks, Building2, CreditCard, Gauge, HeartPulse, ScrollText, ShieldCheck, Users } from "lucide-react";
 import { VinculatoMark } from "@/app/components/VinculatoLogo";
 import styles from "./platform.module.css";
-import { PlatformConsole } from "./PlatformConsole";
+import { AuditFeature } from "./features/AuditFeature";
+import { BillingFeature } from "./features/BillingFeature";
+import { ClientsFeature } from "./features/ClientsFeature";
+import { HealthFeature } from "./features/HealthFeature";
+import { IntegrationsFeature } from "./features/IntegrationsFeature";
+import { OperationsFeature } from "./features/OperationsFeature";
+import { OverviewFeature } from "./features/OverviewFeature";
+import { SecurityFeature } from "./features/SecurityFeature";
+import { UsersFeature } from "./features/UsersFeature";
 
-type Row = Record<string, unknown>;
-type Workspace = { id: string; name: string; slug: string; createdAt: string; subscriptionStatus: string; billingInterval: string; seatQuantity: number; currentPeriodEndsAt: string; planCode: string; planName: string; onboardingStatus: string; currentStep: string };
-type Plan = { id: string; code: string; name: string; description: string; status: string; currency: string; monthlyPriceCents: number; annualPriceCents: number; trialDays: number; includedSeats: number; companyLimit: number; integrationLimit: number; storageLimitMb: number; features: string[]; stripeMonthlyPriceId: string; stripeAnnualPriceId: string; position: number; updatedAt: string };
-type Audit = { id: string; actorEmail: string; action: string; entityType: string; entityId: string; requestId: string; createdAt: string };
-type Overview = { metrics: { workspaces: number; subscribed: number; pastDue: number; onboarded: number }; workspaces: Workspace[]; plans: Plan[]; audits: Audit[] };
-
-const value = (row: Row, camel: string, snake = camel) => row[camel] ?? row[snake];
-const text = (input: unknown) => input == null ? "" : String(input);
-const number = (input: unknown) => Number(input) || 0;
-const array = (input: unknown) => Array.isArray(input) ? input.filter((item): item is string => typeof item === "string") : [];
-const date = (input: string) => { if (!input) return "—"; const parsed = new Date(input); return Number.isNaN(parsed.getTime()) ? input : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(parsed); };
-const money = (cents: number, currency = "BRL") => new Intl.NumberFormat("pt-BR", { style: "currency", currency, maximumFractionDigits: 0 }).format(cents / 100);
-const statusLabels: Record<string, string> = { active: "Ativa", trialing: "Teste", past_due: "Inadimplente", canceled: "Cancelada", draft: "Rascunho", archived: "Arquivado", completed: "Concluído", in_progress: "Em ativação", dismissed: "Adiado" };
-const tone = (status: string) => ["active", "trialing", "completed"].includes(status) ? "safe" : ["past_due", "in_progress", "dismissed"].includes(status) ? "warning" : ["canceled", "archived"].includes(status) ? "danger" : "neutral";
-
-function normalize(payload: unknown): Overview {
-  const row = payload && typeof payload === "object" ? payload as Row : {}; const metrics = (row.metrics ?? {}) as Row;
-  return {
-    metrics: { workspaces: number(metrics.workspaces), subscribed: number(metrics.subscribed), pastDue: number(value(metrics, "pastDue", "past_due")), onboarded: number(metrics.onboarded) },
-    workspaces: Array.isArray(row.workspaces) ? row.workspaces.map((item) => { const entry = item as Row; return { id: text(entry.id), name: text(entry.name), slug: text(entry.slug), createdAt: text(value(entry, "createdAt", "created_at")), subscriptionStatus: text(value(entry, "subscriptionStatus", "subscription_status")), billingInterval: text(value(entry, "billingInterval", "billing_interval")), seatQuantity: number(value(entry, "seatQuantity", "seat_quantity")), currentPeriodEndsAt: text(value(entry, "currentPeriodEndsAt", "current_period_ends_at")), planCode: text(value(entry, "planCode", "plan_code")), planName: text(value(entry, "planName", "plan_name")), onboardingStatus: text(value(entry, "onboardingStatus", "onboarding_status")), currentStep: text(value(entry, "currentStep", "current_step")) }; }) : [],
-    plans: Array.isArray(row.plans) ? row.plans.map((item) => { const entry = item as Row; return { id: text(entry.id), code: text(entry.code), name: text(entry.name), description: text(entry.description), status: text(entry.status), currency: text(entry.currency) || "BRL", monthlyPriceCents: number(value(entry, "monthlyPriceCents", "monthly_price_cents")), annualPriceCents: number(value(entry, "annualPriceCents", "annual_price_cents")), trialDays: number(value(entry, "trialDays", "trial_days")), includedSeats: number(value(entry, "includedSeats", "included_seats")), companyLimit: number(value(entry, "companyLimit", "company_limit")), integrationLimit: number(value(entry, "integrationLimit", "integration_limit")), storageLimitMb: number(value(entry, "storageLimitMb", "storage_limit_mb")), features: array(entry.features), stripeMonthlyPriceId: text(value(entry, "stripeMonthlyPriceId", "stripe_monthly_price_id")), stripeAnnualPriceId: text(value(entry, "stripeAnnualPriceId", "stripe_annual_price_id")), position: number(entry.position), updatedAt: text(value(entry, "updatedAt", "updated_at")) }; }) : [],
-    audits: Array.isArray(row.audits) ? row.audits.map((item) => { const entry = item as Row; return { id: text(entry.id), actorEmail: text(value(entry, "actorEmail", "actor_email")), action: text(entry.action), entityType: text(value(entry, "entityType", "entity_type")), entityId: text(value(entry, "entityId", "entity_id")), requestId: text(value(entry, "requestId", "request_id")), createdAt: text(value(entry, "createdAt", "created_at")) }; }) : [],
-  };
-}
+export const platformAreas = [
+  ["overview", "Visão geral", Gauge], ["clients", "Clientes", Building2], ["users", "Usuários", Users],
+  ["integrations", "Integrações", Blocks], ["operations", "Configuração operacional", Activity], ["billing", "Financeiro", CreditCard],
+  ["security", "Segurança", ShieldCheck], ["audit", "Auditoria", ScrollText], ["health", "Saúde", HeartPulse],
+] as const;
+export type PlatformArea = typeof platformAreas[number][0];
+const validAreas = new Set<PlatformArea>(platformAreas.map(([key]) => key));
 
 export function PlatformApp() {
-  const [overview, setOverview] = useState<Overview | null>(null); const [loading, setLoading] = useState(true); const [blocked, setBlocked] = useState(false); const [error, setError] = useState(""); const [editor, setEditor] = useState<Plan | null>(null); const [busy, setBusy] = useState(false); const [notice, setNotice] = useState("");
-  const triggerRef = useRef<HTMLElement | null>(null);
-  const load = useCallback(async () => { setLoading(true); setError(""); setBlocked(false); try { const response = await fetch("/api/platform/overview", { cache: "no-store" }); const payload = await response.json().catch(() => ({})) as Row; if (response.status === 403) { setBlocked(true); setOverview(null); return; } if (!response.ok) throw new Error(text(payload.error) || "Não foi possível carregar o console global."); setOverview(normalize(payload)); } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar o console global."); } finally { setLoading(false); } }, []);
-  useEffect(() => {
-    let active = true;
-    void fetch("/api/platform/overview", { cache: "no-store" })
-      .then(async (response) => ({ response, payload: await response.json().catch(() => ({})) as Row }))
-      .then(({ response, payload }) => {
-        if (!active) return;
-        if (response.status === 403) { setBlocked(true); setOverview(null); return; }
-        if (!response.ok) throw new Error(text(payload.error) || "Não foi possível carregar o console global.");
-        setOverview(normalize(payload));
-      })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Não foi possível carregar o console global."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
-  useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(""), 4000); return () => window.clearTimeout(timer); }, [notice]);
-  function openEditor(plan: Plan, trigger: HTMLElement) { triggerRef.current = trigger; setEditor(plan); }
-  function closeEditor() { setEditor(null); window.setTimeout(() => triggerRef.current?.focus(), 0); }
-  async function savePlan(next: Plan) { setBusy(true); setError(""); try { const response = await fetch(`/api/platform/plans/${encodeURIComponent(next.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) }); const payload = await response.json().catch(() => ({})) as Row; if (!response.ok) throw new Error(text(payload.error) || "Não foi possível atualizar o plano."); closeEditor(); setNotice(`Plano ${next.name} atualizado.`); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível atualizar o plano."); } finally { setBusy(false); } }
-
-  if (loading && !overview) return <main className={styles.state}><LoaderCircle className={styles.spin} aria-hidden="true" /><strong>Abrindo controle global</strong><p>Validando autorização e consolidando workspaces…</p></main>;
-  if (blocked) return <main className={`${styles.state} ${styles.blocked}`} role="alert"><ShieldAlert aria-hidden="true" /><span>ACESSO GLOBAL BLOQUEADO</span><h1>Este contexto não é uma administração de workspace.</h1><p>Sua conta não possui autorização de operador da plataforma. Nenhum dado entre workspaces foi carregado ou exibido.</p><Link href="/painel"><ArrowLeft aria-hidden="true" /> Voltar ao painel</Link></main>;
-  if (!overview) return <main className={styles.state} role="alert"><CircleAlert aria-hidden="true" /><strong>Console indisponível</strong><p>{error}</p><button type="button" onClick={() => void load()}><RefreshCw aria-hidden="true" /> Tentar novamente</button></main>;
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const candidate = params.get("area") as PlatformArea | null;
+  const area: PlatformArea = candidate && validAreas.has(candidate) ? candidate : "overview";
+  const updateQuery = (updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(params.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) next.set(key, value); else next.delete(key);
+    }
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+  const go = (nextArea: PlatformArea) => updateQuery({
+    area: nextArea === "overview" ? null : nextArea,
+    workspace: null, company: null, user: null, integration: null, cursor: null, q: null, status: null, connector: null, errors: null, expiring: null, stalled: null,
+    actor: null, entity: null, action: null, requestId: null, from: null, to: null, leadStatus: null, leadCursor: null,
+  });
+  const shared = { params, updateQuery };
+  const feature = area === "clients" ? <ClientsFeature {...shared} />
+    : area === "users" ? <UsersFeature {...shared} />
+      : area === "integrations" ? <IntegrationsFeature {...shared} />
+        : area === "operations" ? <OperationsFeature {...shared} />
+          : area === "billing" ? <BillingFeature {...shared} />
+            : area === "security" ? <SecurityFeature />
+              : area === "audit" ? <AuditFeature {...shared} />
+                : area === "health" ? <HealthFeature />
+                  : <OverviewFeature onNavigate={go} />;
 
   return <main className={styles.console}>
-    <header className={styles.topbar}><Link href="/painel" aria-label="Voltar ao painel"><VinculatoMark size={26} title="" /><strong>Vinculato</strong><small>CONTROLE GLOBAL</small></Link><div><ShieldCheck aria-hidden="true" /><span><strong>Contexto de plataforma</strong><small>Autorização independente do papel no workspace</small></span></div></header>
-    <section className={styles.content}>
-      <header className={styles.hero}><div><span>OPERAÇÃO MULTI-WORKSPACE</span><h1>Console global</h1><p>Monitore clientes, assinaturas e catálogo de planos com uma trilha auditável.</p></div><button type="button" disabled={loading} onClick={() => void load()}><RefreshCw className={loading ? styles.spin : ""} aria-hidden="true" /> Atualizar</button></header>
-      <div className={styles.scopeWarning}><ShieldAlert aria-hidden="true" /><div><strong>Atenção: esta tela cruza workspaces</strong><span>Os dados abaixo pertencem a diferentes clientes. Use este acesso apenas para administração autorizada da plataforma.</span></div><b>ESCOPO GLOBAL</b></div>
-      {error && <div className={styles.error} role="alert"><CircleAlert aria-hidden="true" />{error}<button onClick={() => setError("")}>Fechar</button></div>}
-      <section className={styles.metrics} aria-label="Indicadores globais"><Metric icon={Building2} label="Workspaces" value={overview.metrics.workspaces} /><Metric icon={CreditCard} label="Ativas ou teste" value={overview.metrics.subscribed} tone="safe" /><Metric icon={CircleAlert} label="Inadimplentes" value={overview.metrics.pastDue} tone="danger" /><Metric icon={BadgeCheck} label="Onboarding concluído" value={overview.metrics.onboarded} tone="indigo" /></section>
-      <div className={styles.mainGrid}>
-        <section>
-          {/* Administração real dos clientes: cada ação chama uma rota que valida
-              a autorização global no servidor e grava trilha de auditoria. */}
-          <PlatformConsole plans={overview.plans.map((plan) => ({ code: plan.code, name: plan.name }))} />
-        </section>
-        <aside className={styles.plansPanel}><PanelHeader eyebrow="CATÁLOGO COMERCIAL" title="Planos" text="Preços e capacidade publicados" />{overview.plans.length ? <div>{overview.plans.map((plan) => <article key={plan.id} data-status={plan.status}><header><div><small>{plan.code.toUpperCase()}</small><strong>{plan.name}</strong></div><Status status={plan.status} /></header><p>{plan.description}</p><dl><div><dt>Mensal</dt><dd>{money(plan.monthlyPriceCents, plan.currency)}</dd></div><div><dt>Anual</dt><dd>{money(plan.annualPriceCents, plan.currency)}</dd></div><div><dt>Assentos</dt><dd>{plan.includedSeats}</dd></div></dl><button type="button" onClick={(event) => openEditor(plan, event.currentTarget)}><Pencil aria-hidden="true" /> Editar capacidade e preço</button></article>)}</div> : <Empty icon={CreditCard} title="Catálogo vazio" text="Nenhum plano está disponível para edição." />}</aside>
-      </div>
-      <section className={styles.auditPanel}><PanelHeader eyebrow="AUDITORIA GLOBAL" title="Linha do tempo" text="Alterações administrativas recentes" />{overview.audits.length ? <ol>{overview.audits.map((audit) => <li key={audit.id}><span><Activity aria-hidden="true" /></span><div><small>{audit.entityType.toUpperCase()} · {audit.entityId.slice(0, 10)}</small><strong>{audit.action.replaceAll(".", " › ")}</strong><p>{audit.actorEmail || "Ator de sistema"}{audit.requestId ? ` · requisição ${audit.requestId.slice(0, 8)}` : ""}</p></div><time>{date(audit.createdAt)}</time></li>)}</ol> : <Empty icon={FileClock} title="Sem eventos globais" text="As alterações de planos aparecerão nesta trilha." />}</section>
-    </section>
-    {editor && <PlanDrawer plan={editor} busy={busy} error={error} onClose={closeEditor} onSave={savePlan} />}
-    {notice && <div className={styles.toast} role="status"><CheckCircle2 aria-hidden="true" />{notice}</div>}
+    <header className={styles.topbar}>
+      <Link href="/painel" aria-label="Voltar ao painel operacional"><VinculatoMark size={26} title="" /><strong>Vinculato</strong><small>CONTROLE GLOBAL</small></Link>
+      <div><ShieldCheck aria-hidden="true" /><span><strong>Contexto de plataforma</strong><small>Autorização global validada no servidor</small></span></div>
+    </header>
+    <div className={styles.consoleLayout}>
+      <aside className={styles.sideNav} aria-label="Áreas da administração global">
+        <p>Administração</p>
+        <nav>{platformAreas.map(([key, label, Icon]) => <button key={key} type="button" aria-current={area === key ? "page" : undefined} onClick={() => go(key)}><Icon aria-hidden="true" /><span>{label}</span></button>)}</nav>
+        <footer><ShieldCheck aria-hidden="true" /><span>Escopo global</span></footer>
+      </aside>
+      <section className={styles.featureStage}>{feature}</section>
+    </div>
   </main>;
 }
-
-function PlanDrawer({ plan, busy, error, onClose, onSave }: { plan: Plan; busy: boolean; error: string; onClose: () => void; onSave: (plan: Plan) => Promise<void> }) {
-  const [form, setForm] = useState(plan); const drawerRef = useRef<HTMLDivElement>(null); const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => { closeRef.current?.focus(); }, []);
-  function keyDown(event: KeyboardEvent<HTMLDivElement>) { if (event.key === "Escape") { event.preventDefault(); onClose(); return; } if (event.key !== "Tab") return; const focusables = [...(drawerRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]') ?? [])]; if (!focusables.length) return; const first = focusables[0]; const last = focusables.at(-1)!; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
-  function submit(event: FormEvent) { event.preventDefault(); void onSave(form); }
-  const setNumber = (key: keyof Plan, input: string) => setForm((current) => ({ ...current, [key]: Math.max(0, Math.trunc(Number(input) || 0)) }));
-  return <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="plan-editor-title" ref={drawerRef} onKeyDown={keyDown}><header><div><span>EDITOR DE PLANO · {plan.code.toUpperCase()}</span><h2 id="plan-editor-title">{plan.name}</h2><p>Altere somente campos aceitos pelo contrato público de planos.</p></div><button ref={closeRef} type="button" onClick={onClose} aria-label="Fechar editor"><X aria-hidden="true" /></button></header><form onSubmit={submit}><div className={styles.drawerBody}><div className={styles.publicOnly}><ShieldCheck aria-hidden="true" /><div><strong>Somente identificadores públicos de preço</strong><span>Informe IDs no formato price_…. Segredos e chaves Stripe nunca são solicitados.</span></div></div>{error && <p className={styles.drawerError} role="alert">{error}</p>}<section><header><strong>Publicação e preços</strong><span>Valores em centavos</span></header><div className={styles.formGrid}><label>Status<select value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="draft">Rascunho</option><option value="active">Ativo</option><option value="archived">Arquivado</option></select></label><label>Teste (dias)<input type="number" min="0" max="90" value={form.trialDays} onChange={(event) => setNumber("trialDays", event.target.value)} /></label><label>Preço mensal (centavos)<input type="number" min="0" value={form.monthlyPriceCents} onChange={(event) => setNumber("monthlyPriceCents", event.target.value)} /></label><label>ID público mensal<input value={form.stripeMonthlyPriceId} pattern="(?:price_[A-Za-z0-9]+)?" placeholder="price_…" onChange={(event) => setForm((current) => ({ ...current, stripeMonthlyPriceId: event.target.value.trim() }))} /></label><label>Preço anual (centavos)<input type="number" min="0" value={form.annualPriceCents} onChange={(event) => setNumber("annualPriceCents", event.target.value)} /></label><label>ID público anual<input value={form.stripeAnnualPriceId} pattern="(?:price_[A-Za-z0-9]+)?" placeholder="price_…" onChange={(event) => setForm((current) => ({ ...current, stripeAnnualPriceId: event.target.value.trim() }))} /></label></div></section><section><header><strong>Capacidade incluída</strong><span>Limites aplicados ao workspace</span></header><div className={styles.formGrid}><label>Assentos<input type="number" min="1" value={form.includedSeats} onChange={(event) => setNumber("includedSeats", event.target.value)} /></label><label>Empresas<input type="number" min="1" value={form.companyLimit} onChange={(event) => setNumber("companyLimit", event.target.value)} /></label><label>Integrações<input type="number" min="0" value={form.integrationLimit} onChange={(event) => setNumber("integrationLimit", event.target.value)} /></label><label>Armazenamento (MB)<input type="number" min="1" value={form.storageLimitMb} onChange={(event) => setNumber("storageLimitMb", event.target.value)} /></label><label className={styles.wide}>Recursos (um código por linha)<textarea rows={6} value={form.features.join("\n")} onChange={(event) => setForm((current) => ({ ...current, features: event.target.value.split(/\r?\n/u).map((item) => item.trim().toLowerCase()).filter(Boolean) }))} placeholder={"boards\ninbox\nintegrations"} /></label></div></section></div><footer><button type="button" onClick={onClose}>Cancelar</button><button type="submit" disabled={busy}>{busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Save aria-hidden="true" />} Salvar plano</button></footer></form></div></div>;
-}
-
-function Metric({ icon: Icon, label, value, tone = "neutral" }: { icon: typeof Building2; label: string; value: number; tone?: string }) { return <article data-tone={tone}><span><Icon aria-hidden="true" /></span><div><small>{label}</small><strong>{value.toLocaleString("pt-BR")}</strong></div></article>; }
-function Status({ status }: { status: string }) { return <span className={styles.status} data-tone={tone(status)}><CircleDot aria-hidden="true" />{statusLabels[status] ?? status}</span>; }
-function PanelHeader({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) { return <header className={styles.panelHeader}><div><span>{eyebrow}</span><h2>{title}</h2><p>{text}</p></div></header>; }
-function Empty({ icon: Icon, title, text }: { icon: typeof Building2; title: string; text: string }) { return <div className={styles.empty}><Icon aria-hidden="true" /><strong>{title}</strong><p>{text}</p></div>; }
