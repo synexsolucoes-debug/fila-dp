@@ -87,6 +87,7 @@ BEGIN
   END IF;
 END;
 $role$;
+GRANT fdp_rehearsal_app TO CURRENT_USER;
 GRANT USAGE ON SCHEMA public TO fdp_rehearsal_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO fdp_rehearsal_app;
 
@@ -130,6 +131,8 @@ $$;
 \echo TODAS AS VERIFICACOES PASSARAM
 
 RESET ROLE;
+REVOKE fdp_rehearsal_app FROM CURRENT_USER;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM fdp_rehearsal_app;
 REVOKE USAGE ON SCHEMA public FROM fdp_rehearsal_app;
+DROP ROLE fdp_rehearsal_app;
 DROP FUNCTION expect_error(text, text);

@@ -82,7 +82,11 @@ async function step(label, action) {
 
 /* -------------------------------------------------------------------------- */
 
+const failures = [];
+let cleanupNeeded = false;
+try {
 await step("preparar bancos de ensaio", () => {
+  cleanupNeeded = true;
   psql(adminUrl, { sql: `DROP DATABASE IF EXISTS ${sourceDb}` });
   psql(adminUrl, { sql: `DROP DATABASE IF EXISTS ${targetDb}` });
   psql(adminUrl, { sql: `CREATE DATABASE ${sourceDb}` });
@@ -144,7 +148,6 @@ const targetCounts = await step("medir o restaurado", () => psql(databaseUrl(tar
 /* Verificações                                                                */
 /* -------------------------------------------------------------------------- */
 
-const failures = [];
 function check(label, condition, detail = "") {
   if (condition) {
     console.log(`  ✓ ${label}`);
@@ -219,6 +222,14 @@ await step("remover bancos de ensaio", () => {
   psql(adminUrl, { sql: `DROP DATABASE IF EXISTS ${sourceDb}` });
   psql(adminUrl, { sql: `DROP DATABASE IF EXISTS ${targetDb}` });
 });
+cleanupNeeded = false;
+} finally {
+  if (cleanupNeeded) {
+    psql(adminUrl, { sql: `DROP DATABASE IF EXISTS ${sourceDb} WITH (FORCE)` });
+    psql(adminUrl, { sql: `DROP DATABASE IF EXISTS ${targetDb} WITH (FORCE)` });
+    console.log("Bancos temporarios removidos apos a interrupcao do ensaio.");
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 
