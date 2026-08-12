@@ -1,14 +1,10 @@
-import { getD1 } from "@/db";
-import { selfSignupEnabled } from "@/lib/saas";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** A instalação é sempre administrada: usuário comum só recebe o acesso pronto. */
 export async function GET() {
-  try {
-    const workspace = await getD1().prepare("SELECT id FROM fdp_workspaces LIMIT 1").first<{ id: string }>();
-    return Response.json({ setupRequired: !workspace, signupEnabled: selfSignupEnabled() });
-  } catch {
-    return Response.json({ setupRequired: false, signupEnabled: selfSignupEnabled() });
-  }
+  return Response.json(
+    { setupRequired: false, signupEnabled: false },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

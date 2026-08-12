@@ -59,7 +59,11 @@ type Detail = {
 };
 
 const money = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const day = (value: string | null) => (value ? new Date(`${value}T12:00:00Z`).toLocaleDateString("pt-BR") : "—");
+const inputDate = (value: string | null | undefined) => String(value ?? "").slice(0, 10);
+const day = (value: string | null) => {
+  const normalized = inputDate(value);
+  return normalized ? new Date(`${normalized}T12:00:00Z`).toLocaleDateString("pt-BR") : "—";
+};
 
 const statusLabels: Record<string, string> = {
   active: "Ativo", suspended: "Suspenso", inactive: "Encerrado",
@@ -192,6 +196,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
       contractReference: form.get("contractReference"), roleTitle: form.get("roleTitle"),
       contractType,
       contractStart: form.get("contractStart"), contractEnd: form.get("contractEnd"),
+      contractSignedAt: form.get("contractSignedAt"),
       // Valor global só existe no prazo determinado; mandar no outro caso seria
       // recusado pela API, e com razão.
       contractTotalAmount: contractType === "determinado" ? form.get("contractTotalAmount") : "",
@@ -537,6 +542,7 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
               <label>Telefone<input name="phone" defaultValue={current?.phone ?? ""} maxLength={40} /></label>
               <label>Contrato de referência<input name="contractReference" defaultValue={current?.contractReference ?? ""} maxLength={120} /></label>
               <label>Função<input name="roleTitle" defaultValue={current?.roleTitle ?? ""} maxLength={120} /></label>
+              <label>Contrato assinado em<input name="contractSignedAt" type="date" defaultValue={inputDate(current?.contractSignedAt)} /></label>
 
               <label>Tipo de contrato
                 <select name="contractType" value={contractType}
@@ -545,9 +551,9 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
                   <option value="determinado">Prazo determinado</option>
                 </select>
               </label>
-              <label>Início<input name="contractStart" type="date" defaultValue={current?.contractStart ?? ""} /></label>
+              <label>Início<input name="contractStart" type="date" defaultValue={inputDate(current?.contractStart)} /></label>
               <label>Término
-                <input name="contractEnd" type="date" defaultValue={current?.contractEnd ?? ""} required={contractType === "determinado"} />
+                <input name="contractEnd" type="date" defaultValue={inputDate(current?.contractEnd)} required={contractType === "determinado"} />
                 {contractType === "determinado" && <small>Obrigatório no prazo determinado.</small>}
               </label>
               {contractType === "determinado" && (
