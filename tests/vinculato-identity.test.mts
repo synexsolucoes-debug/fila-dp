@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = fileURLToPath(new URL("..", import.meta.url));
 const skip = new Set([".next", "node_modules", ".git", "dist"]);
 
 async function walk(directory: string, extensions: string[]): Promise<string[]> {
