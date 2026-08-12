@@ -265,6 +265,11 @@ test("cadastrar e editar PJ exige capacidade, acesso à empresa e não vaza docu
   assert.doesNotMatch(list, /taxId: row\.tax_id/u);
   const detail = await readFile(new URL("../app/api/registrations/contractors/[id]/route.ts", import.meta.url), "utf8");
   assert.match(detail, /taxIdMasked/u);
+  assert.match(detail, /dateFromDatabase/u, "datas do PostgreSQL precisam chegar canônicas ao formulário");
+  assert.match(detail, /currentIdentity[\s\S]+taxId/u, "documento mascarado em branco não pode apagar o cadastro");
+  const form = await readFile(new URL("../app/painel/features/registrations/ContractorsPanel.tsx", import.meta.url), "utf8");
+  assert.match(form, /inputDate\(current\?\.contractStart\)/u);
+  assert.match(form, /name="contractSignedAt"/u);
 });
 
 test("aplicar movimentação altera contrato e histórico na mesma transação", async () => {

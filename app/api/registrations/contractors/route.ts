@@ -6,6 +6,7 @@ import { sanitizeProviderCode } from "@/lib/auxiliary";
 import { fromCents, centsFromDatabase } from "@/lib/payments";
 import { contractBalance, type ContractType } from "@/lib/contractor-registry";
 import { readContractorInput } from "@/lib/contractor-input";
+import { dateFromDatabase } from "@/lib/registrations";
 
 /**
  * Cadastro de prestador PJ.
@@ -74,8 +75,8 @@ export async function GET(request: Request) {
           contractReference: row.contract_reference,
           roleTitle: row.role_title,
           contractType: row.contract_type,
-          contractStart: row.contract_start,
-          contractEnd: row.contract_end,
+          contractStart: dateFromDatabase(row.contract_start, "Início do contrato"),
+          contractEnd: dateFromDatabase(row.contract_end, "Término do contrato"),
           baseAmountCents: centsFromDatabase(row.base_amount, "Valor fixo"),
           complementMethod: row.complement_method,
           status: row.status,

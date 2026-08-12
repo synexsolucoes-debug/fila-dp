@@ -5,6 +5,7 @@ import { centsFromDatabase, fromCents } from "@/lib/payments";
 import { contractorBalance, requireContractorProfile } from "@/lib/payment-service";
 import { assertContractValueNotBelowConsumed, movementLabels, type MovementType } from "@/lib/contractor-registry";
 import { readContractorInput } from "@/lib/contractor-input";
+import { dateFromDatabase } from "@/lib/registrations";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -68,9 +69,9 @@ export async function GET(request: Request, { params }: Params) {
         contractReference: profile.contract_reference,
         roleTitle: detail?.role_title ?? "",
         contractType: profile.contract_type,
-        contractStart: profile.contract_start,
-        contractEnd: profile.contract_end,
-        contractSignedAt: detail?.contract_signed_at ?? null,
+        contractStart: dateFromDatabase(profile.contract_start, "Início do contrato"),
+        contractEnd: dateFromDatabase(profile.contract_end, "Término do contrato"),
+        contractSignedAt: dateFromDatabase(detail?.contract_signed_at, "Assinatura do contrato"),
         paymentDay: detail?.payment_day ?? null,
         baseAmountCents: centsFromDatabase(profile.base_amount, "Valor fixo"),
         invoiceLimitCents: detail?.invoice_limit_override === null || detail?.invoice_limit_override === undefined
@@ -134,7 +135,10 @@ export async function PATCH(request: Request, { params }: Params) {
     const profile = await requireContractorProfile(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
 
-    const input = readContractorInput({ companyId: profile.company_id, ...body }, { requireCompany: false });
+    const currentIdentity = await d1.prepare("SELECT tax_id FROM fdp_auxiliary_providers WHERE workspace_id = ? AND id = ?")
+      .bind(workspace.id, id).first<{ tax_id: string }>();
+    const taxId = String(body.taxId ?? "").trim() || currentIdentity?.tax_id || "";
+    const input = readContractorInput({ companyId: profile.company_id, ...body, taxId }, { requireCompany: false });
     if (input.companyId && input.companyId !== profile.company_id) {
       await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, input.companyId);
     }

@@ -15,9 +15,65 @@ export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.0.0";
 
 const MAX_MONEY = 1_000_000_000;
 
+/**
+ * Converte a representação digitada em um decimal canônico.
+ *
+ * `inputMode="decimal"` costuma enviar `9.000,00`; `type="number"` devolve
+ * `9000.00`. Remover todo ponto transformava o valor devolvido pelo próprio
+ * formulário em outro número. O separador mais à direita é decimal quando há
+ * até duas casas; um grupo isolado de três casas continua sendo milhar.
+ */
+function moneyNumber(value: unknown) {
+  if (typeof value === "number") return value;
+
+  let raw = cleanText(value, 32).replace(/\s/gu, "").replace(/^R\$/iu, "");
+  const negative = raw.startsWith("-");
+  if (negative) raw = raw.slice(1);
+  if (!raw || !/^[0-9.,]+$/u.test(raw)) return Number.NaN;
+
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  let decimalSeparator = "";
+
+  if (comma >= 0 && dot >= 0) {
+    decimalSeparator = comma > dot ? "," : ".";
+  } else if (comma >= 0 || dot >= 0) {
+    const separator = comma >= 0 ? "," : ".";
+    const parts = raw.split(separator);
+    const last = parts.at(-1) ?? "";
+    if (parts.length === 2 && last.length > 0 && last.length <= 2) {
+      decimalSeparator = separator;
+    } else if (parts.length > 2 && last.length > 0 && last.length <= 2
+      && parts.slice(1, -1).every((part) => part.length === 3)) {
+      decimalSeparator = separator;
+    } else if (!parts.slice(1).every((part) => part.length === 3)) {
+      return Number.NaN;
+    }
+  }
+
+  let integer = raw;
+  let fraction = "";
+  if (decimalSeparator) {
+    const decimalAt = raw.lastIndexOf(decimalSeparator);
+    integer = raw.slice(0, decimalAt);
+    fraction = raw.slice(decimalAt + 1);
+    if (!fraction || fraction.length > 2 || integer.includes(decimalSeparator)) return Number.NaN;
+  }
+
+  const groupingSeparator = decimalSeparator === "," ? "." : decimalSeparator === "." ? "," : /,/u.test(integer) ? "," : ".";
+  if (integer.includes(groupingSeparator)) {
+    const groups = integer.split(groupingSeparator);
+    if (!groups[0] || !groups.slice(1).every((part) => part.length === 3)) return Number.NaN;
+    integer = groups.join("");
+  }
+  if (!/^\d+$/u.test(integer)) return Number.NaN;
+
+  return Number(`${negative ? "-" : ""}${integer}${fraction ? `.${fraction}` : ""}`);
+}
+
 /** Converte reais para centavos inteiros; toda a aritmética financeira acontece em centavos. */
 export function toCents(value: unknown, field = "Valor") {
-  const number = typeof value === "number" ? value : Number(cleanText(value, 24).replace(/\./gu, "").replace(",", "."));
+  const number = moneyNumber(value);
   if (!Number.isFinite(number) || Math.abs(number) > MAX_MONEY) {
     throw ApiError.badRequest(`${field} inválido.`, "INVALID_MONEY");
   }

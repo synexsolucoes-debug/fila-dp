@@ -22,10 +22,24 @@ export function getCatalogResource(value: string) {
 export function optionalDate(value: unknown, required = false) {
   const raw = cleanText(value, 10);
   if (!raw && !required) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(Date.parse(`${raw}T12:00:00Z`))) {
+  const parsed = /^\d{4}-\d{2}-\d{2}$/u.test(raw) ? new Date(`${raw}T12:00:00Z`) : null;
+  if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw) {
     throw ApiError.badRequest("Informe uma data válida.", "INVALID_DATE");
   }
   return raw;
+}
+
+/** Normaliza `date` do PostgreSQL (texto ou Date) para o contrato HTTP AAAA-MM-DD. */
+export function dateFromDatabase(value: unknown, field = "Data") {
+  if (value === null || value === undefined || value === "") return null;
+  const raw = value instanceof Date
+    ? (Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10))
+    : String(value).trim().slice(0, 10);
+  try {
+    return optionalDate(raw, true);
+  } catch {
+    throw ApiError.badRequest(`${field} inválida.`, "INVALID_DATE");
+  }
 }
 
 export function enumValue<T extends string>(value: unknown, allowed: readonly T[], fallback: T) {
