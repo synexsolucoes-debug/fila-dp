@@ -2932,6 +2932,9 @@
 .sidebar-nav-section { margin: 10px 10px 5px; }
 .sidebar-nav-section.management { margin-top: 18px; }
 .sidebar-workspace { margin-top: auto; padding-bottom: 10px; }
+.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.04); color: #d7e0e8; }
+.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--brand-accent); color: #081a31; font-style: normal; font-size: 9px; font-weight: 800; }
+.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: #71869a; font-size: 9px; }
 .sidebar-workspace > span { margin-left: 8px; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
 .sidebar-workspace button { min-height: 58px; align-items: center; }
 .sidebar-workspace button > span { min-width: 0; display: grid; gap: 3px; text-align: left; }

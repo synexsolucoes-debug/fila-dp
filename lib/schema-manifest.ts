@@ -43,6 +43,7 @@ export const expectedMigrations = [
   "0033_member_module_grants.sql",
   "0034_workspace_deletion_ledger.sql",
   "0035_assistant_conversations.sql",
+  "0036_platform_console_indexes.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

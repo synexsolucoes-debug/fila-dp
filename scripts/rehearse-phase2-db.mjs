@@ -14,6 +14,8 @@ if (process.env.FDP_ALLOW_EPHEMERAL_SCHEMA_TEST !== "true") {
 }
 
 const schema = `fdp_phase2_${randomBytes(8).toString("hex")}`;
+const testRole = `fdp_phase2_role_${randomBytes(8).toString("hex")}`;
+if (!/^fdp_phase2_role_[0-9a-f]{16}$/u.test(testRole)) throw new Error("Invalid ephemeral test role name.");
 if (!/^fdp_phase2_[0-9a-f]{16}$/u.test(schema)) throw new Error("Nome de schema efêmero inválido.");
 
 const sql = neon(databaseUrl, { fullResults: true });
@@ -23,6 +25,7 @@ const migrationFiles = (await readdir(migrationsDirectory)).filter((file) => /^\
 function schemaQuery(statement, parameters = []) {
   return [
     sql.query("SELECT set_config('search_path', $1, true)", [schema]),
+    sql.query(`SET LOCAL ROLE "${testRole}"`, []),
     sql.query(statement, parameters),
   ];
 }
@@ -30,6 +33,7 @@ function schemaQuery(statement, parameters = []) {
 function tenantQueries(workspaceId, userId, statements) {
   return [
     sql.query("SELECT set_config('search_path', $1, true)", [schema]),
+    sql.query(`SET LOCAL ROLE "${testRole}"`, []),
     sql.query("SELECT set_config('app.workspace_id', $1, true)", [workspaceId]),
     sql.query("SELECT set_config('app.user_id', $1, true)", [userId]),
     ...statements.map(({ statement, parameters = [] }) => sql.query(statement, parameters)),
@@ -39,6 +43,7 @@ function tenantQueries(workspaceId, userId, statements) {
 function platformQueries(userId, statements) {
   return [
     sql.query("SELECT set_config('search_path', $1, true)", [schema]),
+    sql.query(`SET LOCAL ROLE "${testRole}"`, []),
     sql.query("SELECT set_config('app.platform_admin', 'true', true)"),
     sql.query("SELECT set_config('app.user_id', $1, true)", [userId]),
     ...statements.map(({ statement, parameters = [] }) => sql.query(statement, parameters)),
@@ -46,16 +51,47 @@ function platformQueries(userId, statements) {
 }
 
 await sql.query(`CREATE SCHEMA "${schema}"`, []);
+let roleCreated = false;
 try {
+  await sql.query(`CREATE ROLE "${testRole}" NOLOGIN NOSUPERUSER NOBYPASSRLS`, []);
+  roleCreated = true;
+  await sql.query(`GRANT "${testRole}" TO CURRENT_USER`, []);
+  let cleanBaseline = false;
   for (const file of migrationFiles) {
+    // O baseline 0000 já nasce com timestamps PostgreSQL. A normalização 0001
+    // existe somente para instalações legadas cujas colunas ainda eram texto;
+    // executá-la sobre um schema limpo faz o PostgreSQL tentar comparar
+    // timestamptz com '' antes do cast e mascara o ensaio de RLS.
+    if (file.includes("normalize_existing") && cleanBaseline) continue;
     const source = await readFile(join(migrationsDirectory, file), "utf8");
     const isolatedSource = source.replaceAll('"public".', `"${schema}".`);
     const statements = splitPostgresStatements(isolatedSource);
+    let ordered = statements;
+    // As migrations 0014-0017 vieram de um gerador que posicionou alguns
+    // índices únicos compostos depois das FKs que dependem deles. O migrador e
+    // os outros ensaios preservam a intenção trazendo esses índices para antes
+    // da primeira FK; o ensaio isolado precisa executar a mesma ordem.
+    if (/^001[4-7]_/u.test(file)) {
+      const uniqueIndexes = statements.filter((statement) => /\bCREATE UNIQUE INDEX\b/u.test(statement));
+      const remaining = statements.filter((statement) => !/\bCREATE UNIQUE INDEX\b/u.test(statement));
+      const firstForeignKey = remaining.findIndex((statement) => /\bALTER TABLE\b[\s\S]+\bADD CONSTRAINT\b/u.test(statement));
+      if (firstForeignKey >= 0 && uniqueIndexes.length > 0) {
+        ordered = [...remaining.slice(0, firstForeignKey), ...uniqueIndexes, ...remaining.slice(firstForeignKey)];
+      }
+    }
     await sql.transaction([
       sql.query("SELECT set_config('search_path', $1, true)", [schema]),
-      ...statements.map((statement) => sql.query(statement, [])),
+      ...ordered.map((statement) => sql.query(statement, [])),
     ]);
+    if (file.startsWith("0000_")) cleanBaseline = true;
   }
+
+  await sql.transaction([
+    sql.query(`GRANT USAGE ON SCHEMA "${schema}" TO "${testRole}"`, []),
+    sql.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "${schema}" TO "${testRole}"`, []),
+    sql.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA "${schema}" TO "${testRole}"`, []),
+    sql.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA "${schema}" TO "${testRole}"`, []),
+  ]);
 
   const workspaceA = "phase2-workspace-a";
   const workspaceB = "phase2-workspace-b";
@@ -214,7 +250,7 @@ try {
     sql.transaction(tenantQueries(workspaceA, userA, [{
       statement: "UPDATE fdp_process_versions SET configuration_json = '{\"steps\":[]}'::jsonb WHERE id = 'process-version-a'",
     }])),
-    /published process version is immutable/u,
+    /published process versions are immutable/u,
   );
 
   await assert.rejects(
@@ -263,4 +299,8 @@ try {
   console.log(`Ensaio das Fases 2 a 7 aprovado em ${migrationFiles.length} migrations: RLS, FKs compostas, operação DP, módulos auxiliares, integrações, SaaS multi-workspace, cobrança idempotente e auditoria append-only.`);
 } finally {
   await sql.query(`DROP SCHEMA "${schema}" CASCADE`, []);
+  if (roleCreated) {
+    await sql.query(`REVOKE "${testRole}" FROM CURRENT_USER`, []);
+    await sql.query(`DROP ROLE "${testRole}"`, []);
+  }
 }

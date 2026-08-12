@@ -1,5 +1,8 @@
 import { createHmac } from "node:crypto";
 import { ApiError } from "./api-errors.ts";
+import { cleanText } from "./clean-text.ts";
+
+export { cleanText } from "./clean-text.ts";
 
 export const catalogResources = {
   departments: { table: "fdp_departments", label: "Departamento" },
@@ -14,10 +17,6 @@ export function getCatalogResource(value: string) {
   const resource = catalogResources[value as CatalogResource];
   if (!resource) throw ApiError.notFound("Cadastro auxiliar não encontrado.", "CATALOG_NOT_FOUND");
   return resource;
-}
-
-export function cleanText(value: unknown, max = 160) {
-  return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
 export function optionalDate(value: unknown, required = false) {

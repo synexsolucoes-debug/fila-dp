@@ -45,6 +45,53 @@ test("legacy timestamp defaults are bridged around the type conversion", async (
   assert.ok("0001_normalize_existing_neon.sql" < "0001_z_restore_timestamp_defaults.sql");
 });
 
+test("clean schema rehearsals skip the legacy timestamp normalization", async () => {
+  const rehearsal = await readFile(new URL("../scripts/rehearse-phase2-db.mjs", import.meta.url), "utf8");
+  assert.match(rehearsal, /let cleanBaseline = false/u);
+  assert.match(rehearsal, /file\.includes\("normalize_existing"\) && cleanBaseline/u);
+  assert.match(rehearsal, /file\.startsWith\("0000_"\)/u);
+  assert.match(rehearsal, /\^001\[4-7\]_/u);
+  assert.match(rehearsal, /CREATE UNIQUE INDEX/u);
+  assert.match(rehearsal, /firstForeignKey/u);
+  assert.match(rehearsal, /NOLOGIN NOSUPERUSER NOBYPASSRLS/u);
+  assert.match(rehearsal, /SET LOCAL ROLE/u);
+  assert.match(rehearsal, /DROP ROLE/u);
+});
+
+test("real database rehearsals enter the restricted RLS role explicitly", async () => {
+  const scripts = await Promise.all([
+    "payments-db-rehearsal.sql",
+    "scale-db-rehearsal.sql",
+    "time-db-rehearsal.sql",
+  ].map((file) => readFile(new URL(`../scripts/${file}`, import.meta.url), "utf8")));
+
+  for (const script of scripts) {
+    assert.match(script, /CREATE ROLE fdp_rehearsal_app NOSUPERUSER NOBYPASSRLS NOLOGIN/u);
+    assert.match(script, /GRANT fdp_rehearsal_app TO CURRENT_USER/u);
+    assert.match(script, /SET ROLE fdp_rehearsal_app/u);
+    assert.match(script, /REVOKE fdp_rehearsal_app FROM CURRENT_USER/u);
+    assert.match(script, /DROP ROLE fdp_rehearsal_app/u);
+  }
+});
+
+test("restore rehearsal revokes its RLS role and always removes temporary databases", async () => {
+  const [isolation, restore] = await Promise.all([
+    readFile(new URL("../scripts/dr-verify-isolation.sql", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/rehearse-backup-restore.mjs", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(isolation, /CREATE ROLE fdp_dr_app NOSUPERUSER NOBYPASSRLS NOLOGIN/u);
+  assert.match(isolation, /GRANT fdp_dr_app TO CURRENT_USER/u);
+  assert.match(isolation, /SET ROLE fdp_dr_app/u);
+  assert.match(isolation, /REVOKE fdp_dr_app FROM CURRENT_USER/u);
+  assert.match(isolation, /DROP ROLE fdp_dr_app/u);
+  assert.match(restore, /try \{/u);
+  assert.match(restore, /finally \{/u);
+  assert.ok(restore.indexOf("const failures = []") < restore.indexOf("try {"));
+  assert.match(restore, /DROP DATABASE IF EXISTS \$\{sourceDb\} WITH \(FORCE\)/u);
+  assert.match(restore, /DROP DATABASE IF EXISTS \$\{targetDb\} WITH \(FORCE\)/u);
+});
+
 test("the legacy recovery author column is normalized instead of recreated", async () => {
   const migrator = await readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8");
   assert.match(migrator, /file === "0002_chief_venom\.sql"/);

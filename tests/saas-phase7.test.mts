@@ -95,19 +95,21 @@ test("paid limits are enforced by the server under advisory locks", async () => 
   assert.match(integrations, /PLAN_INTEGRATION_LIMIT/);
 });
 
-test("SaaS administration stays isolated in admin-only workspace and platform surfaces", async () => {
-  const [workspace, saasView, platform, login] = await Promise.all([
+test("SaaS administration stays isolated in the global platform surface", async () => {
+  const [workspace, platform, clients, billing, plansRoute, login] = await Promise.all([
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/painel/features/saas/SaasView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/PlatformApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/plataforma/features/ClientsFeature.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/plataforma/features/BillingFeature.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/plans/[id]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/login/LoginForm.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /isAdmin && <button title="Plano e ativação"/u);
-  assert.match(saasView, /checkout|portal/u);
-  assert.match(saasView, /company|team|operation|integrations|billing/u);
-  assert.match(platform, /\/api\/platform\/plans\//u);
-  assert.match(platform, /role="dialog"/u);
+  assert.doesNotMatch(workspace, /view === "saas"|Plano e ativação/u);
+  assert.match(platform, /\["billing", "Financeiro", CreditCard\]/u);
+  assert.match(clients, /Catálogo de planos/u);
+  assert.match(billing, /MRR|Receita em risco/u);
+  assert.match(plansRoute, /requirePlatformAdmin/u);
   assert.match(login, /signupEnabled/u);
   assert.match(login, /\/api\/auth\/signup/u);
-  assert.doesNotMatch(`${saasView}\n${platform}\n${login}`, /localStorage|sessionStorage|location\.reload/u);
+  assert.doesNotMatch(`${platform}\n${clients}\n${billing}\n${login}`, /localStorage|sessionStorage|location\.reload/u);
 });
