@@ -47,6 +47,7 @@ export async function GET() {
           credentialsEncryptionConfigured: Boolean(String(process.env.FDP_CREDENTIALS_ENCRYPTION_KEY ?? "").trim()),
           authSecretConfigured: Boolean(String(process.env.FDP_AUTH_SECRET ?? "").trim()),
           platformAdminsConfigured: Boolean(String(process.env.FDP_PLATFORM_ADMIN_EMAILS ?? "").trim()),
+          sankhyaActionsConfigured: Boolean(String(process.env.FDP_SANKHYA_ACTIONS_TOKEN ?? "").trim()),
         },
         deployment: { commit: process.env.VERCEL_GIT_COMMIT_SHA ?? "local", environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development", checkedAt: new Date().toISOString() },
       }, { headers: { "Cache-Control": "no-store" } });

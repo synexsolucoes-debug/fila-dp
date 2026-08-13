@@ -19,9 +19,9 @@ flowchart LR
 
 O Next.js somente valida, configura e enfileira. O cron somente cria jobs agendados. Playwright nunca roda dentro de uma requisição HTTP da Vercel. O worker containerizado usa lease, `FOR UPDATE SKIP LOCKED`, retry limitado e um contexto novo por execução.
 
-O diretório `worker/sankhya` contém o Dockerfile e a raiz do repositório contém o `render.yaml`. A imagem pode rodar em Render, Cloud Run, Railway ou serviço equivalente que mantenha processo e Chromium ativos. O runtime precisa oferecer sandbox do Chromium para usuário não-root.
+O diretório `worker/sankhya` contém o executor compartilhado, o modo persistente e o modo `once`. Em produção, o Vinculato usa `.github/workflows/sankhya-worker.yml`: cada disparo cria um runner efêmero, drena a fila PostgreSQL e encerra. Playwright não roda em requisição Vercel, não depende de processo ocioso e não mantém sessão entre execuções.
 
-No Render, o processo é publicado como Web Service Starter na região Virginia. Essa escolha mantém o polling ativo sem suspensão e permite ao Render consultar `/health`, impedir a promoção de um deploy quebrado e reiniciar uma instância que perder acesso ao Neon. O endpoint de saúde não retorna credenciais nem dados de workspace. A concorrência inicial é `1`, adequada à memória do plano Starter com Chromium; aumente somente após observar consumo real.
+O backend dispara o workflow pela API fixa do GitHub, usando um fine-grained PAT limitado ao repositório e à permissão `Actions: write`. O payload contém somente `{ "ref": "main" }`: `workspaceId`, integração, credencial e dados do cliente nunca saem do banco para o GitHub. O runner descobre os jobs com consultas escopadas por tenant.
 
 ## Multi-tenancy
 
@@ -105,7 +105,18 @@ Somente worker:
 
 - `FDP_SANKHYA_WORKER_POLL_MS` (padrão 5000)
 - `FDP_SANKHYA_WORKER_CONCURRENCY` (padrão 3, máximo 10)
+- `FDP_SANKHYA_WORKER_MAX_JOBS` (padrão 10 por workspace e varredura)
+- `FDP_SANKHYA_WORKER_RETRY_WAIT_MS` (padrão 90000 no modo one-shot)
+- `FDP_SANKHYA_WORKER_BUDGET_MS` (padrão 35 minutos no modo one-shot)
+- `FDP_SANKHYA_CHROMIUM_SANDBOX` (`true` no runner Linux não-root)
 - `PORT` para health check
+
+Somente aplicação Vercel:
+
+- `FDP_SANKHYA_ACTIONS_TOKEN`
+- `FDP_SANKHYA_ACTIONS_REPOSITORY` (padrão `synexsolucoes-debug/fila-dp`)
+- `FDP_SANKHYA_ACTIONS_WORKFLOW` (padrão `sankhya-worker.yml`)
+- `FDP_SANKHYA_ACTIONS_REF` (padrão `main`)
 
 `FDP_SANKHYA_BROWSER_ENDPOINT` pode fixar uma origem adicional operada centralmente.
 
@@ -113,21 +124,24 @@ Somente worker:
 
 1. Aplique `0038_sankhya_browser_connector.sql` pelo comando oficial.
 2. Faça deploy do Next.js na Vercel.
-3. Publique `worker/sankhya/Dockerfile` em serviço persistente.
-4. Configure as mesmas chaves de cofre, banco, HMAC, Blob e allowlist nos dois runtimes.
-5. Confirme `/health` do worker e o cron de integrações.
+3. Habilite GitHub Actions e publique `.github/workflows/sankhya-worker.yml` na branch `main`.
+4. Configure as mesmas chaves de cofre, banco, HMAC e Blob como Repository secrets do GitHub.
+5. Configure o PAT de disparo no ambiente Production da Vercel e confirme o workflow manualmente.
 6. Conceda o módulo somente ao workspace piloto.
 7. Cadastre URL, empresa, contexto, usuário dedicado e senha.
 8. Execute Testar conexão; só depois execute sincronização.
 9. Valide no ambiente real os textos/roles do DP Explorer e o arquivo exportado.
 
-### Render
+### GitHub Actions
 
-1. Crie um Blueprint apontando para o `render.yaml` da raiz e para a branch `main`.
-2. Confirme o Web Service `vinculato-sankhya-worker`, plano Starter, região Virginia.
-3. Preencha no primeiro sync os segredos marcados com `sync: false` usando exatamente os valores do ambiente Production da Vercel.
-4. Aguarde build da imagem, instalação do Chromium e health check `/health` com status `ok`.
-5. Não troque para plano Free: a suspensão do processo impede o consumo contínuo dos jobs.
+1. Em `Settings → Secrets and variables → Actions`, cadastre Repository secrets: `DATABASE_URL`, `FDP_INTEGRATION_VAULT_KEYS` (ou a chave única), `FDP_INTEGRATION_VAULT_KEY_VERSION`, `FDP_PII_HASH_SECRET` e, se usado, `BLOB_READ_WRITE_TOKEN`.
+2. Cadastre a Repository variable `FDP_SANKHYA_BROWSER_ALLOWED_HOSTS`; ausente, o workflow usa `*.sankhya.com.br`.
+3. Crie um fine-grained PAT com acesso somente a `synexsolucoes-debug/fila-dp` e permissão de repositório `Actions: Read and write`. Não conceda `Contents: write`, administração ou acesso a outros repositórios.
+4. Grave o PAT como `FDP_SANKHYA_ACTIONS_TOKEN` apenas no ambiente Production da Vercel; configure também repositório, workflow e ref conforme a lista acima e faça novo deploy.
+5. Em `Settings → Billing → Budgets and alerts`, deixe o orçamento de Actions em zero e habilite a interrupção quando o limite for atingido. Repositórios privados no GitHub Free têm 2.000 minutos mensais incluídos.
+6. Execute `Worker Sankhya sob demanda` manualmente uma vez. Sem jobs, ele deve concluir com zero processados; depois use `Testar conexão` no Vinculato.
+
+O workflow agendado genérico roda nos minutos 17 e 47, consumindo no máximo aproximadamente 1.440 minutos mínimos por mês. Ele também acorda o RPA com o `GITHUB_TOKEN` efêmero quando o PAT da Vercel estiver indisponível. A franquia é compartilhada com CI e execuções Sankhya; monitore o consumo. Referências: [uso incluído](https://docs.github.com/en/billing/reference/product-usage-included), [dispatch de workflow](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event) e [segredos](https://docs.github.com/en/actions/concepts/security/secrets).
 
 ## Testes e mock
 

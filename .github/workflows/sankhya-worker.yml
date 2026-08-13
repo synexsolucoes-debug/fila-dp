@@ -1,0 +1,49 @@
+name: Worker Sankhya sob demanda
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sankhya-browser-worker
+  cancel-in-progress: false
+
+jobs:
+  process-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Instalar dependências do worker
+        run: npm ci --omit=dev
+      - name: Restaurar cache do Chromium
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Instalar Chromium e dependências do sistema
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Processar a fila Sankhya uma vez
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          FDP_INTEGRATION_VAULT_KEYS: ${{ secrets.FDP_INTEGRATION_VAULT_KEYS }}
+          FDP_INTEGRATION_VAULT_KEY: ${{ secrets.FDP_INTEGRATION_VAULT_KEY }}
+          FDP_INTEGRATION_VAULT_KEY_VERSION: ${{ secrets.FDP_INTEGRATION_VAULT_KEY_VERSION }}
+          FDP_PII_HASH_SECRET: ${{ secrets.FDP_PII_HASH_SECRET }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          FDP_SANKHYA_BROWSER_ALLOWED_HOSTS: ${{ vars.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS || '*.sankhya.com.br' }}
+          FDP_SANKHYA_CHROMIUM_SANDBOX: "true"
+          FDP_SANKHYA_WORKER_CONCURRENCY: "1"
+          FDP_SANKHYA_WORKER_MAX_JOBS: "10"
+          FDP_SANKHYA_WORKER_RETRY_WAIT_MS: "90000"
+          FDP_SANKHYA_WORKER_BUDGET_MS: "2100000"
+        run: npm run worker:sankhya:once

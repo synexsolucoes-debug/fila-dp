@@ -48,7 +48,11 @@ export class PlaywrightSankhyaSession implements SankhyaBrowserSession {
   static async create() {
     const session = new PlaywrightSankhyaSession();
     session.directory = await mkdtemp(join(tmpdir(), "vinculato-sankhya-"));
-    session.browser = await chromium.launch({ headless: true, args: ["--disable-dev-shm-usage"] });
+    session.browser = await chromium.launch({
+      headless: true,
+      chromiumSandbox: process.env.FDP_SANKHYA_CHROMIUM_SANDBOX === "true",
+      args: ["--disable-dev-shm-usage"],
+    });
     session.context = await session.browser.newContext({ acceptDownloads: true, locale: "pt-BR", timezoneId: "America/Sao_Paulo", serviceWorkers: "block" });
     session.page = await session.context.newPage();
     await session.context.route("**/*", async (route) => {

@@ -9,11 +9,13 @@ import test from "node:test";
  */
 test("existe disparo agendado para o executor de integrações", async () => {
   const workflow = await readFile(new URL("../.github/workflows/integrations-cron.yml", import.meta.url), "utf8");
-  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/u, "a fila depende de um agendamento de poucos minutos");
+  assert.match(workflow, /cron: "17,47 \* \* \* \*"/u, "a fila mantém duas varreduras por hora dentro da franquia gratuita");
   assert.match(workflow, /Authorization: Bearer/u);
   assert.match(workflow, /workflow_dispatch/u, "precisa ser disparável à mão para depuração");
   // O passo tem de falhar quando o executor recusa, senão a fila para em silêncio de novo.
   assert.match(workflow, /exit 1/u);
+  assert.match(workflow, /gh workflow run sankhya-worker\.yml/u, "o cron precisa acordar o RPA sem token permanente quando houver fila");
+  assert.match(workflow, /actions: write/u, "o token efêmero recebe somente a permissão necessária para disparar o worker");
 });
 
 test("o vercel.json não declara cron: a conta Hobby recusa o deploy inteiro", async () => {
@@ -51,7 +53,9 @@ test("o disparo agendado exige segredo e respeita o isolamento por workspace", a
   assert.match(route, /integration\.channel = 'tangerino'/u);
   assert.match(route, /candidate\.resource_type = 'admissions'/u);
   assert.match(route, /triggerType: "scheduled"/u);
-  assert.match(route, /SCHEDULE_INTERVAL_MS = 5 \* 60 \* 1000/u);
+  assert.match(route, /sankhyaPending/u);
+  assert.match(route, /wakeSankhyaWorker/u);
+  assert.match(route, /SCHEDULE_INTERVAL_MS = 30 \* 60 \* 1000/u);
   assert.match(route, /pending\.status IN \('queued', 'leased'\)/u, "não pode acumular consultas concorrentes do mesmo conector");
 
   // Nenhum segredo pode ir para o log.
