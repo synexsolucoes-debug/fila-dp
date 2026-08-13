@@ -35,10 +35,9 @@ jobs:
       - name: Processar a fila Sankhya uma vez
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          FDP_INTEGRATION_VAULT_KEYS: ${{ secrets.FDP_INTEGRATION_VAULT_KEYS }}
-          FDP_INTEGRATION_VAULT_KEY: ${{ secrets.FDP_INTEGRATION_VAULT_KEY }}
-          FDP_INTEGRATION_VAULT_KEY_VERSION: ${{ secrets.FDP_INTEGRATION_VAULT_KEY_VERSION }}
-          FDP_PII_HASH_SECRET: ${{ secrets.FDP_PII_HASH_SECRET }}
+          FDP_SANKHYA_VAULT_KEYS: ${{ secrets.FDP_SANKHYA_VAULT_KEYS }}
+          FDP_SANKHYA_VAULT_KEY: ${{ secrets.FDP_SANKHYA_VAULT_KEY }}
+          FDP_SANKHYA_VAULT_KEY_VERSION: ${{ secrets.FDP_SANKHYA_VAULT_KEY_VERSION }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           FDP_SANKHYA_BROWSER_ALLOWED_HOSTS: ${{ vars.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS || '*.sankhya.com.br' }}
           FDP_SANKHYA_CHROMIUM_SANDBOX: "true"

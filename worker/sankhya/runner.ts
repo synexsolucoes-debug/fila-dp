@@ -24,11 +24,8 @@ export function assertSankhyaWorkerConfiguration() {
   if (!String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || "").startsWith("postgres")) {
     missing.push("DATABASE_URL");
   }
-  if (!String(process.env.FDP_INTEGRATION_VAULT_KEYS || process.env.FDP_INTEGRATION_VAULT_KEY || "").trim()) {
-    missing.push("FDP_INTEGRATION_VAULT_KEYS");
-  }
-  if (!String(process.env.FDP_PII_HASH_SECRET || process.env.FDP_AUTH_SECRET || "").trim()) {
-    missing.push("FDP_PII_HASH_SECRET");
+  if (!String(process.env.FDP_SANKHYA_VAULT_KEYS || process.env.FDP_SANKHYA_VAULT_KEY || "").trim()) {
+    missing.push("FDP_SANKHYA_VAULT_KEYS");
   }
   if (missing.length) throw new Error(`Configuração obrigatória ausente: ${missing.join(", ")}`);
 }

@@ -15,6 +15,9 @@ FDP_INTEGRATION_VAULT_KEY=chave-aes-256-em-base64
 FDP_INTEGRATION_VAULT_KEY_VERSION=1
 # Rotacao sem indisponibilidade: JSON {"1":"base64","2":"base64"} no lugar da chave unica.
 FDP_INTEGRATION_VAULT_KEYS=
+FDP_SANKHYA_VAULT_KEY=chave-aes-256-exclusiva-do-sankhya-em-base64
+FDP_SANKHYA_VAULT_KEY_VERSION=1
+FDP_SANKHYA_VAULT_KEYS=
 
 # Segredo do executor assincrono de integracoes e webhooks.
 # Sem ele /api/integrations/worker e /api/webhooks/worker recusam a chamada.

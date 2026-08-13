@@ -41,6 +41,16 @@ function changedFields(before: Record<string, unknown>, after: Record<string, un
   return [...keys].filter((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null)).sort();
 }
 
+function protectSankhyaCpf(value: string) {
+  // O runner externo não recebe o segredo HMAC global do produto. Quando ele
+  // não está presente, a conciliação usa código externo + matrícula e descarta
+  // o CPF completo, preservando minimização e isolamento de segredos.
+  if (!process.env.FDP_PII_HASH_SECRET && !process.env.FDP_AUTH_SECRET) {
+    return { cpfHash: "", cpfLast4: "" };
+  }
+  return protectCpf(value);
+}
+
 async function organizationalIds(d1: Database, workspaceId: string, companyId: string, employee: VinculatoNormalizedEmployee) {
   const [department, position, costCenter, schedule] = await Promise.all([
     upsertCatalog(d1, { workspaceId, companyId, kind: "department", code: employee.departmentCode, name: employee.departmentName }),
@@ -75,7 +85,7 @@ export async function importSankhyaEmployees(d1: Database, input: {
 
     const hash = normalizedEmployeeHash(normalized);
     const snapshot = persistedSankhyaEmployee(normalized);
-    const cpf = protectCpf(normalized.cpfDigits);
+    const cpf = protectSankhyaCpf(normalized.cpfDigits);
     const reference = await d1.prepare(`SELECT ref.id, ref.employee_id, ref.normalized_hash, ref.normalized_json
       FROM fdp_employee_external_refs ref WHERE ref.workspace_id = ? AND ref.integration_id = ? AND ref.source = 'sankhya' AND ref.external_id = ?`)
       .bind(input.workspaceId, input.integrationId, normalized.externalEmployeeId).first<Row>();

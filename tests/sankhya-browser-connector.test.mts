@@ -12,20 +12,26 @@ import { normalizeSankhyaEmployee, persistedSankhyaEmployee } from "../lib/sankh
 import { MockSankhyaSession } from "../worker/sankhya/mock-session.ts";
 
 test("credenciais Sankhya usam AES-GCM, são recuperáveis apenas no backend e têm dica mascarada", () => {
-  const previous = process.env.FDP_INTEGRATION_VAULT_KEY;
-  const previousVersion = process.env.FDP_INTEGRATION_VAULT_KEY_VERSION;
-  process.env.FDP_INTEGRATION_VAULT_KEY = Buffer.alloc(32, 19).toString("base64");
-  process.env.FDP_INTEGRATION_VAULT_KEY_VERSION = "1";
+  const previous = process.env.FDP_SANKHYA_VAULT_KEY;
+  const previousVersion = process.env.FDP_SANKHYA_VAULT_KEY_VERSION;
+  const previousGlobal = process.env.FDP_INTEGRATION_VAULT_KEY;
+  process.env.FDP_SANKHYA_VAULT_KEY = Buffer.alloc(32, 19).toString("base64");
+  process.env.FDP_SANKHYA_VAULT_KEY_VERSION = "1";
+  process.env.FDP_INTEGRATION_VAULT_KEY = Buffer.alloc(32, 7).toString("base64");
   try {
     const credentials = { username: "integracao.dp", password: "Senha-Forte-123" };
     const sealed = sealCredentials("sankhya_browser", credentials);
     assert.doesNotMatch(sealed.encryptedValue, /integracao|Senha-Forte/u);
     assert.deepEqual(openCredentials("sankhya_browser", sealed), credentials);
+    delete process.env.FDP_SANKHYA_VAULT_KEY;
+    assert.throws(() => openCredentials("sankhya_browser", sealed), /cofre|chave/iu);
+    process.env.FDP_SANKHYA_VAULT_KEY = Buffer.alloc(32, 19).toString("base64");
     assert.equal(credentialPublicHint("sankhya_browser", credentials), "int**********");
     assert.throws(() => sealCredentials("sankhya_browser", { username: "user", password: "curta" }), /tamanho inválido/u);
   } finally {
-    if (previous === undefined) delete process.env.FDP_INTEGRATION_VAULT_KEY; else process.env.FDP_INTEGRATION_VAULT_KEY = previous;
-    if (previousVersion === undefined) delete process.env.FDP_INTEGRATION_VAULT_KEY_VERSION; else process.env.FDP_INTEGRATION_VAULT_KEY_VERSION = previousVersion;
+    if (previous === undefined) delete process.env.FDP_SANKHYA_VAULT_KEY; else process.env.FDP_SANKHYA_VAULT_KEY = previous;
+    if (previousVersion === undefined) delete process.env.FDP_SANKHYA_VAULT_KEY_VERSION; else process.env.FDP_SANKHYA_VAULT_KEY_VERSION = previousVersion;
+    if (previousGlobal === undefined) delete process.env.FDP_INTEGRATION_VAULT_KEY; else process.env.FDP_INTEGRATION_VAULT_KEY = previousGlobal;
   }
 });
 

@@ -43,7 +43,7 @@ Usuário e senha usam o cofre existente AES-256-GCM, com IV aleatório, tag de a
 
 O worker descriptografa a credencial depois de reivindicar o job e apenas para a execução. Logs, auditorias, eventos e erros passam por allowlists e sanitização. Recomenda-se criar no Sankhya um usuário dedicado de consulta, limitado ao DP Explorer e à rotina necessária.
 
-Rotação usa `FDP_INTEGRATION_VAULT_KEYS` no formato `{"1":"base64","2":"base64"}` e `FDP_INTEGRATION_VAULT_KEY_VERSION`. A versão anterior permanece no keyring enquanto existirem envelopes cifrados com ela.
+O Sankhya possui cofre exclusivo: `FDP_SANKHYA_VAULT_KEYS` no formato `{"1":"base64","2":"base64"}` e `FDP_SANKHYA_VAULT_KEY_VERSION`. O worker externo nunca recebe a chave global das demais integrações. A versão anterior permanece no keyring enquanto existirem envelopes cifrados com ela.
 
 ## Fluxo de execução
 
@@ -95,9 +95,8 @@ Não são persistidos cookies, storage, senha, CPF completo no snapshot, dados b
 Web e worker:
 
 - `DATABASE_URL`
-- `FDP_INTEGRATION_VAULT_KEYS` ou `FDP_INTEGRATION_VAULT_KEY`
-- `FDP_INTEGRATION_VAULT_KEY_VERSION`
-- `FDP_PII_HASH_SECRET`
+- `FDP_SANKHYA_VAULT_KEYS` ou `FDP_SANKHYA_VAULT_KEY`
+- `FDP_SANKHYA_VAULT_KEY_VERSION`
 - `FDP_SANKHYA_BROWSER_ALLOWED_HOSTS`
 - `BLOB_READ_WRITE_TOKEN`
 
@@ -134,7 +133,7 @@ Somente aplicação Vercel:
 
 ### GitHub Actions
 
-1. Em `Settings → Secrets and variables → Actions`, cadastre Repository secrets: `DATABASE_URL`, `FDP_INTEGRATION_VAULT_KEYS` (ou a chave única), `FDP_INTEGRATION_VAULT_KEY_VERSION`, `FDP_PII_HASH_SECRET` e, se usado, `BLOB_READ_WRITE_TOKEN`.
+1. Em `Settings → Secrets and variables → Actions`, cadastre Repository secrets: `DATABASE_URL`, `FDP_SANKHYA_VAULT_KEYS` (ou `FDP_SANKHYA_VAULT_KEY`), `FDP_SANKHYA_VAULT_KEY_VERSION` e, se usado, `BLOB_READ_WRITE_TOKEN`.
 2. Cadastre a Repository variable `FDP_SANKHYA_BROWSER_ALLOWED_HOSTS`; ausente, o workflow usa `*.sankhya.com.br`.
 3. Crie um fine-grained PAT com acesso somente a `synexsolucoes-debug/fila-dp` e permissão de repositório `Actions: Read and write`. Não conceda `Contents: write`, administração ou acesso a outros repositórios.
 4. Grave o PAT como `FDP_SANKHYA_ACTIONS_TOKEN` apenas no ambiente Production da Vercel; configure também repositório, workflow e ref conforme a lista acima e faça novo deploy.
