@@ -47,9 +47,10 @@ function decodeVaultKey(raw: string) {
   return key;
 }
 
-function vaultKeys() {
+function vaultKeys(channel?: IntegrationChannel) {
   const result = new Map<number, Buffer>();
-  const configured = process.env.FDP_INTEGRATION_VAULT_KEYS;
+  const sankhya = channel === "sankhya_browser";
+  const configured = sankhya ? process.env.FDP_SANKHYA_VAULT_KEYS : process.env.FDP_INTEGRATION_VAULT_KEYS;
   if (configured) {
     try {
       const parsed = JSON.parse(configured) as Record<string, unknown>;
@@ -61,25 +62,32 @@ function vaultKeys() {
       throw new ApiError(500, "VAULT_KEYS_INVALID", "O cofre de credenciais não está configurado corretamente.");
     }
   }
-  if (!result.size && process.env.FDP_INTEGRATION_VAULT_KEY) result.set(1, decodeVaultKey(process.env.FDP_INTEGRATION_VAULT_KEY));
+  const singleKey = sankhya ? process.env.FDP_SANKHYA_VAULT_KEY : process.env.FDP_INTEGRATION_VAULT_KEY;
+  if (!result.size && singleKey) result.set(1, decodeVaultKey(singleKey));
   // Nomear a variável é o que transforma "não salva" em algo acionável: quem vê
   // esta mensagem administra integrações e precisa saber o que falta no deployment.
-  if (!result.size) throw new ApiError(503, "VAULT_NOT_CONFIGURED", "Cofre de credenciais não configurado neste deployment: defina FDP_INTEGRATION_VAULT_KEY (chave AES-256 em base64) e publique novamente antes de guardar segredos.");
+  if (!result.size) {
+    const variable = sankhya ? "FDP_SANKHYA_VAULT_KEY" : "FDP_INTEGRATION_VAULT_KEY";
+    throw new ApiError(503, "VAULT_NOT_CONFIGURED", `Cofre de credenciais não configurado neste deployment: defina ${variable} (chave AES-256 em base64) e publique novamente antes de guardar segredos.`);
+  }
   return result;
 }
 
 /** Returns the active vault key so other domains can seal secrets with the same rotation policy. */
-export function currentVaultKey() {
-  const keys = vaultKeys();
-  const requested = Number(process.env.FDP_INTEGRATION_VAULT_KEY_VERSION || Math.max(...keys.keys()));
+export function currentVaultKey(channelValue?: unknown) {
+  const channel = channelValue === undefined ? undefined : parseChannel(channelValue);
+  const keys = vaultKeys(channel);
+  const configuredVersion = channel === "sankhya_browser" ? process.env.FDP_SANKHYA_VAULT_KEY_VERSION : process.env.FDP_INTEGRATION_VAULT_KEY_VERSION;
+  const requested = Number(configuredVersion || Math.max(...keys.keys()));
   const key = keys.get(requested);
   if (!key) throw new ApiError(500, "VAULT_KEY_VERSION_MISSING", "A versão ativa do cofre não está disponível.");
   return { key, version: requested };
 }
 
 /** Returns a previously used vault key so sealed payloads survive key rotation. */
-export function vaultKeyByVersion(version: number) {
-  const key = vaultKeys().get(version);
+export function vaultKeyByVersion(version: number, channelValue?: unknown) {
+  const channel = channelValue === undefined ? undefined : parseChannel(channelValue);
+  const key = vaultKeys(channel).get(version);
   if (!key) throw new ApiError(500, "VAULT_KEY_VERSION_MISSING", "A chave necessária para abrir o dado protegido não está disponível.");
   return key;
 }
@@ -106,7 +114,7 @@ export function sanitizeCredentials(channelValue: unknown, value: unknown) {
 export function sealCredentials(channelValue: unknown, value: unknown) {
   const { channel, credentials } = sanitizeCredentials(channelValue, value);
   const plaintext = stableJson(credentials);
-  const { key, version } = currentVaultKey();
+  const { key, version } = currentVaultKey(channel);
   const initializationVector = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, initializationVector);
   cipher.setAAD(Buffer.from(`fila-dp:${channel}:v${version}`, "utf8"));
@@ -123,7 +131,7 @@ export function sealCredentials(channelValue: unknown, value: unknown) {
 
 export function openCredentials(channelValue: unknown, sealed: { encryptedValue: string; initializationVector: string; authTag: string; keyVersion: number }) {
   const channel = parseChannel(channelValue);
-  const key = vaultKeys().get(sealed.keyVersion);
+  const key = vaultKeys(channel).get(sealed.keyVersion);
   if (!key) throw new ApiError(500, "VAULT_KEY_VERSION_MISSING", "A chave necessária para abrir a credencial não está disponível.");
   try {
     const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(sealed.initializationVector, "base64"));

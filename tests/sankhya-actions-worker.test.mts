@@ -54,6 +54,8 @@ test("workflow é one-shot, isolado e recebe segredos apenas pelo GitHub", async
   assert.match(workflow, /permissions:\s+contents: read/u);
   assert.match(workflow, /concurrency:[\s\S]+cancel-in-progress: false/u);
   assert.match(workflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/u);
+  assert.match(workflow, /FDP_SANKHYA_VAULT_KEY: \$\{\{ secrets\.FDP_SANKHYA_VAULT_KEY \}\}/u);
+  assert.doesNotMatch(workflow, /secrets\.FDP_INTEGRATION_VAULT|secrets\.FDP_PII_HASH_SECRET/u);
   assert.match(workflow, /npm run worker:sankhya:once/u);
   assert.match(workflow, /FDP_SANKHYA_CHROMIUM_SANDBOX: "true"/u);
   assert.doesNotMatch(workflow, /workspaceId|integrationId/u);
