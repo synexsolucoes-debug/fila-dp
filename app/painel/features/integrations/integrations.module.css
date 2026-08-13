@@ -1,6 +1,8 @@
 .workspace {
   --int-navy: var(--ui-brand, #0b1f33);
-  --int-accent: #087a63;
+  --int-accent: var(--ui-accent, #087a63);
+  --int-accent-text: var(--ui-accent-text, #087a63);
+  --int-on-accent: var(--ui-on-accent, #fff);
   --int-violet: #6550a1;
   --int-bg: var(--ui-bg, #f5f7f9);
   --int-surface: var(--ui-surface, #fff);
@@ -18,12 +20,12 @@
 .workspace button { color: inherit; }
 .workspace svg { width: 17px; height: 17px; stroke-width: 1.9; }
 .workspace button:focus-visible, .workspace input:focus-visible, .workspace select:focus-visible, .workspace textarea:focus-visible, .tabPanel:focus-visible { outline: 3px solid color-mix(in srgb, var(--int-accent) 27%, transparent); outline-offset: 2px; }
-.eyebrow { color: var(--int-accent); font-size: .56rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--int-accent-text); font-size: .56rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
 .numeric, .workspace code, .workspace time { font-variant-numeric: tabular-nums; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 .primaryButton, .secondaryButton, .dangerButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 13px; border-radius: 6px; font-size: .68rem; font-weight: 740; white-space: nowrap; cursor: pointer; transition: transform .14s ease, border-color .14s ease, background .14s ease; }
-.primaryButton { border: 1px solid var(--int-accent); background: var(--int-accent); color: #fff !important; box-shadow: 0 5px 14px color-mix(in srgb, var(--int-accent) 18%, transparent); }
+.primaryButton { border: 1px solid var(--int-accent); background: var(--int-accent); color: var(--int-on-accent, #fff) !important; box-shadow: 0 5px 14px color-mix(in srgb, var(--int-accent) 18%, transparent); }
 .secondaryButton { border: 1px solid var(--int-border); background: var(--int-surface); }
 .dangerButton { border: 1px solid var(--int-danger); background: var(--int-danger); color: #fff !important; }
 .primaryButton:hover, .dangerButton:hover { transform: translateY(-1px); filter: brightness(.92); }
@@ -53,7 +55,9 @@
 
 .connectionRail { margin-bottom: 12px; overflow: hidden; border: 1px solid var(--int-border); border-top: 3px solid var(--int-navy); border-radius: 7px; background: var(--int-surface); box-shadow: var(--ui-shadow-card); }
 .connectionRail > header { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 7px 13px; border-bottom: 1px solid var(--int-border); background: var(--int-muted); }
-.connectionRail > header > span { display: inline-flex; align-items: center; gap: 8px; color: var(--int-navy); }
+/* `--int-navy` é a cor da marca: no tema escuro ela é quase preta e sumia
+   sobre o próprio cabeçalho (1.31:1). */
+.connectionRail > header > span { display: inline-flex; align-items: center; gap: 8px; color: var(--int-text); }
 .connectionRail > header strong { font-size: .57rem; letter-spacing: .09em; }
 .connectionRail > header small { color: var(--int-soft); font-size: .52rem; }
 .connectionRail ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }

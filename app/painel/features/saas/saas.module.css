@@ -1,14 +1,14 @@
 .workspace {
-  --saas-indigo: #3159b7; --saas-indigo-soft: #edf2ff; --saas-green: #137a4f; --saas-amber: #a15c07; --saas-red: #b42318;
+  --saas-indigo: var(--ui-accent, #3159b7); --saas-indigo-soft: var(--ui-accent-soft, #edf2ff); --saas-indigo-text: var(--ui-accent-text, #3159b7); --saas-on-indigo: var(--ui-on-accent, #fff); --saas-green: #137a4f; --saas-amber: #a15c07; --saas-red: #b42318;
   --saas-surface: var(--ui-surface, #fff); --saas-muted: var(--ui-surface-muted, #f0f4f6); --saas-border: var(--ui-border, #d8e0e7);
   --saas-text: var(--ui-text, #172235); --saas-soft: var(--ui-text-soft, #5e6d7f); min-width: 0; color: var(--saas-text);
 }
 .workspace button, .workspace input, .workspace select { font: inherit; }
 .workspace svg { width: 17px; height: 17px; stroke-width: 1.9; }
 .workspace :is(button, select, a, [tabindex]):focus-visible { outline: 3px solid color-mix(in srgb, var(--saas-indigo) 28%, transparent); outline-offset: 2px; }
-.eyebrow { color: var(--saas-indigo); font-size: .56rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--saas-indigo-text); font-size: .56rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
 .primaryButton, .secondaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 13px; border-radius: 6px; font-size: .66rem; font-weight: 750; white-space: nowrap; cursor: pointer; }
-.primaryButton { border: 1px solid var(--saas-indigo); background: var(--saas-indigo); color: #fff; box-shadow: 0 5px 14px #3159b72b; }
+.primaryButton { border: 1px solid var(--saas-indigo); background: var(--saas-indigo); color: var(--saas-on-indigo, #fff); box-shadow: 0 5px 14px #3159b72b; }
 .secondaryButton { border: 1px solid var(--saas-border); background: var(--saas-surface); color: var(--saas-text); }
 .primaryButton:hover { background: #244aa4; }.secondaryButton:hover { border-color: var(--saas-indigo); color: var(--saas-indigo); }
 .primaryButton:disabled, .secondaryButton:disabled { opacity: .5; cursor: not-allowed; }

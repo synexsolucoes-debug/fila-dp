@@ -343,7 +343,7 @@
 .dashboard-task-labels .purple { color: #7750a3; background: #f0e8fa; }
 .dashboard-task-labels .green { color: #24785c; background: #ddf6ed; }
 .dashboard-task-labels .orange { color: #a75f16; background: #fff0dc; }
-.dashboard-task-labels .gray { color: #657083; background: #edf0f2; }
+.dashboard-task-labels .gray { color: #545e6e; background: #edf0f2; }
 .dashboard-task h2 { margin: 10px 0 4px; font-size: 11px; line-height: 1.4; letter-spacing: -.01em; }
 .dashboard-task > p { margin: 0; color: #6b7789; font-size: 8px; }
 .dashboard-task-bottom { margin-top: 15px; display: flex; align-items: center; gap: 5px; }
@@ -351,7 +351,7 @@
 .dashboard-sla.warning { color: #9a591b; background: #fff0dc; }
 .dashboard-sla.safe { color: #167354; background: #dff7ee; }
 .dashboard-sla.paused { color: #596779; background: #edf0f2; }
-.dashboard-check { color: #758294; font-size: 7px; }
+.dashboard-check { color: #5d6a7c; font-size: 7px; }
 .dashboard-comments { color: #5f6f81; font-size: 7px; }
 .dashboard-mini-avatar { width: 20px; height: 20px; margin-left: auto; display: grid; place-items: center; border-radius: 50%; background: #d9f6ed; color: var(--brand); font-size: 6px; font-weight: 800; }
 .dashboard-add-card { width: 100%; min-height: 30px; padding: 0 4px; border: 1px dashed transparent; border-radius: 6px; background: transparent; color: #788696; text-align: left; cursor: pointer; font-size: 8px; }
@@ -781,7 +781,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .workspace-account-summary > div { min-width: 0; }
 .workspace-account-summary strong, .workspace-account-summary small, .workspace-account-summary em { display: block; }
 .workspace-account-summary strong { font-size: 11px; }
-.workspace-account-summary small { margin-top: 3px; overflow: hidden; color: #626c7a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-account-summary small { margin-top: 3px; overflow: hidden; color: var(--ui-text-soft, #545e6e); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-account-summary em { width: max-content; margin-top: 7px; padding: 4px 6px; border-radius: 4px; background: #dcf7ee; color: var(--brand); font-size: 7px; font-style: normal; font-weight: 800; text-transform: uppercase; }
 .workspace-settings-note { margin: -2px 0 0; color: #758396; font-size: 9px; line-height: 1.5; }
 .workspace-switcher, .workspace-team, .workspace-invite-form { overflow: hidden; border: 1px solid #dfe5e5; border-radius: 9px; background: white; }
@@ -1083,7 +1083,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
   --ui-text-soft: #5d6b80;
   width: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
+  /* `overflow-x: hidden` aqui transformava o shell em contêiner de rolagem e,
+     com isso, anulava o `position: sticky` da barra lateral — quem rolava a
+     página via a barra subir junto e o fundo escuro acabar no meio da tela,
+     deixando os últimos itens do menu em texto claro sobre fundo claro.
+     O recorte horizontal agora vem do `overflow: hidden` do shell travado na
+     viewport, mais abaixo, que não tem esse efeito colateral. */
   background: var(--ui-bg);
   color: var(--ui-text);
   color-scheme: light;

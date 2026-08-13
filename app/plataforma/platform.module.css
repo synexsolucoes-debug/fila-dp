@@ -96,3 +96,16 @@
 .simpleRows { display: grid; }.simpleRows > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 11px; border-bottom: 1px solid var(--border); }.simpleRows span { display: grid; gap: 2px; }.simpleRows strong, .simpleRows small { font-size: .64rem; }.simpleRows small { color: var(--soft); }.accessRow { display: grid; grid-template-columns: minmax(150px, 1fr) 130px minmax(190px, 1.4fr) auto; align-items: center; gap: 9px; padding: 10px 11px; border-bottom: 1px solid var(--border); }.accessRow > div { display: grid; gap: 2px; }.accessRow strong, .accessRow small, .accessRow label, .accessRow legend { font-size: .62rem; }.accessRow small { color: var(--soft); }.accessRow > label { display: grid; gap: 3px; color: var(--soft); }.accessRow select, .moduleRow select { min-height: 33px; padding: 0 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }.accessRow fieldset { display: flex; flex-wrap: wrap; gap: 5px 8px; margin: 0; padding: 6px 8px; border: 1px solid var(--border); }.accessRow fieldset label { display: flex; align-items: center; gap: 4px; }.moduleRow { display: grid; grid-template-columns: minmax(0, 1fr) 145px auto; align-items: center; gap: 9px; padding: 9px 11px; border-bottom: 1px solid var(--border); }.moduleRow > div { display: grid; gap: 2px; }.moduleRow strong, .moduleRow small { font-size: .63rem; }.moduleRow small { color: var(--soft); }
 @media (max-width: 980px) { .configColumns { grid-template-columns: 1fr; }.accessRow { grid-template-columns: 1fr 130px; }.accessRow fieldset { grid-column: 1 / -1; }.accessRow > button { justify-self: start; } }
 @media (max-width: 680px) { .workspacePicker, .configHeading { align-items: stretch; flex-direction: column; }.configForm { grid-template-columns: 1fr; }.configForm .fullField { grid-column: auto; }.accessRow, .moduleRow { grid-template-columns: 1fr; }.accessRow fieldset { grid-column: auto; }.tabs { width: 100%; }.tabs button { flex: 0 0 auto; } }
+
+/* Caixas de seleção do console mediam 13x24: a altura vinha da regra geral de
+   `min-height`, mas a largura ficava no tamanho nativo do controle e reprovava
+   no alvo mínimo da WCAG 2.5.8 (24x24). Filtro e seleção de linha são
+   justamente onde um clique errado custa caro. */
+.console input[type="checkbox"] {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  flex: 0 0 auto;
+  accent-color: var(--blue);
+  cursor: pointer;
+}

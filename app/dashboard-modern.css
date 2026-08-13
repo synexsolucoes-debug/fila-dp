@@ -3411,3 +3411,292 @@
    no toque e reprova na auditoria. */
 .dashboard-shell :is(select, button):not(.dashboard-sidebar button) { min-height: 24px; }
 .dashboard-shell :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
+
+
+/* ==========================================================================
+   Shell travado na viewport
+   ==========================================================================
+   O painel é um aplicativo, não um documento: a barra lateral e o cabeçalho
+   ficam parados e só o conteúdo rola.
+
+   A versão anterior tentava isso com `position: sticky` na barra, e não
+   funcionava por dois motivos somados. Primeiro, `.dashboard-shell` tinha
+   `overflow-x: hidden`, o que faz do shell um contêiner de rolagem e anula o
+   sticky de quem está dentro. Segundo, a barra tinha `height: 100vh` dentro de
+   uma linha de grid mais alta que a janela — então o fundo escuro terminava no
+   meio da coluna e os últimos itens do menu apareciam em texto claro sobre o
+   fundo claro da página, ilegíveis.
+
+   Aqui o shell tem a altura exata da janela e o recorte acontece nele; a
+   coluna de conteúdo é quem rola. Isso resolve os dois problemas de uma vez e
+   ainda mantém o cabeçalho sempre à vista.
+
+   Só vale do tablet para cima: abaixo de 761px o layout vira uma barra
+   superior com navegação fixa embaixo, que depende da rolagem do documento. */
+@media (min-width: 761px) {
+  .dashboard-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-sidebar {
+    position: static;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Com todos os módulos liberados a navegação passa da altura da janela. Quem
+     rola é só ela: a marca e a conta continuam ancoradas, porque perder a
+     identidade do grupo ao procurar um módulo desorienta. */
+  .dashboard-sidebar nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .22) transparent;
+  }
+
+  .dashboard-sidebar > :not(nav) { flex: 0 0 auto; }
+
+  .dashboard-main {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+  }
+
+  .dashboard-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+
+/* ==========================================================================
+   Destaque com foreground próprio
+   ==========================================================================
+   A auditoria nos dois temas acusou 42 violações distintas, e quase todas
+   vinham da mesma origem: cada módulo declarava a própria cor de destaque
+   (`--saas-indigo`, `--pay-accent`, `--time-accent`, `--int-accent`…) fixa
+   para o tema claro, sem contrapartida no escuro. No modo noturno a mesma cor
+   servia de texto sobre superfície escura e de preenchimento sob texto branco
+   — e falhava nos dois papéis.
+
+   Uma cor não basta. São três papéis diferentes e eles não coincidem:
+
+     --ui-accent       preenchimento (fundo de botão primário)
+     --ui-on-accent    o que se lê EM CIMA desse preenchimento
+     --ui-accent-text  a mesma família, mas legível como TEXTO sobre a página
+
+   No claro, `accent` e `accent-text` quase coincidem e o `on-accent` é branco.
+   No escuro eles se separam: o preenchimento clareia para o azul vivo e o
+   `on-accent` vira navy, porque branco sobre azul vivo dá 2.26:1. */
+.dashboard-shell {
+  --ui-accent: var(--vin-blue, #0857b2);
+  --ui-accent-text: var(--vin-blue, #0857b2);
+  --ui-on-accent: #ffffff;
+  --ui-accent-soft: #e7f0fe;
+}
+
+.dashboard-shell.theme-dark {
+  --ui-accent: #4da3ff;
+  /* Texto de destaque sobre superfície escura precisa clarear mais que o
+     preenchimento: o mesmo #4da3ff como texto sobre #111e2c dá 6.4:1, e é ele
+     que usamos — mas separado, porque o preenchimento pode escurecer sem
+     arrastar o texto junto. */
+  --ui-accent-text: #7cc0ff;
+  --ui-on-accent: #04121f;
+  --ui-accent-soft: #14304f;
+}
+
+
+/* ==========================================================================
+   Cores de estado com contrapartida no escuro
+   ==========================================================================
+   Selos de status, avisos e destaques usavam hex fixo escolhido contra fundo
+   branco (#076848, #4a5563, #a95e21…). Dentro de um cartão que escurece com o
+   tema, esses mesmos valores caíam para 2:1 — legíveis de dia, invisíveis de
+   noite. Aqui cada estado ganha um par: o tom do texto e o tom do fundo, os
+   dois virando junto com o tema. */
+.dashboard-shell {
+  --ui-state-neutral-text: #414b5a;
+  --ui-state-neutral-bg: #eef1f4;
+  --ui-state-ok-text: #06563c;
+  --ui-state-ok-bg: #e3f5ed;
+  --ui-state-warn-text: #7d4708;
+  --ui-state-warn-bg: #fdf2e2;
+  --ui-state-danger-text: #96201a;
+  --ui-state-danger-bg: #fdeceb;
+}
+
+.dashboard-shell.theme-dark {
+  --ui-state-neutral-text: #c3cedb;
+  --ui-state-neutral-bg: #232f3d;
+  --ui-state-ok-text: #6fdcb2;
+  --ui-state-ok-bg: #10362a;
+  --ui-state-warn-text: #f5c37a;
+  --ui-state-warn-bg: #3a2c14;
+  --ui-state-danger-text: #ff9f98;
+  --ui-state-danger-bg: #3d1e1c;
+}
+
+/* O selo âmbar da visão geral: no escuro o marrom original dava 2.76:1. */
+.theme-dark .overview-metrics .requires-attention strong { color: var(--ui-state-warn-text); }
+
+/* Rótulos de apoio da folha ficavam abaixo de 4.5:1 sobre o painel da tela. */
+.payroll-toolbar > label,
+.payroll-live-totals > span { color: var(--ui-text-strong-soft, var(--ui-text-soft)); }
+.dashboard-shell { --ui-text-strong-soft: #4d5a6b; }
+.dashboard-shell.theme-dark { --ui-text-strong-soft: #b6c3d1; }
+.payroll-live-totals > span:last-child strong { color: var(--ui-accent-text); }
+
+/* "Arquivados" ficava com fundo branco fixo e borda clara — no tema escuro o
+   texto herdado dava 1.77:1. O botão passa a usar as superfícies do tema. */
+.board-mode-tabs .archive-trigger {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.board-mode-tabs .archive-trigger b { color: var(--ui-accent-text); }
+
+/* O rótulo da competência ficava em 4.08:1 sobre o painel da folha. */
+.payroll-toolbar > label,
+.payroll-toolbar > label > span { color: var(--ui-text-strong-soft); }
+
+/* `--ui-primary` no escuro é o azul vivo, ótimo como preenchimento e fraco
+   como texto sobre o painel translúcido da folha (4.08:1). O token de texto
+   existe exatamente para este caso. */
+.payroll-toolbar > div > span,
+.payroll-entry-panel header span { color: var(--ui-accent-text); }
+
+
+/* ==========================================================================
+   Movimento
+   ==========================================================================
+   Três regras guiaram as escolhas abaixo.
+
+   A primeira: animação existe para explicar, não para enfeitar. A entrada de
+   módulo sobe poucos pixels porque a intenção é dizer "isto é novo", não fazer
+   a pessoa esperar. Nada aqui passa de 260ms — acima disso o movimento deixa
+   de parecer resposta e começa a parecer lentidão.
+
+   A segunda: só se anima o que é barato. `transform` e `opacity` rodam no
+   compositor; animar `height`, `top` ou `width` obriga o navegador a
+   recalcular layout a cada quadro e trava em lista grande.
+
+   A terceira, e a que mais importa: quem pede menos movimento recebe menos
+   movimento. `prefers-reduced-motion` não é um detalhe de acabamento — para
+   quem tem transtorno vestibular, movimento não pedido causa enjoo de
+   verdade. No fim do arquivo tudo isto é desligado, inclusive as animações
+   (o bloco global do globals.css só zerava transições). */
+
+.dashboard-shell {
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-slow: 260ms;
+  /* Desacelera no fim: o começo rápido dá a sensação de resposta imediata. */
+  --motion-ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* --- Troca de módulo ------------------------------------------------------ */
+.view-transition { animation: viewEnter var(--motion-slow) var(--motion-ease) both; }
+
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- Navegação lateral ---------------------------------------------------- */
+.dashboard-sidebar nav button {
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+.dashboard-sidebar nav button:hover:not(.active) { transform: translateX(2px); }
+.dashboard-sidebar nav button.active {
+  /* O item ativo ganha um traço que cresce a partir do centro, em vez de
+     aparecer pronto: liga visualmente o clique ao destino. */
+  position: relative;
+}
+.dashboard-sidebar nav button.active::before {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 60%;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand-accent-on-dark, #6fb4ff);
+  content: "";
+  animation: navMark var(--motion-base) var(--motion-ease) both;
+}
+
+@keyframes navMark {
+  from { opacity: 0; transform: translateY(-50%) scaleY(0); }
+  to { opacity: 1; transform: translateY(-50%) scaleY(1); }
+}
+
+/* --- Cartões e superfícies ------------------------------------------------ */
+.dashboard-task,
+.overview-metrics > article,
+.dashboard-stats article {
+  transition: transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+.dashboard-task:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(11, 31, 51, .12);
+}
+
+/* --- Botões --------------------------------------------------------------- */
+.dashboard-shell button {
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) ease;
+}
+/* O recuo no clique é o retorno tátil que falta num alvo plano. */
+.dashboard-shell button:active:not(:disabled) { transform: scale(.975); }
+
+/* --- Janelas -------------------------------------------------------------- */
+/* `.workspace-modal-backdrop` é o fundo de todas as janelas do painel — as
+   variantes (busca, confirmação, anexo) só acrescentam uma segunda classe. */
+.workspace-modal-backdrop { animation: backdropIn var(--motion-fast) ease-out both; }
+
+.workspace-modal,
+.card-modal,
+.inbox-modal,
+.archive-modal,
+.confirmation-modal,
+.demand-detail-modal,
+.workspace-settings-modal { animation: modalIn var(--motion-base) var(--motion-ease) both; }
+
+@keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- Carregamento --------------------------------------------------------- */
+/* Um pulso discreto diz "estou trabalhando" sem prometer uma barra de progresso
+   que o sistema não tem como calcular. */
+.dashboard-shell [aria-busy="true"] { animation: workingPulse 1.4s ease-in-out infinite; }
+
+@keyframes workingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .62; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-transition,
+  .dashboard-sidebar nav button.active::before,
+  .workspace-modal-backdrop,
+  .workspace-modal, .card-modal, .inbox-modal, .archive-modal,
+  .confirmation-modal, .demand-detail-modal, .workspace-settings-modal,
+  .dashboard-shell [aria-busy="true"] { animation: none !important; }
+
+  .dashboard-sidebar nav button:hover:not(.active),
+  .dashboard-task:hover,
+  .dashboard-shell button:active:not(:disabled) { transform: none; }
+}

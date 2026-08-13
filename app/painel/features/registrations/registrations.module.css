@@ -1,7 +1,9 @@
 .root {
   --reg-navy: var(--ui-brand, #041B45);
-  --reg-mint: var(--ui-primary, #0857B2);
-  --reg-mint-soft: var(--ui-primary-soft, #E7F0FE);
+  --reg-mint: var(--ui-accent, #0857B2);
+  --reg-mint-text: var(--ui-accent-text, #0857B2);
+  --reg-on-mint: var(--ui-on-accent, #fff);
+  --reg-mint-soft: var(--ui-accent-soft, #E7F0FE);
   --reg-surface: var(--ui-surface, #fff);
   --reg-muted: var(--ui-surface-muted, #f0f4f6);
   --reg-border: var(--ui-border, #d8e0e7);
@@ -64,7 +66,7 @@
   font-weight: 720;
   cursor: pointer;
 }
-.primaryButton { border: 1px solid var(--reg-mint); background: var(--reg-mint); color: #fff !important; box-shadow: 0 4px 12px color-mix(in srgb, var(--reg-mint) 20%, transparent); }
+.primaryButton { border: 1px solid var(--reg-mint); background: var(--reg-mint); color: var(--reg-on-mint, #fff) !important; box-shadow: 0 4px 12px color-mix(in srgb, var(--reg-mint) 20%, transparent); }
 .primaryButton:hover { transform: translateY(-1px); filter: brightness(.93); }
 .secondaryButton { border: 1px solid var(--reg-border); background: var(--reg-surface); color: var(--reg-text); }
 .secondaryButton:hover { border-color: color-mix(in srgb, var(--reg-mint) 54%, var(--reg-border)); background: var(--reg-mint-soft); color: var(--reg-mint); }
@@ -161,10 +163,10 @@
 .statusPill i,
 .employeeStatus i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .statusActive,
-.employee_active { background: color-mix(in srgb, #159566 12%, var(--reg-surface)); color: #087a53; }
+.employee_active { background: var(--ui-state-ok-bg, #e3f5ed); color: var(--ui-state-ok-text, #06563c); }
 .statusInactive,
-.employee_terminated { background: color-mix(in srgb, #697586 12%, var(--reg-surface)); color: var(--reg-soft); }
-.employee_on_leave { background: color-mix(in srgb, #c2720c 13%, var(--reg-surface)); color: #9c5808; }
+.employee_terminated { background: var(--ui-state-neutral-bg, #eef1f4); color: var(--ui-state-neutral-text, #414b5a); }
+.employee_on_leave { background: var(--ui-state-warn-bg, #fdf2e2); color: var(--ui-state-warn-text, #7d4708); }
 
 /* Estados por `data-status`.
  *
@@ -172,21 +174,21 @@
  * (.statusActive/.statusInactive) e qualquer estado sem regra herdava a cor do
  * contêiner — "Aplicada" saiu em 1.29:1, praticamente invisível. Com um padrão
  * legível, um estado novo pode ficar sem cor própria, mas nunca sem contraste. */
-.statusPill[data-status] { background: color-mix(in srgb, #697586 12%, var(--reg-surface)); color: #4a5563; }
+.statusPill[data-status] { background: var(--ui-state-neutral-bg, #eef1f4); color: var(--ui-state-neutral-text, #414b5a); }
 .statusPill[data-status="active"],
 .statusPill[data-status="approved"],
 .statusPill[data-status="applied"],
 .statusPill[data-status="paid"],
-.statusPill[data-status="reconciled"] { background: color-mix(in srgb, #159566 12%, var(--reg-surface)); color: #076848; }
+.statusPill[data-status="reconciled"] { background: var(--ui-state-ok-bg, #e3f5ed); color: var(--ui-state-ok-text, #06563c); }
 .statusPill[data-status="suspended"],
 .statusPill[data-status="pending_approval"],
 .statusPill[data-status="review"],
 .statusPill[data-status="approval"],
 .statusPill[data-status="invoice_pending"],
-.statusPill[data-status="open"] { background: color-mix(in srgb, #c2720c 13%, var(--reg-surface)); color: #8a5007; }
-.statusPill[data-status="rejected"] { background: color-mix(in srgb, #b42318 11%, var(--reg-surface)); color: #962016; }
+.statusPill[data-status="open"] { background: var(--ui-state-warn-bg, #fdf2e2); color: var(--ui-state-warn-text, #7d4708); }
+.statusPill[data-status="rejected"] { background: var(--ui-state-danger-bg, #fdeceb); color: var(--ui-state-danger-text, #96201a); }
 .statusPill[data-status="ready_to_pay"],
-.statusPill[data-status="reopened"] { background: color-mix(in srgb, #0857b2 11%, var(--reg-surface)); color: #08529f; }
+.statusPill[data-status="reopened"] { background: var(--ui-accent-soft, #e7f0fe); color: var(--ui-accent-text, #08529f); }
 
 .dataPanel { min-width: 0; min-height: 420px; border: 1px solid var(--reg-border); border-radius: 11px; overflow: hidden; background: var(--reg-surface); box-shadow: var(--ui-shadow-card, 0 4px 16px rgba(11,31,51,.04)); }
 .filters { display: flex; align-items: flex-end; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 55%, var(--reg-surface)); }

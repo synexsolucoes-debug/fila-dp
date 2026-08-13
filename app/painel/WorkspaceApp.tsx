@@ -1236,6 +1236,10 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               </span>
             </p>
           )}
+          {/* `key={view}` faz o React remontar este bloco a cada troca de
+              módulo, o que reinicia a animação de entrada. Sem a chave, a
+              transição só rodaria na primeira vez. */}
+          <div className="view-transition" key={view}>
           <div className="dashboard-heading">
             <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{view === "overview" ? `Olá, ${user.displayName.split(" ")[0] || "equipe"}.` : header.title}</h1><p>{view === "overview" ? "Veja as prioridades da operação e avance com segurança." : header.description}</p><div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div></div>
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
@@ -1358,6 +1362,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} />}
           {view === "indicators" && <IndicatorsView cards={activeCards} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
+          </div>
         </div>
       </section>
 

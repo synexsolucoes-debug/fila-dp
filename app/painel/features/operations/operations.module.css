@@ -1,6 +1,8 @@
 .workspace {
   --ops-navy: var(--ui-brand, #0b1f33);
-  --ops-mint: var(--ui-primary, #087a63);
+  --ops-mint: var(--ui-accent, #087a63);
+  --ops-mint-text: var(--ui-accent-text, #087a63);
+  --ops-on-mint: var(--ui-on-accent, #fff);
   --ops-mint-soft: var(--ui-primary-soft, #e7f6f1);
   --ops-bg: var(--ui-bg, #f5f7f9);
   --ops-surface: var(--ui-surface, #fff);
@@ -19,12 +21,12 @@
 .workspace button, .workspace input, .workspace select, .workspace textarea { font: inherit; }
 .workspace button { color: inherit; }
 .workspace svg { width: 17px; height: 17px; stroke-width: 1.9; }
-.eyebrow { color: var(--ops-mint); font-size: .59rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--ops-mint-text); font-size: .59rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
 .primaryButton, .secondaryButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 39px; padding: 0 14px;
   border-radius: 8px; font-size: .76rem; font-weight: 740; white-space: nowrap; cursor: pointer; transition: transform .14s ease, filter .14s ease, border-color .14s ease;
 }
-.primaryButton { border: 1px solid var(--ops-mint); background: var(--ops-mint); color: #fff !important; box-shadow: 0 5px 14px color-mix(in srgb, var(--ops-mint) 18%, transparent); }
+.primaryButton { border: 1px solid var(--ops-mint); background: var(--ops-mint); color: var(--ops-on-mint, #fff) !important; box-shadow: 0 5px 14px color-mix(in srgb, var(--ops-mint) 18%, transparent); }
 .primaryButton:hover { transform: translateY(-1px); filter: brightness(.94); }
 .secondaryButton { border: 1px solid var(--ops-border); background: var(--ops-surface); }
 .secondaryButton:hover { border-color: var(--ops-mint); color: var(--ops-mint); }

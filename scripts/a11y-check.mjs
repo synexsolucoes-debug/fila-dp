@@ -117,6 +117,19 @@ const AUDIT = () => {
     const ownText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
     const style = getComputedStyle(el);
     const cls = (el.className || "").toString().split(" ")[0];
+    /* Um elemento sem classe própria — `<th>`, `<strong>`, `<span>` solto — era
+       reportado como "STRONG. 1.31:1" e não dava para achar no código. A cadeia
+       de ancestrais com classe transforma o relatório em endereço. */
+    const trail = (() => {
+      const parts = [];
+      let node = el.parentElement;
+      while (node && parts.length < 3 && node !== document.body) {
+        const name = (node.className || "").toString().trim().split(/\s+/u)[0];
+        if (name) parts.unshift(name);
+        node = node.parentElement;
+      }
+      return parts.join(" > ");
+    })();
 
     if (ownText && text) {
       const fg = parseColor(style.color);
@@ -132,7 +145,7 @@ const AUDIT = () => {
           // Pior parada do gradiente: aprovar pela média esconderia a borda ruim.
           const value = Math.min(...surfaces.map((bg) => ratio(fg.rgb, bg)));
           if (value < need) {
-            contrastIssues.push({ tag: el.tagName, cls, text: text.slice(0, 40), value, need, size });
+            contrastIssues.push({ tag: el.tagName, cls, trail, text: text.slice(0, 40), value, need, size });
           }
         }
       }
@@ -185,7 +198,7 @@ async function audit(label, path, setup) {
     await page.waitForTimeout(500);
     const result = await page.evaluate(AUDIT);
     const uniq = (list, key) => [...new Map(list.map((item) => [key(item), item])).values()];
-    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.value}`);
+    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.trail}:${i.value}`);
     const names = uniq(result.nameIssues, (i) => `${i.tag}.${i.cls}`);
     const targets = uniq(result.targetIssues, (i) => `${i.tag}.${i.cls}:${i.name}`);
     const blind = uniq(result.unmeasurable, (i) => `${i.tag}.${i.cls}`);
@@ -195,7 +208,7 @@ async function audit(label, path, setup) {
     const total = contrast.length + names.length + targets.length;
     console.log(`  ${viewport.label}: ${total === 0 ? "sem violações" : `${total} violação(ões)`}`);
     for (const i of contrast.slice(0, 8)) {
-      console.log(`     contraste ${i.tag}.${i.cls} ${i.value}:1 (precisa ${i.need}) "${i.text}"`);
+      console.log(`     contraste ${i.tag}.${i.cls || "—"} ${i.value}:1 (precisa ${i.need}) "${i.text}" ← ${i.trail}`);
     }
     for (const i of names.slice(0, 5)) console.log(`     sem nome ${i.tag}.${i.cls} → ${i.html}`);
     for (const i of targets.slice(0, 5)) console.log(`     alvo ${i.tag}.${i.cls} ${i.w}x${i.h} "${i.name}"`);
@@ -230,7 +243,7 @@ async function auditSubTabs(prefix, selector) {
  * junto com a tela que o hospeda. Aqui ele é aberto de propósito: um painel que
  * só aparece quando chamado ainda precisa ser legível quando aparece.
  */
-async function auditAssistant() {
+async function auditAssistant(theme = "") {
   const launcher = page.locator('button[class*="launcher"]').filter({ hasText: /Assistente/u }).first();
   if (await launcher.count() === 0) {
     console.log("\n### Assistente — lançador não encontrado");
@@ -240,7 +253,7 @@ async function auditAssistant() {
   await launcher.click();
   await page.locator('aside[aria-label="Assistente do Vinculato"]').waitFor({ state: "visible", timeout: 10000 });
   await page.waitForTimeout(1200);
-  await audit("Painel › Assistente", null);
+  await audit(`Painel › Assistente${theme ? ` [${theme}]` : ""}`, null);
   await page.keyboard.press("Escape").catch(() => undefined);
   await page.waitForTimeout(300);
 }
@@ -259,7 +272,7 @@ async function signIn() {
  * O painel troca de tela por estado, não por rota: auditar só `/painel` cobriria
  * a visão geral e mais nada. Aqui a navegação lateral é percorrida de verdade.
  */
-async function auditPanelViews() {
+async function auditPanelViews(theme = "") {
   const nav = page.locator('nav[aria-label="Navegação do painel"] > button');
   const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]);
   for (const label of labels) {
@@ -267,11 +280,65 @@ async function auditPanelViews() {
     const button = nav.filter({ hasText: label }).first();
     await button.click().catch(() => undefined);
     await page.waitForTimeout(900);
-    await audit(`Painel › ${label}`, null);
+    await audit(`Painel › ${label}${theme ? ` [${theme}]` : ""}`, null);
     if (/Cadastros/u.test(label)) {
-      await auditSubTabs(`Painel › ${label}`, 'main [class*="tabs"] > button, [class*="__tabs"] > button');
+      await auditSubTabs(`Painel › ${label}${theme ? ` [${theme}]` : ""}`, 'main [class*="tabs"] > button, [class*="__tabs"] > button');
     }
     await page.keyboard.press("Escape").catch(() => undefined);
+  }
+}
+
+/**
+ * Troca o tema pelo botão do cabeçalho — o mesmo caminho da pessoa.
+ *
+ * Sem isto a varredura media só o tema padrão, e um tema inteiro ficava sem
+ * auditoria nenhuma: "zero violações" queria dizer "zero violações na metade
+ * que eu olhei".
+ */
+async function switchTheme(target) {
+  const label = target === "dark" ? /Ativar modo noturno/u : /Ativar modo claro/u;
+  const toggle = page.getByRole("button", { name: label });
+  if (await toggle.count() === 0) return false;
+  await toggle.first().click();
+  await page.waitForTimeout(700);
+  return true;
+}
+
+async function auditEverything(theme) {
+  console.log(`\n\n═══════════ TEMA ${theme.toUpperCase()} ═══════════`);
+  await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
+  if (theme === "dark" && !await switchTheme("dark")) {
+    console.log("não foi possível ativar o tema escuro");
+    failures += 1;
+    return;
+  }
+  await audit(`Painel [${theme}]`, null);
+  await auditPanelViews(theme);
+  await auditAssistant(theme);
+  await audit(`Console da plataforma [${theme}]`, "/plataforma");
+  await auditPlatformAreas(theme);
+}
+
+/**
+ * Áreas do console global.
+ *
+ * O console troca de área por estado, como o painel: auditar só `/plataforma`
+ * cobriria a visão geral e mais nada. Foi exatamente esse tipo de ponto cego
+ * que fez a varredura anterior declarar "zero violações" enquanto oito módulos
+ * do painel nunca haviam sido visitados.
+ */
+async function auditPlatformAreas(theme = "") {
+  const nav = page.locator('aside[aria-label="Áreas da administração global"] nav > button');
+  const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+  if (labels.length === 0) {
+    console.log("\n### Console da plataforma — sem áreas visíveis (conta sem permissão de plataforma?)");
+    return;
+  }
+  for (const label of labels) {
+    await nav.filter({ hasText: label }).first().click().catch(() => undefined);
+    await page.waitForTimeout(1100);
+    await audit(`Plataforma › ${label}${theme ? ` [${theme}]` : ""}`, null);
   }
 }
 
@@ -282,9 +349,10 @@ try {
     await signIn();
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   });
-  await auditPanelViews();
-  await auditAssistant();
-  await audit("Console da plataforma", "/plataforma");
+  // O tema fica no localStorage, então a escolha atravessa as navegações.
+  await auditEverything("light");
+  await auditEverything("dark");
+  await switchTheme("light");
 } finally {
   await browser.close();
 }
