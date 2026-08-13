@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: Params) {
       const workspace = await global.prepare("SELECT id, name, status FROM fdp_workspaces WHERE id = ?").bind(workspaceId).first<Row>();
       if (!workspace) throw ApiError.notFound("Workspace não encontrado.", "WORKSPACE_NOT_FOUND");
       const scoped = getPlatformScopedD1({ workspaceId, userId: platform.userId });
-      const [integration, credentials, mappings, runs, reconciliations, jobs] = await Promise.all([
+      const [integration, credentials, mappings, runs, reconciliations, jobs, logs, diagnostics] = await Promise.all([
         scoped.prepare(`SELECT integration.id, integration.channel, integration.display_name, integration.status, integration.last_sync_at,
             integration.last_error, integration.created_at, company.id AS company_id, company.legal_name AS company_name
           FROM fdp_integrations integration LEFT JOIN fdp_companies company ON company.workspace_id = integration.workspace_id AND company.id = integration.company_id
@@ -45,6 +45,12 @@ export async function GET(request: Request, { params }: Params) {
           ORDER BY reconciliation.created_at DESC LIMIT 100`).bind(workspaceId, id).all<Row>(),
         scoped.prepare(`SELECT status, count(*)::int AS total, max(updated_at) AS last_update
           FROM fdp_integration_jobs WHERE workspace_id = ? AND integration_id = ? GROUP BY status`).bind(workspaceId, id).all<Row>(),
+        scoped.prepare(`SELECT id, run_id, sequence, level, phase, code, message, created_at
+          FROM fdp_integration_run_logs WHERE workspace_id = ? AND integration_id = ?
+          ORDER BY created_at DESC, sequence DESC LIMIT 200`).bind(workspaceId, id).all<Row>(),
+        scoped.prepare(`SELECT id, run_id, kind, expires_at, created_at
+          FROM fdp_integration_diagnostics WHERE workspace_id = ? AND integration_id = ? AND expires_at > CURRENT_TIMESTAMP
+          ORDER BY created_at DESC LIMIT 20`).bind(workspaceId, id).all<Row>(),
       ]);
       if (!integration) throw ApiError.notFound("Integração não encontrada neste workspace.", "INTEGRATION_NOT_FOUND");
       const reconciliationMap = new Map<string, Row & { differenceFields: string[] }>();
@@ -61,6 +67,9 @@ export async function GET(request: Request, { params }: Params) {
         runs: runs.results.map((row) => ({ ...row, error_summary: safeError(row.error_summary) })),
         reconciliations: [...reconciliationMap.values()],
         jobs: jobs.results,
+        logs: logs.results,
+        diagnostics: diagnostics.results.map((row) => ({ ...row,
+          url: `/api/platform/integrations/${encodeURIComponent(id)}/diagnostics/${encodeURIComponent(text(row.id))}?workspaceId=${encodeURIComponent(workspaceId)}` })),
       }), { headers: { "Cache-Control": "no-store" } });
     });
   } catch (error) { return apiError(error); }

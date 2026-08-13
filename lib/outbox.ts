@@ -24,6 +24,12 @@ export const domainEventTypes = [
   "time_sheet.approved",
   "time_sheet.reopened",
   "time_export.prepared",
+  "sankhya.sync.started",
+  "sankhya.sync.completed",
+  "sankhya.sync.failed",
+  "sankhya.employee.created",
+  "sankhya.employee.updated",
+  "sankhya.connection.failed",
 ] as const;
 export type DomainEventType = typeof domainEventTypes[number];
 
@@ -56,7 +62,8 @@ const allowedPayloadKeys = new Set([
   "competence", "companyId", "providerId", "status", "previousStatus", "netAmount", "grossAmount",
   "invoiceExpectedAmount", "invoiceReceivedAmount", "complementAmount", "cajuAmount", "invoiceStatus",
   "cajuStatus", "reconciliationStatus", "reconciliationDifference", "calcVersion", "sessionsCount",
-  "employeesCount", "closingId", "occurredAt",
+  "employeesCount", "closingId", "occurredAt", "integrationId", "runId", "foundCount", "importedCount",
+  "updatedCount", "ignoredCount", "failedCount", "errorCode",
 ]);
 
 /** Allowlist explícita: o que não está previsto não sai do produto. */

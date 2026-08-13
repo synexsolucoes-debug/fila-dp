@@ -1,0 +1,22 @@
+services:
+  - type: worker
+    name: vinculato-sankhya-worker
+    runtime: docker
+    dockerfilePath: ./worker/sankhya/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FDP_INTEGRATION_VAULT_KEYS
+        sync: false
+      - key: FDP_INTEGRATION_VAULT_KEY_VERSION
+        value: "1"
+      - key: FDP_PII_HASH_SECRET
+        sync: false
+      - key: FDP_SANKHYA_BROWSER_ALLOWED_HOSTS
+        sync: false
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false
+      - key: FDP_SANKHYA_WORKER_CONCURRENCY
+        value: "3"

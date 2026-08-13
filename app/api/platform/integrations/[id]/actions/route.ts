@@ -2,7 +2,8 @@ import { getD1, getPlatformScopedD1 } from "@/db";
 import { ApiError } from "@/lib/api-errors";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { queueIntegrationRun } from "@/lib/integration-engine";
-import { mappingDirection, mappingResource, publicCredentialFingerprint, sanitizeMapping, sealCredentials } from "@/lib/integrations";
+import { credentialPublicHint, mappingDirection, mappingResource, publicCredentialFingerprint, sanitizeMapping, sealCredentials } from "@/lib/integrations";
+import { queueSankhyaRun } from "@/lib/sankhya/queue";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { requiredPlatformReason, sanitizePlatformValue } from "@/lib/platform-console";
@@ -46,11 +47,11 @@ export async function POST(request: Request, { params }: Params) {
       let auditEntityId = id;
 
       if (action === "run") {
-        const run = await queueIntegrationRun(scoped, {
-          workspaceId, integrationId: id, mappingId: cleanText(body.mappingId, 120) || undefined,
-          triggerType: "manual", requestedBy: null,
-          idempotencyKey: cleanText(request.headers.get("idempotency-key"), 180) || `platform:${crypto.randomUUID()}`,
-        });
+        const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `platform:${crypto.randomUUID()}`;
+        const run = integration.channel === "sankhya_browser"
+          ? await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "manual", requestedBy: null, idempotencyKey })
+          : await queueIntegrationRun(scoped, { workspaceId, integrationId: id, mappingId: cleanText(body.mappingId, 120) || undefined,
+            triggerType: "manual", requestedBy: null, idempotencyKey });
         result = { runId: run.id, status: run.status };
       } else if (action === "retry") {
         const runId = cleanText(body.runId, 120);
@@ -58,11 +59,11 @@ export async function POST(request: Request, { params }: Params) {
           WHERE workspace_id = ? AND integration_id = ? AND id = ? AND status IN ('failed', 'partial', 'canceled')`)
           .bind(workspaceId, id, runId).first<Row>();
         if (!failed) throw new ApiError(409, "RUN_NOT_RETRYABLE", "A execução não está em um estado que permita retry controlado.");
-        const retry = await queueIntegrationRun(scoped, {
-          workspaceId, integrationId: id, mappingId: String(failed.mapping_id ?? "") || undefined,
-          triggerType: "retry", requestedBy: null,
-          idempotencyKey: cleanText(request.headers.get("idempotency-key"), 180) || `retry:${runId}:${crypto.randomUUID()}`,
-        });
+        const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `retry:${runId}:${crypto.randomUUID()}`;
+        const retry = integration.channel === "sankhya_browser"
+          ? await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "retry", requestedBy: null, idempotencyKey })
+          : await queueIntegrationRun(scoped, { workspaceId, integrationId: id, mappingId: String(failed.mapping_id ?? "") || undefined,
+            triggerType: "retry", requestedBy: null, idempotencyKey });
         result = { runId: retry.id, retryOf: runId, status: retry.status };
       } else if (action === "pause") {
         await scoped.prepare("UPDATE fdp_integrations SET status = 'paused', updated_at = now() WHERE workspace_id = ? AND id = ?")
@@ -73,7 +74,9 @@ export async function POST(request: Request, { params }: Params) {
             EXISTS (SELECT 1 FROM fdp_integration_credentials WHERE workspace_id = ? AND integration_id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > now())) AS credential,
             EXISTS (SELECT 1 FROM fdp_integration_mappings WHERE workspace_id = ? AND integration_id = ? AND status = 'active') AS mapping`)
           .bind(workspaceId, id, workspaceId, id).first<{ credential: boolean; mapping: boolean }>();
-        if (!truthy(ready?.credential) || !truthy(ready?.mapping)) throw new ApiError(409, "INTEGRATION_NOT_READY", "Credencial ativa e mapeamento publicado são obrigatórios para reativar.");
+        if (!truthy(ready?.credential) || (integration.channel !== "sankhya_browser" && !truthy(ready?.mapping))) {
+          throw new ApiError(409, "INTEGRATION_NOT_READY", "Credencial ativa e configuração válida são obrigatórias para reativar.");
+        }
         await scoped.prepare("UPDATE fdp_integrations SET status = 'connected', last_error = NULL, updated_at = now() WHERE workspace_id = ? AND id = ?")
           .bind(workspaceId, id).run();
         result = { status: "connected" };
@@ -85,6 +88,7 @@ export async function POST(request: Request, { params }: Params) {
         result = { status: "needs_credentials", credential: "revoked" };
       } else if (action === "rotate_credential") {
         const sealed = sealCredentials(integration.channel, body.credentials);
+        const publicHint = credentialPublicHint(String(integration.channel), body.credentials);
         const expiresAt = typeof body.expiresAt === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?Z$/u.test(body.expiresAt) ? body.expiresAt : null;
         const credentialId = crypto.randomUUID();
         // A FK composta é preservada: o proprietário é o custodiante do envelope;
@@ -92,9 +96,9 @@ export async function POST(request: Request, { params }: Params) {
         await scoped.batch([
           scoped.prepare("UPDATE fdp_integration_credentials SET status = 'revoked', revoked_at = now(), rotated_at = now(), updated_at = now() WHERE workspace_id = ? AND integration_id = ? AND status = 'active'").bind(workspaceId, id),
           scoped.prepare(`INSERT INTO fdp_integration_credentials
-            (id, workspace_id, integration_id, credential_type, encrypted_value, initialization_vector, auth_tag, key_version, fingerprint, expires_at, created_by)
-            VALUES (?, ?, ?, 'provider_auth', ?, ?, ?, ?, ?, ?, ?)`)
-            .bind(credentialId, workspaceId, id, sealed.encryptedValue, sealed.initializationVector, sealed.authTag, sealed.keyVersion, sealed.fingerprint, expiresAt, workspace.owner_user_id),
+            (id, workspace_id, integration_id, credential_type, encrypted_value, initialization_vector, auth_tag, key_version, fingerprint, public_hint, expires_at, created_by)
+            VALUES (?, ?, ?, 'provider_auth', ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .bind(credentialId, workspaceId, id, sealed.encryptedValue, sealed.initializationVector, sealed.authTag, sealed.keyVersion, sealed.fingerprint, publicHint, expiresAt, workspace.owner_user_id),
           scoped.prepare("UPDATE fdp_integrations SET status = 'needs_credentials', last_error = NULL, updated_at = now() WHERE workspace_id = ? AND id = ?").bind(workspaceId, id),
         ]);
         result = { credentialId, status: "needs_credentials", verified: false, keyVersion: sealed.keyVersion, fingerprint: publicCredentialFingerprint(sealed.fingerprint), expiresAt };

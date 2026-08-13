@@ -3,6 +3,8 @@ import { getScopedD1 } from "@/db";
 import { apiError } from "@/lib/fila-dp-api";
 import { processNextIntegrationJob, queueIntegrationRun } from "@/lib/integration-engine";
 import { log } from "@/lib/observability";
+import { nextSankhyaRunAt, parseSankhyaConfig } from "@/lib/sankhya/config";
+import { queueSankhyaRun } from "@/lib/sankhya/queue";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +70,7 @@ export async function GET(request: Request) {
     let failed = 0;
     let scheduled = 0;
     let scheduleFailed = 0;
+    let sankhyaScheduled = 0;
     const touched: string[] = [];
     const idempotencyKey = scheduledRunKey();
     for (const workspace of workspaces.results) {
@@ -113,6 +116,33 @@ export async function GET(request: Request) {
         }
       }
 
+      // O cron somente enfileira o RPA. A sessão Playwright nunca é aberta dentro
+      // da função Vercel; o worker containerizado a consumirá com contexto isolado.
+      const sankhyaDue = await scoped.prepare(`SELECT integration.id, integration.config_json, integration.next_sync_at
+        FROM fdp_integrations integration
+        JOIN fdp_workspace_module_grants grant ON grant.workspace_id = integration.workspace_id
+          AND grant.module_key = 'sankhya_browser' AND grant.granted = 1 AND (grant.expires_at IS NULL OR grant.expires_at > CURRENT_TIMESTAMP)
+        WHERE integration.workspace_id = ? AND integration.channel = 'sankhya_browser' AND integration.status = 'connected'
+          AND integration.schedule_enabled = 1 AND integration.next_sync_at <= CURRENT_TIMESTAMP
+          AND NOT EXISTS (SELECT 1 FROM fdp_integration_jobs pending WHERE pending.workspace_id = integration.workspace_id
+            AND pending.integration_id = integration.id AND pending.status IN ('queued', 'leased'))`)
+        .bind(workspace.id).all<{ id: string; config_json: string; next_sync_at: string }>();
+      for (const integration of sankhyaDue.results) {
+        try {
+          await queueSankhyaRun(scoped, { workspaceId: workspace.id, integrationId: integration.id, triggerType: "scheduled", requestedBy: null,
+            idempotencyKey: `sankhya:scheduled:${integration.next_sync_at}` });
+          const next = nextSankhyaRunAt(parseSankhyaConfig(integration.config_json));
+          await scoped.prepare("UPDATE fdp_integrations SET next_sync_at = ?::timestamptz, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
+            .bind(next, workspace.id, integration.id).run();
+          sankhyaScheduled += 1;
+        } catch (error) {
+          scheduleFailed += 1;
+          log("warn", "sankhya.schedule_failed", { workspaceId: workspace.id, connectorId: integration.id }, {
+            errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
+          });
+        }
+      }
+
       let handled = 0;
       while (handled < MAX_JOBS_PER_WORKSPACE && Date.now() < deadline) {
         // Um job com defeito não pode parar a varredura dos demais workspaces:
@@ -125,7 +155,7 @@ export async function GET(request: Request) {
       if (handled) touched.push(workspace.id);
     }
 
-    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, scheduleFailed, processed, failed });
-    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, scheduleFailed, processed, failed }, { headers: { "Cache-Control": "no-store" } });
+    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, scheduleFailed, processed, failed });
+    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, scheduleFailed, processed, failed }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
 }

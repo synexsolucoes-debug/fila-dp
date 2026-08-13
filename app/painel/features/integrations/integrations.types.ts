@@ -1,10 +1,35 @@
-export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "tangerino" | "erp";
+export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "tangerino" | "erp" | "sankhya_browser";
 export type IntegrationTab = "connectors" | "mappings" | "runs" | "reconciliations";
-export type ConnectorStatus = "connected" | "needs_credentials" | "paused" | "error";
+export type ConnectorStatus = "connected" | "needs_credentials" | "paused" | "error" | "requires_user_action";
 export type MappingStatus = "draft" | "active" | "archived";
-export type RunStatus = "queued" | "running" | "succeeded" | "partial" | "failed";
+export type RunStatus = "queued" | "running" | "authenticating" | "navigating" | "processing" | "extracting" | "importing" | "succeeded" | "partial" | "failed" | "requires_user_action" | "canceled";
 
-export type IntegrationPermissions = { manage: boolean; run: boolean; reconcile: boolean };
+export type IntegrationPermissions = {
+  manage: boolean;
+  run: boolean;
+  reconcile: boolean;
+  view: boolean;
+  credentialsManage: boolean;
+  execute: boolean;
+  logsView: boolean;
+};
+
+export type SankhyaConfig = {
+  endpoint: string;
+  companyId: string;
+  companyContext: string;
+  routine: "employees";
+  routineName: string;
+  automaticEnabled: boolean;
+  frequency: "hourly" | "daily" | "weekly";
+  scheduleTime: string;
+  scheduleWeekday: number;
+  timezone: string;
+  timeoutMs: number;
+  maxAttempts: number;
+  downloadLimitBytes: number;
+  diagnosticRetentionHours: number;
+};
 
 export type Connector = {
   id: string;
@@ -20,6 +45,13 @@ export type Connector = {
   keyVersion: number;
   verifiedAt: string;
   expiresAt: string;
+  publicHint: string;
+  config: SankhyaConfig | null;
+  lastConnectionAt: string;
+  lastSuccessfulSyncAt: string;
+  nextSyncAt: string;
+  scheduleEnabled: boolean;
+  connectorVersion: string;
 };
 
 export type Mapping = {
@@ -47,6 +79,10 @@ export type IntegrationRun = {
   skippedCount: number;
   conflictCount: number;
   failedCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  durationMs: number;
+  summary: string;
   errorCode: string;
   errorMessage: string;
   startedAt: string;
@@ -76,6 +112,8 @@ export type IntegrationsOverview = {
   reconciliations: Reconciliation[];
   queue: QueueState[];
   permissions: IntegrationPermissions;
+  sankhyaEnabled: boolean;
+  companies: Array<{ id: string; legalName: string; tradeName: string }>;
   solidesBoundary: string;
 };
 

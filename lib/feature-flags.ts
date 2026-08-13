@@ -2,7 +2,8 @@ export type FeatureFlag =
   | "aiBoardOrchestration"
   | "erpWriteback"
   | "automaticSensitiveChanges"
-  | "reconciliationV2";
+  | "reconciliationV2"
+  | "sankhyaBrowserConnector";
 
 const sensitiveFlags = new Set<FeatureFlag>(["erpWriteback", "automaticSensitiveChanges"]);
 

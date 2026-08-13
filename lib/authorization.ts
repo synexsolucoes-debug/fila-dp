@@ -24,6 +24,10 @@ export const capabilities = [
   "integrations.manage",
   "integrations.run",
   "integrations.reconcile",
+  "integrations.view",
+  "integrations.credentials.manage",
+  "integrations.execute",
+  "integrations.logs.view",
   "saas.read",
   "saas.manage",
   "audit.read",
@@ -115,7 +119,7 @@ const roleCapabilities = {
   member: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "cards.write", "comments.write",
     "attachments.read", "attachments.write", "reports.read", "hr.read", "hr.write",
-    "integrations.status.read",
+    "integrations.status.read", "integrations.view",
     "companies.read", "employees.read", "employees.manage", "registrations.catalogs.manage",
     "processes.read", "competences.read", "competences.manage", "competences.transition",
     "movements.read", "movements.manage", "approvals.read", "approvals.request", "approvals.decide",
@@ -128,7 +132,7 @@ const roleCapabilities = {
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",
-    "integrations.status.read",
+    "integrations.status.read", "integrations.view",
     "companies.read", "employees.read",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "time.read",
