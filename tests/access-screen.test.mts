@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { capabilities, capabilitiesForRole, workspaceRoles } from "../lib/authorization.ts";
 import { capabilitiesOfArea, capabilityAreas, capabilityCatalog, roleSummaries } from "../lib/capability-catalog.ts";
 
@@ -66,12 +67,14 @@ test("a matriz mostrada é a autorização real do sistema", () => {
   }
 });
 
-test("a tela de usuários existe como visão própria do painel", async () => {
-  const panel = await source("../app/painel/WorkspaceApp.tsx");
-  assert.match(panel, /import \{ AccessView \} from "\.\/features\/access"/u);
-  assert.match(panel, /view === "access" && <AccessView/u);
-  assert.match(panel, /hasModule\("access"\)/u, "a visão precisa respeitar a liberação por plano");
-  assert.match(panel, /access: \{ eyebrow: "ACESSO DO GRUPO"/u);
+test("a tela global de usuários existe na plataforma e não no painel operacional", async () => {
+  const [panel, platform, users] = await Promise.all([
+    source("../app/painel/WorkspaceApp.tsx"), source("../app/plataforma/PlatformApp.tsx"), source("../app/plataforma/features/UsersFeature.tsx"),
+  ]);
+  assert.doesNotMatch(panel, /AccessView|view === "access"|hasModule\("access"\)/u);
+  assert.match(platform, /\["users", "Usuários", Users\]/u);
+  assert.match(users, /\/api\/platform\/users/u);
+  assert.match(users, /AdminActionDialog/u);
 });
 
 test("a tela cobre o que uma revisão de acesso exige", async () => {
@@ -129,27 +132,28 @@ test("o módulo de usuários é liberado em todos os planos", async () => {
 });
 
 test("o console da plataforma abre workspace e usuário, não só arquiva", async () => {
-  const console_ = await source("../app/plataforma/PlatformConsole.tsx");
-  const detail = await source("../app/plataforma/PlatformDetail.tsx");
+  const [console_, clients, users] = await Promise.all([
+    source("../app/plataforma/PlatformApp.tsx"), source("../app/plataforma/features/ClientsFeature.tsx"), source("../app/plataforma/features/UsersFeature.tsx"),
+  ]);
   // O console listava e oferecia quase só arquivar: administrar exigia adivinhar
   // quem estava dentro do cliente e o que já tinha acontecido.
-  assert.match(console_, /WorkspaceDetailDrawer/u);
-  assert.match(console_, /UserDetailDrawer/u);
-  assert.match(console_, /setOpenWorkspace\(workspace\.id\)/u);
-  assert.match(console_, /setOpenUser\(user\.id\)/u);
+  assert.match(console_, /ClientsFeature/u);
+  assert.match(console_, /UsersFeature/u);
+  assert.match(clients, /updateQuery\(\{ workspace:/u);
+  assert.match(users, /updateQuery\(\{ user:/u);
 
   // Workspace: ficha, abas e ações de plano e ciclo de vida.
-  for (const marker of ["Plano e limites", "Ciclo de vida", "Membros", "Empresas", "Módulos", "Auditoria"]) {
-    assert.ok(detail.includes(marker), `detalhe do workspace sem "${marker}"`);
+  for (const marker of ["Membros", "Empresas", "Módulos", "Auditoria"]) {
+    assert.ok(clients.includes(marker), `detalhe do workspace sem "${marker}"`);
   }
   // Usuário: identidade e associações são coisas distintas.
-  for (const marker of ["Associações de workspace", "Sessões ativas", "Histórico administrativo"]) {
-    assert.ok(detail.includes(marker), `detalhe do usuário sem "${marker}"`);
+  for (const marker of ["Vínculos", "Sessões ativas", "Auditoria"]) {
+    assert.ok(users.includes(marker), `detalhe do usuário sem "${marker}"`);
   }
   // Papel muda só na associação alterada.
-  assert.match(detail, /workspaceId: membership\.workspaceId, membership: "link", role: event\.target\.value/u);
+  assert.match(users, /\/api\/platform\/users/u);
   // O e-mail não é editável por aqui: é chave de login e de convite.
-  assert.doesNotMatch(detail, /patch\(\{ email:/u);
+  assert.doesNotMatch(users, /patch\(\{ email:/u);
 });
 
 test("as rotas de detalhe exigem administrador de plataforma e não vazam credencial", async () => {
@@ -245,7 +249,7 @@ test("liberação individual não passa por cima do plano", async () => {
 });
 
 test("a permissão individual vale em todos os pontos de checagem, não em alguns", async () => {
-  const files = await walk(new URL("../app/api", import.meta.url).pathname, [".ts"]);
+  const files = await walk(fileURLToPath(new URL("../app/api", import.meta.url)), [".ts"]);
   const offenders: string[] = [];
   for (const file of files) {
     const source = await readFile(file, "utf8");

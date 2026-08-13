@@ -386,17 +386,16 @@ test("a trilha registra a exportação sem guardar CPF nem o conteúdo do arquiv
   assert.doesNotMatch(audit, /taxId/u);
 });
 
-test("decimal do banco e valor digitado usam conversores diferentes", async () => {
+test("decimal do banco e valor digitado preservam o mesmo montante", async () => {
   const { centsFromDatabase, toCents } = await import("../lib/payments.ts");
-  // O `numeric` do PostgreSQL volta como "3000.00". `toCents` interpreta entrada
-  // em pt-BR e trata o ponto como separador de milhar — usá-la aqui multiplicava
-  // todo valor por 100. O ensaio no navegador mostrou R$ 300.000,00 no lugar de
-  // R$ 3.000,00 antes desta separação.
+  // O `numeric` do PostgreSQL volta como "3000.00" e o formulário também pode
+  // devolver ponto decimal. As origens continuam com funções próprias, mas as
+  // duas precisam representar o mesmo dinheiro, sem acrescentar zeros.
   assert.equal(centsFromDatabase("3000.00"), 300000);
   assert.equal(centsFromDatabase("0.05"), 5);
   assert.equal(centsFromDatabase("1234.56"), 123456);
   assert.equal(toCents("1.234,56"), 123456, "entrada digitada continua em pt-BR");
-  assert.notEqual(centsFromDatabase("3000.00"), toCents("3000.00"));
+  assert.equal(toCents("3000.00"), 300000, "ponto decimal do formulário não vira milhar");
 
   const route = await readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8");
   assert.match(route, /centsFromDatabase\(row\.caju_amount/u);

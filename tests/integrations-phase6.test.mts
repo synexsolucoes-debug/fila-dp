@@ -99,29 +99,26 @@ test("phase 6 capabilities keep management and reconciliation admin-only", async
 });
 
 test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessible", async () => {
-  const [view, drawers, api, types, workspace] = await Promise.all([
+  const [view, platform, core, api, types, workspace] = await Promise.all([
     readFile(new URL("../app/painel/features/integrations/IntegrationsView.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/painel/features/integrations/IntegrationDrawers.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/plataforma/features/IntegrationsFeature.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/plataforma/features/core.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/integrations/integrations.api.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/integrations/integrations.types.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(view, /Conector[\s\S]+Cofre[\s\S]+Mapeamento[\s\S]+Execução[\s\S]+Conciliação/);
-  assert.match(view, /role="tablist"/);
-  assert.match(view, /aria-controls/);
-  assert.match(view, /ArrowRight/);
-  assert.match(view, /Home/);
-  assert.match(drawers, /type="password"/);
-  assert.match(drawers, /autoComplete="new-password"/);
-  assert.match(drawers, /const focusables/);
-  assert.match(drawers, /event\.key === "Escape"/);
-  assert.match(drawers, /connector\.status === "connected"/);
+  assert.match(view, /SOMENTE LEITURA/u);
+  assert.doesNotMatch(view, /IntegrationDrawer|type="password"|Rotacionar|Revogar/u);
+  assert.match(platform, /Executar sincronização[\s\S]+Retry[\s\S]+Pausar[\s\S]+Rotacionar[\s\S]+Revogar/u);
+  assert.match(core, /role="dialog"/u);
+  assert.match(core, /Motivo obrigatório/u);
+  assert.match(core, /typedConfirmation/u);
   assert.match(view, /\/api\/integrations\/overview/);
   assert.match(api, /snake/);
   assert.match(types, /"succeeded"/);
   assert.match(workspace, /<IntegrationsView role=/);
   assert.doesNotMatch(workspace, /function IntegrationsSettings|syncIntegration\(/);
-  const featureSource = `${view}\n${drawers}\n${api}`;
+  const featureSource = `${view}\n${platform}\n${core}\n${api}`;
   assert.doesNotMatch(featureSource, /localStorage|sessionStorage|location\.reload|encrypted_value|initialization_vector|auth_tag/);
-  assert.match(featureSource, /O Vinculato não realiza admissão digital/);
+  assert.doesNotMatch(featureSource, /window\.(prompt|confirm)/u);
 });

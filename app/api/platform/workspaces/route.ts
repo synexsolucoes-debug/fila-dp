@@ -7,6 +7,7 @@ import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { cleanText } from "@/lib/registrations";
 import { workspaceSlug } from "@/lib/saas";
+import { decodePlatformCursor, encodePlatformCursor, platformListLimit, requiredPlatformReason } from "@/lib/platform-console";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const status = cleanText(url.searchParams.get("status"), 20);
     const query = cleanText(url.searchParams.get("q"), 120).toLowerCase();
+    const limit = platformListLimit(url.searchParams.get("limit"));
+    const cursor = decodePlatformCursor(url.searchParams.get("cursor"));
 
     return await withPlatformContext(platform, async () => {
       const d1 = getD1();
@@ -27,20 +30,29 @@ export async function GET(request: Request) {
       const values: unknown[] = [];
       if (status) { filters.push("w.status = ?"); values.push(status); }
       if (query) { filters.push("(lower(w.name) LIKE ? OR lower(w.slug) LIKE ? OR w.tax_id LIKE ?)"); values.push(`%${query}%`, `%${query}%`, `%${query}%`); }
+      if (cursor) { filters.push("(w.created_at < ?::timestamptz OR (w.created_at = ?::timestamptz AND w.id < ?))"); values.push(cursor.createdAt, cursor.createdAt, cursor.id); }
 
       const rows = await d1.prepare(`SELECT w.id, w.name, w.slug, w.status, w.status_reason, w.legal_name, w.tax_id,
           w.contact_email, w.timezone, w.created_at, u.email AS owner_email, u.name AS owner_name,
           s.status AS subscription_status, s.billing_interval, s.seat_quantity, s.current_period_ends_at,
-          p.code AS plan_code, p.name AS plan_name, p.included_seats,
-          (SELECT count(*)::int FROM fdp_workspace_members m WHERE m.workspace_id = w.id) AS seats_used,
-          (SELECT count(*)::int FROM fdp_companies c WHERE c.workspace_id = w.id) AS companies
+          p.code AS plan_code, p.name AS plan_name, p.included_seats
         FROM fdp_workspaces w
         JOIN fdp_users u ON u.id = w.owner_user_id
         LEFT JOIN fdp_workspace_subscriptions s ON s.workspace_id = w.id
         LEFT JOIN fdp_saas_plans p ON p.id = s.plan_id
-        WHERE ${filters.join(" AND ")} ORDER BY w.created_at DESC LIMIT 200`)
-        .bind(...values).all<Record<string, unknown>>();
-      return Response.json({ workspaces: rows.results }, { headers: { "Cache-Control": "no-store" } });
+        WHERE ${filters.join(" AND ")} ORDER BY w.created_at DESC, w.id DESC LIMIT ?`)
+        .bind(...values, limit + 1).all<Record<string, unknown>>();
+      const workspaces: Record<string, unknown>[] = await Promise.all(rows.results.slice(0, limit).map(async (workspace): Promise<Record<string, unknown>> => {
+        const workspaceId = String(workspace.id);
+        const scoped = getPlatformScopedD1({ workspaceId, userId: platform.userId });
+        const usage = await scoped.prepare(`SELECT
+            (SELECT count(*)::int FROM fdp_workspace_members WHERE workspace_id = ?) AS seats_used,
+            (SELECT count(*)::int FROM fdp_companies WHERE workspace_id = ?) AS companies`)
+          .bind(workspaceId, workspaceId).first<Record<string, unknown>>();
+        return { ...workspace, seats_used: Number(usage?.seats_used ?? 0), companies: Number(usage?.companies ?? 0) };
+      }));
+      const next = rows.results.length > limit ? workspaces.at(-1) : null;
+      return Response.json({ workspaces, nextCursor: encodePlatformCursor(next ? { createdAt: String(next.created_at), id: String(next.id) } : null) }, { headers: { "Cache-Control": "no-store" } });
     });
   } catch (error) { return apiError(error); }
 }
@@ -58,6 +70,8 @@ export async function POST(request: Request) {
   try {
     const platform = requirePlatformAdmin(auth.user);
     const body = await request.json() as Record<string, unknown>;
+    if (body.confirmed !== true) throw ApiError.badRequest("Confirme explicitamente a criação do workspace.", "PLATFORM_CONFIRMATION_REQUIRED");
+    const reason = requiredPlatformReason(body.reason);
     const name = cleanText(body.name, 120);
     const ownerEmail = cleanText(body.ownerEmail, 180).toLowerCase();
     const ownerName = cleanText(body.ownerName, 160) || ownerEmail.split("@")[0] || "Proprietário";
@@ -112,7 +126,7 @@ export async function POST(request: Request) {
         tenant.prepare(`INSERT INTO fdp_platform_audit_events (id, actor_user_id, actor_email, action, entity_type, entity_id, after_json, request_id)
           VALUES (?, ?, ?, 'platform.workspace_created', 'workspace', ?, ?::jsonb, ?)`)
           .bind(crypto.randomUUID(), platform.userId, platform.email, workspaceId,
-            JSON.stringify({ name, slug: slugBase, planCode: plan.code, ownerEmail }), request.headers.get("x-fila-dp-request-id") ?? ""),
+            JSON.stringify({ name, slug: slugBase, planCode: plan.code, ownerEmail, reason }), request.headers.get("x-fila-dp-request-id") ?? ""),
       );
 
       await provisionWorkspaceDefaults(tenant, workspaceId, statements);

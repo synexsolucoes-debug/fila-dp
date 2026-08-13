@@ -41,7 +41,8 @@ test("keeps collaboration and authorization wired to durable workspace data", as
   assert.match(database, /requireWorkspaceRole/);
   assert.match(membersRoute, /\["admin"\]/);
   assert.match(commentsRoute, /\["admin", "member", "guest"\]/);
-  assert.match(dashboard, /EQUIPE E ACESSO/);
+  assert.match(dashboard, /CONTA PESSOAL/);
+  assert.doesNotMatch(dashboard, /AccessView|Plano e ativação/);
   assert.match(dashboard, /COMENTÁRIOS/);
   assert.match(dashboard, /HISTÓRICO/);
 });

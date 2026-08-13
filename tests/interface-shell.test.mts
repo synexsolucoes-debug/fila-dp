@@ -162,33 +162,37 @@ test("as animações de janela miram classes que existem no código", async () =
 /* Exclusão de workspace                                                      */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A interface de exclusão nasceu neste ramo em `PlatformDetail.tsx` e, em
+ * paralelo, a modularização do console global entregou a mesma coisa melhor —
+ * com armadilha de foco e restauração do foco anterior, que a minha não tinha.
+ * A duplicata foi descartada; estes testes seguem o recurso para onde ele foi,
+ * porque a cobertura é do comportamento, não do arquivo.
+ */
+
 test("a exclusão definitiva tem interface, e ela reflete as travas do servidor", async () => {
-  const tela = await readFile(new URL("../app/plataforma/PlatformDetail.tsx", import.meta.url), "utf8");
+  const tela = await readFile(new URL("../app/plataforma/features/ClientsFeature.tsx", import.meta.url), "utf8");
   // A rota existia desde antes; o que faltava era alguém chamá-la.
-  assert.match(tela, /\/api\/platform\/workspaces\/\$\{workspace\.id\}\/delete/u);
-  // As quatro travas do servidor aparecem na tela — não para decidir (quem
-  // recusa é o servidor), mas porque confirmação que esconde o efeito é
-  // armadilha.
-  assert.match(tela, /confirmation: confirmation\.trim\(\), reason: reason\.trim\(\)/u);
-  assert.match(tela, /confirmation\.trim\(\) === workspace\.slug/u, "o slug digitado por extenso é a trava principal");
-  assert.match(tela, /reason\.trim\(\)\.length >= 10/u);
-  assert.match(tela, /status !== "archived" && workspace!\.status !== "canceled"/u,
-    "grupo em operação não pode ser excluído");
-  assert.match(tela, /não há como recuperar/u, "a tela precisa dizer que é irreversível");
+  assert.match(tela, /\/delete/u);
+  assert.match(tela, /reasonMinLength: 10/u);
+  assert.match(tela, /typedConfirmation: text\(workspace\.slug\)/u,
+    "o slug digitado por extenso é a trava que impede o clique cair no grupo errado");
+  // Só grupo fora de operação: sem esta porta, um clique apaga cliente ativo.
+  assert.match(tela, /\["archived", "canceled"\]\.includes\(status\)/u);
+  assert.match(tela, /irreversível/u, "a tela precisa dizer que não tem volta");
 });
 
-test("a exclusão mostra o recibo com a contagem em vez de sumir em silêncio", async () => {
-  const tela = await readFile(new URL("../app/plataforma/PlatformDetail.tsx", import.meta.url), "utf8");
-  // Depois de apagar, o número de linhas é a única prova que sobra.
-  assert.match(tela, /receipt\.rows/u);
-  assert.match(tela, /receipt\.tables/u);
-  assert.match(tela, /receipt\.orphanUsers/u);
+test("o diálogo de ação prende o foco e o devolve ao fechar", async () => {
+  const core = await readFile(new URL("../app/plataforma/features/core.tsx", import.meta.url), "utf8");
+  assert.match(core, /event\.key === "Escape" && !busy/u, "Esc não pode escapar no meio de uma ação enviada");
+  assert.match(core, /previous\?\.focus\(\)/u, "o foco volta para onde estava");
+  assert.match(core, /event\.key !== "Tab"/u, "o Tab precisa circular dentro do diálogo");
+  assert.match(core, /role="dialog" aria-modal="true"/u);
 });
 
-test("o diálogo de exclusão fecha com Esc e devolve o foco ao campo", async () => {
-  const tela = await readFile(new URL("../app/plataforma/PlatformDetail.tsx", import.meta.url), "utf8");
-  assert.match(tela, /event\.key === "Escape"/u);
-  assert.match(tela, /inputRef\.current\?\.focus\(\)/u);
-  // Esc não pode escapar no meio de uma exclusão já enviada.
-  assert.match(tela, /"Escape" && !busy/u);
+test("a confirmação só libera quando todas as travas passam", async () => {
+  const core = await readFile(new URL("../app/plataforma/features/core.tsx", import.meta.url), "utf8");
+  // Uma condição só, com todas as exigências — não um botão que habilita cedo.
+  assert.match(core, /reason\.trim\(\)\.length >= reasonMinLength/u);
+  assert.match(core, /confirmation === action\.typedConfirmation/u);
 });

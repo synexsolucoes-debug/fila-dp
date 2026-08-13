@@ -317,6 +317,29 @@ async function auditEverything(theme) {
   await auditPanelViews(theme);
   await auditAssistant(theme);
   await audit(`Console da plataforma [${theme}]`, "/plataforma");
+  await auditPlatformAreas(theme);
+}
+
+/**
+ * Áreas do console global.
+ *
+ * O console troca de área por estado, como o painel: auditar só `/plataforma`
+ * cobriria a visão geral e mais nada. Foi exatamente esse tipo de ponto cego
+ * que fez a varredura anterior declarar "zero violações" enquanto oito módulos
+ * do painel nunca haviam sido visitados.
+ */
+async function auditPlatformAreas(theme = "") {
+  const nav = page.locator('aside[aria-label="Áreas da administração global"] nav > button');
+  const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+  if (labels.length === 0) {
+    console.log("\n### Console da plataforma — sem áreas visíveis (conta sem permissão de plataforma?)");
+    return;
+  }
+  for (const label of labels) {
+    await nav.filter({ hasText: label }).first().click().catch(() => undefined);
+    await page.waitForTimeout(1100);
+    await audit(`Plataforma › ${label}${theme ? ` [${theme}]` : ""}`, null);
+  }
 }
 
 try {

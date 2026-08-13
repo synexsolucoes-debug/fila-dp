@@ -65,20 +65,27 @@ test("checkout uses server-owned prices and signed webhooks authenticate before 
   assert.match(requestSecurity, /\/api\/saas\/webhook\/stripe/);
 });
 
-test("self-service signup replaces the singleton bootstrap without weakening platform identity", async () => {
-  const [signup, platformAuth, platformRoute] = await Promise.all([
+test("somente o administrador global provisiona ou exclui workspace", async () => {
+  const [signup, login, setup, platformAuth, platformRoute, deleteRoute] = await Promise.all([
     readFile(new URL("../app/api/auth/signup/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/setup-status/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/platform-authorization.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/platform/overview/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/workspaces/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/workspaces/[id]/delete/route.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(signup, /FDP_ALLOW_SELF_SIGNUP|selfSignupEnabled/);
-  assert.match(signup, /provisionWorkspaceDefaults\(d1, workspaceId, \[/);
-  assert.match(signup, /fdp_workspace_subscriptions/);
-  assert.doesNotMatch(signup, /fdp_bootstrap_guard|SELECT id FROM fdp_workspaces LIMIT 1/);
-  assert.doesNotMatch(signup, /UPDATE fdp_users SET name/u);
+  assert.doesNotMatch(signup, /INSERT INTO fdp_workspaces|provisionWorkspaceDefaults/u);
+  assert.match(signup, /provisionados exclusivamente pelo administrador global/u);
+  assert.doesNotMatch(login, /INSERT INTO fdp_workspaces|fdp_bootstrap_guard/u);
+  assert.match(login, /isPlatformAdmin/u);
+  assert.match(setup, /setupRequired: false, signupEnabled: false/u);
   assert.match(platformAuth, /FDP_PLATFORM_ADMIN_EMAILS/);
   assert.doesNotMatch(platformAuth, /workspace\.role|role === "admin"/);
-  assert.match(platformRoute, /withPlatformContext/);
+  assert.match(platformRoute, /requirePlatformAdmin/u);
+  assert.match(platformRoute, /INSERT INTO fdp_workspaces/u);
+  assert.match(deleteRoute, /requirePlatformAdmin/u);
+  assert.match(deleteRoute, /WHERE w\.id = \?/u);
+  assert.doesNotMatch(deleteRoute, /auth\.user[\s\S]{0,80}owner|owner_user_id\s*=\s*auth/u);
 });
 
 test("paid limits are enforced by the server under advisory locks", async () => {
@@ -95,19 +102,20 @@ test("paid limits are enforced by the server under advisory locks", async () => 
   assert.match(integrations, /PLAN_INTEGRATION_LIMIT/);
 });
 
-test("SaaS administration stays isolated in admin-only workspace and platform surfaces", async () => {
-  const [workspace, saasView, platform, login] = await Promise.all([
+test("SaaS administration stays isolated in the global platform surface", async () => {
+  const [workspace, platform, clients, billing, plansRoute, login] = await Promise.all([
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/painel/features/saas/SaasView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/PlatformApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/plataforma/features/ClientsFeature.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/plataforma/features/BillingFeature.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/plans/[id]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/login/LoginForm.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /isAdmin && <button title="Plano e ativação"/u);
-  assert.match(saasView, /checkout|portal/u);
-  assert.match(saasView, /company|team|operation|integrations|billing/u);
-  assert.match(platform, /\/api\/platform\/plans\//u);
-  assert.match(platform, /role="dialog"/u);
-  assert.match(login, /signupEnabled/u);
-  assert.match(login, /\/api\/auth\/signup/u);
-  assert.doesNotMatch(`${saasView}\n${platform}\n${login}`, /localStorage|sessionStorage|location\.reload/u);
+  assert.doesNotMatch(workspace, /view === "saas"|Plano e ativação/u);
+  assert.match(platform, /\["billing", "Financeiro", CreditCard\]/u);
+  assert.match(clients, /Catálogo de planos/u);
+  assert.match(billing, /MRR|Receita em risco/u);
+  assert.match(plansRoute, /requirePlatformAdmin/u);
+  assert.doesNotMatch(login, /signupEnabled|\/api\/auth\/signup|Criar conta/u);
+  assert.doesNotMatch(`${platform}\n${clients}\n${billing}\n${login}`, /localStorage|sessionStorage|location\.reload/u);
 });

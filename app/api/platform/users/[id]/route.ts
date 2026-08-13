@@ -1,10 +1,11 @@
-import { getD1 } from "@/db";
+import { getD1, getPlatformScopedD1 } from "@/db";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { ApiError } from "@/lib/api-errors";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { cleanText } from "@/lib/registrations";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
+import { requiredPlatformReason } from "@/lib/platform-console";
 
 type Params = { params: Promise<{ id: string }> };
 const roles: WorkspaceRole[] = ["admin", "member", "observer", "guest"];
@@ -23,11 +24,15 @@ export async function PATCH(request: Request, { params }: Params) {
     const platform = requirePlatformAdmin(auth.user);
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
+    if (body.confirmed !== true) throw ApiError.badRequest("Confirme explicitamente a ação administrativa.", "PLATFORM_CONFIRMATION_REQUIRED");
+    const reason = requiredPlatformReason(body.reason);
 
     return await withPlatformContext(platform, async () => {
       const d1 = getD1();
       const before = await d1.prepare("SELECT id, email, name, status FROM fdp_users WHERE id = ?").bind(id).first<Record<string, unknown>>();
       if (!before) throw ApiError.notFound("Usuário não encontrado.", "USER_NOT_FOUND");
+      const workspaceId = body.workspaceId !== undefined ? cleanText(body.workspaceId, 120) : "";
+      const transaction = workspaceId ? getPlatformScopedD1({ workspaceId, userId: platform.userId }) : d1;
 
       const statements = [];
       const after: Record<string, unknown> = {};
@@ -35,7 +40,6 @@ export async function PATCH(request: Request, { params }: Params) {
       if (body.status !== undefined) {
         const status = cleanText(body.status, 20);
         if (!["active", "blocked"].includes(status)) throw ApiError.badRequest("Situação de usuário inválida.", "INVALID_USER_STATUS");
-        const reason = cleanText(body.reason, 500);
         if (status === "blocked") {
           if (reason.length < 5) throw ApiError.badRequest("Informe o motivo do bloqueio.", "STATUS_REASON_REQUIRED");
           // Bloquear o último proprietário de um workspace deixaria o cliente
@@ -55,7 +59,6 @@ export async function PATCH(request: Request, { params }: Params) {
       }
 
       if (body.workspaceId !== undefined) {
-        const workspaceId = cleanText(body.workspaceId, 120);
         const workspace = await d1.prepare("SELECT id, name FROM fdp_workspaces WHERE id = ?").bind(workspaceId).first<{ id: string; name: string }>();
         if (!workspace) throw ApiError.badRequest("Workspace inválido.", "WORKSPACE_NOT_FOUND");
         const action = cleanText(body.membership, 20) || "link";
@@ -101,6 +104,7 @@ export async function PATCH(request: Request, { params }: Params) {
       }
 
       if (!statements.length) throw ApiError.badRequest("Nada para alterar.", "EMPTY_UPDATE");
+      after.reason = reason;
 
       statements.push(d1.prepare(`INSERT INTO fdp_platform_audit_events
           (id, actor_user_id, actor_email, action, entity_type, entity_id, before_json, after_json, request_id)
@@ -108,7 +112,7 @@ export async function PATCH(request: Request, { params }: Params) {
         .bind(crypto.randomUUID(), platform.userId, platform.email, id,
           JSON.stringify({ status: before.status }), JSON.stringify(after), request.headers.get("x-fila-dp-request-id") ?? ""));
 
-      await d1.batch(statements);
+      await transaction.batch(statements);
       return Response.json({ user: { id, email: before.email, ...after } });
     });
   } catch (error) { return apiError(error); }

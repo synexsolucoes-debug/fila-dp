@@ -45,6 +45,53 @@ test("legacy timestamp defaults are bridged around the type conversion", async (
   assert.ok("0001_normalize_existing_neon.sql" < "0001_z_restore_timestamp_defaults.sql");
 });
 
+test("clean schema rehearsals skip the legacy timestamp normalization", async () => {
+  const rehearsal = await readFile(new URL("../scripts/rehearse-phase2-db.mjs", import.meta.url), "utf8");
+  assert.match(rehearsal, /let cleanBaseline = false/u);
+  assert.match(rehearsal, /file\.includes\("normalize_existing"\) && cleanBaseline/u);
+  assert.match(rehearsal, /file\.startsWith\("0000_"\)/u);
+  assert.match(rehearsal, /\^001\[4-7\]_/u);
+  assert.match(rehearsal, /CREATE UNIQUE INDEX/u);
+  assert.match(rehearsal, /firstForeignKey/u);
+  assert.match(rehearsal, /NOLOGIN NOSUPERUSER NOBYPASSRLS/u);
+  assert.match(rehearsal, /SET LOCAL ROLE/u);
+  assert.match(rehearsal, /DROP ROLE/u);
+});
+
+test("real database rehearsals enter the restricted RLS role explicitly", async () => {
+  const scripts = await Promise.all([
+    "payments-db-rehearsal.sql",
+    "scale-db-rehearsal.sql",
+    "time-db-rehearsal.sql",
+  ].map((file) => readFile(new URL(`../scripts/${file}`, import.meta.url), "utf8")));
+
+  for (const script of scripts) {
+    assert.match(script, /CREATE ROLE fdp_rehearsal_app NOSUPERUSER NOBYPASSRLS NOLOGIN/u);
+    assert.match(script, /GRANT fdp_rehearsal_app TO CURRENT_USER/u);
+    assert.match(script, /SET ROLE fdp_rehearsal_app/u);
+    assert.match(script, /REVOKE fdp_rehearsal_app FROM CURRENT_USER/u);
+    assert.match(script, /DROP ROLE fdp_rehearsal_app/u);
+  }
+});
+
+test("restore rehearsal revokes its RLS role and always removes temporary databases", async () => {
+  const [isolation, restore] = await Promise.all([
+    readFile(new URL("../scripts/dr-verify-isolation.sql", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/rehearse-backup-restore.mjs", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(isolation, /CREATE ROLE fdp_dr_app NOSUPERUSER NOBYPASSRLS NOLOGIN/u);
+  assert.match(isolation, /GRANT fdp_dr_app TO CURRENT_USER/u);
+  assert.match(isolation, /SET ROLE fdp_dr_app/u);
+  assert.match(isolation, /REVOKE fdp_dr_app FROM CURRENT_USER/u);
+  assert.match(isolation, /DROP ROLE fdp_dr_app/u);
+  assert.match(restore, /try \{/u);
+  assert.match(restore, /finally \{/u);
+  assert.ok(restore.indexOf("const failures = []") < restore.indexOf("try {"));
+  assert.match(restore, /DROP DATABASE IF EXISTS \$\{sourceDb\} WITH \(FORCE\)/u);
+  assert.match(restore, /DROP DATABASE IF EXISTS \$\{targetDb\} WITH \(FORCE\)/u);
+});
+
 test("the legacy recovery author column is normalized instead of recreated", async () => {
   const migrator = await readFile(new URL("../scripts/migrate.mjs", import.meta.url), "utf8");
   assert.match(migrator, /file === "0002_chief_venom\.sql"/);
@@ -150,7 +197,7 @@ test("tenant relationships are enforced by composite database constraints", asyn
   assert.match(migration, /FOREIGN KEY \("workspace_id", "company_id"\)/);
 });
 
-test("bootstrap and redirects have race and open-redirect defenses", async () => {
+test("login recusa bootstrap e mantém defesas de redirect", async () => {
   const [auth, login, logout, limiter, migration] = await Promise.all([
     readFile(new URL("../app/chatgpt-auth.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
@@ -159,8 +206,10 @@ test("bootstrap and redirects have race and open-redirect defenses", async () =>
     readFile(new URL("../drizzle/postgres/0006_bootstrap_guard.sql", import.meta.url), "utf8"),
   ]);
   assert.match(auth, /export function safeRelativeReturnPath/);
-  assert.match(login, /fdp_bootstrap_guard/);
-  assert.match(login, /owner_user_id = \?/);
+  assert.match(login, /body\.mode === "bootstrap"/u);
+  assert.match(login, /PLATFORM_PROVISIONING_REQUIRED/u);
+  assert.doesNotMatch(login, /INSERT INTO fdp_workspaces|fdp_bootstrap_guard/u);
+  assert.match(login, /safeRelativeReturnPath/u);
   assert.match(logout, /safeRelativeReturnPath/);
   assert.match(limiter, /process\.env\.VERCEL/);
   assert.match(migration, /fdp_bootstrap_guard_singleton_ck/);
@@ -198,16 +247,17 @@ test("the first RLS pilot denies company access without tenant context", async (
   assert.match(migration, /WITH CHECK/);
 });
 
-test("direct workspace tables are only enabled after bootstrap context is available", async () => {
-  const [migration, login] = await Promise.all([
+test("direct workspace tables are provisioned only with explicit tenant context", async () => {
+  const [migration, platformProvisioning] = await Promise.all([
     readFile(new URL("../drizzle/postgres/0008_direct_workspace_rls.sql", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/workspaces/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(migration, /fdp_hr_metrics_workspace_isolation/);
   assert.match(migration, /fdp_labels_workspace_isolation/);
   assert.match(migration, /fdp_automation_rules_workspace_isolation/);
   assert.match(migration, /FORCE ROW LEVEL SECURITY/g);
-  assert.match(login, /setTenantContext\(\{ workspaceId, userId \}\)/);
+  assert.match(platformProvisioning, /getPlatformScopedD1\(\{ workspaceId, userId: platform\.userId \}\)/u);
+  assert.match(platformProvisioning, /provisionWorkspaceDefaults\(tenant, workspaceId, statements\)/u);
 });
 
 test("signed webhooks establish tenant context before protected writes", async () => {
@@ -240,23 +290,18 @@ test("Sólides remains an external source instead of an admission workflow", asy
   assert.match(migration, /'solides', 'Sólides', 'needs_credentials'/);
 });
 
-test("a primeira instalação é atômica e não trava o banco vazio", async () => {
-  const route = await readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8");
-  const bootstrap = route.slice(route.indexOf("const credentials = await hashPassword"), route.indexOf("const claimedWorkspace"));
+test("o provisionamento global cria proprietário e workspace na mesma transação", async () => {
+  const route = await readFile(new URL("../app/api/platform/workspaces/route.ts", import.meta.url), "utf8");
+  const provisioning = route.slice(route.indexOf("const statements = []"), route.indexOf("await provisionWorkspaceDefaults"));
+  assert.match(route, /requirePlatformAdmin/u);
+  assert.match(provisioning, /INSERT INTO fdp_users/u);
+  assert.match(provisioning, /INSERT INTO fdp_workspaces/u);
+  assert.match(provisioning, /INSERT INTO fdp_workspace_members/u);
+  assert.match(provisioning, /INSERT INTO fdp_workspace_subscriptions/u);
+  assert.doesNotMatch(provisioning, /\.run\(\)/u, "nenhuma parte pode ser gravada fora da transação");
 
-  // A conta precisa entrar na MESMA transação do grupo. Fora dela, uma falha
-  // adiante deixava usuário órfão: o app seguia em modo de primeira instalação
-  // e ao mesmo tempo recusava o e-mail por já existir — sem saída pela interface.
-  assert.doesNotMatch(bootstrap, /INSERT INTO fdp_users[\s\S]{0,200}?\.run\(\)/u,
-    "o usuário não pode ser gravado fora do batch do bootstrap");
-  assert.match(bootstrap, /await d1\.batch\(\[[\s\S]*INSERT INTO fdp_users/u,
-    "o usuário precisa entrar no mesmo batch do grupo");
-
-  // O guard resolve a disputa antes de o workspace existir, então a chave
-  // estrangeira precisa ser verificada só no COMMIT.
+  // O guard antigo permanece migrável para bancos históricos, embora o login
+  // não ofereça mais bootstrap ao usuário comum.
   const migration = await readFile(new URL("../drizzle/postgres/0030_bootstrap_guard_deferrable.sql", import.meta.url), "utf8");
   assert.match(migration, /DEFERRABLE INITIALLY DEFERRED/u);
-  const claimAt = bootstrap.indexOf("UPDATE fdp_bootstrap_guard");
-  const workspaceAt = bootstrap.indexOf("INSERT INTO fdp_workspaces");
-  assert.ok(claimAt > 0 && workspaceAt > claimAt, "o guard decide o vencedor antes de criar o grupo");
 });

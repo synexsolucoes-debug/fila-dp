@@ -34,11 +34,8 @@ import {
   Receipt,
   RefreshCw,
   Search,
-  Settings,
   AlertTriangle,
-  ShieldCheck,
   UserRoundCog,
-  Sparkles,
   Smartphone,
   Stethoscope,
   Sun,
@@ -53,18 +50,16 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, Wor
 import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
-import { AccessView } from "./features/access";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
 import { OperationsView } from "./features/operations";
 import { AuxiliaryModulesView } from "./features/auxiliary";
 import { IntegrationsView } from "./features/integrations";
-import { SaasView } from "./features/saas";
 import { PaymentsView } from "./features/payments";
 import { TimeTrackingView } from "./features/time";
 import { ActionCenter } from "./features/action-center";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "integrations" | "registrations" | "access" | "saas" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "integrations" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -138,10 +133,8 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   psychologistPayments: { eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos", description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro." },
   contractorPayments: { eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ", description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado." },
   timeTracking: { eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto", description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada." },
-  integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Central de integrações", description: "Configure conectores, publique mapeamentos e acompanhe execuções e conciliações com segurança." },
+  integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Estado das integrações", description: "Acompanhe conexões e últimas execuções deste workspace. A administração fica na console global." },
   registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
-  access: { eyebrow: "ACESSO DO GRUPO", title: "Usuários e permissões", description: "Defina quem entra, o papel de cada pessoa e as empresas que ela enxerga. Toda alteração fica na trilha de auditoria." },
-  saas: { eyebrow: "ADMINISTRAÇÃO SAAS", title: "Plano e ativação", description: "Conclua a implantação do workspace, acompanhe limites, assinatura e cobranças." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
 };
@@ -151,7 +144,7 @@ const viewTitles: Record<string, string> = {
   overview: "Visão geral", board: "Demandas", inbox: "Inbox", planner: "Planner",
   processes: "Operação DP", auxiliary: "Módulos auxiliares", psychologistPayments: "Pagamento de Psicólogos",
   contractorPayments: "Pagamentos PJ", timeTracking: "Ponto", integrations: "Integrações",
-  registrations: "Cadastros", access: "Usuários e permissões", saas: "Plano e ativação",
+  registrations: "Cadastros",
   payroll: "Folha", indicators: "Relatórios",
 };
 
@@ -1161,14 +1154,10 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {hasModule("psychologistPayments") && snapshot.workspace.role !== "guest" && snapshot.workspace.role !== "observer" && <button title="Pagamento de Psicólogos" className={view === "psychologistPayments" ? "active" : ""} onClick={() => setView("psychologistPayments")}><span aria-hidden="true"><Stethoscope /></span> Pagamento de Psicólogos</button>}
           {hasModule("contractorPayments") && snapshot.workspace.role !== "guest" && <button title="Pagamentos PJ" className={view === "contractorPayments" ? "active" : ""} onClick={() => setView("contractorPayments")}><span aria-hidden="true"><Receipt /></span> Pagamentos PJ</button>}
           {hasModule("timeTracking") && snapshot.workspace.role !== "guest" && <button title="Ponto" className={view === "timeTracking" ? "active" : ""} onClick={() => setView("timeTracking")}><span aria-hidden="true"><Timer /></span> Ponto</button>}
-          {hasModule("integrations") && snapshot.workspace.role !== "guest" && <button title="Central de integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Integrações</button>}
+          {hasModule("integrations") && snapshot.workspace.role !== "guest" && <button title="Estado das integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Estado das integrações</button>}
           {hasModule("registrations") && snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
-          <span className="sidebar-nav-section management">GESTÃO</span>
-          {hasModule("access") && snapshot.workspace.role !== "guest" && <button title="Usuários e permissões" className={view === "access" ? "active" : ""} onClick={() => setView("access")}><span aria-hidden="true"><ShieldCheck /></span> Usuários e permissões</button>}
-          {hasModule("saas") && isAdmin && <button title="Plano e ativação" className={view === "saas" ? "active" : ""} onClick={() => setView("saas")}><span aria-hidden="true"><Sparkles /></span> Plano e ativação</button>}
           {hasModule("payroll") && <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>}
           {hasModule("indicators") && <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>}
-          {isAdmin && <button title="Configurações" onClick={() => { setSettingsSection("general"); openWorkspaceSettings(); }}><span aria-hidden="true"><Settings /></span> Configurações</button>}
         </nav>
         {snapshot.availableWorkspaces.length > 1 && (
           <div className="sidebar-workspace sidebar-workspace-switcher">
@@ -1203,7 +1192,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         )}
         <div className="sidebar-workspace">
           <span>ESTRUTURA EMPRESARIAL</span>
-          <button type="button" onClick={() => { if (isAdmin) { setSettingsSection("companies"); openWorkspaceSettings(); } else setToast("As empresas do grupo são administradas pelo administrador do workspace."); }}><i>{workspaceInitials}</i><span><strong>{principalCompany?.tradeName || principalCompany?.legalName || "Sem principal"}</strong><small>{snapshot.companies.length} empresa(s) no grupo</small></span><ChevronDown aria-hidden="true" /></button>
+          <div className="sidebar-structure-summary"><i>{workspaceInitials}</i><span><strong>{principalCompany?.tradeName || principalCompany?.legalName || "Sem principal"}</strong><small>{snapshot.companies.length} empresa(s) no grupo</small></span></div>
         </div>
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
@@ -1231,7 +1220,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
             <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
-            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "saas" && view !== "psychologistPayments" && view !== "contractorPayments" && view !== "timeTracking" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
+            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "psychologistPayments" && view !== "contractorPayments" && view !== "timeTracking" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
           </div>
         </header>
 
@@ -1269,9 +1258,6 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "timeTracking" && <TimeTrackingView role={snapshot.workspace.role} />}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
-
-          {view === "access" && <AccessView role={snapshot.workspace.role} />}
-          {view === "saas" && <SaasView role={snapshot.workspace.role} />}
 
           {view === "registrations" && <RegistrationsView role={snapshot.workspace.role} />}
 
@@ -1497,20 +1483,11 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       {workspaceModalOpen && (
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setWorkspaceModalOpen(false); }}>
           <section className="workspace-modal workspace-settings-modal" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
-            <header><div><span>ADMINISTRAÇÃO DO GRUPO · EQUIPE E ACESSO</span><h2 id="workspace-modal-title">Configurações do grupo</h2><p>{snapshot.workspace.name} · {snapshot.companies.length} empresa(s) · {snapshot.members.length} usuário(s) com acesso</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>CONTA PESSOAL</span><h2 id="workspace-modal-title">Perfil e segurança</h2><p>Revise apenas as sessões da identidade atual.</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
             <div className="workspace-settings-layout">
               <nav className="settings-nav" aria-label="Seções das configurações">
-                <span className="settings-nav-label">ESTRUTURA DO GRUPO</span>
-                <button className={settingsSection === "general" ? "active" : ""} onClick={() => setSettingsSection("general")}><Building2 aria-hidden="true" /><span>Grupo e quadros<small>Identidade e operação</small></span></button>
-                {isAdmin && <button className={settingsSection === "companies" ? "active" : ""} onClick={() => setSettingsSection("companies")}><Building2 aria-hidden="true" /><span>Empresas do grupo<small>CNPJs, hierarquia e Sankhya</small></span></button>}
-                <button className={settingsSection === "team" ? "active" : ""} onClick={() => setSettingsSection("team")}><Users aria-hidden="true" /><span>Usuários e acessos<small>Libere pessoas e empresas</small></span></button>
+                <span className="settings-nav-label">CONTA</span>
                 <button className={settingsSection === "security" ? "active" : ""} onClick={() => { setSettingsSection("security"); void loadAuthSessions(); }}><Smartphone aria-hidden="true" /><span>Segurança<small>Dispositivos e sessões</small></span></button>
-                <button className={settingsSection === "columns" ? "active" : ""} onClick={() => setSettingsSection("columns")}><ListChecks aria-hidden="true" /><span>Fluxo do quadro<small>Colunas e status</small></span></button>
-                <span className="settings-nav-label">OPERAÇÃO</span>
-                <button className={settingsSection === "fields" ? "active" : ""} onClick={() => setSettingsSection("fields")}><Settings aria-hidden="true" /><span>Campos e etiquetas<small>Dados padronizados</small></span></button>
-                <button className={settingsSection === "templates" ? "active" : ""} onClick={() => setSettingsSection("templates")}><WalletCards aria-hidden="true" /><span>Templates<small>Processos recorrentes</small></span></button>
-                <button className={settingsSection === "sla" ? "active" : ""} onClick={() => setSettingsSection("sla")}><CalendarDays aria-hidden="true" /><span>SLA e calendário<small>Expediente e prazos</small></span></button>
-                <button className={settingsSection === "automations" ? "active" : ""} onClick={() => setSettingsSection("automations")}><RefreshCw aria-hidden="true" /><span>Automações<small>Regras da operação</small></span></button>
               </nav>
               <div className="workspace-settings-content">
                 {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{snapshot.boards.length} quadro(s) disponíveis</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}

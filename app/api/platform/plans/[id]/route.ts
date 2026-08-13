@@ -2,6 +2,8 @@ import { getD1 } from "@/db";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
+import { requiredPlatformReason } from "@/lib/platform-console";
+import { ApiError } from "@/lib/api-errors";
 
 type Body = Record<string, unknown>;
 
@@ -31,6 +33,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const platform = requirePlatformAdmin(auth.user);
     const { id } = await params;
     const body = await request.json() as Body;
+    if (body.confirmed !== true) throw ApiError.badRequest("Confirme explicitamente a alteração do plano.", "PLATFORM_CONFIRMATION_REQUIRED");
+    const reason = requiredPlatformReason(body.reason);
     const status = String(body.status ?? "");
     if (!new Set(["draft", "active", "archived"]).has(status)) throw new Error("Status de plano inválido.");
     const after = {
@@ -45,6 +49,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       features: features(body.features),
       stripeMonthlyPriceId: priceId(body.stripeMonthlyPriceId),
       stripeAnnualPriceId: priceId(body.stripeAnnualPriceId),
+      reason,
     };
     // Um plano pago pode ficar ativo sem preço no provedor: nesse caso ele é
     // vendido por contato comercial, e o checkout aparece como indisponível.

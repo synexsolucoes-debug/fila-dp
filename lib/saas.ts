@@ -92,7 +92,9 @@ export function currentPeriod() {
 }
 
 export function selfSignupEnabled() {
-  return String(process.env.FDP_ALLOW_SELF_SIGNUP ?? "").trim().toLowerCase() === "true";
+  // Provisionamento é uma operação global auditada. Uma variável antiga não
+  // pode reabrir criação pública de identidade e workspace.
+  return false;
 }
 
 export function workspaceSlug(name: string) {

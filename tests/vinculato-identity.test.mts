@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = fileURLToPath(new URL("..", import.meta.url));
 const skip = new Set([".next", "node_modules", ".git", "dist"]);
 
 async function walk(directory: string, extensions: string[]): Promise<string[]> {
@@ -254,13 +255,11 @@ test("a trilha do grupo é removida explicitamente, e o registro de exclusão é
   assert.match(migration, /BEFORE UPDATE OR DELETE ON "fdp_workspace_deletions"/u);
 });
 
-test("excluir o último grupo não tranca a instalação", async () => {
+test("administrador global entra no console mesmo sem vínculo de workspace", async () => {
   const route = await readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8");
-  const bootstrap = route.slice(route.indexOf("const credentials = await hashPassword"), route.indexOf("const claimedWorkspace"));
-  // Depois de excluir o último grupo, a conta do dono sobrevive sem workspace:
-  // a primeira instalação fica aberta e o e-mail continua cadastrado. Recusar
-  // ali trancaria o sistema sem saída pela interface — a senha correta é o que
-  // autoriza reivindicar o primeiro grupo.
-  assert.match(bootstrap, /verifyPassword\(password, current\.password_salt/u);
-  assert.match(bootstrap, /Este e-mail já possui uma conta/u);
+  // Excluir o último cliente não pode impedir o administrador global de entrar
+  // e provisionar o próximo pelo Console Global.
+  assert.match(route, /const platformAdmin = isPlatformAdmin\(identity\)/u);
+  assert.match(route, /if \(!access && !platformAdmin\)/u);
+  assert.match(route, /platformAdmin && !access \? "\/plataforma"/u);
 });

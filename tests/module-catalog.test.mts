@@ -101,16 +101,18 @@ test("o catálogo semeado aponta só para telas que existem no painel", async ()
   const valuesBlock = migration.split('INSERT INTO "fdp_modules"')[1]?.split("ON CONFLICT")[0] ?? "";
   const routes = [...valuesBlock.matchAll(/\('[a-z_]+', '[^']+', '[^']*', '[a-z]+', '([A-Za-z]+)'/gu)].map((match) => match[1]);
   assert.ok(routes.length >= 12, `catálogo com poucos módulos: ${routes.length}`);
-  for (const route of routes) {
+  const platformOnly = new Set(["access", "saas"]);
+  for (const route of routes.filter((route) => !platformOnly.has(route))) {
     assert.ok(workspaceApp.includes(`"${route}"`), `rota ${route} não existe no painel`);
   }
+  assert.doesNotMatch(workspaceApp, /view === "(?:access|saas)"/u, "administração global não volta ao painel por compatibilidade do catálogo");
 });
 
 test("os planos incluem módulos em escada crescente", async () => {
   const migration = await readFile(new URL("../drizzle/postgres/0024_module_catalog.sql", import.meta.url), "utf8");
   // Starter é o mais enxuto e Enterprise recebe o catálogo inteiro.
   assert.match(migration, /p\."code" = 'starter'[\s\S]{0,200}m\."key" IN \('board', 'inbox', 'planner', 'registrations', 'saas'\)/u);
-  assert.match(migration, /WHERE p\."code" = 'enterprise'\nON CONFLICT DO NOTHING/u);
+  assert.match(migration, /WHERE p\."code" = 'enterprise'\r?\nON CONFLICT DO NOTHING/u);
   // Liberação especial exige motivo registrado.
   assert.match(migration, /"fdp_workspace_module_grants_reason_check" CHECK \(length\("reason"\) >= 5\)/u);
   // O cliente lê as próprias liberações; só a plataforma escreve.

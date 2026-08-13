@@ -1,9 +1,10 @@
-import { getD1 } from "@/db";
+import { getD1, getPlatformScopedD1 } from "@/db";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { ApiError } from "@/lib/api-errors";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { cleanText } from "@/lib/registrations";
+import { requiredPlatformReason } from "@/lib/platform-console";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,6 +23,8 @@ export async function PATCH(request: Request, { params }: Params) {
     const platform = requirePlatformAdmin(auth.user);
     const { id } = await params;
     const body = await request.json() as Record<string, unknown>;
+    if (body.confirmed !== true) throw ApiError.badRequest("Confirme explicitamente a ação administrativa.", "PLATFORM_CONFIRMATION_REQUIRED");
+    const reason = requiredPlatformReason(body.reason);
 
     return await withPlatformContext(platform, async () => {
       const d1 = getD1();
@@ -30,6 +33,7 @@ export async function PATCH(request: Request, { params }: Params) {
         FROM fdp_workspaces w LEFT JOIN fdp_workspace_subscriptions s ON s.workspace_id = w.id
         WHERE w.id = ?`).bind(id).first<Record<string, unknown>>();
       if (!before) throw ApiError.notFound("Workspace não encontrado.", "WORKSPACE_NOT_FOUND");
+      const scoped = getPlatformScopedD1({ workspaceId: id, userId: platform.userId });
 
       const statements = [];
       const after: Record<string, unknown> = {};
@@ -39,7 +43,6 @@ export async function PATCH(request: Request, { params }: Params) {
         if (!(workspaceStatuses as readonly string[]).includes(status)) {
           throw ApiError.badRequest("Situação de workspace inválida.", "INVALID_WORKSPACE_STATUS");
         }
-        const reason = cleanText(body.reason, 500);
         if (status !== "active" && reason.length < 5) {
           throw ApiError.badRequest("Informe o motivo com pelo menos 5 caracteres para suspender, cancelar ou arquivar.", "STATUS_REASON_REQUIRED");
         }
@@ -55,7 +58,7 @@ export async function PATCH(request: Request, { params }: Params) {
         if (!plan) throw ApiError.badRequest("Plano inválido.", "INVALID_PLAN");
         // Downgrade com mais usuários que o novo limite é recusado: reduzir o
         // plano nunca pode significar apagar usuário do cliente.
-        const seats = await d1.prepare("SELECT count(*)::int AS used FROM fdp_workspace_members WHERE workspace_id = ?")
+        const seats = await scoped.prepare("SELECT count(*)::int AS used FROM fdp_workspace_members WHERE workspace_id = ?")
           .bind(id).first<{ used: number }>();
         const requested = Number(body.seatQuantity ?? plan.included_seats);
         const limit = Math.max(requested, Number(plan.included_seats));
@@ -88,6 +91,7 @@ export async function PATCH(request: Request, { params }: Params) {
       }
 
       if (!statements.length) throw ApiError.badRequest("Nada para alterar.", "EMPTY_UPDATE");
+      after.reason = reason;
 
       statements.push(d1.prepare(`INSERT INTO fdp_platform_audit_events
           (id, actor_user_id, actor_email, action, entity_type, entity_id, before_json, after_json, request_id)
@@ -95,7 +99,7 @@ export async function PATCH(request: Request, { params }: Params) {
         .bind(crypto.randomUUID(), platform.userId, platform.email, id,
           JSON.stringify(before), JSON.stringify(after), request.headers.get("x-fila-dp-request-id") ?? ""));
 
-      await d1.batch(statements);
+      await scoped.batch(statements);
       return Response.json({ workspace: { id, ...after } });
     });
   } catch (error) { return apiError(error); }

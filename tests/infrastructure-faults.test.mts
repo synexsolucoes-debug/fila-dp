@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { classifyInfrastructureFault } from "../lib/infrastructure-errors.ts";
 import { expectedMigrations, latestMigration } from "../lib/schema-manifest.ts";
 
@@ -170,7 +171,7 @@ test("todo arquivo de teste está na lista que o npm test executa", async () => 
   // O script enumera os arquivos um a um. Um teste novo fica invisível até ser
   // registrado — passa a suíte inteira sem nunca ter rodado. Já aconteceu com
   // tests/contractor-registry.test.mts nesta sessão.
-  const files = (await readdir(new URL("../tests", import.meta.url).pathname))
+  const files = (await readdir(fileURLToPath(new URL("../tests", import.meta.url))))
     .filter((file) => /\.test\.(mts|mjs)$/u.test(file))
     .sort();
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
