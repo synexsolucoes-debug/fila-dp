@@ -28,6 +28,9 @@ type CapabilityDescription = { area: CapabilityArea; label: string };
 export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "workspace.read": { area: "workspace", label: "Entrar no grupo e ver a operação" },
   "workspace.manage": { area: "workspace", label: "Alterar nome, quadros e configurações do grupo" },
+  "workspace.archive": { area: "workspace", label: "Arquivar o grupo, tirando-o de operação sem apagar nada" },
+  "workspace.restore": { area: "workspace", label: "Restaurar um grupo arquivado ou excluído dentro do prazo" },
+  "workspace.delete": { area: "workspace", label: "Excluir o grupo, com todas as demandas, cadastros e integrações" },
   "members.directory.read": { area: "workspace", label: "Ver quem tem acesso ao grupo" },
   "members.manage": { area: "workspace", label: "Criar, alterar papel e remover usuários" },
 

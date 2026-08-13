@@ -5,7 +5,12 @@ import { ApiError, apiErrorResponse } from "../lib/api-errors.ts";
 import { readFile } from "node:fs/promises";
 
 test("RBAC is centralized and denies unknown roles by default", () => {
-  for (const capability of capabilities) assert.equal(hasCapability("admin", capability), true);
+  // O papel de administrador concede tudo, com uma exceção deliberada: excluir o
+  // grupo exige ser o proprietário (ou ter a permissão concedida nominalmente).
+  // Administrador convidado para tocar a operação não apaga a empresa inteira.
+  for (const capability of capabilities) {
+    assert.equal(hasCapability("admin", capability), capability !== "workspace.delete", capability);
+  }
   assert.equal(hasCapability("owner-from-untrusted-database", "workspace.manage"), false);
   assert.equal(hasCapability("member", "integrations.run"), false);
   assert.equal(hasCapability("member", "hr.write"), true);

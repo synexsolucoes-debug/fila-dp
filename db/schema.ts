@@ -1,5 +1,6 @@
 import {
   type AnyPgColumn,
+  bigint,
   check,
   date,
   doublePrecision,
@@ -2051,4 +2052,95 @@ export const timeInconsistencies = pgTable("fdp_time_inconsistencies", {
   check("fdp_time_inconsistencies_severity_check", sql`${table.severity} IN ('blocking', 'warning')`),
   check("fdp_time_inconsistencies_status_check", sql`${table.status} IN ('open', 'resolved', 'waived')`),
   check("fdp_time_inconsistencies_resolution_check", sql`${table.status} = 'open' OR length(${table.resolutionNote}) >= 5`),
+]);
+
+/**
+ * Central de eventos de integração.
+ *
+ * Toda entrada vinda de fora — webhook do Teams, admissão lida da Sólides,
+ * sincronização manual — passa por aqui antes de virar demanda. O índice único
+ * em (workspace, integração, evento externo) é o que garante idempotência: o
+ * segundo processamento do mesmo evento não insere, e portanto não duplica a
+ * demanda. A garantia é do banco, não da boa vontade do conector.
+ */
+export const integrationEvents = pgTable("fdp_integration_events", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  integrationId: text("integration_id").notNull(),
+  connector: text("connector").notNull(),
+  eventType: text("event_type").notNull(),
+  externalEventId: text("external_event_id").notNull(),
+  source: text("source").notNull().default("webhook"),
+  payloadHash: text("payload_hash").notNull().default(""),
+  payloadJson: jsonb("payload_json").notNull().default({}),
+  status: text("status").notNull().default("received"),
+  resultType: text("result_type").notNull().default(""),
+  resultId: text("result_id").notNull().default(""),
+  errorCode: text("error_code").notNull().default(""),
+  errorMessage: text("error_message").notNull().default(""),
+  retryCount: integer("retry_count").notNull().default(0),
+  receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_integration_events_idempotency_uq").on(table.workspaceId, table.integrationId, table.externalEventId),
+  uniqueIndex("fdp_integration_events_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_integration_events_workspace_status_idx").on(table.workspaceId, table.status, table.receivedAt),
+  index("fdp_integration_events_workspace_connector_idx").on(table.workspaceId, table.connector, table.eventType, table.receivedAt),
+  foreignKey({ name: "fdp_integration_events_workspace_integration_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }).onDelete("cascade"),
+  check("fdp_integration_events_status_check", sql`${table.status} IN ('received', 'processing', 'processed', 'ignored', 'error', 'reprocessed')`),
+  check("fdp_integration_events_source_check", sql`${table.source} IN ('webhook', 'polling', 'manual', 'retry')`),
+  check("fdp_integration_events_retry_check", sql`${table.retryCount} >= 0 AND ${table.retryCount} <= 100`),
+]);
+
+/**
+ * Movimentação reconhecida no Teams que ainda não vira demanda.
+ *
+ * Existe por causa de um requisito explícito: mensagem com dado insuficiente não
+ * pode abrir demanda errada. Ela vira sugestão, e alguém do DP confirma,
+ * completa ou rejeita. O texto original fica guardado para essa conferência.
+ */
+export const movementSuggestions = pgTable("fdp_movement_suggestions", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  integrationId: text("integration_id").notNull(),
+  eventId: text("event_id").notNull().references(() => integrationEvents.id, { onDelete: "cascade" }),
+  movementKind: text("movement_kind").notNull(),
+  status: text("status").notNull().default("pending"),
+  confidence: integer("confidence").notNull().default(0),
+  employeeName: text("employee_name").notNull().default(""),
+  employeeId: text("employee_id"),
+  previousSalaryCents: bigint("previous_salary_cents", { mode: "number" }),
+  newSalaryCents: bigint("new_salary_cents", { mode: "number" }),
+  previousRole: text("previous_role").notNull().default(""),
+  newRole: text("new_role").notNull().default(""),
+  effectiveDate: date("effective_date"),
+  requestedByName: text("requested_by_name").notNull().default(""),
+  teamId: text("team_id").notNull().default(""),
+  teamName: text("team_name").notNull().default(""),
+  channelId: text("channel_id").notNull().default(""),
+  channelName: text("channel_name").notNull().default(""),
+  messageId: text("message_id").notNull().default(""),
+  messageUrl: text("message_url").notNull().default(""),
+  originalMessage: text("original_message").notNull().default(""),
+  missingFieldsJson: jsonb("missing_fields_json").notNull().default([]),
+  signalsJson: jsonb("signals_json").notNull().default([]),
+  cardId: text("card_id"),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "string" }),
+  resolutionNote: text("resolution_note").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_movement_suggestions_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_movement_suggestions_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
+  // Mensagem editada reencontra a própria sugestão em vez de abrir outra.
+  uniqueIndex("fdp_movement_suggestions_message_uq").on(table.workspaceId, table.integrationId, table.messageId)
+    .where(sql`${table.messageId} <> '' AND ${table.status} = 'pending'`),
+  foreignKey({ name: "fdp_movement_suggestions_workspace_integration_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }).onDelete("cascade"),
+  check("fdp_movement_suggestions_kind_check", sql`${table.movementKind} IN ('salary_change', 'role_change')`),
+  check("fdp_movement_suggestions_status_check", sql`${table.status} IN ('pending', 'confirmed', 'rejected', 'superseded')`),
+  check("fdp_movement_suggestions_confidence_check", sql`${table.confidence} BETWEEN 0 AND 100`),
+  check("fdp_movement_suggestions_resolution_check", sql`(${table.status} = 'confirmed' AND ${table.cardId} IS NOT NULL AND ${table.resolvedAt} IS NOT NULL) OR (${table.status} = 'rejected' AND ${table.resolvedAt} IS NOT NULL) OR (${table.status} IN ('pending', 'superseded'))`),
 ]);
