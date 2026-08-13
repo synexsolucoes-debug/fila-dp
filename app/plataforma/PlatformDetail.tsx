@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Ban, Building2, CheckCircle2, KeyRound, Link2, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react";
 import styles from "./platform.module.css";
 
@@ -16,6 +16,106 @@ import styles from "./platform.module.css";
  */
 
 type Tab = "overview" | "members" | "companies" | "modules" | "audit";
+
+type DeletionReceipt = {
+  workspaceName: string; tables: number; rows: number; orphanUsers: number;
+};
+
+/**
+ * Confirmação de exclusão definitiva.
+ *
+ * As quatro travas que o servidor exige aparecem aqui como quatro coisas que a
+ * pessoa vê — não porque a tela decida algo (ela não decide: quem recusa é o
+ * servidor), mas porque uma confirmação que esconde o que vai acontecer não é
+ * confirmação, é armadilha.
+ *
+ * O identificador digitado por extenso é a trava que mais importa: ela impede
+ * que um clique caia no grupo errado, que é o erro que ninguém desfaz.
+ */
+function DeleteWorkspaceDialog({ workspace, onCancel, onDeleted }: {
+  workspace: { id: string; name: string; slug: string; status: string };
+  onCancel: () => void;
+  onDeleted: (receipt: DeletionReceipt) => void;
+}) {
+  const [confirmation, setConfirmation] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !busy) onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onCancel]);
+
+  const slugOk = confirmation.trim() === workspace.slug;
+  const reasonOk = reason.trim().length >= 10;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const payload = await call<{ deleted: DeletionReceipt }>(`/api/platform/workspaces/${workspace.id}/delete`, {
+        method: "POST",
+        body: JSON.stringify({ confirmation: confirmation.trim(), reason: reason.trim() }),
+      });
+      onDeleted(payload.deleted);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível excluir o grupo.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={styles.confirmBackdrop} role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget && !busy) onCancel();
+    }}>
+      <form className={styles.confirmDialog} role="dialog" aria-modal="true"
+        aria-labelledby="excluir-grupo" onSubmit={submit}>
+        <header>
+          <span className={styles.confirmMark} aria-hidden="true"><Trash2 /></span>
+          <div>
+            <h3 id="excluir-grupo">Excluir {workspace.name} definitivamente</h3>
+            <p>Isto não é arquivar. Os dados, o histórico e a trilha de auditoria deste grupo
+              são apagados e <b>não há como recuperar</b>.</p>
+          </div>
+        </header>
+
+        <p className={styles.confirmLedger}>
+          Antes de apagar, o sistema conta cada tabela e guarda o número num registro permanente,
+          com o motivo e quem executou. É a única coisa que sobra depois.
+        </p>
+
+        <label>
+          <span>Digite o identificador do grupo para confirmar: <code>{workspace.slug}</code></span>
+          <input ref={inputRef} value={confirmation} disabled={busy} autoComplete="off" spellCheck={false}
+            aria-invalid={confirmation.length > 0 && !slugOk}
+            onChange={(event) => setConfirmation(event.target.value)} />
+        </label>
+
+        <label>
+          <span>Motivo da exclusão (mínimo 10 caracteres)</span>
+          <textarea rows={3} value={reason} disabled={busy}
+            aria-invalid={reason.length > 0 && !reasonOk}
+            onChange={(event) => setReason(event.target.value)} />
+        </label>
+
+        {error && <p className={styles.confirmError} role="alert">{error}</p>}
+
+        <footer>
+          <button type="button" onClick={onCancel} disabled={busy}>Cancelar</button>
+          <button type="submit" data-danger="true" disabled={busy || !slugOk || !reasonOk}>
+            {busy ? "Excluindo…" : "Excluir definitivamente"}
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
 
 const roleLabels: Record<string, string> = {
   admin: "Administrador", member: "Membro", observer: "Observador", guest: "Convidado",
@@ -41,7 +141,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 
 type WorkspaceDetail = {
   workspace: Record<string, never> & {
-    id: string; name: string; status: string; statusReason: string; legalName: string; taxId: string;
+    id: string; name: string; slug: string; status: string; statusReason: string; legalName: string; taxId: string;
     contactEmail: string; createdAt: string;
     owner: { id: string; email: string; name: string };
     subscription: { status: string; seatQuantity: number; provider: string; contractedMonthlyPriceCents: number; trialEndsAt: string | null; currentPeriodEnd: string | null };
@@ -67,6 +167,8 @@ export function WorkspaceDetailDrawer({ id, plans, onClose, onChanged }: {
   const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [receipt, setReceipt] = useState<DeletionReceipt | null>(null);
 
   const load = useCallback(async () => {
     try { setData(await call<WorkspaceDetail>(`/api/platform/workspaces/${id}/detail`)); setError(""); }
@@ -165,6 +267,34 @@ export function WorkspaceDetailDrawer({ id, plans, onClose, onChanged }: {
                 ))}
               </div>
             </section>
+
+            <section className={styles.detailActions} data-tone="danger">
+              <h3>Exclusão definitiva</h3>
+              {receipt ? (
+                <p className={styles.deleteReceipt} role="status">
+                  <strong>{receipt.workspaceName} foi excluído.</strong>
+                  {" "}{receipt.rows} linha(s) em {receipt.tables} tabela(s)
+                  {receipt.orphanUsers > 0 ? `, incluindo ${receipt.orphanUsers} conta(s) que só existiam neste grupo` : ""}.
+                  O registro permanente da exclusão ficou gravado com o motivo e o seu e-mail.
+                </p>
+              ) : (
+                <>
+                  <p>
+                    Apaga os dados, o histórico e a trilha de auditoria deste grupo. Não há como recuperar.
+                    {workspace!.status !== "archived" && workspace!.status !== "canceled" && (
+                      <> Só é possível excluir um grupo <b>arquivado ou cancelado</b> — arquive antes.</>
+                    )}
+                  </p>
+                  <div className={styles.rowActions}>
+                    <button type="button" data-danger="true"
+                      disabled={busy || (workspace!.status !== "archived" && workspace!.status !== "canceled")}
+                      onClick={() => setConfirmingDelete(true)}>
+                      <Trash2 aria-hidden="true" /> Excluir grupo definitivamente
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
           </>
         ) : tab === "members" ? (
           <table className={styles.detailTable}>
@@ -224,6 +354,20 @@ export function WorkspaceDetailDrawer({ id, plans, onClose, onChanged }: {
           </table>
         )}
       </div>
+
+      {confirmingDelete && workspace && (
+        <DeleteWorkspaceDialog
+          workspace={{ id: workspace.id, name: workspace.name, slug: workspace.slug, status: workspace.status }}
+          onCancel={() => setConfirmingDelete(false)}
+          onDeleted={(payload) => {
+            setConfirmingDelete(false);
+            // O recibo fica na tela em vez de sumir junto com o grupo: o número
+            // de linhas apagadas é a única prova que ainda existe.
+            setReceipt(payload);
+            onChanged();
+          }}
+        />
+      )}
     </div>
   );
 }

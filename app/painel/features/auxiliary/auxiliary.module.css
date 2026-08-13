@@ -1,7 +1,9 @@
 .workspace {
   --aux-navy: var(--ui-brand, #0b1f33);
-  --aux-accent: #087a63;
-  --aux-accent-soft: #e6f3ef;
+  --aux-accent: var(--ui-accent, #087a63);
+  --aux-accent-text: var(--ui-accent-text, #087a63);
+  --aux-on-accent: var(--ui-on-accent, #fff);
+  --aux-accent-soft: var(--ui-accent-soft, #e6f3ef);
   --aux-bg: var(--ui-bg, #f5f7f9);
   --aux-surface: var(--ui-surface, #fff);
   --aux-muted: var(--ui-surface-muted, #f0f4f6);
@@ -21,14 +23,14 @@
 .workspace button, .workspace input, .workspace select, .workspace textarea { font: inherit; }
 .workspace button { color: inherit; }
 .workspace svg { width: 17px; height: 17px; stroke-width: 1.9; }
-.eyebrow { color: var(--aux-accent); font-size: .58rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--aux-accent-text); font-size: .58rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
 
 .primaryButton, .secondaryButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 39px; padding: 0 14px;
   border-radius: 7px; font-size: .72rem; font-weight: 740; white-space: nowrap; cursor: pointer;
   transition: transform .14s ease, border-color .14s ease, background .14s ease;
 }
-.primaryButton { border: 1px solid var(--aux-accent); background: var(--aux-accent); color: #fff !important; box-shadow: 0 5px 14px color-mix(in srgb, var(--aux-accent) 18%, transparent); }
+.primaryButton { border: 1px solid var(--aux-accent); background: var(--aux-accent); color: var(--aux-on-accent, #fff) !important; box-shadow: 0 5px 14px color-mix(in srgb, var(--aux-accent) 18%, transparent); }
 .primaryButton:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--aux-accent) 88%, #000); }
 .secondaryButton { border: 1px solid var(--aux-border); background: var(--aux-surface); }
 .secondaryButton:hover { border-color: var(--aux-accent); color: var(--aux-accent); }

@@ -1,6 +1,8 @@
 .workspace {
-  --pay-accent: #0f6b53;
-  --pay-accent-soft: #e6f3ef;
+  --pay-accent: var(--ui-accent, #0f6b53);
+  --pay-accent-text: var(--ui-accent-text, #0f6b53);
+  --pay-on-accent: var(--ui-on-accent, #fff);
+  --pay-accent-soft: var(--ui-accent-soft, #e6f3ef);
   --pay-surface: var(--ui-surface, #fff);
   --pay-muted: var(--ui-surface-muted, #f0f4f6);
   --pay-border: var(--ui-border, #d8e0e7);
@@ -24,14 +26,14 @@
   outline-offset: 2px;
 }
 
-.eyebrow { color: var(--pay-accent); font-size: .58rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+.eyebrow { color: var(--pay-accent-text); font-size: .58rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
 
 .primaryButton, .secondaryButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 14px;
   border-radius: 7px; font-size: .72rem; font-weight: 740; white-space: nowrap; cursor: pointer; text-decoration: none;
   transition: transform .14s ease, border-color .14s ease, background .14s ease;
 }
-.primaryButton { border: 1px solid var(--pay-accent); background: var(--pay-accent); color: #fff !important; }
+.primaryButton { border: 1px solid var(--pay-accent); background: var(--pay-accent); color: var(--pay-on-accent, #fff) !important; }
 .primaryButton:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--pay-accent) 88%, #000); }
 .secondaryButton { border: 1px solid var(--pay-border); background: var(--pay-surface); color: inherit; }
 .secondaryButton:hover { border-color: var(--pay-accent); color: var(--pay-accent); }
@@ -117,7 +119,7 @@
 }
 .errorState { border-color: color-mix(in srgb, var(--pay-danger) 45%, transparent); color: var(--pay-danger); }
 .warningState { border-color: color-mix(in srgb, var(--pay-warning) 45%, transparent); color: var(--pay-warning); }
-.privacyNotice { border-color: color-mix(in srgb, var(--pay-accent) 40%, transparent); color: var(--pay-accent); }
+.privacyNotice { border-color: color-mix(in srgb, var(--pay-accent) 40%, transparent); color: var(--pay-accent-text); }
 .spin { animation: paymentSpin 1s linear infinite; }
 @keyframes paymentSpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } .primaryButton:hover { transform: none; } }

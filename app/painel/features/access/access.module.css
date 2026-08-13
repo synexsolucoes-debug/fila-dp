@@ -1,7 +1,9 @@
 /* Tela de usuários e permissões. As cores vêm dos tokens da marca; nada de HEX
    solto aqui além dos tons neutros de fallback quando o token não existe. */
 .workspace {
-  --acc-brand: var(--brand, #0857b2);
+  --acc-brand: var(--ui-accent, #0857b2);
+  --acc-brand-text: var(--ui-accent-text, #0857b2);
+  --acc-on-brand: var(--ui-on-accent, #fff);
   --acc-brand-strong: var(--brand-strong, #062b60);
   --acc-brand-soft: var(--brand-soft, #e7f0fe);
   --acc-surface: var(--ui-surface, #fff);
@@ -20,14 +22,14 @@
 .workspace :is(button, select, input, a, [tabindex]):focus-visible { outline: 3px solid color-mix(in srgb, var(--acc-brand) 30%, transparent); outline-offset: 2px; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-.eyebrow { color: var(--acc-brand); font-size: .56rem; font-weight: 820; letter-spacing: .11em; }
+.eyebrow { color: var(--acc-brand-text); font-size: .56rem; font-weight: 820; letter-spacing: .11em; }
 
 .primaryButton, .secondaryButton, .dangerButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 36px; padding: 0 12px; border-radius: 6px;
   font-size: .66rem; font-weight: 740; white-space: nowrap; cursor: pointer;
 }
-.primaryButton { border: 1px solid var(--acc-brand); background: var(--acc-brand); color: #fff; }
+.primaryButton { border: 1px solid var(--acc-brand); background: var(--acc-brand); color: var(--acc-on-brand, #fff); }
 .primaryButton:hover { background: var(--acc-brand-strong); border-color: var(--acc-brand-strong); }
 .secondaryButton { border: 1px solid var(--acc-border); background: var(--acc-surface); color: var(--acc-text); }
 .secondaryButton:hover { border-color: var(--acc-brand); color: var(--acc-brand); }
@@ -38,7 +40,11 @@
 .commandDeck {
   display: grid; grid-template-columns: minmax(0, 1fr) 230px auto; align-items: center; gap: 14px;
   margin-bottom: 12px; padding: 16px; border: 1px solid var(--acc-border); border-top: 3px solid var(--acc-brand);
-  border-radius: 8px; background: linear-gradient(120deg, var(--acc-brand-strong), var(--acc-brand)); color: #fff;
+  border-radius: 8px;
+  /* Painel de marca: escuro nos DOIS temas, de propósito. Antes o gradiente
+     terminava em `--acc-brand`, que passou a virar com o tema — no escuro ele
+     clareava para azul vivo e o texto branco caía para 2.63:1. */
+  background: linear-gradient(120deg, var(--vin-navy-deep, #041b45), var(--vin-navy, #0b2f5e)); color: #fff;
 }
 .commandDeck .eyebrow { color: color-mix(in srgb, #fff 72%, var(--acc-brand-soft)); }
 .commandDeck h2 { margin: 3px 0 4px; font-size: 1.1rem; letter-spacing: -.03em; }
@@ -136,7 +142,8 @@
 .matrix td svg { width: 14px; height: 14px; color: var(--acc-success); }
 .matrixDenied { color: color-mix(in srgb, var(--acc-soft) 60%, transparent); }
 .matrix [data-highlight="true"] { background: color-mix(in srgb, var(--acc-brand) 6%, transparent); }
-.matrixArea th { background: var(--acc-muted); color: var(--acc-brand-strong); font-size: .52rem; font-weight: 820; letter-spacing: .07em; text-transform: uppercase; }
+/* `--acc-brand-strong` é navy quase preto: sobre o fundo escuro dava 1.03:1. */
+.matrixArea th { background: var(--acc-muted); color: var(--acc-text); font-size: .52rem; font-weight: 820; letter-spacing: .07em; text-transform: uppercase; }
 
 .modalBackdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--acc-brand-strong) 55%, transparent); backdrop-filter: blur(3px); }
 .modal { display: grid; gap: 12px; width: min(560px, 100%); max-height: 90vh; overflow-y: auto; padding: 18px; border-radius: 10px; background: var(--acc-surface); }
