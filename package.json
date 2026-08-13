@@ -30,7 +30,8 @@
     "db:rehearse": "node scripts/rehearse-payments-db.mjs",
     "db:rehearse-restore": "node scripts/rehearse-backup-restore.mjs",
     "db:rehearse-events": "node scripts/rehearse-integration-events.mjs",
-    "worker:sankhya": "tsx worker/sankhya/index.ts"
+    "worker:sankhya": "tsx worker/sankhya/index.ts",
+    "worker:sankhya:check": "node scripts/check-sankhya-worker-env.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",

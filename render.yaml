@@ -1,9 +1,13 @@
 services:
-  - type: worker
+  - type: web
     name: vinculato-sankhya-worker
     runtime: docker
+    plan: starter
+    region: virginia
     dockerfilePath: ./worker/sankhya/Dockerfile
     dockerContext: .
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 60
     autoDeployTrigger: checksPass
     envVars:
       - key: DATABASE_URL
@@ -15,8 +19,10 @@ services:
       - key: FDP_PII_HASH_SECRET
         sync: false
       - key: FDP_SANKHYA_BROWSER_ALLOWED_HOSTS
-        sync: false
+        value: "*.sankhya.com.br"
       - key: BLOB_READ_WRITE_TOKEN
         sync: false
+      - key: FDP_SANKHYA_WORKER_POLL_MS
+        value: "5000"
       - key: FDP_SANKHYA_WORKER_CONCURRENCY
-        value: "3"
+        value: "1"
