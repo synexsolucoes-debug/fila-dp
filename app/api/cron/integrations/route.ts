@@ -5,6 +5,7 @@ import { processNextIntegrationJob, queueIntegrationRun } from "@/lib/integratio
 import { log } from "@/lib/observability";
 import { nextSankhyaRunAt, parseSankhyaConfig } from "@/lib/sankhya/config";
 import { queueSankhyaRun } from "@/lib/sankhya/queue";
+import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ const TIME_BUDGET_MS = 45_000;
 /** Teto por workspace: um tenant com fila grande não pode consumir a janela inteira. */
 const MAX_JOBS_PER_WORKSPACE = 25;
 /** Mesma cadência do workflow; a chave torna duas chamadas no mesmo intervalo idempotentes. */
-const SCHEDULE_INTERVAL_MS = 5 * 60 * 1000;
+const SCHEDULE_INTERVAL_MS = 30 * 60 * 1000;
 
 function scheduledRunKey(now = Date.now()) {
   const intervalStart = Math.floor(now / SCHEDULE_INTERVAL_MS) * SCHEDULE_INTERVAL_MS;
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
     let scheduled = 0;
     let scheduleFailed = 0;
     let sankhyaScheduled = 0;
+    let sankhyaPending = 0;
     const touched: string[] = [];
     const idempotencyKey = scheduledRunKey();
     for (const workspace of workspaces.results) {
@@ -143,6 +145,15 @@ export async function GET(request: Request) {
         }
       }
 
+      const pendingSankhya = await scoped.prepare(`SELECT COUNT(*)::integer AS pending
+        FROM fdp_integration_jobs job
+        JOIN fdp_integrations integration ON integration.workspace_id = job.workspace_id AND integration.id = job.integration_id
+        WHERE job.workspace_id = ? AND integration.channel = 'sankhya_browser'
+          AND job.status IN ('queued', 'leased') AND job.available_at <= CURRENT_TIMESTAMP
+          AND (job.status = 'queued' OR job.lease_expires_at < CURRENT_TIMESTAMP)`)
+        .bind(workspace.id).first<{ pending: number }>();
+      sankhyaPending += Number(pendingSankhya?.pending ?? 0);
+
       let handled = 0;
       while (handled < MAX_JOBS_PER_WORKSPACE && Date.now() < deadline) {
         // Um job com defeito não pode parar a varredura dos demais workspaces:
@@ -155,7 +166,10 @@ export async function GET(request: Request) {
       if (handled) touched.push(workspace.id);
     }
 
-    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, scheduleFailed, processed, failed });
-    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, scheduleFailed, processed, failed }, { headers: { "Cache-Control": "no-store" } });
+    const workerDispatch = sankhyaPending ? await wakeSankhyaWorker({ route: "/api/cron/integrations" }) : null;
+    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed,
+      workerDispatched: workerDispatch?.status === "dispatched" });
+    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed },
+      { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
 }

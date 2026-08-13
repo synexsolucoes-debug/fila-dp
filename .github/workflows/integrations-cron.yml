@@ -6,18 +6,20 @@
 # não serve. O agendador do GitHub entrega a cadência real sem custo.
 #
 # Ao migrar para o plano Pro, o caminho natural é mover isto de volta para
-# `vercel.json` (`{"crons":[{"path":"/api/cron/integrations","schedule":"*/5 * * * *"}]}`)
+# `vercel.json` (`{"crons":[{"path":"/api/cron/integrations","schedule":"17,47 * * * *"}]}`)
 # e desativar este workflow, para ter um mecanismo só.
 name: Executor de integrações
 
 on:
   schedule:
-    # A menor granularidade do agendador do GitHub é 5 minutos, e ele atrasa sob
-    # carga: trate como "a cada poucos minutos", não como horário exato.
-    - cron: "*/5 * * * *"
+    # Duas vezes por hora preserva a franquia gratuita de Actions. O disparo
+    # manual do Sankhya continua imediato pela API do GitHub.
+    - cron: "17,47 * * * *"
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  actions: write
+  contents: read
 
 concurrency:
   # Duas varreduras simultâneas não corrompem a fila — o lease usa FOR UPDATE
@@ -34,6 +36,7 @@ jobs:
         env:
           ENDPOINT: ${{ secrets.INTEGRATIONS_CRON_URL }}
           SECRET: ${{ secrets.INTEGRATIONS_CRON_SECRET }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ -z "${ENDPOINT}" ] || [ -z "${SECRET}" ]; then
@@ -52,4 +55,10 @@ jobs:
           if [ "${codigo}" != "200" ]; then
             echo "O executor respondeu ${codigo}." >&2
             exit 1
+          fi
+          pendentes=$(jq -r '.sankhyaPending // 0' resposta.json)
+          despacho=$(jq -r '.workerDispatch // "not_configured"' resposta.json)
+          if [ "${pendentes}" -gt 0 ] && [ "${despacho}" != "dispatched" ]; then
+            echo "Disparando o worker Sankhya pelo token efêmero do workflow."
+            gh workflow run sankhya-worker.yml --ref main
           fi

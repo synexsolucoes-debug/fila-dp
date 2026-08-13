@@ -4,6 +4,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { queueIntegrationRun } from "@/lib/integration-engine";
 import { credentialPublicHint, mappingDirection, mappingResource, publicCredentialFingerprint, sanitizeMapping, sealCredentials } from "@/lib/integrations";
 import { queueSankhyaRun } from "@/lib/sankhya/queue";
+import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { requiredPlatformReason, sanitizePlatformValue } from "@/lib/platform-console";
@@ -45,6 +46,7 @@ export async function POST(request: Request, { params }: Params) {
       let result: Record<string, unknown> = {};
       let auditEntityType = "integration";
       let auditEntityId = id;
+      let shouldWakeSankhya = false;
 
       if (action === "run") {
         const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `platform:${crypto.randomUUID()}`;
@@ -53,6 +55,7 @@ export async function POST(request: Request, { params }: Params) {
           : await queueIntegrationRun(scoped, { workspaceId, integrationId: id, mappingId: cleanText(body.mappingId, 120) || undefined,
             triggerType: "manual", requestedBy: null, idempotencyKey });
         result = { runId: run.id, status: run.status };
+        shouldWakeSankhya = integration.channel === "sankhya_browser";
       } else if (action === "retry") {
         const runId = cleanText(body.runId, 120);
         const failed = await scoped.prepare(`SELECT id, mapping_id, status FROM fdp_integration_sync_runs
@@ -65,6 +68,7 @@ export async function POST(request: Request, { params }: Params) {
           : await queueIntegrationRun(scoped, { workspaceId, integrationId: id, mappingId: String(failed.mapping_id ?? "") || undefined,
             triggerType: "retry", requestedBy: null, idempotencyKey });
         result = { runId: retry.id, retryOf: runId, status: retry.status };
+        shouldWakeSankhya = integration.channel === "sankhya_browser";
       } else if (action === "pause") {
         await scoped.prepare("UPDATE fdp_integrations SET status = 'paused', updated_at = now() WHERE workspace_id = ? AND id = ?")
           .bind(workspaceId, id).run();
@@ -178,6 +182,10 @@ export async function POST(request: Request, { params }: Params) {
         auditEntityId = reconciliationId;
       }
 
+      if (shouldWakeSankhya) {
+        const workerDispatch = await wakeSankhyaWorker({ workspaceId, connectorId: id, syncRunId: String(result.runId ?? "") });
+        result.workerDispatch = workerDispatch.status;
+      }
       const after = sanitizePlatformValue({ workspaceId, workspaceName: workspace.name, action, reason, ...result });
       await scoped.batch([
         scoped.prepare(`INSERT INTO fdp_audit_events
