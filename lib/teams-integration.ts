@@ -147,25 +147,58 @@ export type TeamsWebhookPayload = {
   editedAt: string;
 };
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+/**
+ * Extrai a mensagem do corpo enviado pelo Power Automate.
+ *
+ * O caminho oficial do Teams neste produto é um fluxo do Power Automate com o
+ * gatilho "When a new channel message is added (V…)". Dois formatos precisam ser
+ * aceitos, porque os dois aparecem na prática:
+ *
+ * 1. **Contrato recomendado** — o autor do fluxo monta um JSON limpo numa ação
+ *    HTTP: `{ teamId, teamName, channelId, channelName, messageId, messageUrl,
+ *    senderName, text }`. É o que a documentação instrui e o mais robusto.
+ *
+ * 2. **Corpo cru do gatilho** — quem apenas encaminha o `body` do gatilho manda
+ *    a forma nativa do Graph: canal e time sob `channelIdentity`, remetente sob
+ *    `from.user.displayName`, conteúdo sob `body.content` (HTML). Aceitar essa
+ *    forma evita que o conector devolva "mensagem sem texto" para um fluxo
+ *    montado do jeito mais óbvio.
+ *
+ * Nenhum campo aqui é confiável para roteamento de segurança: o workspace vem do
+ * segredo conferido, não deste corpo. `teamId`/`channelId` servem só para casar
+ * com o canal que o próprio workspace configurou.
+ */
 export function parseTeamsPayload(raw: Record<string, unknown>): TeamsWebhookPayload {
-  const message = raw.message && typeof raw.message === "object" ? raw.message as Record<string, unknown> : raw;
-  const from = raw.from && typeof raw.from === "object" ? raw.from as Record<string, unknown> : {};
+  // O gatilho do Power Automate entrega tudo sob `body`; um contrato limpo
+  // entrega na raiz. Procurar nos dois cobre as duas montagens.
+  const message = record(raw.message ?? raw.body);
+  const channelIdentity = record(raw.channelIdentity ?? message.channelIdentity);
+  const from = record(raw.from ?? message.from);
+  const fromUser = record(from.user ?? from);
+  // `body` pode ser a string do contrato limpo OU o objeto {contentType, content}
+  // do gatilho; `message.body` cobre o caso do corpo cru aninhado.
+  const messageBody = record(raw.body ?? message.body);
+
   return {
-    teamId: textOf(raw.teamId ?? raw.teamAadGroupId, 200),
+    teamId: textOf(raw.teamId ?? raw.teamAadGroupId ?? channelIdentity.teamId, 200),
     teamName: textOf(raw.teamName, 160),
-    channelId: textOf(raw.channelId, 200),
+    channelId: textOf(raw.channelId ?? channelIdentity.channelId, 200),
     channelName: textOf(raw.channelName, 160),
     messageId: textOf(raw.messageId ?? message.id ?? raw.id, 200),
     messageUrl: textOf(raw.messageUrl ?? raw.webUrl ?? message.webUrl, 500),
-    senderName: textOf(raw.senderName ?? from.displayName ?? raw.from ?? raw.sender, 160),
+    senderName: textOf(raw.senderName ?? fromUser.displayName ?? from.displayName ?? raw.sender, 160),
     text: plainTextFromTeams(
       typeof raw.text === "string" ? raw.text
-        : typeof message.content === "string" ? message.content
-          : typeof raw.body === "string" ? raw.body
-            : typeof (raw.body as Record<string, unknown>)?.content === "string" ? (raw.body as Record<string, unknown>).content
+        : typeof raw.body === "string" ? raw.body
+          : typeof message.content === "string" ? message.content
+            : typeof messageBody.content === "string" ? messageBody.content
               : "",
     ),
-    editedAt: textOf(raw.editedAt ?? message.lastEditedDateTime, 40),
+    editedAt: textOf(raw.editedAt ?? message.lastEditedDateTime ?? message.lastModifiedDateTime, 40),
   };
 }
 

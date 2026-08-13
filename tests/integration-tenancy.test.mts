@@ -150,6 +150,41 @@ const payload = (partial: Record<string, unknown> = {}) => parseTeamsPayload({
   ...partial,
 });
 
+test("o corpo cru do gatilho do Power Automate é entendido sem mapeamento manual", () => {
+  // O caminho oficial do Teams é um fluxo do Power Automate. Quem apenas
+  // encaminha o `body` do gatilho "When a new channel message is added" manda a
+  // forma nativa do Graph: canal/time sob channelIdentity, remetente sob
+  // from.user, conteúdo HTML sob body.content. O conector precisa entender isso
+  // sem exigir que o autor do fluxo monte um JSON à mão — senão devolveria
+  // "mensagem sem texto" para a montagem mais óbvia.
+  const parsed = parseTeamsPayload({
+    id: "1699999999999",
+    webUrl: "https://teams.microsoft.com/l/message/19:abc/1699999999999",
+    body: { contentType: "html", content: "<div>João da Silva terá <b>alteração salarial</b> para R$ 5.500,00 a partir de 01/09/2026.</div>" },
+    from: { user: { id: "u-1", displayName: "Renata Gestora" } },
+    channelIdentity: { teamId: "team-dp", channelId: "canal-movimentacoes" },
+    lastEditedDateTime: "",
+  });
+  assert.equal(parsed.teamId, "team-dp");
+  assert.equal(parsed.channelId, "canal-movimentacoes");
+  assert.equal(parsed.messageId, "1699999999999");
+  assert.equal(parsed.senderName, "Renata Gestora");
+  assert.equal(parsed.text, "João da Silva terá alteração salarial para R$ 5.500,00 a partir de 01/09/2026.");
+  assert.match(parsed.messageUrl, /teams\.microsoft\.com/u);
+});
+
+test("o contrato JSON limpo do fluxo também é aceito", () => {
+  const parsed = parseTeamsPayload({
+    teamId: "team-dp", teamName: "Departamento Pessoal",
+    channelId: "canal-movimentacoes", channelName: "Movimentações",
+    messageId: "abc", messageUrl: "https://x", senderName: "Renata",
+    text: "Maria Souza passará de Assistente para Analista em 01/09/2026.",
+  });
+  assert.equal(parsed.teamId, "team-dp");
+  assert.equal(parsed.senderName, "Renata");
+  assert.match(parsed.text, /Maria Souza/u);
+});
+
 test("mensagem de canal não monitorado é ignorada", () => {
   // O requisito: não existe um canal global para todos os clientes. Cada grupo
   // monitora o seu.
