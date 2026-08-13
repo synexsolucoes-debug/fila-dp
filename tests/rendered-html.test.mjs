@@ -73,7 +73,10 @@ test("ships operational foundations for boards, attachments, planner, reports an
   assert.match(search, /LIMIT 50/);
   assert.match(reports, /averageCompletionHours/);
   assert.match(planner, /fdp_planner_blocks/);
-  assert.match(webhook, /FDP_\$\{channel\.toUpperCase\(\)\}_WEBHOOK_SECRET/);
+  // O segredo do webhook deixou de vir do ambiente e passou a ser credencial do
+  // próprio workspace; o ambiente segue aceito só como compatibilidade, dentro
+  // de `resolveWebhookSecret`.
+  assert.match(webhook, /resolveWebhookSecret/);
   assert.match(pause, /sla\.paused/);
 });
 
@@ -104,6 +107,8 @@ test("keeps critical workspace and integration security boundaries", async () =>
   assert.match(syncRoute, /queueIntegrationRun/);
   assert.match(integrationEngine, /validateConnectorEndpoint/);
   assert.match(integrationEngine, /redirect: "error"/);
-  assert.match(webhookRoute, /WEBHOOK_SECRETS/);
+  // Segredo por workspace, conferido em tempo constante, antes de qualquer
+  // escrita. A variável de ambiente global saiu do caminho principal.
+  assert.match(webhookRoute, /assertWebhookSecret/);
   assert.match(webhookRoute, /Payload do webhook excede 64 KB/);
 });

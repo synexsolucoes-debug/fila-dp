@@ -86,8 +86,12 @@ test("resource APIs expose no plaintext secret and reconciliation is audited ato
   assert.match(credentials, /secretStored: true/);
   assert.doesNotMatch(credentials, /after: \{[^}]*credentials/u);
   assert.match(reconciliation, /WITH updated AS[\s\S]+item_updated AS[\s\S]+audited AS/);
-  assert.match(webhook, /fdp_integration_sync_runs/);
-  assert.match(webhook, /idempotencyKey/);
+  // A idempotência do webhook saiu das execuções de sincronização e passou para
+  // a central de eventos: um registro por evento externo, com o índice único do
+  // banco garantindo que a reentrega não gere um segundo efeito.
+  assert.match(webhook, /recordIntegrationEvent/);
+  assert.match(webhook, /externalEventId/);
+  assert.match(webhook, /recorded\.kind === "duplicate"/);
   assert.doesNotMatch(webhook, /body LIKE/);
 });
 

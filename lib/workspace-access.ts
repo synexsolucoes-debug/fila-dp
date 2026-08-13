@@ -23,6 +23,10 @@ export const WORKSPACE_STATUS_LABELS: Record<string, string> = {
   suspended: "Suspenso",
   canceled: "Cancelado",
   archived: "Arquivado",
+  // Exclusão pedida pelo cliente é reversível dentro do prazo, então o grupo
+  // continua aparecendo na lista — rotulado — em vez de sumir. Sumir sem
+  // explicação é o que faz o usuário achar que perdeu os dados.
+  deleted: "Excluído",
 };
 
 export type AccessibleWorkspace = {

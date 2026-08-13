@@ -5,6 +5,8 @@ import { computeSlaStatus } from "./fila-dp-api";
 import { addBusinessDays } from "./fila-dp-relations";
 import { workingDayMinutes } from "./fila-dp-sla";
 import { admissionIsComplete } from "./admissions";
+import { completeIntegrationEvent, recordIntegrationEvent } from "./integration-events";
+import { log } from "./observability";
 import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
 import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoErpReadiness, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
 import {
@@ -348,6 +350,34 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
   // reconhecidos pelo admissionDate guardado no metadata para não duplicar cartão.
   const demandExternalId = tangerino ? `${admission.externalId}:${admission.admissionDate}` : input.externalId;
   const demandItemKey = `${demandExternalId}:${input.payloadHash.slice(0, 16)}`;
+
+  // A admissão entra na central de eventos antes de virar demanda. É a mesma
+  // porta que o Teams atravessa, e é ela que dá a garantia de idempotência no
+  // banco: a chave (workspace, integração, evento externo) é única, então uma
+  // segunda execução do sincronizador não consegue sequer registrar o evento de
+  // novo — e portanto não chega a abrir a segunda demanda.
+  //
+  // A conferência por cartão logo abaixo continua existindo: ela cobre as bases
+  // que já sincronizavam antes desta central passar a existir.
+  const event = await recordIntegrationEvent(d1, {
+    workspaceId: input.workspaceId,
+    integrationId: input.integrationId,
+    connector: input.channel,
+    eventType: "admission",
+    externalEventId: `admission:${demandExternalId}`,
+    source: "polling",
+    payloadHash: input.payloadHash,
+    payload: { admissionDate: admission.admissionDate, externalId: admission.externalId },
+  });
+  if (event.kind === "duplicate" && event.event.status === "processed" && event.event.result_id) {
+    await d1.prepare(`INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, target_id, metadata_json, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
+      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, demandItemKey, demandExternalId, input.payloadHash,
+        event.event.result_id, JSON.stringify({ source: input.channel, skipped: "admissão já processada", eventId: event.event.id })).run();
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
+
   const previous = await d1.prepare(`SELECT target_id FROM fdp_integration_sync_items
     WHERE workspace_id = ? AND integration_id = ? AND target_type = 'card' AND COALESCE(target_id, '') <> ''
       AND (external_id = ? OR (external_id = ? AND COALESCE(metadata_json->>'admissionDate', '') = ?))
@@ -369,6 +399,11 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
       VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
       ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
       .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, demandItemKey, demandExternalId, input.payloadHash, cardId, metadata).run();
+    // Demanda que já existia de uma sincronização anterior a esta central:
+    // o evento fecha apontando para ela, e a próxima execução para na porta.
+    await completeIntegrationEvent(d1, input.workspaceId, event.event.id, {
+      status: "processed", resultType: "card", resultId: cardId,
+    });
     return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
   }
 
@@ -390,7 +425,19 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
       admissionProcessType, context.dueAt, computeSlaStatus(context.dueAt, context.slaBehavior), context.listId, `integracao:${input.channel}`, context.slaTargetMinutes, context.templateId,
     )
     .first<{ id: string }>();
-  if (!created) return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  if (!created) {
+    await completeIntegrationEvent(d1, input.workspaceId, event.event.id, {
+      status: "ignored", reason: "item já registrado nesta execução",
+    });
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
+
+  await completeIntegrationEvent(d1, input.workspaceId, event.event.id, {
+    status: "processed", resultType: "card", resultId: cardId,
+  });
+  log("info", "integration.demand_created", { workspaceId: input.workspaceId, connectorId: input.integrationId }, {
+    source: input.channel, eventId: event.event.id, cardId, processType: admissionProcessType,
+  });
 
   await d1.batch(draft.checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
     .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)));

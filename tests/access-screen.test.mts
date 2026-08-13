@@ -42,7 +42,12 @@ test("toda capacidade do sistema é explicada em linguagem de cliente", () => {
 
 test("a matriz mostrada é a autorização real do sistema", () => {
   const granted = Object.fromEntries(workspaceRoles.map((role) => [role, new Set(capabilitiesForRole(role))]));
-  assert.equal(granted.admin.size, capabilities.length, "administrador precisa ter todas as capacidades");
+  // O papel de administrador concede tudo menos a exclusão do grupo, que é
+  // restrita ao proprietário. A matriz da tela precisa mostrar exatamente essa
+  // regra — se ela mostrasse a exclusão como concedida, o administrador veria
+  // um botão que o backend nega.
+  assert.equal(granted.admin.size, capabilities.length - 1, "administrador precisa ter todas as capacidades exceto a exclusão do grupo");
+  assert.ok(!granted.admin.has("workspace.delete"), "exclusão do grupo não vem do papel, e sim da propriedade");
 
   // Administrador e membro formam a escada esperada.
   for (const [wider, narrower] of [["admin", "member"], ["member", "observer"], ["admin", "guest"]] as const) {

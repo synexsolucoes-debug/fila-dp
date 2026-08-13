@@ -4,6 +4,12 @@ import type { WorkspaceRole } from "./fila-dp-types";
 export const capabilities = [
   "workspace.read",
   "workspace.manage",
+  // Ciclo de vida do grupo, separado de `workspace.manage` de propósito:
+  // renomear o grupo e apagá-lo não são o mesmo risco e não podem depender da
+  // mesma permissão.
+  "workspace.archive",
+  "workspace.restore",
+  "workspace.delete",
   "members.directory.read",
   "members.manage",
   "cards.read",
@@ -69,8 +75,43 @@ export const capabilities = [
 
 export type Capability = typeof capabilities[number];
 
+/**
+ * Nomes alternativos aceitos para a mesma permissão.
+ *
+ * A especificação do produto nomeia as permissões de grupo como
+ * `workspace.view` / `workspace.update` / `workspace.members.manage` /
+ * `workspace.integrations.manage`; o código já usava nomes mais curtos, gravados
+ * em concessões individuais no banco. Traduzir aqui deixa os dois vocabulários
+ * válidos sem migrar dado nem duplicar a regra — e sem o risco de uma metade do
+ * sistema autorizar por um nome enquanto a outra nega pelo outro.
+ */
+const capabilityAliases = {
+  "workspace.view": "workspace.read",
+  "workspace.update": "workspace.manage",
+  "workspace.members.manage": "members.manage",
+  "workspace.integrations.manage": "integrations.manage",
+} as const satisfies Record<string, Capability>;
+
+export type CapabilityAlias = keyof typeof capabilityAliases;
+export type CapabilityName = Capability | CapabilityAlias;
+
+function resolveCapability(name: CapabilityName): Capability {
+  return (capabilityAliases as Record<string, Capability>)[name] ?? name as Capability;
+}
+
+/**
+ * Permissões que o papel de administrador **não** concede sozinho.
+ *
+ * Excluir o grupo apaga demandas, colaboradores, empresas, documentos e a
+ * trilha de auditoria de todo mundo que trabalha nele. Um administrador
+ * convidado para tocar a operação do dia a dia não deveria conseguir fazer isso
+ * por engano; quem pode é o proprietário, o administrador da plataforma, ou
+ * alguém a quem a permissão foi concedida nominalmente.
+ */
+const ownerOnlyCapabilities = new Set<Capability>(["workspace.delete"]);
+
 const roleCapabilities = {
-  admin: new Set<Capability>(capabilities),
+  admin: new Set<Capability>(capabilities.filter((capability) => !ownerOnlyCapabilities.has(capability))),
   member: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "cards.write", "comments.write",
     "attachments.read", "attachments.write", "reports.read", "hr.read", "hr.write",
@@ -111,25 +152,51 @@ export type AuthorizationSubject = string | {
   extraCapabilities?: ReadonlySet<string>;
   /** Módulos bloqueados para o usuário, mesmo que o papel permita. */
   deniedCapabilities?: ReadonlySet<string>;
+  /** Proprietário do grupo — única forma de obter as permissões restritas ao dono. */
+  isOwner?: boolean;
 };
 
 function subjectOf(subject: AuthorizationSubject) {
   return typeof subject === "string" ? { role: subject } : subject;
 }
 
-export function hasCapability(subject: AuthorizationSubject, capability: Capability) {
-  const { role, extraCapabilities, deniedCapabilities } = subjectOf(subject);
+export function hasCapability(subject: AuthorizationSubject, capabilityName: CapabilityName) {
+  const capability = resolveCapability(capabilityName);
+  const { role, extraCapabilities, deniedCapabilities, isOwner } = subjectOf(subject);
   // A negação individual vence o papel: é a exceção restritiva, e uma exceção
   // restritiva que pode ser contornada não é restrição.
   if (deniedCapabilities?.has(capability)) return false;
+  // A concessão nominal também vale para as permissões restritas ao dono: é
+  // exatamente o caso "usuário com a permissão concedida explicitamente".
   if (extraCapabilities?.has(capability)) return true;
+  if (ownerOnlyCapabilities.has(capability)) {
+    // O papel sozinho não basta: além de ser dono, precisa administrar o grupo.
+    return isOwner === true && role === "admin";
+  }
   if (!Object.hasOwn(roleCapabilities, role)) return false;
   return roleCapabilities[role as WorkspaceRole].has(capability);
 }
 
-export function requireCapability(subject: AuthorizationSubject, capability: Capability) {
-  if (!hasCapability(subject, capability)) {
+export function requireCapability(subject: AuthorizationSubject, capabilityName: CapabilityName) {
+  if (!hasCapability(subject, capabilityName)) {
     throw ApiError.forbidden("Você não tem permissão para realizar esta ação.", "CAPABILITY_REQUIRED");
+  }
+}
+
+/**
+ * Recusa com o nome da permissão que falta.
+ *
+ * "Você não tem permissão" obriga o usuário a abrir um chamado para descobrir
+ * qual. Dizer o nome não vaza nada — a permissão já é parte do contrato do
+ * produto — e transforma a recusa em algo que o administrador do grupo resolve
+ * sozinho.
+ */
+export function requireNamedCapability(subject: AuthorizationSubject, capabilityName: CapabilityName, action: string) {
+  if (!hasCapability(subject, capabilityName)) {
+    throw ApiError.forbidden(
+      `Você não tem permissão para ${action}. É necessária a permissão ${capabilityName}, concedida ao proprietário do grupo ou por um administrador da plataforma.`,
+      "CAPABILITY_REQUIRED",
+    );
   }
 }
 

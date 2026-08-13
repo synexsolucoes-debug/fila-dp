@@ -274,6 +274,13 @@
       "when": 1786478400000,
       "tag": "0036_platform_console_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786953600000,
+      "tag": "0037_integration_events_and_workspace_lifecycle",
+      "breakpoints": true
     }
   ]
 }

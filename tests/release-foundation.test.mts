@@ -265,9 +265,25 @@ test("signed webhooks establish tenant context before protected writes", async (
     readFile(new URL("../app/api/integrations/webhook/[channel]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/postgres/0009_webhook_tenant_rls.sql", import.meta.url), "utf8"),
   ]);
-  assert.ok(webhook.indexOf("preAuthExpectedSecret") < webhook.indexOf("const d1 = getD1()"));
-  assert.match(webhook, /preAuthSecretKey}_WORKSPACE_ID/);
-  assert.ok(webhook.indexOf("setTenantContext({ workspaceId") < webhook.indexOf("const d1 = getD1()"));
+  // O contexto de tenant precisa existir antes de qualquer consulta: sem ele a
+  // RLS resolve para NULL e a consulta devolve zero linha em silêncio.
+  assert.ok(
+    webhook.indexOf("setTenantContext({ workspaceId") < webhook.indexOf("getScopedD1({ workspaceId"),
+    "o tenant precisa ser estabelecido antes da conexão escopada",
+  );
+  // A verificação do segredo vem antes de toda escrita. O segredo agora é do
+  // workspace (credencial cifrada), não de uma variável de ambiente
+  // compartilhada — trocar o workspaceId da URL não abre a porta de outro
+  // cliente porque o segredo conferido é o daquele grupo.
+  assert.match(webhook, /resolveWebhookSecret\(d1, workspaceId, integration\.id, channel\)/u);
+  const authenticationPoint = webhook.indexOf("assertWebhookSecret(receivedSecret");
+  assert.ok(authenticationPoint > 0, "o webhook precisa conferir o segredo do workspace");
+  for (const write of ["INSERT INTO", "UPDATE fdp_"]) {
+    assert.ok(
+      webhook.indexOf(write) > authenticationPoint,
+      `nenhuma escrita (${write}) pode acontecer antes da autenticação do webhook`,
+    );
+  }
   assert.match(migration, /fdp_integrations_workspace_isolation/);
   assert.match(migration, /fdp_workspace_inbox_items_workspace_isolation/);
   assert.match(migration, /fdp_activity_events_workspace_isolation/);
