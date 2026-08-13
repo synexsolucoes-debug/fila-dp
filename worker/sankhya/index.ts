@@ -9,8 +9,23 @@ const concurrency = Math.min(10, Math.max(1, Number(process.env.FDP_SANKHYA_WORK
 const port = Math.max(1, Number(process.env.PORT) || 8080);
 let stopping = false;
 let sweeping = false;
+let ready = false;
 let lastSweepAt = "";
 let lastError = "";
+
+function assertWorkerConfiguration() {
+  const missing: string[] = [];
+  if (!String(process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.NEON_DATABASE_URL ?? "").startsWith("postgres")) {
+    missing.push("DATABASE_URL");
+  }
+  if (!String(process.env.FDP_INTEGRATION_VAULT_KEYS ?? process.env.FDP_INTEGRATION_VAULT_KEY ?? "").trim()) {
+    missing.push("FDP_INTEGRATION_VAULT_KEYS");
+  }
+  if (!String(process.env.FDP_PII_HASH_SECRET ?? process.env.FDP_AUTH_SECRET ?? "").trim()) {
+    missing.push("FDP_PII_HASH_SECRET");
+  }
+  if (missing.length) throw new Error(`Configuração obrigatória ausente: ${missing.join(", ")}`);
+}
 
 async function cleanupDiagnostics(workspaceId: string) {
   const d1 = getScopedD1({ workspaceId, userId: null });
@@ -47,7 +62,9 @@ async function sweep() {
     }
     lastSweepAt = new Date().toISOString();
     lastError = "";
+    ready = true;
   } catch (error) {
+    ready = false;
     lastError = error instanceof Error ? error.name : "UnknownError";
     log("error", "sankhya.worker_sweep_failed", {}, { errorName: lastError });
   } finally { sweeping = false; }
@@ -55,13 +72,15 @@ async function sweep() {
 
 const server = createServer((request, response) => {
   if (request.url === "/health") {
-    response.writeHead(lastError ? 503 : 200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-    response.end(JSON.stringify({ service: "vinculato-sankhya-worker", status: lastError ? "degraded" : "ok", sweeping, lastSweepAt }));
+    const healthy = ready && !lastError;
+    response.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    response.end(JSON.stringify({ service: "vinculato-sankhya-worker", status: healthy ? "ok" : "starting", sweeping, lastSweepAt }));
     return;
   }
   response.writeHead(404).end();
 });
 
+assertWorkerConfiguration();
 server.listen(port, () => log("info", "sankhya.worker_started", {}, { port, concurrency, pollMs }));
 const timer = setInterval(() => void sweep(), pollMs);
 timer.unref();

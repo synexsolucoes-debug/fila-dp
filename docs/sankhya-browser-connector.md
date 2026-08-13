@@ -19,7 +19,9 @@ flowchart LR
 
 O Next.js somente valida, configura e enfileira. O cron somente cria jobs agendados. Playwright nunca roda dentro de uma requisição HTTP da Vercel. O worker containerizado usa lease, `FOR UPDATE SKIP LOCKED`, retry limitado e um contexto novo por execução.
 
-O diretório `worker/sankhya` contém Dockerfile e exemplo `render.yaml`. A imagem pode rodar em Render, Cloud Run, Railway ou serviço equivalente que mantenha processo e Chromium ativos. O runtime precisa oferecer sandbox do Chromium para usuário não-root.
+O diretório `worker/sankhya` contém o Dockerfile e a raiz do repositório contém o `render.yaml`. A imagem pode rodar em Render, Cloud Run, Railway ou serviço equivalente que mantenha processo e Chromium ativos. O runtime precisa oferecer sandbox do Chromium para usuário não-root.
+
+No Render, o processo é publicado como Web Service Starter na região Virginia. Essa escolha mantém o polling ativo sem suspensão e permite ao Render consultar `/health`, impedir a promoção de um deploy quebrado e reiniciar uma instância que perder acesso ao Neon. O endpoint de saúde não retorna credenciais nem dados de workspace. A concorrência inicial é `1`, adequada à memória do plano Starter com Chromium; aumente somente após observar consumo real.
 
 ## Multi-tenancy
 
@@ -118,6 +120,14 @@ Somente worker:
 7. Cadastre URL, empresa, contexto, usuário dedicado e senha.
 8. Execute Testar conexão; só depois execute sincronização.
 9. Valide no ambiente real os textos/roles do DP Explorer e o arquivo exportado.
+
+### Render
+
+1. Crie um Blueprint apontando para o `render.yaml` da raiz e para a branch `main`.
+2. Confirme o Web Service `vinculato-sankhya-worker`, plano Starter, região Virginia.
+3. Preencha no primeiro sync os segredos marcados com `sync: false` usando exatamente os valores do ambiente Production da Vercel.
+4. Aguarde build da imagem, instalação do Chromium e health check `/health` com status `ok`.
+5. Não troque para plano Free: a suspensão do processo impede o consumo contínuo dos jobs.
 
 ## Testes e mock
 
