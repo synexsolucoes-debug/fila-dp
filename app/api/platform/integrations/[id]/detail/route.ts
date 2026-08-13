@@ -27,7 +27,9 @@ export async function GET(request: Request, { params }: Params) {
       const [integration, credentials, mappings, runs, reconciliations, jobs, logs, diagnostics] = await Promise.all([
         scoped.prepare(`SELECT integration.id, integration.channel, integration.display_name, integration.status, integration.last_sync_at,
             integration.last_error, integration.created_at, company.id AS company_id, company.legal_name AS company_name
-          FROM fdp_integrations integration LEFT JOIN fdp_companies company ON company.workspace_id = integration.workspace_id AND company.id = integration.company_id
+          FROM fdp_integrations integration LEFT JOIN fdp_companies company
+            ON company.workspace_id = integration.workspace_id
+            AND company.id = NULLIF(integration.config_json, '')::jsonb->>'companyId'
           WHERE integration.workspace_id = ? AND integration.id = ?`).bind(workspaceId, id).first<Row>(),
         scoped.prepare(`SELECT id, fingerprint, key_version, status, verified_at, expires_at, rotated_at, revoked_at, created_at
           FROM fdp_integration_credentials WHERE workspace_id = ? AND integration_id = ? ORDER BY created_at DESC LIMIT 20`).bind(workspaceId, id).all<Row>(),

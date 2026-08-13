@@ -156,6 +156,8 @@ test("detalhe global de integração mantém segredos omitidos e expõe fluxos a
   assert.match(detail, /getPlatformScopedD1/u);
   assert.match(detail, /publicCredentialFingerprint/u);
   assert.match(detail, /differences_json/u);
+  assert.match(detail, /NULLIF\(integration\.config_json, ''\)::jsonb->>'companyId'/u);
+  assert.doesNotMatch(detail, /integration\.company_id/u);
   assert.doesNotMatch(detail, /SELECT[^\n]*(?:encrypted_value|initialization_vector|auth_tag|mapping_json|resolution_note)/iu);
   for (const action of ["create_mapping", "publish_mapping", "resolve_reconciliation"]) {
     assert.match(actions, new RegExp(action));
