@@ -12,7 +12,9 @@ test("a barra lateral volta a acompanhar a rolagem", async () => {
   // nunca era acionado. `clip` corta igual sem criar contêiner de rolagem.
   //
   // Cada regra declara as duas: `hidden` primeiro, como fallback para quem não
-  // suporta `clip`, e `clip` depois, que é o que vale. A invariante é do arquivo inteiro, não de duas regras conhecidas: qualquer
+  // suporta `clip`, e `clip` depois, que é o que vale.
+  //
+  // A invariante é do arquivo inteiro, e não de duas regras conhecidas: qualquer
   // `overflow-x: hidden` num ancestral da barra reintroduz o mesmo defeito, e
   // ninguém lembraria de conferir isso ao acrescentar uma regra nova.
   const rules = access.replace(/\/\*[\s\S]*?\*\//gu, "");
