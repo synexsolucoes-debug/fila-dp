@@ -180,6 +180,13 @@ test("a exclusão definitiva tem interface, e ela reflete as travas do servidor"
   // Só grupo fora de operação: sem esta porta, um clique apaga cliente ativo.
   assert.match(tela, /\["archived", "canceled"\]\.includes\(status\)/u);
   assert.match(tela, /irreversível/u, "a tela precisa dizer que não tem volta");
+  // O botão fica sempre visível — esconder virava "não acho a opção de excluir" —
+  // mas desabilitado enquanto o cliente está em operação, com a dica do que
+  // falta. A trava real continua no backend (WORKSPACE_NOT_ARCHIVED).
+  assert.match(tela, /disabled=\{!canPurge\}/u, "o botão de excluir fica visível, porém desabilitado fora de operação");
+  assert.match(tela, /Arquive ou cancele o cliente antes de excluir/u, "a dica precisa dizer o que fazer para liberar");
+  assert.doesNotMatch(tela, /\{\["archived", "canceled"\]\.includes\(status\) && <div className=\{styles\.dangerZone\}/u,
+    "a zona de exclusão não pode voltar a sumir por completo — só o botão é gated");
 });
 
 test("o diálogo de ação prende o foco e o devolve ao fechar", async () => {
