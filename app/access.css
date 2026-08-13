@@ -760,7 +760,13 @@
 }
 
 /* Responsive workspace controls */
-html, body { max-width: 100%; overflow-x: hidden; }
+/* `overflow-x: hidden` transforma o elemento em contêiner de rolagem. Aplicado
+ * ao `body`, ele passa a ser o contêiner do `position: sticky` da barra lateral
+ * — e, como quem rola é a página e não o `body`, o sticky nunca prende e a
+ * barra sobe junto com o conteúdo. `clip` corta o transbordo horizontal do
+ * mesmo jeito **sem** criar contêiner de rolagem. A declaração antiga fica
+ * antes como fallback para navegador sem suporte a `clip`. */
+html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 .dashboard-shell { min-height: 100dvh; }
 .dashboard-main, .dashboard-content, .dashboard-heading, .dashboard-board-head { min-width: 0; }
 .dashboard-sidebar button, .dashboard-header button, .dashboard-tabs button, .dashboard-add-card, .inbox-item button, .planner-day button, .primary-button, .secondary-button, .danger-link { touch-action: manipulation; }
@@ -1083,7 +1089,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
   --ui-text-soft: #5d6b80;
   width: 100%;
   max-width: 100vw;
+  /* Mesmo motivo do `html, body` acima, e aqui o efeito era ainda mais direto:
+   * este é o pai imediato da barra lateral. */
   overflow-x: hidden;
+  overflow-x: clip;
   background: var(--ui-bg);
   color: var(--ui-text);
   color-scheme: light;
