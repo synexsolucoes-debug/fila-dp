@@ -96,3 +96,97 @@
 .simpleRows { display: grid; }.simpleRows > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 11px; border-bottom: 1px solid var(--border); }.simpleRows span { display: grid; gap: 2px; }.simpleRows strong, .simpleRows small { font-size: .64rem; }.simpleRows small { color: var(--soft); }.accessRow { display: grid; grid-template-columns: minmax(150px, 1fr) 130px minmax(190px, 1.4fr) auto; align-items: center; gap: 9px; padding: 10px 11px; border-bottom: 1px solid var(--border); }.accessRow > div { display: grid; gap: 2px; }.accessRow strong, .accessRow small, .accessRow label, .accessRow legend { font-size: .62rem; }.accessRow small { color: var(--soft); }.accessRow > label { display: grid; gap: 3px; color: var(--soft); }.accessRow select, .moduleRow select { min-height: 33px; padding: 0 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }.accessRow fieldset { display: flex; flex-wrap: wrap; gap: 5px 8px; margin: 0; padding: 6px 8px; border: 1px solid var(--border); }.accessRow fieldset label { display: flex; align-items: center; gap: 4px; }.moduleRow { display: grid; grid-template-columns: minmax(0, 1fr) 145px auto; align-items: center; gap: 9px; padding: 9px 11px; border-bottom: 1px solid var(--border); }.moduleRow > div { display: grid; gap: 2px; }.moduleRow strong, .moduleRow small { font-size: .63rem; }.moduleRow small { color: var(--soft); }
 @media (max-width: 980px) { .configColumns { grid-template-columns: 1fr; }.accessRow { grid-template-columns: 1fr 130px; }.accessRow fieldset { grid-column: 1 / -1; }.accessRow > button { justify-self: start; } }
 @media (max-width: 680px) { .workspacePicker, .configHeading { align-items: stretch; flex-direction: column; }.configForm { grid-template-columns: 1fr; }.configForm .fullField { grid-column: auto; }.accessRow, .moduleRow { grid-template-columns: 1fr; }.accessRow fieldset { grid-column: auto; }.tabs { width: 100%; }.tabs button { flex: 0 0 auto; } }
+
+/* ==========================================================================
+ * Refinamento do Console Global — movimento, barra fixa e zona de risco.
+ *
+ * As folhas do painel operacional recebem o mesmo tratamento em
+ * app/interface-refresh.css. Aqui é a versão em módulo CSS, com os mesmos
+ * tempos e curvas: o console e o painel precisam parecer o mesmo produto.
+ * ========================================================================== */
+
+@keyframes consoleRise { from { opacity: 0; transform: translate3d(0, 10px, 0); } to { opacity: 1; transform: none; } }
+@keyframes consoleFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes consolePop { from { opacity: 0; transform: translate3d(0, 12px, 0) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes consoleSlideIn { from { opacity: 0; transform: translate3d(36px, 0, 0); } to { opacity: 1; transform: none; } }
+
+/* A lista de áreas passa da altura da tela em telas baixas; sem rolagem
+ * própria o último item ficava inalcançável, porque quem rola é a página e a
+ * barra está presa ao topo. */
+.sideNav {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.sideNav nav button {
+  position: relative;
+  transition: background-color 130ms cubic-bezier(.2, .6, .3, 1), border-color 130ms cubic-bezier(.2, .6, .3, 1), color 130ms cubic-bezier(.2, .6, .3, 1);
+}
+
+/* A marca do item ativo cresce a partir do centro em vez de piscar. */
+.sideNav nav button::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 0 3px 3px 0;
+  background: #1e469a;
+  transform: translateY(-50%);
+  transition: height 220ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.sideNav nav button[aria-current="page"]::before { height: 20px; }
+
+/* `key={area}` no PlatformApp remonta o palco a cada troca, e é isso que faz a
+ * animação rodar de novo em vez de só na primeira carga. */
+.featureStage { animation: consoleRise 340ms cubic-bezier(.16, 1, .3, 1) both; }
+
+.dialogBackdrop { animation: consoleFade 200ms ease both; backdrop-filter: blur(3px); }
+.actionDialog { animation: consolePop 300ms cubic-bezier(.16, 1, .3, 1) both; }
+.detailOverlay { animation: consoleFade 200ms ease both; }
+.detailPane { animation: consoleSlideIn 320ms cubic-bezier(.16, 1, .3, 1) both; }
+
+.featurePanel, .metricCard { transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease; }
+.metricCard:hover { transform: translateY(-2px); box-shadow: 0 8px 20px #06152614; }
+.tableWrap tbody tr { transition: background-color 130ms ease; }
+.tableWrap tbody tr:hover { background: #f6f9fd; }
+
+.smallAction, .headerAction, .pagination button {
+  transition: border-color 130ms ease, background-color 130ms ease, color 130ms ease, transform 130ms ease;
+}
+.smallAction:hover:not(:disabled), .headerAction:hover:not(:disabled) { border-color: #aec1e5; color: #1e469a; }
+.smallAction:active:not(:disabled), .headerAction:active:not(:disabled) { transform: scale(.98); }
+
+/* Ação destrutiva na listagem: só aparece para grupo já fora de operação, com o
+ * mesmo vermelho da zona de risco para que ninguém confunda com "suspender". */
+.dangerAction { border-color: #e3aaa6; color: var(--red); }
+.dangerAction:hover:not(:disabled) { border-color: var(--red); background: #fff4f3; color: var(--red); }
+
+/* A zona de risco deixou de aparecer só quando a exclusão já é possível: sem
+ * ela, quem procurava a opção não achava e não descobria o que faltava fazer.
+ * Agora ela está sempre lá e diz qual é a condição que ainda não foi atendida. */
+.dangerZone > ul { margin: 0 0 10px; padding-left: 17px; color: #76514e; font-size: .63rem; line-height: 1.55; }
+.dangerZone > button:disabled { border-color: #d9c3c1; color: #a4807d; cursor: not-allowed; }
+.dangerZone .dangerGate {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 0 9px;
+  padding: 8px 9px;
+  border: 1px solid #dec18e;
+  border-radius: 4px;
+  background: #fff9ee;
+  color: #68583f;
+  font-size: .63rem;
+  line-height: 1.45;
+}
+.dangerZone .dangerGate svg { flex: 0 0 auto; color: var(--amber); }
+.dangerZone .rowActions button[data-danger="true"] { border-color: #e3aaa6; color: var(--red); }
+
+@media (prefers-reduced-motion: reduce) {
+  .featureStage, .dialogBackdrop, .actionDialog, .detailOverlay, .detailPane { animation-duration: 1ms; }
+  .sideNav nav button::before, .metricCard, .smallAction, .headerAction { transition-duration: 1ms; }
+}

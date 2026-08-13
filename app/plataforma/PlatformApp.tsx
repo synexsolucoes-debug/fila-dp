@@ -63,7 +63,9 @@ export function PlatformApp() {
         <nav>{platformAreas.map(([key, label, Icon]) => <button key={key} type="button" aria-current={area === key ? "page" : undefined} onClick={() => go(key)}><Icon aria-hidden="true" /><span>{label}</span></button>)}</nav>
         <footer><ShieldCheck aria-hidden="true" /><span>Escopo global</span></footer>
       </aside>
-      <section className={styles.featureStage}>{feature}</section>
+      {/* `key={area}` remonta o palco a cada troca de área: é o que faz a
+          animação de entrada rodar de novo em vez de só na primeira carga. */}
+      <section className={styles.featureStage} key={area}>{feature}</section>
     </div>
   </main>;
 }
