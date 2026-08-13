@@ -444,6 +444,11 @@ export const integrations = pgTable("fdp_integrations", {
   status: text("status").notNull().default("needs_credentials"),
   configJson: text("config_json").notNull().default("{}"),
   lastSyncAt: timestamp("last_sync_at", { withTimezone: true, mode: "string" }),
+  lastConnectionAt: timestamp("last_connection_at", { withTimezone: true, mode: "string" }),
+  lastSuccessfulSyncAt: timestamp("last_successful_sync_at", { withTimezone: true, mode: "string" }),
+  nextSyncAt: timestamp("next_sync_at", { withTimezone: true, mode: "string" }),
+  scheduleEnabled: integer("schedule_enabled").notNull().default(0),
+  connectorVersion: text("connector_version").notNull().default(""),
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -702,7 +707,7 @@ export const employees = pgTable("fdp_employees", {
   check("fdp_employees_status_check", sql`${table.employmentStatus} IN ('active', 'on_leave', 'terminated')`),
   check("fdp_employees_type_check", sql`${table.employmentType} IN ('clt', 'intern', 'apprentice', 'temporary')`),
   check("fdp_employees_work_model_check", sql`${table.workModel} IN ('onsite', 'hybrid', 'remote')`),
-  check("fdp_employees_source_check", sql`${table.sourceSystem} IN ('manual', 'solides')`),
+  check("fdp_employees_source_check", sql`${table.sourceSystem} IN ('manual', 'solides', 'sankhya')`),
 ]);
 
 export const payrollCycles = pgTable("fdp_payroll_cycles", {
@@ -1014,6 +1019,7 @@ export const integrationCredentials = pgTable("fdp_integration_credentials", {
   authTag: text("auth_tag").notNull(),
   keyVersion: integer("key_version").notNull().default(1),
   fingerprint: text("fingerprint").notNull(),
+  publicHint: text("public_hint").notNull().default(""),
   status: text("status").notNull().default("active"),
   verifiedAt: timestamp("verified_at", { withTimezone: true, mode: "string" }),
   expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }),
@@ -1078,6 +1084,10 @@ export const integrationSyncRuns = pgTable("fdp_integration_sync_runs", {
   skippedCount: integer("skipped_count").notNull().default(0),
   conflictCount: integer("conflict_count").notNull().default(0),
   failedCount: integer("failed_count").notNull().default(0),
+  updatedCount: integer("updated_count").notNull().default(0),
+  unchangedCount: integer("unchanged_count").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  summary: text("summary").notNull().default(""),
   errorCode: text("error_code").notNull().default(""),
   errorMessage: text("error_message").notNull().default(""),
   requestedBy: text("requested_by"),
@@ -1088,13 +1098,49 @@ export const integrationSyncRuns = pgTable("fdp_integration_sync_runs", {
   uniqueIndex("fdp_integration_sync_runs_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_sync_runs_idempotency_uq").on(table.workspaceId, table.integrationId, table.idempotencyKey),
   uniqueIndex("fdp_integration_sync_runs_workspace_integration_id_uq").on(table.workspaceId, table.integrationId, table.id),
+  uniqueIndex("fdp_sankhya_active_run_uq").on(table.workspaceId, table.integrationId)
+    .where(sql`${table.mappingId} IS NULL AND ${table.status} IN ('queued', 'running', 'authenticating', 'navigating', 'processing', 'extracting', 'importing')`),
   index("fdp_integration_sync_runs_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
   foreignKey({ name: "fdp_integration_sync_runs_workspace_integration_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }).onDelete("cascade"),
   foreignKey({ name: "fdp_integration_sync_runs_workspace_mapping_fk", columns: [table.workspaceId, table.integrationId, table.mappingId], foreignColumns: [integrationMappings.workspaceId, integrationMappings.integrationId, integrationMappings.id] }),
   foreignKey({ name: "fdp_integration_sync_runs_workspace_requester_fk", columns: [table.workspaceId, table.requestedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
-  check("fdp_integration_sync_runs_trigger_check", sql`${table.triggerType} IN ('manual', 'scheduled', 'webhook', 'retry')`),
-  check("fdp_integration_sync_runs_status_check", sql`${table.status} IN ('queued', 'running', 'succeeded', 'partial', 'failed', 'canceled')`),
-  check("fdp_integration_sync_runs_counts_check", sql`${table.attempt} >= 0 AND ${table.receivedCount} >= 0 AND ${table.processedCount} >= 0 AND ${table.skippedCount} >= 0 AND ${table.conflictCount} >= 0 AND ${table.failedCount} >= 0`),
+  check("fdp_integration_sync_runs_trigger_check", sql`${table.triggerType} IN ('manual', 'scheduled', 'webhook', 'retry', 'health_check')`),
+  check("fdp_integration_sync_runs_status_check", sql`${table.status} IN ('queued', 'running', 'authenticating', 'navigating', 'processing', 'extracting', 'importing', 'succeeded', 'partial', 'failed', 'requires_user_action', 'canceled')`),
+  check("fdp_integration_sync_runs_counts_check", sql`${table.attempt} >= 0 AND ${table.receivedCount} >= 0 AND ${table.processedCount} >= 0 AND ${table.skippedCount} >= 0 AND ${table.conflictCount} >= 0 AND ${table.failedCount} >= 0 AND ${table.updatedCount} >= 0 AND ${table.unchangedCount} >= 0 AND ${table.durationMs} >= 0`),
+]);
+
+export const integrationRunLogs = pgTable("fdp_integration_run_logs", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  integrationId: text("integration_id").notNull().references(() => integrations.id, { onDelete: "cascade" }),
+  runId: text("run_id").notNull().references(() => integrationSyncRuns.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(),
+  level: text("level").notNull().default("info"),
+  phase: text("phase").notNull().default("queued"),
+  code: text("code").notNull().default(""),
+  message: text("message").notNull(),
+  metadataJson: jsonb("metadata_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_integration_run_logs_run_sequence_uq").on(table.runId, table.sequence),
+  index("fdp_integration_run_logs_workspace_run_idx").on(table.workspaceId, table.runId, table.createdAt),
+  foreignKey({ name: "fdp_integration_run_logs_workspace_run_fk", columns: [table.workspaceId, table.integrationId, table.runId], foreignColumns: [integrationSyncRuns.workspaceId, integrationSyncRuns.integrationId, integrationSyncRuns.id] }).onDelete("cascade"),
+  check("fdp_integration_run_logs_level_check", sql`${table.level} IN ('info', 'warn', 'error')`),
+]);
+
+export const integrationDiagnostics = pgTable("fdp_integration_diagnostics", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  integrationId: text("integration_id").notNull().references(() => integrations.id, { onDelete: "cascade" }),
+  runId: text("run_id").notNull().references(() => integrationSyncRuns.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default("screenshot"),
+  objectKey: text("object_key").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_integration_diagnostics_workspace_run_idx").on(table.workspaceId, table.runId, table.expiresAt),
+  foreignKey({ name: "fdp_integration_diagnostics_workspace_run_fk", columns: [table.workspaceId, table.integrationId, table.runId], foreignColumns: [integrationSyncRuns.workspaceId, integrationSyncRuns.integrationId, integrationSyncRuns.id] }).onDelete("cascade"),
+  check("fdp_integration_diagnostics_kind_check", sql`${table.kind} IN ('screenshot')`),
 ]);
 
 export const integrationSyncItems = pgTable("fdp_integration_sync_items", {
@@ -1150,9 +1196,51 @@ export const integrationJobs = pgTable("fdp_integration_jobs", {
   uniqueIndex("fdp_integration_jobs_idempotency_uq").on(table.workspaceId, table.integrationId, table.idempotencyKey),
   index("fdp_integration_jobs_claim_idx").on(table.workspaceId, table.status, table.availableAt, table.leaseExpiresAt),
   foreignKey({ name: "fdp_integration_jobs_workspace_run_fk", columns: [table.workspaceId, table.integrationId, table.runId], foreignColumns: [integrationSyncRuns.workspaceId, integrationSyncRuns.integrationId, integrationSyncRuns.id] }).onDelete("cascade"),
-  check("fdp_integration_jobs_type_check", sql`${table.jobType} IN ('sync', 'retry', 'reconcile')`),
+  check("fdp_integration_jobs_type_check", sql`${table.jobType} IN ('sync', 'retry', 'reconcile', 'health_check')`),
   check("fdp_integration_jobs_status_check", sql`${table.status} IN ('queued', 'leased', 'succeeded', 'failed', 'dead_letter', 'canceled')`),
   check("fdp_integration_jobs_attempt_check", sql`${table.attempt} >= 0 AND ${table.maxAttempts} BETWEEN 1 AND 12 AND ${table.attempt} <= ${table.maxAttempts}`),
+]);
+
+export const employeeExternalRefs = pgTable("fdp_employee_external_refs", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  integrationId: text("integration_id").notNull().references(() => integrations.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").references(() => employees.id, { onDelete: "set null" }),
+  source: text("source").notNull().default("sankhya"),
+  externalId: text("external_id").notNull(),
+  registrationNumber: text("registration_number").notNull().default(""),
+  normalizedHash: text("normalized_hash").notNull(),
+  normalizedJson: jsonb("normalized_json").$type<Record<string, unknown>>().notNull().default({}),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_external_refs_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_external_refs_source_external_uq").on(table.workspaceId, table.integrationId, table.source, table.externalId),
+  index("fdp_employee_external_refs_employee_idx").on(table.workspaceId, table.employeeId),
+  foreignKey({ name: "fdp_employee_external_refs_workspace_integration_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_employee_external_refs_workspace_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }),
+  check("fdp_employee_external_refs_source_check", sql`${table.source} IN ('sankhya')`),
+]);
+
+export const employeeSyncChanges = pgTable("fdp_employee_sync_changes", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  integrationId: text("integration_id").notNull().references(() => integrations.id, { onDelete: "cascade" }),
+  runId: text("run_id").notNull().references(() => integrationSyncRuns.id, { onDelete: "cascade" }),
+  externalRefId: text("external_ref_id").notNull().references(() => employeeExternalRefs.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").references(() => employees.id, { onDelete: "set null" }),
+  classification: text("classification").notNull(),
+  changedFieldsJson: jsonb("changed_fields_json").$type<string[]>().notNull().default([]),
+  beforeJson: jsonb("before_json").$type<Record<string, unknown>>().notNull().default({}),
+  afterJson: jsonb("after_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_employee_sync_changes_workspace_run_idx").on(table.workspaceId, table.runId, table.createdAt),
+  foreignKey({ name: "fdp_employee_sync_changes_workspace_run_fk", columns: [table.workspaceId, table.integrationId, table.runId], foreignColumns: [integrationSyncRuns.workspaceId, integrationSyncRuns.integrationId, integrationSyncRuns.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_employee_sync_changes_workspace_ref_fk", columns: [table.workspaceId, table.externalRefId], foreignColumns: [employeeExternalRefs.workspaceId, employeeExternalRefs.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_employee_sync_changes_workspace_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }),
+  check("fdp_employee_sync_changes_classification_check", sql`${table.classification} IN ('new', 'changed', 'unchanged', 'invalid')`),
 ]);
 
 export const integrationReconciliations = pgTable("fdp_integration_reconciliations", {

@@ -4,7 +4,7 @@ import { validateIntegrationEndpoint } from "./integration-security.ts";
 import { validateSolidesEndpoint } from "./solides.ts";
 import { validateTangerinoEndpoint } from "./tangerino.ts";
 
-export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "erp"] as const;
+export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "sankhya_browser", "erp"] as const;
 export type IntegrationChannel = typeof integrationChannels[number];
 export const integrationResources = ["inbox", "employees", "hr_metrics", "files", "admissions"] as const;
 export type IntegrationResource = typeof integrationResources[number];
@@ -17,6 +17,7 @@ const allowedCredentialKeys: Record<IntegrationChannel, ReadonlySet<string>> = {
   onedrive: new Set(["token", "clientId", "clientSecret", "tenantId", "refreshToken"]),
   solides: new Set(["token", "apiKey", "clientId", "clientSecret", "refreshToken"]),
   tangerino: new Set(["token", "apiKey"]),
+  sankhya_browser: new Set(["username", "password"]),
   erp: new Set(["token", "apiKey", "clientId", "clientSecret", "xToken"]),
 };
 
@@ -94,7 +95,8 @@ export function sanitizeCredentials(channelValue: unknown, value: unknown) {
   for (const [key, raw] of entries) {
     if (!allowed.has(key) || typeof raw !== "string") throw ApiError.badRequest(`O campo de credencial ${key} não é aceito para este conector.`, "CREDENTIAL_FIELD_INVALID");
     const secret = raw.trim();
-    if (secret.length < 8 || secret.length > 16_000) throw ApiError.badRequest(`A credencial ${key} possui tamanho inválido.`, "CREDENTIAL_VALUE_INVALID");
+    const minimumLength = channel === "sankhya_browser" && key === "username" ? 2 : 8;
+    if (secret.length < minimumLength || secret.length > 16_000) throw ApiError.badRequest(`A credencial ${key} possui tamanho inválido.`, "CREDENTIAL_VALUE_INVALID");
     sanitized[key] = secret;
   }
   if (Buffer.byteLength(stableJson(sanitized), "utf8") > 32 * 1024) throw ApiError.badRequest("O conjunto de credenciais excede 32 KB.", "CREDENTIALS_TOO_LARGE");
@@ -181,6 +183,15 @@ export function validateConnectorEndpoint(channel: string, value: unknown) {
 
 export function publicCredentialFingerprint(value: string) {
   return value ? `sha256:${value.slice(0, 12)}` : "";
+}
+
+/** Exibe somente um indício não reversível do usuário; a senha nunca tem representação pública. */
+export function credentialPublicHint(channelValue: unknown, value: unknown) {
+  const { channel, credentials } = sanitizeCredentials(channelValue, value);
+  if (channel !== "sankhya_browser") return "";
+  const username = credentials.username;
+  const visible = username.slice(0, Math.min(3, username.length));
+  return `${visible}${"*".repeat(Math.max(8, username.length - visible.length))}`;
 }
 
 export function retryDelaySeconds(attempt: number) {

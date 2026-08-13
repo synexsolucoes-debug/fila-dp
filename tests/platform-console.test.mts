@@ -84,13 +84,14 @@ test("ações críticas de integração exigem motivo, confirmação e auditoria
   assert.doesNotMatch(route, /return Response\.json\([^\n]*encryptedValue/u);
 });
 
-test("o painel é operacional e integrações ficam somente leitura", async () => {
+test("o painel é operacional e o conector Sankhya é administrado por capability no workspace", async () => {
   const [panel, integrations, registrations] = await Promise.all([
     source("app/painel/WorkspaceApp.tsx"), source("app/painel/features/integrations/IntegrationsView.tsx"), source("app/painel/features/registrations/RegistrationsView.tsx"),
   ]);
   assert.doesNotMatch(panel, /AccessView|SaasView|view === "access"|view === "saas"/u);
   assert.doesNotMatch(panel, /title="Configurações"/u);
-  assert.match(integrations, /SOMENTE LEITURA/u);
+  assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/u);
+  assert.match(integrations, /SankhyaConnectorPanel/u);
   assert.doesNotMatch(integrations, /IntegrationDrawer|type="password"|method: "(?:POST|PATCH|DELETE)"/u);
   assert.match(registrations, /useState<RegistrationTab>\("employees"\)/u);
   assert.doesNotMatch(registrations, /onClick=\{\(\) => setTab\("companies"\)\}/u);

@@ -46,7 +46,8 @@ export async function GET(request: Request) {
 
       const grouped = await Promise.all(workspaces.results.map(async (workspace) => {
         const scoped = getPlatformScopedD1({ workspaceId: workspace.id, userId: platform.userId });
-        const rows = await scoped.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.last_sync_at, i.last_error, i.created_at, i.updated_at,
+        const rows = await scoped.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.last_sync_at, i.last_connection_at, i.last_successful_sync_at,
+            i.next_sync_at, i.last_error, i.created_at, i.updated_at,
             NULLIF(i.config_json, '')::jsonb->>'companyId' AS company_id,
             company.trade_name AS company_name,
             credential.fingerprint, credential.key_version, credential.verified_at, credential.expires_at,
@@ -54,7 +55,8 @@ export async function GET(request: Request) {
             mapping.id AS mapping_id, mapping.resource_type, mapping.direction, mapping.version AS mapping_version,
             run.id AS last_run_id, run.trigger_type, run.status AS run_status, run.received_count, run.processed_count,
             run.skipped_count, run.conflict_count, run.failed_count, run.created_at AS run_created_at,
-            queue.queued, queue.processing, queue.retries, queue.dead_letter, reconciliation.conflicts
+            queue.queued, queue.processing, queue.retries, queue.dead_letter, reconciliation.conflicts,
+            health.run_count, health.success_count, health.average_duration_ms, health.authentication_errors, health.layout_errors, health.processed_total
           FROM fdp_integrations i
           LEFT JOIN fdp_companies company ON company.workspace_id = i.workspace_id
             AND company.id = NULLIF(i.config_json, '')::jsonb->>'companyId'
@@ -84,6 +86,15 @@ export async function GET(request: Request) {
             SELECT count(*) FILTER (WHERE status IN ('unmatched', 'conflict'))::int AS conflicts
             FROM fdp_integration_reconciliations WHERE workspace_id = i.workspace_id AND integration_id = i.id
           ) reconciliation ON TRUE
+          LEFT JOIN LATERAL (
+            SELECT count(*)::int AS run_count,
+              count(*) FILTER (WHERE status = 'succeeded')::int AS success_count,
+              COALESCE(avg(duration_ms) FILTER (WHERE duration_ms > 0), 0)::int AS average_duration_ms,
+              count(*) FILTER (WHERE error_code LIKE 'SANKHYA_LOGIN%' OR error_code LIKE 'SANKHYA_%CREDENTIAL%')::int AS authentication_errors,
+              count(*) FILTER (WHERE error_code IN ('SELECTOR_NOT_FOUND', 'DP_EXPLORER_NOT_FOUND', 'UI_CHANGED'))::int AS layout_errors,
+              COALESCE(sum(processed_count), 0)::int AS processed_total
+            FROM fdp_integration_sync_runs WHERE workspace_id = i.workspace_id AND integration_id = i.id
+          ) health ON TRUE
           WHERE i.workspace_id = ? ORDER BY i.created_at DESC, i.id DESC`).bind(workspace.id).all<Row>();
         return rows.results.map((row) => ({ workspace, row }));
       }));
@@ -102,6 +113,9 @@ export async function GET(request: Request) {
           fingerprint: row.fingerprint ? publicCredentialFingerprint(text(row.fingerprint)) : "",
           credentialVersion: number(row.key_version), verifiedAt: text(row.verified_at) || null, expiresAt: expiresAt || null,
           lastSyncAt: text(row.last_sync_at) || null,
+          lastConnectionAt: text(row.last_connection_at) || null,
+          lastSuccessfulSyncAt: text(row.last_successful_sync_at) || null,
+          nextSyncAt: text(row.next_sync_at) || null,
           lastError: lastError ? safeIntegrationError(new Error(lastError)).message : "",
           mapping: row.mapping_id ? { id: text(row.mapping_id), resource: text(row.resource_type), direction: text(row.direction), version: number(row.mapping_version) } : null,
           lastRun: row.last_run_id ? {
@@ -111,6 +125,8 @@ export async function GET(request: Request) {
           } : null,
           queue: { queued: number(row.queued), processing: number(row.processing), retries: number(row.retries), deadLetter: number(row.dead_letter) },
           conflicts: number(row.conflicts),
+          health: { runs: number(row.run_count), successes: number(row.success_count), averageDurationMs: number(row.average_duration_ms),
+            authenticationErrors: number(row.authentication_errors), layoutErrors: number(row.layout_errors), processed: number(row.processed_total) },
           credentialExpiring: Boolean(expiresAt && new Date(expiresAt).getTime() <= expiringCutoff),
           queueStalled: queueTotal > 0 && (!row.updated_at || now - new Date(text(row.updated_at)).getTime() > 30 * 60 * 1000),
           createdAt: text(row.created_at),
@@ -128,8 +144,16 @@ export async function GET(request: Request) {
       if (cursor) integrations = integrations.filter((item) => item.createdAt < cursor.createdAt || (item.createdAt === cursor.createdAt && item.id < cursor.id));
       const page = integrations.slice(0, limit);
       const next = integrations.length > limit ? page.at(-1) : null;
+      const sankhya = integrations.filter((item) => item.connector === "sankhya_browser");
+      const sankhyaRuns = sankhya.reduce((sum, item) => sum + item.health.runs, 0);
+      const sankhyaSuccesses = sankhya.reduce((sum, item) => sum + item.health.successes, 0);
       return Response.json({
         integrations: page,
+        sankhyaHealth: { connectors: sankhya.length, runs: sankhyaRuns, successRate: sankhyaRuns ? sankhyaSuccesses / sankhyaRuns : 0,
+          averageDurationMs: sankhya.length ? Math.round(sankhya.reduce((sum, item) => sum + item.health.averageDurationMs, 0) / sankhya.length) : 0,
+          authenticationErrors: sankhya.reduce((sum, item) => sum + item.health.authenticationErrors, 0),
+          layoutErrors: sankhya.reduce((sum, item) => sum + item.health.layoutErrors, 0),
+          processed: sankhya.reduce((sum, item) => sum + item.health.processed, 0) },
         nextCursor: encodePlatformCursor(next ? { createdAt: next.createdAt, id: next.id } : null),
         totalOnPage: page.length,
       }, { headers: { "Cache-Control": "no-store" } });

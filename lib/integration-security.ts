@@ -4,6 +4,7 @@ const DEFAULT_PROVIDER_HOSTS: Record<string, string[]> = {
   teams: ["graph.microsoft.com"],
   drive: ["www.googleapis.com", "graph.microsoft.com"],
   onedrive: ["graph.microsoft.com"],
+  sankhya_browser: ["*.sankhya.com.br"],
   erp: ["api.sankhya.com.br", "service.sankhya.com.br", "*.sankhya.com.br"],
 };
 

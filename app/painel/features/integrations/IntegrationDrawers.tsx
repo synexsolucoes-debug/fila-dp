@@ -35,6 +35,7 @@ const credentialFields: Record<Connector["channel"], Array<{ name: string; label
   solides: [{ name: "token", label: "Token oficial" }],
   tangerino: [{ name: "token", label: "Token de integração (Empregador → Integrações)" }],
   erp: [{ name: "apiKey", label: "Chave da API" }, { name: "xToken", label: "X-Token" }],
+  sankhya_browser: [{ name: "username", label: "Usuário dedicado" }, { name: "password", label: "Senha" }],
 };
 
 const formatDate = (value: string) => value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";

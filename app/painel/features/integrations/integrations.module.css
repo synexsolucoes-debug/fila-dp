@@ -355,3 +355,45 @@
   .spin, .toast, .drawer { animation: none; }
   .primaryButton, .secondaryButton, .dangerButton { transition: none; }
 }
+
+.sankhyaPanel { display: grid; gap: 12px; margin-bottom: 12px; }
+.sankhyaHero, .sankhyaCard > header, .sankhyaConfig > header, .sankhyaHistory > header { display: flex; align-items: center; gap: 11px; }
+.sankhyaHero { padding: 14px 16px; border: 1px solid var(--int-border); border-top: 3px solid var(--int-accent); border-radius: 7px; background: var(--int-surface); box-shadow: var(--ui-shadow-card); }
+.sankhyaHero > div { flex: 1; min-width: 0; }
+.sankhyaHero h3 { margin: 3px 0; font-size: 1rem; }
+.sankhyaHero p { margin: 0; color: var(--int-soft); font-size: .61rem; line-height: 1.5; }
+.sankhyaMark { display: grid; place-items: center; flex: 0 0 auto; width: 42px; height: 42px; border-radius: 7px; background: var(--int-navy); color: #75d5b6; }
+.sankhyaMark svg { width: 23px; height: 23px; }
+.successBanner { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--int-success) 30%, var(--int-border)); background: color-mix(in srgb, var(--int-success) 7%, var(--int-surface)); color: var(--int-success); font-size: .63rem; }
+.sankhyaGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sankhyaCard, .sankhyaConfig, .sankhyaHistory { overflow: hidden; border: 1px solid var(--int-border); border-radius: 7px; background: var(--int-surface); box-shadow: var(--ui-shadow-card); }
+.sankhyaCard > header, .sankhyaConfig > header, .sankhyaHistory > header { min-height: 58px; padding: 10px 13px; border-bottom: 1px solid var(--int-border); background: var(--int-muted); }
+.sankhyaCard > header > svg, .sankhyaConfig > header > svg, .sankhyaHistory > header > svg { color: var(--int-accent); }
+.sankhyaCard header > div, .sankhyaConfig header > div, .sankhyaHistory header > div { display: grid; gap: 2px; }
+.sankhyaCard header strong, .sankhyaConfig header strong, .sankhyaHistory header strong { font-size: .69rem; }
+.sankhyaCard header span, .sankhyaConfig header span, .sankhyaHistory header span { color: var(--int-soft); font-size: .52rem; }
+.sankhyaCard dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.sankhyaCard dl > div { min-width: 0; padding: 10px 12px; border-right: 1px solid var(--int-border); border-bottom: 1px solid var(--int-border); }
+.sankhyaCard dl > div:nth-child(even) { border-right: 0; }
+.sankhyaCard dt { color: var(--int-soft); font-size: .49rem; font-weight: 750; text-transform: uppercase; }
+.sankhyaCard dd { margin: 4px 0 0; overflow: hidden; font-size: .6rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.sankhyaCard > footer, .sankhyaConfig > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 12px; }
+.sankhyaConfig .formGrid { padding-bottom: 4px; }
+.toggleField { display: flex !important; grid-column: 1 / -1; align-items: center; grid-template-columns: 18px minmax(0, 1fr); padding: 9px 10px; border: 1px solid var(--int-border); border-radius: 4px; background: var(--int-muted); }
+.toggleField input { width: 16px !important; min-height: 16px !important; }
+.sankhyaHistory { min-width: 0; }
+.sankhyaHistory .dataTable td { white-space: nowrap; }
+.logList { display: grid; gap: 1px; border: 1px solid var(--int-border); background: var(--int-border); }
+.logList article { display: grid; grid-template-columns: 130px 110px minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px; background: var(--int-surface); }
+.logList article time { color: var(--int-soft); font-size: .53rem; }
+.logList article > div { min-width: 0; }
+.logList article strong { font-size: .58rem; }
+.logList article p, .logList > p { margin: 3px 0 0; color: var(--int-soft); font-size: .55rem; line-height: 1.5; }
+.logList > p { padding: 15px; background: var(--int-surface); }
+
+@media (max-width: 820px) {
+  .sankhyaGrid { grid-template-columns: 1fr; }
+  .sankhyaHero { align-items: flex-start; flex-wrap: wrap; }
+  .sankhyaHero .statusPill { margin-left: 53px; }
+  .logList article { grid-template-columns: 1fr; }
+}

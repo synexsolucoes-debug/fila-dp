@@ -503,8 +503,11 @@ async function executeRun(d1: Database, workspaceId: string, job: JobRow) {
 export async function processNextIntegrationJob(d1: Database, workspaceId: string) {
   const leaseToken = crypto.randomUUID();
   const job = await d1.prepare(`WITH candidate AS (
-      SELECT id FROM fdp_integration_jobs WHERE workspace_id = ? AND status IN ('queued', 'leased') AND available_at <= CURRENT_TIMESTAMP
-        AND (status = 'queued' OR lease_expires_at < CURRENT_TIMESTAMP) ORDER BY available_at, created_at FOR UPDATE SKIP LOCKED LIMIT 1
+      SELECT job.id FROM fdp_integration_jobs job
+      WHERE job.workspace_id = ? AND job.status IN ('queued', 'leased') AND job.available_at <= CURRENT_TIMESTAMP
+        AND EXISTS (SELECT 1 FROM fdp_integrations integration WHERE integration.workspace_id = job.workspace_id
+          AND integration.id = job.integration_id AND integration.channel <> 'sankhya_browser')
+        AND (job.status = 'queued' OR job.lease_expires_at < CURRENT_TIMESTAMP) ORDER BY job.available_at, job.created_at FOR UPDATE SKIP LOCKED LIMIT 1
     ) UPDATE fdp_integration_jobs job SET status = 'leased', lease_token = ?, lease_expires_at = CURRENT_TIMESTAMP + INTERVAL '2 minutes',
       attempt = job.attempt + 1, updated_at = CURRENT_TIMESTAMP FROM candidate WHERE job.id = candidate.id
     RETURNING job.id, job.integration_id, job.run_id, job.attempt, job.max_attempts, job.lease_token`)

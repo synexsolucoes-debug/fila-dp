@@ -103,16 +103,21 @@ test("phase 6 capabilities keep management and reconciliation admin-only", async
 });
 
 test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessible", async () => {
-  const [view, platform, core, api, types, workspace] = await Promise.all([
+  const [view, sankhyaPanel, platform, core, api, types, workspace] = await Promise.all([
     readFile(new URL("../app/painel/features/integrations/IntegrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/integrations/SankhyaConnectorPanel.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/features/IntegrationsFeature.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/features/core.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/integrations/integrations.api.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/integrations/integrations.types.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(view, /SOMENTE LEITURA/u);
+  assert.match(view, /INTEGRAÇÕES DO WORKSPACE/u);
+  assert.match(view, /SankhyaConnectorPanel/u);
   assert.doesNotMatch(view, /IntegrationDrawer|type="password"|Rotacionar|Revogar/u);
+  assert.match(sankhyaPanel, /Testar conexão/u);
+  assert.match(sankhyaPanel, /type="password"/u);
+  assert.match(sankhyaPanel, /••••••••••••/u);
   assert.match(platform, /Executar sincronização[\s\S]+Retry[\s\S]+Pausar[\s\S]+Rotacionar[\s\S]+Revogar/u);
   assert.match(core, /role="dialog"/u);
   assert.match(core, /Motivo obrigatório/u);
@@ -122,7 +127,7 @@ test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessibl
   assert.match(types, /"succeeded"/);
   assert.match(workspace, /<IntegrationsView role=/);
   assert.doesNotMatch(workspace, /function IntegrationsSettings|syncIntegration\(/);
-  const featureSource = `${view}\n${platform}\n${core}\n${api}`;
+  const featureSource = `${view}\n${sankhyaPanel}\n${platform}\n${core}\n${api}`;
   assert.doesNotMatch(featureSource, /localStorage|sessionStorage|location\.reload|encrypted_value|initialization_vector|auth_tag/);
   assert.doesNotMatch(featureSource, /window\.(prompt|confirm)/u);
 });
