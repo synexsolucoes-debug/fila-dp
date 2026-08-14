@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const [closings, contractors, policies] = await Promise.all([
+    const [closings, contractors, fixedItems, policies] = await Promise.all([
       cycleId
         ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.credits_amount, c.debits_amount, c.net_amount,
             c.invoice_limit_amount, c.invoice_limit_source, c.invoice_expected_amount, c.complement_amount, c.complement_method,
@@ -93,6 +93,13 @@ export async function GET(request: Request) {
       d1.prepare(`SELECT a.id, a.code, a.legal_name, p.base_amount, p.invoice_limit_override, p.complement_method, p.contract_reference, p.status
         FROM fdp_contractor_profiles p JOIN fdp_auxiliary_providers a ON a.workspace_id = p.workspace_id AND a.id = p.provider_id
         WHERE p.workspace_id = ? AND p.company_id = ? ORDER BY p.status, a.legal_name`).bind(workspace.id, companyId).all(),
+      d1.prepare(`SELECT f.id, f.provider_id, f.direction, f.component_type, f.description, f.amount,
+          f.effective_from, f.effective_to, f.status, f.note, a.legal_name AS contractor_name
+        FROM fdp_contractor_fixed_items f
+        JOIN fdp_auxiliary_providers a ON a.workspace_id = f.workspace_id AND a.id = f.provider_id
+        WHERE f.workspace_id = ? AND f.company_id = ?
+        ORDER BY f.status, a.legal_name, f.effective_from DESC, f.created_at DESC`)
+        .bind(workspace.id, companyId).all(),
       d1.prepare(`SELECT id, scope, company_id, provider_id, contract_reference, amount, effective_from
         FROM fdp_invoice_limit_policies WHERE workspace_id = ? AND (effective_to IS NULL OR effective_to >= ?)
         ORDER BY scope, effective_from DESC`).bind(workspace.id, `${competence}-01`).all(),
@@ -101,7 +108,8 @@ export async function GET(request: Request) {
     const rows = closings.results as Record<string, unknown>[];
     return Response.json({
       module: moduleType, competence, cycle, cycles: cycles.results,
-      closings: rows, contractors: contractors.results, invoiceLimitPolicies: policies.results,
+      closings: rows, contractors: contractors.results, fixedItems: fixedItems.results,
+      invoiceLimitPolicies: policies.results,
       totals: {
         netAmount: rows.reduce((total, row) => total + Number(row.net_amount ?? 0), 0),
         invoiceExpectedAmount: rows.reduce((total, row) => total + Number(row.invoice_expected_amount ?? 0), 0),

@@ -2,17 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertOctagon, ArrowRight, Calculator, CircleDot, Coins, Download, FileText, LoaderCircle, LockKeyhole,
+  AlertOctagon, ArrowRight, Calculator, CalendarClock, CircleDot, Coins, Download, FileText, LoaderCircle, LockKeyhole,
   Plus, RefreshCw, RotateCcw, ShieldCheck, Stethoscope, WalletCards,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { PaymentDialog as PaymentDialogView } from "./PaymentDialogs";
 import { CajuExportPanel } from "./CajuExportPanel";
+import { ContractorPaymentDetail } from "./ContractorPaymentDetail";
 import {
-  normalizeCompany, normalizeContractorOverview, normalizePsychologyOverview, requestJson, type Row,
+  normalizeCompany, normalizeContractorOverview, normalizeContractorPaymentDetail,
+  normalizePsychologyOverview, requestJson, type Row,
 } from "./payments.api";
 import type {
-  CompanyOption, ContractorOverview, EmployeeOption, PaymentDialog, PaymentModule, PsychologyOverview,
+  CompanyOption, ContractorOverview, ContractorPaymentDetail as ContractorPaymentDetailData,
+  EmployeeOption, PaymentDialog, PaymentModule, PsychologyOverview,
 } from "./payments.types";
 import styles from "./payments.module.css";
 
@@ -43,6 +46,13 @@ const limitSourceLabels: Record<string, string> = {
 const complementLabels: Record<string, string> = {
   none: "Não configurado", caju_saldo_livre: "Caju Saldo Livre", other_benefit_card: "Outro cartão", manual_transfer: "Transferência",
 };
+const componentLabels: Record<string, string> = {
+  commission: "Comissão", bonus: "Bônus", award: "Prêmio", reimbursement: "Reembolso", additional: "Adicional",
+  positive_adjustment: "Ajuste positivo", other_credit: "Outro provento", health_plan: "Plano de saúde",
+  dental_plan: "Plano odontológico", benefit: "Convênio ou benefício", coparticipation: "Coparticipação",
+  equipment: "Equipamento", advance: "Adiantamento", absence: "Falta", loan: "Empréstimo",
+  negative_adjustment: "Ajuste negativo", other_debit: "Outro desconto",
+};
 
 const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 const currentCompetence = () => new Date().toISOString().slice(0, 7);
@@ -65,6 +75,8 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
   const [contractors, setContractors] = useState<ContractorOverview | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [dialog, setDialog] = useState<PaymentDialog>(null);
+  const [paymentDetail, setPaymentDetail] = useState<ContractorPaymentDetailData | null>(null);
+  const [detailLoadingId, setDetailLoadingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -163,6 +175,19 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
     await mutate(path, { method: "POST", body: JSON.stringify(body) }, "Apuração atualizada.");
   }
 
+  async function openContractorDetail(closingId: string) {
+    setDetailLoadingId(closingId);
+    try {
+      const payload = await requestJson<Row>(`/api/payments/contractors/closings/${closingId}`);
+      setPaymentDetail(normalizeContractorPaymentDetail(payload));
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar o detalhamento do prestador.");
+    } finally {
+      setDetailLoadingId("");
+    }
+  }
+
   async function transition(closingId: string, status: string, reason?: string) {
     const path = module === "psychology"
       ? `/api/payments/psychology/closings/${closingId}/transition`
@@ -252,6 +277,23 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
         }),
       }, "Componente lançado na competência.");
       if (result) setDialog(null);
+      return;
+    }
+
+    if (active.kind === "fixed-item") {
+      const providerId = field(form, "providerId");
+      const result = await mutate("/api/payments/contractors/fixed-items", {
+        method: "POST",
+        body: JSON.stringify({
+          providerId, componentType: field(form, "componentType"), description: field(form, "description"),
+          amount: numeric(form, "amount") ?? 0, effectiveFrom: field(form, "effectiveFrom"),
+          effectiveTo: field(form, "effectiveTo") || null, note: field(form, "note"),
+        }),
+      }, "Lançamento fixo cadastrado.");
+      if (result) {
+        setDialog(null);
+        await recalculate(providerId);
+      }
       return;
     }
 
@@ -408,6 +450,57 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
             </article>
           </div>
 
+          <section className={styles.fixedItemsPanel} aria-labelledby="fixed-items-title">
+            <header>
+              <div>
+                <span className={styles.eyebrow}>LANÇAMENTOS RECORRENTES</span>
+                <h3 id="fixed-items-title">Lançamentos fixos</h3>
+                <p>Plano de saúde, convênios, adicionais e outros valores que se repetem automaticamente por competência.</p>
+              </div>
+              {canManage ? (
+                <button
+                  className={styles.secondaryButton}
+                  type="button"
+                  onClick={() => setDialog({ kind: "fixed-item", contractors: contractors.contractors, competence })}
+                  disabled={busy}
+                >
+                  <CalendarClock aria-hidden="true" /> Novo lançamento fixo
+                </button>
+              ) : null}
+            </header>
+            {contractors.fixedItems.length === 0 ? (
+              <p className={styles.fixedItemsEmpty}>Nenhum lançamento fixo cadastrado para esta empresa.</p>
+            ) : (
+              <div className={styles.tableScroll}>
+                <table className={styles.table}>
+                  <caption className={styles.tableCaption}>Valores recorrentes que alimentam as apurações PJ</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Prestador</th><th scope="col">Rubrica</th><th scope="col">Tipo</th>
+                      <th scope="col">Valor mensal</th><th scope="col">Vigência</th><th scope="col">Nesta competência</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contractors.fixedItems.map((item) => {
+                      const appliesNow = item.status === "active" && item.effectiveFrom <= competence
+                        && (!item.effectiveTo || competence <= item.effectiveTo);
+                      return (
+                        <tr key={item.id}>
+                          <th scope="row">{item.contractorName}</th>
+                          <td>{item.description || componentLabels[item.componentType] || item.componentType}<small>{componentLabels[item.componentType] || item.componentType}</small></td>
+                          <td>{item.direction === "credit" ? "Provento" : "Desconto"}</td>
+                          <td className={item.direction === "debit" ? styles.negative : undefined}>{money(item.amount)}</td>
+                          <td>{item.effectiveFrom} → {item.effectiveTo || "sem término"}<small>{item.effectiveTo ? "Prazo determinado" : "Sem prazo"}</small></td>
+                          <td><span className={styles.badge} data-tone={appliesNow ? "validated" : "pending"}>{appliesNow ? "Aplicado" : "Fora da vigência"}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
           {contractors.totals.cajuAmount > 0 && (
             <CajuExportPanel competenceId={cycle.id} canExport={permissions?.exportCaju === true} />
           )}
@@ -441,7 +534,15 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
                   {contractors.closings.map((row) => (
                     <tr key={row.id}>
                       <th scope="row">
-                        {row.contractorName}
+                        <button
+                          className={styles.contractorDetailButton}
+                          type="button"
+                          onClick={() => void openContractorDetail(row.id)}
+                          disabled={detailLoadingId === row.id}
+                          aria-label={`Ver proventos, descontos e resultado de ${row.contractorName}`}
+                        >
+                          {detailLoadingId === row.id ? "Carregando…" : row.contractorName}
+                        </button>
                         <small>{row.contractReference || row.contractorCode}</small>
                       </th>
                       <td>{money(row.baseAmount)}</td>
@@ -581,6 +682,7 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
       )}
 
       {toast && <p className={styles.toast} role="status">{toast}</p>}
+      {paymentDetail ? <ContractorPaymentDetail detail={paymentDetail} onClose={() => setPaymentDetail(null)} /> : null}
       {dialog && <PaymentDialogView dialog={dialog} busy={busy} onClose={() => setDialog(null)} onSubmit={submitDialog} />}
     </section>
   );
