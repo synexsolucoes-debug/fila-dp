@@ -6,6 +6,7 @@ import { sanitizePlatformValue } from "@/lib/platform-console";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { cleanText } from "@/lib/registrations";
+import { parseSankhyaConfig } from "@/lib/sankhya/config";
 
 type Params = { params: Promise<{ id: string }> };
 type Row = Record<string, unknown>;
@@ -24,14 +25,15 @@ export async function GET(request: Request, { params }: Params) {
       const workspace = await global.prepare("SELECT id, name, status FROM fdp_workspaces WHERE id = ?").bind(workspaceId).first<Row>();
       if (!workspace) throw ApiError.notFound("Workspace não encontrado.", "WORKSPACE_NOT_FOUND");
       const scoped = getPlatformScopedD1({ workspaceId, userId: platform.userId });
-      const [integration, credentials, mappings, runs, reconciliations, jobs, logs, diagnostics] = await Promise.all([
+      const [integration, credentials, mappings, runs, reconciliations, jobs, logs, diagnostics, companies] = await Promise.all([
         scoped.prepare(`SELECT integration.id, integration.channel, integration.display_name, integration.status, integration.last_sync_at,
-            integration.last_error, integration.created_at, company.id AS company_id, company.legal_name AS company_name
+            integration.last_connection_at, integration.next_sync_at, integration.last_error, integration.created_at,
+            integration.config_json, company.id AS company_id, company.legal_name AS company_name
           FROM fdp_integrations integration LEFT JOIN fdp_companies company
             ON company.workspace_id = integration.workspace_id
             AND company.id = NULLIF(integration.config_json, '')::jsonb->>'companyId'
           WHERE integration.workspace_id = ? AND integration.id = ?`).bind(workspaceId, id).first<Row>(),
-        scoped.prepare(`SELECT id, fingerprint, key_version, status, verified_at, expires_at, rotated_at, revoked_at, created_at
+        scoped.prepare(`SELECT id, fingerprint, public_hint, key_version, status, verified_at, expires_at, rotated_at, revoked_at, created_at
           FROM fdp_integration_credentials WHERE workspace_id = ? AND integration_id = ? ORDER BY created_at DESC LIMIT 20`).bind(workspaceId, id).all<Row>(),
         scoped.prepare(`SELECT id, resource_type, direction, version, status, checksum, published_at, created_at
           FROM fdp_integration_mappings WHERE workspace_id = ? AND integration_id = ? ORDER BY created_at DESC LIMIT 50`).bind(workspaceId, id).all<Row>(),
@@ -53,8 +55,13 @@ export async function GET(request: Request, { params }: Params) {
         scoped.prepare(`SELECT id, run_id, kind, expires_at, created_at
           FROM fdp_integration_diagnostics WHERE workspace_id = ? AND integration_id = ? AND expires_at > CURRENT_TIMESTAMP
           ORDER BY created_at DESC LIMIT 20`).bind(workspaceId, id).all<Row>(),
+        scoped.prepare(`SELECT id, legal_name, trade_name FROM fdp_companies
+          WHERE workspace_id = ? AND status = 'active' ORDER BY is_principal DESC, legal_name`).bind(workspaceId).all<Row>(),
       ]);
       if (!integration) throw ApiError.notFound("Integração não encontrada neste workspace.", "INTEGRATION_NOT_FOUND");
+      const configuration = integration.channel === "sankhya_browser" ? parseSankhyaConfig(integration.config_json) : null;
+      const publicIntegration = { ...integration };
+      delete publicIntegration.config_json;
       const reconciliationMap = new Map<string, Row & { differenceFields: string[] }>();
       for (const row of reconciliations.results) {
         const key = text(row.id); const current = reconciliationMap.get(key) ?? { ...row, differenceFields: [] };
@@ -63,7 +70,9 @@ export async function GET(request: Request, { params }: Params) {
       }
       return Response.json(sanitizePlatformValue({
         workspace,
-        integration: { ...integration, last_error: safeError(integration.last_error) },
+        integration: { ...publicIntegration, last_error: safeError(integration.last_error) },
+        configuration,
+        companies: companies.results,
         credentials: credentials.results.map((row) => ({ ...row, fingerprint: publicCredentialFingerprint(text(row.fingerprint)) })),
         mappings: mappings.results,
         runs: runs.results.map((row) => ({ ...row, error_summary: safeError(row.error_summary) })),

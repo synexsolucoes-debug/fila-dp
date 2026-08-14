@@ -4,8 +4,6 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { validateConnectorEndpoint } from "@/lib/integrations";
 import { solidesDateToIso } from "@/lib/solides";
-import { nextSankhyaRunAt, sanitizeSankhyaConfig } from "@/lib/sankhya/config";
-import { requireSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 
 type Context = { params: Promise<{ id: string }> };
 const sensitiveKey = /token|password|secret|senha|chave|authorization|cookie|api.?key/iu;
@@ -55,25 +53,7 @@ export async function PATCH(request: Request, { params }: Context) {
     const body = await request.json() as Record<string, unknown>;
     const channel = String(current.channel);
     if (channel === "sankhya_browser") {
-      await requireSankhyaWorkspaceEnabled(d1, workspace.id);
-      const config = sanitizeSankhyaConfig(body);
-      if (config.companyId) {
-        const company = await d1.prepare("SELECT 1 FROM fdp_companies WHERE workspace_id = ? AND id = ?")
-          .bind(workspace.id, config.companyId).first();
-        if (!company) throw ApiError.badRequest("A empresa selecionada não pertence a este workspace.", "SANKHYA_COMPANY_INVALID");
-      }
-      const displayName = text(body.displayName, 120) || String(current.display_name);
-      const status = body.status === "paused" ? "paused" : "needs_credentials";
-      const nextSyncAt = config.automaticEnabled ? nextSankhyaRunAt(config) : null;
-      await d1.batch([
-        d1.prepare(`UPDATE fdp_integrations SET display_name = ?, status = ?, config_json = ?, schedule_enabled = ?, next_sync_at = ?::timestamptz,
-          connector_version = '1', last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?`)
-          .bind(displayName, status, JSON.stringify(config), config.automaticEnabled ? 1 : 0, nextSyncAt, workspace.id, id),
-        prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "sankhya.integration.configured", entityType: "integration", entityId: id,
-          before: { displayName: current.display_name, status: current.status }, after: { displayName, status, automaticEnabled: config.automaticEnabled, frequency: config.frequency, routine: config.routine },
-          requestId: request.headers.get("x-fila-dp-request-id") }),
-      ]);
-      return Response.json({ id, channel, displayName, status, config: { ...config }, nextSyncAt });
+      throw ApiError.forbidden("A configuração Sankhya é gerenciada exclusivamente pela Plataforma Global.", "SANKHYA_PLATFORM_ADMIN_REQUIRED");
     }
     const endpointInput = text(body.endpoint, 500);
     const endpoint = endpointInput ? validateConnectorEndpoint(channel, endpointInput) : "";

@@ -3,8 +3,9 @@ import { ApiError } from "@/lib/api-errors";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { queueIntegrationRun } from "@/lib/integration-engine";
 import { credentialPublicHint, mappingDirection, mappingResource, publicCredentialFingerprint, sanitizeMapping, sealCredentials } from "@/lib/integrations";
-import { queueSankhyaRun } from "@/lib/sankhya/queue";
+import { queueSankhyaRun, requireSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
+import { nextSankhyaRunAt, parseSankhyaConfig, sanitizeSankhyaConfig } from "@/lib/sankhya/config";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { requiredPlatformReason, sanitizePlatformValue } from "@/lib/platform-console";
@@ -12,7 +13,7 @@ import { cleanText } from "@/lib/registrations";
 
 type Params = { params: Promise<{ id: string }> };
 type Row = Record<string, unknown>;
-const actions = new Set(["run", "retry", "pause", "resume", "revoke_credential", "rotate_credential", "create_mapping", "publish_mapping", "resolve_reconciliation"]);
+const actions = new Set(["run", "retry", "pause", "resume", "revoke_credential", "rotate_credential", "configure_sankhya", "test_connection", "create_mapping", "publish_mapping", "resolve_reconciliation"]);
 const truthy = (value: unknown) => value === true || value === 1 || value === "1" || value === "t" || value === "true";
 
 export async function POST(request: Request, { params }: Params) {
@@ -34,7 +35,7 @@ export async function POST(request: Request, { params }: Params) {
         .bind(workspaceId).first<{ id: string; name: string; owner_user_id: string }>();
       if (!workspace) throw ApiError.badRequest("Workspace informado não existe.", "WORKSPACE_NOT_FOUND");
       const scoped = getPlatformScopedD1({ workspaceId, userId: platform.userId });
-      const integration = await scoped.prepare("SELECT id, channel, display_name, status FROM fdp_integrations WHERE workspace_id = ? AND id = ?")
+      const integration = await scoped.prepare("SELECT id, channel, display_name, status, config_json FROM fdp_integrations WHERE workspace_id = ? AND id = ?")
         .bind(workspaceId, id).first<Row>();
       if (!integration) throw ApiError.notFound("Integração não encontrada neste workspace.", "INTEGRATION_NOT_FOUND");
       if (["revoke_credential", "rotate_credential"].includes(action) && cleanText(body.confirmation, 160) !== String(integration.display_name)) {
@@ -69,6 +70,37 @@ export async function POST(request: Request, { params }: Params) {
             triggerType: "retry", requestedBy: null, idempotencyKey });
         result = { runId: retry.id, retryOf: runId, status: retry.status };
         shouldWakeSankhya = integration.channel === "sankhya_browser";
+      } else if (action === "configure_sankhya") {
+        if (integration.channel !== "sankhya_browser") {
+          throw ApiError.badRequest("Esta configuração é exclusiva do conector Sankhya.", "SANKHYA_INTEGRATION_REQUIRED");
+        }
+        await requireSankhyaWorkspaceEnabled(scoped, workspaceId);
+        const config = sanitizeSankhyaConfig(body.config);
+        if (config.companyId) {
+          const company = await scoped.prepare("SELECT 1 FROM fdp_companies WHERE workspace_id = ? AND id = ? AND status = 'active'")
+            .bind(workspaceId, config.companyId).first();
+          if (!company) throw ApiError.badRequest("A empresa selecionada não pertence a este workspace.", "SANKHYA_COMPANY_INVALID");
+        }
+        const displayName = cleanText(body.displayName, 120) || String(integration.display_name);
+        const nextSyncAt = config.automaticEnabled ? nextSankhyaRunAt(config) : null;
+        const activeCredential = await scoped.prepare(`SELECT 1 FROM fdp_integration_credentials
+          WHERE workspace_id = ? AND integration_id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > now())`)
+          .bind(workspaceId, id).first();
+        const status = integration.status === "paused" ? "paused" : activeCredential ? "connected" : "needs_credentials";
+        before = { workspaceId, displayName: integration.display_name, status: integration.status, configuration: parseSankhyaConfig(integration.config_json) };
+        await scoped.prepare(`UPDATE fdp_integrations SET display_name = ?, status = ?, config_json = ?,
+            schedule_enabled = ?, next_sync_at = ?::timestamptz, connector_version = '1', last_error = NULL, updated_at = now()
+          WHERE workspace_id = ? AND id = ?`)
+          .bind(displayName, status, JSON.stringify(config), config.automaticEnabled ? 1 : 0, nextSyncAt, workspaceId, id).run();
+        result = { displayName, status, configuration: config, nextSyncAt };
+      } else if (action === "test_connection") {
+        if (integration.channel !== "sankhya_browser") {
+          throw ApiError.badRequest("O teste RPA é exclusivo do conector Sankhya.", "SANKHYA_INTEGRATION_REQUIRED");
+        }
+        const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `platform-health:${crypto.randomUUID()}`;
+        const run = await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "health_check", requestedBy: null, idempotencyKey });
+        result = { runId: run.id, status: run.status, healthCheck: true };
+        shouldWakeSankhya = true;
       } else if (action === "pause") {
         await scoped.prepare("UPDATE fdp_integrations SET status = 'paused', updated_at = now() WHERE workspace_id = ? AND id = ?")
           .bind(workspaceId, id).run();
@@ -91,6 +123,7 @@ export async function POST(request: Request, { params }: Params) {
         ]);
         result = { status: "needs_credentials", credential: "revoked" };
       } else if (action === "rotate_credential") {
+        if (integration.channel === "sankhya_browser") await requireSankhyaWorkspaceEnabled(scoped, workspaceId);
         const sealed = sealCredentials(integration.channel, body.credentials);
         const publicHint = credentialPublicHint(String(integration.channel), body.credentials);
         const expiresAt = typeof body.expiresAt === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?Z$/u.test(body.expiresAt) ? body.expiresAt : null;
@@ -199,7 +232,7 @@ export async function POST(request: Request, { params }: Params) {
           .bind(crypto.randomUUID(), platform.userId, platform.email, `platform.integration.${action}`, auditEntityType, auditEntityId,
             JSON.stringify(before), JSON.stringify(after), requestId),
       ]);
-      return Response.json({ action, integrationId: id, workspaceId, result }, { status: action === "run" || action === "retry" ? 202 : 200 });
+      return Response.json({ action, integrationId: id, workspaceId, result }, { status: ["run", "retry", "test_connection"].includes(action) ? 202 : 200 });
     });
   } catch (error) { return apiError(error); }
 }
