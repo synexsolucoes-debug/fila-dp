@@ -62,12 +62,28 @@ export type InvoiceLimitPolicy = {
 
 export type ContractorComponent = {
   id: string; providerId: string; direction: string; componentType: string; description: string;
-  amount: number; origin: string; documentReference: string; status: string;
+  quantity: number; amount: number; origin: string; documentReference: string; status: string;
+};
+
+export type ContractorFixedItem = {
+  id: string; providerId: string; contractorName: string; direction: "credit" | "debit";
+  componentType: string; description: string; amount: number; effectiveFrom: string;
+  effectiveTo: string | null; status: string; note: string;
+};
+
+export type ContractorPaymentDetail = {
+  closing: ContractorClosing;
+  provider: {
+    id: string; code: string; legalName: string; tradeName: string;
+    contractReference: string; roleTitle: string;
+  };
+  components: ContractorComponent[];
 };
 
 export type ContractorOverview = {
   module: "contractors"; competence: string; cycle: CycleOption | null; cycles: CycleOption[];
-  closings: ContractorClosing[]; contractors: Contractor[]; invoiceLimitPolicies: InvoiceLimitPolicy[];
+  closings: ContractorClosing[]; contractors: Contractor[]; fixedItems: ContractorFixedItem[];
+  invoiceLimitPolicies: InvoiceLimitPolicy[];
   totals: { netAmount: number; invoiceExpectedAmount: number; complementAmount: number; cajuAmount: number; divergentCount: number };
   permissions: PaymentPermissions;
 };
@@ -80,6 +96,7 @@ export type PaymentDialog =
   | { kind: "psychology-payment"; closing: PsychologyClosing }
   | { kind: "contractor" }
   | { kind: "component"; contractors: Contractor[] }
+  | { kind: "fixed-item"; contractors: Contractor[]; competence: string }
   | { kind: "invoice"; closing: ContractorClosing }
   | { kind: "complement"; closing: ContractorClosing }
   | { kind: "limit"; contractors: Contractor[] }

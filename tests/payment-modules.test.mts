@@ -301,7 +301,7 @@ test("o banco garante a identidade do cálculo e a imutabilidade do fechamento",
 });
 
 test("as APIs de pagamento validam tenant, competência fechada, permissão e auditoria", async () => {
-  const [sessions, contractorClosings, transition, invoice, caju, limits, adjustments, overview] = await Promise.all([
+  const [sessions, contractorClosings, transition, invoice, caju, limits, adjustments, overview, fixedItems] = await Promise.all([
     readFile(new URL("../app/api/payments/psychology/sessions/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/contractors/closings/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/contractors/closings/[id]/transition/route.ts", import.meta.url), "utf8"),
@@ -310,13 +310,14 @@ test("as APIs de pagamento validam tenant, competência fechada, permissão e au
     readFile(new URL("../app/api/payments/contractors/limits/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/psychology/closings/[id]/adjustments/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/overview/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/fixed-items/route.ts", import.meta.url), "utf8"),
   ]);
 
-  for (const source of [sessions, contractorClosings, transition, invoice, caju, limits, adjustments, overview]) {
+  for (const source of [sessions, contractorClosings, transition, invoice, caju, limits, adjustments, overview, fixedItems]) {
     assert.match(source, /getWorkspaceContext/);
     assert.doesNotMatch(source, /getWorkspaceSnapshot/);
   }
-  for (const source of [sessions, contractorClosings, transition, invoice, caju, adjustments, overview]) {
+  for (const source of [sessions, contractorClosings, transition, invoice, caju, adjustments, overview, fixedItems]) {
     assert.match(source, /requireCompanyAccess/);
   }
   assert.match(sessions, /assertNoClinicalData/);
@@ -334,16 +335,21 @@ test("as APIs de pagamento validam tenant, competência fechada, permissão e au
   assert.match(invoice, /refreshContractorReconciliation/);
   assert.match(limits, /requireCapability\(workspace, "contractors\.limits\.manage"\)/);
   assert.match(limits, /effective_to = \?/);
+  assert.match(fixedItems, /requireCapability\(workspace, "contractors\.payments\.manage"\)/);
+  assert.match(fixedItems, /readFixedItemInput\(body\)/);
+  assert.match(fixedItems, /prepareAuditEvent/);
+  assert.match(overview, /fdp_contractor_fixed_items/);
   // O complemento é controle assistido: nenhuma integração é declarada pronta.
   assert.match(caju, /connected: false/);
   assert.doesNotMatch(caju, /https?:\/\/[a-z]*\.?caju/i);
 });
 
 test("a interface de pagamento é modular, acessível e sem controle decorativo", async () => {
-  const [workspace, view, dialogs] = await Promise.all([
+  const [workspace, view, dialogs, contractorDetail] = await Promise.all([
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/PaymentDialogs.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorPaymentDetail.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(workspace, /<PaymentsView role=\{snapshot\.workspace\.role\} module="psychology" \/>/);
   assert.match(workspace, /<PaymentsView role=\{snapshot\.workspace\.role\} module="contractors" \/>/);
@@ -369,4 +375,12 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   assert.match(dialogs, /aria-modal="true"/);
   assert.doesNotMatch(dialogs, /name="diagnosis"|name="clinicalNote"|Prontuário/i);
   assert.match(dialogs, /Não registre diagnóstico/);
+  assert.match(dialogs, /Lançamento fixo do prestador/);
+  assert.match(dialogs, /Sem término/);
+  assert.match(dialogs, /Com término determinado/);
+  for (const section of ["Proventos", "Descontos", "Resultado final", "Nota a emitir", "Caju Saldo Livre"]) {
+    assert.ok(contractorDetail.includes(section), `detalhamento PJ sem a seção ${section}`);
+  }
+  assert.match(contractorDetail, /aria-modal="true"/);
+  assert.match(view, /openContractorDetail\(row\.id\)/);
 });

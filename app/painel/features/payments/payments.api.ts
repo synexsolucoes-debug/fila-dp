@@ -1,5 +1,6 @@
 import type {
-  CompanyOption, Contractor, ContractorClosing, ContractorComponent, ContractorOverview, CycleOption,
+  CompanyOption, Contractor, ContractorClosing, ContractorComponent, ContractorFixedItem,
+  ContractorOverview, ContractorPaymentDetail, CycleOption,
   InvoiceLimitPolicy, PaymentPermissions, Psychologist, PsychologyAdjustment, PsychologyClosing,
   PsychologyOverview, PsychologySession, UnassignedSessions,
 } from "./payments.types";
@@ -164,8 +165,42 @@ export function normalizeComponent(row: Row): ContractorComponent {
   return {
     id: text(row.id), providerId: text(pick(row, "providerId", "provider_id")), direction: text(row.direction),
     componentType: text(pick(row, "componentType", "component_type")), description: text(row.description),
+    quantity: number(pick(row, "quantity", "component_quantity")) || 1,
     amount: number(row.amount), origin: text(row.origin),
     documentReference: text(pick(row, "documentReference", "document_reference")), status: text(row.status),
+  };
+}
+
+export function normalizeFixedItem(row: Row): ContractorFixedItem {
+  return {
+    id: text(row.id), providerId: text(pick(row, "providerId", "provider_id")),
+    contractorName: text(pick(row, "contractorName", "contractor_name")),
+    direction: text(row.direction) === "credit" ? "credit" : "debit",
+    componentType: text(pick(row, "componentType", "component_type")), description: text(row.description),
+    amount: number(row.amount), effectiveFrom: text(pick(row, "effectiveFrom", "effective_from")),
+    effectiveTo: text(pick(row, "effectiveTo", "effective_to")) || null,
+    status: text(row.status), note: text(row.note),
+  };
+}
+
+export function normalizeContractorPaymentDetail(payload: Row): ContractorPaymentDetail {
+  const provider = (payload.provider ?? {}) as Row;
+  const rawClosing = (payload.closing ?? {}) as Row;
+  return {
+    closing: normalizeContractorClosing({
+      ...rawClosing,
+      contractorName: pick(provider, "legalName", "legal_name"),
+      contractorCode: provider.code,
+      contractReference: pick(provider, "contractReference", "contract_reference"),
+    }),
+    provider: {
+      id: text(provider.id), code: text(provider.code),
+      legalName: text(pick(provider, "legalName", "legal_name")),
+      tradeName: text(pick(provider, "tradeName", "trade_name")),
+      contractReference: text(pick(provider, "contractReference", "contract_reference")),
+      roleTitle: text(pick(provider, "roleTitle", "role_title")),
+    },
+    components: ((payload.components ?? []) as Row[]).map(normalizeComponent),
   };
 }
 
@@ -178,6 +213,7 @@ export function normalizeContractorOverview(payload: Row): ContractorOverview {
     cycles: ((payload.cycles ?? []) as Row[]).map(normalizeCycle),
     closings: ((payload.closings ?? []) as Row[]).map(normalizeContractorClosing),
     contractors: ((payload.contractors ?? []) as Row[]).map(normalizeContractor),
+    fixedItems: ((payload.fixedItems ?? []) as Row[]).map(normalizeFixedItem),
     invoiceLimitPolicies: ((payload.invoiceLimitPolicies ?? []) as Row[]).map((row): InvoiceLimitPolicy => ({
       id: text(row.id), scope: text(row.scope), companyId: text(pick(row, "companyId", "company_id")),
       providerId: text(pick(row, "providerId", "provider_id")),
