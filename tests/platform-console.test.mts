@@ -133,6 +133,26 @@ test("clientes e usuários expõem as mutações globais existentes sem diálogo
   assert.doesNotMatch(`${clients}\n${users}`, /window\.(prompt|confirm)/u);
 });
 
+test("administrador global consegue gerar link de ativação auditado sem expor senha", async () => {
+  const [feature, route] = await Promise.all([
+    source("app/plataforma/features/UsersFeature.tsx"),
+    source("app/api/platform/users/[id]/activation/route.ts"),
+  ]);
+  assert.match(feature, /Gerar link de ativação/u);
+  assert.match(feature, /Link único de ativação/u);
+  assert.match(feature, /\/api\/platform\/users\/\$\{encodeURIComponent\(id\)\}\/activation/u);
+  assert.match(route, /requirePlatformAdmin\(auth\.user\)/u);
+  assert.match(route, /body\.confirmed !== true/u);
+  assert.match(route, /requiredPlatformReason/u);
+  assert.match(route, /createRecoveryToken/u);
+  assert.match(route, /fdp_access_recovery_tokens/u);
+  assert.match(route, /platform\.user_activation_link_created/u);
+  assert.match(route, /fdp_platform_audit_events/u);
+  assert.match(route, /USER_ALREADY_ACTIVATED/u);
+  assert.doesNotMatch(route, /SELECT[^\n]*password_hash(?![^\n]*IS NOT NULL)/u);
+  assert.doesNotMatch(`${feature}\n${route}`, /senha provisória|passwordHash|token_hash:/iu);
+});
+
 test("financeiro liga planos e leads a APIs reais e auditadas", async () => {
   const [feature, plans, leads] = await Promise.all([
     source("app/plataforma/features/BillingFeature.tsx"), source("app/api/platform/plans/[id]/route.ts"), source("app/api/platform/leads/route.ts"),

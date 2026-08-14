@@ -78,6 +78,10 @@
 .detailActions > p { margin: 0 0 10px; color: var(--soft); font-size: .66rem; line-height: 1.5; }
 .detailActions label { display: inline-grid; gap: 4px; color: var(--soft); font-size: .64rem; font-weight: 700; }
 .detailActions select { min-height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); font-size: .7rem; }
+.activationLink { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; border-color: #9bc4b4; background: #effaf6; }
+.activationLink h3, .activationLink p { grid-column: 1 / -1; }
+.activationLink input { min-width: 0; min-height: 36px; padding: 0 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); font-family: var(--font-geist-mono), monospace; font-size: .62rem; }
+.activationLink button { min-height: 36px; padding: 0 11px; border: 1px solid var(--green); border-radius: 5px; background: var(--green); color: #fff; font-weight: 760; cursor: pointer; }
 
 .detailTable { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
 .detailTable th, .detailTable td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: .68rem; vertical-align: middle; }
