@@ -84,15 +84,21 @@ test("ações críticas de integração exigem motivo, confirmação e auditoria
   assert.doesNotMatch(route, /return Response\.json\([^\n]*encryptedValue/u);
 });
 
-test("o painel é operacional e o conector Sankhya é administrado por capability no workspace", async () => {
-  const [panel, integrations, registrations] = await Promise.all([
-    source("app/painel/WorkspaceApp.tsx"), source("app/painel/features/integrations/IntegrationsView.tsx"), source("app/painel/features/registrations/RegistrationsView.tsx"),
+test("o painel é operacional e recebe o conector Sankhya pronto da Plataforma Global", async () => {
+  const [panel, integrations, sankhya, integrationRoute, credentialsRoute, registrations] = await Promise.all([
+    source("app/painel/WorkspaceApp.tsx"), source("app/painel/features/integrations/IntegrationsView.tsx"),
+    source("app/painel/features/integrations/SankhyaConnectorPanel.tsx"), source("app/api/integrations/[id]/route.ts"),
+    source("app/api/integrations/[id]/credentials/route.ts"), source("app/painel/features/registrations/RegistrationsView.tsx"),
   ]);
   assert.doesNotMatch(panel, /AccessView|SaasView|view === "access"|view === "saas"/u);
   assert.doesNotMatch(panel, /title="Configurações"/u);
   assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/u);
   assert.match(integrations, /SankhyaConnectorPanel/u);
   assert.doesNotMatch(integrations, /IntegrationDrawer|type="password"|method: "(?:POST|PATCH|DELETE)"/u);
+  assert.match(sankhya, /Gerenciada pela Plataforma Global/u);
+  assert.doesNotMatch(sankhya, /Alterar credenciais Sankhya|type="password"|Salvar configuração/u);
+  assert.match(integrationRoute, /SANKHYA_PLATFORM_ADMIN_REQUIRED/u);
+  assert.match(credentialsRoute, /SANKHYA_PLATFORM_ADMIN_REQUIRED/u);
   assert.match(registrations, /useState<RegistrationTab>\("employees"\)/u);
   assert.doesNotMatch(registrations, /onClick=\{\(\) => setTab\("companies"\)\}/u);
 });
@@ -145,9 +151,10 @@ test("integrações globais oferecem todos os filtros operacionais solicitados",
   for (const label of ["Filtrar workspace", "Filtrar empresa", "Credenciais vencendo", "Filas paradas"]) assert.match(feature, new RegExp(label));
 });
 
-test("detalhe global de integração mantém segredos omitidos e expõe fluxos auditados de mapeamento e conciliação", async () => {
-  const [feature, detail, actions, core] = await Promise.all([
+test("detalhe global de integração mantém segredos omitidos e expõe configuração Sankhya auditada", async () => {
+  const [feature, sankhya, detail, actions, core] = await Promise.all([
     source("app/plataforma/features/IntegrationsFeature.tsx"),
+    source("app/plataforma/features/SankhyaPlatformConfiguration.tsx"),
     source("app/api/platform/integrations/[id]/detail/route.ts"),
     source("app/api/platform/integrations/[id]/actions/route.ts"),
     source("app/plataforma/features/core.tsx"),
@@ -155,10 +162,22 @@ test("detalhe global de integração mantém segredos omitidos e expõe fluxos a
   assert.match(detail, /requirePlatformAdmin\(auth\.user\)/u);
   assert.match(detail, /getPlatformScopedD1/u);
   assert.match(detail, /publicCredentialFingerprint/u);
+  assert.match(detail, /public_hint/u);
+  assert.match(detail, /parseSankhyaConfig/u);
+  assert.match(detail, /delete publicIntegration\.config_json/u);
+  assert.match(detail, /FROM fdp_companies/u);
   assert.match(detail, /differences_json/u);
   assert.match(detail, /NULLIF\(integration\.config_json, ''\)::jsonb->>'companyId'/u);
   assert.doesNotMatch(detail, /integration\.company_id/u);
   assert.doesNotMatch(detail, /SELECT[^\n]*(?:encrypted_value|initialization_vector|auth_tag|mapping_json|resolution_note)/iu);
+  for (const action of ["configure_sankhya", "test_connection"]) assert.match(actions, new RegExp(action));
+  assert.match(actions, /sanitizeSankhyaConfig/u);
+  assert.match(actions, /triggerType: "health_check"/u);
+  assert.match(actions, /requireSankhyaWorkspaceEnabled/u);
+  assert.match(feature, /SankhyaPlatformConfiguration/u);
+  for (const label of ["Configuração Sankhya do workspace", "Criptografar e salvar", "Testar conexão", "Motivo administrativo"]) assert.match(sankhya, new RegExp(label));
+  assert.match(sankhya, /type="password"/u);
+  assert.doesNotMatch(sankhya, /password[^\n]*public_hint/iu);
   for (const action of ["create_mapping", "publish_mapping", "resolve_reconciliation"]) {
     assert.match(actions, new RegExp(action));
     assert.match(feature, new RegExp(action));

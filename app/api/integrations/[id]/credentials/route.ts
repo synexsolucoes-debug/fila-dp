@@ -3,7 +3,6 @@ import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { credentialPublicHint, publicCredentialFingerprint, sealCredentials } from "@/lib/integrations";
-import { requireSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -17,8 +16,7 @@ export async function PUT(request: Request, { params }: Context) {
       .bind(workspace.id, id).first<{ id: string; channel: string }>();
     if (!integration) throw ApiError.notFound("Integração não encontrada.", "INTEGRATION_NOT_FOUND");
     if (integration.channel === "sankhya_browser") {
-      requireCapability(workspace, "integrations.credentials.manage");
-      await requireSankhyaWorkspaceEnabled(d1, workspace.id);
+      throw ApiError.forbidden("As credenciais Sankhya são gerenciadas exclusivamente pela Plataforma Global.", "SANKHYA_PLATFORM_ADMIN_REQUIRED");
     } else requireCapability(workspace, "integrations.manage");
     const body = await request.json() as { credentials?: unknown; expiresAt?: unknown };
     const sealed = sealCredentials(integration.channel, body.credentials);
@@ -50,8 +48,7 @@ export async function DELETE(request: Request, { params }: Context) {
     const integration = await d1.prepare("SELECT id, channel FROM fdp_integrations WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first<{ id: string; channel: string }>();
     if (!integration) throw ApiError.notFound("Integração não encontrada.", "INTEGRATION_NOT_FOUND");
     if (integration.channel === "sankhya_browser") {
-      requireCapability(workspace, "integrations.credentials.manage");
-      await requireSankhyaWorkspaceEnabled(d1, workspace.id);
+      throw ApiError.forbidden("As credenciais Sankhya são gerenciadas exclusivamente pela Plataforma Global.", "SANKHYA_PLATFORM_ADMIN_REQUIRED");
     } else requireCapability(workspace, "integrations.manage");
     await d1.batch([
       d1.prepare("UPDATE fdp_integration_credentials SET status = 'revoked', revoked_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND integration_id = ? AND status = 'active'").bind(workspace.id, id),
