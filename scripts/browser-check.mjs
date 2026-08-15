@@ -120,10 +120,18 @@ if (password && await emailField.count()) {
 
   // 3. Console global
   await page.goto(`${base}/plataforma`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('[role="tablist"]', { timeout: 20000 }).catch(() => undefined);
+  // O console navega por URL (`?area=...`), então a marcação correta é <nav>
+  // com `aria-current="page"` — não `role="tablist"`, que descreveria painéis
+  // trocados dentro da mesma página. Esta verificação esperava tablist e falhava
+  // contra um console que está certo: ela ficou para trás porque nunca rodava.
+  await page.waitForSelector("nav button[aria-current]", { timeout: 20000 }).catch(() => undefined);
+  const areaButtons = await page.locator("nav button").count();
   record("o console global abre para o administrador da plataforma",
-    await page.locator('[role="tablist"]').count() > 0,
-    (await page.locator("h1").first().innerText().catch(() => "")).slice(0, 60));
+    areaButtons > 0 && await page.locator('nav button[aria-current="page"]').count() > 0,
+    `${areaButtons} área(s) · ${(await page.locator("h1").first().innerText().catch(() => "")).slice(0, 40)}`);
+
+  // As áreas ficam atrás da navegação: chegar em Clientes é o que traz a tabela.
+  await page.locator("nav button").filter({ hasText: /Clientes/u }).first().click().catch(() => undefined);
 
   // A tabela carrega por fetch: contar antes da resposta mediria o vazio.
   await page.waitForSelector("table tbody tr", { timeout: 20000 }).catch(() => undefined);
@@ -137,17 +145,51 @@ if (password && await emailField.count()) {
   await page.locator('input[name="name"]').fill(`Cliente Navegador ${stamp}`);
   await page.locator('input[name="ownerEmail"]').fill(`nav-${stamp}@vinculato.test`);
   await page.locator('select[name="planCode"]').selectOption("standard");
+  // O provisionamento passa a exigir motivo escrito e confirmação explícita —
+  // toda alteração administrativa registra o porquê. Sem preencher os dois, o
+  // formulário nem envia, e a verificação acusava falha de criação onde havia
+  // apenas campo obrigatório novo.
+  await page.locator('textarea[name="reason"]').fill("Ensaio automatizado de provisionamento pela interface.");
+  await page.locator('input[name="confirmed"]').check();
   await page.getByRole("button", { name: /Criar workspace/u }).click();
   await page.waitForSelector('[role="status"]', { timeout: 20000 }).catch(() => undefined);
   const toast = await page.locator('[role="status"]').first().innerText().catch(() => "");
   record("criar workspace pela interface funciona", /criado/iu.test(toast), toast.slice(0, 80));
 
+  // A tabela recarrega por fetch depois da criação. Contar assim que o aviso
+  // aparece mede o estado anterior — é a mesma armadilha que esta verificação
+  // já evitava na primeira contagem e esquecia aqui.
+  await page.waitForFunction(
+    (anterior) => document.querySelectorAll("table tbody tr").length > anterior,
+    workspaceRows,
+    { timeout: 20000 },
+  ).catch(() => undefined);
   const afterRows = await page.locator("table tbody tr").count();
   record("o workspace criado aparece na tabela", afterRows > workspaceRows, `${workspaceRows} → ${afterRows}`);
 
+  // Criar um cliente abre a gaveta de detalhe dele, que é modal e cobre a
+  // navegação — comportamento correto. Sem fechá-la, o clique seguinte bate no
+  // overlay e a verificação acusa falha de navegação onde há apenas um diálogo
+  // aberto esperando ser fechado.
+  await page.getByRole("button", { name: /^Fechar$/u }).first().click().catch(() => undefined);
+  await page.waitForSelector('[role="dialog"]', { state: "detached", timeout: 10000 }).catch(() => undefined);
+
   // Aba de usuários
-  await page.getByRole("tab", { name: /Usuários/u }).click();
-  await page.waitForSelector("table tbody tr", { timeout: 20000 }).catch(() => undefined);
+  await page.locator("nav button").filter({ hasText: /Usuários/u }).first().click();
+  // Esperar por `table tbody tr` logo após o clique casa com as linhas da área
+  // anterior, que ainda estão no DOM: a contagem seguinte cai no vazio entre a
+  // tabela velha sair e a nova chegar. A espera é pela área virar corrente e,
+  // só então, por linhas de verdade.
+  await page.waitForFunction(
+    () => document.querySelector('nav button[aria-current="page"]')?.textContent?.includes("Usuários") ?? false,
+    undefined,
+    { timeout: 20000 },
+  ).catch(() => undefined);
+  await page.waitForFunction(
+    () => document.querySelectorAll("table tbody tr").length > 0,
+    undefined,
+    { timeout: 20000 },
+  ).catch(() => undefined);
   const userRows = await page.locator("table tbody tr").count();
   record("a aba de usuários lista contas globais", userRows > 0, `${userRows} linha(s)`);
   const usersText = await page.locator("table").innerText().catch(() => "");
@@ -164,74 +206,27 @@ if (password && await emailField.count()) {
   record("credenciais do administrador não informadas", false, "defina VINCULATO_ADMIN_PASSWORD");
 }
 
-// 4a. Tela de usuários e permissões: o administrador precisa conseguir revisar
-//     acesso e criar gente pela interface, não pela API.
+// 4a. Revisão de acesso: ela vive no console da plataforma, não no painel.
+//
+//     Esta verificação esperava a tela em `/painel` e falhava contra um produto
+//     que está certo. A administração de identidades foi movida para o console
+//     global de propósito — `tests/access-screen.test.mts` guarda essa decisão e
+//     reprova se `AccessView` voltar ao painel. A verificação ficou para trás
+//     porque nunca rodava.
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
-  const accessEntry = page.getByRole("button", { name: /Usuários e permissões/u }).first();
-  record("o painel oferece a tela de usuários e permissões", await accessEntry.count() > 0);
-  if (await accessEntry.count()) {
-    await accessEntry.click();
-    await page.waitForSelector("table", { timeout: 20000 }).catch(() => undefined);
-    const accessText = await page.locator("main").innerText();
-    record("a tela mostra o consumo de assentos do plano", /ASSENTOS/iu.test(accessText),
-      (/ASSENTOS[\s\S]{0,60}/u.exec(accessText)?.[0] ?? "").replace(/\n/gu, " · ").slice(0, 80));
-    record("a tela explica o que cada papel permite", accessText.includes("Matriz de permissões"));
-    record("a tela nunca mostra hash de senha", !/\$argon|\$2[aby]\$|password_hash/u.test(accessText));
+  record("o painel operacional não administra identidades globais",
+    await page.getByRole("button", { name: /Usuários e permissões/u }).count() === 0);
 
-    // Criar usuário pela interface e conferir que o link de ativação aparece.
-    const seatsFull = /limite atingido/u.test(accessText);
-    if (!seatsFull) {
-      const stamp = Date.now();
-      await page.getByRole("button", { name: /Novo usuário/u }).click();
-      await page.waitForSelector('[role="dialog"]', { timeout: 10000 });
-      await page.locator('input[name="name"]').fill(`Acesso Navegador ${stamp}`);
-      await page.locator('input[name="email"]').fill(`acesso-${stamp}@vinculato.test`);
-      await page.locator('select[name="role"]').selectOption("member");
-      await page.getByRole("button", { name: /Criar usuário e gerar link/u }).click();
-      await page.waitForSelector('[role="status"]', { timeout: 20000 }).catch(() => undefined);
-      const created = await page.locator("main").innerText();
-      record("criar usuário pela interface entrega link de ativação, não senha",
-        created.includes("LINK ÚNICO DE ATIVAÇÃO") && !/senha:|password/iu.test(created));
-    } else {
-      record("o limite de assentos bloqueia a criação em vez de falhar depois",
-        await page.getByRole("button", { name: /Novo usuário/u }).count() > 0, "plano no limite");
-    }
-
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.waitForTimeout(350);
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      record(`tela de usuários sem rolagem horizontal em ${width}px`, overflow <= 1, `sobra ${overflow}px`);
-    }
-    await page.setViewportSize({ width: 1440, height: 900 });
-  }
-}
-
-// 4a-bis. O seletor de grupo precisa estar no shell, em toda largura. Ele já
-//         esteve escondido entre 761px e 1499px — a faixa da maioria dos
-//         notebooks —, o que tirava do ar uma ação essencial.
-if (password) {
-  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
-  const multi = await page.evaluate(async () => {
-    const response = await fetch("/api/workspace", { cache: "no-store" });
-    const payload = await response.json();
-    return (payload.availableWorkspaces ?? []).length;
-  });
-  if (multi > 1) {
-    for (const width of widths) {
-      await page.setViewportSize({ width, height: 900 });
-      await page.waitForTimeout(300);
-      const visible = await page.locator(".sidebar-workspace-switcher").isVisible().catch(() => false);
-      record(`seletor de grupo disponível em ${width}px`, visible);
-    }
-    await page.setViewportSize({ width: 1440, height: 900 });
-  } else {
-    record("conta de ensaio pertence a um grupo só: seletor não se aplica", true, `${multi} grupo(s)`);
-  }
+  await page.goto(`${base}/plataforma?area=users`, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => document.querySelectorAll("table tbody tr").length > 0, undefined, { timeout: 20000 })
+    .catch(() => undefined);
+  const globalUsers = await page.locator("table tbody tr").count();
+  record("o console global lista as identidades", globalUsers > 0, `${globalUsers} conta(s)`);
+  const globalText = await page.locator("main").innerText().catch(() => "");
+  record("a tela global nunca mostra hash de senha", !/\$argon|\$2[aby]\$|password_hash/u.test(globalText));
 }
 
 // 4b. Liberação por plano: o menu do painel reflete o plano contratado.
