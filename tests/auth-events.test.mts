@@ -108,3 +108,40 @@ test("a migration está no journal", async () => {
     { entries: Array<{ tag: string }> };
   assert.ok(journal.entries.some((entry) => entry.tag === "0040_auth_events"));
 });
+
+test("excluir o grupo anonimiza a trilha de acesso de quem foi removido", async () => {
+  // A trilha não tem `workspace_id` — o login acontece antes de existir um —,
+  // então ela não sai na varredura por tenant da exclusão. Sem este passo, o
+  // e-mail de quem foi excluído sobreviveria ligado a nada, e a exclusão não
+  // seria exclusão.
+  const rota = await readFile(
+    new URL("../app/api/platform/workspaces/[id]/delete/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /UPDATE fdp_auth_events SET email = '\(conta excluída\)', user_id = NULL/u);
+
+  // A anonimização vem ANTES do DELETE das contas: depois, o `user_id` já teria
+  // virado NULL pelo ON DELETE SET NULL e não haveria por onde encontrá-las.
+  const anonimiza = rota.indexOf("UPDATE fdp_auth_events SET email");
+  const apaga = rota.indexOf("DELETE FROM fdp_users WHERE id IN");
+  assert.ok(anonimiza > 0 && anonimiza < apaga, "anonimizar depois de excluir não encontra mais os eventos");
+
+  // O evento fica: horário, resultado e origem em hash seguem valendo para
+  // investigar um acesso indevido que já tenha acontecido. Sai o identificador
+  // pessoal. Isso é anonimização, não descarte.
+  const bloco = rota.slice(anonimiza, apaga);
+  assert.doesNotMatch(bloco, /DELETE FROM fdp_auth_events/u, "o evento não é descartado, só despersonalizado");
+});
+
+test("a trilha só é alterável sob a marca de manutenção", async () => {
+  // Verificado contra PostgreSQL: o UPDATE de anonimização é recusado com
+  // "fdp_auth_events is append-only" quando a marca não está ligada, e passa
+  // quando está. Sem essa porta, a exclusão não conseguiria anonimizar; com ela
+  // aberta a esmo, qualquer rota poderia reescrever a trilha em silêncio.
+  assert.match(migration, /current_setting\('app\.audit_maintenance', true\) = 'on'/u);
+
+  const rota = await readFile(
+    new URL("../app/api/platform/workspaces/[id]/delete/route.ts", import.meta.url), "utf8");
+  // A marca é ligada na mesma transação da exclusão, e só nela.
+  assert.match(rota, /set_config\('app\.audit_maintenance', 'on', true\)/u);
+  assert.ok(rota.indexOf("app.audit_maintenance") < rota.indexOf("UPDATE fdp_auth_events SET email"),
+    "a marca precisa estar ligada antes da anonimização, ou o trigger recusa");
+});
