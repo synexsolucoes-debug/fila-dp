@@ -2,6 +2,7 @@ import { safeRelativeReturnPath, setAuthSession, verifyPassword } from "@/app/ch
 import { getD1 } from "@/db";
 import { checkLoginRateLimit, clearLoginIdentityFailures, clientAddress, recordLoginFailure } from "@/lib/auth-rate-limit";
 import { isPlatformAdmin } from "@/lib/platform-authorization";
+import { recordAuthEvent } from "@/lib/auth-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,8 +51,13 @@ export async function POST(request: Request) {
     const d1 = getD1();
     const current = await d1.prepare(`SELECT id, email, name, password_hash, password_salt, status, status_reason
       FROM fdp_users WHERE email = ?`).bind(email).first<UserRow>();
+    const userAgent = request.headers.get("user-agent") ?? "";
+    const requestId = request.headers.get("x-fila-dp-request-id");
+    const trail = { email, address, userAgent, requestId };
+
     if (current?.status === "blocked") {
       await recordLoginFailure(email, address);
+      await recordAuthEvent({ ...trail, action: "login", outcome: "denied", userId: current.id, reason: "conta bloqueada" });
       return Response.json(
         { error: "Seu acesso está bloqueado. Fale com o administrador da plataforma.", code: "USER_BLOCKED" },
         { status: 403 },
@@ -61,6 +67,10 @@ export async function POST(request: Request) {
     if (!current || !current.password_hash || !current.password_salt
       || !await verifyPassword(password, current.password_salt, current.password_hash)) {
       const failure = await recordLoginFailure(email, address);
+      // `current?.id` distingue "senha errada" de "e-mail inexistente" na trilha,
+      // sem que a resposta ao cliente diga qual dos dois foi.
+      await recordAuthEvent({ ...trail, action: "login", outcome: "denied", userId: current?.id ?? null,
+        reason: current ? "senha incorreta" : "e-mail sem conta" });
       if (failure.blocked) {
         return Response.json(
           { error: "Muitas tentativas de acesso. Aguarde alguns minutos e tente novamente." },
@@ -75,11 +85,13 @@ export async function POST(request: Request) {
     const access = await d1.prepare("SELECT 1 AS granted FROM fdp_workspace_members WHERE user_id = ? LIMIT 1")
       .bind(current.id).first<{ granted: number }>();
     if (!access && !platformAdmin) {
+      await recordAuthEvent({ ...trail, action: "login", outcome: "denied", userId: current.id, reason: "sem associação a grupo" });
       return Response.json({ error: "Seu acesso ainda não foi liberado por um administrador." }, { status: 403 });
     }
 
     await clearLoginIdentityFailures(email, address);
-    await setAuthSession(identity, { address, userAgent: request.headers.get("user-agent") ?? "" });
+    await setAuthSession(identity, { address, userAgent });
+    await recordAuthEvent({ ...trail, action: "login", outcome: "success", userId: current.id });
     return Response.json({
       ok: true,
       redirectTo: platformAdmin && !access ? "/plataforma" : cleanReturnTo(body.returnTo),

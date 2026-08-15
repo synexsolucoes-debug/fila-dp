@@ -47,6 +47,7 @@ export const expectedMigrations = [
   "0037_integration_events_and_workspace_lifecycle.sql",
   "0038_sankhya_browser_connector.sql",
   "0039_attachment_storage_quota_index.sql",
+  "0040_auth_events.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

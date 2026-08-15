@@ -4,6 +4,7 @@ import { apiError } from "@/lib/fila-dp-api";
 import { classifyInfrastructureFault } from "@/lib/infrastructure-errors";
 import { hashRecoveryToken } from "@/lib/fila-dp-recovery";
 import { log } from "@/lib/observability";
+import { recordAuthEvent } from "@/lib/auth-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,14 @@ export async function POST(request: Request) {
         .bind(recovery.user_id),
       d1.prepare("UPDATE fdp_auth_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL").bind(recovery.user_id),
     ]);
+    // Redefinir senha derruba todas as sessões: quem investiga um acesso
+    // indevido precisa ver o momento em que isso aconteceu.
+    await recordAuthEvent({
+      action: "password_reset", outcome: "success", email: recovery.email, userId: recovery.user_id,
+      address: request.headers.get("x-forwarded-for") ?? "",
+      userAgent: request.headers.get("user-agent") ?? "",
+      requestId: request.headers.get("x-fila-dp-request-id"),
+    });
     return Response.json({ ok: true });
   } catch (error) {
     // A mensagem interna do erro nunca pode chegar ao cliente aqui: esta rota é

@@ -1,4 +1,5 @@
-import { clearAuthSession, safeRelativeReturnPath } from "@/app/chatgpt-auth";
+import { clearAuthSession, getChatGPTUser, safeRelativeReturnPath } from "@/app/chatgpt-auth";
+import { recordAuthEvent } from "@/lib/auth-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,18 @@ function redirectTarget(request: Request) {
  * - envio de formulário (navegação) recebe 303 e o navegador segue sozinho.
  */
 export async function POST(request: Request) {
+  // A identidade é lida antes de encerrar: depois de `clearAuthSession` não há
+  // mais de quem registrar o evento.
+  const user = await getChatGPTUser().catch(() => null);
   await clearAuthSession();
+  if (user) {
+    await recordAuthEvent({
+      action: "logout", outcome: "success", email: user.email, userId: user.id ?? null,
+      address: request.headers.get("x-forwarded-for") ?? "",
+      userAgent: request.headers.get("user-agent") ?? "",
+      requestId: request.headers.get("x-fila-dp-request-id"),
+    });
+  }
 
   const url = new URL(request.url);
   let switching = url.searchParams.get("trocar") === "1";
