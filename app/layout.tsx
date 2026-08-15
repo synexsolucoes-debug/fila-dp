@@ -1,8 +1,22 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Manrope } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 import "./access.css";
 import "./dashboard-modern.css";
+
+/**
+ * Tipografia do produto (§15): Manrope nos títulos, Inter na interface e nos
+ * dados. Até aqui o CSS nomeava as duas famílias sem carregar nenhuma, então a
+ * interface caía para a fonte do sistema — o que muda de máquina para máquina e
+ * derruba a densidade que uma tela operacional precisa.
+ *
+ * `next/font` hospeda os arquivos no próprio deploy: nenhuma requisição a
+ * terceiros em tempo de execução, o que mantém o CSP fechado e o carregamento
+ * previsível. `display: swap` evita texto invisível enquanto a fonte chega.
+ */
+const interface_ = Inter({ subsets: ["latin"], display: "swap", variable: "--font-interface" });
+const titles = Manrope({ subsets: ["latin"], display: "swap", weight: ["600", "700", "800"], variable: "--font-titles" });
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -42,7 +56,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={`${interface_.variable} ${titles.variable}`}>
       <body>{children}</body>
     </html>
   );

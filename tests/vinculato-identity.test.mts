@@ -45,14 +45,44 @@ test("identificadores técnicos foram preservados na renomeação", async () => 
 
 test("a identidade visual vive em tokens, não espalhada em HEX", async () => {
   const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  // Os dois azuis vêm dos pixels do símbolo oficial, não de estimativa.
-  for (const token of ["--vin-navy: #062B60", "--vin-blue-vivid: #168CFD",
-    "--vin-bg: #F6F8FC", "--vin-border: #DCE3ED"]) {
+  // Os dois azuis vêm dos pixels do símbolo oficial, não de estimativa. Eles não
+  // acompanham a paleta de referência de propósito: adotá-la faria a interface
+  // deixar de combinar com o próprio logo.
+  for (const token of ["--vin-navy: #062B60", "--vin-blue-vivid: #168CFD"]) {
     assert.ok(globals.includes(token), `token ausente: ${token}`);
   }
+  // Os neutros, ao contrário, seguem a paleta de referência (§14).
+  for (const token of ["--vin-bg: #F6F8FC", "--vin-text: #172033", "--vin-border: #E2E8F0", "--vin-teal: #16A394"]) {
+    assert.ok(globals.includes(token), `token ausente: ${token}`);
+  }
+  // Exceção medida: a referência pede #64748B para texto secundário, que rende
+  // 4.48:1 sobre o fundo #F6F8FC — abaixo do mínimo 4.5 da WCAG 2.2 AA. O tom
+  // adotado rende 5.78:1. Adotar o pedido criaria a violação que a auditoria de
+  // acessibilidade acusaria nas 59 telas.
+  assert.ok(globals.includes("--vin-text-soft: #55627A"), "o texto secundário precisa passar no contraste");
+  // A conferência é sobre uso como valor, não sobre a palavra: o comentário que
+  // explica a exceção cita o tom, e casar com ele acusaria o contrário.
+  assert.ok(!/:\s*#64748B/u.test(globals), "o tom que reprova no contraste não pode virar valor de token");
   for (const semantic of ["--brand:", "--brand-strong:", "--brand-accent:", "--ui-surface:", "--ui-text:"]) {
     assert.ok(globals.includes(semantic), `token semântico ausente: ${semantic}`);
   }
+});
+
+test("a tipografia carrega de verdade: Manrope nos títulos, Inter na interface", async () => {
+  // O CSS nomeava as duas famílias sem carregar nenhuma, então a interface caía
+  // para a fonte do sistema — que muda de máquina para máquina e derruba a
+  // densidade que uma tela operacional precisa.
+  const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
+  assert.match(layout, /from "next\/font\/google"/u, "sem carregamento, a família é só um nome no CSS");
+  assert.match(layout, /Manrope\(\{[^}]*variable: "--font-titles"/u);
+  assert.match(layout, /Inter\(\{[^}]*variable: "--font-interface"/u);
+  // `next/font` hospeda no próprio deploy: nenhuma requisição a terceiros em
+  // runtime, o que mantém o CSP fechado.
+  assert.doesNotMatch(layout, /fonts\.googleapis\.com|fonts\.gstatic\.com/u);
+
+  const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(globals, /--font-title: var\(--font-titles\)/u);
+  assert.match(globals, /h1, h2, h3, h4, h5, h6 \{ font-family: var\(--font-title\)/u);
 });
 
 test("a marca usa os arquivos oficiais, não um redesenho", async () => {
