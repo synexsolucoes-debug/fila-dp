@@ -102,3 +102,63 @@ jobs:
           FDP_DR_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
           FDP_ALLOW_EPHEMERAL_SCHEMA_TEST: "true"
         run: npm run db:rehearse-restore
+
+  # Conferência WCAG 2.2 AA contra o produto rodando de verdade: contraste
+  # medido pixel a pixel (inclusive sobre gradiente), nome acessível de cada
+  # controle e tamanho de alvo. Roda nos dois temas e em duas larguras, o que
+  # também cobre a responsividade a 390 px.
+  #
+  # O ensaio já existia e nunca rodava, porque não havia como criar a conta que
+  # ele usa — cada execução dependia de alguém montar o ambiente à mão.
+  # `scripts/seed-ui-fixture.mjs` resolve isso, e a semente é deliberadamente
+  # quase vazia: assim a auditoria passa pelos estados vazios, que são os mais
+  # fáceis de quebrar sem ninguém perceber.
+  interface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vinculato
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vinculato"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vinculato
+      FDP_DB_DRIVER: pg
+      FDP_AUTH_SECRET: ensaio-de-interface-em-ci-com-mais-de-32-caracteres
+      FDP_PLATFORM_ADMIN_EMAILS: admin@vinculato.test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Preparar banco e conta do ensaio
+        run: |
+          npm run db:migrate
+          node scripts/seed-ui-fixture.mjs
+
+      - run: npm run build
+
+      # `npm start` não termina sozinho: sobe em segundo plano e o passo espera
+      # a porta responder antes de auditar, em vez de dormir um tempo fixo.
+      - name: Subir o produto e auditar acessibilidade
+        run: |
+          set -euo pipefail
+          npm start -- -p 3000 > /tmp/next.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/login; then break; fi
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:3000/login || { echo "o produto não subiu:"; tail -30 /tmp/next.log; exit 1; }
+          npm run a11y-check
