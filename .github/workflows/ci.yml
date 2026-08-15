@@ -90,3 +90,15 @@ jobs:
         env:
           DATABASE_URL: postgresql://vinculato_app:app@localhost:5432/vinculato
         run: npm run verify:isolation
+
+      # Backup só vale quando a restauração é provada, e uma prova que só roda
+      # quando alguém lembra de rodar apodrece. O ensaio faz o ciclo inteiro —
+      # migrations pelo executor de produção, dump, restore em banco vazio — e
+      # confere contagem por tabela, políticas de RLS, FORCE ROW LEVEL SECURITY,
+      # triggers, constraints, isolamento entre clientes no banco restaurado e
+      # imutabilidade de fechamento concluído. Leva segundos.
+      - name: Ensaiar backup e restauração
+        env:
+          FDP_DR_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          FDP_ALLOW_EPHEMERAL_SCHEMA_TEST: "true"
+        run: npm run db:rehearse-restore

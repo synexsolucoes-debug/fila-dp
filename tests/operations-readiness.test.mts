@@ -127,3 +127,25 @@ test("o ensaio de restauração verifica conteúdo, estrutura e isolamento", asy
   assert.match(isolation, /NOSUPERUSER NOBYPASSRLS/);
   assert.match(isolation, /vazamento apos restore/);
 });
+
+test("o ensaio restaura o schema de produção, não uma montagem própria", async () => {
+  const script = await readFile(new URL("../scripts/rehearse-backup-restore.mjs", import.meta.url), "utf8");
+
+  // O passo montava um script único com todas as migrations dentro de um
+  // BEGIN/COMMIT e reordenava à mão os índices únicos de 0014–0017. Restaurar
+  // aquilo provava que um schema inexistente em produção restaura, e o banco
+  // restaurado saía sem histórico em `fdp_schema_migrations`.
+  assert.match(script, /scripts", "migrate\.mjs/u, "as migrations precisam vir do executor de produção");
+  assert.doesNotMatch(script, /CREATE UNIQUE INDEX/u, "a reordenação manual não deve voltar");
+  assert.doesNotMatch(script, /script \+= "BEGIN/u);
+});
+
+test("o ensaio de restauração roda na CI, e não só quando alguém lembra", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+
+  // Uma prova de backup que depende de memória humana apodrece, e a primeira
+  // notícia de que o dump não restaura seria no dia em que ele precisasse.
+  assert.match(workflow, /npm run db:rehearse-restore/u);
+  assert.match(workflow, /FDP_ALLOW_EPHEMERAL_SCHEMA_TEST: "true"/u);
+  assert.match(workflow, /FDP_DR_ADMIN_DATABASE_URL/u);
+});

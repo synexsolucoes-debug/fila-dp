@@ -21,10 +21,9 @@
  * uma instância descartável: o script cria e destrói bancos de ensaio.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { splitPostgresStatements } from "./sql-statements.mjs";
 
 const adminUrl = process.env.FDP_DR_ADMIN_DATABASE_URL;
 if (!adminUrl?.startsWith("postgres")) {
@@ -51,8 +50,8 @@ function databaseUrl(name) {
   return url.toString();
 }
 
-function run(command, args, { input, allowFailure = false } = {}) {
-  const result = spawnSync(command, args, { encoding: "utf8", input });
+function run(command, args, { input, allowFailure = false, env } = {}) {
+  const result = spawnSync(command, args, { encoding: "utf8", input, env: env ? { ...process.env, ...env } : process.env });
   if (result.error) throw result.error;
   if (!allowFailure && result.status !== 0) {
     process.stderr.write(result.stderr ?? "");
@@ -93,31 +92,21 @@ await step("preparar bancos de ensaio", () => {
   psql(adminUrl, { sql: `CREATE DATABASE ${targetDb}` });
 });
 
-const migrationsFile = join(workingDirectory, "migrations.sql");
-await step("aplicar migrations na origem", async () => {
-  const directory = join(root, "drizzle", "postgres");
-  const files = (await readdir(directory)).filter((file) => /^\d{4}_.+\.sql$/u.test(file)).sort();
-  let script = "BEGIN;\n";
-  let cleanBaseline = false;
-  for (const file of files) {
-    if (file.includes("normalize_existing") && cleanBaseline) continue;
-    const source = await readFile(join(directory, file), "utf8");
-    const statements = splitPostgresStatements(source);
-    let ordered = statements;
-    if (/^001[4-7]_/u.test(file)) {
-      const uniqueIndexes = statements.filter((statement) => /\bCREATE UNIQUE INDEX\b/u.test(statement));
-      const remaining = statements.filter((statement) => !/\bCREATE UNIQUE INDEX\b/u.test(statement));
-      const firstForeignKey = remaining.findIndex((statement) => /\bALTER TABLE\b[\s\S]+\bADD CONSTRAINT\b/u.test(statement));
-      if (firstForeignKey >= 0 && uniqueIndexes.length > 0) {
-        ordered = [...remaining.slice(0, firstForeignKey), ...uniqueIndexes, ...remaining.slice(firstForeignKey)];
-      }
-    }
-    script += `${ordered.map((statement) => `${statement};`).join("\n")}\n`;
-    if (file.startsWith("0000_")) cleanBaseline = true;
-  }
-  script += "COMMIT;\n";
-  await writeFile(migrationsFile, script);
-  psql(databaseUrl(sourceDb), { file: migrationsFile });
+await step("aplicar migrations na origem", () => {
+  // Pelo executor de produção, e não por uma concatenação própria.
+  //
+  // Antes este passo montava um único script com todos os arquivos dentro de um
+  // BEGIN/COMMIT, e precisava reordenar à mão os índices únicos das migrations
+  // 0014–0017 para o script fechar. O efeito colateral era o ensaio provar que
+  // *aquele* schema restaura — um schema que nunca existe em produção, montado
+  // por um caminho que ninguém usa, e sem histórico em `fdp_schema_migrations`.
+  //
+  // Usando `scripts/migrate.mjs` o ensaio passa a restaurar exatamente o que o
+  // cliente tem, incluindo o histórico de migrations, e a divergência entre os
+  // dois caminhos deixa de existir por construção.
+  run("node", [join(root, "scripts", "migrate.mjs")], {
+    env: { DATABASE_URL: databaseUrl(sourceDb), FDP_DB_DRIVER: "pg" },
+  });
 });
 
 await step("semear dados de dois clientes", () => {
