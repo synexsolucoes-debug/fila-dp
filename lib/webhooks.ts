@@ -100,6 +100,37 @@ function isPrivateIpv4(hostname: string) {
     || (parts[0] === 192 && parts[1] === 168);
 }
 
+/**
+ * Endereço IPv6 que não pode ser destino de webhook.
+ *
+ * O literal IPv6 chega aqui entre colchetes: `new URL("https://[::1]/")` devolve
+ * `hostname === "[::1]"`, com os colchetes. A comparação anterior era contra
+ * `"::1"` puro, então **nunca casava** — `https://[::1]/` era aceito, e com ele
+ * o loopback do próprio servidor. `https://[::ffff:127.0.0.1]/` passava pelo
+ * mesmo buraco, porque a forma mapeada nem chegava a ser olhada.
+ */
+function isPrivateIpv6(hostname: string) {
+  const bare = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  if (!bare.includes(":")) return false;
+  if (bare === "::1" || bare === "::") return true;
+  // Link-local (fe80::/10) e unique-local (fc00::/7).
+  if (/^fe[89ab]?[0-9a-f]?:/u.test(bare) || /^f[cd][0-9a-f]{0,2}:/u.test(bare)) return true;
+  // IPv4 mapeado. O parser do WHATWG reescreve `::ffff:127.0.0.1` na forma
+  // hexadecimal `::ffff:7f00:1`, então procurar por ponto não encontra nada —
+  // era por aí que o loopback ainda passava. Os dois últimos hextets carregam
+  // os quatro octetos do IPv4 e precisam ser decodificados.
+  const hextets = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/u.exec(bare);
+  if (hextets) {
+    const high = Number.parseInt(hextets[1], 16);
+    const low = Number.parseInt(hextets[2], 16);
+    if (isPrivateIpv4(`${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`)) return true;
+  }
+  // A forma pontuada continua conferida: nem todo caminho passa pelo mesmo parser.
+  const dotted = bare.slice(bare.lastIndexOf(":") + 1);
+  if (dotted.includes(".") && isPrivateIpv4(dotted)) return true;
+  return false;
+}
+
 /** Só HTTPS e nunca rede interna: um webhook de saída não vira SSRF. */
 export function validateWebhookUrl(value: unknown) {
   const raw = cleanText(value, 500);
@@ -111,9 +142,8 @@ export function validateWebhookUrl(value: unknown) {
   }
   if (url.protocol !== "https:") throw ApiError.badRequest("O endpoint precisa usar HTTPS.", "WEBHOOK_URL_INSECURE");
   const host = url.hostname.toLowerCase().replace(/\.$/u, "");
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host === "::1"
-    || host.startsWith("fe80:") || (host.includes(":") && (host.startsWith("fc") || host.startsWith("fd")))
-    || isPrivateIpv4(host)) {
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")
+    || isPrivateIpv6(host) || isPrivateIpv4(host)) {
     throw ApiError.badRequest("O endpoint não pode apontar para a rede interna.", "WEBHOOK_URL_PRIVATE");
   }
   if (url.username || url.password) throw ApiError.badRequest("Não use credenciais na URL do endpoint.", "WEBHOOK_URL_CREDENTIALS");
