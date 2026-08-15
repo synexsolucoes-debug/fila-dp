@@ -136,8 +136,20 @@ test("o catálogo de integrações declara estado real e não promete fornecedor
   assert.equal(byName.get("Caju")?.state, "planned");
   assert.equal(byName.get("Sankhya")?.state, "partial");
   assert.equal(byName.get("API pública Vinculato")?.state, "available");
+
+  // Teams, e-mail e WhatsApp não podem voltar a "disponível" sem o handshake do
+  // fornecedor. O endpoint de entrada é sólido, mas fala o protocolo do
+  // Vinculato: a Meta exige eco de `hub.challenge` no GET de verificação e o
+  // Microsoft Graph exige devolver `validationToken` e renovar a assinatura.
+  // Sem isso o cliente não consegue sequer cadastrar a URL — chamar de
+  // "disponível" venderia uma conexão que não conecta.
+  for (const name of ["Microsoft Teams", "E-mail corporativo", "WhatsApp Business"] as const) {
+    assert.equal(byName.get(name)?.state, "assisted", `${name} depende de configuração na ponta do fornecedor`);
+    assert.match(byName.get(name)!.note, /implantação/iu, `${name} precisa dizer que a ponta do fornecedor é configurada junto`);
+  }
+
   for (const item of integrationCatalog) {
-    assert.ok(["available", "partial", "planned"].includes(item.state), `${item.name} com estado inválido`);
+    assert.ok(["available", "partial", "assisted", "planned"].includes(item.state), `${item.name} com estado inválido`);
     assert.ok(item.note.length > 10, `${item.name} precisa explicar o estado`);
   }
   // O texto do Caju deixa claro que não há integração implementada.

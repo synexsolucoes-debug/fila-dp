@@ -234,6 +234,10 @@ button, summary { font: inherit; }
 .integration-state { padding: 4px 9px; border-radius: 99px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .integration-state.state-available { background: color-mix(in srgb, var(--ui-success) 14%, transparent); color: var(--ui-success); }
 .integration-state.state-partial { background: color-mix(in srgb, var(--ui-warning) 16%, transparent); color: var(--ui-warning); }
+/* Implantação assistida: existe e funciona, com a ponta do fornecedor
+   configurada junto ao cliente. Azul de andamento — nem o verde de pronto, nem
+   o cinza de apenas preparado. */
+.integration-state.state-assisted { background: var(--brand-soft); color: var(--brand); }
 .integration-state.state-planned { background: var(--ui-surface-muted); color: var(--ui-text-soft); }
 .integration-category { margin: 10px 0 8px; font-family: var(--font-geist-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ui-text-muted); }
 .integration-card p { margin: 0; color: var(--ui-text-soft); font-size: 13px; line-height: 1.62; }
