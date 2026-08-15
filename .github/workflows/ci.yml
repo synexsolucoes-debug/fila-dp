@@ -71,3 +71,22 @@ jobs:
 
       - name: Preparar cada consulta do produto contra o schema real
         run: npm run verify:sql
+
+      # Isolamento multi-tenant provado, não afirmado. O ensaio usa o mesmo
+      # adaptador da aplicação e um papel SEM superusuário — superusuário ignora
+      # RLS e faria tudo passar sem provar nada, por isso o próprio ensaio
+      # reprova se o papel puder burlar as políticas.
+      - name: Semear dois clientes e criar o papel da aplicação
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/dr-seed.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            DROP ROLE IF EXISTS vinculato_app;
+            CREATE ROLE vinculato_app LOGIN PASSWORD 'app';
+            GRANT USAGE ON SCHEMA public TO vinculato_app;
+            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO vinculato_app;"
+
+      - name: Provar que um workspace não alcança o outro
+        env:
+          DATABASE_URL: postgresql://vinculato_app:app@localhost:5432/vinculato
+        run: npm run verify:isolation
