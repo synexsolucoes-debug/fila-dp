@@ -302,6 +302,13 @@
       "when": 1787212800000,
       "tag": "0040_auth_events",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1787299200000,
+      "tag": "0041_obligation_protocol_evidence",
+      "breakpoints": true
     }
   ]
 }

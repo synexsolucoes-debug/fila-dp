@@ -173,3 +173,29 @@ export function closingBlockerMessage(blockers: ClosingBlocker[]) {
   });
   return `Não é possível avançar a competência: ${parts.join(", ")}. Resolva esses itens e tente novamente.`;
 }
+
+/**
+ * Evidência da obrigação: link para o comprovante, não o arquivo.
+ *
+ * Recusa o que não for http(s) — `javascript:` gravado aqui viraria execução no
+ * clique de quem abrisse a evidência a partir da lista, e o `CHECK` do banco
+ * sozinho daria um erro de constraint em vez de uma frase que ajuda.
+ */
+export function validEvidenceUrl(value: unknown) {
+  const raw = cleanText(value, 2000);
+  if (!raw) return "";
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw ApiError.badRequest("A evidência precisa ser um endereço completo, começando com https://.", "INVALID_EVIDENCE_URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw ApiError.badRequest("A evidência precisa ser um endereço http ou https.", "INVALID_EVIDENCE_URL");
+  }
+  // Credencial na URL acabaria no corpo da resposta e no log de auditoria.
+  if (url.username || url.password) {
+    throw ApiError.badRequest("Não use usuário e senha no endereço da evidência.", "INVALID_EVIDENCE_URL");
+  }
+  return url.toString();
+}

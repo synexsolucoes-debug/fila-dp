@@ -55,7 +55,7 @@ export function normalizeClosingItem(row: Row): ClosingItem {
 }
 export function normalizeObligation(row: Row): Obligation {
   const raw = text(row.status);
-  return { id: text(row.id), obligationType: text(value(row, "obligationType", "obligation_type")), title: text(row.title), dueDate: text(value(row, "dueDate", "due_date")), status: (["open", "in_progress", "blocked", "completed"].includes(raw) ? raw : "open") as Obligation["status"], ownerUserId: text(value(row, "ownerUserId", "owner_user_id")), cardId: text(value(row, "cardId", "card_id")), notes: text(row.notes) };
+  return { id: text(row.id), obligationType: text(value(row, "obligationType", "obligation_type")), title: text(row.title), dueDate: text(value(row, "dueDate", "due_date")), status: (["open", "in_progress", "blocked", "completed"].includes(raw) ? raw : "open") as Obligation["status"], ownerUserId: text(value(row, "ownerUserId", "owner_user_id")), cardId: text(value(row, "cardId", "card_id")), notes: text(row.notes), protocol: text(row.protocol), evidenceUrl: text(value(row, "evidenceUrl", "evidence_url")) };
 }
 export function normalizePending(row: Row): PendingItem {
   const severity = text(row.severity); const status = text(row.status);
