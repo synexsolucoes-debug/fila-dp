@@ -3,7 +3,7 @@ import { getWorkspaceContext, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
-import { cycleStatuses, enumOr } from "@/lib/operations";
+import { closingBlockerMessage, cycleStatuses, describeClosingBlockers, enumOr } from "@/lib/operations";
 
 const allowed: Record<string, string[]> = { open: ["pre_closing"], pre_closing: ["open", "processing"], processing: ["pre_closing", "post_closing"], post_closing: ["processing", "closed"], closed: ["post_closing"] };
 
@@ -37,7 +37,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ) SELECT * FROM updated`)
       .bind(target, target, workspace.id, id, cycle.status, crypto.randomUUID(), user.id, auth.user.email,
         JSON.stringify({ status: cycle.status }), JSON.stringify({ reason: reason || null }), request.headers.get("x-fila-dp-request-id")).first<Record<string, unknown>>();
-    if (!result) throw new ApiError(409, "COMPETENCE_BLOCKED", "A competência possui bloqueadores, aprovações ou obrigações pendentes.");
+    if (!result) {
+      // Os portões ficam no `WHERE` do UPDATE para não abrir janela entre
+      // conferir e aplicar. Isso deixava a resposta sabendo apenas que algo
+      // barrou; o diagnóstico roda agora, depois do bloqueio, para dizer o quê.
+      const blockers = await describeClosingBlockers(d1, workspace.id, id, target);
+      throw new ApiError(409, "COMPETENCE_BLOCKED", closingBlockerMessage(blockers), { blockers });
+    }
     return Response.json({ competence: result });
   } catch (error) { return apiError(error); }
 }
