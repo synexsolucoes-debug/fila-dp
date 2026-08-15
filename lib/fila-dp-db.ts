@@ -285,14 +285,23 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
     d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
-    d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? ORDER BY ci.position").bind(board.id).all(),
+    // `c.archived = 0` nas coleções por cartão.
+    //
+    // O arquivo é a maior parte de um quadro com um ano de operação, e nada
+    // dele é exibido: a gaveta de arquivados mostra processo, título, empresa e
+    // data, e só. Medido com 2.400 demandas (500 ativas, 1.900 arquivadas), o
+    // que vinha das arquivadas eram 3,49 MB dos 4,01 MB da resposta — 87% do
+    // payload, com 7.600 itens de checklist e 3.800 comentários que ninguém
+    // abre. O cartão arquivado continua vindo inteiro no que a gaveta usa; o
+    // que deixou de vir é o conteúdo que só o detalhe da demanda mostraria.
+    d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY ci.position").bind(board.id).all(),
     d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM fdp_workspace_inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
     d1.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM fdp_automation_rules WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare(`SELECT cc.id, cc.card_id, cc.body, cc.created_at, u.name AS author_name, u.email AS author_email
       FROM fdp_card_comments cc
       JOIN fdp_users u ON u.id = cc.author_user_id
       JOIN fdp_cards c ON c.id = cc.card_id
-      WHERE c.board_id = ?
+      WHERE c.board_id = ? AND c.archived = 0
       ORDER BY cc.created_at`).bind(board.id).all(),
     d1.prepare(`SELECT ae.id, ae.card_id, ae.actor_email, ae.event_type, ae.payload_json, ae.created_at,
         COALESCE(u.name, ae.actor_email) AS actor_name
@@ -314,13 +323,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       WHERE l.workspace_id = ? ORDER BY l.position`).bind(workspace.id).all(),
     d1.prepare(`SELECT ca.card_id, u.id AS user_id, u.name, u.email
       FROM fdp_card_assignees ca JOIN fdp_users u ON u.id = ca.user_id
-      JOIN fdp_cards c ON c.id = ca.card_id WHERE c.board_id = ? ORDER BY u.name`).bind(board.id).all(),
+      JOIN fdp_cards c ON c.id = ca.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY u.name`).bind(board.id).all(),
     d1.prepare("SELECT id, name, field_key, field_type, options_json, required, position FROM fdp_custom_fields WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare(`SELECT cfv.card_id, cf.field_key, cfv.value_text
       FROM fdp_custom_field_values cfv JOIN fdp_custom_fields cf ON cf.id = cfv.field_id
       WHERE cf.workspace_id = ?`).bind(workspace.id).all(),
     d1.prepare(`SELECT a.id, a.card_id, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at
-      FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? ORDER BY a.created_at DESC`).bind(board.id).all(),
+      FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY a.created_at DESC`).bind(board.id).all(),
     d1.prepare("SELECT id, name, process_type, description, checklist_json, default_sla_days, active, position FROM fdp_process_templates WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare("SELECT business_days_json, day_start, day_end, realtime_seconds FROM fdp_workspace_settings WHERE workspace_id = ?").bind(workspace.id).first<Record<string, unknown>>(),
     d1.prepare("SELECT holiday_date, name FROM fdp_business_holidays WHERE workspace_id = ? ORDER BY holiday_date").bind(workspace.id).all(),

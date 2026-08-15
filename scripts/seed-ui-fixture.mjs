@@ -76,6 +76,33 @@ try {
      VALUES ('co-ui', 'ws-ui', 'Piloto Servicos LTDA', 'Piloto', '11222333000181', 1) ON CONFLICT DO NOTHING`,
   );
 
+  // Uma demanda por tipo de processo, e só.
+  //
+  // A semente era inteiramente vazia, para a auditoria passar pelos estados
+  // vazios. O efeito colateral era grave: o rótulo de processo nunca chegava a
+  // ser pintado, então a conferência de contraste nunca o media. Foi assim que
+  // `.dashboard-task-labels .orange` ficou em 4.37:1 — abaixo do mínimo 4.5 da
+  // WCAG — passando por uma auditoria que dizia "0 violações".
+  //
+  // Uma demanda de cada tipo cobre as cinco cores de rótulo sem encher as
+  // telas: os estados vazios das outras áreas continuam sendo exercitados.
+  const processos = [
+    ["FÉRIAS", "normal", "l-ui-1"],
+    ["RESCISÃO", "high", "l-ui-1"],
+    ["BENEFÍCIOS", "normal", "l-ui-2"],
+    ["FOLHA", "low", "l-ui-2"],
+    ["OUTROS", "normal", "l-ui-3"],
+  ];
+  for (const [index, [processo, prioridade, lista]] of processos.entries()) {
+    await client.query(
+      `INSERT INTO fdp_cards (id, board_id, workspace_id, list_id, title, description, company_id, company,
+         process_type, priority, position, created_by, competence)
+       VALUES ($1, 'b-ui', 'ws-ui', $2, $3, 'Demanda do ensaio de interface.', 'co-ui', 'Piloto', $4, $5, $6, 'u-ui', '2026-08')
+       ON CONFLICT DO NOTHING`,
+      [`c-ui-${index + 1}`, lista, `${processo[0]}${processo.slice(1).toLowerCase()} do ensaio`, processo, prioridade, (index + 1) * 1000],
+    );
+  }
+
   // Assinatura no plano mais amplo: sem ela os módulos ficam bloqueados por
   // plano e a auditoria não chegaria às telas que precisa medir.
   const plan = await client.query(`SELECT id FROM fdp_saas_plans WHERE code = 'enterprise' LIMIT 1`);
