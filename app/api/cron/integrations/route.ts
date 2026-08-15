@@ -73,103 +73,127 @@ export async function GET(request: Request) {
     let scheduleFailed = 0;
     let sankhyaScheduled = 0;
     let sankhyaPending = 0;
+    let workspacesFailed = 0;
     const touched: string[] = [];
     const idempotencyKey = scheduledRunKey();
     for (const workspace of workspaces.results) {
       if (Date.now() >= deadline) break;
       const scoped = getScopedD1({ workspaceId: workspace.id, userId: null });
 
-      // O cron também inicia a consulta: antes ele apenas drenava jobs criados
-      // manualmente. Só entra o conector Tangerino conectado, com mapeamento de
-      // admissões ativo e sem outra execução pendente, evitando acúmulo de fila.
-      const integrations = await scoped.prepare(`SELECT integration.id, mapping.id AS mapping_id
-        FROM fdp_integrations integration
-        JOIN LATERAL (
-          SELECT candidate.id FROM fdp_integration_mappings candidate
-          WHERE candidate.workspace_id = integration.workspace_id AND candidate.integration_id = integration.id
-            AND candidate.status = 'active' AND candidate.resource_type = 'admissions'
-            AND candidate.direction IN ('inbound', 'bidirectional')
-          ORDER BY candidate.published_at DESC NULLS LAST, candidate.created_at DESC LIMIT 1
-        ) mapping ON TRUE
-        WHERE integration.workspace_id = ? AND integration.channel = 'tangerino' AND integration.status = 'connected'
-          AND NOT EXISTS (
-            SELECT 1 FROM fdp_integration_jobs pending
-            WHERE pending.workspace_id = integration.workspace_id AND pending.integration_id = integration.id
-              AND pending.status IN ('queued', 'leased')
-          ) ORDER BY integration.created_at`).bind(workspace.id).all<{ id: string; mapping_id: string }>();
-      for (const integration of integrations.results) {
-        if (Date.now() >= deadline) break;
-        try {
-          await queueIntegrationRun(scoped, {
-            workspaceId: workspace.id,
-            integrationId: integration.id,
-            mappingId: integration.mapping_id,
-            triggerType: "scheduled",
-            requestedBy: null,
-            idempotencyKey,
-          });
-          scheduled += 1;
-        } catch (error) {
-          scheduleFailed += 1;
-          log("warn", "integrations.cron_schedule_failed", { workspaceId: workspace.id, connectorId: integration.id }, {
-            errorName: error instanceof Error ? error.name : "UnknownError",
-            errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
-          });
+      // Isolamento por tenant. Sem este `try`, qualquer erro nas consultas abaixo
+      // aborta a varredura inteira e nenhum workspace seguinte é drenado — foi o
+      // que aconteceu com o apelido `grant`: um erro de sintaxe em uma consulta
+      // deixou a fila de todos os clientes parada, sem sinal de qual era o
+      // problema. Um tenant com defeito agora custa esse tenant, e o restante
+      // segue; a contagem `workspacesFailed` é o que denuncia a falha.
+      try {
+        // O cron também inicia a consulta: antes ele apenas drenava jobs criados
+        // manualmente. Só entra o conector Tangerino conectado, com mapeamento de
+        // admissões ativo e sem outra execução pendente, evitando acúmulo de fila.
+        const integrations = await scoped.prepare(`SELECT integration.id, mapping.id AS mapping_id
+          FROM fdp_integrations integration
+          JOIN LATERAL (
+            SELECT candidate.id FROM fdp_integration_mappings candidate
+            WHERE candidate.workspace_id = integration.workspace_id AND candidate.integration_id = integration.id
+              AND candidate.status = 'active' AND candidate.resource_type = 'admissions'
+              AND candidate.direction IN ('inbound', 'bidirectional')
+            ORDER BY candidate.published_at DESC NULLS LAST, candidate.created_at DESC LIMIT 1
+          ) mapping ON TRUE
+          WHERE integration.workspace_id = ? AND integration.channel = 'tangerino' AND integration.status = 'connected'
+            AND NOT EXISTS (
+              SELECT 1 FROM fdp_integration_jobs pending
+              WHERE pending.workspace_id = integration.workspace_id AND pending.integration_id = integration.id
+                AND pending.status IN ('queued', 'leased')
+            ) ORDER BY integration.created_at`).bind(workspace.id).all<{ id: string; mapping_id: string }>();
+        for (const integration of integrations.results) {
+          if (Date.now() >= deadline) break;
+          try {
+            await queueIntegrationRun(scoped, {
+              workspaceId: workspace.id,
+              integrationId: integration.id,
+              mappingId: integration.mapping_id,
+              triggerType: "scheduled",
+              requestedBy: null,
+              idempotencyKey,
+            });
+            scheduled += 1;
+          } catch (error) {
+            scheduleFailed += 1;
+            log("warn", "integrations.cron_schedule_failed", { workspaceId: workspace.id, connectorId: integration.id }, {
+              errorName: error instanceof Error ? error.name : "UnknownError",
+              errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
+            });
+          }
         }
-      }
 
-      // O cron somente enfileira o RPA. A sessão Playwright nunca é aberta dentro
-      // da função Vercel; o worker containerizado a consumirá com contexto isolado.
-      const sankhyaDue = await scoped.prepare(`SELECT integration.id, integration.config_json, integration.next_sync_at
-        FROM fdp_integrations integration
-        JOIN fdp_workspace_module_grants grant ON grant.workspace_id = integration.workspace_id
-          AND grant.module_key = 'sankhya_browser' AND grant.granted = 1 AND (grant.expires_at IS NULL OR grant.expires_at > CURRENT_TIMESTAMP)
-        WHERE integration.workspace_id = ? AND integration.channel = 'sankhya_browser' AND integration.status = 'connected'
-          AND integration.schedule_enabled = 1 AND integration.next_sync_at <= CURRENT_TIMESTAMP
-          AND NOT EXISTS (SELECT 1 FROM fdp_integration_jobs pending WHERE pending.workspace_id = integration.workspace_id
-            AND pending.integration_id = integration.id AND pending.status IN ('queued', 'leased'))`)
-        .bind(workspace.id).all<{ id: string; config_json: string; next_sync_at: string }>();
-      for (const integration of sankhyaDue.results) {
-        try {
-          await queueSankhyaRun(scoped, { workspaceId: workspace.id, integrationId: integration.id, triggerType: "scheduled", requestedBy: null,
-            idempotencyKey: `sankhya:scheduled:${integration.next_sync_at}` });
-          const next = nextSankhyaRunAt(parseSankhyaConfig(integration.config_json));
-          await scoped.prepare("UPDATE fdp_integrations SET next_sync_at = ?::timestamptz, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
-            .bind(next, workspace.id, integration.id).run();
-          sankhyaScheduled += 1;
-        } catch (error) {
-          scheduleFailed += 1;
-          log("warn", "sankhya.schedule_failed", { workspaceId: workspace.id, connectorId: integration.id }, {
-            errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
-          });
+        // O cron somente enfileira o RPA. A sessão Playwright nunca é aberta dentro
+        // da função Vercel; o worker containerizado a consumirá com contexto isolado.
+        // `grant` é palavra reservada do PostgreSQL e não serve de apelido: a
+        // consulta inteira falhava com `syntax error at or near "grant"`, e como o
+        // erro estourava no meio da varredura, nenhum job de nenhum workspace
+        // chegava a ser drenado. O apelido é `module_grant` por isso.
+        const sankhyaDue = await scoped.prepare(`SELECT integration.id, integration.config_json, integration.next_sync_at
+          FROM fdp_integrations integration
+          JOIN fdp_workspace_module_grants module_grant ON module_grant.workspace_id = integration.workspace_id
+            AND module_grant.module_key = 'sankhya_browser' AND module_grant.granted = 1
+            AND (module_grant.expires_at IS NULL OR module_grant.expires_at > CURRENT_TIMESTAMP)
+          WHERE integration.workspace_id = ? AND integration.channel = 'sankhya_browser' AND integration.status = 'connected'
+            AND integration.schedule_enabled = 1 AND integration.next_sync_at <= CURRENT_TIMESTAMP
+            AND NOT EXISTS (SELECT 1 FROM fdp_integration_jobs pending WHERE pending.workspace_id = integration.workspace_id
+              AND pending.integration_id = integration.id AND pending.status IN ('queued', 'leased'))`)
+          .bind(workspace.id).all<{ id: string; config_json: string; next_sync_at: string }>();
+        for (const integration of sankhyaDue.results) {
+          try {
+            await queueSankhyaRun(scoped, { workspaceId: workspace.id, integrationId: integration.id, triggerType: "scheduled", requestedBy: null,
+              idempotencyKey: `sankhya:scheduled:${integration.next_sync_at}` });
+            const next = nextSankhyaRunAt(parseSankhyaConfig(integration.config_json));
+            await scoped.prepare("UPDATE fdp_integrations SET next_sync_at = ?::timestamptz, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
+              .bind(next, workspace.id, integration.id).run();
+            sankhyaScheduled += 1;
+          } catch (error) {
+            scheduleFailed += 1;
+            log("warn", "sankhya.schedule_failed", { workspaceId: workspace.id, connectorId: integration.id }, {
+              errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
+            });
+          }
         }
-      }
 
-      const pendingSankhya = await scoped.prepare(`SELECT COUNT(*)::integer AS pending
-        FROM fdp_integration_jobs job
-        JOIN fdp_integrations integration ON integration.workspace_id = job.workspace_id AND integration.id = job.integration_id
-        WHERE job.workspace_id = ? AND integration.channel = 'sankhya_browser'
-          AND job.status IN ('queued', 'leased') AND job.available_at <= CURRENT_TIMESTAMP
-          AND (job.status = 'queued' OR job.lease_expires_at < CURRENT_TIMESTAMP)`)
-        .bind(workspace.id).first<{ pending: number }>();
-      sankhyaPending += Number(pendingSankhya?.pending ?? 0);
+        const pendingSankhya = await scoped.prepare(`SELECT COUNT(*)::integer AS pending
+          FROM fdp_integration_jobs job
+          JOIN fdp_integrations integration ON integration.workspace_id = job.workspace_id AND integration.id = job.integration_id
+          WHERE job.workspace_id = ? AND integration.channel = 'sankhya_browser'
+            AND job.status IN ('queued', 'leased') AND job.available_at <= CURRENT_TIMESTAMP
+            AND (job.status = 'queued' OR job.lease_expires_at < CURRENT_TIMESTAMP)`)
+          .bind(workspace.id).first<{ pending: number }>();
+        sankhyaPending += Number(pendingSankhya?.pending ?? 0);
 
-      let handled = 0;
-      while (handled < MAX_JOBS_PER_WORKSPACE && Date.now() < deadline) {
-        // Um job com defeito não pode parar a varredura dos demais workspaces:
-        // o próprio executor já registra a falha, agenda a retentativa e devolve.
-        const result = await processNextIntegrationJob(scoped, workspace.id);
-        if (!result) break;
-        handled += 1;
-        if (result.status === "succeeded" || result.status === "partial") processed += 1; else failed += 1;
+        let handled = 0;
+        while (handled < MAX_JOBS_PER_WORKSPACE && Date.now() < deadline) {
+          // Um job com defeito não pode parar a varredura dos demais workspaces:
+          // o próprio executor já registra a falha, agenda a retentativa e devolve.
+          const result = await processNextIntegrationJob(scoped, workspace.id);
+          if (!result) break;
+          handled += 1;
+          if (result.status === "succeeded" || result.status === "partial") processed += 1; else failed += 1;
+        }
+        if (handled) touched.push(workspace.id);
+      } catch (error) {
+        workspacesFailed += 1;
+        log("error", "integrations.cron_workspace_failed", { workspaceId: workspace.id }, {
+          errorName: error instanceof Error ? error.name : "UnknownError",
+          errorMessage: error instanceof Error ? error.message.slice(0, 300) : undefined,
+          errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
+        });
       }
-      if (handled) touched.push(workspace.id);
     }
 
     const workerDispatch = sankhyaPending ? await wakeSankhyaWorker({ route: "/api/cron/integrations" }) : null;
-    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed,
+    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed, workspacesFailed,
       workerDispatched: workerDispatch?.status === "dispatched" });
-    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed },
-      { headers: { "Cache-Control": "no-store" } });
+    // A varredura responde 500 quando algum tenant falhou. O workflow do GitHub
+    // trata != 200 como falha, então o alerta chega em vez de a fila parar em
+    // silêncio; os contadores continuam no corpo para dizer o que passou.
+    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed, workspacesFailed },
+      { status: workspacesFailed ? 500 : 200, headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
 }

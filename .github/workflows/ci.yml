@@ -21,3 +21,53 @@ jobs:
       - run: npm ci
       - run: npm run ci
       - run: npm audit --omit=dev --audit-level=high
+
+  # Portão de banco. Ele existe por um motivo concreto: o SQL do produto é
+  # escrito à mão dentro de strings, e nada o verificava. `JOIN
+  # fdp_workspace_module_grants grant` passou por lint, typecheck, testes e
+  # revisão — `grant` é palavra reservada do PostgreSQL, e a varredura agendada
+  # das integrações morria em produção a cada meia hora com `syntax error at or
+  # near "grant"`, parando a fila de todos os clientes.
+  #
+  # Nenhum teste podia ter pego isso, porque nenhum teste falava com um banco.
+  # Aqui as migrations rodam de verdade e cada consulta é preparada contra o
+  # schema resultante.
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vinculato
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vinculato
+      FDP_DB_DRIVER: pg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # As migrations precisam aplicar em um banco vazio. Se esta etapa falhar,
+      # o deploy levaria um schema que não sobe do zero.
+      - name: Aplicar migrations em banco limpo
+        run: npm run db:migrate
+
+      # Aplicar duas vezes precisa ser inofensivo: é o que acontece em qualquer
+      # redeploy. Uma migration não idempotente aparece aqui, não em produção.
+      - name: Reaplicar migrations (idempotência)
+        run: npm run db:migrate
+
+      - name: Preparar cada consulta do produto contra o schema real
+        run: npm run verify:sql
