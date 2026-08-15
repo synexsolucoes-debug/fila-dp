@@ -87,3 +87,23 @@ test("os outros três limites do plano continuam aplicados no servidor", async (
   const integracoes = await readFile(new URL("../lib/integration-engine.ts", import.meta.url), "utf8");
   assert.match(integracoes, /integration_limit/u);
 });
+
+test("a soma da cota tem índice: ela roda dentro do lock a cada envio", async () => {
+  // Sem índice em `workspace_id`, a soma é um Seq Scan da tabela inteira —
+  // inclusive das linhas dos outros clientes — e o custo entra no caminho
+  // crítico do upload, serializado pelo advisory lock.
+  //
+  // Medido com 60.052 anexos distribuídos como num multi-tenant real:
+  //   sem índice: 6,72 ms · 1.734 buffers · Seq Scan
+  //   com índice: 0,62 ms ·    58 buffers · Bitmap Heap Scan
+  const migration = await readFile(
+    new URL("../drizzle/postgres/0039_attachment_storage_quota_index.sql", import.meta.url), "utf8");
+  assert.match(migration, /ON "fdp_card_attachments" \("workspace_id"\) INCLUDE \("size_bytes"\)/u);
+  // `INCLUDE` evita voltar à tabela para ler a única coluna que a soma precisa.
+  assert.match(migration, /IF NOT EXISTS/u, "reaplicar a migration não pode falhar");
+
+  const journal = JSON.parse(await readFile(new URL("../drizzle/postgres/meta/_journal.json", import.meta.url), "utf8")) as
+    { entries: Array<{ tag: string }> };
+  assert.ok(journal.entries.some((entry) => entry.tag === "0039_attachment_storage_quota_index"),
+    "migration fora do journal não é aplicada pelo executor");
+});

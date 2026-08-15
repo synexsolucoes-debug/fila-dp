@@ -288,6 +288,13 @@
       "when": 1787040000000,
       "tag": "0038_sankhya_browser_connector",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1787126400000,
+      "tag": "0039_attachment_storage_quota_index",
+      "breakpoints": true
     }
   ]
 }
