@@ -32,7 +32,9 @@ const chromiumDirectory = existsSync(browsersRoot)
   : undefined;
 const executablePath = chromiumDirectory ? `${browsersRoot}/${chromiumDirectory}/chrome-linux/chrome` : undefined;
 const browser = await chromium.launch(executablePath ? { executablePath } : {});
-const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "pt-BR" });
+// `acceptDownloads` para conferir o CSV exportado: o arquivo é o único
+// artefato do produto que sai do navegador e vai para a mão de alguém.
+const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "pt-BR", acceptDownloads: true });
 const page = await context.newPage();
 
 const consoleErrors = [];
@@ -291,6 +293,48 @@ if (password) {
       ultima.includes(`companyId=${vazia}`), ultima.slice(-70) || "nenhuma chamada");
   }
   page.off("request", escuta);
+  await seletor.selectOption("all").catch(() => undefined);
+}
+
+// 4d. Relatórios e a exportação seguem o recorte de empresa.
+//
+//     O CSV é o pior caso do filtro ignorado: a tela mostrando o grupo inteiro
+//     é confuso; um arquivo com o grupo inteiro, baixado logo depois de
+//     escolher uma empresa, sai daqui parecendo ser daquela empresa.
+if (password) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  await page.getByRole("button", { name: /^Relatórios$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(1800);
+
+  const linhasDoCsv = async () => {
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 15000 }),
+      page.getByRole("button", { name: /Exportar CSV/u }).first().click(),
+    ]);
+    const caminho = await download.path();
+    const { readFileSync } = await import("node:fs");
+    return readFileSync(caminho, "utf8").replace(/^\uFEFF/u, "").trim().split("\n");
+  };
+
+  const doGrupo = await linhasDoCsv().catch(() => null);
+  record("a exportação do grupo traz as demandas", Boolean(doGrupo && doGrupo.length > 1),
+    doGrupo ? `${doGrupo.length - 1} linha(s) além do cabeçalho` : "download não aconteceu");
+
+  const seletor = page.getByLabel("Selecionar empresa");
+  await seletor.selectOption("co-ui-2").catch(() => undefined);
+  await page.waitForTimeout(1800);
+
+  const volume = await page.locator(".metrics-panel header span").first().innerText().catch(() => "");
+  record("Relatórios recorta pela empresa escolhida", /^0 demanda\(s\)/u.test(volume), volume);
+  record("Relatórios diz de quem são os números", /Filial Vazia/u.test(volume), volume);
+
+  const daFilial = await linhasDoCsv().catch(() => null);
+  record("a exportação segue o recorte, e não o grupo",
+    Boolean(daFilial && daFilial.length === 1),
+    daFilial ? `${daFilial.length - 1} linha(s) além do cabeçalho` : "download não aconteceu");
+
   await seletor.selectOption("all").catch(() => undefined);
 }
 

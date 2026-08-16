@@ -162,3 +162,33 @@ test("a semente tem uma empresa sem demanda, que é o que torna o recorte demons
   assert.match(check, /escolher empresa recorta os indicadores da visão geral/u);
   assert.match(check, /abertasNoGrupo > 0 && abertasNaFilial === 0/u);
 });
+
+test("Relatórios e a exportação seguem o recorte de empresa (§34)", async () => {
+  // O mesmo filtro ignorado da visão geral, uma tela adiante — e aqui com uma
+  // consequência pior: o CSV é o único artefato do produto que sai do navegador
+  // e vai para a mão de alguém. Baixado logo depois de escolher uma empresa,
+  // um arquivo com o grupo inteiro sai daqui parecendo ser daquela empresa.
+  assert.match(source, /<IndicatorsView cards=\{scopedCards\}/u);
+  assert.match(source, /\.\.\.scopedCards\.map\(/u, "a exportação precisa usar o recorte");
+  assert.match(source, /vinculato-demandas-\$\{sufixo\}/u, "o nome do arquivo carrega o recorte");
+
+  // A tela consulta o servidor com o recorte e recarrega quando ele muda.
+  assert.match(source, /companyId \? `&companyId=\$\{encodeURIComponent\(companyId\)\}` : ""/u);
+  assert.match(source, /\}, \[reportDays, companyId\]\);/u);
+
+  const rota = await readFile(new URL("../app/api/reports/route.ts", import.meta.url), "utf8");
+  // O escopo de acesso do membro é segurança e já existia; o filtro é outra
+  // coisa, e faltava. Os dois convivem: o filtro nunca amplia o escopo.
+  assert.match(rota, /if \(companyId\) await requireCompanyAccess\(/u);
+  assert.match(rota, /if \(companyId && empresa !== companyId\) return false;/u);
+  assert.match(rota, /return companyAccess\.unrestricted \|\| companyAccess\.companyIds\.has\(empresa\);/u);
+});
+
+test("a verificação de navegador prova a exportação, não só a tela", async () => {
+  // Uma asserção sobre o texto da tela não teria pego o CSV: ele é montado no
+  // cliente, a partir de outra lista.
+  const check = await readFile(new URL("../scripts/browser-check.mjs", import.meta.url), "utf8");
+  assert.match(check, /acceptDownloads: true/u);
+  assert.match(check, /a exportação segue o recorte, e não o grupo/u);
+  assert.match(check, /daFilial && daFilial\.length === 1/u, "o arquivo da filial vazia só pode ter cabeçalho");
+});
