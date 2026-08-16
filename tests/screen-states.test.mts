@@ -98,7 +98,10 @@ test("o contador da aba conta o que a aba contém (§20)", async () => {
   const painel = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   assert.match(painel, /Atividade <b>\{selectedCard\.comments\.length \+ selectedCard\.activities\.length\}<\/b>/u);
   assert.match(painel, /HISTÓRICO DA DEMANDA/u);
-  assert.match(painel, /\{selectedCard\.activities\.length\} evento\(s\)/u);
+  // O que importa é a ORIGEM do número, não a grafia: a asserção fixava
+  // "evento(s)" e reprovou quando a concordância foi corrigida — reprovando
+  // por melhoria de texto, não por defeito de contagem.
+  assert.match(painel, /plural\(selectedCard\.activities\.length, "evento", "eventos"\)/u);
   // O histórico mostra ator, o que mudou e quando — não só que algo mudou.
   assert.match(painel, /activityDetails\(activity\)/u);
   assert.match(painel, /\{activity\.actorName\}<\/strong> \{activityLabel\(activity\)\}/u);

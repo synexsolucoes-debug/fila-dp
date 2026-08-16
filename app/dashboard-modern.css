@@ -2747,6 +2747,11 @@
 .dashboard-heading p { max-width: 620px; }
 
 .overview-layout { display: grid; gap: 18px; }
+/* A dupla do Modelo 2. Abaixo de 1100px vira empilhado: o diagrama de conexões
+   precisa de largura para o hub caber entre as duas colunas de conectores. */
+.overview-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.overview-pair > * { margin-bottom: 0; }
+@media (max-width: 1100px) { .overview-pair { grid-template-columns: minmax(0, 1fr); } }
 .overview-hero { min-height: 136px; padding: 24px 26px; display: flex; align-items: center; justify-content: space-between; gap: 22px; overflow: hidden; border: 1px solid #2f6661; border-radius: 16px; background: var(--ui-brand); color: #fff; }
 .overview-hero > div { max-width: 720px; }
 .overview-hero span, .overview-panel header > div > span, .overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }

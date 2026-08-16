@@ -83,7 +83,7 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
               ? "Consultando pendências da operação…"
               : active.length === 0
                 ? "Nenhuma pendência aberta nos módulos que você acompanha."
-                : `${pendingTotal} pendência(s) em aberto${criticalTotal ? `, ${criticalTotal} crítica(s)` : ""}.`}
+                : `${pendingTotal === 1 ? "1 pendência em aberto" : `${pendingTotal} pendências em aberto`}${criticalTotal ? `, ${criticalTotal === 1 ? "1 crítica" : `${criticalTotal} críticas`}` : ""}.`}
           </p>
         </div>
         <button className={styles.refresh} type="button" onClick={() => void load(true)} disabled={refreshing || loading}>
@@ -109,14 +109,18 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
         <ul className={styles.grid}>
           {active.map((item) => (
             <li key={item.key}>
-              <button type="button" data-tone={item.tone} onClick={() => onNavigate(item.target)}>
+              <button type="button" data-tone={item.tone} onClick={() => onNavigate(item.target)}
+                title={`${item.amount !== null && item.amount > 0 ? `${money(item.amount)} · ` : ""}${item.earliestDueDate ? dueLabel(item.earliestDueDate) : item.description}`}>
                 <span className={styles.count}>{item.count}</span>
                 <span className={styles.label}>{item.label}</span>
+                {/* O detalhe continua no DOM para leitor de tela: numa linha
+                    compacta ele não cabe à vista, mas some-lo do acessível
+                    tiraria justamente o prazo e o valor de quem mais precisa. */}
                 <span className={styles.description}>
                   {item.amount !== null && item.amount > 0 ? `${money(item.amount)} · ` : ""}
                   {item.earliestDueDate ? dueLabel(item.earliestDueDate) : item.description}
                 </span>
-                <span className={styles.cta} aria-hidden="true">Abrir <ArrowRight /></span>
+                <span className={styles.cta} aria-hidden="true"><ArrowRight /></span>
               </button>
             </li>
           ))}
