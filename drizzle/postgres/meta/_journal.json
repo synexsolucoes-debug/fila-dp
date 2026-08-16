@@ -316,6 +316,13 @@
       "when": 1787299201000,
       "tag": "0042_member_company_access_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1787299202000,
+      "tag": "0043_lead_privacy_interest",
+      "breakpoints": true
     }
   ]
 }

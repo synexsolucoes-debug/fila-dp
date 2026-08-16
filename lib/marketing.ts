@@ -185,7 +185,17 @@ export function pluralize(count: number, singular: string, plural: string) {
 /* Captação de contato                                                         */
 /* -------------------------------------------------------------------------- */
 
-export const leadInterests = ["demonstracao", "planos", "integracoes", "suporte", "outro"] as const;
+/**
+ * Assuntos do formulário de contato.
+ *
+ * `privacidade` entrou porque a página de privacidade manda o titular pedir
+ * acesso, correção, anonimização ou portabilidade justamente por este
+ * formulário — e não havia assunto para isso. O pedido chegava como "outro",
+ * numa tabela chamada `fdp_marketing_leads`, listada no console sob "Leads
+ * comerciais". Indistinguível de quem quer falar de preço, e sem nada marcando
+ * o prazo de resposta que a mesma página promete.
+ */
+export const leadInterests = ["demonstracao", "planos", "integracoes", "suporte", "privacidade", "outro"] as const;
 export type LeadInterest = typeof leadInterests[number];
 
 export const leadInterestLabels: Record<LeadInterest, string> = {
@@ -193,8 +203,20 @@ export const leadInterestLabels: Record<LeadInterest, string> = {
   planos: "Falar sobre planos e condições",
   integracoes: "Tirar dúvidas sobre integrações",
   suporte: "Suporte a cliente atual",
+  privacidade: "Privacidade e direitos do titular (LGPD)",
   outro: "Outro assunto",
 };
+
+/**
+ * Prazo de resposta declarado na página de privacidade.
+ *
+ * O número mora aqui para que a página e a fila do console falem do mesmo
+ * prazo. Ele é o compromisso já publicado — não uma garantia nova.
+ */
+export const PRIVACY_REQUEST_DEADLINE_DAYS = 15;
+
+/** Um pedido de titular é um assunto do formulário, não uma tabela à parte. */
+export const isPrivacyRequest = (interest: string) => interest === "privacidade";
 
 export type LeadInput = {
   name: string;

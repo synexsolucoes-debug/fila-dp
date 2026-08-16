@@ -171,7 +171,11 @@ test("o formulário de contato valida entrada e exige consentimento", () => {
   // Sem consentimento não há captação.
   assert.throws(() => sanitizeLead({ name: "Maria", email: "a@b.com", interest: "planos" }), /concordar/iu);
   assert.throws(() => sanitizeLead({ name: "Maria", email: "a@b.com", interest: "planos", consent: false }), /concordar/iu);
-  assert.deepEqual([...leadInterests], ["demonstracao", "planos", "integracoes", "suporte", "outro"]);
+  // `privacidade` entrou porque a página de privacidade manda o titular pedir
+  // acesso, correção, anonimização ou portabilidade por este mesmo formulário —
+  // e não havia assunto para isso. O pedido chegava como "outro", numa tabela
+  // chamada `fdp_marketing_leads`, listada no console sob "Leads comerciais".
+  assert.deepEqual([...leadInterests], ["demonstracao", "planos", "integracoes", "suporte", "privacidade", "outro"]);
 });
 
 test("o contato é gravado de verdade, com limite por endereço e sem PII em log", async () => {
