@@ -361,6 +361,56 @@ if (password) {
   }
 }
 
+// 4f. A escrita operacional pela interface (§39).
+//
+//     As conferências anteriores cobriam navegação, permissão, recorte,
+//     relatório e SEO — nenhuma escrevia. Criar demanda é a ação central do
+//     produto: se o formulário quebrar, a coluna sumir ou a persistência
+//     falhar, tudo aqui continuaria verde. Este bloco faz o caminho inteiro
+//     pela tela, como uma pessoa faz, e confere no fim que a demanda ficou.
+if (password) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  await page.getByRole("button", { name: /^Demandas$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(1500);
+
+  const titulo = `Ensaio de ponta a ponta ${Date.now()}`;
+  await page.getByRole("button", { name: /Nova demanda/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(900);
+
+  const dialogo = page.getByRole("dialog");
+  record("o formulário de nova demanda abre", await dialogo.count() > 0);
+
+  await page.getByLabel(/Título da demanda/u).first().fill(titulo).catch(() => undefined);
+  await page.getByLabel(/^Descrição$/u).first().fill("Criada pela verificação de navegador.").catch(() => undefined);
+  await page.getByRole("button", { name: /Criar demanda|^Salvar$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(2500);
+
+  const noQuadro = await page.getByText(titulo, { exact: false }).count();
+  record("a demanda criada aparece no quadro", noQuadro > 0, `${noQuadro} ocorrência(s)`);
+
+  // Persistiu de verdade, ou só ficou no estado do React? A recarga responde —
+  // mas o painel reabre na Visão geral, então é preciso voltar a Demandas antes
+  // de procurar. Sem isso a conferência mediria "o título aparece na primeira
+  // tela que carregar", que não é a pergunta.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  await page.getByRole("button", { name: /^Demandas$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(2500);
+  const depoisDoReload = await page.getByText(titulo, { exact: false }).count();
+  record("a demanda sobrevive à recarga da página", depoisDoReload > 0, `${depoisDoReload} ocorrência(s)`);
+
+  // E entrou na trilha: o produto promete auditoria de quem fez o quê.
+  const auditoria = await page.evaluate(async () => {
+    const resposta = await fetch("/api/workspace", { cache: "no-store" });
+    const dados = await resposta.json();
+    return (dados.recentActivity ?? []).slice(0, 8).map((item) => String(item.eventType ?? item.event_type ?? ""));
+  }).catch(() => []);
+  record("a criação entra na atividade recente",
+    auditoria.some((evento) => /card/u.test(evento)), auditoria.slice(0, 3).join(", ") || "sem eventos");
+}
+
 // 4e. O site é encontrável (§45).
 //
 //     Medido contra o site de pé: antes desta correção /planos, /faq,

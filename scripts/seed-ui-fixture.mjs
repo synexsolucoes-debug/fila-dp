@@ -70,7 +70,11 @@ try {
   // falham por chave estrangeira — o que só não aparecia na CI porque lá o
   // banco nasce vazio a cada execução. Semente que só funciona em banco novo
   // não é semente, é sorte.
-  const lists = [["l-ui-1", "A fazer", "todo"], ["l-ui-2", "Em andamento", "doing"], ["l-ui-3", "Concluído", "done"]];
+  // Os mesmos `kind` que o produto cria ao abrir um quadro — `new`, uma etapa
+  // intermediária e `done`. A semente usava `todo`/`doing`/`done`, que o produto
+  // nunca gera: o ensaio de ponta a ponta criava demanda num formato de quadro
+  // que nenhum cliente tem, e o defeito real ficava escondido atrás do artificial.
+  const lists = [["l-ui-1", "Novas demandas", "new"], ["l-ui-2", "Em análise", "analysis"], ["l-ui-3", "Concluído", "done"]];
   const listId = {};
   for (const [index, [id, name, kind]] of lists.entries()) {
     await client.query(

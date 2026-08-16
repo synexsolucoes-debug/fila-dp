@@ -41,9 +41,23 @@ export async function POST(request: Request) {
       : null;
 
     if (!list) {
-      list = await d1.prepare("SELECT id, kind, sla_behavior FROM fdp_lists WHERE board_id = ? AND kind = 'new'").bind(targetBoard.id).first<{ id: string; kind: string; sla_behavior: string }>();
+      // A coluna de entrada, e — se ela não existir — a primeira do quadro.
+      //
+      // Só `kind = 'new'` não bastava. O quadro nasce com essa coluna, mas o
+      // administrador pode apagá-la: a exclusão de coluna só exige que sobre
+      // uma. Reproduzido contra o produto de pé — apagada a coluna "Novas
+      // demandas", o botão "Nova demanda" da barra superior passava a devolver
+      // 404 "Coluna não encontrada". O quadro continuava com duas colunas e
+      // aparência normal, e a ação central do produto estava quebrada com uma
+      // mensagem sobre algo que a pessoa não pediu.
+      //
+      // Qualquer quadro com ao menos uma coluna recebe demanda.
+      list = await d1.prepare(`SELECT id, kind, sla_behavior FROM fdp_lists
+        WHERE board_id = ?
+        ORDER BY (kind = 'new') DESC, position, id
+        LIMIT 1`).bind(targetBoard.id).first<{ id: string; kind: string; sla_behavior: string }>();
     }
-    if (!list) throw ApiError.notFound("Coluna não encontrada.", "LIST_NOT_FOUND");
+    if (!list) throw ApiError.notFound("Este quadro não tem nenhuma coluna. Crie uma coluna antes de abrir demandas.", "LIST_NOT_FOUND");
 
     const requestedTemplateId = text(body.templateId, 120);
     const template = requestedTemplateId
