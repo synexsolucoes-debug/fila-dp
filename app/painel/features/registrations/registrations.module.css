@@ -70,7 +70,7 @@
 .primaryButton:hover { transform: translateY(-1px); filter: brightness(.93); }
 .secondaryButton { border: 1px solid var(--reg-border); background: var(--reg-surface); color: var(--reg-text); }
 .secondaryButton:hover { border-color: color-mix(in srgb, var(--reg-mint) 54%, var(--reg-border)); background: var(--reg-mint-soft); color: var(--reg-mint); }
-.dangerButton { border: 1px solid #b42318; background: #b42318; color: #fff !important; }
+.dangerButton { border: 1px solid var(--ui-danger); background: var(--ui-danger); color: var(--brand-contrast) !important; }
 .primaryButton:disabled,
 .secondaryButton:disabled,
 .dangerButton:disabled { cursor: not-allowed; opacity: .55; transform: none; }
@@ -119,7 +119,7 @@
 .companyRow > svg { color: var(--reg-soft); }
 .principalMark,
 .branchMark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; }
-.principalMark { background: var(--reg-navy); color: #CFE4FF; }
+.principalMark { background: var(--reg-navy); color: var(--on-brand-soft); }
 .branchMark { border: 1px solid var(--reg-border); background: var(--reg-muted); color: var(--reg-soft); }
 
 .detailPane { min-width: 0; padding: 26px clamp(22px, 3vw, 38px); background: var(--reg-surface); }
@@ -165,7 +165,7 @@
 .table td:last-child { width: 42px; padding-inline: 6px; }
 .table td:last-child button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--reg-soft); cursor: pointer; }
 .personCell { display: flex; align-items: center; gap: 10px; min-width: 190px; }
-.personCell > span { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; background: var(--reg-navy); color: #CFE4FF; font-size: .66rem; font-weight: 810; }
+.personCell > span { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; background: var(--reg-navy); color: var(--on-brand-soft); font-size: .66rem; font-weight: 810; }
 .personCell > div { display: grid; gap: 4px; }
 .personCell strong { font-size: .79rem; }
 .personCell small { color: var(--reg-soft); font-size: .67rem; }
@@ -208,7 +208,7 @@
 .compactEditor footer { display: flex; align-items: center; gap: 9px; min-height: 70px; padding: 12px 22px; border-top: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 48%, var(--reg-surface)); }
 .editorPanel footer > span,
 .compactEditor footer > span { flex: 1; }
-.textDanger { border: 0; background: transparent; color: #b42318 !important; font-size: .74rem; font-weight: 700; cursor: pointer; }
+.textDanger { border: 0; background: transparent; color: var(--ui-danger) !important; font-size: .74rem; font-weight: 700; cursor: pointer; }
 .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
 .formGrid label,
 .compactEditor .editorBody label { display: grid; align-content: start; gap: 6px; min-width: 0; }
@@ -238,7 +238,7 @@
 .drawerHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 104px; padding: 18px 24px; border-bottom: 1px solid var(--reg-border); }
 .drawerHeader > div:last-child { display: flex; gap: 8px; }
 .employeeHero { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.employeeHero > span { display: grid; place-items: center; flex: 0 0 auto; width: 52px; height: 52px; border-radius: 10px; background: var(--reg-navy); color: #CFE4FF; font-size: .9rem; font-weight: 820; }
+.employeeHero > span { display: grid; place-items: center; flex: 0 0 auto; width: 52px; height: 52px; border-radius: 10px; background: var(--reg-navy); color: var(--on-brand-soft); font-size: .9rem; font-weight: 820; }
 .employeeHero small { color: var(--reg-mint); font-size: .62rem; font-weight: 800; letter-spacing: .1em; }
 .employeeHero h2 { margin: 4px 0; overflow: hidden; font-size: 1.18rem; text-overflow: ellipsis; white-space: nowrap; }
 .employeeHero p { margin: 0; color: var(--reg-soft); font-size: .71rem; }
@@ -278,7 +278,7 @@
 .historyTrail article > small { display: block; margin-top: 7px; color: var(--reg-mint); }
 
 .confirm { align-self: center; width: min(410px, calc(100% - 32px)); padding: 28px; border: 1px solid var(--reg-border); border-radius: 12px; background: var(--reg-surface); box-shadow: var(--ui-shadow-modal); text-align: center; animation: riseIn .2s ease both; }
-.confirmIcon { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 14px; border-radius: 10px; background: color-mix(in srgb, #b42318 10%, var(--reg-surface)); color: #b42318; }
+.confirmIcon { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 14px; border-radius: 10px; background: color-mix(in srgb, var(--ui-danger) 10%, var(--reg-surface)); color: var(--ui-danger); }
 .confirm h2 { margin: 0 0 8px; font-size: 1.08rem; }
 .confirm p { margin: 0; color: var(--reg-soft); font-size: .75rem; line-height: 1.55; }
 .confirm > div { display: flex; justify-content: center; gap: 8px; margin-top: 22px; }

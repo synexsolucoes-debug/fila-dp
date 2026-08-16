@@ -3529,6 +3529,44 @@
 
 
 /* ==========================================================================
+   Cores de módulo e de superfície escura (§13)
+   ==========================================================================
+   Estes valores já existiam — repetidos. O violeta de Psicologia estava escrito
+   em três arquivos (`--aux-accent`, `--int-violet`, `--pay-accent`), o âmbar de
+   Prestadores PJ em dois, e o par de superfície escura — traço, véu e o mint da
+   confirmação — em dois ou três cada. Mudar a cor de um módulo significava
+   achar todas as cópias, e a que sobrasse ficaria fora de tom sem avisar.
+
+   O que muda aqui é onde a cor mora, não qual ela é: os valores são idênticos
+   aos que estavam espalhados. */
+.dashboard-shell {
+  /* Acento por módulo auxiliar. O azul da marca continua sendo o acento
+     padrão; estes dois distinguem contextos que convivem na mesma competência.
+     Preenchimento e texto são separados pelo mesmo motivo que `--ui-accent` e
+     `--ui-accent-text`: no tema escuro o texto precisa clarear mais que o
+     preenchimento. Verificado — a primeira versão usava o mesmo violeta nos
+     dois papéis e a conferência acusou 2.49:1 no cabeçalho de Psicologia. */
+  --module-psychology: #6550a1;
+  --module-psychology-text: #6550a1;
+  --module-psychology-soft: #f0ecfa;
+  --module-contractors: #9a5c20;
+  --module-contractors-text: #9a5c20;
+  --module-contractors-soft: #f8eee2;
+
+  /* Sobre superfície escura — cabeçalho de gaveta, diálogo, toast. Não são o
+     tema escuro: são áreas que já eram escuras nos dois temas. */
+  --on-dark-soft: #b9c9d8;
+  --on-dark-line: #52667a;
+  --on-dark-veil: #ffffff0d;
+  --on-dark-confirm: #70dfb9;
+
+  /* Tinta das sombras profundas, com a opacidade embutida no valor. */
+  --ink-shadow: #06152642;
+  --ink-shadow-soft: #06152630;
+  --ink-scrim: #061526a8;
+}
+
+/* ==========================================================================
    Cores de estado com contrapartida no escuro
    ==========================================================================
    Selos de status, avisos e destaques usavam hex fixo escolhido contra fundo
@@ -3545,6 +3583,15 @@
   --ui-state-warn-bg: #fdf2e2;
   --ui-state-danger-text: #96201a;
   --ui-state-danger-bg: #fdeceb;
+}
+
+/* Contrapartida escura dos acentos de módulo. Medido contra as três
+   superfícies do tema: 7.73:1 e 9.56:1 na superfície de cartão. */
+.dashboard-shell.theme-dark {
+  --module-psychology-text: #b9a5ea;
+  --module-psychology-soft: #241d3a;
+  --module-contractors-text: #f0b978;
+  --module-contractors-soft: #33260f;
 }
 
 .dashboard-shell.theme-dark {

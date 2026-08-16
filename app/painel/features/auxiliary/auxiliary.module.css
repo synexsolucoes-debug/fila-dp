@@ -18,8 +18,15 @@
   min-width: 0;
   color: var(--aux-text);
 }
-.workspace[data-module="psychology"] { --aux-accent: #6550a1; --aux-accent-soft: #f0ecfa; }
-.workspace[data-module="contractors"] { --aux-accent: #9a5c20; --aux-accent-soft: #f8eee2; }
+/* O acento troca no token semântico, não só no alias local (§13, §16).
+ *
+ * A versão anterior redefinia apenas `--aux-accent`, e o estado vazio e o selo
+ * de status — que passaram a vir do módulo compartilhado — leem `--ui-accent`.
+ * O resultado seria a tela de Psicologia com o cabeçalho violeta e o ícone do
+ * estado vazio azul, na mesma tela. Sobrescrever o token semântico dentro do
+ * escopo alcança os dois, porque o alias local resolve a partir dele. */
+.workspace[data-module="psychology"] { --ui-accent: var(--module-psychology); --ui-accent-text: var(--module-psychology-text); --ui-accent-soft: var(--module-psychology-soft); }
+.workspace[data-module="contractors"] { --ui-accent: var(--module-contractors); --ui-accent-text: var(--module-contractors-text); --ui-accent-soft: var(--module-contractors-soft); }
 .workspace button, .workspace input, .workspace select, .workspace textarea { font: inherit; }
 .workspace button { color: inherit; }
 .workspace svg { width: 17px; height: 17px; stroke-width: 1.9; }
@@ -65,22 +72,22 @@
    precise da própria exceção — e evita o erro de especificidade que deixava
    "EM ABERTO" em 2.74:1, porque `.moduleLenses button > b small` vencia de
    `.activeLens > b small`. */
-.moduleLenses .activeLens { --aux-soft: #b9c9d8; --aux-accent: var(--brand-accent-on-dark); background: var(--aux-navy); color: #fff; }
+.moduleLenses .activeLens { --aux-soft: var(--on-dark-soft); --aux-accent: var(--brand-accent-on-dark); background: var(--aux-navy); color: #fff; }
 .lensIcon { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid color-mix(in srgb, var(--aux-border) 80%, transparent); border-radius: 7px; background: var(--aux-muted); color: var(--aux-accent); }
 .activeLens .lensIcon { border-color: color-mix(in srgb, var(--aux-accent) 55%, #fff); background: color-mix(in srgb, var(--aux-accent) 35%, var(--aux-navy)); color: #fff; }
 .moduleLenses button > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
 .moduleLenses button > span:nth-child(2) strong { font-size: .74rem; }
 .moduleLenses button > span:nth-child(2) small { overflow: hidden; color: var(--aux-soft); font-size: .56rem; text-overflow: ellipsis; white-space: nowrap; }
-.moduleLenses .activeLens > span:nth-child(2) small { color: #b9c9d8; }
+.moduleLenses .activeLens > span:nth-child(2) small { color: var(--on-dark-soft); }
 .moduleLenses button > b { display: grid; gap: 1px; padding-left: 10px; border-left: 1px solid var(--aux-border); font-style: normal; text-align: right; }
 .activeLens > b { border-color: #3d5165; }
 .moduleLenses button > b strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
 .moduleLenses button > b small { color: var(--aux-soft); font-size: .47rem; font-weight: 780; letter-spacing: .07em; }
-.moduleLenses .activeLens > b small { color: #b9c9d8; }
+.moduleLenses .activeLens > b small { color: var(--on-dark-soft); }
 .moduleLenses button > svg { color: var(--aux-soft); }
 .activeLens > svg { color: #fff; }
 
-.privacyBanner, .privacyNotice { display: flex; align-items: center; gap: 11px; border: 1px solid color-mix(in srgb, #6550a1 32%, var(--aux-border)); background: #f4f1fb; color: #4d3c83; }
+.privacyBanner, .privacyNotice { display: flex; align-items: center; gap: 11px; border: 1px solid color-mix(in srgb, var(--module-psychology) 32%, var(--aux-border)); background: #f4f1fb; color: #4d3c83; }
 .privacyBanner { margin-bottom: 12px; padding: 10px 13px; border-radius: 7px; }
 .privacyBanner > svg, .privacyNotice > svg { flex: 0 0 auto; }
 .privacyBanner > div, .privacyNotice > div { display: grid; flex: 1; gap: 2px; }
@@ -196,12 +203,12 @@
 .versionLedger article > footer small { color: var(--aux-soft); font-size: .52rem; }
 .spin { animation: aux-spin .8s linear infinite; }
 @keyframes aux-spin { to { transform: rotate(360deg); } }
-.toast { position: fixed; z-index: 120; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 9px; max-width: 390px; padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--aux-success) 32%, var(--aux-border)); border-radius: 7px; background: var(--aux-navy); color: #fff; box-shadow: 0 14px 40px #06152642; font-size: .68rem; font-weight: 660; animation: toast-in .2s ease-out both; }
-.toast svg { color: #70dfb9; }
+.toast { position: fixed; z-index: 120; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 9px; max-width: 390px; padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--aux-success) 32%, var(--aux-border)); border-radius: 7px; background: var(--aux-navy); color: #fff; box-shadow: 0 14px 40px var(--ink-shadow); font-size: .68rem; font-weight: 660; animation: toast-in .2s ease-out both; }
+.toast svg { color: var(--on-dark-confirm); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
-.overlay { position: fixed; z-index: 150; inset: 0; display: flex; align-items: stretch; justify-content: flex-end; background: #061526a8; }
-.dialog { display: flex; flex-direction: column; width: min(100%, 620px); height: 100%; overflow: hidden; background: var(--aux-surface); color: var(--aux-text); box-shadow: -18px 0 50px #06152630; animation: drawer-in .2s ease-out both; }
+.overlay { position: fixed; z-index: 150; inset: 0; display: flex; align-items: stretch; justify-content: flex-end; background: var(--ink-scrim); }
+.dialog { display: flex; flex-direction: column; width: min(100%, 620px); height: 100%; overflow: hidden; background: var(--aux-surface); color: var(--aux-text); box-shadow: -18px 0 50px var(--ink-shadow-soft); animation: drawer-in .2s ease-out both; }
 .dialogWide { width: min(100%, 780px); }
 .dialogCompact { width: min(100%, 470px); }
 @keyframes drawer-in { from { transform: translateX(24px); opacity: .7; } }
@@ -209,7 +216,7 @@
 .dialogHeader > div { display: grid; gap: 5px; }
 .dialogHeader .eyebrow { color: #7dddbc; }
 .dialogHeader h2 { margin: 0; font-size: 1.02rem; }
-.dialogHeader button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #52667a; border-radius: 6px; background: #ffffff0d; color: #fff; cursor: pointer; }
+.dialogHeader button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--on-dark-line); border-radius: 6px; background: var(--on-dark-veil); color: #fff; cursor: pointer; }
 .dialog form { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .dialogBody { flex: 1; overflow-y: auto; padding: 17px; background: var(--aux-bg); }
 .dialogFooter { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 17px; border-top: 1px solid var(--aux-border); background: var(--aux-surface); }

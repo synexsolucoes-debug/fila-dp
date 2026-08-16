@@ -53,7 +53,7 @@
 /* Trilho navy: os tokens de texto do módulo são calibrados para fundo claro e
    caem para 2.42:1 aqui. Redefini-los no contêiner vale para tudo que ele
    contém, sem espalhar exceção regra a regra. */
-.cycleRail { --ops-mint: var(--brand-accent-on-dark); --ops-soft: #b9c9d8; margin-bottom: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--ops-navy) 45%, var(--ops-border)); border-radius: 11px; background: var(--ops-navy); color: #fff; box-shadow: 0 10px 24px rgba(5,18,33,.12); }
+.cycleRail { --ops-mint: var(--brand-accent-on-dark); --ops-soft: var(--on-dark-soft); margin-bottom: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--ops-navy) 45%, var(--ops-border)); border-radius: 11px; background: var(--ops-navy); color: #fff; box-shadow: 0 10px 24px rgba(5,18,33,.12); }
 .cycleRail > header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
 .cycleRail > header > div { display: grid; gap: 4px; }
 .cycleRail > header strong { font-size: .94rem; text-transform: capitalize; font-variant-numeric: tabular-nums; }

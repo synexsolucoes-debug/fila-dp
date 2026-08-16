@@ -15,8 +15,15 @@
   min-width: 0;
   color: var(--pay-text);
 }
-.workspace[data-module="psychology"] { --pay-accent: #6550a1; --pay-accent-soft: #f0ecfa; }
-.workspace[data-module="contractors"] { --pay-accent: #9a5c20; --pay-accent-soft: #f8eee2; }
+/* O acento troca no token semântico, não só no alias local (§13, §16).
+ *
+ * A versão anterior redefinia apenas `--aux-accent`, e o estado vazio e o selo
+ * de status — que passaram a vir do módulo compartilhado — leem `--ui-accent`.
+ * O resultado seria a tela de Psicologia com o cabeçalho violeta e o ícone do
+ * estado vazio azul, na mesma tela. Sobrescrever o token semântico dentro do
+ * escopo alcança os dois, porque o alias local resolve a partir dele. */
+.workspace[data-module="psychology"] { --ui-accent: var(--module-psychology); --ui-accent-text: var(--module-psychology-text); --ui-accent-soft: var(--module-psychology-soft); }
+.workspace[data-module="contractors"] { --ui-accent: var(--module-contractors); --ui-accent-text: var(--module-contractors-text); --ui-accent-soft: var(--module-contractors-soft); }
 .workspace button, .workspace input, .workspace select, .workspace textarea { font: inherit; }
 .workspace button { color: inherit; }
 .workspace svg { width: 16px; height: 16px; stroke-width: 1.9; }
