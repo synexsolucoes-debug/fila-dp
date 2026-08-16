@@ -2764,16 +2764,14 @@
 .overview-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
 .overview-pair > * { margin-bottom: 0; }
 @media (max-width: 1100px) { .overview-pair { grid-template-columns: minmax(0, 1fr); } }
-.overview-hero { min-height: 136px; padding: 24px 26px; display: flex; align-items: center; justify-content: space-between; gap: 22px; overflow: hidden; border: 1px solid #2f6661; border-radius: 16px; background: var(--ui-brand); color: #fff; }
-.overview-hero > div { max-width: 720px; }
-.overview-hero span, .overview-panel header > div > span, .overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
 /* No herói o fundo é o navy, então o azul vivo já lê; nos painéis claros, não. */
-.overview-hero span { color: var(--ui-mint); }
+/* Rótulo das seções da visão geral. Estava numa regra compartilhada com
+   `.overview-hero span`, e ao apagar a faixa morta eu levei os dois vivos
+   junto — o seletor compartilhado é justamente o que torna a remoção
+   cega perigosa. */
+.overview-panel header > div > span,
+.overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
 .overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-mint-text); }
-.overview-hero strong { display: block; margin-top: 7px; font-size: clamp(20px, 2vw, 27px); letter-spacing: -.04em; }
-.overview-hero p { margin: 7px 0 0; color: rgba(255,255,255,.73); font-size: 12px; line-height: 1.5; }
-.overview-hero .overview-new-demand { flex: 0 0 auto; border: 0; background: var(--ui-mint); color: var(--ui-on-mint); box-shadow: none; }
-.overview-hero .overview-new-demand:hover { background: #8CC4FF; }
 
 .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .overview-metrics article { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
@@ -2889,8 +2887,6 @@
   .dashboard-header-actions .header-company-select { min-width: 38px; width: 38px; padding: 0; justify-content: center; }
   .header-company-select select { display: none; }
   .dashboard-header-actions .help-button, .dashboard-header-actions .header-profile { display: none; }
-  .overview-hero { min-height: 0; padding: 20px; align-items: flex-start; flex-direction: column; }
-  .overview-hero .overview-new-demand { width: 100%; }
   .overview-metrics { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
   .overview-metrics article { min-width: min(74vw, 250px); scroll-snap-align: start; }
   .overview-sla-band { grid-template-columns: 1fr; gap: 14px; }
