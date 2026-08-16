@@ -32,12 +32,9 @@ import sharp from "sharp";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const raiz = fileURLToPath(new URL("../", import.meta.url));
+import { ALTURA, LARGURA, LIMITE_BYTES, SAIDA } from "./share-image.config.mjs";
 
-/** Onde o cartão é gravado. O layout aponta para cá; o teste confere os dois. */
-export const SAIDA = "public/og-vinculato.jpg";
-/** Teto de peso: acima disso alguns aplicativos desistem da pré-visualização. */
-export const LIMITE_BYTES = 300 * 1024;
+const raiz = fileURLToPath(new URL("../", import.meta.url));
 
 /* -------------------------------------------------------------------------- */
 /* A marca, lida de onde o produto a define                                    */
@@ -138,10 +135,6 @@ function fontesDaMarca() {
 /* -------------------------------------------------------------------------- */
 /* O cartão                                                                    */
 /* -------------------------------------------------------------------------- */
-
-/** 1200×630 é a proporção que WhatsApp, LinkedIn, Slack e X recortam sem cortar. */
-const LARGURA = 1200;
-const ALTURA = 630;
 
 function cartao(fontes, logoBase64) {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>

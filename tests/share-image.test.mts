@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
-import { LIMITE_BYTES, SAIDA } from "../scripts/generate-og-image.mjs";
+import { ALTURA, LARGURA, LIMITE_BYTES, SAIDA } from "../scripts/share-image.config.mjs";
 
 /**
  * §45: a imagem de compartilhamento.
@@ -54,8 +54,23 @@ test("as dimensões declaradas são as do arquivo, não uma lembrança delas", a
   assert.equal(Number(declarada[2]), altura, "altura declarada difere do arquivo");
 
   // 1200×630 é a proporção que WhatsApp, LinkedIn, Slack e X recortam sem cortar.
-  assert.equal(largura, 1200);
-  assert.equal(altura, 630);
+  assert.equal(largura, LARGURA);
+  assert.equal(altura, ALTURA);
+});
+
+test("a configuração do cartão não faz nada ao ser importada", async () => {
+  // A primeira versão deste teste importava `generate-og-image.mjs` — que abre
+  // o Chromium e lê o build **ao ser carregado**. Localmente passava, porque os
+  // dois estavam ali; na CI os testes rodam antes do build e o import derrubou
+  // a suíte inteira. Módulo de configuração não pode agir ao ser carregado.
+  const config = await readFile(new URL("scripts/share-image.config.mjs", raiz), "utf8");
+  assert.doesNotMatch(config, /^import /mu, "configuração com dependência volta a arrastar efeito colateral");
+  assert.doesNotMatch(config, /require\(|await |chromium|readFileSync|writeFileSync/u);
+  for (const linha of config.split("\n")) {
+    const codigo = linha.trim();
+    if (!codigo || codigo.startsWith("*") || codigo.startsWith("/*") || codigo.startsWith("//")) continue;
+    assert.match(codigo, /^export const /u, `só declarações de constante: "${codigo}"`);
+  }
 });
 
 test("o cartão é leve o bastante para a pré-visualização montar", async () => {
