@@ -697,6 +697,23 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }, [cardModalOpen, inboxModalOpen, workspaceModalOpen, searchOpen, notificationsOpen, archiveOpen, confirmation, attachmentPreview]);
 
   const activeCards = useMemo(() => snapshot?.lists.flatMap((list) => list.cards) ?? [], [snapshot]);
+  /**
+   * Recorte da empresa escolhida na barra superior (§18, §19).
+   *
+   * Só o quadro respeitava o seletor; a visão geral somava o grupo inteiro.
+   * Escolher uma empresa não mexia em número nenhum, e quem escolhia não tinha
+   * como saber se aquela empresa não tinha nada ou se o filtro era enfeite.
+   *
+   * Isto é diferente de `filteredActiveCards`, que aplica também responsável,
+   * SLA, processo e prazo — filtros do quadro, que não valem para a visão geral.
+   */
+  const scopedCards = useMemo(
+    () => companyFilter === "all" ? activeCards : activeCards.filter((card) => card.companyId === companyFilter),
+    [activeCards, companyFilter],
+  );
+  const scopedLists = useMemo(() => (snapshot?.lists ?? []).map((list) => companyFilter === "all"
+    ? list
+    : { ...list, cards: list.cards.filter((card) => card.companyId === companyFilter) }), [snapshot?.lists, companyFilter]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
   const filteredActiveCards = useMemo(() => {
     const now = new Date();
@@ -748,19 +765,19 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }), [snapshot]);
 
   const stats = useMemo(() => {
-    const active = activeCards.filter((card) => card.slaStatus !== "completed");
+    const active = scopedCards.filter((card) => card.slaStatus !== "completed");
     const waitingListIds = new Set(snapshot?.lists.filter((list) => list.slaBehavior === "paused").map((list) => list.id) ?? []);
-    const completed = activeCards.filter((card) => card.slaStatus === "completed").length;
+    const completed = scopedCards.filter((card) => card.slaStatus === "completed").length;
     return {
       active: active.length,
       attention: active.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length,
       waiting: active.filter((card) => waitingListIds.has(card.listId)).length,
-      onTime: activeCards.length ? Math.round(((activeCards.length - activeCards.filter((card) => card.slaStatus === "overdue").length) / activeCards.length) * 100) : 100,
+      onTime: scopedCards.length ? Math.round(((scopedCards.length - scopedCards.filter((card) => card.slaStatus === "overdue").length) / scopedCards.length) * 100) : 100,
       completed,
       documentsPending: active.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0),
       activeCompanies: snapshot?.companies.filter((company) => company.status === "active").length ?? 0,
     };
-  }, [activeCards, snapshot]);
+  }, [scopedCards, snapshot]);
 
   function applySnapshot(next: WorkspaceSnapshot, message?: string) {
     setSnapshot(next);
@@ -1369,7 +1386,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
 
-          {view === "overview" && <OverviewView onNavigate={(target) => setView(target)} cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} />}
+          {view === "overview" && <OverviewView onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
 
@@ -1659,7 +1676,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   );
 }
 
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit }: {
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel }: {
   onNavigate: (target: ActionTarget) => void;
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
@@ -1670,6 +1687,9 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   onOpenBoard: () => void;
   onNew: () => void;
   canEdit: boolean;
+  /** Empresa do recorte; vazio = todas as autorizadas. */
+  companyId: string;
+  scopeLabel: string;
 }) {
   const attention = cards.filter((card) => card.slaStatus === "overdue" || card.slaStatus === "warning").sort((a, b) => (a.slaStatus === "overdue" ? -1 : 1) - (b.slaStatus === "overdue" ? -1 : 1));
   const companyById = new Map(companies.map((company) => [company.id, company]));
@@ -1679,10 +1699,13 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   const visibleColumns = lists.slice(0, 3);
 
   return <div className="overview-layout">
-    <ActionCenter onNavigate={onNavigate} />
+    <ActionCenter onNavigate={onNavigate} companyId={companyId} />
 
     <section className="overview-hero">
-      <div><span>RESUMO OPERACIONAL</span><strong>{stats.active ? `${stats.active} demanda(s) em andamento.` : "Tudo sob controle por enquanto."}</strong><p>Priorize o que vence primeiro e mantenha cada empresa atualizada sem abrir planilhas paralelas.</p></div>
+      {/* O recorte é dito por extenso. Sem isso, "3 demandas em andamento" com
+          uma empresa escolhida e "3" com o grupo inteiro são o mesmo texto para
+          fatos diferentes, e não há como saber qual dos dois se está lendo. */}
+      <div><span>RESUMO OPERACIONAL · {scopeLabel.toUpperCase()}</span><strong>{stats.active ? `${stats.active} demanda(s) em andamento.` : "Tudo sob controle por enquanto."}</strong><p>Priorize o que vence primeiro e mantenha cada empresa atualizada sem abrir planilhas paralelas.</p></div>
       {canEdit && <button className="primary-button overview-new-demand" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
     </section>
 
@@ -1690,7 +1713,12 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
       <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{stats.completed} concluída(s) no quadro</small></article>
       <article className={stats.attention ? "requires-attention" : ""}><span>SLA em risco</span><strong>{stats.attention}</strong><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small></article>
       <article><span>Documentos pendentes</span><strong>{stats.documentsPending}</strong><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small></article>
-      <article><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><small>Cadastros disponíveis na operação</small></article>
+      {/* Com uma empresa escolhida, "Empresas ativas: 3" seria um número do
+          grupo inteiro sentado entre três números do recorte — o tipo de
+          vizinhança que faz ler errado sem perceber. */}
+      {companyId
+        ? <article><span>Empresa em foco</span><strong className="overview-metric-name">{scopeLabel}</strong><small>Os números acima são só desta empresa</small></article>
+        : <article><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><small>Cadastros disponíveis na operação</small></article>}
     </section>
 
     <section className="overview-sla-band">

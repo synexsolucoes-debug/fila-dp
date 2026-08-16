@@ -112,3 +112,53 @@ test("o botão de ajuda abre a ajuda que existe", async () => {
   // Esc continua fechando: a ajuda não pode virar parede entre a pessoa e a tela.
   assert.match(assistant, /event\.key === "Escape"/u);
 });
+
+test("o seletor de empresa da barra superior recorta a visão geral (§18, §19)", async () => {
+  // Ele existia em toda tela e só o quadro o respeitava. Escolher uma empresa
+  // não mexia em número nenhum da visão geral, e quem escolhia não tinha como
+  // saber se aquela empresa não tinha nada ou se o filtro era enfeite.
+  assert.match(source, /const scopedCards = useMemo\(/u);
+  assert.match(source, /activeCards\.filter\(\(card\) => card\.companyId === companyFilter\)/u);
+  // Os indicadores medem o recorte, não o grupo.
+  assert.match(source, /const active = scopedCards\.filter\(\(card\) => card\.slaStatus !== "completed"\);/u);
+  assert.match(source, /\}, \[scopedCards, snapshot\]\);/u);
+  // E o quadro continua com os filtros dele — responsável, SLA, processo,
+  // prazo —, que não valem para a visão geral.
+  assert.match(source, /boardMode === "table"[\s\S]{0,80}filteredActiveCards/u);
+});
+
+test("a visão geral diz de quem são os números que mostra", () => {
+  // "3 demandas em andamento" com uma empresa escolhida e "3" com o grupo
+  // inteiro são o mesmo texto para fatos diferentes.
+  assert.match(source, /RESUMO OPERACIONAL · \{scopeLabel\.toUpperCase\(\)\}/u);
+  // E o cartão de empresas deixa de misturar um número do grupo entre três do
+  // recorte.
+  assert.match(source, /<span>Empresa em foco<\/span>/u);
+});
+
+test("a verificação de navegador roda na CI, não só na máquina de quem lembrar", async () => {
+  // Ela existia com 47 conferências contra o produto de pé e a CI só rodava a
+  // de acessibilidade. É o padrão que já escondeu defeito neste repositório
+  // mais de uma vez: a ferramenta certa, construída, e nunca executada.
+  const workflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  assert.match(workflow, /npm run browser-check/u);
+  assert.match(workflow, /npm run a11y-check/u);
+  // E ela precisa das credenciais para passar do login; sem elas, reprova em
+  // vez de pular em silêncio.
+  assert.match(workflow, /VINCULATO_ADMIN_PASSWORD="\$FIXTURE_PASSWORD"/u);
+
+  const check = await readFile(new URL("../scripts/browser-check.mjs", import.meta.url), "utf8");
+  assert.match(check, /record\("credenciais do administrador não informadas", false/u);
+  assert.match(check, /process\.exit\(1\)/u);
+});
+
+test("a semente tem uma empresa sem demanda, que é o que torna o recorte demonstrável", async () => {
+  // Com uma empresa só, um seletor que recorta e um seletor que não faz nada
+  // produzem exatamente a mesma tela — foi assim que o filtro ficou anos
+  // aparente sem funcionar na visão geral.
+  const seed = await readFile(new URL("../scripts/seed-ui-fixture.mjs", import.meta.url), "utf8");
+  assert.match(seed, /'co-ui-2', 'ws-ui', 'Filial Sem Demanda LTDA'/u);
+  const check = await readFile(new URL("../scripts/browser-check.mjs", import.meta.url), "utf8");
+  assert.match(check, /escolher empresa recorta os indicadores da visão geral/u);
+  assert.match(check, /abertasNoGrupo > 0 && abertasNaFilial === 0/u);
+});

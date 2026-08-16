@@ -2721,6 +2721,12 @@
 .overview-metrics span { color: var(--ui-text-soft); font-size: 11px; font-weight: 700; }
 .overview-metrics strong { margin-top: 10px; color: var(--ui-text); font-size: clamp(27px, 2.2vw, 36px); letter-spacing: -.06em; line-height: 1; }
 .overview-metrics small { margin-top: auto; color: var(--ui-text-soft); font-size: 10px; }
+/* Nome de empresa no lugar de um número: a escala do dígito (até 36px, com
+   -.06em de espaçamento) deixaria a razão social ilegível e transbordando. */
+.overview-metrics .overview-metric-name {
+  font-size: 15px; letter-spacing: -.01em; line-height: 1.25; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .overview-metrics .requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); background: #fff8f0; }
 .overview-metrics .requires-attention strong { color: #a95e21; }
 .theme-dark .overview-metrics .requires-attention { background: color-mix(in srgb, #F4A261 11%, var(--ui-surface)); }

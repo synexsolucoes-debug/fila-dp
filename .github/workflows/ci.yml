@@ -134,6 +134,11 @@ jobs:
       FDP_DB_DRIVER: pg
       FDP_AUTH_SECRET: ensaio-de-interface-em-ci-com-mais-de-32-caracteres
       FDP_PLATFORM_ADMIN_EMAILS: admin@vinculato.test
+      # Credencial de ensaio de um banco efêmero que nasce e morre com o job.
+      # Não é segredo e não deve virar um: o ensaio precisa entrar pela tela de
+      # login como uma pessoa entra, e um segredo de repositório aqui daria a
+      # impressão errada de que existe uma conta real por trás.
+      FIXTURE_PASSWORD: ensaio-de-interface-em-ci-2026
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -146,13 +151,13 @@ jobs:
       - name: Preparar banco e conta do ensaio
         run: |
           npm run db:migrate
-          node scripts/seed-ui-fixture.mjs
+          A11Y_PASSWORD="$FIXTURE_PASSWORD" node scripts/seed-ui-fixture.mjs
 
       - run: npm run build
 
       # `npm start` não termina sozinho: sobe em segundo plano e o passo espera
       # a porta responder antes de auditar, em vez de dormir um tempo fixo.
-      - name: Subir o produto e auditar acessibilidade
+      - name: Subir o produto e auditar interface
         run: |
           set -euo pipefail
           npm start -- -p 3000 > /tmp/next.log 2>&1 &
@@ -161,4 +166,12 @@ jobs:
             sleep 1
           done
           curl -sf -o /dev/null http://localhost:3000/login || { echo "o produto não subiu:"; tail -30 /tmp/next.log; exit 1; }
+          export VINCULATO_ADMIN_EMAIL=admin@vinculato.test
+          export VINCULATO_ADMIN_PASSWORD="$FIXTURE_PASSWORD"
+          export A11Y_PASSWORD="$FIXTURE_PASSWORD"
           npm run a11y-check
+          # A verificação de navegador existia e a CI não a rodava — o mesmo
+          # padrão que já escondeu defeito neste repositório mais de uma vez.
+          # São 47 conferências contra o produto de pé, incluindo as que provam
+          # que o seletor de empresa recorta de verdade a visão geral.
+          npm run browser-check

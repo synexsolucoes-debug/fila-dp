@@ -253,6 +253,47 @@ if (password) {
     blocked.map((item) => `${item.key}:${item.reason}`).slice(0, 4).join(", "));
 }
 
+// 4c. O seletor de empresa recorta a visão geral, não só o quadro.
+//
+//     Ele ficava aparente em toda tela e só o quadro o respeitava: escolher uma
+//     empresa não mexia em número nenhum da visão geral. Nenhum ensaio acusava
+//     porque a semente tinha uma empresa só — com uma, um seletor que recorta e
+//     um seletor que não faz nada produzem exatamente a mesma tela.
+if (password) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector(".overview-metrics article strong", { timeout: 25000 }).catch(() => undefined);
+  await page.waitForTimeout(1200);
+
+  const chamadas = [];
+  const escuta = (request) => { if (request.url().includes("action-center")) chamadas.push(request.url()); };
+  page.on("request", escuta);
+
+  const abertasNoGrupo = Number((await page.locator(".overview-metrics article strong").first().innerText().catch(() => "0")).trim());
+  const seletor = page.getByLabel("Selecionar empresa");
+  const valores = await seletor.locator("option").evaluateAll((options) => options.map((option) => option.value));
+  const vazia = valores.find((value) => value.startsWith("co-ui-2"));
+
+  if (!vazia) {
+    record("a semente tem uma empresa sem demanda para provar o recorte", false, valores.join(", "));
+  } else {
+    await seletor.selectOption(vazia);
+    await page.waitForTimeout(1800);
+    const abertasNaFilial = Number((await page.locator(".overview-metrics article strong").first().innerText().catch(() => "-1")).trim());
+    record("escolher empresa recorta os indicadores da visão geral",
+      abertasNoGrupo > 0 && abertasNaFilial === 0, `grupo ${abertasNoGrupo} → filial sem demanda ${abertasNaFilial}`);
+
+    const resumo = await page.locator(".overview-hero span").first().innerText().catch(() => "");
+    record("a visão geral diz de quem são os números", /FILIAL VAZIA/u.test(resumo), resumo);
+
+    const ultima = chamadas[chamadas.length - 1] ?? "";
+    record("a central de ação consulta o servidor com a empresa escolhida",
+      ultima.includes(`companyId=${vazia}`), ultima.slice(-70) || "nenhuma chamada");
+  }
+  page.off("request", escuta);
+  await seletor.selectOption("all").catch(() => undefined);
+}
+
 // 5. Responsividade do site público
 for (const width of widths) {
   await page.setViewportSize({ width, height: 900 });

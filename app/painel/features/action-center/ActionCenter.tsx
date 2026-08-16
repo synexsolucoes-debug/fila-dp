@@ -31,7 +31,11 @@ function dueLabel(value: string | null) {
  * decorativo. Indicadores zerados são mantidos fora da lista para que a tela
  * responda de fato "o que precisa ser feito agora?".
  */
-export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget) => void }) {
+export function ActionCenter({ onNavigate, companyId = "" }: {
+  onNavigate: (target: ActionTarget) => void;
+  /** Empresa escolhida na barra superior. Vazio = todas as autorizadas. */
+  companyId?: string;
+}) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [criticalTotal, setCriticalTotal] = useState(0);
@@ -42,7 +46,11 @@ export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget
   const load = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true); else setLoading(true);
     try {
-      const response = await fetch("/api/dashboard/action-center", { cache: "no-store" });
+      // A rota já aceitava `companyId` e conferia o acesso; era o painel que
+      // nunca enviava. O seletor de empresa da barra superior ficava aparente
+      // em toda tela e não mexia em número nenhum aqui.
+      const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
+      const response = await fetch(`/api/dashboard/action-center${query}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({})) as Payload;
       if (!response.ok) throw new Error(payload.error || "Não foi possível carregar as pendências.");
       setItems(payload.items ?? []);
@@ -55,7 +63,7 @@ export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => void load());

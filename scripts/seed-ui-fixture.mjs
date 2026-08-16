@@ -89,6 +89,17 @@ try {
     `INSERT INTO fdp_companies (id, workspace_id, legal_name, trade_name, tax_id, is_principal)
      VALUES ('co-ui', 'ws-ui', 'Piloto Servicos LTDA', 'Piloto', '11222333000181', 1) ON CONFLICT DO NOTHING`,
   );
+  // Uma segunda empresa, deliberadamente sem demanda.
+  //
+  // Com uma empresa só, o seletor de empresa da barra superior é indistinguível
+  // de um seletor que não faz nada: escolher a única empresa devolve os mesmos
+  // números. Foi assim que ele passou a existir em toda tela sem recortar a
+  // visão geral, sem que ensaio nenhum acusasse. Esta empresa é a que torna o
+  // recorte demonstrável — e de quebra exercita a tela de empresa sem demanda.
+  await client.query(
+    `INSERT INTO fdp_companies (id, workspace_id, legal_name, trade_name, tax_id, is_principal)
+     VALUES ('co-ui-2', 'ws-ui', 'Filial Sem Demanda LTDA', 'Filial Vazia', '11222333000262', 0) ON CONFLICT DO NOTHING`,
+  );
 
   // Uma demanda por tipo de processo, e só.
   //
