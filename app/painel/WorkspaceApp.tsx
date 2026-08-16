@@ -52,7 +52,7 @@ import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
-import { competenceLabel, cycleProgress, cycleStages } from "./features/shared";
+import { competenceLabel, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -1417,7 +1417,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
 
-          {view === "overview" && <OverviewView cycles={scopedCycles} onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
+          {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations} onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
 
@@ -1724,6 +1724,66 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
  * etapa atual, contorno vazio no que falta — para funcionar também para quem
  * não distingue verde de azul.
  */
+function ConnectionMap({ integrations, onNavigate }: {
+  integrations: WorkspaceSnapshot["integrations"];
+  onNavigate: (target: ActionTarget) => void;
+}) {
+  /* A peça mais característica do Modelo 2: a marca no centro e os sistemas em
+     volta. Para um produto chamado Vinculato, o desenho é a tese — mas só vale
+     se o que ele mostra for verdade.
+
+     A fonte é `snapshot.integrations`, o que ESTE grupo tem configurado, e não
+     o catálogo do site. O mockup trazia eSocial, FGTS Digital e Pontotel como
+     conectados; nenhum dos três existe no produto, e a §31 é explícita: uma
+     integração só aparece como disponível quando estiver homologada de ponta a
+     ponta. Desenhar linha para conector que não conecta seria vender a conexão
+     na tela de quem já é cliente.
+
+     Semanticamente é uma lista, não um desenho: o arranjo em torno do centro é
+     apresentação, e quem usa leitor de tela recebe nome, estado e última
+     sincronização em texto. */
+  if (!integrations.length) {
+    return <section className="connection-map connection-map-empty" aria-label="Conexões">
+      <h3>Conexões</h3>
+      <p>Nenhum conector configurado neste grupo. As integrações disponíveis aparecem em Estado das integrações.</p>
+      <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
+    </section>;
+  }
+
+  const conectadas = integrations.filter((item) => item.status === "connected").length;
+  const comErro = integrations.filter((item) => item.status === "error").length;
+
+  return <section className="connection-map" aria-label="Conexões">
+    <header>
+      <div>
+        <span>CONEXÕES</span>
+        <strong>{plural(conectadas, "sistema conectado", "sistemas conectados")}</strong>
+        <p>{comErro
+          ? `${plural(comErro, "conector com erro", "conectores com erro")}, de ${plural(integrations.length, "configurado", "configurados")}.`
+          : `de ${plural(integrations.length, "configurado", "configurados")} neste grupo.`}</p>
+      </div>
+      <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
+    </header>
+
+    <div className="connection-map-graph">
+      <p className="connection-map-hub" aria-hidden="true"><VinculatoLogo size={22} compact /></p>
+      <ul>
+        {integrations.map((item) => {
+          const tom = connectionTone(item.status);
+          return <li key={item.id} data-tone={tom}>
+            <i aria-hidden="true" />
+            <span>
+              <strong>{item.displayName}</strong>
+              <small>{connectionStatusLabel(item.status)}
+                {item.status === "connected" ? ` · ${lastSyncLabel(item.lastSyncAt)}` : ""}</small>
+            </span>
+          </li>;
+        })}
+      </ul>
+    </div>
+  </section>;
+}
+
 const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
 
 function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
@@ -1770,13 +1830,14 @@ function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
   </section>;
 }
 
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles }: {
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations }: {
   onNavigate: (target: ActionTarget) => void;
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
   activities: ActivityEvent[];
   cycles: WorkspaceSnapshot["payrollCycles"];
+  integrations: WorkspaceSnapshot["integrations"];
   stats: { active: number; attention: number; waiting: number; onTime: number; completed: number; documentsPending: number; activeCompanies: number };
   onOpen: (card: Card) => void;
   onOpenBoard: () => void;
@@ -1798,6 +1859,8 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 
     <CompetenceFlow cycles={cycles} scopeLabel={scopeLabel} active={stats.active}
       onNew={canEdit ? onNew : undefined} onNavigate={onNavigate} />
+
+    <ConnectionMap integrations={integrations} onNavigate={onNavigate} />
 
     <section className="overview-metrics" aria-label="Indicadores principais">
       <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{stats.completed} concluída(s) no quadro</small></article>

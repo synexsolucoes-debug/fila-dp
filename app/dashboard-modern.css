@@ -3870,3 +3870,47 @@
   .competence-flow-track > li > span { padding: 0; }
   .competence-flow > header { flex-direction: column; }
 }
+
+/* ── Diagrama de conexões (Modelo 2, "Flow") ──────────────────────────────
+   A marca no centro e os sistemas em volta. É uma <ul> de verdade: o arranjo
+   em torno do centro é apresentação, e quem usa leitor de tela recebe nome,
+   estado e última sincronização em texto — um SVG de linhas seria ilegível
+   para ele. O estado vem também na forma do traço, não só na cor: contínuo
+   para conectado, tracejado para sem credencial, pontilhado para erro. */
+.connection-map { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
+.connection-map > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.connection-map > header span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.connection-map > header strong { display: block; margin-top: 5px; font-size: 19px; font-weight: 800; letter-spacing: -.025em; }
+.connection-map > header p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 12px; }
+
+.connection-map-graph { position: relative; margin-top: 18px; }
+.connection-map-hub { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: 13px; background: var(--ui-surface); box-shadow: var(--ui-shadow-card); z-index: 2; }
+.connection-map-graph > ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 88px; }
+.connection-map-graph > ul > li { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 11px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); }
+
+/* O fio até o centro. Nasce na borda interna do cartão e morre antes do hub. */
+.connection-map-graph > ul > li::after { content: ""; position: absolute; top: 50%; width: 44px; height: 0; border-top: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li:nth-child(odd)::after { right: -46px; }
+.connection-map-graph > ul > li:nth-child(even)::after { left: -46px; }
+.connection-map-graph > ul > li[data-tone="ok"]::after { border-top-color: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"]::after { border-top-style: dashed; border-top-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"]::after { border-top-style: dotted; border-top-color: var(--ui-danger); }
+
+.connection-map-graph > ul > li > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li[data-tone="ok"] > i { border-color: var(--ui-done); background: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"] > i { border-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"] > i { border-color: var(--ui-danger); background: var(--ui-danger); }
+.connection-map-graph > ul > li > span { min-width: 0; }
+.connection-map-graph > ul > li strong { display: block; font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-map-graph > ul > li small { display: block; font-size: 10.5px; color: var(--ui-text-soft); }
+
+.connection-map-empty h3 { font-size: 15px; font-weight: 750; }
+.connection-map-empty p { margin: 6px 0 12px; color: var(--ui-text-soft); font-size: 12.5px; max-width: 60ch; }
+
+@media (max-width: 900px) {
+  /* Sem espaço para o hub no meio, o desenho vira o que ele já é por baixo:
+     uma lista. Melhor lista honesta que diagrama espremido. */
+  .connection-map-hub { display: none; }
+  .connection-map-graph > ul { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .connection-map-graph > ul > li::after { display: none; }
+}

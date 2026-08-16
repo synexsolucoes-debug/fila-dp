@@ -126,6 +126,23 @@ try {
     );
   }
 
+  /* Conectores em quatro estados. Um conector só, ou todos iguais, deixaria o
+     diagrama de conexões com um traço só de tom — e a conferência de contraste
+     mediria um estado dos quatro. É a mesma armadilha da competência acima. */
+  for (const [id, canal, nome, status, sync] of [
+    ["int-ui-1", "sankhya_browser", "Sankhya Browser Connector", "connected", "now() - interval '8 minutes'"],
+    ["int-ui-2", "solides", "Sólides", "connected", "now() - interval '3 hours'"],
+    ["int-ui-3", "teams", "Microsoft Teams", "needs_credentials", "null"],
+    ["int-ui-4", "tangerino", "Sólides DP (Tangerino)", "error", "now() - interval '2 days'"],
+  ]) {
+    await client.query(
+      `INSERT INTO fdp_integrations (id, workspace_id, channel, display_name, status, last_sync_at)
+       VALUES ($1, 'ws-ui', $2, $3, $4, ${sync}) ON CONFLICT (id) DO UPDATE
+       SET status = EXCLUDED.status, last_sync_at = EXCLUDED.last_sync_at`,
+      [id, canal, nome, status],
+    );
+  }
+
   // Uma demanda por tipo de processo, e só.
   //
   // A semente era inteiramente vazia, para a auditoria passar pelos estados

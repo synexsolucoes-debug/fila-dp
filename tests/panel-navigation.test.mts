@@ -154,7 +154,11 @@ test("as etapas do ciclo têm uma definição só", () => {
   // inteiro para eliminar (cabeçalho 3×, selo 5×, aviso de erro 10×).
   assert.doesNotMatch(source, /status: "pre_closing", label:/u,
     "a visão geral não pode ter cópia própria das etapas");
-  assert.match(source, /import \{ competenceLabel, cycleProgress, cycleStages \} from "\.\/features\/shared"/u);
+  // A exigência é a ORIGEM, não a lista exata: fixar a linha inteira fez este
+  // teste reprovar assim que o diagrama de conexões acrescentou auxiliares ao
+  // mesmo import — reprovando por mudança, não por defeito.
+  assert.match(source, /import \{[^}]*\bcycleStages\b[^}]*\} from "\.\/features\/shared"/u);
+  assert.match(source, /import \{[^}]*\bcycleProgress\b[^}]*\} from "\.\/features\/shared"/u);
 });
 
 test("a verificação de navegador roda na CI, não só na máquina de quem lembrar", async () => {
