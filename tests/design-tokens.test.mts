@@ -23,7 +23,11 @@ const FEATURES = new URL("../app/painel/features/", import.meta.url);
 const TETO: Record<string, number> = {
   saas: 36,
   auxiliary: 15,
-  operations: 14,
+  /* De 14 para 3: a conversão da faixa do ciclo para a casca clara tirou o
+     último bolsão do verde da marca antiga (#38d6a7 e parentes) e as cores de
+     superfície escura que ela carregava. A catraca cobrou a descida — é para
+     isso que ela existe. */
+  operations: 3,
   access: 13,
   integrations: 10,
   assistant: 8,

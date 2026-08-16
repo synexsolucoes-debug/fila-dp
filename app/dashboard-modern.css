@@ -46,6 +46,7 @@
   /* Concluído/conectado. No Modelo 2 o verde é estado, nunca marca. */
   --ui-done: var(--ui-success);
   --ui-done-soft: #e3f5ec;
+  --ui-on-done: #ffffff;
   --ui-radius-sm: 7px;
   --ui-radius-md: 10px;
   --ui-radius-lg: 14px;
@@ -86,6 +87,8 @@
   --ui-rail-context: #14202f;
   --ui-done: var(--ui-success);
   --ui-done-soft: #0f2f20;
+  /* No escuro o verde clareia; branco em cima dele reprova. */
+  --ui-on-done: #06251a;
   --ui-shadow-card: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px rgba(0, 0, 0, .14);
   --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .48);
 }
