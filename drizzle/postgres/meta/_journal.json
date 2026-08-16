@@ -309,6 +309,13 @@
       "when": 1787299200000,
       "tag": "0041_obligation_protocol_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787299201000,
+      "tag": "0042_member_company_access_rls",
+      "breakpoints": true
     }
   ]
 }

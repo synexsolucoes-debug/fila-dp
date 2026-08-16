@@ -53,7 +53,10 @@ const CLAUSE_CONTINUATION = new Set([
 const SOURCE_MODIFIERS = new Set(["lateral", "only"]);
 
 const SOURCE_EXTENSIONS = /\.(?:ts|tsx|mts|mjs)$/u;
-const IGNORED_DIRECTORIES = new Set(["node_modules", ".git", ".next", "dist", "build", ".vercel"]);
+// `tests` fica de fora: consulta escrita dentro de um teste é fixture — texto
+// para o teste examinar —, não código que roda para cliente. Incluí-la
+// misturava a contagem de cobertura do produto com a do próprio ensaio.
+const IGNORED_DIRECTORIES = new Set(["node_modules", ".git", ".next", "dist", "build", ".vercel", "tests"]);
 
 /** Percorre a árvore de fontes, ignorando o que não é código do produto. */
 export function listSourceFiles(root, out = []) {

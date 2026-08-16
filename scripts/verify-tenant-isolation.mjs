@@ -110,6 +110,64 @@ record("em lote, o tenant vale para todos os comandos",
     && Number(batch[1]?.results?.[0]?.total ?? -1) === counts[first.id].visible,
   `lote respondeu "${batch[0]?.results?.[0]?.workspace ?? "(vazio)"}"`);
 
+// 7. O schema inteiro, não uma tabela.
+//
+//    Até aqui este ensaio provava isolamento em `fdp_companies` — uma tabela
+//    de noventa e uma que carregam `workspace_id`. Cinco verificações sobre
+//    1/91, e o veredito impresso era "ISOLAMENTO APROVADO neste banco".
+//
+//    A §8 chama multi-tenancy de prioridade máxima; provar numa tabela e
+//    concluir sobre o schema é a mesma classe de erro que dizer "0 violações"
+//    depois de olhar metade das telas.
+const tenantTables = await unscoped.prepare(`SELECT c.relname AS tabela, c.relrowsecurity AS rls, c.relforcerowsecurity AS forcada
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  JOIN information_schema.columns col
+    ON col.table_schema = n.nspname AND col.table_name = c.relname AND col.column_name = 'workspace_id'
+  WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname LIKE 'fdp_%'
+  ORDER BY c.relname`).all();
+
+/**
+ * Tabelas com `workspace_id` que ficam fora da RLS de propósito.
+ *
+ * Cada uma precisa de um motivo estrutural escrito aqui. A lista é curta e o
+ * ensaio reprova quem crescer a lista sem passar por este arquivo — que é
+ * onde a decisão fica visível em diff.
+ */
+const GLOBAIS_POR_DESENHO = new Map([
+  ["fdp_workspace_members", "o seletor de grupo precisa achar os workspaces de uma pessoa antes de existir contexto de workspace; com RLS por tenant, ninguém entraria"],
+  ["fdp_workspaces", "a mesma leitura anterior ao contexto, do outro lado da junção"],
+  ["fdp_workspace_deletions", "ciclo de vida operado pela plataforma, que lê entre clientes por definição"],
+  ["fdp_bootstrap_guard", "trava de inicialização do banco, anterior a qualquer cliente"],
+]);
+
+const semRls = tenantTables.results.filter((row) => !row.rls || !row.forcada)
+  .map((row) => String(row.tabela))
+  .filter((tabela) => !GLOBAIS_POR_DESENHO.has(tabela));
+record(`toda tabela com workspace_id tem RLS forçada (${tenantTables.results.length} tabelas, ${GLOBAIS_POR_DESENHO.size} globais por desenho)`,
+  semRls.length === 0, semRls.length ? `sem proteção e sem motivo declarado: ${semRls.join(", ")}` : "todas protegidas");
+
+// A prova de vazamento, tabela por tabela: sob o contexto do primeiro tenant,
+// nenhuma linha do segundo pode ser alcançada em lugar nenhum do schema.
+const vazamentos = [];
+for (const row of tenantTables.results) {
+  const tabela = String(row.tabela);
+  // As globais por desenho não têm isolamento a provar: a proteção delas é o
+  // filtro explícito nas consultas, e é a revisão de código que a garante.
+  if (GLOBAIS_POR_DESENHO.has(tabela)) continue;
+  // Identificador vindo do catálogo do próprio PostgreSQL, não de entrada.
+  if (!/^fdp_[a-z0-9_]+$/u.test(tabela)) { vazamentos.push(`${tabela} (nome inesperado)`); continue; }
+  try {
+    const alcancado = await scopedFirst.prepare(`SELECT count(*)::int AS total FROM ${tabela} WHERE workspace_id = ?`)
+      .bind(second.id).first();
+    if (Number(alcancado?.total ?? -1) !== 0) vazamentos.push(`${tabela}: ${alcancado?.total} linha(s)`);
+  } catch (error) {
+    vazamentos.push(`${tabela}: ${String(error).split("\n")[0].slice(0, 80)}`);
+  }
+}
+record(`nenhuma das ${tenantTables.results.length - GLOBAIS_POR_DESENHO.size} tabelas protegidas entrega dado do outro tenant`,
+  vazamentos.length === 0, vazamentos.length ? vazamentos.slice(0, 6).join(" | ") : "nenhuma linha alcançada");
+
 const failures = results.filter((item) => !item.ok);
 console.log(`\n${results.length - failures.length}/${results.length} verificações passaram.`);
 if (failures.length) {

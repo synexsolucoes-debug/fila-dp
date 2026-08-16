@@ -49,6 +49,7 @@ export const expectedMigrations = [
   "0039_attachment_storage_quota_index.sql",
   "0040_auth_events.sql",
   "0041_obligation_protocol_evidence.sql",
+  "0042_member_company_access_rls.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
