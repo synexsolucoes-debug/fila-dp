@@ -62,13 +62,27 @@ try {
     `INSERT INTO fdp_boards (id, workspace_id, name, board_type)
      VALUES ('b-ui', 'ws-ui', 'Demandas do DP', 'general') ON CONFLICT DO NOTHING`,
   );
+  // As colunas são resolvidas por `kind`, não pelo id que a semente propõe.
+  //
+  // `fdp_lists` tem UNIQUE (board_id, kind): num banco onde o quadro já ganhou
+  // suas colunas padrão, o INSERT abaixo colide, o ON CONFLICT engole em
+  // silêncio e o id proposto nunca passa a existir. As demandas seguintes então
+  // falham por chave estrangeira — o que só não aparecia na CI porque lá o
+  // banco nasce vazio a cada execução. Semente que só funciona em banco novo
+  // não é semente, é sorte.
   const lists = [["l-ui-1", "A fazer", "todo"], ["l-ui-2", "Em andamento", "doing"], ["l-ui-3", "Concluído", "done"]];
+  const listId = {};
   for (const [index, [id, name, kind]] of lists.entries()) {
     await client.query(
       `INSERT INTO fdp_lists (id, board_id, workspace_id, name, kind, position)
        VALUES ($1, 'b-ui', 'ws-ui', $2, $3, $4) ON CONFLICT DO NOTHING`,
       [id, name, kind, (index + 1) * 1000],
     );
+    const { rows } = await client.query(
+      `SELECT id FROM fdp_lists WHERE board_id = 'b-ui' AND kind = $1`, [kind],
+    );
+    if (!rows.length) throw new Error(`a coluna "${kind}" não existe no quadro do ensaio`);
+    listId[id] = rows[0].id;
   }
   await client.query(`INSERT INTO fdp_workspace_settings (workspace_id) VALUES ('ws-ui') ON CONFLICT DO NOTHING`);
   await client.query(
@@ -99,7 +113,7 @@ try {
          process_type, priority, position, created_by, competence)
        VALUES ($1, 'b-ui', 'ws-ui', $2, $3, 'Demanda do ensaio de interface.', 'co-ui', 'Piloto', $4, $5, $6, 'u-ui', '2026-08')
        ON CONFLICT DO NOTHING`,
-      [`c-ui-${index + 1}`, lista, `${processo[0]}${processo.slice(1).toLowerCase()} do ensaio`, processo, prioridade, (index + 1) * 1000],
+      [`c-ui-${index + 1}`, listId[lista], `${processo[0]}${processo.slice(1).toLowerCase()} do ensaio`, processo, prioridade, (index + 1) * 1000],
     );
   }
 

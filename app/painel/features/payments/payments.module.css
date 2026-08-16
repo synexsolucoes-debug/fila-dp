@@ -128,12 +128,11 @@
 
 .reportBar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
-.emptyState, .loadingState, .errorState, .warningState, .privacyNotice {
+.noteLine, .loadingLine, .warningState, .privacyNotice {
   display: flex; align-items: center; gap: 9px; padding: 13px 15px; margin: 0 0 12px;
   border: 1px solid var(--pay-border); border-radius: 11px; background: var(--pay-surface);
   font-size: .77rem; color: var(--pay-soft);
 }
-.errorState { border-color: color-mix(in srgb, var(--pay-danger) 45%, transparent); color: var(--pay-danger); }
 .warningState { border-color: color-mix(in srgb, var(--pay-warning) 45%, transparent); color: var(--pay-warning); }
 .privacyNotice { border-color: color-mix(in srgb, var(--pay-accent) 40%, transparent); color: var(--pay-accent-text); }
 .spin { animation: paymentSpin 1s linear infinite; }

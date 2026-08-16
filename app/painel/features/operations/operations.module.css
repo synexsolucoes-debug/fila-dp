@@ -44,12 +44,6 @@
 .refreshButton { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 11px; border: 1px solid var(--ops-border); border-radius: 8px; background: transparent; color: var(--ops-soft); font-size: .7rem; cursor: pointer; }
 .refreshButton:disabled { opacity: .55; }
 
-.errorBanner { display: flex; align-items: center; gap: 11px; margin: 0 0 14px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--ops-danger) 34%, var(--ops-border)); border-radius: 8px; background: color-mix(in srgb, var(--ops-danger) 7%, var(--ops-surface)); color: var(--ops-danger); font-size: .72rem; }
-.errorBanner > svg { flex: 0 0 auto; }
-.errorBanner span { display: grid; flex: 1; gap: 2px; }
-.errorBanner span strong { color: var(--ops-text); }
-.errorBanner button { display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }
-
 .cycleEmpty { margin-bottom: 14px; padding: 22px; border: 1px dashed var(--ops-strong); border-radius: 10px; background: color-mix(in srgb, var(--ops-muted) 65%, var(--ops-surface)); }
 .cycleEmpty > div { display: flex; align-items: center; gap: 13px; }
 .cycleEmpty > div > svg { width: 30px; height: 30px; color: var(--ops-mint); }
@@ -108,10 +102,6 @@
 .localTabs .activeTab { border-bottom-color: var(--ops-mint); background: var(--ops-surface); color: var(--ops-mint); }
 .localTabs b { min-width: 18px; padding: 2px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ops-danger) 10%, var(--ops-surface)); color: var(--ops-danger); font-size: .56rem; text-align: center; }
 .tabSurface { min-height: 410px; border: 1px solid var(--ops-border); border-radius: 0 0 10px 10px; background: var(--ops-surface); box-shadow: var(--ui-shadow-card); }
-.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 92px; padding: 16px 20px; border-bottom: 1px solid var(--ops-border); }
-.panelHeader > div { min-width: 0; }
-.panelHeader h2 { margin: 4px 0 3px; font-size: 1rem; letter-spacing: -.015em; }
-.panelHeader p { margin: 0; color: var(--ops-soft); font-size: .67rem; line-height: 1.45; }
 
 .overviewGrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, .7fr) minmax(210px, .58fr); min-height: 410px; }
 .overviewGrid > section, .overviewGrid > aside { min-width: 0; border-right: 1px solid var(--ops-border); }
@@ -157,12 +147,6 @@
 .dataTable time { font-variant-numeric: tabular-nums; }
 .dataTable td:last-child { width: 90px; }
 .rowAction { display: inline-flex; align-items: center; gap: 3px; padding: 6px 8px; border: 0; background: transparent; color: var(--ops-mint) !important; font-size: .63rem; font-weight: 740; cursor: pointer; }
-
-.statusPill { display: inline-flex; align-items: center; gap: 5px; width: max-content; padding: 4px 7px; border: 1px solid var(--ops-border); border-radius: 5px; background: var(--ops-muted); color: var(--ops-soft); font-size: .56rem; font-weight: 730; white-space: nowrap; }
-.statusPill svg { width: 9px; height: 9px; fill: currentColor; }
-.statusPill[data-tone="safe"] { border-color: color-mix(in srgb, var(--ops-success) 23%, var(--ops-border)); background: var(--ops-mint-soft); color: var(--ops-success); }
-.statusPill[data-tone="warning"] { border-color: color-mix(in srgb, var(--ops-warning) 25%, var(--ops-border)); background: color-mix(in srgb, var(--ops-warning) 8%, var(--ops-surface)); color: var(--ops-warning); }
-.statusPill[data-tone="danger"] { border-color: color-mix(in srgb, var(--ops-danger) 24%, var(--ops-border)); background: color-mix(in srgb, var(--ops-danger) 7%, var(--ops-surface)); color: var(--ops-danger); }
 
 .approvalQueue { display: grid; gap: 0; }
 .approvalQueue article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 79px; padding: 11px 18px; border-bottom: 1px solid var(--ops-border); }
@@ -226,13 +210,6 @@
 .processVersions span small { font-size: .48rem; }
 .processActions { display: flex; gap: 6px; }
 .processActions .publishButton { border-color: var(--ops-mint); background: var(--ops-mint-soft); color: var(--ops-mint); }
-
-.emptyState, .loadingState { display: flex; min-height: 310px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 34px; text-align: center; }
-.emptyState > span { display: grid; place-items: center; width: 49px; height: 49px; margin-bottom: 3px; border: 1px solid color-mix(in srgb, var(--ops-mint) 25%, var(--ops-border)); border-radius: 9px; background: var(--ops-mint-soft); color: var(--ops-mint); }
-.emptyState strong, .loadingState strong { font-size: .79rem; }
-.emptyState p, .loadingState span { max-width: 390px; margin: 0; color: var(--ops-soft); font-size: .67rem; line-height: 1.5; }
-.emptyState button { margin-top: 7px; }
-.loadingState svg { width: 28px; height: 28px; color: var(--ops-mint); }
 
 .overlay { position: fixed; z-index: 120; inset: 0; display: flex; align-items: stretch; justify-content: flex-end; background: rgba(4,15,27,.58); animation: fade .15s ease both; }
 .dialog { display: flex; width: min(620px, 100%); height: 100%; flex-direction: column; border-left: 1px solid var(--ops-border); background: var(--ops-surface); box-shadow: -28px 0 70px rgba(3,15,28,.25); animation: slide .2s cubic-bezier(.2,.8,.2,1) both; }
@@ -301,7 +278,7 @@
   .closingColumns { display: block; }
   .closingColumn:first-child { border-right: 0; border-bottom: 1px solid var(--ops-border); }
   .obligationList article { grid-template-columns: 48px minmax(0, 1fr) auto; }
-  .obligationList article > select, .obligationList article > .statusPill { grid-column: 2 / -1; justify-self: end; }
+  .obligationList article > select, .obligationList article > [data-panel-ui="pill"] { grid-column: 2 / -1; justify-self: end; }
 }
 @media (max-width: 640px) {
   .commandSelectors { display: grid; grid-template-columns: 1fr 1fr; }
@@ -317,8 +294,6 @@
   .exceptionMetric { border-right: 0; border-bottom: 1px solid var(--ops-border); }
   .exceptionMetric:last-child { border-bottom: 0; }
   .localTabs button { min-height: 45px; }
-  .panelHeader { align-items: flex-start; flex-direction: column; min-height: 0; padding: 15px; }
-  .panelHeader > .primaryButton { width: 100%; }
   .cycleIndicators dl { grid-template-columns: 1fr; }
   .cycleIndicators dl > div { border-right: 0; }
   .tableTools { align-items: stretch; flex-direction: column; }
@@ -333,11 +308,11 @@
   .approvalQueue article > div { align-items: flex-start; flex-direction: column; gap: 5px; }
   .approvalQueue article > button, .approvalQueue article > .decisionDate { grid-column: 2; justify-self: start; }
   .closingColumn li { grid-template-columns: 30px minmax(0, 1fr); }
-  .closingColumn li > select, .closingColumn li > .statusPill { grid-column: 2; justify-self: start; }
+  .closingColumn li > select, .closingColumn li > [data-panel-ui="pill"] { grid-column: 2; justify-self: start; }
   .obligationList article { grid-template-columns: 46px minmax(0, 1fr); }
-  .obligationList article > em, .obligationList article > select, .obligationList article > .statusPill { grid-column: 2; justify-self: start; }
+  .obligationList article > em, .obligationList article > select, .obligationList article > [data-panel-ui="pill"] { grid-column: 2; justify-self: start; }
   .pendingLedger article { grid-template-columns: 36px minmax(0, 1fr); }
-  .pendingLedger article > .statusPill, .pendingActions { grid-column: 2; justify-self: start; }
+  .pendingLedger article > [data-panel-ui="pill"], .pendingActions { grid-column: 2; justify-self: start; }
   .processLedger article { grid-template-columns: 86px minmax(0, 1fr); }
   .processVersions, .processActions { grid-column: 1 / -1; justify-content: flex-end; }
   .dialog { width: 100%; border-left: 0; }

@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertOctagon, ArrowRight, BadgeCheck, Building2, CalendarClock, Check, ChevronRight, CircleDot,
-  ClipboardCheck, Coins, FileClock, FilePenLine, HeartHandshake, History, LoaderCircle, LockKeyhole,
-  Plus, RefreshCw, RotateCcw, Send, ShieldCheck, Stethoscope, UserCheck, UsersRound, WalletCards, X,
+  ArrowRight, BadgeCheck, Building2, CalendarClock, Check, ChevronRight, ClipboardCheck, Coins, FileClock,
+  FilePenLine, HeartHandshake, History, LockKeyhole, Plus, RefreshCw, RotateCcw, Send, ShieldCheck,
+  Stethoscope, UserCheck, UsersRound, WalletCards,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
+import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
 import { AuxiliaryDialog } from "./AuxiliaryDialogs";
 import { normalizeCompany, normalizeDetail, normalizeOverview, requestJson, type Row } from "./auxiliary.api";
 import type {
@@ -175,7 +176,7 @@ export function AuxiliaryModulesView({ role }: { role: WorkspaceRole }) {
   }
 
   if (role === "guest") return null;
-  if (loading && !data) return <LoadingState />;
+  if (loading && !data) return <LedgerLoading />;
   if (!companies.length && !loading) return <EmptyState icon={Building2} title="Nenhuma empresa disponível" text={error || "Solicite acesso a uma empresa ativa para operar módulos auxiliares."} action={<button className={styles.secondaryButton} onClick={() => void loadCompanies()}><RefreshCw aria-hidden="true" /> Tentar novamente</button>} />;
 
   return <section className={styles.workspace} data-module={module} aria-label="Módulos auxiliares do Departamento Pessoal">
@@ -188,7 +189,7 @@ export function AuxiliaryModulesView({ role }: { role: WorkspaceRole }) {
       <div className={styles.competenceStamp}><span>COMPETÊNCIA ATIVA</span><strong>{competenceLabel(competence)}</strong><small>{selectedCompany?.name}</small></div>
     </div>
 
-    {error && <div className={styles.errorBanner} role="alert"><AlertOctagon aria-hidden="true" /><span><strong>Algo exige atenção</strong>{error}</span><button type="button" onClick={() => setError("")} aria-label="Fechar aviso"><X aria-hidden="true" /></button></div>}
+    {error && <ErrorBanner title="Algo exige atenção" message={error} onDismiss={() => setError("")} />}
 
     <nav className={styles.moduleLenses} aria-label="Módulos auxiliares">
       {availableModules.map((item) => { const config = moduleConfig[item]; const Icon = config.icon; const open = (overviews[item]?.executions ?? []).filter((execution) => !["closed", "canceled"].includes(execution.status)).length; return <button key={item} type="button" className={module === item ? styles.activeLens : ""} onClick={() => { setModule(item); setTab("executions"); setSelectedDetail(null); }} aria-pressed={module === item}><span className={styles.lensIcon}><Icon aria-hidden="true" /></span><span><strong>{config.label}</strong><small>{config.description}</small></span><b><strong>{open}</strong><small>EM ABERTO</small></b><ChevronRight aria-hidden="true" /></button>; })}
@@ -237,14 +238,8 @@ function ExceptionMetric({ icon: Icon, label, value, note, tone }: { icon: typeo
   return <article className={styles.exceptionMetric} data-tone={tone}><span><Icon aria-hidden="true" /></span><div><small>{label}</small><strong>{value}</strong><em>{note}</em></div></article>;
 }
 
-function PanelHeader({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) {
-  return <header className={styles.panelHeader}><div><span className={styles.eyebrow}>{eyebrow}</span><h2>{title}</h2><p>{description}</p></div>{action}</header>;
-}
-
-function StatusPill({ status }: { status: string }) {
-  const tone = ["approved", "closed", "active"].includes(status) ? "safe" : status === "rejected" ? "danger" : status === "pending_approval" ? "warning" : "neutral";
-  return <span className={styles.statusPill} data-tone={tone}><CircleDot aria-hidden="true" />{statusLabels[status] ?? status}</span>;
-}
+/** O vocabulário de estados é local; a aparência do selo é compartilhada. */
+const pill = (status: string) => <StatusPill status={status} label={statusLabels[status] ?? status} />;
 
 function ExecutionsPanel({ module, executions, canManage, permissions, onCreate, onEdit, onRevise, onSubmit, onClose, onHistory }: {
   module: AuxiliaryModule; executions: Execution[]; canManage: boolean; permissions?: AuxiliaryOverview["permissions"];
@@ -252,7 +247,7 @@ function ExecutionsPanel({ module, executions, canManage, permissions, onCreate,
   onSubmit: (item: Execution) => void; onClose: (item: Execution) => void; onHistory: (item: Execution) => void;
 }) {
   return <><PanelHeader eyebrow="ENTREGAS DA COMPETÊNCIA" title={`Ledger de ${moduleConfig[module].label}`} description="Cada linha preserva referência, revisão e estado até o fechamento." action={canManage && <button className={styles.primaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Nova entrega</button>} />
-    {executions.length ? <div className={styles.tableWrap}><table className={styles.dataTable}><thead><tr><th>Referência</th><th>Fornecedor</th><th>Valor</th><th>Revisão</th><th>Vencimento</th><th>Estado</th><th>Ações</th></tr></thead><tbody>{executions.map((item) => <tr key={item.id}><td data-label="Referência"><strong>{item.referenceCode}</strong><small>{item.title}</small></td><td data-label="Fornecedor">{item.providerName || `Sem ${providerLabels[module]}`}</td><td data-label="Valor" className={styles.numeric}>{amount(item.totalAmount)}</td><td data-label="Revisão" className={styles.numeric}>v{item.currentRevision}</td><td data-label="Vencimento"><time>{date(item.dueDate)}</time></td><td data-label="Estado"><StatusPill status={item.status} /></td><td data-label="Ações"><div className={styles.rowActions}>
+    {executions.length ? <div className={styles.tableWrap}><table className={styles.dataTable}><thead><tr><th>Referência</th><th>Fornecedor</th><th>Valor</th><th>Revisão</th><th>Vencimento</th><th>Estado</th><th>Ações</th></tr></thead><tbody>{executions.map((item) => <tr key={item.id}><td data-label="Referência"><strong>{item.referenceCode}</strong><small>{item.title}</small></td><td data-label="Fornecedor">{item.providerName || `Sem ${providerLabels[module]}`}</td><td data-label="Valor" className={styles.numeric}>{amount(item.totalAmount)}</td><td data-label="Revisão" className={styles.numeric}>v{item.currentRevision}</td><td data-label="Vencimento"><time>{date(item.dueDate)}</time></td><td data-label="Estado">{pill(item.status)}</td><td data-label="Ações"><div className={styles.rowActions}>
       <button onClick={() => onHistory(item)} aria-label={`Ver histórico de ${item.referenceCode}`}><History aria-hidden="true" /> Histórico</button>
       {canManage && item.status === "draft" && <button onClick={() => onEdit(item)}><FilePenLine aria-hidden="true" /> Editar</button>}
       {canManage && item.status === "rejected" && <button onClick={() => onRevise(item)}><RotateCcw aria-hidden="true" /> Nova revisão</button>}
@@ -263,12 +258,12 @@ function ExecutionsPanel({ module, executions, canManage, permissions, onCreate,
 }
 
 function ApprovalsPanel({ executions, canDecide, onDecide }: { executions: Execution[]; canDecide: boolean; onDecide: (item: Execution) => void }) {
-  return <><PanelHeader eyebrow="DECISÕES ATRIBUÍDAS" title="Fila de aprovações" description="Somente o responsável designado pode decidir; autoaprovação é bloqueada no servidor." />{executions.length ? <div className={styles.approvalQueue}>{executions.map((item) => <article key={item.id} className={item.canDecide ? styles.assignedApproval : ""}><span className={styles.approvalMark}><UserCheck aria-hidden="true" /></span><div><small>{item.referenceCode} · REVISÃO {item.currentRevision}</small><strong>{item.title}</strong><span>{item.providerName || "Sem fornecedor"} · {amount(item.totalAmount)}</span></div><StatusPill status={item.status} />{canDecide && item.canDecide ? <button className={styles.primaryButton} onClick={() => onDecide(item)}>Decidir <ArrowRight aria-hidden="true" /></button> : <em>Aguardando responsável</em>}</article>)}</div> : <EmptyState icon={BadgeCheck} title="Fila de aprovações limpa" text="As entregas enviadas aparecerão aqui com o responsável atribuído." />}</>;
+  return <><PanelHeader eyebrow="DECISÕES ATRIBUÍDAS" title="Fila de aprovações" description="Somente o responsável designado pode decidir; autoaprovação é bloqueada no servidor." />{executions.length ? <div className={styles.approvalQueue}>{executions.map((item) => <article key={item.id} className={item.canDecide ? styles.assignedApproval : ""}><span className={styles.approvalMark}><UserCheck aria-hidden="true" /></span><div><small>{item.referenceCode} · REVISÃO {item.currentRevision}</small><strong>{item.title}</strong><span>{item.providerName || "Sem fornecedor"} · {amount(item.totalAmount)}</span></div>{pill(item.status)}{canDecide && item.canDecide ? <button className={styles.primaryButton} onClick={() => onDecide(item)}>Decidir <ArrowRight aria-hidden="true" /></button> : <em>Aguardando responsável</em>}</article>)}</div> : <EmptyState icon={BadgeCheck} title="Fila de aprovações limpa" text="As entregas enviadas aparecerão aqui com o responsável atribuído." />}</>;
 }
 
 function ProvidersPanel({ module, providers, canManage, onCreate, onEdit }: { module: AuxiliaryModule; providers: Provider[]; canManage: boolean; onCreate: () => void; onEdit: (item: Provider) => void }) {
   const noun = module === "benefits" ? "Operadoras" : module === "psychology" ? "Profissionais e clínicas" : "Prestadores PJ";
-  return <><PanelHeader eyebrow="BASE DE FORNECEDORES" title={noun} description="Cadastros reutilizáveis por competência, com status explícito e contato administrativo." action={canManage && <button className={styles.primaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Novo cadastro</button>} />{providers.length ? <div className={styles.providerLedger}>{providers.map((item) => <article key={item.id}><span className={styles.providerCode}>{item.code}</span><div><small>{item.tradeName || "SEM NOME DE EXIBIÇÃO"}</small><strong>{item.legalName}</strong><p>{[item.email, item.phone].filter(Boolean).join(" · ") || "Sem contato cadastrado"}</p></div><span className={styles.providerTax}>{item.taxId || "Documento não informado"}</span><StatusPill status={item.status} />{canManage && <button className={styles.rowButton} onClick={() => onEdit(item)}>Editar <ChevronRight aria-hidden="true" /></button>}</article>)}</div> : <EmptyState icon={UsersRound} title={`Nenhum ${providerLabels[module]} cadastrado`} text="Cadastre o fornecedor antes de vincular uma entrega." action={canManage && <button className={styles.secondaryButton} onClick={onCreate}>Criar cadastro</button>} />}</>;
+  return <><PanelHeader eyebrow="BASE DE FORNECEDORES" title={noun} description="Cadastros reutilizáveis por competência, com status explícito e contato administrativo." action={canManage && <button className={styles.primaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Novo cadastro</button>} />{providers.length ? <div className={styles.providerLedger}>{providers.map((item) => <article key={item.id}><span className={styles.providerCode}>{item.code}</span><div><small>{item.tradeName || "SEM NOME DE EXIBIÇÃO"}</small><strong>{item.legalName}</strong><p>{[item.email, item.phone].filter(Boolean).join(" · ") || "Sem contato cadastrado"}</p></div><span className={styles.providerTax}>{item.taxId || "Documento não informado"}</span>{pill(item.status)}{canManage && <button className={styles.rowButton} onClick={() => onEdit(item)}>Editar <ChevronRight aria-hidden="true" /></button>}</article>)}</div> : <EmptyState icon={UsersRound} title={`Nenhum ${providerLabels[module]} cadastrado`} text="Cadastre o fornecedor antes de vincular uma entrega." action={canManage && <button className={styles.secondaryButton} onClick={onCreate}>Criar cadastro</button>} />}</>;
 }
 
 function HistoryPanel({ detail, executions, onSelect }: { detail: ExecutionDetail | null; executions: Execution[]; onSelect: (item: Execution) => void }) {
@@ -290,7 +285,4 @@ function buildModulePayload(module: AuxiliaryModule, form: FormData) {
   return { input: { serviceDescription: field(form, "serviceDescription"), invoiceNumber: field(form, "invoiceNumber"), servicePeriod: field(form, "servicePeriod"), grossAmount: Number(field(form, "grossAmount") || 0) }, output: { approvedAmount: Number(field(form, "approvedAmount") || 0), paymentDueDate: field(form, "paymentDueDate"), paymentReference: field(form, "paymentReference") } };
 }
 
-function EmptyState({ icon: Icon, title, text, action }: { icon: typeof Building2; title: string; text: string; action?: React.ReactNode }) {
-  return <div className={styles.emptyState}><span><Icon aria-hidden="true" /></span><strong>{title}</strong><p>{text}</p>{action}</div>;
-}
-function LoadingState() { return <section className={styles.workspace}><div className={styles.loadingState}><LoaderCircle className={styles.spin} aria-hidden="true" /><strong>Abrindo o ledger de serviços</strong><span>Carregando entregas, aprovações e fornecedores…</span></div></section>; }
+function LedgerLoading() { return <section className={styles.workspace}><LoadingState size="page" title="Abrindo o ledger de serviços" text="Carregando entregas, aprovações e fornecedores…" /></section>; }

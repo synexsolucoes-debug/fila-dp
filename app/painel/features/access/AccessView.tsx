@@ -12,6 +12,7 @@ import {
 } from "./access.api";
 import type { AccessMember, AccessOverview, ActivationLink } from "./access.types";
 import { MemberModules } from "./MemberModules";
+import { ErrorBanner } from "../shared";
 import styles from "./access.module.css";
 
 const dateTime = (value: string | null) =>
@@ -225,13 +226,7 @@ export function AccessView({ role }: { role: WorkspaceRole }) {
         )}
       </header>
 
-      {error && (
-        <div className={styles.errorBanner} role="alert">
-          <AlertTriangle aria-hidden="true" />
-          <span><strong>A operação não foi concluída</strong>{error}</span>
-          <button type="button" onClick={() => setError("")}>Fechar</button>
-        </div>
-      )}
+      {error && <ErrorBanner title="A operação não foi concluída" message={error} onDismiss={() => setError("")} />}
 
       {activation && (
         <section className={styles.activationPanel} aria-live="polite">

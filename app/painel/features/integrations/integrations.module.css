@@ -47,12 +47,6 @@
 .refreshButton { display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--int-border); border-radius: 6px; background: var(--int-surface); color: var(--int-soft); font-size: .66rem; cursor: pointer; }
 .refreshButton:disabled { opacity: .55; }
 
-.errorBanner { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--int-danger) 34%, var(--int-border)); background: color-mix(in srgb, var(--int-danger) 7%, var(--int-surface)); color: var(--int-danger); font-size: .66rem; }
-.errorBanner > svg { flex: 0 0 auto; }
-.errorBanner > span { display: grid; flex: 1; gap: 2px; }
-.errorBanner strong { color: var(--int-text); }
-.errorBanner button { border: 0; background: transparent; color: var(--int-danger); font-size: .61rem; font-weight: 760; cursor: pointer; }
-
 .connectionRail { margin-bottom: 12px; overflow: hidden; border: 1px solid var(--int-border); border-top: 3px solid var(--int-navy); border-radius: 7px; background: var(--int-surface); box-shadow: var(--ui-shadow-card); }
 .connectionRail > header { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 7px 13px; border-bottom: 1px solid var(--int-border); background: var(--int-muted); }
 /* `--int-navy` é a cor da marca: no tema escuro ela é quase preta e sumia
@@ -100,10 +94,6 @@
 .tabs .activeTab { border-bottom-color: var(--int-accent); background: var(--int-surface); color: var(--int-accent); }
 .tabs b { min-width: 18px; padding: 2px 5px; border-radius: 3px; background: color-mix(in srgb, var(--int-accent) 9%, var(--int-surface)); color: var(--int-accent); font-size: .52rem; text-align: center; font-variant-numeric: tabular-nums; }
 .tabPanel { min-height: 390px; border: 1px solid var(--int-border); border-radius: 0 0 7px 7px; background: var(--int-surface); box-shadow: var(--ui-shadow-card); }
-.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 82px; padding: 13px 17px; border-bottom: 1px solid var(--int-border); }
-.panelHeader > div { min-width: 0; }
-.panelHeader h3 { margin: 3px 0 2px; font-size: .94rem; letter-spacing: -.015em; }
-.panelHeader p { margin: 0; color: var(--int-soft); font-size: .61rem; line-height: 1.45; }
 
 .connectorRack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; padding: 1px; background: var(--int-border); }
 .connectorRack article { display: flex; min-width: 0; flex-direction: column; background: var(--int-surface); border-top: 3px solid var(--int-border-strong); }
@@ -145,12 +135,6 @@
 .rowActions .actionStrong { border-color: color-mix(in srgb, var(--int-accent) 25%, var(--int-border)); color: var(--int-accent); }
 .mutedAction { display: inline-flex; align-items: center; gap: 5px; color: var(--int-soft); font-size: .53rem; }
 
-.statusPill { display: inline-flex; align-items: center; gap: 5px; width: max-content; padding: 4px 6px; border: 1px solid var(--int-border); border-radius: 3px; background: var(--int-muted); color: var(--int-soft); font-size: .51rem; font-weight: 730; white-space: nowrap; text-transform: capitalize; }
-.statusPill svg { width: 8px; height: 8px; fill: currentColor; }
-.statusPill[data-tone="safe"] { border-color: color-mix(in srgb, var(--int-success) 24%, var(--int-border)); background: color-mix(in srgb, var(--int-success) 8%, var(--int-surface)); color: var(--int-success); }
-.statusPill[data-tone="warning"] { border-color: color-mix(in srgb, var(--int-warning) 25%, var(--int-border)); background: color-mix(in srgb, var(--int-warning) 8%, var(--int-surface)); color: var(--int-warning); }
-.statusPill[data-tone="danger"] { border-color: color-mix(in srgb, var(--int-danger) 24%, var(--int-border)); background: color-mix(in srgb, var(--int-danger) 7%, var(--int-surface)); color: var(--int-danger); }
-
 .runLedger { position: relative; display: grid; padding: 0 14px; }
 .runLedger::before { position: absolute; top: 0; bottom: 0; left: 31px; width: 1px; background: var(--int-border); content: ""; }
 .runLedger article { position: relative; z-index: 1; display: grid; grid-template-columns: 34px minmax(125px, .8fr) auto minmax(280px, 1.3fr) minmax(130px, .7fr) auto; align-items: center; gap: 11px; min-height: 80px; border-bottom: 1px solid var(--int-border); }
@@ -181,15 +165,10 @@
 .reconciliationList article > div strong { font-size: .68rem; }
 .reconciliationList article > div span { overflow: hidden; color: var(--int-soft); font-size: .53rem; text-overflow: ellipsis; white-space: nowrap; }
 .reconciliationList time { color: var(--int-soft); font-size: .53rem; }
-
-.emptyState { display: grid; place-items: center; align-content: center; min-height: 280px; padding: 30px; text-align: center; }
-.emptyState > span { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 11px; border: 1px solid var(--int-border); border-radius: 7px; background: var(--int-muted); color: var(--int-accent); }
-.emptyState > strong { font-size: .76rem; }
-.emptyState > p { max-width: 410px; margin: 6px 0 13px; color: var(--int-soft); font-size: .61rem; line-height: 1.5; }
-.loadingState, .drawerLoading { display: grid; place-items: center; align-content: center; min-height: 440px; gap: 7px; color: var(--int-soft); }
-.loadingState svg, .drawerLoading svg { width: 28px; height: 28px; color: var(--int-accent); }
-.loadingState strong, .drawerLoading strong { color: var(--int-text); font-size: .76rem; }
-.loadingState span, .drawerLoading span { font-size: .59rem; }
+.drawerLoading { display: grid; place-items: center; align-content: center; min-height: 440px; gap: 7px; color: var(--int-soft); }
+.drawerLoading svg { width: 28px; height: 28px; color: var(--int-accent); }
+.drawerLoading strong { color: var(--int-text); font-size: .76rem; }
+.drawerLoading span { font-size: .59rem; }
 .spin { animation: integrations-spin .8s linear infinite; }
 @keyframes integrations-spin { to { transform: rotate(360deg); } }
 .toast { position: fixed; z-index: 180; right: 24px; bottom: 24px; display: flex; align-items: center; gap: 9px; max-width: 390px; padding: 11px 14px; border: 1px solid #427064; border-radius: 6px; background: var(--int-navy); color: #fff; box-shadow: 0 14px 40px #06152642; font-size: .65rem; font-weight: 660; animation: toast-in .2s ease-out both; }
@@ -314,8 +293,6 @@
   .queueHealth, .refreshButton { min-height: 40px; }
   .solidesBoundary { align-items: flex-start; }
   .solidesBoundary > b { display: none; }
-  .panelHeader { align-items: stretch; flex-direction: column; }
-  .panelHeader > button { width: 100%; }
   .dataTable thead { display: none; }
   .dataTable, .dataTable tbody, .dataTable tr, .dataTable td { display: block; }
   .dataTable tbody { padding: 9px; background: var(--int-muted); }
@@ -395,6 +372,6 @@
 @media (max-width: 820px) {
   .sankhyaGrid { grid-template-columns: 1fr; }
   .sankhyaHero { align-items: flex-start; flex-wrap: wrap; }
-  .sankhyaHero .statusPill { margin-left: 53px; }
+  .sankhyaHero [data-panel-ui="pill"] { margin-left: 53px; }
   .logList article { grid-template-columns: 1fr; }
 }

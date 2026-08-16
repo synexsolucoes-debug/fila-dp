@@ -124,12 +124,11 @@
 .mappingList li[data-missing="true"] { border-color: color-mix(in srgb, var(--time-danger) 45%, transparent); }
 .mappingList small { display: block; color: var(--time-soft); font-size: .65rem; font-weight: 600; }
 
-.emptyState, .loadingState, .errorState, .warningState, .privacyNotice {
+.noteLine, .loadingLine, .warningState, .privacyNotice {
   display: flex; align-items: center; gap: 9px; padding: 13px 15px; margin: 0 0 12px;
   border: 1px solid var(--time-border); border-radius: 11px; background: var(--time-surface);
   font-size: .77rem; color: var(--time-soft);
 }
-.errorState { border-color: color-mix(in srgb, var(--time-danger) 45%, transparent); color: var(--time-danger); }
 .warningState { border-color: color-mix(in srgb, var(--time-warning) 45%, transparent); color: var(--time-warning); }
 .privacyNotice { border-color: color-mix(in srgb, var(--time-accent) 40%, transparent); color: var(--time-accent); }
 .spin { animation: timeSpin 1s linear infinite; }

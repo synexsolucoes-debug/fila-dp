@@ -10,6 +10,7 @@ import {
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { navigateToHttps, normalizeSaasOverview, openBillingPortal, requestSaas, startCheckout, updateOnboarding } from "./saas.api";
 import type { BillingInterval, OnboardingProfile, OnboardingStep, SaasOverview, SaasPlan, SaasTab } from "./saas.types";
+import { ErrorBanner, StatusPill, statusTone } from "../shared";
 import styles from "./saas.module.css";
 
 const tabItems: Array<{ id: SaasTab; label: string; icon: typeof Rocket }> = [
@@ -43,7 +44,6 @@ const date = (value: string) => {
   return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(parsed);
 };
 const money = (cents: number, currency = "BRL") => new Intl.NumberFormat("pt-BR", { style: "currency", currency, maximumFractionDigits: 0 }).format(cents / 100);
-const statusTone = (status: string) => ["active", "trialing", "paid", "completed"].includes(status) ? "safe" : ["past_due", "open", "in_progress", "dismissed"].includes(status) ? "warning" : ["canceled", "unpaid", "uncollectible"].includes(status) ? "danger" : "neutral";
 
 export function SaasView({ role }: { role: WorkspaceRole }) {
   const [overview, setOverview] = useState<SaasOverview | null>(null);
@@ -121,7 +121,7 @@ export function SaasView({ role }: { role: WorkspaceRole }) {
       {overview.permissions.platform && <Link className={styles.platformLink} href="/plataforma"><ShieldCheck aria-hidden="true" /><span><strong>Console global</strong><small>Acesso autorizado entre workspaces</small></span><ArrowRight aria-hidden="true" /></Link>}
     </header>
 
-    {error && <div className={styles.errorBanner} role="alert"><CircleAlert aria-hidden="true" /><span><strong>A operação não foi concluída</strong>{error}</span><button type="button" onClick={() => setError("")}>Fechar</button></div>}
+    {error && <ErrorBanner title="A operação não foi concluída" message={error} onDismiss={() => setError("")} />}
 
     <section className={styles.readinessRail} aria-label={`Ativação ${progress}% concluída`}>
       <header><div><span className={styles.eyebrow}>PISTA DE PRONTIDÃO</span><strong>{progress}% operacional</strong></div><div className={styles.progressTrack} role="progressbar" aria-label="Progresso da ativação" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><i style={{ width: `${progress}%` }} /></div><small>{completedCount} concluída(s) · {skippedCount} opcional(is)</small></header>
@@ -209,5 +209,5 @@ function InvoicesPanel({ overview, onPortal, busy }: { overview: SaasOverview; o
   </section>;
 }
 
-function StatusBadge({ status }: { status: string }) { return <span className={styles.statusBadge} data-tone={statusTone(status)}><CircleDot aria-hidden="true" />{statusLabels[status] ?? (status === "pending" ? "Pendente" : status)}</span>; }
+function StatusBadge({ status }: { status: string }) { return <StatusPill status={status} label={statusLabels[status] ?? (status === "pending" ? "Pendente" : status)} />; }
 function Empty({ icon: Icon, title, text }: { icon: typeof Rocket; title: string; text: string }) { return <div className={styles.empty}><Icon aria-hidden="true" /><strong>{title}</strong><p>{text}</p></div>; }

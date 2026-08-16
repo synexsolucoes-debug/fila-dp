@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LoaderCircle, Lock, MinusCircle, PlusCircle, RotateCcw } from "lucide-react";
+import { ErrorBanner } from "../shared";
 import styles from "./access.module.css";
 
 /**
@@ -93,7 +94,7 @@ export function MemberModules({ memberId, memberName, canManage }: {
     );
   }
   if (!payload) {
-    return <p className={styles.errorBanner} role="alert">{error || "Não foi possível carregar os acessos."}</p>;
+    return <ErrorBanner message={error || "Não foi possível carregar os acessos."} />;
   }
 
   const exceptions = payload.modules.filter((item) => item.override !== null).length;
@@ -106,7 +107,7 @@ export function MemberModules({ memberId, memberName, canManage }: {
         {" "}Liberar concede a <b>leitura</b> do módulo; as ações de escrita continuam vindo do papel.
       </p>
 
-      {error && <p className={styles.errorBanner} role="alert">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
       <div className={styles.tableScroll}>
         <table className={styles.memberTable}>

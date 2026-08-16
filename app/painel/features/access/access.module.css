@@ -59,11 +59,6 @@
 .seatMeter strong { font-size: 1rem; font-variant-numeric: tabular-nums; }
 .seatMeter small { color: color-mix(in srgb, #fff 72%, transparent); font-size: .52rem; line-height: 1.4; }
 
-.errorBanner { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--acc-danger) 32%, var(--acc-border)); border-radius: 6px; background: color-mix(in srgb, var(--acc-danger) 7%, var(--acc-surface)); color: var(--acc-danger); font-size: .62rem; }
-.errorBanner > span { display: grid; flex: 1; gap: 2px; }
-.errorBanner strong { color: var(--acc-text); }
-.errorBanner button { border: 0; background: transparent; color: inherit; font-size: .58rem; font-weight: 800; cursor: pointer; }
-
 .activationPanel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 1.4fr) auto auto; align-items: center; gap: 10px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--acc-success) 35%, var(--acc-border)); border-radius: 8px; background: color-mix(in srgb, var(--acc-success) 6%, var(--acc-surface)); }
 .activationPanel > div { display: grid; gap: 3px; }
 .activationPanel strong { font-size: .72rem; }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertOctagon, ArrowRight, Calculator, CalendarClock, CircleDot, Coins, Download, FileText, LoaderCircle, LockKeyhole,
+  ArrowRight, Calculator, CalendarClock, CircleDot, Coins, Download, FileText, LoaderCircle, LockKeyhole,
   Plus, RefreshCw, RotateCcw, ShieldCheck, Stethoscope, WalletCards,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
@@ -17,6 +17,7 @@ import type {
   CompanyOption, ContractorOverview, ContractorPaymentDetail as ContractorPaymentDetailData,
   EmployeeOption, PaymentDialog, PaymentModule, PsychologyOverview,
 } from "./payments.types";
+import { ErrorBanner } from "../shared";
 import styles from "./payments.module.css";
 
 const moduleConfig: Record<PaymentModule, { title: string; eyebrow: string; description: string; icon: typeof Stethoscope }> = {
@@ -347,7 +348,7 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
   };
 
   if (role === "guest") {
-    return <section className={styles.workspace} data-module={module}><p className={styles.emptyState}>Seu perfil não tem acesso ao controle de pagamentos.</p></section>;
+    return <section className={styles.workspace} data-module={module}><p className={styles.noteLine}>Seu perfil não tem acesso ao controle de pagamentos.</p></section>;
   }
 
   const Icon = config.icon;
@@ -425,15 +426,15 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
         <p className={styles.privacyNotice}><ShieldCheck aria-hidden="true" /><span>{psychology.privacyBoundary}</span></p>
       )}
 
-      {error && <p className={styles.errorState} role="alert"><AlertOctagon aria-hidden="true" /> {error}</p>}
-      {loading && <p className={styles.loadingState}><LoaderCircle aria-hidden="true" className={styles.spin} /> Carregando dados da competência…</p>}
+      {error && <ErrorBanner message={error} />}
+      {loading && <p className={styles.loadingLine}><LoaderCircle aria-hidden="true" className={styles.spin} /> Carregando dados da competência…</p>}
 
       {!loading && !companies.length && (
-        <p className={styles.emptyState}>Cadastre uma empresa para controlar pagamentos.</p>
+        <p className={styles.noteLine}>Cadastre uma empresa para controlar pagamentos.</p>
       )}
 
       {!loading && companies.length > 0 && !cycle && (
-        <p className={styles.emptyState}>
+        <p className={styles.noteLine}>
           A competência {competenceLabel(competence)} ainda não foi aberta para esta empresa. Abra-a em Operação DP para lançar pagamentos.
         </p>
       )}
@@ -506,7 +507,7 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
           )}
 
           {contractors.closings.length === 0 ? (
-            <p className={styles.emptyState}>
+            <p className={styles.noteLine}>
               Nenhum fechamento apurado nesta competência. Lance os créditos e descontos e use <b>Apurar competência</b>.
             </p>
           ) : (
@@ -611,7 +612,7 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
           )}
 
           {psychology.closings.length === 0 ? (
-            <p className={styles.emptyState}>
+            <p className={styles.noteLine}>
               Nenhum fechamento apurado. Lance as consultas realizadas e use <b>Apurar competência</b> para saber quanto pagar a cada psicólogo.
             </p>
           ) : (

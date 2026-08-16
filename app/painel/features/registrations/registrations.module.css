@@ -75,22 +75,6 @@
 .secondaryButton:disabled,
 .dangerButton:disabled { cursor: not-allowed; opacity: .55; transform: none; }
 
-.errorBanner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 16px;
-  padding: 11px 14px;
-  border: 1px solid color-mix(in srgb, #b42318 32%, var(--reg-border));
-  border-radius: 9px;
-  background: color-mix(in srgb, #b42318 7%, var(--reg-surface));
-  color: #b42318;
-  font-size: .82rem;
-  font-weight: 620;
-}
-.errorBanner span { flex: 1; }
-.errorBanner button { display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }
-
 .masterDetail {
   display: grid;
   grid-template-columns: minmax(300px, 38%) minmax(0, 1fr);
@@ -157,38 +141,6 @@
 .detailSection dl div { min-width: 0; }
 .detailSection dt { margin-bottom: 5px; color: var(--reg-soft); font-size: .68rem; }
 .detailSection dd { margin: 0; overflow-wrap: anywhere; font-size: .79rem; font-weight: 620; }
-
-.statusPill,
-.employeeStatus { display: inline-flex; align-items: center; gap: 6px; width: fit-content; padding: 4px 7px; border-radius: 5px; font-size: .66rem; font-weight: 760; white-space: nowrap; }
-.statusPill i,
-.employeeStatus i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.statusActive,
-.employee_active { background: var(--ui-state-ok-bg, #e3f5ed); color: var(--ui-state-ok-text, #06563c); }
-.statusInactive,
-.employee_terminated { background: var(--ui-state-neutral-bg, #eef1f4); color: var(--ui-state-neutral-text, #414b5a); }
-.employee_on_leave { background: var(--ui-state-warn-bg, #fdf2e2); color: var(--ui-state-warn-text, #7d4708); }
-
-/* Estados por `data-status`.
- *
- * O padrão vem primeiro e de propósito: a versão anterior coloria só por classe
- * (.statusActive/.statusInactive) e qualquer estado sem regra herdava a cor do
- * contêiner — "Aplicada" saiu em 1.29:1, praticamente invisível. Com um padrão
- * legível, um estado novo pode ficar sem cor própria, mas nunca sem contraste. */
-.statusPill[data-status] { background: var(--ui-state-neutral-bg, #eef1f4); color: var(--ui-state-neutral-text, #414b5a); }
-.statusPill[data-status="active"],
-.statusPill[data-status="approved"],
-.statusPill[data-status="applied"],
-.statusPill[data-status="paid"],
-.statusPill[data-status="reconciled"] { background: var(--ui-state-ok-bg, #e3f5ed); color: var(--ui-state-ok-text, #06563c); }
-.statusPill[data-status="suspended"],
-.statusPill[data-status="pending_approval"],
-.statusPill[data-status="review"],
-.statusPill[data-status="approval"],
-.statusPill[data-status="invoice_pending"],
-.statusPill[data-status="open"] { background: var(--ui-state-warn-bg, #fdf2e2); color: var(--ui-state-warn-text, #7d4708); }
-.statusPill[data-status="rejected"] { background: var(--ui-state-danger-bg, #fdeceb); color: var(--ui-state-danger-text, #96201a); }
-.statusPill[data-status="ready_to_pay"],
-.statusPill[data-status="reopened"] { background: var(--ui-accent-soft, #e7f0fe); color: var(--ui-accent-text, #08529f); }
 
 .dataPanel { min-width: 0; min-height: 420px; border: 1px solid var(--reg-border); border-radius: 11px; overflow: hidden; background: var(--reg-surface); box-shadow: var(--ui-shadow-card, 0 4px 16px rgba(11,31,51,.04)); }
 .filters { display: flex; align-items: flex-end; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 55%, var(--reg-surface)); }
@@ -325,17 +277,6 @@
 .historyTrail article > small { color: var(--reg-soft); font-size: .62rem; }
 .historyTrail article > small { display: block; margin-top: 7px; color: var(--reg-mint); }
 
-.loadingState,
-.emptyState { display: flex; min-height: 330px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 36px; text-align: center; }
-.loadingState svg { width: 28px; height: 28px; color: var(--reg-mint); }
-.loadingState strong,
-.emptyState strong { margin-top: 5px; font-size: .86rem; }
-.loadingState span,
-.emptyState p { max-width: 390px; margin: 0; color: var(--reg-soft); font-size: .72rem; line-height: 1.5; }
-.emptyState > span { display: grid; place-items: center; width: 50px; height: 50px; margin-bottom: 5px; border: 1px solid color-mix(in srgb, var(--reg-mint) 24%, var(--reg-border)); border-radius: 10px; background: var(--reg-mint-soft); color: var(--reg-mint); }
-.emptyState > span svg { width: 23px; height: 23px; }
-.emptyState button { margin-top: 8px; }
-
 .confirm { align-self: center; width: min(410px, calc(100% - 32px)); padding: 28px; border: 1px solid var(--reg-border); border-radius: 12px; background: var(--reg-surface); box-shadow: var(--ui-shadow-modal); text-align: center; animation: riseIn .2s ease both; }
 .confirmIcon { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 14px; border-radius: 10px; background: color-mix(in srgb, #b42318 10%, var(--reg-surface)); color: #b42318; }
 .confirm h2 { margin: 0 0 8px; font-size: 1.08rem; }
@@ -366,7 +307,7 @@
 @media (max-width: 900px) {
   .masterDetail { grid-template-columns: minmax(260px, 42%) minmax(0, 1fr); }
   .companyRow { grid-template-columns: 36px minmax(0, 1fr) 16px; }
-  .companyRow .statusPill { display: none; }
+  .companyRow [data-panel-ui="pill"] { display: none; }
   .detailBand,
   .detailSection dl { grid-template-columns: 1fr; }
   .catalogLayout { grid-template-columns: 220px minmax(0, 1fr); }

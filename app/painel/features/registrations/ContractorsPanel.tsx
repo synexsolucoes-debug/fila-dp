@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertOctagon, Briefcase, CalendarClock, CircleDollarSign, History, LoaderCircle, Plus, RefreshCw, X,
+  Briefcase, CalendarClock, CircleDollarSign, History, LoaderCircle, Plus, RefreshCw, X,
 } from "lucide-react";
+import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import styles from "./registrations.module.css";
 
 /**
@@ -224,11 +225,10 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
           </button>
         </header>
         {loading ? (
-          <p className={styles.loadingState}><LoaderCircle className={styles.spin} aria-hidden="true" /> Carregando…</p>
+          <LoadingState size="compact" title="Carregando prestadores" />
         ) : list.length === 0 ? (
-          <p className={styles.emptyState}>
-            Nenhum prestador PJ cadastrado. Cadastre para que ele entre na apuração e na exportação do complemento.
-          </p>
+          <EmptyState size="compact" icon={Briefcase} title="Nenhum prestador PJ cadastrado"
+            text="Cadastre para que ele entre na apuração e na exportação do complemento." />
         ) : (
           <div className={styles.companyList}>
             {list.map((row) => (
@@ -246,7 +246,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                   <strong>{row.tradeName || row.legalName}</strong>
                   <small>{row.companyName} · {money(row.baseAmountCents)}/mês</small>
                 </span>
-                <span className={styles.statusPill} data-status={row.status}>{statusLabels[row.status] ?? row.status}</span>
+                <StatusPill status={row.status} label={statusLabels[row.status] ?? row.status} />
               </button>
             ))}
           </div>
@@ -254,7 +254,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
       </aside>
 
       <section className={styles.detailPane}>
-        {error && <p className={styles.errorBanner} role="alert"><AlertOctagon aria-hidden="true" /> {error}</p>}
+        {error && <ErrorBanner message={error} />}
 
         <header>
           <div className={styles.companyIdentity}>
@@ -277,7 +277,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
         </header>
 
         {!contractor ? (
-          <p className={styles.emptyState}>Escolha um prestador na lista para ver contrato, saldo e movimentação.</p>
+          <EmptyState icon={Briefcase} title="Nenhum prestador selecionado" text="Escolha um prestador na lista para ver contrato, saldo e movimentação." />
         ) : (
           <>
             <section className={styles.detailSection}>
@@ -317,7 +317,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                           <td>{item.direction === "credit" ? "Crédito" : "Desconto"}</td>
                           <td className={item.direction === "debit" ? styles.textDanger : undefined}>{money(item.amountCents)}</td>
                           <td>{item.effectiveFrom} → {item.effectiveTo ?? "sem fim"}</td>
-                          <td><span className={styles.statusPill} data-status={item.status}>{statusLabels[item.status] ?? item.status}</span></td>
+                          <td><StatusPill status={item.status} label={statusLabels[item.status] ?? item.status} /></td>
                           {canManage && (
                             <td>
                               {item.status === "active" && (
@@ -370,9 +370,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                         <small>{movement.movementLabel} · vigência {day(movement.effectiveDate)}</small>
                         {movement.reason && <p>{movement.reason}</p>}
                       </div>
-                      <span className={styles.statusPill} data-status={movement.status}>
-                        {statusLabels[movement.status] ?? movement.status}
-                      </span>
+                      <StatusPill status={movement.status} label={statusLabels[movement.status] ?? movement.status} />
                       {canManage && movement.status !== "applied" && movement.status !== "canceled" && (
                         <div className={styles.filters}>
                           {movement.status === "draft" && (
@@ -428,7 +426,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                           <td>{money(row.netCents)}</td>
                           <td>{money(row.invoiceCents)}</td>
                           <td>{money(row.complementCents)}{row.cajuCents > 0 && <small>Caju {money(row.cajuCents)}</small>}</td>
-                          <td><span className={styles.statusPill} data-status={row.status}>{row.status}</span></td>
+                          <td><StatusPill status={row.status} label={row.status} /></td>
                         </tr>
                       ))}
                     </tbody>
