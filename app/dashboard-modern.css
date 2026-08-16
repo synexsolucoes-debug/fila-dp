@@ -3927,3 +3927,11 @@
   .connection-map-graph > ul { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .connection-map-graph > ul > li::after { display: none; }
 }
+
+/* Acesso por módulo, dentro da ficha do membro.
+   Fechado por padrão: a maioria das pessoas segue o papel, e abrir a matriz
+   de todos os módulos para todo mundo transformaria a lista de membros numa
+   parede. `details` nativo — teclado e leitor de tela funcionam sem estado. */
+.member-modules-details { grid-column: 1 / -1; margin-top: 8px; }
+.member-modules-details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--ui-primary); font-size: 11.5px; font-weight: 650; cursor: pointer; }
+.member-modules-details > summary:hover { text-decoration: underline; }

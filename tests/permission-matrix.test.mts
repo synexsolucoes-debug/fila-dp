@@ -109,7 +109,7 @@ test("liberar continua sendo só leitura — a exceção não promove ninguém",
   assert.match(corpo, /if \(granted\) extraCapabilities\.add\(capability\);/u);
   assert.doesNotMatch(corpo, /grantedWriteCapabilities|extraCapabilities\.add\(write/u);
 
-  const tela = await readFile(new URL("../app/painel/features/access/MemberModules.tsx", import.meta.url), "utf8");
+  const tela = await readFile(new URL("../app/painel/features/shared/MemberModules.tsx", import.meta.url), "utf8");
   assert.match(tela, /as ações de escrita continuam vindo do papel/u);
 });
 

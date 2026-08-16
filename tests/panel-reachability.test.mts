@@ -32,9 +32,7 @@ const FEATURES = new URL("../app/painel/features/", import.meta.url);
  * que este teste garante é que a situação fique visível e datada, em vez de
  * ser redescoberta daqui a seis meses.
  */
-const SEM_PORTA = new Map([
-  ["AccessView", "duplica a gestão de membros que já vive em WorkspaceApp.tsx (papel, empresas, ativação, link, remoção) — mas `MemberModules` ao lado dela é a ÚNICA interface de /api/members/[id]/modules, a exceção de módulo por pessoa cuja autorização foi corrigida em f86fa6d. A decisão registrada em tests/access-screen.test.mts cobre administração GLOBAL de usuários, que é da plataforma; exceção por pessoa é do grupo e não tem outro lugar. Remover perderia a feature; reconectar criaria a segunda tela de acesso. A parte útil precisa migrar para a lista de membros viva."],
-]);
+const SEM_PORTA = new Map<string, string>([]);
 
 const modules = (await readdir(FEATURES, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
@@ -86,14 +84,19 @@ test("todo componente publicado por uma feature tem quem o renderize", () => {
 });
 
 test("a lista de telas sem porta não cresce em silêncio, e cada entrada diz por quê", () => {
-  /* De duas para uma. `SaasView` foi removida: `tests/saas-phase7.test.mts`
-     registra que administrar assinatura é da plataforma por desenho e proíbe
-     `view === "saas"` no painel — coerente com o produto não ter autocadastro.
-     Ela era resto de um desenho anterior, em que o workspace se autoatendia.
+  /* Zero, e as duas foram resolvidas por caminhos diferentes.
 
-     `AccessView` fica, com motivo mais forte do que o anterior: ela carrega a
-     única interface de uma feature viva. */
-  assert.equal(SEM_PORTA.size, 1, "mudou o número de telas sem porta — atualize o motivo junto");
+     `SaasView`: removida. `tests/saas-phase7.test.mts` registra que administrar
+     assinatura é da plataforma por desenho e proíbe `view === "saas"` no
+     painel — coerente com o produto não ter autocadastro.
+
+     `AccessView`: a gestão de membros dela duplicava a que já vive em
+     WorkspaceApp.tsx, mas `MemberModules` ao lado era a ÚNICA interface de
+     /api/members/[id]/modules — a exceção de módulo por pessoa, cuja
+     autorização foi corrigida em f86fa6d. Apagar a pasta teria removido a
+     porta de uma feature viva. O componente migrou para `features/shared` e
+     entrou na ficha do membro; só então a tela foi removida. */
+  assert.equal(SEM_PORTA.size, 0, "mudou o número de telas sem porta — atualize o motivo junto");
   for (const [component, motivo] of SEM_PORTA) {
     assert.ok(motivo.length > 80, `${component} precisa de um motivo, não de uma linha`);
     assert.ok(exported.has(component), `${component} saiu do index: tire-o da lista também`);

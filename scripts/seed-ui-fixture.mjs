@@ -57,6 +57,21 @@ try {
   await client.query(
     `INSERT INTO fdp_workspace_members (workspace_id, user_id, role) VALUES ('ws-ui', 'u-ui', 'admin') ON CONFLICT DO NOTHING`,
   );
+
+  /* Um segundo membro, que não é o dono.
+     A ficha de membro só oferece papel, empresas, link de ativação, remoção e
+     exceção de módulo quando `!member.isOwner` — e a semente tinha uma pessoa
+     só, que era o dono. O efeito: nenhuma dessas interfaces era desenhada, e
+     portanto nenhuma era medida pela conferência de contraste. É a mesma
+     armadilha do rótulo de processo e do ciclo de fechamento. */
+  await client.query(
+    `INSERT INTO fdp_users (id, email, name) VALUES ('u-ui-2', 'membro@vinculato.test', 'Membro do Ensaio')
+     ON CONFLICT (id) DO NOTHING`,
+  );
+  await client.query(
+    `INSERT INTO fdp_workspace_members (workspace_id, user_id, role) VALUES ('ws-ui', 'u-ui-2', 'member')
+     ON CONFLICT DO NOTHING`,
+  );
   // Sem quadro o contexto do painel recusa a sessão com BOARD_NOT_FOUND.
   await client.query(
     `INSERT INTO fdp_boards (id, workspace_id, name, board_type)

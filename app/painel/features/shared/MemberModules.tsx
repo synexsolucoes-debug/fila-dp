@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { LoaderCircle, Lock, MinusCircle, PlusCircle, RotateCcw } from "lucide-react";
-import { ErrorBanner } from "../shared";
-import styles from "./access.module.css";
+import { ErrorBanner } from "./panel-ui";
+import styles from "./member-modules.module.css";
 
 /**
  * Acesso individual aos módulos, dentro da ficha de um membro.
@@ -103,7 +103,7 @@ export function MemberModules({ memberId, memberName, canManage }: {
     <div className={styles.matrixArea}>
       <p className={styles.detailNote}>
         O papel <b>{payload.member.role}</b> decide o acesso padrão. Aqui você abre exceções para esta pessoa —{" "}
-        {exceptions === 0 ? "nenhuma aberta até agora" : `${exceptions} exceção(ões) aberta(s)`}.
+        {exceptions === 0 ? "nenhuma aberta até agora" : exceptions === 1 ? "1 exceção aberta" : `${exceptions} exceções abertas`}.
         {" "}Liberar concede a <b>leitura</b> do módulo; as ações de escrita continuam vindo do papel.
       </p>
 
