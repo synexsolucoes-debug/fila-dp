@@ -1286,7 +1286,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
-          <VinculatoLogo size={28} tone="light" />
+          {/* A barra lateral virou clara: o logotipo branco sumiria nela. A
+              variante segue o tema, em vez de assumir fundo escuro. */}
+          <VinculatoLogo size={28} tone={theme === "dark" ? "light" : "color"} />
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>

@@ -22,6 +22,30 @@
   --ui-success: #137a4f;
   --ui-warning: #a15c07;
   --ui-danger: #b42318;
+  /* Casca clara — Modelo 2 "Flow".
+     A barra lateral deixa de ser um bloco escuro e passa a ser superfície,
+     separada do conteúdo por um fio. Antes disso, ~20 cores fixas espalhadas
+     pelo arquivo assumiam fundo escuro — inclusive um verde da marca antiga,
+     `rgba(98,213,178,.16)`, ainda vivo no hover. Agora a barra tem tokens
+     próprios e a mesma regra vale nos dois temas. */
+  --ui-rail: #ffffff;
+  /* Avatar: texto sobre fundo suave. Par com dono porque já regrediu duas
+     vezes — a segunda quando esta casca clara chegou. No claro rende 6,06:1;
+     no escuro, o azul vivo sobre o suave rendia 4,30:1 e precisa do tom
+     legível sobre fundo escuro. */
+  --ui-avatar-bg: var(--ui-primary-soft);
+  --ui-avatar-text: var(--ui-primary);
+  --ui-rail-border: var(--ui-border);
+  --ui-rail-text: #55627a;
+  --ui-rail-icon: #8b97a8;
+  --ui-rail-hover: #f1f5fb;
+  --ui-rail-active: #e9f2fe;
+  --ui-rail-active-text: var(--vin-blue);
+  --ui-rail-section: #5f6b7d;
+  --ui-rail-context: #f7f9fc;
+  /* Concluído/conectado. No Modelo 2 o verde é estado, nunca marca. */
+  --ui-done: var(--ui-success);
+  --ui-done-soft: #e3f5ec;
   --ui-radius-sm: 7px;
   --ui-radius-md: 10px;
   --ui-radius-lg: 14px;
@@ -49,6 +73,19 @@
   --ui-success: #70e1b9;
   --ui-warning: #ffd089;
   --ui-danger: #ff9c96;
+  --ui-rail: #0d1826;
+  --ui-avatar-bg: #12294a;
+  --ui-avatar-text: var(--brand-accent-on-dark);
+  --ui-rail-border: var(--ui-border);
+  --ui-rail-text: #a7b5c4;
+  --ui-rail-icon: #7d8fa3;
+  --ui-rail-hover: #16273a;
+  --ui-rail-active: #12294a;
+  --ui-rail-active-text: var(--brand-accent-on-dark);
+  --ui-rail-section: #8095aa;
+  --ui-rail-context: #14202f;
+  --ui-done: var(--ui-success);
+  --ui-done-soft: #0f2f20;
   --ui-shadow-card: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px rgba(0, 0, 0, .14);
   --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .48);
 }
@@ -69,8 +106,8 @@
   z-index: 30;
   height: 100dvh;
   padding: 22px 16px 16px;
-  background: var(--ui-brand);
-  box-shadow: inset -1px 0 rgba(255, 255, 255, .04);
+  background: var(--ui-rail);
+  border-right: 1px solid var(--ui-rail-border);
 }
 
 .sidebar-toggle {
@@ -108,7 +145,7 @@
   align-items: center;
   gap: 12px;
   border-radius: 9px;
-  color: #aebdcc;
+  color: var(--ui-rail-text);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
@@ -119,7 +156,7 @@
   height: 20px;
   display: grid;
   place-items: center;
-  color: #8399ac;
+  color: var(--ui-rail-icon);
 }
 
 .dashboard-sidebar nav button > span svg {
@@ -135,14 +172,22 @@
   font-size: 10px;
 }
 
-.dashboard-sidebar nav button.active,
 .dashboard-sidebar nav button:hover {
-  background: rgba(255, 255, 255, .09);
-  color: #fff;
+  background: var(--ui-rail-hover);
+  color: var(--ui-text);
+}
+
+/* O item ativo ganha barra à esquerda além da cor: o Modelo 2 marca o lugar
+   pela forma, e forma continua legível para quem não distingue matiz. */
+.dashboard-sidebar nav button.active {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--ui-rail-active-text);
 }
 
 .dashboard-sidebar nav button.active > span {
-  color: var(--brand-accent-on-dark);
+  color: var(--ui-rail-active-text);
 }
 
 .sidebar-collapsed .dashboard-sidebar nav button {
@@ -955,9 +1000,9 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 3px;
     overflow: visible;
-    border-top: 1px solid rgba(255, 255, 255, .1);
-    background: color-mix(in srgb, var(--ui-brand) 96%, transparent);
-    box-shadow: 0 -10px 30px rgba(5, 18, 33, .2);
+    border-top: 1px solid var(--ui-rail-border);
+    background: color-mix(in srgb, var(--ui-rail) 96%, transparent);
+    box-shadow: 0 -10px 30px rgba(5, 18, 33, .09);
     backdrop-filter: blur(14px);
   }
 
@@ -2664,22 +2709,19 @@
 }
 
 .dashboard-sidebar {
-  background: var(--ui-brand);
+  background: var(--ui-rail);
   padding: 20px 14px 14px;
 }
 
-.dashboard-brand { color: #fff; font-size: 20px; letter-spacing: -.045em; }
-.dashboard-brand strong { color: var(--ui-mint); }
+.dashboard-brand { color: var(--ui-text); font-size: 20px; letter-spacing: -.045em; }
+.dashboard-brand strong { color: var(--ui-primary); }
 .dashboard-sidebar nav { margin-top: 30px; gap: 5px; }
-.dashboard-sidebar nav button { min-height: 45px; border-radius: 12px; color: rgba(255,255,255,.72); font-weight: 650; }
-.dashboard-sidebar nav button > span { color: rgba(255,255,255,.55); }
-.dashboard-sidebar nav button.active,
-.dashboard-sidebar nav button:hover { background: rgba(98,213,178,.16); color: #fff; }
-.dashboard-sidebar nav button.active > span { color: var(--ui-mint); }
-.sidebar-workspace { border-top-color: rgba(255,255,255,.11); }
-.sidebar-workspace button { background: rgba(255,255,255,.07); border-radius: 12px; }
-.sidebar-account { border-top-color: rgba(255,255,255,.11); }
-.user-avatar, .header-profile > span { background: #dff8ee; color: var(--ui-brand); }
+.dashboard-sidebar nav button { min-height: 45px; border-radius: 10px; color: var(--ui-rail-text); font-weight: 600; }
+.dashboard-sidebar nav button > span { color: var(--ui-rail-icon); }
+.sidebar-workspace { border-top-color: var(--ui-rail-border); }
+.sidebar-workspace button { background: var(--ui-rail-context); border-radius: 10px; }
+.sidebar-account { border-top-color: var(--ui-rail-border); }
+.user-avatar, .header-profile > span { background: var(--ui-avatar-bg); color: var(--ui-avatar-text); }
 
 .dashboard-header { height: 72px; background: color-mix(in srgb, var(--ui-surface) 92%, transparent); }
 .dashboard-location { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2939,10 +2981,10 @@
 /* Grupo empresarial and navigation clarity. */
 .dashboard-sidebar { display: flex; flex-direction: column; gap: 0; }
 .dashboard-brand { min-height: 42px; }
-.sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; background: rgba(255,255,255,.055); }
-.sidebar-group-context > span, .sidebar-nav-section { display: block; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
-.sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: rgba(255,255,255,.62); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid var(--ui-rail-border); border-radius: 11px; background: var(--ui-rail-context); }
+.sidebar-group-context > span, .sidebar-nav-section { display: block; color: var(--ui-rail-section); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
+.sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: var(--ui-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 /* O menu passa a ter contextos (§17): antes era um rótulo só, "OPERAÇÃO",
    sobre treze itens — e Cadastros, Relatórios e Estado das integrações não são
    operação. O espaço entre grupos é maior que entre itens porque é ele que
@@ -2951,15 +2993,15 @@
 .sidebar-nav-group { display: flex; flex-direction: column; gap: 4px; }
 .sidebar-nav-section { margin: 0 10px 5px; }
 .sidebar-workspace { margin-top: auto; padding-bottom: 10px; }
-.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.04); color: #d7e0e8; }
-.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--brand-accent); color: #081a31; font-style: normal; font-size: 9px; font-weight: 800; }
-.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: #71869a; font-size: 9px; }
-.sidebar-workspace > span { margin-left: 8px; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
+.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--ui-rail-border); border-radius: 8px; background: var(--ui-rail-context); color: var(--ui-text); }
+.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--ui-primary); color: #fff; font-style: normal; font-size: 9px; font-weight: 800; }
+.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: var(--ui-text-soft); font-size: 9px; }
+.sidebar-workspace > span { margin-left: 8px; color: var(--ui-rail-section); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
 .sidebar-workspace button { min-height: 58px; align-items: center; }
 .sidebar-workspace button > span { min-width: 0; display: grid; gap: 3px; text-align: left; }
 .sidebar-workspace button > span strong, .sidebar-workspace button > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-workspace button > span strong { color: #fff; font-size: 10px; }
-.sidebar-workspace button > span small { color: rgba(255,255,255,.58); font-size: 8px; }
+.sidebar-workspace button > span strong { color: var(--ui-text); font-size: 10px; }
+.sidebar-workspace button > span small { color: var(--ui-text-soft); font-size: 8px; }
 .sidebar-collapsed .sidebar-group-context, .sidebar-collapsed .sidebar-nav-section { display: none; }
 
 .companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
