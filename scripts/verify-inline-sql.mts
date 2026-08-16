@@ -38,14 +38,56 @@ async function main() {
   const queries = collectQueries(root);
   const failures: Failure[] = [];
   let prepared = 0;
+  let approximated = 0;
   let skipped = 0;
+
+  /**
+   * Substituições para o trecho interpolado.
+   *
+   * A primeira versão disto era teatro: tentava `?`, `true`, `1` e contava como
+   * verificada a consulta em que alguma delas preparasse. Testei introduzindo
+   * uma coluna inexistente no trecho *fixo* de um INSERT em lote — o relatório
+   * continuou dizendo "0 falhas". Nenhuma candidata servia para `VALUES ${...}`,
+   * a consulta caía em "não verificada", e "não verificada" não reprovava. Ou
+   * seja: exatamente o defeito que este projeto vem corrigindo em outras
+   * ferramentas — dizer OK sobre o que não se olhou.
+   *
+   * A versão que vale sabe o formato. Num INSERT a aridade da tupla está na
+   * própria lista de colunas, e é ela que torna a substituição exata o
+   * bastante para o PostgreSQL validar tabela e colunas.
+   */
+  function substituicoes(sql: string) {
+    const insert = /INSERT\s+INTO\s+[\w".]+\s*\(([^)]*)\)\s*(?:\n|\s)*VALUES\s*\$\{\.\.\.\}/iu.exec(sql);
+    if (insert) {
+      const colunas = insert[1].split(",").filter((parte) => parte.trim()).length;
+      const tupla = `(${Array.from({ length: colunas }, () => "?").join(", ")})`;
+      return [tupla, `${tupla}, ${tupla}`];
+    }
+    // `IN (${ids.map(() => "?").join(",")})`, `WHERE ${where.join(" AND ")}`,
+    // e o resto: uma lista curta cobre as formas que aparecem no produto.
+    return ["?", "true", "1", "'x'", "?, ?", "id"];
+  }
 
   await client.query("BEGIN");
   for (const [index, query] of queries.entries()) {
-    // Consulta montada com interpolação não existe como texto fixo: o que o
-    // banco receberia depende de valores de execução. Fica de fora, e o total é
-    // reportado para que ninguém confunda "não verificado" com "verificado".
-    if (query.interpolated) { skipped += 1; continue; }
+    if (query.interpolated) {
+      let ok = false;
+      for (const candidata of substituicoes(query.sql)) {
+        const tentativa = toPostgresParameters(query.sql.replaceAll("${...}", candidata));
+        await client.query(`SAVEPOINT inline_sql_${index}`);
+        try {
+          await client.query(`PREPARE inline_sql_${index} AS ${tentativa}`);
+          await client.query(`RELEASE SAVEPOINT inline_sql_${index}`);
+          ok = true;
+          break;
+        } catch (error) {
+          await client.query(`ROLLBACK TO SAVEPOINT inline_sql_${index}`);
+          if (String((error as { code?: string }).code ?? "") === INDETERMINATE_PARAMETER) { ok = true; break; }
+        }
+      }
+      if (ok) approximated += 1; else skipped += 1;
+      continue;
+    }
     const statement = toPostgresParameters(query.sql);
     // Um SAVEPOINT por consulta. Sem ele, a primeira falha aborta a transação e
     // todas as consultas seguintes reportam `25P02` — o relatório passaria a
@@ -74,7 +116,26 @@ async function main() {
   for (const failure of failures) {
     console.error(`\n${failure.file}:${failure.line}  [${failure.code}] ${failure.message}\n  ${failure.sql}`);
   }
-  console.log(`\nConsultas preparadas: ${prepared} | com interpolação (não verificadas): ${skipped} | falhas: ${failures.length}`);
+  console.log(`\nConsultas preparadas: ${prepared} | interpoladas verificadas por aproximação: ${approximated} | não verificadas: ${skipped} | falhas: ${failures.length}`);
+
+  /**
+   * Teto do que fica sem verificação.
+   *
+   * Sem ele, uma consulta interpolada que quebra apenas *sai* da contagem de
+   * verificadas e entra na de não verificadas — o relatório muda dois números
+   * e continua dizendo "0 falhas". Foi o que aconteceu quando testei este
+   * verificador contra uma coluna inexistente: ele notou e não reprovou.
+   *
+   * Com o teto, quebrar uma consulta que hoje é verificável reprova o build.
+   * Tornar mais uma verificável é livre — e obriga a baixar o número aqui,
+   * senão o teste de folga acusa.
+   */
+  const MAXIMO_NAO_VERIFICADAS = 24;
+  if (skipped > MAXIMO_NAO_VERIFICADAS) {
+    console.error(`\nRegressão de cobertura: ${skipped} consultas sem verificação, o teto é ${MAXIMO_NAO_VERIFICADAS}.`);
+    console.error("Uma consulta que era verificável deixou de ser — provavelmente ela quebrou.");
+    process.exitCode = 1;
+  }
   if (failures.length) process.exitCode = 1;
 }
 
