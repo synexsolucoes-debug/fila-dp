@@ -120,7 +120,6 @@ export function SaasView({ role }: { role: WorkspaceRole }) {
       <div className={styles.commandStatus} data-tone={statusTone(overview.subscription?.status ?? "neutral")}><span><CircleDot aria-hidden="true" /> Assinatura</span><strong>{statusLabels[overview.subscription?.status ?? ""] ?? "Sem assinatura"}</strong><small>{overview.subscription?.plan.name ?? "Plano não definido"}</small></div>
       {overview.permissions.platform && <Link className={styles.platformLink} href="/plataforma"><ShieldCheck aria-hidden="true" /><span><strong>Console global</strong><small>Acesso autorizado entre workspaces</small></span><ArrowRight aria-hidden="true" /></Link>}
     </header>
-
     {error && <ErrorBanner title="A operação não foi concluída" message={error} onDismiss={() => setError("")} />}
 
     <section className={styles.readinessRail} aria-label={`Ativação ${progress}% concluída`}>

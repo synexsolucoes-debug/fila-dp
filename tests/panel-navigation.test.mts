@@ -168,7 +168,7 @@ test("Relatórios e a exportação seguem o recorte de empresa (§34)", async ()
   // consequência pior: o CSV é o único artefato do produto que sai do navegador
   // e vai para a mão de alguém. Baixado logo depois de escolher uma empresa,
   // um arquivo com o grupo inteiro sai daqui parecendo ser daquela empresa.
-  assert.match(source, /<IndicatorsView cards=\{scopedCards\}/u);
+  assert.match(source, /<IndicatorsView canExportWorkspace=\{isAdmin\} cards=\{scopedCards\}/u);
   assert.match(source, /\.\.\.scopedCards\.map\(/u, "a exportação precisa usar o recorte");
   assert.match(source, /vinculato-demandas-\$\{sufixo\}/u, "o nome do arquivo carrega o recorte");
 

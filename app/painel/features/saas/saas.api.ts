@@ -79,7 +79,7 @@ export function normalizeSaasOverview(input: unknown): SaasOverview {
     plans: Array.isArray(row.plans) ? row.plans.map(normalizePlan) : [], subscription: normalizeSubscription(row.subscription), onboarding: normalizeOnboarding(row.onboarding),
     invoices: Array.isArray(row.invoices) ? row.invoices.map(normalizeInvoice) : [],
     usage: { members: number(usage.members), companies: number(usage.companies), integrations: number(usage.integrations), storageMb: number(value(usage, "storageMb", "storage_mb")) },
-    permissions: { manage: bool(permissions.manage), platform: bool(permissions.platform) },
+    permissions: { manage: bool(permissions.manage), exportData: bool(permissions.exportData), platform: bool(permissions.platform) },
   };
 }
 

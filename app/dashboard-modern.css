@@ -3761,3 +3761,10 @@
   .dashboard-task:hover,
   .dashboard-shell button:active:not(:disabled) { transform: none; }
 }
+
+/* Duas exportações lado a lado na tela de relatórios (§50): o CSV das demandas
+   do recorte e o JSON do grupo inteiro. O link precisa parecer botão porque é
+   um download direto — um <button> com fetch guardaria o arquivo na memória do
+   navegador antes de salvar, e o ponto do fluxo no servidor era não fazer isso. */
+.export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.export-actions > a.export-button { text-decoration: none; }

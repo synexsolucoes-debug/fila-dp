@@ -336,6 +336,29 @@ if (password) {
     daFilial ? `${daFilial.length - 1} linha(s) além do cabeçalho` : "download não aconteceu");
 
   await seletor.selectOption("all").catch(() => undefined);
+  await page.waitForTimeout(1200);
+
+  // A exportação completa do grupo (§50) precisa de porta alcançável. A
+  // primeira tentativa colocou o botão na tela de assinatura — que não é
+  // renderizada por lugar nenhum do painel. Um botão numa tela inalcançável é
+  // exatamente a promessa sem porta que a exportação veio resolver.
+  const exportarTudo = page.getByRole("link", { name: /Exportar tudo \(JSON\)/u });
+  record("a exportação completa do grupo tem porta na interface", await exportarTudo.count() > 0);
+  if (await exportarTudo.count()) {
+    const [arquivo] = await Promise.all([
+      page.waitForEvent("download", { timeout: 25000 }),
+      exportarTudo.first().click(),
+    ]);
+    const { readFileSync } = await import("node:fs");
+    const conteudo = JSON.parse(readFileSync(await arquivo.path(), "utf8"));
+    const tabelas = Object.keys(conteudo.tabelas ?? {}).length;
+    record("o arquivo traz o grupo inteiro", tabelas > 50, `${tabelas} tabela(s)`);
+    record("o arquivo declara o que omitiu", (conteudo.omissoes ?? []).length > 0,
+      `${(conteudo.omissoes ?? []).length} coluna(s) com motivo`);
+    const cru = JSON.stringify(conteudo);
+    record("nenhum segredo cifrado no arquivo",
+      !/"[a-z_]*(secret|encrypted|token_hash|lease_token)[a-z_]*":/u.test(cru));
+  }
 }
 
 // 5. Responsividade do site público

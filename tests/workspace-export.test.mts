@@ -92,3 +92,37 @@ test("a página de privacidade descreve o que o produto faz", async () => {
   assert.match(pagina, /O arquivo declara o que não contém/u);
   assert.match(pagina, /conteúdo binário dos anexos/u);
 });
+
+test("a exportação tem porta alcançável, não só rota", async () => {
+  // A página de privacidade passou a dizer que o administrador exporta "a
+  // qualquer momento". Sem botão, seria mais uma promessa sem porta.
+  //
+  // A primeira tentativa colocou o botão em `SaasView` — e essa tela **não é
+  // renderizada por lugar nenhum**: nada importa `SaasView`, e
+  // `/api/saas/overview` só é chamada por ela. Um botão numa tela inalcançável
+  // é o mesmo defeito que a exportação veio resolver, com outra roupa. Ficou
+  // em Relatórios, que está no menu e já é a tela de tirar dado do produto.
+  const painel = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(painel, /href="\/api\/workspace\/export" download/u);
+  assert.match(painel, /\{canExportWorkspace && <a className="export-button"/u);
+  assert.match(painel, /<IndicatorsView canExportWorkspace=\{isAdmin\}/u);
+  // O título do botão repete o limite do arquivo: quem clica sabe o que leva.
+  assert.match(painel, /Segredos cifrados, chaves internas e o conteúdo dos anexos ficam de fora/u);
+
+  // E a verificação de navegador baixa o arquivo de verdade a cada execução.
+  const check = await readFile(new URL("../scripts/browser-check.mjs", import.meta.url), "utf8");
+  assert.match(check, /a exportação completa do grupo tem porta na interface/u);
+  assert.match(check, /nenhum segredo cifrado no arquivo/u);
+});
+
+test("a permissão da tela vem da mesma fonte que decide no servidor", async () => {
+  // `manage: true` fixo dizia que qualquer um que abre a tela pode administrar
+  // a assinatura. A rota exige `saas.read`, que observador tem; administrar
+  // exige `saas.manage`, que ele não tem — a tela oferecia e o servidor
+  // recusava.
+  const rota = await readFile(new URL("../app/api/saas/overview/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /manage: hasCapability\(workspace, "saas\.manage"\)/u);
+  assert.match(rota, /exportData: hasCapability\(workspace, "workspace\.manage"\)/u);
+  const codigo = rota.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/\/\/[^\n]*/gu, "");
+  assert.doesNotMatch(codigo, /manage: true/u, "permissão fixa volta a mentir para a tela");
+});

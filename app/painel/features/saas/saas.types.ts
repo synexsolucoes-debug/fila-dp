@@ -70,5 +70,5 @@ export type SaasOverview = {
   onboarding: Onboarding | null;
   invoices: Invoice[];
   usage: { members: number; companies: number; integrations: number; storageMb: number };
-  permissions: { manage: boolean; platform: boolean };
+  permissions: { manage: boolean; exportData: boolean; platform: boolean };
 };
