@@ -402,15 +402,20 @@
   font-size: 12px;
 }
 
+/* Tira compacta, no lugar de quatro fichas de 104px.
+   No quadro de demandas, título, subtítulo, estas fichas e duas fileiras de
+   filtro consumiam cerca de 470 dos 900 pixels antes do primeiro cartão —
+   metade da tela antes da primeira demanda, na tela onde a operação passa o
+   dia. O número continua legível; o que sai é o ar em volta dele. */
 .dashboard-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .dashboard-stats article {
-  min-height: 104px;
-  padding: 16px 17px;
+  min-height: 74px;
+  padding: 11px 14px;
   border-color: var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface);
@@ -425,7 +430,8 @@
 
 .dashboard-stats strong {
   color: var(--ui-text);
-  font-size: clamp(26px, 1.8vw, 32px);
+  font-size: clamp(21px, 1.4vw, 25px);
+  letter-spacing: -.02em;
 }
 
 .dashboard-stats small {
