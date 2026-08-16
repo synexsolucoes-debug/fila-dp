@@ -137,6 +137,22 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.match(script, /process\.exit\(failures === 0 \? 0 : 1\)/u);
   // As duas larguras: alvo de 24px muda com o layout.
   assert.match(script, /width: 390/u);
+
+  // Piso de cobertura. Este script já falhou do jeito mais perigoso que um
+  // verificador pode falhar: passando. Um seletor de navegação que deixou de
+  // casar tirou 32 telas da varredura e a conclusão continuou "OK: 0
+  // violações" — 0 violações em nada. Sem o piso, a próxima mudança de menu
+  // repete o silêncio.
+  assert.match(script, /const MINIMO_DE_TELAS = \d+;/u);
+  assert.match(script, /if \(screensAudited < MINIMO_DE_TELAS\)/u);
+  assert.match(script, /COBERTURA INSUFICIENTE/u);
+
+  // E a varredura precisa alcançar o menu mesmo com os itens agrupados: o
+  // seletor de filho direto era exatamente o que quebrou.
+  assert.match(script, /nav\[aria-label="Navegação do painel"\] button/u);
+  assert.doesNotMatch(script, /Navegação do painel"\] > button/u);
+  // Console sem áreas visíveis passou a ser falha, não aviso.
+  assert.match(script, /nenhuma área visível; a varredura não rodou/u);
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts["a11y-check"], "node scripts/a11y-check.mjs");
 });

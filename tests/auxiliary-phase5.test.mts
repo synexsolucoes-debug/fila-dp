@@ -80,7 +80,10 @@ test("phase 5 UI is modular, assigned, privacy-aware and keyboard accessible", a
     readFile(new URL("../app/painel/features/auxiliary/AuxiliaryDialogs.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(workspace, /<AuxiliaryModulesView role=\{snapshot\.workspace\.role\}/);
-  assert.match(workspace, /snapshot\.workspace\.role !== "guest"/);
+  // Convidado não vê módulos auxiliares. A regra saiu do JSX e virou dado no
+  // catálogo de telas — era a mesma comparação repetida em sete botões.
+  assert.match(workspace, /module: "auxiliary", hiddenFor: \["guest"\]/u);
+  assert.match(workspace, /return !\(role && entry\.hiddenFor\?\.includes\(role\)\);/u);
   assert.match(view, /role === "observer" \? \["benefits", "contractors"\]/);
   assert.match(view, /canDecide && item\.canDecide/);
   assert.match(view, /SEM DADOS INDIVIDUAIS/);

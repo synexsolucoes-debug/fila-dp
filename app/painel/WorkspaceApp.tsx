@@ -16,6 +16,7 @@ import {
   ChevronDown,
   CircleAlert,
   CircleHelp,
+  ClipboardCheck,
   Clock3,
   Download,
   Inbox,
@@ -44,6 +45,7 @@ import {
   Users,
   WalletCards,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
@@ -123,30 +125,124 @@ const processColors: Record<string, string> = {
   "OUTROS": "gray",
 };
 
-const viewContent: Record<View, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "VISÃO GERAL", title: "Visão geral", description: "Acompanhe o que exige ação e mantenha a operação sob controle." },
-  board: { eyebrow: "DEMANDAS", title: "Quadro de demandas", description: "Acompanhe prioridades, responsáveis e próximos passos." },
-  inbox: { eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada", description: "Transforme solicitações recebidas em demandas rastreáveis." },
-  planner: { eyebrow: "AGENDA DO ANALISTA", title: "Meu planner", description: "Organize sua execução a partir dos prazos da operação." },
-  processes: { eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento", description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides." },
-  auxiliary: { eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares", description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ." },
-  psychologistPayments: { eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos", description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro." },
-  contractorPayments: { eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ", description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado." },
-  timeTracking: { eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto", description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada." },
-  integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Estado das integrações", description: "Acompanhe conexões e últimas execuções deste workspace. A administração fica na console global." },
-  registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
-  payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
-  indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
+/**
+ * Catálogo das telas do painel (§17, §18).
+ *
+ * Era três listas paralelas — cabeçalho, título curto para o assistente e
+ * treze botões escritos à mão no menu — que ninguém obrigava a concordar.
+ * Acrescentar uma tela significava lembrar de quatro lugares, e o quarto era o
+ * pior: o botão de ação primária da barra superior aparecia por *negação*
+ * (`view !== "registrations" && view !== "auxiliary" && …`), então uma tela
+ * nova nascia com "Nova demanda" no topo até alguém notar.
+ *
+ * `section` é o que a §17 pede: o menu tinha um rótulo só, "OPERAÇÃO", sobre
+ * treze itens — e Cadastros, Relatórios e Estado das integrações não são
+ * operação. Rótulo que não descreve o que está embaixo é pior que nenhum.
+ */
+type NavSection = "operacao" | "pessoas" | "financeiro" | "dados";
+
+const navSections: Array<{ id: NavSection; label: string }> = [
+  { id: "operacao", label: "OPERAÇÃO" },
+  { id: "pessoas", label: "PESSOAS E CADASTROS" },
+  { id: "financeiro", label: "FINANCEIRO" },
+  { id: "dados", label: "DADOS E ANÁLISE" },
+];
+
+type ViewEntry = {
+  /** Título curto: menu lateral e contexto do assistente. */
+  label: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  section: NavSection;
+  /** Rota do catálogo de módulos. Ausente = sempre disponível. */
+  module?: string;
+  /** Papéis que não veem a tela. A regra ficava repetida em sete botões. */
+  hiddenFor?: WorkspaceRole[];
+  /** Ação primária da barra superior. Ausente = a barra não oferece nenhuma:
+   *  a tela tem os próprios comandos e um botão genérico ali criaria dois
+   *  caminhos para a mesma coisa, ou um caminho para coisa nenhuma. */
+  primaryAction?: { label: string; kind: "card" | "inbox" };
 };
 
-/** Nome da tela atual, para o assistente saber onde a pessoa está. */
-const viewTitles: Record<string, string> = {
-  overview: "Visão geral", board: "Demandas", inbox: "Inbox", planner: "Planner",
-  processes: "Operação DP", auxiliary: "Módulos auxiliares", psychologistPayments: "Pagamento de Psicólogos",
-  contractorPayments: "Pagamentos PJ", timeTracking: "Ponto", integrations: "Integrações",
-  registrations: "Cadastros",
-  payroll: "Folha", indicators: "Relatórios",
+const viewCatalog: Record<View, ViewEntry> = {
+  overview: {
+    label: "Visão geral", icon: LayoutDashboard, section: "operacao",
+    eyebrow: "VISÃO GERAL", title: "Visão geral",
+    description: "Acompanhe o que exige ação e mantenha a operação sob controle.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  board: {
+    label: "Demandas", icon: ListChecks, section: "operacao",
+    eyebrow: "DEMANDAS", title: "Quadro de demandas",
+    description: "Acompanhe prioridades, responsáveis e próximos passos.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  inbox: {
+    label: "Inbox", icon: Inbox, section: "operacao", module: "inbox",
+    eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada",
+    description: "Transforme solicitações recebidas em demandas rastreáveis.",
+    primaryAction: { label: "Nova solicitação", kind: "inbox" },
+  },
+  planner: {
+    label: "Planner", icon: CalendarDays, section: "operacao", module: "planner",
+    eyebrow: "AGENDA DO ANALISTA", title: "Meu planner",
+    description: "Organize sua execução a partir dos prazos da operação.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  processes: {
+    label: "Operação DP", icon: ClipboardCheck, section: "operacao", module: "processes",
+    eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento",
+    description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  auxiliary: {
+    label: "Módulos auxiliares", icon: Blocks, section: "operacao", module: "auxiliary", hiddenFor: ["guest"],
+    eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares",
+    description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ.",
+  },
+  registrations: {
+    label: "Cadastros", icon: Users, section: "pessoas", module: "registrations", hiddenFor: ["guest"],
+    eyebrow: "BASE OPERACIONAL", title: "Cadastros",
+    description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar.",
+  },
+  timeTracking: {
+    label: "Ponto", icon: Timer, section: "pessoas", module: "timeTracking", hiddenFor: ["guest"],
+    eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto",
+    description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada.",
+  },
+  payroll: {
+    label: "Folha", icon: WalletCards, section: "financeiro", module: "payroll",
+    eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento",
+    description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente.",
+  },
+  psychologistPayments: {
+    label: "Pagamento de Psicólogos", icon: Stethoscope, section: "financeiro",
+    module: "psychologistPayments", hiddenFor: ["guest", "observer"],
+    eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos",
+    description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro.",
+  },
+  contractorPayments: {
+    label: "Pagamentos PJ", icon: Receipt, section: "financeiro", module: "contractorPayments", hiddenFor: ["guest"],
+    eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ",
+    description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado.",
+  },
+  indicators: {
+    label: "Relatórios", icon: BarChart3, section: "dados", module: "indicators",
+    eyebrow: "RELATÓRIOS", title: "Relatórios da operação",
+    description: "Monitore SLAs, volume, produtividade e regras ativas do workspace.",
+  },
+  integrations: {
+    label: "Estado das integrações", icon: Cable, section: "dados", module: "integrations", hiddenFor: ["guest"],
+    eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Estado das integrações",
+    description: "Acompanhe conexões e últimas execuções deste workspace. A administração fica na console global.",
+  },
 };
+
+/** Ordem do menu. É a ordem de declaração do catálogo — mantê-las separadas
+ *  criaria a quinta lista para desalinhar. */
+const navOrder = Object.keys(viewCatalog) as View[];
 
 /** Estados do ciclo de vida do workspace, para o seletor dizer por que um grupo
     não pode ser aberto em vez de apenas desabilitar o botão. */
@@ -423,6 +519,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [newBoardDescription, setNewBoardDescription] = useState("");
   const [theme, setTheme] = useState<Theme>("light");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [assistantSignal, setAssistantSignal] = useState(0);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("syncing");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const sidebarPreferenceLoaded = useRef(false);
@@ -635,6 +732,20 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   );
   const hasModule = useCallback((route: string) => enabledModules.size === 0 || enabledModules.has(route), [enabledModules]);
   const currentMemberName = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.name ?? user.displayName;
+
+  // Quais telas esta pessoa vê, uma vez só. Antes a mesma pergunta estava
+  // escrita em treze botões — `hasModule("x") && role !== "guest" &&` — e as
+  // sete cópias da regra de papel eram sete chances de divergirem.
+  const role = snapshot?.workspace.role;
+  const visibleViews = useMemo(() => navOrder.filter((id) => {
+    const entry = viewCatalog[id];
+    if (entry.module && !hasModule(entry.module)) return false;
+    return !(role && entry.hiddenFor?.includes(role));
+  }), [hasModule, role]);
+
+  const navBadges = useMemo<Partial<Record<View, number>>>(() => ({
+    inbox: snapshot?.inbox.filter((item) => item.status === "new").length || undefined,
+  }), [snapshot]);
 
   const stats = useMemo(() => {
     const active = activeCards.filter((card) => card.slaStatus !== "completed");
@@ -1124,7 +1235,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     );
   }
 
-  const header = viewContent[view];
+  const header = viewCatalog[view];
+  const primaryAction = header.primaryAction;
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
   const principalCompany = snapshot.companies.find((company) => company.isPrincipal) ?? null;
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
@@ -1144,20 +1256,25 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <small>{principalCompany ? `Principal: ${principalCompany.tradeName || principalCompany.legalName}` : "Defina a empresa principal"}</small>
         </div>
         <nav aria-label="Navegação do painel">
-          <span className="sidebar-nav-section">OPERAÇÃO</span>
-          <button title="Visão geral" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span aria-hidden="true"><LayoutDashboard /></span> Visão geral</button>
-          <button title="Demandas" className={view === "board" ? "active" : ""} onClick={() => setView("board")}><span aria-hidden="true"><ListChecks /></span> Demandas</button>
-          {hasModule("inbox") && <button title="Inbox" className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true"><Inbox /></span> Inbox <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>}
-          {hasModule("planner") && <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>}
-          {hasModule("processes") && <button title="Operação DP" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Operação DP</button>}
-          {hasModule("auxiliary") && snapshot.workspace.role !== "guest" && <button title="Módulos auxiliares" className={view === "auxiliary" ? "active" : ""} onClick={() => setView("auxiliary")}><span aria-hidden="true"><Blocks /></span> Módulos auxiliares</button>}
-          {hasModule("psychologistPayments") && snapshot.workspace.role !== "guest" && snapshot.workspace.role !== "observer" && <button title="Pagamento de Psicólogos" className={view === "psychologistPayments" ? "active" : ""} onClick={() => setView("psychologistPayments")}><span aria-hidden="true"><Stethoscope /></span> Pagamento de Psicólogos</button>}
-          {hasModule("contractorPayments") && snapshot.workspace.role !== "guest" && <button title="Pagamentos PJ" className={view === "contractorPayments" ? "active" : ""} onClick={() => setView("contractorPayments")}><span aria-hidden="true"><Receipt /></span> Pagamentos PJ</button>}
-          {hasModule("timeTracking") && snapshot.workspace.role !== "guest" && <button title="Ponto" className={view === "timeTracking" ? "active" : ""} onClick={() => setView("timeTracking")}><span aria-hidden="true"><Timer /></span> Ponto</button>}
-          {hasModule("integrations") && snapshot.workspace.role !== "guest" && <button title="Estado das integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Estado das integrações</button>}
-          {hasModule("registrations") && snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
-          {hasModule("payroll") && <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>}
-          {hasModule("indicators") && <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>}
+          {/* Seção sem item visível não é renderizada: um rótulo sozinho diz
+              que existe algo ali e não há. */}
+          {navSections.map((section) => {
+            const items = visibleViews.filter((id) => viewCatalog[id].section === section.id);
+            if (!items.length) return null;
+            return <div key={section.id} className="sidebar-nav-group">
+              <span className="sidebar-nav-section">{section.label}</span>
+              {items.map((id) => {
+                const entry = viewCatalog[id];
+                const Icon = entry.icon;
+                const badge = navBadges[id];
+                return <button key={id} type="button" title={entry.label} className={view === id ? "active" : ""}
+                  onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}>
+                  <span aria-hidden="true"><Icon /></span> {entry.label}
+                  {badge ? <b>{badge}</b> : null}
+                </button>;
+              })}
+            </div>;
+          })}
         </nav>
         {snapshot.availableWorkspaces.length > 1 && (
           <div className="sidebar-workspace sidebar-workspace-switcher">
@@ -1217,10 +1334,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <label className="header-company-select"><Building2 aria-hidden="true" /><select aria-label="Selecionar empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">{companyScopeLabel}</option>{snapshot.companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</option>)}</select></label>
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
-            <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
+            <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
             <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
-            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "psychologistPayments" && view !== "contractorPayments" && view !== "timeTracking" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
+            {/* A ação primária vem do catálogo, não de uma lista de exceções.
+                A versão anterior aparecia por negação — seis `view !== "…"` —,
+                então uma tela nova nascia com "Nova demanda" no topo mesmo sem
+                ter demanda nenhuma para criar. */}
+            {canEdit && primaryAction && <button className="new-demand"
+              onClick={primaryAction.kind === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>
+              <Plus aria-hidden="true" /><span>{primaryAction.label}</span>
+            </button>}
           </div>
         </header>
 
@@ -1530,7 +1654,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
       {/* Recolhido por padrão: um copiloto que ocupa espaço sem ter sido pedido
           atrapalha justamente quem já sabe o que fazer. */}
-      <AssistantPanel screen={viewTitles[view] ?? "Painel"} />
+      <AssistantPanel screen={viewCatalog[view].label} openSignal={assistantSignal} />
     </main>
   );
 }

@@ -125,8 +125,12 @@ test("o menu do painel respeita o plano, e o servidor continua sendo a proteçã
     readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8"),
   ]);
   assert.match(workspaceApp, /const hasModule = useCallback/);
+  // O filtro deixou de estar escrito treze vezes no JSX e passou a ser uma
+  // regra só sobre o catálogo. O que este teste garante continua sendo o
+  // mesmo: cada tela paga declara a rota que a libera.
+  assert.match(workspaceApp, /if \(entry\.module && !hasModule\(entry\.module\)\) return false;/u);
   for (const route of ["timeTracking", "contractorPayments", "integrations", "registrations", "payroll", "processes"]) {
-    assert.ok(workspaceApp.includes(`hasModule("${route}")`), `menu não filtra ${route}`);
+    assert.ok(workspaceApp.includes(`module: "${route}"`), `menu não filtra ${route}`);
   }
   assert.match(database, /export async function getWorkspaceModules/);
   assert.match(database, /modules: resolvedModules/);

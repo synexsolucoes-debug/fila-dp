@@ -2928,9 +2928,13 @@
 .sidebar-group-context > span, .sidebar-nav-section { display: block; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
 .sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: rgba(255,255,255,.62); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-sidebar nav { margin-top: 20px; gap: 4px; }
-.sidebar-nav-section { margin: 10px 10px 5px; }
-.sidebar-nav-section.management { margin-top: 18px; }
+/* O menu passa a ter contextos (§17): antes era um rótulo só, "OPERAÇÃO",
+   sobre treze itens — e Cadastros, Relatórios e Estado das integrações não são
+   operação. O espaço entre grupos é maior que entre itens porque é ele que
+   torna o agrupamento visível; sem isso o rótulo é decoração. */
+.dashboard-sidebar nav { margin-top: 20px; gap: 15px; }
+.sidebar-nav-group { display: flex; flex-direction: column; gap: 4px; }
+.sidebar-nav-section { margin: 0 10px 5px; }
 .sidebar-workspace { margin-top: auto; padding-bottom: 10px; }
 .sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.04); color: #d7e0e8; }
 .sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--brand-accent); color: #081a31; font-style: normal; font-size: 9px; font-weight: 800; }
@@ -2973,6 +2977,10 @@
 @media (max-width: 780px) {
   .sidebar-group-context { display: none; }
   .sidebar-nav-section { display: none; }
+  /* Nesta largura o menu vira barra inferior em `grid`. `display: contents`
+     devolve os botões à grade: sem isso a grade posicionaria os quatro grupos,
+     e a barra mostraria quatro colunas com os itens empilhados dentro. */
+  .sidebar-nav-group { display: contents; }
   .companies-list article { grid-template-columns: 24px minmax(0, 1fr) auto; }
   .companies-list article > i { width: 21px; height: 21px; }
   .invite-company-scope { min-width: 100%; }
