@@ -2786,7 +2786,16 @@
 .recent-activity-list { padding: 5px 16px 13px; }
 .recent-activity-list article { min-height: 61px; padding: 11px 0; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 9px; align-items: start; border-bottom: 1px solid var(--ui-border); }
 .recent-activity-list article:last-child { border-bottom: 0; }
-.recent-activity-list article > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 8px; font-weight: 850; }
+/* Iniciais do autor sobre o círculo suave. `--ui-primary` é o tom de
+   preenchimento: no tema escuro ele rende 4.3:1 aqui, medido — abaixo do
+   mínimo 4.5. `--ui-accent-text` existe exatamente para este papel e rende
+   7.52:1 sobre a mesma superfície.
+
+   Isto só apareceu quando o ensaio de ponta a ponta passou a criar demandas: a
+   lista de atividades recentes nunca tinha sido pintada com conteúdo, então a
+   conferência nunca a mediu. É o mesmo padrão dos rótulos de processo, que
+   ficaram em 4.37:1 enquanto a semente era inteiramente vazia. */
+.recent-activity-list article > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); font-size: 8px; font-weight: 850; }
 .recent-activity-list strong { display: block; color: var(--ui-text); font-size: 10px; }
 .recent-activity-list strong small { color: var(--ui-text-soft); font-size: 9px; font-weight: 500; }
 .recent-activity-list p { margin: 4px 0 0; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }

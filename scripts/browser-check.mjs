@@ -161,13 +161,19 @@ if (password && await emailField.count()) {
   // A tabela recarrega por fetch depois da criação. Contar assim que o aviso
   // aparece mede o estado anterior — é a mesma armadilha que esta verificação
   // já evitava na primeira contagem e esquecia aqui.
-  await page.waitForFunction(
-    (anterior) => document.querySelectorAll("table tbody tr").length > anterior,
-    workspaceRows,
-    { timeout: 20000 },
-  ).catch(() => undefined);
+  // Procura o workspace **pelo nome**, não pelo crescimento da contagem.
+  //
+  // "A tabela tem uma linha a mais" para de valer quando a lista pagina: num
+  // banco com trinta clientes o novo entra na segunda página e a contagem da
+  // primeira não muda. A conferência acusava falha de criação onde havia
+  // criação — e o oposto também seria possível, já que outra linha qualquer
+  // faria o número subir. O nome é o que prova que este workspace foi criado.
+  const criado = page.getByText(`Cliente Navegador ${stamp}`, { exact: false });
+  await criado.first().waitFor({ timeout: 20000 }).catch(() => undefined);
+  const encontrado = await criado.count();
   const afterRows = await page.locator("table tbody tr").count();
-  record("o workspace criado aparece na tabela", afterRows > workspaceRows, `${workspaceRows} → ${afterRows}`);
+  record("o workspace criado aparece na tabela", encontrado > 0,
+    `${encontrado} ocorrência(s) de "Cliente Navegador ${stamp}" em ${afterRows} linha(s)`);
 
   // Criar um cliente abre a gaveta de detalhe dele, que é modal e cobre a
   // navegação — comportamento correto. Sem fechá-la, o clique seguinte bate no
