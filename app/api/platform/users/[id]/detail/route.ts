@@ -1,4 +1,4 @@
-import { getD1, getPlatformScopedD1 } from "@/db";
+import { getD1 } from "@/db";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { ApiError } from "@/lib/api-errors";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
@@ -32,17 +32,15 @@ export async function GET(_request: Request, { params }: Params) {
       if (!user) throw ApiError.notFound("Usuário não encontrado.", "USER_NOT_FOUND");
 
       const [memberships, sessions, audit] = await Promise.all([
-        (async () => {
-          const workspaces = await d1.prepare("SELECT id, name, status, owner_user_id FROM fdp_workspaces ORDER BY name").all<Record<string, unknown>>();
-          const rows = await Promise.all(workspaces.results.map(async (workspace) => {
-            const workspaceId = String(workspace.id);
-            const scoped = getPlatformScopedD1({ workspaceId, userId: platform.userId });
-            const membership = await scoped.prepare("SELECT role, joined_at FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = ?")
-              .bind(workspaceId, id).first<Record<string, unknown>>();
-            return membership ? { ...membership, workspace_id: workspaceId, name: workspace.name, workspace_status: workspace.status, is_owner: String(workspace.owner_user_id) === id } : null;
-          }));
-          return { results: rows.filter(Boolean) as Record<string, unknown>[] };
-        })(),
+        // Uma consulta, não uma por cliente. `fdp_workspace_members` é global
+        // por desenho — sem RLS a reger a leitura, abrir contexto de tenant por
+        // workspace só multiplicava idas ao banco pelo número de clientes.
+        d1.prepare(`SELECT wm.role, wm.joined_at, wm.workspace_id, w.name, w.status AS workspace_status,
+            (w.owner_user_id = wm.user_id) AS is_owner
+          FROM fdp_workspace_members wm
+          JOIN fdp_workspaces w ON w.id = wm.workspace_id
+          WHERE wm.user_id = ?
+          ORDER BY w.name`).bind(id).all<Record<string, unknown>>(),
         d1.prepare(`SELECT id, device_label, created_at, last_seen_at, expires_at
           FROM fdp_auth_sessions
           WHERE user_id = ? AND revoked_at IS NULL AND expires_at > now()

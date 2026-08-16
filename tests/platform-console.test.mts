@@ -35,9 +35,19 @@ test("agregações tenant-aware usam contexto RLS explícito", async () => {
   const paths = ["integrations", "operations", "security", "health"];
   const routes = await Promise.all(paths.map((path) => source(`app/api/platform/${path}/route.ts`)));
   for (const [index, route] of routes.entries()) assert.match(route, /getPlatformScopedD1/u, `${paths[index]} não carrega o tenant na conexão`);
-  const [workspaceDetail, userDetail] = await Promise.all([source("app/api/platform/workspaces/[id]/detail/route.ts"), source("app/api/platform/users/[id]/detail/route.ts")]);
+  // O detalhe do workspace lê `fdp_companies`, que tem RLS por workspace: sem
+  // o tenant na conexão a consulta volta vazia.
+  const workspaceDetail = await source("app/api/platform/workspaces/[id]/detail/route.ts");
   assert.match(workspaceDetail, /getPlatformScopedD1/u);
-  assert.match(userDetail, /getPlatformScopedD1/u);
+
+  // O detalhe do usuário deixou de precisar. Ele lê `fdp_workspace_members` e
+  // `fdp_workspaces` (globais por desenho — o seletor de grupo depende disso),
+  // `fdp_auth_sessions` (sem RLS) e `fdp_platform_audit_events`, cuja política
+  // é por `app.platform_admin` e não por workspace. Abrir contexto de tenant
+  // por cliente ali era uma ida ao banco por cliente sem nada a proteger.
+  const userDetail = await source("app/api/platform/users/[id]/detail/route.ts");
+  assert.doesNotMatch(userDetail, /getPlatformScopedD1/u);
+  assert.match(userDetail, /FROM fdp_platform_audit_events/u);
 });
 
 test("listas globais usam cursor estável e índices correspondentes", async () => {

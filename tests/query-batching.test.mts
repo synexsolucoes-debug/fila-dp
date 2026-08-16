@@ -64,3 +64,34 @@ test("o verificador de SQL confere as consultas montadas com interpolação", as
   assert.match(script, /Regressão de cobertura/u);
   assert.match(script, /if \(skipped > MAXIMO_NAO_VERIFICADAS\)/u);
 });
+
+test("o console da plataforma não pergunta a mesma coisa a cada cliente (§54)", async () => {
+  // `/api/platform/users` abria contexto de tenant por workspace e fazia a
+  // mesma pergunta a cada um: numa plataforma com duzentos clientes, duzentas
+  // idas ao banco para montar uma página de cinquenta usuários. Medido com 17
+  // workspaces no banco local: 19ms → 11ms na listagem, 15ms → 9ms no detalhe.
+  // O ganho cresce com a base de clientes, porque o custo era O(clientes).
+  //
+  // O contexto por tenant existia por causa da RLS, e `fdp_workspace_members`
+  // é uma das quatro tabelas globais por desenho — sem RLS a reger a leitura,
+  // o laço não protegia nada.
+  const lista = await readFile(new URL("../app/api/platform/users/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(lista, /workspaces\.results\.map\(async \(workspace\)/u);
+  assert.match(lista, /FROM fdp_workspace_members wm\s*\n\s*JOIN fdp_workspaces w ON w\.id = wm\.workspace_id/u);
+
+  const detalhe = await readFile(new URL("../app/api/platform/users/[id]/detail/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(detalhe, /getPlatformScopedD1/u);
+  assert.match(detalhe, /\(w\.owner_user_id = wm\.user_id\) AS is_owner/u);
+});
+
+test("as tabelas com RLS continuam sendo lidas por tenant, uma de cada vez", async () => {
+  // Aqui o laço é estrutural e fica: `fdp_audit_events` e `fdp_integrations`
+  // têm RLS por workspace e a política não consulta `app.platform_admin`.
+  // Trocar isso significaria abrir uma exceção de plataforma em 87 políticas —
+  // mudança do modelo de segurança, não otimização.
+  for (const rota of ["audit", "integrations"]) {
+    const fonte = await readFile(new URL(`../app/api/platform/${rota}/route.ts`, import.meta.url), "utf8");
+    assert.match(fonte, /getPlatformScopedD1/u,
+      `${rota} lê tabela com RLS: o contexto por tenant é obrigatório`);
+  }
+});
