@@ -172,6 +172,7 @@ jobs:
           npm run a11y-check
           # A verificação de navegador existia e a CI não a rodava — o mesmo
           # padrão que já escondeu defeito neste repositório mais de uma vez.
-          # São 47 conferências contra o produto de pé, incluindo as que provam
-          # que o seletor de empresa recorta de verdade a visão geral.
+          # São 64 conferências contra o produto de pé, incluindo a criação de
+          # demanda pela interface e a prova de que o seletor de empresa
+          # recorta de verdade a visão geral.
           npm run browser-check
