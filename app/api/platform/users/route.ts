@@ -43,15 +43,24 @@ export async function GET(request: Request) {
       const userIds = page.map((row) => String(row.id));
       const memberships = new Map<string, string[]>();
       if (userIds.length) {
-        const workspaces = await d1.prepare("SELECT id, name FROM fdp_workspaces ORDER BY name").all<{ id: string; name: string }>();
+        // Uma consulta, não uma por cliente.
+        //
+        // O laço anterior abria contexto de tenant por workspace e perguntava a
+        // mesma coisa a cada um: numa plataforma com duzentos clientes, eram
+        // duzentas idas ao banco para montar uma página de cinquenta usuários.
+        //
+        // O contexto por tenant existia por causa da RLS — mas
+        // `fdp_workspace_members` é uma das quatro tabelas globais por desenho:
+        // ela precisa ser legível entre workspaces para o seletor de grupo
+        // funcionar antes de existir contexto. Sem RLS a reger a leitura, o
+        // laço não protegia nada; só custava.
         const placeholders = userIds.map(() => "?").join(", ");
-        const scopedRows = await Promise.all(workspaces.results.map(async (workspace) => {
-          const scoped = getPlatformScopedD1({ workspaceId: workspace.id, userId: platform.userId });
-          const result = await scoped.prepare(`SELECT user_id, role FROM fdp_workspace_members
-            WHERE workspace_id = ? AND user_id IN (${placeholders})`).bind(workspace.id, ...userIds).all<{ user_id: string; role: string }>();
-          return result.results.map((row) => ({ ...row, workspaceName: workspace.name }));
-        }));
-        for (const membership of scopedRows.flat()) {
+        const result = await d1.prepare(`SELECT wm.user_id, wm.role, w.name AS workspace_name
+          FROM fdp_workspace_members wm
+          JOIN fdp_workspaces w ON w.id = wm.workspace_id
+          WHERE wm.user_id IN (${placeholders})
+          ORDER BY w.name`).bind(...userIds).all<{ user_id: string; role: string; workspace_name: string }>();
+        for (const membership of result.results.map((row) => ({ ...row, workspaceName: row.workspace_name }))) {
           const current = memberships.get(membership.user_id) ?? [];
           current.push(`${membership.workspaceName} (${membership.role})`);
           memberships.set(membership.user_id, current);

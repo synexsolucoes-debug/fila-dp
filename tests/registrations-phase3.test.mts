@@ -79,5 +79,6 @@ test("registration UI uses server search, async refresh and role-aware navigatio
   assert.match(view, /onRefresh=\{loadCompanies\}/);
   assert.doesNotMatch(view, /window\.location\.reload/);
   assert.match(view, /item\.isPrincipal/);
-  assert.match(workspace, /workspace\.role !== "guest"/);
+  // Convidado não vê Cadastros. A regra virou dado no catálogo de telas.
+  assert.match(workspace, /module: "registrations", hiddenFor: \["guest"\]/u);
 });

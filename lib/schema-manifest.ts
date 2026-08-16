@@ -46,6 +46,11 @@ export const expectedMigrations = [
   "0036_platform_console_indexes.sql",
   "0037_integration_events_and_workspace_lifecycle.sql",
   "0038_sankhya_browser_connector.sql",
+  "0039_attachment_storage_quota_index.sql",
+  "0040_auth_events.sql",
+  "0041_obligation_protocol_evidence.sql",
+  "0042_member_company_access_rls.sql",
+  "0043_lead_privacy_interest.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

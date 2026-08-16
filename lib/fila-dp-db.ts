@@ -4,7 +4,7 @@ import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 import { getTenantContext, setTenantContext } from "./tenant-context";
 import { hasCapability } from "./authorization";
-import { resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
+import { deniedWriteCapabilities, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
@@ -268,6 +268,10 @@ export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, works
     if (granted) extraCapabilities.add(capability);
     else deniedCapabilities.add(capability);
   }
+  // Negar um módulo negava só a capacidade de leitura dele — a que decide se o
+  // módulo aparece. As de escrita continuavam valendo pelo papel, e quem tinha
+  // Demandas, Inbox e Planner negados criava demandas pela API sem ver o quadro.
+  for (const capability of deniedWriteCapabilities(byModule)) deniedCapabilities.add(capability);
   return { byModule, extraCapabilities, deniedCapabilities };
 }
 
@@ -280,19 +284,28 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
     String((workspace as Record<string, unknown>).status ?? "active"),
     (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants);
-  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
+  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult, cyclesResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
     d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
-    d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? ORDER BY ci.position").bind(board.id).all(),
+    // `c.archived = 0` nas coleções por cartão.
+    //
+    // O arquivo é a maior parte de um quadro com um ano de operação, e nada
+    // dele é exibido: a gaveta de arquivados mostra processo, título, empresa e
+    // data, e só. Medido com 2.400 demandas (500 ativas, 1.900 arquivadas), o
+    // que vinha das arquivadas eram 3,49 MB dos 4,01 MB da resposta — 87% do
+    // payload, com 7.600 itens de checklist e 3.800 comentários que ninguém
+    // abre. O cartão arquivado continua vindo inteiro no que a gaveta usa; o
+    // que deixou de vir é o conteúdo que só o detalhe da demanda mostraria.
+    d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY ci.position").bind(board.id).all(),
     d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM fdp_workspace_inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
     d1.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM fdp_automation_rules WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare(`SELECT cc.id, cc.card_id, cc.body, cc.created_at, u.name AS author_name, u.email AS author_email
       FROM fdp_card_comments cc
       JOIN fdp_users u ON u.id = cc.author_user_id
       JOIN fdp_cards c ON c.id = cc.card_id
-      WHERE c.board_id = ?
+      WHERE c.board_id = ? AND c.archived = 0
       ORDER BY cc.created_at`).bind(board.id).all(),
     d1.prepare(`SELECT ae.id, ae.card_id, ae.actor_email, ae.event_type, ae.payload_json, ae.created_at,
         COALESCE(u.name, ae.actor_email) AS actor_name
@@ -314,13 +327,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       WHERE l.workspace_id = ? ORDER BY l.position`).bind(workspace.id).all(),
     d1.prepare(`SELECT ca.card_id, u.id AS user_id, u.name, u.email
       FROM fdp_card_assignees ca JOIN fdp_users u ON u.id = ca.user_id
-      JOIN fdp_cards c ON c.id = ca.card_id WHERE c.board_id = ? ORDER BY u.name`).bind(board.id).all(),
+      JOIN fdp_cards c ON c.id = ca.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY u.name`).bind(board.id).all(),
     d1.prepare("SELECT id, name, field_key, field_type, options_json, required, position FROM fdp_custom_fields WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare(`SELECT cfv.card_id, cf.field_key, cfv.value_text
       FROM fdp_custom_field_values cfv JOIN fdp_custom_fields cf ON cf.id = cfv.field_id
       WHERE cf.workspace_id = ?`).bind(workspace.id).all(),
     d1.prepare(`SELECT a.id, a.card_id, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at
-      FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? ORDER BY a.created_at DESC`).bind(board.id).all(),
+      FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY a.created_at DESC`).bind(board.id).all(),
     d1.prepare("SELECT id, name, process_type, description, checklist_json, default_sla_days, active, position FROM fdp_process_templates WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare("SELECT business_days_json, day_start, day_end, realtime_seconds FROM fdp_workspace_settings WHERE workspace_id = ?").bind(workspace.id).first<Record<string, unknown>>(),
     d1.prepare("SELECT holiday_date, name FROM fdp_business_holidays WHERE workspace_id = ? ORDER BY holiday_date").bind(workspace.id).all(),
@@ -331,6 +344,16 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT id, parent_company_id, is_principal, legal_name, trade_name, tax_id, external_code, email, phone, status FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name").bind(workspace.id).all(),
     d1.prepare("SELECT id, company_id, period, headcount, headcount_start, headcount_end, leaves_count, admissions, terminations, voluntary_terminations, involuntary_terminations, base_salary, variable_pay, overtime_pay, additional_pay, vacation_pay, thirteenth_pay, termination_pay, gross_payroll, employee_inss, employee_irrf, employee_other_deductions, net_pay, employer_inss, rat_contribution, third_party_contributions, fgts, fgts_penalty, employer_charges, benefits_cost, provisions_cost, other_costs, payroll_cost, source, external_id, notes FROM fdp_hr_metrics WHERE workspace_id = ? ORDER BY period DESC, company_id").bind(workspace.id).all(),
     d1.prepare("SELECT p.card_id, p.reason FROM fdp_card_sla_pauses p JOIN fdp_cards c ON c.id = p.card_id WHERE p.workspace_id = ? AND p.ended_at IS NULL AND c.board_id = ?").bind(workspace.id, board.id).all(),
+    /* Ciclos da competência mais recente do grupo.
+       O fechamento é o fato mais estruturante do DP — a operação é cíclica e
+       fecha todo mês — e a interface não dizia isso em lugar nenhum. Limitado
+       à competência corrente: o histórico inteiro não cabe no payload e não é
+       o que a Visão geral responde. */
+    d1.prepare(`SELECT id, company_id, competence, status, closed_at
+      FROM fdp_payroll_cycles
+      WHERE workspace_id = ?
+        AND competence = (SELECT MAX(competence) FROM fdp_payroll_cycles WHERE workspace_id = ?)
+      ORDER BY company_id`).bind(workspace.id, workspace.id).all(),
   ]);
 
   const checklistRows = checklistResult.results as Array<Record<string, unknown>>;
@@ -549,6 +572,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     companies: visibleCompanyRows.map((row) => ({ id: String(row.id), parentCompanyId: row.parent_company_id ? String(row.parent_company_id) : null, isPrincipal: Boolean(row.is_principal), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
     hrMetrics: canReadHr ? visibleMetricRows.map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), headcountStart: Number(row.headcount_start ?? row.headcount ?? 0), headcountEnd: Number(row.headcount_end ?? row.headcount ?? 0), leavesCount: Number(row.leaves_count ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), voluntaryTerminations: Number(row.voluntary_terminations ?? 0), involuntaryTerminations: Number(row.involuntary_terminations ?? 0), baseSalary: Number(row.base_salary ?? 0), variablePay: Number(row.variable_pay ?? 0), overtimePay: Number(row.overtime_pay ?? 0), additionalPay: Number(row.additional_pay ?? 0), vacationPay: Number(row.vacation_pay ?? 0), thirteenthPay: Number(row.thirteenth_pay ?? 0), terminationPay: Number(row.termination_pay ?? 0), grossPayroll: Number(row.gross_payroll ?? 0), employeeInss: Number(row.employee_inss ?? 0), employeeIrrf: Number(row.employee_irrf ?? 0), employeeOtherDeductions: Number(row.employee_other_deductions ?? 0), netPay: Number(row.net_pay ?? 0), employerInss: Number(row.employer_inss ?? 0), ratContribution: Number(row.rat_contribution ?? 0), thirdPartyContributions: Number(row.third_party_contributions ?? 0), fgts: Number(row.fgts ?? 0), fgtsPenalty: Number(row.fgts_penalty ?? 0), employerCharges: Number(row.employer_charges ?? 0), benefitsCost: Number(row.benefits_cost ?? 0), provisionsCost: Number(row.provisions_cost ?? 0), otherCosts: Number(row.other_costs ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })) : [],
     recentActivity: activityRows.slice(0, 50).map(mapActivity),
+    payrollCycles: (cyclesResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      companyId: String(row.company_id),
+      competence: String(row.competence),
+      status: String(row.status),
+      closedAt: row.closed_at ? String(row.closed_at) : null,
+    })),
   };
 }
 

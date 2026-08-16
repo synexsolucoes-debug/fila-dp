@@ -1,5 +1,6 @@
 import { getApiUser, apiError } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export async function PATCH(request: Request) {
 
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "workspace.manage");
     await d1.prepare("UPDATE fdp_workspaces SET name = ? WHERE id = ?")
       .bind(name, workspace.id)
       .run();

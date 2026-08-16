@@ -22,6 +22,31 @@
   --ui-success: #137a4f;
   --ui-warning: #a15c07;
   --ui-danger: #b42318;
+  /* Casca clara — Modelo 2 "Flow".
+     A barra lateral deixa de ser um bloco escuro e passa a ser superfície,
+     separada do conteúdo por um fio. Antes disso, ~20 cores fixas espalhadas
+     pelo arquivo assumiam fundo escuro — inclusive um verde da marca antiga,
+     `rgba(98,213,178,.16)`, ainda vivo no hover. Agora a barra tem tokens
+     próprios e a mesma regra vale nos dois temas. */
+  --ui-rail: #ffffff;
+  /* Avatar: texto sobre fundo suave. Par com dono porque já regrediu duas
+     vezes — a segunda quando esta casca clara chegou. No claro rende 6,06:1;
+     no escuro, o azul vivo sobre o suave rendia 4,30:1 e precisa do tom
+     legível sobre fundo escuro. */
+  --ui-avatar-bg: var(--ui-primary-soft);
+  --ui-avatar-text: var(--ui-primary);
+  --ui-rail-border: var(--ui-border);
+  --ui-rail-text: #55627a;
+  --ui-rail-icon: #8b97a8;
+  --ui-rail-hover: #f1f5fb;
+  --ui-rail-active: #e9f2fe;
+  --ui-rail-active-text: var(--vin-blue);
+  --ui-rail-section: #5f6b7d;
+  --ui-rail-context: #f7f9fc;
+  /* Concluído/conectado. No Modelo 2 o verde é estado, nunca marca. */
+  --ui-done: var(--ui-success);
+  --ui-done-soft: #e3f5ec;
+  --ui-on-done: #ffffff;
   --ui-radius-sm: 7px;
   --ui-radius-md: 10px;
   --ui-radius-lg: 14px;
@@ -49,6 +74,21 @@
   --ui-success: #70e1b9;
   --ui-warning: #ffd089;
   --ui-danger: #ff9c96;
+  --ui-rail: #0d1826;
+  --ui-avatar-bg: #12294a;
+  --ui-avatar-text: var(--brand-accent-on-dark);
+  --ui-rail-border: var(--ui-border);
+  --ui-rail-text: #a7b5c4;
+  --ui-rail-icon: #7d8fa3;
+  --ui-rail-hover: #16273a;
+  --ui-rail-active: #12294a;
+  --ui-rail-active-text: var(--brand-accent-on-dark);
+  --ui-rail-section: #8095aa;
+  --ui-rail-context: #14202f;
+  --ui-done: var(--ui-success);
+  --ui-done-soft: #0f2f20;
+  /* No escuro o verde clareia; branco em cima dele reprova. */
+  --ui-on-done: #06251a;
   --ui-shadow-card: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px rgba(0, 0, 0, .14);
   --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .48);
 }
@@ -69,8 +109,8 @@
   z-index: 30;
   height: 100dvh;
   padding: 22px 16px 16px;
-  background: var(--ui-brand);
-  box-shadow: inset -1px 0 rgba(255, 255, 255, .04);
+  background: var(--ui-rail);
+  border-right: 1px solid var(--ui-rail-border);
 }
 
 .sidebar-toggle {
@@ -108,7 +148,7 @@
   align-items: center;
   gap: 12px;
   border-radius: 9px;
-  color: #aebdcc;
+  color: var(--ui-rail-text);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
@@ -119,7 +159,7 @@
   height: 20px;
   display: grid;
   place-items: center;
-  color: #8399ac;
+  color: var(--ui-rail-icon);
 }
 
 .dashboard-sidebar nav button > span svg {
@@ -135,14 +175,22 @@
   font-size: 10px;
 }
 
-.dashboard-sidebar nav button.active,
 .dashboard-sidebar nav button:hover {
-  background: rgba(255, 255, 255, .09);
-  color: #fff;
+  background: var(--ui-rail-hover);
+  color: var(--ui-text);
+}
+
+/* O item ativo ganha barra à esquerda além da cor: o Modelo 2 marca o lugar
+   pela forma, e forma continua legível para quem não distingue matiz. */
+.dashboard-sidebar nav button.active {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--ui-rail-active-text);
 }
 
 .dashboard-sidebar nav button.active > span {
-  color: var(--brand-accent-on-dark);
+  color: var(--ui-rail-active-text);
 }
 
 .sidebar-collapsed .dashboard-sidebar nav button {
@@ -289,7 +337,7 @@
 .dashboard-content {
   width: 100%;
   max-width: none;
-  padding: 30px clamp(18px, 2vw, 34px) 42px;
+  padding: 24px clamp(18px, 2vw, 34px) 42px;
 }
 
 .dashboard-heading {
@@ -302,10 +350,13 @@
   letter-spacing: .11em;
 }
 
+/* 38px era manchete. O Modelo 2 abre com saudação discreta e devolve a dobra
+   ao conteúdo — a tela existe para mostrar a operação, não para se apresentar. */
 .dashboard-heading h1 {
-  margin: 9px 0 6px;
+  margin: 7px 0 5px;
   color: var(--ui-text);
-  font-size: clamp(29px, 2vw, 38px);
+  font-size: clamp(24px, 1.7vw, 30px);
+  letter-spacing: -.025em;
 }
 
 .dashboard-heading p {
@@ -351,15 +402,20 @@
   font-size: 12px;
 }
 
+/* Tira compacta, no lugar de quatro fichas de 104px.
+   No quadro de demandas, título, subtítulo, estas fichas e duas fileiras de
+   filtro consumiam cerca de 470 dos 900 pixels antes do primeiro cartão —
+   metade da tela antes da primeira demanda, na tela onde a operação passa o
+   dia. O número continua legível; o que sai é o ar em volta dele. */
 .dashboard-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .dashboard-stats article {
-  min-height: 104px;
-  padding: 16px 17px;
+  min-height: 74px;
+  padding: 11px 14px;
   border-color: var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface);
@@ -374,7 +430,8 @@
 
 .dashboard-stats strong {
   color: var(--ui-text);
-  font-size: clamp(26px, 1.8vw, 32px);
+  font-size: clamp(21px, 1.4vw, 25px);
+  letter-spacing: -.02em;
 }
 
 .dashboard-stats small {
@@ -955,9 +1012,9 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 3px;
     overflow: visible;
-    border-top: 1px solid rgba(255, 255, 255, .1);
-    background: color-mix(in srgb, var(--ui-brand) 96%, transparent);
-    box-shadow: 0 -10px 30px rgba(5, 18, 33, .2);
+    border-top: 1px solid var(--ui-rail-border);
+    background: color-mix(in srgb, var(--ui-rail) 96%, transparent);
+    box-shadow: 0 -10px 30px rgba(5, 18, 33, .09);
     backdrop-filter: blur(14px);
   }
 
@@ -2664,22 +2721,19 @@
 }
 
 .dashboard-sidebar {
-  background: var(--ui-brand);
+  background: var(--ui-rail);
   padding: 20px 14px 14px;
 }
 
-.dashboard-brand { color: #fff; font-size: 20px; letter-spacing: -.045em; }
-.dashboard-brand strong { color: var(--ui-mint); }
+.dashboard-brand { color: var(--ui-text); font-size: 20px; letter-spacing: -.045em; }
+.dashboard-brand strong { color: var(--ui-primary); }
 .dashboard-sidebar nav { margin-top: 30px; gap: 5px; }
-.dashboard-sidebar nav button { min-height: 45px; border-radius: 12px; color: rgba(255,255,255,.72); font-weight: 650; }
-.dashboard-sidebar nav button > span { color: rgba(255,255,255,.55); }
-.dashboard-sidebar nav button.active,
-.dashboard-sidebar nav button:hover { background: rgba(98,213,178,.16); color: #fff; }
-.dashboard-sidebar nav button.active > span { color: var(--ui-mint); }
-.sidebar-workspace { border-top-color: rgba(255,255,255,.11); }
-.sidebar-workspace button { background: rgba(255,255,255,.07); border-radius: 12px; }
-.sidebar-account { border-top-color: rgba(255,255,255,.11); }
-.user-avatar, .header-profile > span { background: #dff8ee; color: var(--ui-brand); }
+.dashboard-sidebar nav button { min-height: 45px; border-radius: 10px; color: var(--ui-rail-text); font-weight: 600; }
+.dashboard-sidebar nav button > span { color: var(--ui-rail-icon); }
+.sidebar-workspace { border-top-color: var(--ui-rail-border); }
+.sidebar-workspace button { background: var(--ui-rail-context); border-radius: 10px; }
+.sidebar-account { border-top-color: var(--ui-rail-border); }
+.user-avatar, .header-profile > span { background: var(--ui-avatar-bg); color: var(--ui-avatar-text); }
 
 .dashboard-header { height: 72px; background: color-mix(in srgb, var(--ui-surface) 92%, transparent); }
 .dashboard-location { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2705,22 +2759,31 @@
 .dashboard-heading p { max-width: 620px; }
 
 .overview-layout { display: grid; gap: 18px; }
-.overview-hero { min-height: 136px; padding: 24px 26px; display: flex; align-items: center; justify-content: space-between; gap: 22px; overflow: hidden; border: 1px solid #2f6661; border-radius: 16px; background: var(--ui-brand); color: #fff; }
-.overview-hero > div { max-width: 720px; }
-.overview-hero span, .overview-panel header > div > span, .overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+/* A dupla do Modelo 2. Abaixo de 1100px vira empilhado: o diagrama de conexões
+   precisa de largura para o hub caber entre as duas colunas de conectores. */
+.overview-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.overview-pair > * { margin-bottom: 0; }
+@media (max-width: 1100px) { .overview-pair { grid-template-columns: minmax(0, 1fr); } }
 /* No herói o fundo é o navy, então o azul vivo já lê; nos painéis claros, não. */
-.overview-hero span { color: var(--ui-mint); }
+/* Rótulo das seções da visão geral. Estava numa regra compartilhada com
+   `.overview-hero span`, e ao apagar a faixa morta eu levei os dois vivos
+   junto — o seletor compartilhado é justamente o que torna a remoção
+   cega perigosa. */
+.overview-panel header > div > span,
+.overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
 .overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-mint-text); }
-.overview-hero strong { display: block; margin-top: 7px; font-size: clamp(20px, 2vw, 27px); letter-spacing: -.04em; }
-.overview-hero p { margin: 7px 0 0; color: rgba(255,255,255,.73); font-size: 12px; line-height: 1.5; }
-.overview-hero .overview-new-demand { flex: 0 0 auto; border: 0; background: var(--ui-mint); color: var(--ui-on-mint); box-shadow: none; }
-.overview-hero .overview-new-demand:hover { background: #8CC4FF; }
 
 .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .overview-metrics article { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 .overview-metrics span { color: var(--ui-text-soft); font-size: 11px; font-weight: 700; }
 .overview-metrics strong { margin-top: 10px; color: var(--ui-text); font-size: clamp(27px, 2.2vw, 36px); letter-spacing: -.06em; line-height: 1; }
 .overview-metrics small { margin-top: auto; color: var(--ui-text-soft); font-size: 10px; }
+/* Nome de empresa no lugar de um número: a escala do dígito (até 36px, com
+   -.06em de espaçamento) deixaria a razão social ilegível e transbordando. */
+.overview-metrics .overview-metric-name {
+  font-size: 15px; letter-spacing: -.01em; line-height: 1.25; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .overview-metrics .requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); background: #fff8f0; }
 .overview-metrics .requires-attention strong { color: #a95e21; }
 .theme-dark .overview-metrics .requires-attention { background: color-mix(in srgb, #F4A261 11%, var(--ui-surface)); }
@@ -2780,7 +2843,16 @@
 .recent-activity-list { padding: 5px 16px 13px; }
 .recent-activity-list article { min-height: 61px; padding: 11px 0; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 9px; align-items: start; border-bottom: 1px solid var(--ui-border); }
 .recent-activity-list article:last-child { border-bottom: 0; }
-.recent-activity-list article > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 8px; font-weight: 850; }
+/* Iniciais do autor sobre o círculo suave. `--ui-primary` é o tom de
+   preenchimento: no tema escuro ele rende 4.3:1 aqui, medido — abaixo do
+   mínimo 4.5. `--ui-accent-text` existe exatamente para este papel e rende
+   7.52:1 sobre a mesma superfície.
+
+   Isto só apareceu quando o ensaio de ponta a ponta passou a criar demandas: a
+   lista de atividades recentes nunca tinha sido pintada com conteúdo, então a
+   conferência nunca a mediu. É o mesmo padrão dos rótulos de processo, que
+   ficaram em 4.37:1 enquanto a semente era inteiramente vazia. */
+.recent-activity-list article > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); font-size: 8px; font-weight: 850; }
 .recent-activity-list strong { display: block; color: var(--ui-text); font-size: 10px; }
 .recent-activity-list strong small { color: var(--ui-text-soft); font-size: 9px; font-weight: 500; }
 .recent-activity-list p { margin: 4px 0 0; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2815,8 +2887,6 @@
   .dashboard-header-actions .header-company-select { min-width: 38px; width: 38px; padding: 0; justify-content: center; }
   .header-company-select select { display: none; }
   .dashboard-header-actions .help-button, .dashboard-header-actions .header-profile { display: none; }
-  .overview-hero { min-height: 0; padding: 20px; align-items: flex-start; flex-direction: column; }
-  .overview-hero .overview-new-demand { width: 100%; }
   .overview-metrics { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
   .overview-metrics article { min-width: min(74vw, 250px); scroll-snap-align: start; }
   .overview-sla-band { grid-template-columns: 1fr; gap: 14px; }
@@ -2924,23 +2994,27 @@
 /* Grupo empresarial and navigation clarity. */
 .dashboard-sidebar { display: flex; flex-direction: column; gap: 0; }
 .dashboard-brand { min-height: 42px; }
-.sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; background: rgba(255,255,255,.055); }
-.sidebar-group-context > span, .sidebar-nav-section { display: block; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
-.sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: rgba(255,255,255,.62); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-sidebar nav { margin-top: 20px; gap: 4px; }
-.sidebar-nav-section { margin: 10px 10px 5px; }
-.sidebar-nav-section.management { margin-top: 18px; }
+.sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid var(--ui-rail-border); border-radius: 11px; background: var(--ui-rail-context); }
+.sidebar-group-context > span, .sidebar-nav-section { display: block; color: var(--ui-rail-section); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
+.sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: var(--ui-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+/* O menu passa a ter contextos (§17): antes era um rótulo só, "OPERAÇÃO",
+   sobre treze itens — e Cadastros, Relatórios e Estado das integrações não são
+   operação. O espaço entre grupos é maior que entre itens porque é ele que
+   torna o agrupamento visível; sem isso o rótulo é decoração. */
+.dashboard-sidebar nav { margin-top: 20px; gap: 15px; }
+.sidebar-nav-group { display: flex; flex-direction: column; gap: 4px; }
+.sidebar-nav-section { margin: 0 10px 5px; }
 .sidebar-workspace { margin-top: auto; padding-bottom: 10px; }
-.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.04); color: #d7e0e8; }
-.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--brand-accent); color: #081a31; font-style: normal; font-size: 9px; font-weight: 800; }
-.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: #71869a; font-size: 9px; }
-.sidebar-workspace > span { margin-left: 8px; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
+.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--ui-rail-border); border-radius: 8px; background: var(--ui-rail-context); color: var(--ui-text); }
+.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--ui-primary); color: #fff; font-style: normal; font-size: 9px; font-weight: 800; }
+.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: var(--ui-text-soft); font-size: 9px; }
+.sidebar-workspace > span { margin-left: 8px; color: var(--ui-rail-section); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
 .sidebar-workspace button { min-height: 58px; align-items: center; }
 .sidebar-workspace button > span { min-width: 0; display: grid; gap: 3px; text-align: left; }
 .sidebar-workspace button > span strong, .sidebar-workspace button > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-workspace button > span strong { color: #fff; font-size: 10px; }
-.sidebar-workspace button > span small { color: rgba(255,255,255,.58); font-size: 8px; }
+.sidebar-workspace button > span strong { color: var(--ui-text); font-size: 10px; }
+.sidebar-workspace button > span small { color: var(--ui-text-soft); font-size: 8px; }
 .sidebar-collapsed .sidebar-group-context, .sidebar-collapsed .sidebar-nav-section { display: none; }
 
 .companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
@@ -2973,6 +3047,10 @@
 @media (max-width: 780px) {
   .sidebar-group-context { display: none; }
   .sidebar-nav-section { display: none; }
+  /* Nesta largura o menu vira barra inferior em `grid`. `display: contents`
+     devolve os botões à grade: sem isso a grade posicionaria os quatro grupos,
+     e a barra mostraria quatro colunas com os itens empilhados dentro. */
+  .sidebar-nav-group { display: contents; }
   .companies-list article { grid-template-columns: 24px minmax(0, 1fr) auto; }
   .companies-list article > i { width: 21px; height: 21px; }
   .invite-company-scope { min-width: 100%; }
@@ -3515,6 +3593,50 @@
 
 
 /* ==========================================================================
+   Cores de módulo e de superfície escura (§13)
+   ==========================================================================
+   Estes valores já existiam — repetidos. O violeta de Psicologia estava escrito
+   em três arquivos (`--aux-accent`, `--int-violet`, `--pay-accent`), o âmbar de
+   Prestadores PJ em dois, e o par de superfície escura — traço, véu e o mint da
+   confirmação — em dois ou três cada. Mudar a cor de um módulo significava
+   achar todas as cópias, e a que sobrasse ficaria fora de tom sem avisar.
+
+   O que muda aqui é onde a cor mora, não qual ela é: os valores são idênticos
+   aos que estavam espalhados. */
+.dashboard-shell {
+  /* Acento por módulo auxiliar. O azul da marca continua sendo o acento
+     padrão; estes dois distinguem contextos que convivem na mesma competência.
+     Preenchimento e texto são separados pelo mesmo motivo que `--ui-accent` e
+     `--ui-accent-text`: no tema escuro o texto precisa clarear mais que o
+     preenchimento. Verificado — a primeira versão usava o mesmo violeta nos
+     dois papéis e a conferência acusou 2.49:1 no cabeçalho de Psicologia. */
+  --module-psychology: #6550a1;
+  --module-psychology-text: #6550a1;
+  /* O que se lê EM CIMA do acento do módulo. Violeta e âmbar são escuros nos
+     dois temas, então é branco nos dois — diferente de `--ui-on-accent`, que
+     vira navy no escuro porque lá o preenchimento é azul claro. Sem este par,
+     o botão primário de Psicologia dava 2,89:1 e o de PJ 3,53:1 no tema
+     escuro; nenhum ensaio media, porque a semente não alcançava as telas. */
+  --module-on-accent: #ffffff;
+  --module-psychology-soft: #f0ecfa;
+  --module-contractors: #9a5c20;
+  --module-contractors-text: #9a5c20;
+  --module-contractors-soft: #f8eee2;
+
+  /* Sobre superfície escura — cabeçalho de gaveta, diálogo, toast. Não são o
+     tema escuro: são áreas que já eram escuras nos dois temas. */
+  --on-dark-soft: #b9c9d8;
+  --on-dark-line: #52667a;
+  --on-dark-veil: #ffffff0d;
+  --on-dark-confirm: #70dfb9;
+
+  /* Tinta das sombras profundas, com a opacidade embutida no valor. */
+  --ink-shadow: #06152642;
+  --ink-shadow-soft: #06152630;
+  --ink-scrim: #061526a8;
+}
+
+/* ==========================================================================
    Cores de estado com contrapartida no escuro
    ==========================================================================
    Selos de status, avisos e destaques usavam hex fixo escolhido contra fundo
@@ -3531,6 +3653,15 @@
   --ui-state-warn-bg: #fdf2e2;
   --ui-state-danger-text: #96201a;
   --ui-state-danger-bg: #fdeceb;
+}
+
+/* Contrapartida escura dos acentos de módulo. Medido contra as três
+   superfícies do tema: 7.73:1 e 9.56:1 na superfície de cartão. */
+.dashboard-shell.theme-dark {
+  --module-psychology-text: #b9a5ea;
+  --module-psychology-soft: #241d3a;
+  --module-contractors-text: #f0b978;
+  --module-contractors-soft: #33260f;
 }
 
 .dashboard-shell.theme-dark {
@@ -3700,3 +3831,107 @@
   .dashboard-task:hover,
   .dashboard-shell button:active:not(:disabled) { transform: none; }
 }
+
+/* Duas exportações lado a lado na tela de relatórios (§50): o CSV das demandas
+   do recorte e o JSON do grupo inteiro. O link precisa parecer botão porque é
+   um download direto — um <button> com fetch guardaria o arquivo na memória do
+   navegador antes de salvar, e o ponto do fluxo no servidor era não fazer isso. */
+.export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.export-actions > a.export-button { text-decoration: none; }
+
+/* ── Fluxo da competência (Modelo 2, "Flow") ──────────────────────────────
+   Substitui a faixa marinho que brigava com a casca clara. As cinco etapas
+   são os estados que o servidor aceita, e o estado de cada uma é marcado por
+   FORMA além de cor — ícone de concluída, anel na atual, contorno vazio no
+   que falta —, para funcionar também para quem não distingue matiz. */
+.competence-flow { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
+.competence-flow > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.competence-flow > header > div:first-child { min-width: 0; }
+.competence-flow > header span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.competence-flow > header strong { display: block; margin-top: 6px; font-size: clamp(20px, 2vw, 26px); font-weight: 800; letter-spacing: -.03em; }
+.competence-flow > header p { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.5; }
+.competence-flow-actions { display: flex; gap: 9px; align-items: center; flex: 0 0 auto; }
+
+.competence-flow-track { margin: 22px 0 0; padding: 0; list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; }
+.competence-flow-track > li { position: relative; padding-top: 30px; text-align: center; }
+/* O fio entre as etapas é o que faz isto ser um fluxo e não cinco selos. Ele
+   nasce depois do círculo de uma e morre antes do da seguinte. */
+.competence-flow-track > li::before { content: ""; position: absolute; top: 10px; left: calc(-50% + 15px); width: calc(100% - 30px); height: 2px; background: var(--ui-border); }
+.competence-flow-track > li:first-child::before { display: none; }
+.competence-flow-track > li[data-state="done"]::before,
+.competence-flow-track > li[data-state="current"]::before { background: var(--ui-done); }
+
+.competence-flow-track > li > i { position: absolute; top: 0; left: 50%; width: 22px; height: 22px; margin-left: -11px; display: grid; place-items: center; border: 2px solid var(--ui-border-strong); border-radius: 50%; background: var(--ui-surface); }
+.competence-flow-track > li > i svg { width: 12px; height: 12px; stroke-width: 3; color: #fff; }
+.competence-flow-track > li[data-state="done"] > i { border-color: var(--ui-done); background: var(--ui-done); }
+/* Anel na etapa atual: o círculo fica vazio e ganha um halo, para se distinguir
+   da concluída sem depender da cor. */
+.competence-flow-track > li[data-state="current"] > i { border-color: var(--ui-primary); box-shadow: 0 0 0 3px var(--ui-primary-soft); }
+.competence-flow-track > li[data-state="current"] > i::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ui-primary); }
+
+.competence-flow-track > li > span { display: block; padding: 0 6px; }
+.competence-flow-track > li strong { display: block; font-size: 12px; font-weight: 650; color: var(--ui-text-soft); }
+.competence-flow-track > li small { display: block; margin-top: 2px; font-size: 10.5px; color: var(--ui-text-soft); }
+.competence-flow-track > li[data-state="current"] strong { color: var(--ui-primary); font-weight: 750; }
+.competence-flow-track > li[data-state="done"] strong { color: var(--ui-text); }
+
+@media (max-width: 760px) {
+  .competence-flow-track { grid-auto-flow: row; grid-auto-columns: auto; gap: 2px; }
+  .competence-flow-track > li { padding: 4px 0 4px 34px; text-align: left; }
+  .competence-flow-track > li::before { top: -8px; left: 10px; width: 2px; height: 16px; }
+  .competence-flow-track > li > i { top: 6px; left: 0; margin-left: 0; }
+  .competence-flow-track > li > span { padding: 0; }
+  .competence-flow > header { flex-direction: column; }
+}
+
+/* ── Diagrama de conexões (Modelo 2, "Flow") ──────────────────────────────
+   A marca no centro e os sistemas em volta. É uma <ul> de verdade: o arranjo
+   em torno do centro é apresentação, e quem usa leitor de tela recebe nome,
+   estado e última sincronização em texto — um SVG de linhas seria ilegível
+   para ele. O estado vem também na forma do traço, não só na cor: contínuo
+   para conectado, tracejado para sem credencial, pontilhado para erro. */
+.connection-map { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
+.connection-map > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.connection-map > header span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.connection-map > header strong { display: block; margin-top: 5px; font-size: 19px; font-weight: 800; letter-spacing: -.025em; }
+.connection-map > header p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 12px; }
+
+.connection-map-graph { position: relative; margin-top: 18px; }
+.connection-map-hub { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: 13px; background: var(--ui-surface); box-shadow: var(--ui-shadow-card); z-index: 2; }
+.connection-map-graph > ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 88px; }
+.connection-map-graph > ul > li { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 11px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); }
+
+/* O fio até o centro. Nasce na borda interna do cartão e morre antes do hub. */
+.connection-map-graph > ul > li::after { content: ""; position: absolute; top: 50%; width: 44px; height: 0; border-top: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li:nth-child(odd)::after { right: -46px; }
+.connection-map-graph > ul > li:nth-child(even)::after { left: -46px; }
+.connection-map-graph > ul > li[data-tone="ok"]::after { border-top-color: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"]::after { border-top-style: dashed; border-top-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"]::after { border-top-style: dotted; border-top-color: var(--ui-danger); }
+
+.connection-map-graph > ul > li > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li[data-tone="ok"] > i { border-color: var(--ui-done); background: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"] > i { border-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"] > i { border-color: var(--ui-danger); background: var(--ui-danger); }
+.connection-map-graph > ul > li > span { min-width: 0; }
+.connection-map-graph > ul > li strong { display: block; font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-map-graph > ul > li small { display: block; font-size: 10.5px; color: var(--ui-text-soft); }
+
+.connection-map-empty h3 { font-size: 15px; font-weight: 750; }
+.connection-map-empty p { margin: 6px 0 12px; color: var(--ui-text-soft); font-size: 12.5px; max-width: 60ch; }
+
+@media (max-width: 900px) {
+  /* Sem espaço para o hub no meio, o desenho vira o que ele já é por baixo:
+     uma lista. Melhor lista honesta que diagrama espremido. */
+  .connection-map-hub { display: none; }
+  .connection-map-graph > ul { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .connection-map-graph > ul > li::after { display: none; }
+}
+
+/* Acesso por módulo, dentro da ficha do membro.
+   Fechado por padrão: a maioria das pessoas segue o papel, e abrir a matriz
+   de todos os módulos para todo mundo transformaria a lista de membros numa
+   parede. `details` nativo — teclado e leitor de tela funcionam sem estado. */
+.member-modules-details { grid-column: 1 / -1; margin-top: 8px; }
+.member-modules-details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--ui-primary); font-size: 11.5px; font-weight: 650; cursor: pointer; }
+.member-modules-details > summary:hover { text-decoration: underline; }

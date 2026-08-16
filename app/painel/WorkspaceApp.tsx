@@ -10,12 +10,14 @@ import {
   Blocks,
   Building2,
   Cable,
+  Check,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
   CircleAlert,
   CircleHelp,
+  ClipboardCheck,
   Clock3,
   Download,
   Inbox,
@@ -44,11 +46,13 @@ import {
   Users,
   WalletCards,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
+import { competenceLabel, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -123,30 +127,124 @@ const processColors: Record<string, string> = {
   "OUTROS": "gray",
 };
 
-const viewContent: Record<View, { eyebrow: string; title: string; description: string }> = {
-  overview: { eyebrow: "VISÃO GERAL", title: "Visão geral", description: "Acompanhe o que exige ação e mantenha a operação sob controle." },
-  board: { eyebrow: "DEMANDAS", title: "Quadro de demandas", description: "Acompanhe prioridades, responsáveis e próximos passos." },
-  inbox: { eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada", description: "Transforme solicitações recebidas em demandas rastreáveis." },
-  planner: { eyebrow: "AGENDA DO ANALISTA", title: "Meu planner", description: "Organize sua execução a partir dos prazos da operação." },
-  processes: { eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento", description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides." },
-  auxiliary: { eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares", description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ." },
-  psychologistPayments: { eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos", description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro." },
-  contractorPayments: { eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ", description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado." },
-  timeTracking: { eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto", description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada." },
-  integrations: { eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Estado das integrações", description: "Acompanhe conexões e últimas execuções deste workspace. A administração fica na console global." },
-  registrations: { eyebrow: "BASE OPERACIONAL", title: "Cadastros", description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar." },
-  payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
-  indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
+/**
+ * Catálogo das telas do painel (§17, §18).
+ *
+ * Era três listas paralelas — cabeçalho, título curto para o assistente e
+ * treze botões escritos à mão no menu — que ninguém obrigava a concordar.
+ * Acrescentar uma tela significava lembrar de quatro lugares, e o quarto era o
+ * pior: o botão de ação primária da barra superior aparecia por *negação*
+ * (`view !== "registrations" && view !== "auxiliary" && …`), então uma tela
+ * nova nascia com "Nova demanda" no topo até alguém notar.
+ *
+ * `section` é o que a §17 pede: o menu tinha um rótulo só, "OPERAÇÃO", sobre
+ * treze itens — e Cadastros, Relatórios e Estado das integrações não são
+ * operação. Rótulo que não descreve o que está embaixo é pior que nenhum.
+ */
+type NavSection = "operacao" | "pessoas" | "financeiro" | "dados";
+
+const navSections: Array<{ id: NavSection; label: string }> = [
+  { id: "operacao", label: "OPERAÇÃO" },
+  { id: "pessoas", label: "PESSOAS E CADASTROS" },
+  { id: "financeiro", label: "FINANCEIRO" },
+  { id: "dados", label: "DADOS E ANÁLISE" },
+];
+
+type ViewEntry = {
+  /** Título curto: menu lateral e contexto do assistente. */
+  label: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  section: NavSection;
+  /** Rota do catálogo de módulos. Ausente = sempre disponível. */
+  module?: string;
+  /** Papéis que não veem a tela. A regra ficava repetida em sete botões. */
+  hiddenFor?: WorkspaceRole[];
+  /** Ação primária da barra superior. Ausente = a barra não oferece nenhuma:
+   *  a tela tem os próprios comandos e um botão genérico ali criaria dois
+   *  caminhos para a mesma coisa, ou um caminho para coisa nenhuma. */
+  primaryAction?: { label: string; kind: "card" | "inbox" };
 };
 
-/** Nome da tela atual, para o assistente saber onde a pessoa está. */
-const viewTitles: Record<string, string> = {
-  overview: "Visão geral", board: "Demandas", inbox: "Inbox", planner: "Planner",
-  processes: "Operação DP", auxiliary: "Módulos auxiliares", psychologistPayments: "Pagamento de Psicólogos",
-  contractorPayments: "Pagamentos PJ", timeTracking: "Ponto", integrations: "Integrações",
-  registrations: "Cadastros",
-  payroll: "Folha", indicators: "Relatórios",
+const viewCatalog: Record<View, ViewEntry> = {
+  overview: {
+    label: "Visão geral", icon: LayoutDashboard, section: "operacao",
+    eyebrow: "VISÃO GERAL", title: "Visão geral",
+    description: "Acompanhe o que exige ação e mantenha a operação sob controle.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  board: {
+    label: "Demandas", icon: ListChecks, section: "operacao",
+    eyebrow: "DEMANDAS", title: "Quadro de demandas",
+    description: "Acompanhe prioridades, responsáveis e próximos passos.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  inbox: {
+    label: "Inbox", icon: Inbox, section: "operacao", module: "inbox",
+    eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada",
+    description: "Transforme solicitações recebidas em demandas rastreáveis.",
+    primaryAction: { label: "Nova solicitação", kind: "inbox" },
+  },
+  planner: {
+    label: "Planner", icon: CalendarDays, section: "operacao", module: "planner",
+    eyebrow: "AGENDA DO ANALISTA", title: "Meu planner",
+    description: "Organize sua execução a partir dos prazos da operação.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  processes: {
+    label: "Operação DP", icon: ClipboardCheck, section: "operacao", module: "processes",
+    eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento",
+    description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides.",
+    primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  auxiliary: {
+    label: "Módulos auxiliares", icon: Blocks, section: "operacao", module: "auxiliary", hiddenFor: ["guest"],
+    eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares",
+    description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ.",
+  },
+  registrations: {
+    label: "Cadastros", icon: Users, section: "pessoas", module: "registrations", hiddenFor: ["guest"],
+    eyebrow: "BASE OPERACIONAL", title: "Cadastros",
+    description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar.",
+  },
+  timeTracking: {
+    label: "Ponto", icon: Timer, section: "pessoas", module: "timeTracking", hiddenFor: ["guest"],
+    eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto",
+    description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada.",
+  },
+  payroll: {
+    label: "Folha", icon: WalletCards, section: "financeiro", module: "payroll",
+    eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento",
+    description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente.",
+  },
+  psychologistPayments: {
+    label: "Pagamento de Psicólogos", icon: Stethoscope, section: "financeiro",
+    module: "psychologistPayments", hiddenFor: ["guest", "observer"],
+    eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos",
+    description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro.",
+  },
+  contractorPayments: {
+    label: "Pagamentos PJ", icon: Receipt, section: "financeiro", module: "contractorPayments", hiddenFor: ["guest"],
+    eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ",
+    description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado.",
+  },
+  indicators: {
+    label: "Relatórios", icon: BarChart3, section: "dados", module: "indicators",
+    eyebrow: "RELATÓRIOS", title: "Relatórios da operação",
+    description: "Monitore SLAs, volume, produtividade e regras ativas do workspace.",
+  },
+  integrations: {
+    label: "Estado das integrações", icon: Cable, section: "dados", module: "integrations", hiddenFor: ["guest"],
+    eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Estado das integrações",
+    description: "Acompanhe conexões e últimas execuções deste workspace. A administração fica na console global.",
+  },
 };
+
+/** Ordem do menu. É a ordem de declaração do catálogo — mantê-las separadas
+ *  criaria a quinta lista para desalinhar. */
+const navOrder = Object.keys(viewCatalog) as View[];
 
 /** Estados do ciclo de vida do workspace, para o seletor dizer por que um grupo
     não pode ser aberto em vez de apenas desabilitar o botão. */
@@ -383,7 +481,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [view, setView] = useState<View>("overview");
   const [boardMode, setBoardMode] = useState<BoardMode>("kanban");
   const [cardTab, setCardTab] = useState<CardTab>("details");
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  /**
+   * O modal de configurações é o de segurança, e só (§35).
+   *
+   * O painel foi restringido ao fluxo operacional em `d2d8d5a`, e o menu de
+   * configurações perdeu oito entradas. O estado inicial ficou em "general" —
+   * uma seção que nenhum caminho consegue abrir: o único botão que abre o modal
+   * chama `openSecuritySettings`, que fixa "security". Um estado inicial que a
+   * tela não consegue mostrar é um convite a bug: bastaria alguém abrir o modal
+   * por outro caminho para a pessoa ver um painel com um menu que não o aponta.
+   */
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("security");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -423,6 +531,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [newBoardDescription, setNewBoardDescription] = useState("");
   const [theme, setTheme] = useState<Theme>("light");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [assistantSignal, setAssistantSignal] = useState(0);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("syncing");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const sidebarPreferenceLoaded = useRef(false);
@@ -600,6 +709,29 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }, [cardModalOpen, inboxModalOpen, workspaceModalOpen, searchOpen, notificationsOpen, archiveOpen, confirmation, attachmentPreview]);
 
   const activeCards = useMemo(() => snapshot?.lists.flatMap((list) => list.cards) ?? [], [snapshot]);
+  /**
+   * Recorte da empresa escolhida na barra superior (§18, §19).
+   *
+   * Só o quadro respeitava o seletor; a visão geral somava o grupo inteiro.
+   * Escolher uma empresa não mexia em número nenhum, e quem escolhia não tinha
+   * como saber se aquela empresa não tinha nada ou se o filtro era enfeite.
+   *
+   * Isto é diferente de `filteredActiveCards`, que aplica também responsável,
+   * SLA, processo e prazo — filtros do quadro, que não valem para a visão geral.
+   */
+  const scopedCards = useMemo(
+    () => companyFilter === "all" ? activeCards : activeCards.filter((card) => card.companyId === companyFilter),
+    [activeCards, companyFilter],
+  );
+  const scopedLists = useMemo(() => (snapshot?.lists ?? []).map((list) => companyFilter === "all"
+    ? list
+    : { ...list, cards: list.cards.filter((card) => card.companyId === companyFilter) }), [snapshot?.lists, companyFilter]);
+  /* O fluxo da competência respeita o seletor de empresa, como todo o resto da
+     Visão geral desde `db5300b`. Com uma empresa escolhida, o ciclo mostrado é
+     o dela; sem, é o do grupo, e o avanço é o do ciclo menos adiantado. */
+  const scopedCycles = useMemo(() => (snapshot?.payrollCycles ?? [])
+    .filter((cycle) => companyFilter === "all" || cycle.companyId === companyFilter),
+  [snapshot?.payrollCycles, companyFilter]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
   const filteredActiveCards = useMemo(() => {
     const now = new Date();
@@ -636,20 +768,34 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const hasModule = useCallback((route: string) => enabledModules.size === 0 || enabledModules.has(route), [enabledModules]);
   const currentMemberName = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.name ?? user.displayName;
 
+  // Quais telas esta pessoa vê, uma vez só. Antes a mesma pergunta estava
+  // escrita em treze botões — `hasModule("x") && role !== "guest" &&` — e as
+  // sete cópias da regra de papel eram sete chances de divergirem.
+  const role = snapshot?.workspace.role;
+  const visibleViews = useMemo(() => navOrder.filter((id) => {
+    const entry = viewCatalog[id];
+    if (entry.module && !hasModule(entry.module)) return false;
+    return !(role && entry.hiddenFor?.includes(role));
+  }), [hasModule, role]);
+
+  const navBadges = useMemo<Partial<Record<View, number>>>(() => ({
+    inbox: snapshot?.inbox.filter((item) => item.status === "new").length || undefined,
+  }), [snapshot]);
+
   const stats = useMemo(() => {
-    const active = activeCards.filter((card) => card.slaStatus !== "completed");
+    const active = scopedCards.filter((card) => card.slaStatus !== "completed");
     const waitingListIds = new Set(snapshot?.lists.filter((list) => list.slaBehavior === "paused").map((list) => list.id) ?? []);
-    const completed = activeCards.filter((card) => card.slaStatus === "completed").length;
+    const completed = scopedCards.filter((card) => card.slaStatus === "completed").length;
     return {
       active: active.length,
       attention: active.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length,
       waiting: active.filter((card) => waitingListIds.has(card.listId)).length,
-      onTime: activeCards.length ? Math.round(((activeCards.length - activeCards.filter((card) => card.slaStatus === "overdue").length) / activeCards.length) * 100) : 100,
+      onTime: scopedCards.length ? Math.round(((scopedCards.length - scopedCards.filter((card) => card.slaStatus === "overdue").length) / scopedCards.length) * 100) : 100,
       completed,
       documentsPending: active.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0),
       activeCompanies: snapshot?.companies.filter((company) => company.status === "active").length ?? 0,
     };
-  }, [activeCards, snapshot]);
+  }, [scopedCards, snapshot]);
 
   function applySnapshot(next: WorkspaceSnapshot, message?: string) {
     setSnapshot(next);
@@ -1097,11 +1243,22 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   }
 
   function exportCsv() {
-    const rows = [["Demanda", "Processo", "Empresa", "Responsáveis", "Prazo", "SLA", "Status"], ...activeCards.map((card) => [card.title, card.processType, card.company, card.assignees.map((item) => item.name).join("; ") || card.assigneeName, card.dueAt ?? "", card.slaStatus, snapshot?.lists.find((list) => list.id === card.listId)?.name ?? ""])];
+    // O arquivo segue o recorte da barra superior (§34).
+    //
+    // Este era o pior dos dois casos do filtro ignorado: a tela mostrando o
+    // grupo inteiro é confuso; um CSV com o grupo inteiro, baixado logo depois
+    // de escolher uma empresa, sai daqui parecendo ser daquela empresa e vai
+    // para a mão de alguém.
+    const rows = [["Demanda", "Processo", "Empresa", "Responsáveis", "Prazo", "SLA", "Status"], ...scopedCards.map((card) => [card.title, card.processType, card.company, card.assignees.map((item) => item.name).join("; ") || card.assigneeName, card.dueAt ?? "", card.slaStatus, snapshot?.lists.find((list) => list.id === card.listId)?.name ?? ""])];
     const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }));
-    link.download = `fila-dp-${new Date().toISOString().slice(0, 10)}.csv`;
+    // O nome do arquivo carrega o recorte: quem tem cinco exportações na pasta
+    // de downloads precisa distinguir uma da outra sem abrir.
+    const empresa = companyFilter === "all" ? "grupo" : (snapshot?.companies.find((item) => item.id === companyFilter)?.tradeName
+      || snapshot?.companies.find((item) => item.id === companyFilter)?.legalName || companyFilter);
+    const sufixo = String(empresa).normalize("NFD").replace(/[\u0300-\u036f]/gu, "").replace(/[^a-zA-Z0-9]+/gu, "-").toLowerCase().slice(0, 40);
+    link.download = `vinculato-demandas-${sufixo}-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(link.href);
   }
@@ -1124,7 +1281,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     );
   }
 
-  const header = viewContent[view];
+  const header = viewCatalog[view];
+  const primaryAction = header.primaryAction;
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
   const principalCompany = snapshot.companies.find((company) => company.isPrincipal) ?? null;
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
@@ -1136,7 +1294,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
-          <VinculatoLogo size={28} tone="light" />
+          {/* A barra lateral virou clara: o logotipo branco sumiria nela. A
+              variante segue o tema, em vez de assumir fundo escuro. */}
+          <VinculatoLogo size={28} tone={theme === "dark" ? "light" : "color"} />
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>
@@ -1144,20 +1304,25 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <small>{principalCompany ? `Principal: ${principalCompany.tradeName || principalCompany.legalName}` : "Defina a empresa principal"}</small>
         </div>
         <nav aria-label="Navegação do painel">
-          <span className="sidebar-nav-section">OPERAÇÃO</span>
-          <button title="Visão geral" className={view === "overview" ? "active" : ""} onClick={() => setView("overview")}><span aria-hidden="true"><LayoutDashboard /></span> Visão geral</button>
-          <button title="Demandas" className={view === "board" ? "active" : ""} onClick={() => setView("board")}><span aria-hidden="true"><ListChecks /></span> Demandas</button>
-          {hasModule("inbox") && <button title="Inbox" className={view === "inbox" ? "active" : ""} onClick={() => setView("inbox")}><span aria-hidden="true"><Inbox /></span> Inbox <b>{snapshot.inbox.filter((item) => item.status === "new").length}</b></button>}
-          {hasModule("planner") && <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>}
-          {hasModule("processes") && <button title="Operação DP" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Operação DP</button>}
-          {hasModule("auxiliary") && snapshot.workspace.role !== "guest" && <button title="Módulos auxiliares" className={view === "auxiliary" ? "active" : ""} onClick={() => setView("auxiliary")}><span aria-hidden="true"><Blocks /></span> Módulos auxiliares</button>}
-          {hasModule("psychologistPayments") && snapshot.workspace.role !== "guest" && snapshot.workspace.role !== "observer" && <button title="Pagamento de Psicólogos" className={view === "psychologistPayments" ? "active" : ""} onClick={() => setView("psychologistPayments")}><span aria-hidden="true"><Stethoscope /></span> Pagamento de Psicólogos</button>}
-          {hasModule("contractorPayments") && snapshot.workspace.role !== "guest" && <button title="Pagamentos PJ" className={view === "contractorPayments" ? "active" : ""} onClick={() => setView("contractorPayments")}><span aria-hidden="true"><Receipt /></span> Pagamentos PJ</button>}
-          {hasModule("timeTracking") && snapshot.workspace.role !== "guest" && <button title="Ponto" className={view === "timeTracking" ? "active" : ""} onClick={() => setView("timeTracking")}><span aria-hidden="true"><Timer /></span> Ponto</button>}
-          {hasModule("integrations") && snapshot.workspace.role !== "guest" && <button title="Estado das integrações" className={view === "integrations" ? "active" : ""} onClick={() => setView("integrations")}><span aria-hidden="true"><Cable /></span> Estado das integrações</button>}
-          {hasModule("registrations") && snapshot.workspace.role !== "guest" && <button title="Cadastros" className={view === "registrations" ? "active" : ""} onClick={() => setView("registrations")}><span aria-hidden="true"><Users /></span> Cadastros</button>}
-          {hasModule("payroll") && <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>}
-          {hasModule("indicators") && <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>}
+          {/* Seção sem item visível não é renderizada: um rótulo sozinho diz
+              que existe algo ali e não há. */}
+          {navSections.map((section) => {
+            const items = visibleViews.filter((id) => viewCatalog[id].section === section.id);
+            if (!items.length) return null;
+            return <div key={section.id} className="sidebar-nav-group">
+              <span className="sidebar-nav-section">{section.label}</span>
+              {items.map((id) => {
+                const entry = viewCatalog[id];
+                const Icon = entry.icon;
+                const badge = navBadges[id];
+                return <button key={id} type="button" title={entry.label} className={view === id ? "active" : ""}
+                  onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}>
+                  <span aria-hidden="true"><Icon /></span> {entry.label}
+                  {badge ? <b>{badge}</b> : null}
+                </button>;
+              })}
+            </div>;
+          })}
         </nav>
         {snapshot.availableWorkspaces.length > 1 && (
           <div className="sidebar-workspace sidebar-workspace-switcher">
@@ -1192,7 +1357,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         )}
         <div className="sidebar-workspace">
           <span>ESTRUTURA EMPRESARIAL</span>
-          <div className="sidebar-structure-summary"><i>{workspaceInitials}</i><span><strong>{principalCompany?.tradeName || principalCompany?.legalName || "Sem principal"}</strong><small>{snapshot.companies.length} empresa(s) no grupo</small></span></div>
+          <div className="sidebar-structure-summary"><i>{workspaceInitials}</i><span><strong>{principalCompany?.tradeName || principalCompany?.legalName || "Sem principal"}</strong><small>{plural(snapshot.companies.length, "empresa no grupo", "empresas no grupo")}</small></span></div>
         </div>
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
@@ -1217,10 +1382,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <label className="header-company-select"><Building2 aria-hidden="true" /><select aria-label="Selecionar empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">{companyScopeLabel}</option>{snapshot.companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</option>)}</select></label>
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
-            <button className="help-button" aria-label="Ajuda" title="Ajuda" onClick={() => setToast("Use a busca global ou abra uma demanda para acessar todos os detalhes.")}><CircleHelp aria-hidden="true" /></button>
+            <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
             <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
-            {canEdit && view !== "registrations" && view !== "auxiliary" && view !== "integrations" && view !== "psychologistPayments" && view !== "contractorPayments" && view !== "timeTracking" && <button className="new-demand" onClick={view === "inbox" ? () => setInboxModalOpen(true) : openNewCard}><Plus aria-hidden="true" /><span>{view === "inbox" ? "Nova solicitação" : "Nova demanda"}</span></button>}
+            {/* A ação primária vem do catálogo, não de uma lista de exceções.
+                A versão anterior aparecia por negação — seis `view !== "…"` —,
+                então uma tela nova nascia com "Nova demanda" no topo mesmo sem
+                ter demanda nenhuma para criar. */}
+            {canEdit && primaryAction && <button className="new-demand"
+              onClick={primaryAction.kind === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>
+              <Plus aria-hidden="true" /><span>{primaryAction.label}</span>
+            </button>}
           </div>
         </header>
 
@@ -1245,7 +1417,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
 
-          {view === "overview" && <OverviewView onNavigate={(target) => setView(target)} cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} />}
+          {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations} onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
 
@@ -1264,7 +1436,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "board" && (
             <>
               <div className="dashboard-stats">
-                <article><span>Demandas ativas</span><strong>{stats.active}</strong><small>{stats.completed} concluída(s)</small></article>
+                <article><span>Demandas ativas</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída", "concluídas")}</small></article>
                 <article><span>Exigem atenção</span><strong>{stats.attention}</strong><small className="warning-text">SLA hoje ou atrasado</small></article>
                 <article><span>Aguardando terceiros</span><strong>{stats.waiting}</strong><small>SLA pausado</small></article>
                 <article><span>Dentro do prazo</span><strong>{stats.onTime}%</strong><small className="safe-text">Visão atual</small></article>
@@ -1361,7 +1533,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "inbox" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
           {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} />}
-          {view === "indicators" && <IndicatorsView cards={activeCards} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
+          {view === "indicators" && <IndicatorsView canExportWorkspace={isAdmin} cards={scopedCards} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((item) => item.id === companyFilter)?.tradeName || snapshot.companies.find((item) => item.id === companyFilter)?.legalName || "Empresa selecionada")} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
           </div>
         </div>
       </section>
@@ -1390,7 +1562,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <div className="workspace-modal-backdrop drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setNotificationsOpen(false); }}>
           <aside className="notification-drawer" role="dialog" aria-modal="true" aria-labelledby="notifications-title">
             <header><div><span>CENTRAL DE ALERTAS</span><h2 id="notifications-title">Notificações</h2></div><button onClick={() => setNotificationsOpen(false)} aria-label="Fechar">×</button></header>
-            <div className="notification-actions"><span>{snapshot.notifications.filter((item) => !item.readAt).length} não lida(s)</span><button disabled={busy || !snapshot.notifications.some((item) => !item.readAt)} onClick={() => void markAllNotifications()}>Marcar todas como lidas</button></div>
+            <div className="notification-actions"><span>{plural(snapshot.notifications.filter((item) => !item.readAt).length, "não lida", "não lidas")}</span><button disabled={busy || !snapshot.notifications.some((item) => !item.readAt)} onClick={() => void markAllNotifications()}>Marcar todas como lidas</button></div>
             <div className="notification-list">
               {snapshot.notifications.length === 0 && <div className="empty-view"><span>✓</span><strong>Tudo em dia</strong><p>Alertas de SLA, comentários e movimentações aparecerão aqui.</p></div>}
               {snapshot.notifications.map((notification) => <button className={notification.readAt ? "read" : "unread"} key={notification.id} onClick={() => { if (!notification.readAt) void markNotification(notification.id); const card = notification.cardId ? allCards.find((item) => item.id === notification.cardId) : null; if (card) { setNotificationsOpen(false); if (card.archived) setArchiveOpen(true); else openCard(card); } }}><i>{notification.type.includes("sla") ? "!" : "●"}</i><span><strong>{notification.title}</strong><p>{notification.body}</p><time>{formatMoment(notification.createdAt)}</time></span></button>)}
@@ -1415,7 +1587,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
           <section className="workspace-modal card-modal demand-detail-modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
             <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {selectedCard.assigneeName || "Sem responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
-            {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length}</b></button></nav>}
+            {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
             <div className="card-modal-body single">
               {selectedCard && <section className="demand-detail-summary"><div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div><div className="demand-document-state"><span>DOCUMENTOS</span><strong>{selectedCard.checklist.filter((item) => item.completed).length} aprovados</strong><small>{selectedCard.checklist.filter((item) => !item.completed).length} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div><div className="demand-quick-actions">{canEdit && !selectedCard.archived && <><button className="quick-complete" type="button" onClick={completeSelectedCard}><CheckCircle2 aria-hidden="true" /> Concluir</button><button type="button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button><button type="button" onClick={() => focusCardField("card-assignees")}>Responsável</button><button type="button" onClick={() => focusCardField("card-due-at")}>Prazo</button></>}</div></section>}
               {(!selectedCard || cardTab === "details") &&
@@ -1448,7 +1620,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
               {selectedCard && cardTab === "attachments" && <section className="card-tab-panel attachments-panel"><header><div><span>DOCUMENTOS</span><h3>Anexos da demanda</h3><p>PDF, imagem, TXT, CSV, DOCX ou XLSX, com até 20 MB.</p></div>{canEdit && !selectedCard.archived && <label className="upload-button">＋ Enviar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.target.value = ""; }} /></label>}</header><div className="attachment-list">{selectedCard.attachments.length === 0 && <div className="empty-view"><span>↥</span><strong>Nenhum anexo</strong><p>Envie documentos para manter todo o processo no mesmo lugar.</p></div>}{selectedCard.attachments.map((attachment) => <article key={attachment.id}><i>{attachment.filename.split(".").pop()?.toUpperCase()}</i><div><strong>{attachment.filename}</strong><span>{formatFileSize(attachment.sizeBytes)} • {attachment.uploadedBy} • {formatMoment(attachment.createdAt)}</span></div>{canPreviewAttachment(attachment) && <button className="attachment-preview-button" onClick={() => setAttachmentPreview(attachment)}>Visualizar</button>}<a href={attachment.downloadUrl}>Baixar</a>{canEdit && !selectedCard.archived && <button onClick={() => void removeAttachment(attachment.id)} aria-label={`Excluir ${attachment.filename}`}>×</button>}</article>)}</div></section>}
 
-              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO</span><strong>{selectedCard.activities.length}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
+              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
             </div>
           </section>
         </div>
@@ -1490,13 +1662,13 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                 <button className={settingsSection === "security" ? "active" : ""} onClick={() => { setSettingsSection("security"); void loadAuthSessions(); }}><Smartphone aria-hidden="true" /><span>Segurança<small>Dispositivos e sessões</small></span></button>
               </nav>
               <div className="workspace-settings-content">
-                {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{snapshot.boards.length} quadro(s) disponíveis</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}
+                {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}
                 {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
                 {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
                 {settingsSection === "team" && <>
                   <section className="access-admin-hero"><span><Users aria-hidden="true" /></span><div><strong>Controle de acesso do grupo</strong><p>Você define quem entra, qual papel cada pessoa terá e quais empresas poderá consultar ou operar.</p></div><b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b></section>
-                  <section className="workspace-team"><header><div><strong>Usuários liberados</strong><span>{snapshot.members.length} pessoa(s) com acesso ao grupo</span></div><p>O proprietário e os administradores veem todas as empresas. Os demais acessam apenas os CNPJs liberados.</p></header>
-                    <div className="workspace-member-list">{snapshot.members.map((member) => <article key={member.userId}><i>{initials(member.name)}</i><div><strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong><small>{member.email}</small><span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span></div>{isAdmin && !member.isOwner ? <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}><option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option></select> : <b>{roleLabels[member.role]}</b>}{isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}{isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}{isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}</article>)}</div>
+                  <section className="workspace-team"><header><div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div><p>O proprietário e os administradores veem todas as empresas. Os demais acessam apenas os CNPJs liberados.</p></header>
+                    <div className="workspace-member-list">{snapshot.members.map((member) => <article key={member.userId}><i>{initials(member.name)}</i><div><strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong><small>{member.email}</small><span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span></div>{isAdmin && !member.isOwner ? <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}><option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option></select> : <b>{roleLabels[member.role]}</b>}{isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}{isAdmin && !member.isOwner && <details className="member-modules-details"><summary>Acesso por módulo</summary><MemberModules memberId={member.userId} memberName={member.name} canManage={isAdmin} /></details>}{isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}{isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}</article>)}</div>
                   </section>
                   {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}><header><div><strong>Criar e liberar usuário</strong><span>O sistema gerará um link único para a pessoa definir a própria senha.</span></div><b>1. Cadastre · 2. Copie o link · 3. Libere</b></header><div><label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label><label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label><label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label><fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset><button className="primary-button" disabled={busy || !memberEmail.trim()}>Criar usuário e gerar link</button></div></form>}
                 </>}
@@ -1530,22 +1702,150 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
       {/* Recolhido por padrão: um copiloto que ocupa espaço sem ter sido pedido
           atrapalha justamente quem já sabe o que fazer. */}
-      <AssistantPanel screen={viewTitles[view] ?? "Painel"} />
+      <AssistantPanel screen={viewCatalog[view].label} openSignal={assistantSignal} />
     </main>
   );
 }
 
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit }: {
+
+/**
+ * O fluxo da competência (Modelo 2, "Flow").
+ *
+ * No lugar da faixa marinho que dizia "N demanda(s) em andamento" — texto que
+ * o indicador logo abaixo repetia, e cuja concordância "(s)" era ruído de
+ * gerador. O fechamento é o fato mais estruturante do DP: a operação é cíclica
+ * e fecha todo mês, e a interface não dizia isso em lugar nenhum.
+ *
+ * As cinco etapas são os estados que o servidor aceita (`cycleStatuses` em
+ * lib/operations.ts), não uma sequência decorativa: avançar entre elas passa
+ * pelos bloqueios de `describeClosingBlockers`.
+ *
+ * O estado é marcado por forma além de cor — ícone de concluído, anel na
+ * etapa atual, contorno vazio no que falta — para funcionar também para quem
+ * não distingue verde de azul.
+ */
+function ConnectionMap({ integrations, onNavigate }: {
+  integrations: WorkspaceSnapshot["integrations"];
+  onNavigate: (target: ActionTarget) => void;
+}) {
+  /* A peça mais característica do Modelo 2: a marca no centro e os sistemas em
+     volta. Para um produto chamado Vinculato, o desenho é a tese — mas só vale
+     se o que ele mostra for verdade.
+
+     A fonte é `snapshot.integrations`, o que ESTE grupo tem configurado, e não
+     o catálogo do site. O mockup trazia eSocial, FGTS Digital e Pontotel como
+     conectados; nenhum dos três existe no produto, e a §31 é explícita: uma
+     integração só aparece como disponível quando estiver homologada de ponta a
+     ponta. Desenhar linha para conector que não conecta seria vender a conexão
+     na tela de quem já é cliente.
+
+     Semanticamente é uma lista, não um desenho: o arranjo em torno do centro é
+     apresentação, e quem usa leitor de tela recebe nome, estado e última
+     sincronização em texto. */
+  if (!integrations.length) {
+    return <section className="connection-map connection-map-empty" aria-label="Conexões">
+      <h3>Conexões</h3>
+      <p>Nenhum conector configurado neste grupo. As integrações disponíveis aparecem em Estado das integrações.</p>
+      <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
+    </section>;
+  }
+
+  const conectadas = integrations.filter((item) => item.status === "connected").length;
+  const comErro = integrations.filter((item) => item.status === "error").length;
+
+  return <section className="connection-map" aria-label="Conexões">
+    <header>
+      <div>
+        <span>CONEXÕES</span>
+        <strong>{plural(conectadas, "sistema conectado", "sistemas conectados")}</strong>
+        <p>{comErro
+          ? `${plural(comErro, "conector com erro", "conectores com erro")}, de ${plural(integrations.length, "configurado", "configurados")}.`
+          : `de ${plural(integrations.length, "configurado", "configurados")} neste grupo.`}</p>
+      </div>
+      <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
+    </header>
+
+    <div className="connection-map-graph">
+      <p className="connection-map-hub" aria-hidden="true"><VinculatoLogo size={22} compact /></p>
+      <ul>
+        {integrations.map((item) => {
+          const tom = connectionTone(item.status);
+          return <li key={item.id} data-tone={tom}>
+            <i aria-hidden="true" />
+            <span>
+              <strong>{item.displayName}</strong>
+              <small>{connectionStatusLabel(item.status)}
+                {item.status === "connected" ? ` · ${lastSyncLabel(item.lastSyncAt)}` : ""}</small>
+            </span>
+          </li>;
+        })}
+      </ul>
+    </div>
+  </section>;
+}
+
+const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
+
+function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
+  cycles: WorkspaceSnapshot["payrollCycles"];
+  scopeLabel: string;
+  active: number;
+  onNew?: () => void;
+  onNavigate: (target: ActionTarget) => void;
+}) {
+  const progresso = cycleProgress(cycles);
+  const competencia = cycles[0]?.competence ?? "";
+
+  return <section className="competence-flow" aria-label="Fluxo da competência">
+    <header>
+      <div>
+        <span>COMPETÊNCIA · {scopeLabel.toUpperCase()}</span>
+        <strong>{competencia ? competenceLabel(competencia) : "Nenhuma competência aberta"}</strong>
+        {/* "1 ciclo(s) concluído(s)" é ruído de gerador, não texto de produto —
+            a mesma coisa que a §44 já tinha tirado da página de planos. */}
+        <p>{progresso
+          ? progresso.completa
+            ? `${plural(progresso.total, "ciclo concluído", "ciclos concluídos")}. Nada pendente nesta competência.`
+            : `${progresso.concluidos} de ${plural(progresso.total, "ciclo concluído", "ciclos concluídos")} · ${plural(active, "demanda em andamento", "demandas em andamento")}.`
+          : "Abra a competência em Operação DP para acompanhar o fechamento por aqui."}</p>
+      </div>
+      <div className="competence-flow-actions">
+        <button type="button" className="secondary-button" onClick={() => onNavigate("processes")}>Ver fechamento</button>
+        {onNew && <button type="button" className="primary-button" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
+      </div>
+    </header>
+
+    {progresso
+      ? <ol className="competence-flow-track">
+          {cycleStages.map((stage, index) => {
+            const estado = index < progresso.atual ? "done" : index === progresso.atual ? "current" : "todo";
+            return <li key={stage.status} data-state={estado}
+              aria-current={estado === "current" ? "step" : undefined}>
+              <i aria-hidden="true">{estado === "done" ? <Check /> : null}</i>
+              <span><strong>{stage.label}</strong><small>{estado === "done" ? "Concluída" : estado === "current" ? stage.note : "Pendente"}</small></span>
+            </li>;
+          })}
+        </ol>
+      : null}
+  </section>;
+}
+
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations }: {
   onNavigate: (target: ActionTarget) => void;
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
   activities: ActivityEvent[];
+  cycles: WorkspaceSnapshot["payrollCycles"];
+  integrations: WorkspaceSnapshot["integrations"];
   stats: { active: number; attention: number; waiting: number; onTime: number; completed: number; documentsPending: number; activeCompanies: number };
   onOpen: (card: Card) => void;
   onOpenBoard: () => void;
   onNew: () => void;
   canEdit: boolean;
+  /** Empresa do recorte; vazio = todas as autorizadas. */
+  companyId: string;
+  scopeLabel: string;
 }) {
   const attention = cards.filter((card) => card.slaStatus === "overdue" || card.slaStatus === "warning").sort((a, b) => (a.slaStatus === "overdue" ? -1 : 1) - (b.slaStatus === "overdue" ? -1 : 1));
   const companyById = new Map(companies.map((company) => [company.id, company]));
@@ -1555,18 +1855,28 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   const visibleColumns = lists.slice(0, 3);
 
   return <div className="overview-layout">
-    <ActionCenter onNavigate={onNavigate} />
+    <CompetenceFlow cycles={cycles} scopeLabel={scopeLabel} active={stats.active}
+      onNew={canEdit ? onNew : undefined} onNavigate={onNavigate} />
 
-    <section className="overview-hero">
-      <div><span>RESUMO OPERACIONAL</span><strong>{stats.active ? `${stats.active} demanda(s) em andamento.` : "Tudo sob controle por enquanto."}</strong><p>Priorize o que vence primeiro e mantenha cada empresa atualizada sem abrir planilhas paralelas.</p></div>
-      {canEdit && <button className="primary-button overview-new-demand" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
-    </section>
+    {/* Lado a lado, como o Modelo 2 põe: o que precisa de você e o que está
+        ligado. Antes a central de ação abria a tela sozinha, em largura
+        inteira, para dizer quase sempre "nenhuma pendência" — o estado mais
+        comum ocupando o lugar mais nobre. */}
+    <div className="overview-pair">
+      <ActionCenter onNavigate={onNavigate} companyId={companyId} />
+      <ConnectionMap integrations={integrations} onNavigate={onNavigate} />
+    </div>
 
     <section className="overview-metrics" aria-label="Indicadores principais">
-      <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{stats.completed} concluída(s) no quadro</small></article>
+      <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída no quadro", "concluídas no quadro")}</small></article>
       <article className={stats.attention ? "requires-attention" : ""}><span>SLA em risco</span><strong>{stats.attention}</strong><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small></article>
       <article><span>Documentos pendentes</span><strong>{stats.documentsPending}</strong><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small></article>
-      <article><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><small>Cadastros disponíveis na operação</small></article>
+      {/* Com uma empresa escolhida, "Empresas ativas: 3" seria um número do
+          grupo inteiro sentado entre três números do recorte — o tipo de
+          vizinhança que faz ler errado sem perceber. */}
+      {companyId
+        ? <article><span>Empresa em foco</span><strong className="overview-metric-name">{scopeLabel}</strong><small>Os números acima são só desta empresa</small></article>
+        : <article><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><small>Cadastros disponíveis na operação</small></article>}
     </section>
 
     <section className="overview-sla-band">
@@ -2059,7 +2369,7 @@ function PlannerView({ cards, blocks, connections, onOpen, onCreateBlock, onDele
   );
 }
 
-function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {
+function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRules, canExportWorkspace, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; companyId: string; scopeLabel: string; canExportWorkspace: boolean; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {
   const [report, setReport] = useState<{ from: string; to: string; total: number; completed: number; completionRate: number; averageCompletionHours: number; activityCount: number; byProcess: Record<string, number>; hrMetrics?: { admissions: number; terminations: number; averageHeadcount: number; payrollCostTotal: number; turnoverRate: number; payrollByCompany: Record<string, number> } } | null>(null);
   const [reportDays, setReportDays] = useState("30");
   const [reportLoading, setReportLoading] = useState(true);
@@ -2068,7 +2378,8 @@ function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onEx
     const controller = new AbortController();
     const to = new Date();
     const from = new Date(Date.now() - (Number(reportDays) - 1) * 86400000);
-    void fetch(`/api/reports?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`, { signal: controller.signal })
+    const escopo = companyId ? `&companyId=${encodeURIComponent(companyId)}` : "";
+    void fetch(`/api/reports?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}${escopo}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar o relatório.");
         return response.json();
@@ -2081,15 +2392,24 @@ function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onEx
       })
       .finally(() => { if (!controller.signal.aborted) setReportLoading(false); });
     return () => controller.abort();
-  }, [reportDays]);
+  }, [reportDays, companyId]);
   const processes = Object.entries(cards.reduce<Record<string, number>>((accumulator, card) => { accumulator[card.processType] = (accumulator[card.processType] ?? 0) + 1; return accumulator; }, {})).sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...processes.map(([, count]) => count));
   const statusCounts = { safe: 0, warning: 0, overdue: 0, paused: 0, completed: 0 };
   cards.forEach((card) => { statusCounts[card.slaStatus] += 1; });
   return (
     <div className="indicators-layout">
-      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência.</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><Users aria-hidden="true" /><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><Plus aria-hidden="true" /><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><ArrowRight aria-hidden="true" /><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><WalletCards aria-hidden="true" /><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
-      <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s)</span></div><button className="export-button" onClick={onExport}><Download aria-hidden="true" /> Exportar CSV</button></header><div className="process-bars">{processes.length === 0 && <div className="panel-empty">Nenhuma demanda nos filtros atuais.</div>}{processes.map(([process, count]) => <div key={process}><span>{process}</span><i><b style={{ width: `${(count / max) * 100}%` }} /></i><strong>{count}</strong></div>)}</div></section>
+      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência · {scopeLabel}</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><Users aria-hidden="true" /><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><Plus aria-hidden="true" /><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><ArrowRight aria-hidden="true" /><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><WalletCards aria-hidden="true" /><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
+      <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s) · {scopeLabel}</span></div><div className="export-actions">
+        <button className="export-button" onClick={onExport}><Download aria-hidden="true" /> Exportar CSV</button>
+        {/* A exportação completa do grupo (§50) mora aqui porque esta é a tela
+            de tirar dado do produto. A rota já existia e a página de privacidade
+            passou a dizer que o administrador exporta a qualquer momento —
+            sem porta, seria mais uma promessa sem porta. */}
+        {canExportWorkspace && <a className="export-button" href="/api/workspace/export" download title="Empresas, colaboradores, demandas, competências, obrigações, pagamentos e auditoria em um JSON. Segredos cifrados, chaves internas e o conteúdo dos anexos ficam de fora, e o arquivo diz quais.">
+          <Download aria-hidden="true" /> Exportar tudo (JSON)
+        </a>}
+      </div></header><div className="process-bars">{processes.length === 0 && <div className="panel-empty">Nenhuma demanda nos filtros atuais.</div>}{processes.map(([process, count]) => <div key={process}><span>{process}</span><i><b style={{ width: `${(count / max) * 100}%` }} /></i><strong>{count}</strong></div>)}</div></section>
       <section className="sla-panel"><header><strong>Saúde dos SLAs</strong><span>Visão atual</span></header><div className="sla-donut" style={{ background: `conic-gradient(#23d8a1 0 ${(statusCounts.safe / Math.max(1, cards.length)) * 100}%, #f2a13e 0 ${((statusCounts.safe + statusCounts.warning) / Math.max(1, cards.length)) * 100}%, #ef5b5b 0 ${((statusCounts.safe + statusCounts.warning + statusCounts.overdue) / Math.max(1, cards.length)) * 100}%, #8b98a7 0 100%)` }}><span><strong>{cards.length - statusCounts.overdue}</strong><small>sob controle</small></span></div><ul><li><i className="safe" />No prazo <b>{statusCounts.safe}</b></li><li><i className="warning" />Atenção <b>{statusCounts.warning}</b></li><li><i className="overdue" />Atrasadas <b>{statusCounts.overdue}</b></li><li><i className="paused" />Pausadas/concluídas <b>{statusCounts.paused + statusCounts.completed}</b></li></ul></section>
       <section className="report-panel" aria-live="polite"><header><div><strong>Histórico e produtividade</strong><span>Indicadores calculados a partir da auditoria do workspace.</span></div><select value={reportDays} onChange={(event) => { setReportDays(event.target.value); setReportLoading(true); setReportError(""); }}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></header>{reportLoading && <div className="report-state"><i /> Atualizando relatório…</div>}{reportError && <div className="report-state error"><CircleAlert aria-hidden="true" /> {reportError}</div>}{report && !reportLoading && <div className="report-metrics"><article><strong>{report.total}</strong><span>Demandas no período</span></article><article><strong>{report.completionRate}%</strong><span>Taxa de conclusão</span></article><article><strong>{report.averageCompletionHours}h</strong><span>Tempo médio</span></article><article><strong>{report.activityCount}</strong><span>Eventos auditados</span></article></div>}<div className="report-process-list">{report && !reportLoading && Object.entries(report.byProcess).sort((a, b) => b[1] - a[1]).map(([process, count]) => <span key={process}><b>{process}</b><i style={{ width: `${Math.max(8, (count / Math.max(1, report.total)) * 100)}%` }} /><em>{count}</em></span>)}</div></section>
       <section className="rules-panel"><header><div><strong>Automações nativas</strong><span>Gatilho → condição → ação</span></div><b>{rules.filter((rule) => rule.enabled).length} ativas</b></header><div>{rules.map((rule, index) => <article key={rule.id}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{rule.name}</strong><small>{rule.trigger.replaceAll(".", " ")}</small></div><label className="rule-switch"><input type="checkbox" checked={rule.enabled} disabled={busy || !canManageRules} onChange={(event) => void onToggleRule(rule.id, event.target.checked)} /><i /></label></article>)}</div></section>

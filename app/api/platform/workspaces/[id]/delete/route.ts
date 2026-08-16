@@ -143,10 +143,21 @@ export async function POST(request: Request, { params }: Params) {
         d1.prepare("DELETE FROM fdp_audit_events WHERE workspace_id = ?").bind(id),
         // O resto sai em cascata a partir daqui.
         d1.prepare("DELETE FROM fdp_workspaces WHERE id = ?").bind(id),
-        // As contas órfãs saem depois do grupo: enquanto ele existir, elas ainda
-        // têm associação.
+        // A trilha de acesso não tem `workspace_id` — o login acontece antes de
+        // existir workspace —, então ela não sai na varredura por tenant. Sem
+        // este passo, o e-mail de quem foi excluído sobreviveria na trilha,
+        // ligado a nada, e a exclusão não seria exclusão.
+        //
+        // O evento em si fica: horário, resultado e origem em hash continuam
+        // valendo para investigar um acesso indevido que já tenha acontecido. O
+        // que sai é o identificador pessoal. Isso é anonimização, não descarte,
+        // e é o que permite honrar o pedido de exclusão sem cegar a segurança.
         ...(orphanIds.length > 0
-          ? [d1.prepare(`DELETE FROM fdp_users WHERE id IN (${orphanIds.map(() => "?").join(", ")})`).bind(...orphanIds)]
+          ? [
+            d1.prepare(`UPDATE fdp_auth_events SET email = '(conta excluída)', user_id = NULL
+              WHERE user_id IN (${orphanIds.map(() => "?").join(", ")})`).bind(...orphanIds),
+            d1.prepare(`DELETE FROM fdp_users WHERE id IN (${orphanIds.map(() => "?").join(", ")})`).bind(...orphanIds),
+          ]
           : []),
       ]);
 

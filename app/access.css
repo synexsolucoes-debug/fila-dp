@@ -342,7 +342,10 @@
 .dashboard-task-labels .blue { color: #286c9f; background: #e1f2fc; }
 .dashboard-task-labels .purple { color: #7750a3; background: #f0e8fa; }
 .dashboard-task-labels .green { color: #24785c; background: #ddf6ed; }
-.dashboard-task-labels .orange { color: #a75f16; background: #fff0dc; }
+/* #a75f16 dava 4.37:1 sobre #fff0dc e reprovava o mínimo 4.5 da WCAG 2.2 AA.
+   O defeito só aparecia com demanda de verdade na tela: com o quadro vazio, o
+   rótulo de processo nunca era pintado. */
+.dashboard-task-labels .orange { color: #a25c15; background: #fff0dc; }
 .dashboard-task-labels .gray { color: #545e6e; background: #edf0f2; }
 .dashboard-task h2 { margin: 10px 0 4px; font-size: 11px; line-height: 1.4; letter-spacing: -.01em; }
 .dashboard-task > p { margin: 0; color: #6b7789; font-size: 8px; }
@@ -1054,7 +1057,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .demand-table-view td strong { color: #243349; font-size: 9px; }
 .demand-table-view td small { margin-top: 4px; color: #8a96a2; font-size: 7px; }
 .table-process { padding: 4px 6px; border-radius: 4px; font-size: 7px; font-weight: 750; }
-.table-process.blue { color: #286c9f; background: #e1f2fc; }.table-process.purple { color: #7750a3; background: #f0e8fa; }.table-process.green { color: #24785c; background: #ddf6ed; }.table-process.orange { color: #a75f16; background: #fff0dc; }.table-process.gray { color: #657083; background: #edf0f2; }
+.table-process.blue { color: #286c9f; background: #e1f2fc; }.table-process.purple { color: #7750a3; background: #f0e8fa; }.table-process.green { color: #24785c; background: #ddf6ed; }.table-process.orange { color: #a25c15; background: #fff0dc; }.table-process.gray { color: #657083; background: #edf0f2; }
 .demand-table-view td em, .demand-calendar-view button { font-style: normal; }
 .demand-table-view td em { padding: 5px 6px; border-radius: 4px; font-size: 7px; font-weight: 750; }.demand-table-view td em.safe { color: #167354; background: #dff7ee; }.demand-table-view td em.warning { color: #9a591b; background: #fff0dc; }.demand-table-view td em.overdue { color: #a33b3b; background: #fee9e7; }.demand-table-view td em.paused, .demand-table-view td em.completed { color: #596779; background: #edf0f2; }
 .demand-calendar-view > header { justify-content: center; }.demand-calendar-view > header > button { width: 32px; height: 32px; border: 1px solid #dfe5e5; border-radius: 6px; background: #fff; color: #526176; cursor: pointer; }.demand-calendar-view > header > div { min-width: 180px; text-align: center; }

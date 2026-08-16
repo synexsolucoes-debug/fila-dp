@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Cable, CircleDot, Clock3, KeyRound, LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle, Cable, Clock3, KeyRound, RefreshCw } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { normalizeOverview, requestJson, type Row } from "./integrations.api";
 import type { IntegrationsOverview } from "./integrations.types";
 import { SankhyaConnectorPanel } from "./SankhyaConnectorPanel";
+import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
 const empty: IntegrationsOverview = {
@@ -32,7 +33,7 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
     const frame = window.requestAnimationFrame(() => void load());
     return () => window.cancelAnimationFrame(frame);
   }, [load, role]);
-  if (loading) return <section className={styles.workspace}><div className={styles.loadingState}><LoaderCircle className={styles.spin} /><strong>Carregando estado das integrações</strong></div></section>;
+  if (loading) return <section className={styles.workspace}><LoadingState size="page" title="Carregando estado das integrações" text="Consultando conectores, fila e execuções recentes…" /></section>;
 
   const queue = overview.queue.reduce((sum, item) => sum + item.count, 0);
   const failures = overview.runs.filter((run) => run.status === "failed" || run.status === "partial").length;
@@ -41,7 +42,7 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
 
   return <section className={styles.workspace}>
     <div className={styles.connectionRail}><header><span><Cable /><strong>INTEGRAÇÕES DO WORKSPACE</strong><small>Dados e credenciais segregados por organização</small></span><button className={styles.refreshButton} onClick={() => void load()}><RefreshCw />Atualizar</button></header></div>
-    {error && <div className={styles.errorBanner}><AlertTriangle /><span><strong>Não foi possível consultar o estado</strong>{error}</span></div>}
+    {error && <ErrorBanner title="Não foi possível consultar o estado" message={error} />}
     <div className={styles.kpis}>
       <article data-tone="safe"><span><Cable /></span><div><small>Conectadas</small><strong>{overview.connectors.filter((item) => item.status === "connected").length}</strong><em>{overview.connectors.length} configuradas</em></div></article>
       <article data-tone={queue ? "warning" : "safe"}><span><Clock3 /></span><div><small>Fila</small><strong>{queue}</strong><em>jobs persistidos</em></div></article>
@@ -51,8 +52,8 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
 
     {sankhya && <SankhyaConnectorPanel connector={sankhya} runs={overview.runs} companies={overview.companies} permissions={overview.permissions} refresh={refresh} />}
 
-    <section className={styles.tabPanel}><header className={styles.panelHeader}><div><span className={styles.eyebrow}>OUTRAS CONEXÕES</span><h3>Disponibilidade e última sincronização</h3><p>Configuração sensível só aparece para usuários que possuam a permissão correspondente.</p></div></header>
-      {standardConnectors.length ? <div className={styles.connectorRack}>{standardConnectors.map((connector) => <article key={connector.id} data-status={connector.status}><header><span className={styles.connectorIcon}><Cable /></span><div><small>{connector.channel.toUpperCase()}</small><strong>{connector.displayName}</strong></div><span className={styles.statusPill} data-tone={tone(connector.status)}><CircleDot />{connector.status.replaceAll("_", " ")}</span></header><dl><div><dt>Última sincronização</dt><dd><Clock3 />{date(connector.lastSyncAt)}</dd></div><div><dt>Credencial</dt><dd><KeyRound />{connector.hasCredentials ? "configurada" : "não configurada"}</dd></div></dl>{connector.lastError && <div className={styles.safeError}><AlertTriangle />{connector.lastError}</div>}</article>)}</div> : <div className={styles.emptyState}><span><Cable /></span><strong>Nenhuma outra integração configurada</strong><p>O conector Sankhya, quando habilitado, aparece acima.</p></div>}
+    <section className={styles.tabPanel}><PanelHeader eyebrow="OUTRAS CONEXÕES" title="Disponibilidade e última sincronização" description="Configuração sensível só aparece para usuários que possuam a permissão correspondente." />
+      {standardConnectors.length ? <div className={styles.connectorRack}>{standardConnectors.map((connector) => <article key={connector.id} data-status={connector.status}><header><span className={styles.connectorIcon}><Cable /></span><div><small>{connector.channel.toUpperCase()}</small><strong>{connector.displayName}</strong></div><StatusPill status={connector.status} tone={tone(connector.status)} label={connector.status.replaceAll("_", " ")} /></header><dl><div><dt>Última sincronização</dt><dd><Clock3 />{date(connector.lastSyncAt)}</dd></div><div><dt>Credencial</dt><dd><KeyRound />{connector.hasCredentials ? "configurada" : "não configurada"}</dd></div></dl>{connector.lastError && <div className={styles.safeError}><AlertTriangle />{connector.lastError}</div>}</article>)}</div> : <EmptyState icon={Cable} title="Nenhuma outra integração configurada" text="O conector Sankhya, quando habilitado, aparece acima." />}
     </section>
   </section>;
 }

@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
     const channel = ["manual", "email", "whatsapp", "teams"].includes(String(body.channel)) ? String(body.channel) : "manual";
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     await d1.prepare("INSERT INTO fdp_workspace_inbox_items (id, workspace_id, channel, sender_name, subject, body, status) VALUES (?, ?, ?, ?, ?, ?, 'new')")
       .bind(crypto.randomUUID(), workspace.id, channel, senderName, subject, text(body.body))
       .run();

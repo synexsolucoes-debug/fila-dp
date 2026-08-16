@@ -36,12 +36,15 @@ async function configuration(workspaceId: string, platformUserId: string) {
     scoped.prepare("SELECT holiday_date, name FROM fdp_business_holidays WHERE workspace_id = ? ORDER BY holiday_date").bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, process_type, target_business_days, warning_business_days, active FROM fdp_sla_policies WHERE workspace_id = ? ORDER BY process_type").bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM fdp_automation_rules WHERE workspace_id = ? ORDER BY position").bind(workspaceId).all<Row>(),
+    // `grant` é palavra reservada do PostgreSQL: usada como apelido, derruba a
+    // consulta com `syntax error at or near "grant"` e a tela de configuração do
+    // workspace no console da plataforma não abre. Daí `module_grant`.
     scoped.prepare(`SELECT module.key, module.name, module.description, module.category, module.status,
-        (plan_module.module_key IS NOT NULL) AS in_plan, grant.granted, grant.reason, grant.expires_at
+        (plan_module.module_key IS NOT NULL) AS in_plan, module_grant.granted, module_grant.reason, module_grant.expires_at
       FROM fdp_modules module
       LEFT JOIN fdp_plan_modules plan_module ON plan_module.module_key = module.key
         AND plan_module.plan_id = (SELECT plan_id FROM fdp_workspace_subscriptions WHERE workspace_id = ?)
-      LEFT JOIN fdp_workspace_module_grants grant ON grant.workspace_id = ? AND grant.module_key = module.key
+      LEFT JOIN fdp_workspace_module_grants module_grant ON module_grant.workspace_id = ? AND module_grant.module_key = module.key
       ORDER BY module.position`).bind(workspaceId, workspaceId).all<Row>(),
     scoped.prepare("SELECT user_id, module_key, granted, reason, updated_at FROM fdp_member_module_grants WHERE workspace_id = ? ORDER BY user_id, module_key").bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, name, prefix, scopes_json, rate_limit_per_minute, status, last_used_at, expires_at, created_at FROM fdp_api_keys WHERE workspace_id = ? ORDER BY created_at DESC").bind(workspaceId).all<Row>(),

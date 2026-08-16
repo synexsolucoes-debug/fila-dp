@@ -31,7 +31,11 @@ function dueLabel(value: string | null) {
  * decorativo. Indicadores zerados são mantidos fora da lista para que a tela
  * responda de fato "o que precisa ser feito agora?".
  */
-export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget) => void }) {
+export function ActionCenter({ onNavigate, companyId = "" }: {
+  onNavigate: (target: ActionTarget) => void;
+  /** Empresa escolhida na barra superior. Vazio = todas as autorizadas. */
+  companyId?: string;
+}) {
   const [items, setItems] = useState<ActionItem[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [criticalTotal, setCriticalTotal] = useState(0);
@@ -42,7 +46,11 @@ export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget
   const load = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true); else setLoading(true);
     try {
-      const response = await fetch("/api/dashboard/action-center", { cache: "no-store" });
+      // A rota já aceitava `companyId` e conferia o acesso; era o painel que
+      // nunca enviava. O seletor de empresa da barra superior ficava aparente
+      // em toda tela e não mexia em número nenhum aqui.
+      const query = companyId ? `?companyId=${encodeURIComponent(companyId)}` : "";
+      const response = await fetch(`/api/dashboard/action-center${query}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({})) as Payload;
       if (!response.ok) throw new Error(payload.error || "Não foi possível carregar as pendências.");
       setItems(payload.items ?? []);
@@ -55,7 +63,7 @@ export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => void load());
@@ -75,7 +83,7 @@ export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget
               ? "Consultando pendências da operação…"
               : active.length === 0
                 ? "Nenhuma pendência aberta nos módulos que você acompanha."
-                : `${pendingTotal} pendência(s) em aberto${criticalTotal ? `, ${criticalTotal} crítica(s)` : ""}.`}
+                : `${pendingTotal === 1 ? "1 pendência em aberto" : `${pendingTotal} pendências em aberto`}${criticalTotal ? `, ${criticalTotal === 1 ? "1 crítica" : `${criticalTotal} críticas`}` : ""}.`}
           </p>
         </div>
         <button className={styles.refresh} type="button" onClick={() => void load(true)} disabled={refreshing || loading}>
@@ -101,14 +109,18 @@ export function ActionCenter({ onNavigate }: { onNavigate: (target: ActionTarget
         <ul className={styles.grid}>
           {active.map((item) => (
             <li key={item.key}>
-              <button type="button" data-tone={item.tone} onClick={() => onNavigate(item.target)}>
+              <button type="button" data-tone={item.tone} onClick={() => onNavigate(item.target)}
+                title={`${item.amount !== null && item.amount > 0 ? `${money(item.amount)} · ` : ""}${item.earliestDueDate ? dueLabel(item.earliestDueDate) : item.description}`}>
                 <span className={styles.count}>{item.count}</span>
                 <span className={styles.label}>{item.label}</span>
+                {/* O detalhe continua no DOM para leitor de tela: numa linha
+                    compacta ele não cabe à vista, mas some-lo do acessível
+                    tiraria justamente o prazo e o valor de quem mais precisa. */}
                 <span className={styles.description}>
                   {item.amount !== null && item.amount > 0 ? `${money(item.amount)} · ` : ""}
                   {item.earliestDueDate ? dueLabel(item.earliestDueDate) : item.description}
                 </span>
-                <span className={styles.cta} aria-hidden="true">Abrir <ArrowRight /></span>
+                <span className={styles.cta} aria-hidden="true"><ArrowRight /></span>
               </button>
             </li>
           ))}

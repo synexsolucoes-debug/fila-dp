@@ -8,7 +8,7 @@ import { Empty, ErrorState, FeatureHeader, FeatureProps, Loading, MetricCard, No
 export function BillingFeature({ params, updateQuery }: FeatureProps) {
   const resource = usePlatformResource<Row>("/api/platform/billing"); const overview = usePlatformResource<{ plans: Row[] }>("/api/platform/overview");
   const leadStatus = params.get("leadStatus") ?? ""; const leadCursor = params.get("leadCursor") ?? "";
-  const leads = usePlatformResource<{ leads: Row[]; nextCursor?: string }>(`/api/platform/leads?${new URLSearchParams({ ...(leadStatus ? { status: leadStatus } : {}), ...(leadCursor ? { cursor: leadCursor } : {}), limit: "30" })}`);
+  const leads = usePlatformResource<{ leads: Row[]; nextCursor?: string; privacyRequests?: { open: number; oldestDays: number; deadlineDays: number } }>(`/api/platform/leads?${new URLSearchParams({ ...(leadStatus ? { status: leadStatus } : {}), ...(leadCursor ? { cursor: leadCursor } : {}), limit: "30" })}`);
   const [editingPlan, setEditingPlan] = useState<Row | null>(null); const [notice, setNotice] = useState("");
   const metrics = (resource.data?.metrics ?? {}) as Row; const invoices = (resource.data?.invoices ?? {}) as Row; const events = (resource.data?.webhookEvents ?? {}) as Row; const configuration = (resource.data?.configuration ?? {}) as Row;
   const unavailable = [["Variação de MRR", metrics.mrrChange], ["Churn de receita", metrics.revenueChurn], ["LTV", metrics.ltv]] as [string, unknown][];
@@ -19,9 +19,45 @@ export function BillingFeature({ params, updateQuery }: FeatureProps) {
       <Panel title="Planos publicados" subtitle="Alteração de preço cria uma nova versão; contratos antigos preservam o valor contratado."><div className={styles.cardGrid}>{(overview.data?.plans ?? []).map((plan) => <article key={text(plan.id)}><header><strong>{text(plan.name)}</strong><Status value={text(plan.status)} /></header><p>{text(plan.description)}</p><dl><div><dt>Mensal</dt><dd>{money(plan.monthlyPriceCents)}</dd></div><div><dt>Assentos</dt><dd>{number(plan.includedSeats)}</dd></div><div><dt>Empresas</dt><dd>{number(plan.companyLimit)}</dd></div></dl><button type="button" className={styles.smallAction} onClick={() => setEditingPlan(plan)}><Pencil aria-hidden="true" />Editar plano</button></article>)}</div></Panel>
       <Panel title="Faturas recentes" subtitle="Valores e status persistidos pelo subsistema de cobrança."><div className={styles.tableWrap}><table><thead><tr><th>Workspace</th><th>Status</th><th>Valor devido</th><th>Valor pago</th><th>Período</th></tr></thead><tbody>{(Array.isArray(invoices.recent) ? invoices.recent as Row[] : []).map((row) => <tr key={text(row.id)}><td>{text(row.workspace_name)}</td><td><Status value={text(row.status)} /></td><td>{money(row.amount_due_cents, text(row.currency) || "BRL")}</td><td>{money(row.amount_paid_cents, text(row.currency) || "BRL")}</td><td>{date(row.period_ends_at)}</td></tr>)}</tbody></table></div>{!(Array.isArray(invoices.recent) && invoices.recent.length) && <Empty />}</Panel>
       <div className={styles.twoColumns}><Panel title="Eventos de cobrança" subtitle="Webhook por estado."><dl className={styles.counterList}>{Object.entries((events.totals ?? {}) as Row).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{number(value)}</dd></div>)}</dl></Panel><Panel title="Configuração" subtitle="Somente presença; nenhum segredo é exibido."><dl className={styles.counterList}>{Object.entries(configuration).map(([key, value]) => <div key={key}><dt>{key}</dt><dd><Status value={value ? "ready" : "missing"} /></dd></div>)}</dl></Panel></div></>}
+    {/* Pedidos de titular, separados do comercial (§50).
+        A página de privacidade promete resposta em até 15 dias e manda o
+        titular usar o formulário de contato. Sem esta faixa, o pedido chegava
+        indistinguível de quem quer falar de preço, numa lista chamada "Leads
+        comerciais", e o prazo corria sem nada marcá-lo. */}
+    <PrivacyRequestsNotice data={leads.data?.privacyRequests} onOpen={() => updateQuery({ leadStatus: "new", leadCursor: null })} />
     <Panel title="Leads comerciais" subtitle="Contatos do site, com detalhe e andamento auditado."><div className={styles.filterBar}><select value={leadStatus} onChange={(event) => updateQuery({ leadStatus: event.target.value || null, leadCursor: null })} aria-label="Filtrar leads"><option value="">Todos</option><option value="new">Novos</option><option value="contacted">Contatados</option><option value="qualified">Qualificados</option><option value="discarded">Descartados</option></select></div>{leads.loading && !leads.data ? <Loading /> : leads.error ? <ErrorState message={leads.error} retry={leads.refresh} /> : <><div className={styles.tableWrap}><table><thead><tr><th>Contato</th><th>Empresa</th><th>Interesse</th><th>Recebido</th><th>Andamento</th></tr></thead><tbody>{(leads.data?.leads ?? []).map((lead) => <LeadRow key={text(lead.id)} lead={lead} onChanged={() => { setNotice("Andamento comercial atualizado e auditado."); leads.refresh(); resource.refresh(); }} />)}</tbody></table></div>{!(leads.data?.leads.length) && <Empty />}<div className={styles.pagination}><button disabled={!leadCursor} onClick={() => updateQuery({ leadCursor: null })}>Primeira página</button><button disabled={!leads.data?.nextCursor} onClick={() => updateQuery({ leadCursor: leads.data?.nextCursor ?? null })}>Próxima página</button></div></>}</Panel>
     {editingPlan && <PlanDialog plan={editingPlan} onClose={() => setEditingPlan(null)} onSaved={() => { setEditingPlan(null); setNotice("Plano atualizado, com nova versão de preço quando aplicável."); overview.refresh(); resource.refresh(); }} />}
   </>;
+}
+
+/**
+ * Fila de pedidos de titular.
+ *
+ * Mostra o mais antigo em dias contra o prazo já publicado — o número vem de
+ * `PRIVACY_REQUEST_DEADLINE_DAYS`, para a página e o console falarem do mesmo
+ * compromisso. Não é garantia nova: é o prazo que a política já declara,
+ * ficando visível para quem precisa cumpri-lo.
+ */
+function PrivacyRequestsNotice({ data, onOpen }: {
+  data?: { open: number; oldestDays: number; deadlineDays: number };
+  onOpen: () => void;
+}) {
+  if (!data || data.open === 0) return null;
+  // A idade vem contada do servidor: contar aqui tornaria o componente impuro,
+  // e o relógio do navegador não é a referência do prazo.
+  const dias = data.oldestDays;
+  const vencido = dias >= data.deadlineDays;
+  return (
+    <Panel title="Pedidos de titular (LGPD)"
+      subtitle={`A política publicada promete resposta em até ${data.deadlineDays} dias.`}>
+      <div className={styles.filterBar} role={vencido ? "alert" : undefined}>
+        <strong>{data.open} pedido(s) em aberto</strong>
+        <span>mais antigo há {dias} dia(s)</span>
+        <Status value={vencido ? "overdue" : dias >= data.deadlineDays - 5 ? "warning" : "ready"} />
+        <button type="button" className={styles.smallAction} onClick={onOpen}>Ver na fila</button>
+      </div>
+    </Panel>
+  );
 }
 
 function LeadRow({ lead, onChanged }: { lead: Row; onChanged: () => void }) {

@@ -15,8 +15,15 @@
   min-width: 0;
   color: var(--pay-text);
 }
-.workspace[data-module="psychology"] { --pay-accent: #6550a1; --pay-accent-soft: #f0ecfa; }
-.workspace[data-module="contractors"] { --pay-accent: #9a5c20; --pay-accent-soft: #f8eee2; }
+/* O acento troca no token semântico, não só no alias local (§13, §16).
+ *
+ * A versão anterior redefinia apenas `--aux-accent`, e o estado vazio e o selo
+ * de status — que passaram a vir do módulo compartilhado — leem `--ui-accent`.
+ * O resultado seria a tela de Psicologia com o cabeçalho violeta e o ícone do
+ * estado vazio azul, na mesma tela. Sobrescrever o token semântico dentro do
+ * escopo alcança os dois, porque o alias local resolve a partir dele. */
+.workspace[data-module="psychology"] { --ui-accent: var(--module-psychology); --ui-accent-text: var(--module-psychology-text); --ui-accent-soft: var(--module-psychology-soft); --ui-on-accent: var(--module-on-accent); }
+.workspace[data-module="contractors"] { --ui-accent: var(--module-contractors); --ui-accent-text: var(--module-contractors-text); --ui-accent-soft: var(--module-contractors-soft); --ui-on-accent: var(--module-on-accent); }
 .workspace button, .workspace input, .workspace select, .workspace textarea { font: inherit; }
 .workspace button { color: inherit; }
 .workspace svg { width: 16px; height: 16px; stroke-width: 1.9; }
@@ -128,12 +135,11 @@
 
 .reportBar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
-.emptyState, .loadingState, .errorState, .warningState, .privacyNotice {
+.noteLine, .loadingLine, .warningState, .privacyNotice {
   display: flex; align-items: center; gap: 9px; padding: 13px 15px; margin: 0 0 12px;
   border: 1px solid var(--pay-border); border-radius: 11px; background: var(--pay-surface);
   font-size: .77rem; color: var(--pay-soft);
 }
-.errorState { border-color: color-mix(in srgb, var(--pay-danger) 45%, transparent); color: var(--pay-danger); }
 .warningState { border-color: color-mix(in srgb, var(--pay-warning) 45%, transparent); color: var(--pay-warning); }
 .privacyNotice { border-color: color-mix(in srgb, var(--pay-accent) 40%, transparent); color: var(--pay-accent-text); }
 .spin { animation: paymentSpin 1s linear infinite; }

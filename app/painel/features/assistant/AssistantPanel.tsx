@@ -25,7 +25,7 @@ type Status = {
   messages: Message[];
 };
 
-export function AssistantPanel({ screen }: { screen: string }) {
+export function AssistantPanel({ screen, openSignal = 0 }: { screen: string; openSignal?: number }) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -52,6 +52,16 @@ export function AssistantPanel({ screen }: { screen: string }) {
     const frame = window.requestAnimationFrame(() => void load());
     return () => window.cancelAnimationFrame(frame);
   }, [load, open]);
+
+  // O botão "Ajuda" da barra superior abre por aqui. Ele existia e respondia
+  // com uma frase fixa — "use a busca global" —, que é um botão de ajuda que
+  // não ajuda. A capacidade de responder já estava construída neste painel: as
+  // instruções dele mandam explicar o caminho e apontar a tela e o botão.
+  useEffect(() => {
+    if (openSignal <= 0) return;
+    const frame = window.requestAnimationFrame(() => setOpen(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [openSignal]);
 
   // Esc fecha: o painel não pode virar uma parede entre a pessoa e a tela.
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { ApiError, apiError, computeSlaStatus, getApiUser, text, validDueAt, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 import { replaceCardRelations } from "@/lib/fila-dp-relations";
 import { validCompetence } from "@/lib/operations";
 
@@ -13,6 +14,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     const current = await d1.prepare("SELECT * FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
 
@@ -90,6 +92,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
     if (!result.meta.changes) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertOctagon, Download, FileUp, LoaderCircle, RefreshCw } from "lucide-react";
 import { requestJson } from "./payments.api";
+import { ErrorBanner } from "../shared";
 import styles from "./payments.module.css";
 
 /**
@@ -182,7 +183,7 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
         </p>
       )}
 
-      {error && <p className={styles.errorState} role="alert">{error}</p>}
+      {error && <ErrorBanner message={error} />}
       {notice && <p className={styles.hint} role="status">{notice}</p>}
 
       <div className={styles.cajuActions}>

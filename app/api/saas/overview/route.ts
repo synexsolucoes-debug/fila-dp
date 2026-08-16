@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { requireCapability } from "@/lib/authorization";
+import { hasCapability, requireCapability } from "@/lib/authorization";
 import { getWorkspaceContext } from "@/lib/fila-dp-db";
 import { isPlatformAdmin } from "@/lib/platform-authorization";
 import { parseStringArray, publicPlan } from "@/lib/saas";
@@ -58,7 +58,16 @@ export async function GET() {
         members: Number(usage?.members ?? 0), companies: Number(usage?.companies ?? 0),
         integrations: Number(usage?.integrations ?? 0), storageMb: Number(usage?.storage_mb ?? 0),
       },
-      permissions: { manage: true, platform: isPlatformAdmin(auth.user) },
+      // `manage: true` fixo dizia que qualquer um que abre a tela pode
+      // administrar a assinatura. A rota exige `saas.read`, que observador tem;
+      // administrar exige `saas.manage`, que ele não tem. A tela mostrava a
+      // ação e o servidor recusava — a permissão precisa vir da mesma fonte
+      // que decide de verdade.
+      permissions: {
+        manage: hasCapability(workspace, "saas.manage"),
+        exportData: hasCapability(workspace, "workspace.manage"),
+        platform: isPlatformAdmin(auth.user),
+      },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
 }

@@ -153,7 +153,11 @@ test("users can inspect and revoke only their own persisted sessions", async () 
   assert.match(auth, /sessionId\?: string/);
   assert.match(auth, /SESSION_TOUCH_INTERVAL_MS/);
   assert.match(auth, /session-address:/);
-  assert.match(login, /userAgent: request\.headers\.get\("user-agent"\)/);
+  // A sessão continua guardando o agente do navegador. A expressão deixou de ser
+  // inline quando a trilha de acesso passou a usar o mesmo valor: agora ele é
+  // lido uma vez e compartilhado entre a sessão e o evento de autenticação.
+  assert.match(login, /const userAgent = request\.headers\.get\("user-agent"\)/);
+  assert.match(login, /setAuthSession\(identity, \{ address, userAgent \}\)/);
   assert.match(sessions, /WHERE user_id = \?/);
   assert.match(sessions, /id <> \?/);
   assert.match(sessionById, /WHERE id = \? AND user_id = \?/);

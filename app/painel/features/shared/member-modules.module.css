@@ -1,0 +1,32 @@
+/* Acesso individual aos módulos, dentro da ficha de um membro.
+ *
+ * Estas regras vieram de `features/access/access.module.css`, reescritas
+ * contra os tokens `--ui-*` em vez dos `--acc-*` que só existiam naquele
+ * módulo. O componente saiu de lá porque era a única interface viva de
+ * `/api/members/[id]/modules` numa pasta que ninguém renderizava — a feature
+ * ficava sem porta junto com a tela morta em volta dela. */
+
+.matrixArea { margin-top: 10px; }
+.detailNote { display: flex; align-items: center; gap: 7px; margin: 0 0 12px; color: var(--ui-text-soft); font-size: .68rem; line-height: 1.5; flex-wrap: wrap; }
+.detailEmpty { display: inline-flex; align-items: center; gap: 6px; color: var(--ui-text-soft); font-size: .66rem; }
+.detailEmpty svg { width: 13px; height: 13px; }
+
+.tableScroll { max-width: 100%; overflow-x: auto; }
+.memberTable { width: 100%; border-collapse: collapse; font-size: .72rem; }
+.memberTable th, .memberTable td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--ui-border); }
+.memberTable thead th { background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: .58rem; font-weight: 820; letter-spacing: .09em; text-transform: uppercase; white-space: nowrap; }
+.memberTable tbody th { font-weight: 650; }
+.memberTable tbody th small, .memberTable td small { display: block; margin-top: 2px; color: var(--ui-text-soft); font-size: .62rem; font-weight: 400; line-height: 1.45; }
+.memberTable tbody tr[data-denied="true"] { background: var(--ui-state-danger-bg, #fdeceb); }
+.matrixDenied { color: var(--ui-text-soft); }
+
+.rowActions { display: flex; flex-wrap: wrap; gap: 6px; }
+.secondaryButton { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: 999px; background: var(--ui-surface); color: var(--ui-text); font-size: .64rem; font-weight: 650; cursor: pointer; }
+.secondaryButton:hover:not(:disabled) { border-color: var(--ui-primary); color: var(--ui-primary); }
+.secondaryButton:disabled { cursor: not-allowed; opacity: .6; }
+.secondaryButton svg { width: 13px; height: 13px; }
+
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.spin { animation: memberModulesSpin .8s linear infinite; }
+@keyframes memberModulesSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 1.8s; } }

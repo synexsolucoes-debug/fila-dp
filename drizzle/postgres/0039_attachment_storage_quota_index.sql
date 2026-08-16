@@ -1,0 +1,21 @@
+-- Índice para a cota de armazenamento do plano.
+--
+-- A cota é somada a cada envio de anexo, dentro de um `pg_advisory_xact_lock`
+-- que serializa os envios do workspace. Sem índice em `workspace_id`, essa soma
+-- é um Seq Scan da tabela inteira — inclusive das linhas dos outros clientes —
+-- e o custo entra direto no caminho crítico do upload.
+--
+-- Medido com 60.052 anexos distribuídos como num multi-tenant real (57.000 de
+-- um cliente, 3.052 do outro):
+--
+--   sem índice:  6,72 ms · 1.734 buffers · Seq Scan
+--   com índice:  0,62 ms ·    58 buffers · Bitmap Heap Scan
+--
+-- O `INCLUDE (size_bytes)` evita voltar à tabela para ler o tamanho, que é a
+-- única coluna que a soma precisa.
+--
+-- `CONCURRENTLY` fica de fora de propósito: ele não roda dentro de transação, e
+-- o executor de migrations aplica cada arquivo em uma. A tabela é pequena o
+-- bastante para o bloqueio ser irrelevante na janela de deploy.
+CREATE INDEX IF NOT EXISTS "fdp_attachments_workspace_size_idx"
+  ON "fdp_card_attachments" ("workspace_id") INCLUDE ("size_bytes");

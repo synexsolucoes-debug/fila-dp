@@ -364,10 +364,16 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   }
   assert.match(view, /Quanto o prestador tem a receber/);
   assert.match(view, /Quantas consultas válidas/);
-  assert.match(view, /styles\.emptyState/);
-  assert.match(view, /styles\.errorState/);
-  assert.match(view, /styles\.loadingState/);
-  assert.match(view, /role="alert"/);
+  // Os três estados continuam existindo; mudaram de nome e de dono. A tira de
+  // aviso em linha deste módulo nunca foi o estado vazio do painel — o nome
+  // igual ao do componente compartilhado confundia os dois —, e o aviso de erro
+  // passou a ser o mesmo dos outros oito módulos, que traz `role="alert"`
+  // consigo em vez de depender de cada chamada lembrar dele.
+  assert.match(view, /styles\.noteLine/);
+  assert.match(view, /styles\.loadingLine/);
+  assert.match(view, /<ErrorBanner message=\{error\} \/>/);
+  const banner = await readFile(new URL("../app/painel/features/shared/panel-ui.tsx", import.meta.url), "utf8");
+  assert.match(banner, /className=\{styles\.errorBanner\} role="alert"/);
   assert.doesNotMatch(view + dialogs, /localStorage|sessionStorage|window\.location\.reload/);
   // Diálogos com foco preso, escape e sem campo clínico.
   assert.match(dialogs, /event\.key !== "Tab"/);

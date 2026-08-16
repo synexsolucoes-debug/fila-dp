@@ -73,6 +73,7 @@
 .badge { display: inline-block; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--site-border); font-size: .7rem; font-weight: 720; white-space: nowrap; }
 .badge[data-state="available"] { border-color: color-mix(in srgb, var(--site-accent) 45%, transparent); color: var(--site-accent); background: var(--site-accent-soft); }
 .badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--site-warning); background: color-mix(in srgb, var(--site-warning) 12%, var(--site-surface)); }
+.badge[data-state="assisted"] { border-color: color-mix(in srgb, var(--site-accent) 35%, transparent); color: var(--site-accent); background: color-mix(in srgb, var(--site-accent) 8%, var(--site-surface)); }
 .badge[data-state="planned"] { color: var(--site-soft); }
 
 .planGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(272px, 1fr)); gap: 14px; }

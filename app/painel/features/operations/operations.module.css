@@ -44,12 +44,6 @@
 .refreshButton { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 11px; border: 1px solid var(--ops-border); border-radius: 8px; background: transparent; color: var(--ops-soft); font-size: .7rem; cursor: pointer; }
 .refreshButton:disabled { opacity: .55; }
 
-.errorBanner { display: flex; align-items: center; gap: 11px; margin: 0 0 14px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--ops-danger) 34%, var(--ops-border)); border-radius: 8px; background: color-mix(in srgb, var(--ops-danger) 7%, var(--ops-surface)); color: var(--ops-danger); font-size: .72rem; }
-.errorBanner > svg { flex: 0 0 auto; }
-.errorBanner span { display: grid; flex: 1; gap: 2px; }
-.errorBanner span strong { color: var(--ops-text); }
-.errorBanner button { display: grid; place-items: center; border: 0; background: transparent; cursor: pointer; }
-
 .cycleEmpty { margin-bottom: 14px; padding: 22px; border: 1px dashed var(--ops-strong); border-radius: 10px; background: color-mix(in srgb, var(--ops-muted) 65%, var(--ops-surface)); }
 .cycleEmpty > div { display: flex; align-items: center; gap: 13px; }
 .cycleEmpty > div > svg { width: 30px; height: 30px; color: var(--ops-mint); }
@@ -59,34 +53,40 @@
 /* Trilho navy: os tokens de texto do módulo são calibrados para fundo claro e
    caem para 2.42:1 aqui. Redefini-los no contêiner vale para tudo que ele
    contém, sem espalhar exceção regra a regra. */
-.cycleRail { --ops-mint: var(--brand-accent-on-dark); --ops-soft: #b9c9d8; margin-bottom: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--ops-navy) 45%, var(--ops-border)); border-radius: 11px; background: var(--ops-navy); color: #fff; box-shadow: 0 10px 24px rgba(5,18,33,.12); }
-.cycleRail > header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
+/* Cartão claro, como o fluxo da Visão geral (Modelo 2).
+   Era superfície marinho desenhada contra a barra lateral escura; com a casca
+   clara passou a brigar com tudo em volta — o mesmo defeito que a faixa
+   "RESUMO OPERACIONAL" tinha. E guardava o último bolsão do verde da marca
+   antiga (#38d6a7 e parentes): aqui o verde vira ESTADO de conclusão, que é o
+   que o Modelo 2 faz com ele. */
+.cycleRail { margin-bottom: 14px; overflow: hidden; border: 1px solid var(--ops-border); border-radius: 12px; background: var(--ui-surface); color: var(--ui-text); box-shadow: var(--ui-shadow-card); }
+.cycleRail > header { display: flex; align-items: center; justify-content: space-between; min-height: 58px; padding: 10px 16px; border-bottom: 1px solid var(--ops-border); }
 .cycleRail > header > div { display: grid; gap: 4px; }
 .cycleRail > header strong { font-size: .94rem; text-transform: capitalize; font-variant-numeric: tabular-nums; }
-.cycleHealth { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; font-size: .63rem; font-weight: 750; }
-.healthSafe { background: rgba(56,214,167,.11); color: #8ae6c8; }
-.healthBlocked { background: rgba(255,168,118,.1); color: #ffc18e; }
+.cycleHealth { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid var(--ops-border); border-radius: 999px; font-size: .63rem; font-weight: 750; }
+.healthSafe { border-color: color-mix(in srgb, var(--ui-done) 30%, transparent); background: var(--ui-done-soft); color: var(--ui-done); }
+.healthBlocked { border-color: color-mix(in srgb, var(--ui-warning) 30%, transparent); background: var(--ui-state-warn-bg, #fdf2e2); color: var(--ui-warning); }
 .cycleRail ol { display: grid; grid-template-columns: repeat(5, minmax(170px, 1fr)); margin: 0; padding: 0; overflow-x: auto; scrollbar-width: thin; list-style: none; }
-.cycleRail li { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) 16px; align-items: center; gap: 10px; min-height: 86px; padding: 12px 11px; border-right: 1px solid rgba(255,255,255,.08); }
-.cycleRail li > svg { width: 14px; color: rgba(255,255,255,.22); }
+.cycleRail li { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr) 16px; align-items: center; gap: 10px; min-height: 86px; padding: 12px 11px; border-right: 1px solid var(--ops-border); }
+.cycleRail li > svg { width: 14px; color: var(--ops-border); }
 .cycleRail li > div { display: grid; gap: 2px; min-width: 0; }
-.cycleRail li small { color: rgba(255,255,255,.42); font-size: .49rem; font-weight: 820; letter-spacing: .09em; }
+.cycleRail li small { color: var(--ui-text-soft); font-size: .49rem; font-weight: 820; letter-spacing: .09em; }
 .cycleRail li strong { font-size: .72rem; }
-.cycleRail li div > span { color: rgba(255,255,255,.54); font-size: .59rem; white-space: nowrap; }
-.stageIndex { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid rgba(255,255,255,.2); border-radius: 7px; color: rgba(255,255,255,.56); font-size: .67rem; font-weight: 800; }
-.stageDone { background: rgba(56,214,167,.035); }
-.stageDone .stageIndex { border-color: rgba(56,214,167,.4); background: rgba(56,214,167,.12); color: #82e4c4; }
-.stageActive { background: linear-gradient(115deg, rgba(56,214,167,.15), rgba(56,214,167,.035)); box-shadow: inset 0 -3px #38d6a7; }
-.stageActive .stageIndex { border-color: #68dcba; background: #38d6a7; color: #08251d; box-shadow: 0 0 0 4px rgba(56,214,167,.12); }
-.stageActive small, .stageActive div > span { color: #8ae6c8; }
+.cycleRail li div > span { color: var(--ui-text-soft); font-size: .59rem; white-space: nowrap; }
+.stageIndex { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ops-border); border-radius: 9px; color: var(--ui-text-soft55,255,255,.56); font-size: .67rem; font-weight: 800; }
+.stageDone { background: var(--ui-done-soft); }
+.stageDone .stageIndex { border-color: var(--ui-done); background: var(--ui-done); color: var(--ui-on-done); }
+.stageActive { background: var(--ui-accent-soft); box-shadow: inset 0 -3px var(--ui-primary); }
+.stageActive .stageIndex { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-accent); box-shadow: 0 0 0 4px var(--ui-accent-soft); }
+.stageActive small, .stageActive div > span { color: var(--ui-primary); }
 .stageFuture { opacity: .62; }
-.cycleRail > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 9px 14px; border-top: 1px solid rgba(255,255,255,.1); background: rgba(0,0,0,.12); }
+.cycleRail > footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; padding: 9px 14px; border-top: 1px solid var(--ops-border); background: rgba(0,0,0,.12); }
 .cycleRail > footer > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.cycleRail > footer > div > svg { flex: 0 0 auto; color: #7de1c1; }
+.cycleRail > footer > div > svg { flex: 0 0 auto; color: var(--ui-done); }
 .cycleRail > footer span { display: grid; gap: 2px; }
 .cycleRail > footer strong { font-size: .67rem; }
-.cycleRail > footer small { overflow: hidden; color: rgba(255,255,255,.58); font-size: .59rem; text-overflow: ellipsis; white-space: nowrap; }
-.cycleRail > footer button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 11px; border: 1px solid rgba(255,255,255,.2); border-radius: 7px; background: rgba(255,255,255,.08); color: #fff; font-size: .64rem; font-weight: 720; cursor: pointer; }
+.cycleRail > footer small { overflow: hidden; color: var(--ui-text-soft); font-size: .59rem; text-overflow: ellipsis; white-space: nowrap; }
+.cycleRail > footer button { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 11px; border: 1px solid var(--ops-border); border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-text); font-size: .64rem; font-weight: 720; cursor: pointer; }
 .cycleRail > footer button:disabled { cursor: not-allowed; opacity: .6; }
 
 .exceptionStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; border: 1px solid var(--ops-border); border-radius: 10px; background: var(--ops-surface); box-shadow: var(--ui-shadow-card); }
@@ -108,10 +108,6 @@
 .localTabs .activeTab { border-bottom-color: var(--ops-mint); background: var(--ops-surface); color: var(--ops-mint); }
 .localTabs b { min-width: 18px; padding: 2px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ops-danger) 10%, var(--ops-surface)); color: var(--ops-danger); font-size: .56rem; text-align: center; }
 .tabSurface { min-height: 410px; border: 1px solid var(--ops-border); border-radius: 0 0 10px 10px; background: var(--ops-surface); box-shadow: var(--ui-shadow-card); }
-.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 92px; padding: 16px 20px; border-bottom: 1px solid var(--ops-border); }
-.panelHeader > div { min-width: 0; }
-.panelHeader h2 { margin: 4px 0 3px; font-size: 1rem; letter-spacing: -.015em; }
-.panelHeader p { margin: 0; color: var(--ops-soft); font-size: .67rem; line-height: 1.45; }
 
 .overviewGrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(220px, .7fr) minmax(210px, .58fr); min-height: 410px; }
 .overviewGrid > section, .overviewGrid > aside { min-width: 0; border-right: 1px solid var(--ops-border); }
@@ -157,12 +153,6 @@
 .dataTable time { font-variant-numeric: tabular-nums; }
 .dataTable td:last-child { width: 90px; }
 .rowAction { display: inline-flex; align-items: center; gap: 3px; padding: 6px 8px; border: 0; background: transparent; color: var(--ops-mint) !important; font-size: .63rem; font-weight: 740; cursor: pointer; }
-
-.statusPill { display: inline-flex; align-items: center; gap: 5px; width: max-content; padding: 4px 7px; border: 1px solid var(--ops-border); border-radius: 5px; background: var(--ops-muted); color: var(--ops-soft); font-size: .56rem; font-weight: 730; white-space: nowrap; }
-.statusPill svg { width: 9px; height: 9px; fill: currentColor; }
-.statusPill[data-tone="safe"] { border-color: color-mix(in srgb, var(--ops-success) 23%, var(--ops-border)); background: var(--ops-mint-soft); color: var(--ops-success); }
-.statusPill[data-tone="warning"] { border-color: color-mix(in srgb, var(--ops-warning) 25%, var(--ops-border)); background: color-mix(in srgb, var(--ops-warning) 8%, var(--ops-surface)); color: var(--ops-warning); }
-.statusPill[data-tone="danger"] { border-color: color-mix(in srgb, var(--ops-danger) 24%, var(--ops-border)); background: color-mix(in srgb, var(--ops-danger) 7%, var(--ops-surface)); color: var(--ops-danger); }
 
 .approvalQueue { display: grid; gap: 0; }
 .approvalQueue article { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 79px; padding: 11px 18px; border-bottom: 1px solid var(--ops-border); }
@@ -226,13 +216,6 @@
 .processVersions span small { font-size: .48rem; }
 .processActions { display: flex; gap: 6px; }
 .processActions .publishButton { border-color: var(--ops-mint); background: var(--ops-mint-soft); color: var(--ops-mint); }
-
-.emptyState, .loadingState { display: flex; min-height: 310px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 34px; text-align: center; }
-.emptyState > span { display: grid; place-items: center; width: 49px; height: 49px; margin-bottom: 3px; border: 1px solid color-mix(in srgb, var(--ops-mint) 25%, var(--ops-border)); border-radius: 9px; background: var(--ops-mint-soft); color: var(--ops-mint); }
-.emptyState strong, .loadingState strong { font-size: .79rem; }
-.emptyState p, .loadingState span { max-width: 390px; margin: 0; color: var(--ops-soft); font-size: .67rem; line-height: 1.5; }
-.emptyState button { margin-top: 7px; }
-.loadingState svg { width: 28px; height: 28px; color: var(--ops-mint); }
 
 .overlay { position: fixed; z-index: 120; inset: 0; display: flex; align-items: stretch; justify-content: flex-end; background: rgba(4,15,27,.58); animation: fade .15s ease both; }
 .dialog { display: flex; width: min(620px, 100%); height: 100%; flex-direction: column; border-left: 1px solid var(--ops-border); background: var(--ops-surface); box-shadow: -28px 0 70px rgba(3,15,28,.25); animation: slide .2s cubic-bezier(.2,.8,.2,1) both; }
@@ -301,7 +284,7 @@
   .closingColumns { display: block; }
   .closingColumn:first-child { border-right: 0; border-bottom: 1px solid var(--ops-border); }
   .obligationList article { grid-template-columns: 48px minmax(0, 1fr) auto; }
-  .obligationList article > select, .obligationList article > .statusPill { grid-column: 2 / -1; justify-self: end; }
+  .obligationList article > select, .obligationList article > [data-panel-ui="pill"] { grid-column: 2 / -1; justify-self: end; }
 }
 @media (max-width: 640px) {
   .commandSelectors { display: grid; grid-template-columns: 1fr 1fr; }
@@ -317,8 +300,6 @@
   .exceptionMetric { border-right: 0; border-bottom: 1px solid var(--ops-border); }
   .exceptionMetric:last-child { border-bottom: 0; }
   .localTabs button { min-height: 45px; }
-  .panelHeader { align-items: flex-start; flex-direction: column; min-height: 0; padding: 15px; }
-  .panelHeader > .primaryButton { width: 100%; }
   .cycleIndicators dl { grid-template-columns: 1fr; }
   .cycleIndicators dl > div { border-right: 0; }
   .tableTools { align-items: stretch; flex-direction: column; }
@@ -333,11 +314,11 @@
   .approvalQueue article > div { align-items: flex-start; flex-direction: column; gap: 5px; }
   .approvalQueue article > button, .approvalQueue article > .decisionDate { grid-column: 2; justify-self: start; }
   .closingColumn li { grid-template-columns: 30px minmax(0, 1fr); }
-  .closingColumn li > select, .closingColumn li > .statusPill { grid-column: 2; justify-self: start; }
+  .closingColumn li > select, .closingColumn li > [data-panel-ui="pill"] { grid-column: 2; justify-self: start; }
   .obligationList article { grid-template-columns: 46px minmax(0, 1fr); }
-  .obligationList article > em, .obligationList article > select, .obligationList article > .statusPill { grid-column: 2; justify-self: start; }
+  .obligationList article > em, .obligationList article > select, .obligationList article > [data-panel-ui="pill"] { grid-column: 2; justify-self: start; }
   .pendingLedger article { grid-template-columns: 36px minmax(0, 1fr); }
-  .pendingLedger article > .statusPill, .pendingActions { grid-column: 2; justify-self: start; }
+  .pendingLedger article > [data-panel-ui="pill"], .pendingActions { grid-column: 2; justify-self: start; }
   .processLedger article { grid-template-columns: 86px minmax(0, 1fr); }
   .processVersions, .processActions { grid-column: 1 / -1; justify-content: flex-end; }
   .dialog { width: 100%; border-left: 0; }

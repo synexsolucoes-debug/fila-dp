@@ -103,7 +103,11 @@ test("a prontidão confere acesso, não só o histórico de migrações", async 
   const route = await readFile(new URL("../app/api/health/route.ts", import.meta.url), "utf8");
   // Detalhe de migração pendente é informação de operação, não pública.
   assert.match(route, /isPlatformAdmin/u);
-  assert.match(route, /report\.status === "ok" \? 200 : 503/u);
+  // Prontidão degradada continua respondendo 503. A condição deixou de ser só
+  // essa — a fila parada também derruba o veredito —, mas a garantia original
+  // não pode se perder no meio da nova: schema atrás da aplicação é indisponível.
+  assert.match(route, /report\.status !== "ok"/u);
+  assert.match(route, /status: unavailable \? 503 : 200/u);
   assert.doesNotMatch(route, /DATABASE_URL|password|token/iu);
 });
 

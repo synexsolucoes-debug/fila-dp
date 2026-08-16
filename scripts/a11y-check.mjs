@@ -183,6 +183,19 @@ const VIEWPORTS = [
 ];
 
 let failures = 0;
+let screensAudited = 0;
+
+/**
+ * Piso de cobertura.
+ *
+ * A varredura completa mede 59 telas — dois temas do painel, do console e das
+ * subabas. O piso existe porque este script já falhou do jeito mais perigoso
+ * que um verificador pode falhar: passar. Um seletor de navegação que deixou de
+ * casar tirou 32 telas da varredura, e a conclusão impressa continuou sendo
+ * "OK: 0 violações" — 0 violações em nada. O número é folgado de propósito:
+ * acusa um colapso de cobertura sem quebrar quando um módulo sai do plano.
+ */
+const MINIMO_DE_TELAS = 40;
 
 /** `path === null` audita a tela já aberta, sem recarregar — usado nas visões do painel. */
 async function audit(label, path, setup) {
@@ -192,6 +205,7 @@ async function audit(label, path, setup) {
     await page.waitForTimeout(1800);
   }
   console.log(`\n### ${label}${path === null ? "" : ` (${path})`}`);
+  screensAudited += 1;
 
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -273,8 +287,16 @@ async function signIn() {
  * a visão geral e mais nada. Aqui a navegação lateral é percorrida de verdade.
  */
 async function auditPanelViews(theme = "") {
-  const nav = page.locator('nav[aria-label="Navegação do painel"] > button');
-  const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]);
+  // Descendente, não filho direto. O menu agrupou os itens por contexto e o
+  // seletor `> button` deixou de casar — sem erro nenhum: a varredura passou a
+  // visitar zero telas do painel e a imprimir "0 violações".
+  const nav = page.locator('nav[aria-label="Navegação do painel"] button');
+  const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+  if (labels.length === 0) {
+    console.log("\n### Painel — nenhum item de menu encontrado; a varredura das visões não rodou");
+    failures += 1;
+    return;
+  }
   for (const label of labels) {
     // "Configurações" abre modal em vez de trocar a visão; entra na mesma varredura.
     const button = nav.filter({ hasText: label }).first();
@@ -329,10 +351,13 @@ async function auditEverything(theme) {
  * do painel nunca haviam sido visitados.
  */
 async function auditPlatformAreas(theme = "") {
-  const nav = page.locator('aside[aria-label="Áreas da administração global"] nav > button');
+  const nav = page.locator('aside[aria-label="Áreas da administração global"] nav button');
   const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
   if (labels.length === 0) {
-    console.log("\n### Console da plataforma — sem áreas visíveis (conta sem permissão de plataforma?)");
+    // Antes isto era só um aviso. Não pode ser: sem as áreas do console, a
+    // varredura devolve "OK" tendo medido uma tela de onze.
+    console.log("\n### Console da plataforma — nenhuma área visível; a varredura não rodou");
+    failures += 1;
     return;
   }
   for (const label of labels) {
@@ -357,5 +382,12 @@ try {
   await browser.close();
 }
 
-console.log(`\n${failures === 0 ? "OK" : "FALHOU"}: ${failures} violação(ões) WCAG 2.2 AA.`);
+if (screensAudited < MINIMO_DE_TELAS) {
+  console.log(`\nCOBERTURA INSUFICIENTE: ${screensAudited} tela(s) auditada(s), mínimo ${MINIMO_DE_TELAS}.`);
+  console.log("Uma varredura que não alcança as telas não prova nada sobre elas.");
+  failures += 1;
+} else {
+  console.log(`\n${screensAudited} tela(s) auditada(s).`);
+}
+console.log(`${failures === 0 ? "OK" : "FALHOU"}: ${failures} violação(ões) WCAG 2.2 AA.`);
 process.exit(failures === 0 ? 0 : 1);

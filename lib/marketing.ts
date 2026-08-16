@@ -96,11 +96,26 @@ export const featureHighlights = [
 /**
  * Estado real de cada integração. `available` só para o que existe de ponta a
  * ponta; o resto aparece como arquitetura preparada, nunca como pronto.
+ *
+ * Teams, e-mail e WhatsApp saíram de `available` depois de conferir o que o
+ * código faz de fato. O endpoint de entrada existe e é sólido — segredo por
+ * workspace vindo do cofre, assinatura conferida, idempotência, isolamento por
+ * RLS —, mas ele fala o protocolo do Vinculato, não o do fornecedor:
+ *
+ *   - o WhatsApp Business exige responder ao GET de verificação da Meta
+ *     ecoando `hub.challenge`, sem o qual a URL nem pode ser cadastrada;
+ *   - o Microsoft Graph exige devolver o `validationToken` na criação da
+ *     assinatura e renová-la antes de expirar;
+ *   - um provedor de e-mail assina com o esquema dele, não com o nosso HMAC.
+ *
+ * Nada disso está implementado. Na prática o cliente precisa de um relay que
+ * traduza e assine — o que é exatamente "implantação assistida", e não
+ * "disponível". Prometer o contrário venderia uma conexão que não conecta.
  */
 export const integrationCatalog = [
-  { name: "Microsoft Teams", category: "Comunicação", state: "available", note: "Entrada de solicitações por webhook assinado." },
-  { name: "E-mail corporativo", category: "Comunicação", state: "available", note: "Caixa de entrada operacional por webhook." },
-  { name: "WhatsApp Business", category: "Comunicação", state: "available", note: "Recebimento de solicitações por webhook." },
+  { name: "Microsoft Teams", category: "Comunicação", state: "assisted", note: "Entrada de solicitações por webhook assinado pelo Vinculato. Não há aplicativo publicado no Microsoft Graph: a assinatura de notificações e sua renovação são feitas na implantação, com apoio da nossa equipe." },
+  { name: "E-mail corporativo", category: "Comunicação", state: "assisted", note: "Caixa de entrada operacional por webhook assinado pelo Vinculato. O encaminhamento a partir do provedor de e-mail é configurado na implantação." },
+  { name: "WhatsApp Business", category: "Comunicação", state: "assisted", note: "Recebimento por webhook assinado pelo Vinculato. A verificação exigida pela Meta e o número oficial são tratados na implantação, com apoio da nossa equipe." },
   { name: "Sankhya", category: "ERP", state: "partial", note: "Conector com credencial por workspace; requer endpoint e homologação com o cliente." },
   { name: "API pública Vinculato", category: "Plataforma", state: "available", note: "Leitura da operação e envio de créditos/descontos PJ, com escopos e idempotência." },
   { name: "Webhooks de saída", category: "Plataforma", state: "available", note: "Eventos assinados com HMAC, repetição e log de entrega." },
@@ -114,6 +129,10 @@ export const integrationCatalog = [
 export const integrationStateLabels: Record<string, string> = {
   available: "Disponível",
   partial: "Parcial",
+  // Funciona, e funciona com ajuda: existe conector, mas a ponta do fornecedor
+  // é configurada junto com o cliente. Dizer "disponível" prometeria autonomia
+  // que ainda não existe; dizer "preparado" esconderia o que já está pronto.
+  assisted: "Implantação assistida",
   planned: "Preparado",
 };
 
@@ -166,7 +185,17 @@ export function pluralize(count: number, singular: string, plural: string) {
 /* Captação de contato                                                         */
 /* -------------------------------------------------------------------------- */
 
-export const leadInterests = ["demonstracao", "planos", "integracoes", "suporte", "outro"] as const;
+/**
+ * Assuntos do formulário de contato.
+ *
+ * `privacidade` entrou porque a página de privacidade manda o titular pedir
+ * acesso, correção, anonimização ou portabilidade justamente por este
+ * formulário — e não havia assunto para isso. O pedido chegava como "outro",
+ * numa tabela chamada `fdp_marketing_leads`, listada no console sob "Leads
+ * comerciais". Indistinguível de quem quer falar de preço, e sem nada marcando
+ * o prazo de resposta que a mesma página promete.
+ */
+export const leadInterests = ["demonstracao", "planos", "integracoes", "suporte", "privacidade", "outro"] as const;
 export type LeadInterest = typeof leadInterests[number];
 
 export const leadInterestLabels: Record<LeadInterest, string> = {
@@ -174,8 +203,20 @@ export const leadInterestLabels: Record<LeadInterest, string> = {
   planos: "Falar sobre planos e condições",
   integracoes: "Tirar dúvidas sobre integrações",
   suporte: "Suporte a cliente atual",
+  privacidade: "Privacidade e direitos do titular (LGPD)",
   outro: "Outro assunto",
 };
+
+/**
+ * Prazo de resposta declarado na página de privacidade.
+ *
+ * O número mora aqui para que a página e a fila do console falem do mesmo
+ * prazo. Ele é o compromisso já publicado — não uma garantia nova.
+ */
+export const PRIVACY_REQUEST_DEADLINE_DAYS = 15;
+
+/** Um pedido de titular é um assunto do formulário, não uma tabela à parte. */
+export const isPrivacyRequest = (interest: string) => interest === "privacidade";
 
 export type LeadInput = {
   name: string;

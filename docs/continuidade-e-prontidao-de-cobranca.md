@@ -11,7 +11,8 @@ ponta (§73, §103).
 `npm run db:rehearse-restore` executa o ciclo completo contra PostgreSQL real:
 
 1. cria dois bancos descartáveis;
-2. aplica todas as migrations na origem;
+2. aplica todas as migrations na origem **pelo executor de produção**
+   (`scripts/migrate.mjs`);
 3. semeia dados de **dois clientes**, incluindo um fechamento PJ concluído e congelado;
 4. gera o dump com `pg_dump --format=custom`;
 5. restaura em banco vazio com `pg_restore --exit-on-error`;
@@ -65,12 +66,35 @@ que o ensaio estabelece é o procedimento e a garantia de integridade; os númer
 dependem do volume real e da política de retenção do provedor de banco, e devem ser medidos sobre
 uma cópia de tamanho representativo antes de virar compromisso contratual.
 
+### Periodicidade: o ensaio roda sozinho
+
+O ensaio passou a rodar no job `database` da CI, a cada pull request e a cada push para `main`.
+Isso resolve a pendência que estava aqui como "fixar periodicidade do ensaio": uma prova que só
+acontece quando alguém lembra de rodar apodrece em silêncio, e a primeira notícia de que o backup
+não restaura seria no dia em que ele precisasse restaurar.
+
+Como o ensaio leva segundos sobre o volume semeado, ele cabe na CI sem custo relevante.
+
+### Fidelidade: o ensaio restaura o schema real
+
+Até 2026-08-15 este passo montava um único script com todos os arquivos de migration dentro de um
+`BEGIN/COMMIT`, e precisava reordenar à mão os índices únicos das migrations 0014–0017 para o
+script fechar. O ensaio provava que *aquele* schema restaura — um schema montado por um caminho
+que produção nunca usa, e sem histórico em `fdp_schema_migrations`.
+
+Agora o passo chama `scripts/migrate.mjs`, o mesmo executor de produção. O banco restaurado passou
+a conter o histórico de migrations, o que foi verificado: 41 migrations registradas e **0
+pendentes** segundo o manifesto de schema da aplicação — ou seja, o restaurado é considerado em dia
+pelo próprio produto, e não dispara o alerta de "banco atrás da versão".
+
 O que ainda falta para um plano de continuidade completo:
 
 - executar o ensaio sobre uma cópia com volume de produção e registrar os tempos obtidos;
 - definir e contratar a janela de retenção e o RPO com o provedor;
-- ensaiar a recuperação de anexos do Blob junto com o banco;
-- fixar periodicidade do ensaio e responsável.
+- ensaiar a recuperação de anexos do Blob junto com o banco. **Este é o maior risco em aberto**:
+  o dump preserva a *referência* ao anexo, mas o arquivo vive no Vercel Blob. Restaurar só o banco
+  devolve uma operação com metadados íntegros e downloads quebrados, e nada hoje mede isso;
+- definir o responsável por acompanhar o resultado do ensaio quando ele reprovar na CI.
 
 ## 2. Prontidão de cobrança
 

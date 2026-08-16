@@ -105,7 +105,11 @@ test("a central de ação é clicável, acessível e não inventa números", asy
     readFile(new URL("../app/painel/features/action-center/ActionCenter.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /<ActionCenter onNavigate=\{onNavigate\} \/>/);
+  // A central recebe o recorte de empresa da barra superior. A rota já aceitava
+  // `companyId` e conferia o acesso; era o painel que nunca enviava, e o
+  // seletor ficava aparente em toda tela sem mexer em número nenhum.
+  assert.match(workspace, /<ActionCenter onNavigate=\{onNavigate\} companyId=\{companyId\} \/>/);
+  assert.match(component, /\/api\/dashboard\/action-center\$\{query\}/u);
   assert.match(workspace, /onNavigate=\{\(target\) => setView\(target\)\}/);
   // Cada indicador é um botão que navega para o módulo responsável.
   assert.match(component, /onClick=\{\(\) => onNavigate\(item\.target\)\}/);

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/privacidade" },
   title: "Política de privacidade | Vinculato",
   description: "Como o Vinculato trata dados pessoais, com bases legais, retenção, direitos do titular e resposta a incidentes conforme a LGPD.",
 };
@@ -64,7 +65,7 @@ export default function PrivacidadePage() {
         <h2>5. Retenção e eliminação</h2>
         <ul>
           <li>Dados da operação são mantidos enquanto durar o contrato.</li>
-          <li>Após o encerramento, há período de recuperação de 30 dias para exportação; em seguida, os dados do workspace são eliminados ou anonimizados.</li>
+          <li>Após o encerramento, há período de recuperação de 30 dias em que o grupo pode ser restaurado e seus dados exportados em arquivo único; em seguida, os dados do workspace são eliminados ou anonimizados.</li>
           <li>Registros de auditoria e financeiros podem ser mantidos por prazo legal maior, em formato mínimo necessário.</li>
           <li>Contatos comerciais sem contrato são eliminados em até 24 meses ou antes, mediante pedido.</li>
         </ul>
@@ -77,6 +78,7 @@ export default function PrivacidadePage() {
         <ul>
           <li>Titulares vinculados à operação de um cliente devem procurar o próprio empregador, que é o controlador; o Vinculato atende como operador, mediante instrução.</li>
           <li>Pedidos podem ser enviados pela página de <Link href="/contato">Contato</Link> e são respondidos em até 15 dias.</li>
+          <li>O administrador do grupo exporta os dados do próprio workspace a qualquer momento, em arquivo único, sem depender de pedido. O arquivo declara o que não contém: segredos de integração cifrados, chaves internas de correlação e o conteúdo binário dos anexos, que são listados com nome, tamanho e referência.</li>
         </ul>
 
         <h2>7. Segurança</h2>

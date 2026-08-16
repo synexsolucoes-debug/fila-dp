@@ -1,5 +1,6 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 import { createRecoveryToken } from "@/lib/fila-dp-recovery";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -11,6 +12,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "members.manage");
     const member = await d1.prepare(`SELECT u.id, u.email, u.name
       FROM fdp_workspace_members wm JOIN fdp_users u ON u.id = wm.user_id
       WHERE wm.workspace_id = ? AND wm.user_id = ?`).bind(workspace.id, id).first<{ id: string; email: string; name: string }>();

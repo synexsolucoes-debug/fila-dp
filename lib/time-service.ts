@@ -88,7 +88,19 @@ export async function saveTimeEntries(d1: Database, input: {
   workspaceId: string; companyId: string; sheetId: string; employeeId: string;
   entries: readonly TimeEntryInput[]; userId: string; today?: string;
 }) {
-  let written = 0;
+  if (!input.entries.length) return { written: 0 };
+
+  // Uma ida ao banco, não uma por dia.
+  //
+  // O laço anterior gravava linha a linha. Em produção o driver é HTTP: cada
+  // `.run()` é uma requisição própria. Um mês de marcações de um colaborador
+  // são 31 idas — medido com PostgreSQL local (~0,1ms de latência) o laço leva
+  // 10,6ms contra 1,1ms do comando único; projetado a 25ms de ida e volta, que
+  // é a ordem de grandeza do driver HTTP, são 785ms contra 26ms.
+  //
+  // O `ON CONFLICT` continua sendo o mesmo, por isso reenviar o mês é seguro.
+  const COLUNAS = 16;
+  const valores: unknown[] = [];
   for (const entry of input.entries) {
     const day = calculateTimeDay({
       entryDate: entry.entryDate,
@@ -97,19 +109,24 @@ export async function saveTimeEntries(d1: Database, input: {
       punches: entry.punches,
       justification: entry.justification,
     }, { today: input.today });
-    await d1.prepare(`INSERT INTO fdp_time_entries (id, workspace_id, company_id, time_sheet_id, employee_id, entry_date,
-        day_type, expected_minutes, worked_minutes, night_minutes, balance_minutes, punches_json, origin, justification, note, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?)
-      ON CONFLICT (workspace_id, time_sheet_id, entry_date) DO UPDATE SET
-        day_type = excluded.day_type, expected_minutes = excluded.expected_minutes, worked_minutes = excluded.worked_minutes,
-        night_minutes = excluded.night_minutes, balance_minutes = excluded.balance_minutes, punches_json = excluded.punches_json,
-        origin = excluded.origin, justification = excluded.justification, note = excluded.note, updated_at = now()`)
-      .bind(crypto.randomUUID(), input.workspaceId, input.companyId, input.sheetId, input.employeeId, entry.entryDate,
-        entry.dayType, day.expectedMinutes, day.workedMinutes, day.nightMinutes, day.balanceMinutes,
-        JSON.stringify(entry.punches), entry.origin ?? "manual", cleanText(entry.justification, 500), cleanText(entry.note, 300), input.userId)
-      .run();
-    written += 1;
+    valores.push(
+      crypto.randomUUID(), input.workspaceId, input.companyId, input.sheetId, input.employeeId, entry.entryDate,
+      entry.dayType, day.expectedMinutes, day.workedMinutes, day.nightMinutes, day.balanceMinutes,
+      JSON.stringify(entry.punches), entry.origin ?? "manual",
+      cleanText(entry.justification, 500), cleanText(entry.note, 300), input.userId,
+    );
   }
+  const linhas = input.entries.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?)").join(", ");
+  await d1.prepare(`INSERT INTO fdp_time_entries (id, workspace_id, company_id, time_sheet_id, employee_id, entry_date,
+      day_type, expected_minutes, worked_minutes, night_minutes, balance_minutes, punches_json, origin, justification, note, created_by)
+    VALUES ${linhas}
+    ON CONFLICT (workspace_id, time_sheet_id, entry_date) DO UPDATE SET
+      day_type = excluded.day_type, expected_minutes = excluded.expected_minutes, worked_minutes = excluded.worked_minutes,
+      night_minutes = excluded.night_minutes, balance_minutes = excluded.balance_minutes, punches_json = excluded.punches_json,
+      origin = excluded.origin, justification = excluded.justification, note = excluded.note, updated_at = now()`)
+    .bind(...valores)
+    .run();
+  const written = valores.length / COLUNAS;
   return { written };
 }
 
@@ -154,11 +171,13 @@ export async function recalculateTimeSheet(d1: Database, workspaceId: string, sh
   // Eventos apurados: substituídos a cada recálculo. Os manuais têm dono humano e ficam.
   await d1.prepare("DELETE FROM fdp_time_sheet_events WHERE workspace_id = ? AND time_sheet_id = ? AND source = 'computed'")
     .bind(workspaceId, sheetId).run();
-  for (const event of totals.events) {
-    if (event.source !== "computed") continue;
+  const apurados = totals.events.filter((event) => event.source === "computed");
+  if (apurados.length) {
+    const valores = apurados.flatMap((event) =>
+      [crypto.randomUUID(), workspaceId, sheetId, event.eventCode, event.minutes, "system"]);
     await d1.prepare(`INSERT INTO fdp_time_sheet_events (id, workspace_id, time_sheet_id, event_code, minutes, source, created_by)
-      VALUES (?, ?, ?, ?, ?, 'computed', ?)`)
-      .bind(crypto.randomUUID(), workspaceId, sheetId, event.eventCode, event.minutes, "system").run();
+      VALUES ${apurados.map(() => "(?, ?, ?, ?, ?, 'computed', ?)").join(", ")}`)
+      .bind(...valores).run();
   }
 
   const existing = await d1.prepare("SELECT id, entry_date, kind, status FROM fdp_time_inconsistencies WHERE workspace_id = ? AND time_sheet_id = ?")
@@ -167,20 +186,27 @@ export async function recalculateTimeSheet(d1: Database, workspaceId: string, sh
   const derived = new Map(totals.issues.map((issue) => [key(issue.entryDate, issue.kind), issue]));
   const known = new Map(existing.results.map((row) => [key(row.entry_date, row.kind), row]));
 
-  for (const [issueKey, row] of known) {
-    if (derived.has(issueKey)) continue;
-    await d1.prepare("DELETE FROM fdp_time_inconsistencies WHERE workspace_id = ? AND id = ?").bind(workspaceId, row.id).run();
+  // As três operações vão num lote só: `batch` executa tudo numa transação e
+  // numa ida. Sequenciais eram três idas por inconsistência mudada, e uma folha
+  // com problema é justamente a que tem muitas.
+  const comandos = [];
+  const obsoletas = [...known].filter(([issueKey]) => !derived.has(issueKey)).map(([, row]) => row.id);
+  if (obsoletas.length) {
+    comandos.push(d1.prepare(`DELETE FROM fdp_time_inconsistencies WHERE workspace_id = ? AND id IN (${obsoletas.map(() => "?").join(", ")})`)
+      .bind(workspaceId, ...obsoletas));
   }
   for (const [issueKey, issue] of derived) {
-    if (known.has(issueKey)) {
-      await d1.prepare("UPDATE fdp_time_inconsistencies SET detail = ?, severity = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
-        .bind(issue.detail, issue.severity, workspaceId, known.get(issueKey)!.id).run();
+    const existente = known.get(issueKey);
+    if (existente) {
+      comandos.push(d1.prepare("UPDATE fdp_time_inconsistencies SET detail = ?, severity = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
+        .bind(issue.detail, issue.severity, workspaceId, existente.id));
       continue;
     }
-    await d1.prepare(`INSERT INTO fdp_time_inconsistencies (id, workspace_id, time_sheet_id, entry_date, kind, severity, detail, status)
+    comandos.push(d1.prepare(`INSERT INTO fdp_time_inconsistencies (id, workspace_id, time_sheet_id, entry_date, kind, severity, detail, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`)
-      .bind(crypto.randomUUID(), workspaceId, sheetId, issue.entryDate, issue.kind, issue.severity, issue.detail).run();
+      .bind(crypto.randomUUID(), workspaceId, sheetId, issue.entryDate, issue.kind, issue.severity, issue.detail));
   }
+  if (comandos.length) await d1.batch(comandos);
 
   const openIssues = await d1.prepare(`SELECT
       count(*) FILTER (WHERE severity = 'blocking' AND status = 'open')::int AS blocking,
@@ -334,10 +360,13 @@ export async function runTimeExport(d1: Database, input: {
     .bind(exportId, input.workspaceId, input.companyId, input.cycle.id, input.cycle.competence, input.destination,
       preview.sheets.length, preview.linesCount, await checksumOf(csv), JSON.stringify(payload), input.userId).run();
 
-  for (const sheet of preview.sheets) {
+  // Uma folha por colaborador: a exportação de uma competência inteira eram
+  // tantas idas ao banco quantos colaboradores. Um comando marca todas.
+  const folhas = preview.sheets.map((sheet) => sheet.sheetId);
+  if (folhas.length) {
     await d1.prepare(`UPDATE fdp_time_sheets SET status = 'exported', export_id = ?, exported_at = now(), updated_at = now()
-      WHERE workspace_id = ? AND id = ? AND status = 'approved'`)
-      .bind(exportId, input.workspaceId, sheet.sheetId).run();
+      WHERE workspace_id = ? AND status = 'approved' AND id IN (${folhas.map(() => "?").join(", ")})`)
+      .bind(exportId, input.workspaceId, ...folhas).run();
   }
 
   return { exportId, preview, csv };

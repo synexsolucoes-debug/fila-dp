@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, AlertTriangle, Bot, CalendarClock, CheckCircle2, Clock3, Eye, KeyRound,
-  LoaderCircle, Play, RefreshCw, Server, ShieldCheck, X,
+  Bot, CalendarClock, CheckCircle2, Clock3, Eye, KeyRound, LoaderCircle, Play, RefreshCw, Server,
+  ShieldCheck, X,
 } from "lucide-react";
 import { requestJson } from "./integrations.api";
 import type { Connector, IntegrationPermissions, IntegrationRun, IntegrationsOverview, SankhyaConfig } from "./integrations.types";
+import { ErrorBanner, StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
 type Props = {
@@ -85,10 +86,10 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
     <header className={styles.sankhyaHero}>
       <span className={styles.sankhyaMark}><Bot /></span>
       <div><span className={styles.eyebrow}>RPA · BROWSER AUTOMATION</span><h3 id="sankhya-title">Sankhya Browser Connector</h3><p>Consulta isolada por workspace, executada por navegador seguro e sem uso da API Sankhya.</p></div>
-      <span className={styles.statusPill} data-tone={connector.status === "connected" ? "safe" : connector.status === "error" ? "danger" : "warning"}><Activity />{phaseLabel(connector.status)}</span>
+      <StatusPill status={connector.status} tone={connector.status === "connected" ? "safe" : connector.status === "error" ? "danger" : "warning"} label={phaseLabel(connector.status)} />
     </header>
 
-    {(failure || connector.lastError) && <div className={styles.errorBanner}><AlertTriangle /><span><strong>O conector requer atenção</strong>{failure || connector.lastError}</span></div>}
+    {(failure || connector.lastError) && <ErrorBanner title="O conector requer atenção" message={failure || connector.lastError} />}
     {notice && <div className={styles.successBanner}><CheckCircle2 /><span>{notice}</span></div>}
     <div className={styles.securityNotice}><ShieldCheck /><div><strong>Use um usuário dedicado de consulta</strong><span>Recomendamos utilizar um usuário exclusivo para integração, com acesso somente às rotinas necessárias. CAPTCHA e MFA nunca serão contornados.</span></div></div>
 
@@ -138,10 +139,10 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
     <section className={styles.sankhyaHistory}>
       <header><Clock3 /><div><strong>Histórico</strong><span>Execuções e resultados segregados deste workspace</span></div></header>
       <div className={styles.tableWrap}><table className={styles.dataTable}><thead><tr><th>Data</th><th>Tipo</th><th>Resultado</th><th>Duração</th><th>Registros</th><th>Detalhes</th></tr></thead><tbody>
-        {sankhyaRuns.length ? sankhyaRuns.map((run) => <tr key={run.id}><td><time>{date(run.createdAt)}</time></td><td>{run.triggerType === "health_check" ? "Teste" : run.triggerType === "scheduled" ? "Automática" : "Manual"}</td><td><span className={styles.statusPill} data-tone={terminalSuccess.has(run.status) ? "safe" : run.status === "failed" ? "danger" : "warning"}>{phaseLabel(run.status)}</span></td><td>{duration(run.durationMs)}</td><td>{run.processedCount} processados · {run.failedCount} erros</td><td><button className={styles.detailButton} disabled={!permissions.logsView || pending === "logs"} onClick={() => openLogs(run.id)}><Eye />Logs</button></td></tr>) : <tr><td colSpan={6}>Nenhuma execução registrada.</td></tr>}
+        {sankhyaRuns.length ? sankhyaRuns.map((run) => <tr key={run.id}><td><time>{date(run.createdAt)}</time></td><td>{run.triggerType === "health_check" ? "Teste" : run.triggerType === "scheduled" ? "Automática" : "Manual"}</td><td><StatusPill status={run.status} tone={terminalSuccess.has(run.status) ? "safe" : run.status === "failed" ? "danger" : "warning"} label={phaseLabel(run.status)} /></td><td>{duration(run.durationMs)}</td><td>{run.processedCount} processados · {run.failedCount} erros</td><td><button className={styles.detailButton} disabled={!permissions.logsView || pending === "logs"} onClick={() => openLogs(run.id)}><Eye />Logs</button></td></tr>) : <tr><td colSpan={6}>Nenhuma execução registrada.</td></tr>}
       </tbody></table></div>
     </section>
 
-    {logRunId && <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLogRunId(""); }}><aside className={`${styles.drawer} ${styles.drawerWide}`} role="dialog" aria-modal="true" aria-labelledby="sankhya-logs-title"><header className={styles.drawerHeader}><div><span className={styles.eyebrow}>DIAGNÓSTICO SEGURO</span><h2 id="sankhya-logs-title">Logs da execução</h2><p>Mensagens técnicas sanitizadas; credenciais, cookies e dados pessoais não são registrados.</p></div><button aria-label="Fechar" onClick={() => setLogRunId("")}><X /></button></header><div className={styles.drawerBody}><div className={styles.logList}>{logs.length ? logs.map((entry) => <article key={entry.id}><time>{date(entry.created_at)}</time><span className={styles.statusPill}>{entry.phase || entry.level}</span><div><strong>{entry.code || phaseLabel(entry.phase)}</strong><p>{entry.message}</p></div></article>) : <p>Nenhum log técnico disponível para esta execução.</p>}</div></div></aside></div>}
+    {logRunId && <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLogRunId(""); }}><aside className={`${styles.drawer} ${styles.drawerWide}`} role="dialog" aria-modal="true" aria-labelledby="sankhya-logs-title"><header className={styles.drawerHeader}><div><span className={styles.eyebrow}>DIAGNÓSTICO SEGURO</span><h2 id="sankhya-logs-title">Logs da execução</h2><p>Mensagens técnicas sanitizadas; credenciais, cookies e dados pessoais não são registrados.</p></div><button aria-label="Fechar" onClick={() => setLogRunId("")}><X /></button></header><div className={styles.drawerBody}><div className={styles.logList}>{logs.length ? logs.map((entry) => <article key={entry.id}><time>{date(entry.created_at)}</time><StatusPill status={entry.level} label={entry.phase || entry.level} /><div><strong>{entry.code || phaseLabel(entry.phase)}</strong><p>{entry.message}</p></div></article>) : <p>Nenhum log técnico disponível para esta execução.</p>}</div></div></aside></div>}
   </section>;
 }

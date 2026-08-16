@@ -3,7 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
-import { validRequiredDate } from "@/lib/operations";
+import { validEvidenceUrl, validRequiredDate } from "@/lib/operations";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
@@ -13,10 +13,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!current) throw ApiError.notFound("Obrigação não encontrada.", "OBLIGATION_NOT_FOUND"); await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(current.company_id));
     const status = ["open", "in_progress", "blocked", "completed"].includes(String(body.status)) ? String(body.status) : String(current.status);
     const next = { title: cleanText(body.title, 180) || String(current.title), dueDate: Object.hasOwn(body, "dueDate") ? validRequiredDate(body.dueDate) : String(current.due_date), status,
-      ownerUserId: Object.hasOwn(body, "ownerUserId") ? cleanText(body.ownerUserId, 120) || null : current.owner_user_id, notes: Object.hasOwn(body, "notes") ? cleanText(body.notes, 1000) : String(current.notes) };
+      ownerUserId: Object.hasOwn(body, "ownerUserId") ? cleanText(body.ownerUserId, 120) || null : current.owner_user_id, notes: Object.hasOwn(body, "notes") ? cleanText(body.notes, 1000) : String(current.notes),
+      // O protocolo é a prova de que a obrigação foi cumprida: o produto não
+      // transmite ao portal, então ele vem de fora e só existe se alguém digitar.
+      protocol: Object.hasOwn(body, "protocol") ? cleanText(body.protocol, 120) : String(current.protocol ?? ""),
+      evidenceUrl: Object.hasOwn(body, "evidenceUrl") ? validEvidenceUrl(body.evidenceUrl) : String(current.evidence_url ?? "") };
     await d1.batch([
-      d1.prepare("UPDATE fdp_compliance_obligations SET title = ?, due_date = ?, status = ?, owner_user_id = ?, notes = ?, completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
-        .bind(next.title, next.dueDate, next.status, next.ownerUserId, next.notes, next.status, workspace.id, id),
+      d1.prepare("UPDATE fdp_compliance_obligations SET title = ?, due_date = ?, status = ?, owner_user_id = ?, notes = ?, protocol = ?, evidence_url = ?, completed_at = CASE WHEN ? = 'completed' THEN CURRENT_TIMESTAMP ELSE NULL END, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
+        .bind(next.title, next.dueDate, next.status, next.ownerUserId, next.notes, next.protocol, next.evidenceUrl, next.status, workspace.id, id),
       prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "obligation.updated", entityType: "compliance_obligation", entityId: id, before: current, after: next, requestId: request.headers.get("x-fila-dp-request-id") }),
     ]); return Response.json({ obligation: { id, ...next } });
   } catch (error) { return apiError(error); }

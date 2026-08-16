@@ -1,6 +1,10 @@
 import { hashPassword } from "@/app/chatgpt-auth";
 import { getD1 } from "@/db";
+import { apiError } from "@/lib/fila-dp-api";
+import { classifyInfrastructureFault } from "@/lib/infrastructure-errors";
 import { hashRecoveryToken } from "@/lib/fila-dp-recovery";
+import { log } from "@/lib/observability";
+import { recordAuthEvent } from "@/lib/auth-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,11 +27,48 @@ export async function POST(request: Request) {
     const credentials = await hashPassword(password);
     await d1.batch([
       d1.prepare("UPDATE fdp_users SET password_hash = ?, password_salt = ? WHERE id = ?").bind(credentials.hash, credentials.salt, recovery.user_id),
-      d1.prepare("UPDATE fdp_access_recovery_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?").bind(recovery.id),
+      // Queima todos os links pendentes do usuário, não só o que foi usado.
+      // Quem pede recuperação três vezes deixa três links vivos na caixa de
+      // e-mail; consumir um só mantinha os outros utilizáveis até expirarem,
+      // então um e-mail antigo — ou um encaminhado por engano — ainda trocava a
+      // senha depois que a conta já havia sido recuperada.
+      d1.prepare("UPDATE fdp_access_recovery_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = ? AND used_at IS NULL")
+        .bind(recovery.user_id),
       d1.prepare("UPDATE fdp_auth_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL").bind(recovery.user_id),
     ]);
+    // Redefinir senha derruba todas as sessões: quem investiga um acesso
+    // indevido precisa ver o momento em que isso aconteceu.
+    await recordAuthEvent({
+      action: "password_reset", outcome: "success", email: recovery.email, userId: recovery.user_id,
+      address: request.headers.get("x-forwarded-for") ?? "",
+      userAgent: request.headers.get("user-agent") ?? "",
+      requestId: request.headers.get("x-fila-dp-request-id"),
+    });
     return Response.json({ ok: true });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Não foi possível redefinir a senha." }, { status: 500 });
+    // A mensagem interna do erro nunca pode chegar ao cliente aqui: esta rota é
+    // pública e o texto de uma falha de banco entrega nome de tabela, de coluna
+    // e de constraint a quem estiver sondando. Antes ela era devolvida crua.
+    //
+    // Falha de infraestrutura conhecida (banco atrás da versão, banco fora do
+    // ar) já tem resposta própria, que diz o que houve sem expor SQL.
+    if (classifyInfrastructureFault(error)) return apiError(error);
+
+    // Para o resto, mensagem específica e acionável — não "não foi possível
+    // concluir a operação" — com um requestId que liga o relato do usuário ao
+    // log do servidor, onde o erro real fica.
+    const requestId = crypto.randomUUID();
+    log("error", "auth.password_reset_failed", { requestId }, {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message.slice(0, 300) : undefined,
+    });
+    return Response.json(
+      {
+        error: "Não conseguimos redefinir sua senha agora. O link continua válido: tente novamente em alguns instantes ou solicite um novo em Recuperar acesso.",
+        code: "PASSWORD_RESET_FAILED",
+        requestId,
+      },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
   }
 }
