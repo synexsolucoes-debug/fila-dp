@@ -4,6 +4,7 @@ import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 import { featureHighlights, productBoundaries } from "@/lib/marketing";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/funcionalidades" },
   title: "Funcionalidades | Vinculato",
   description: "Demandas, competências, movimentações, conferência, pagamento de psicólogos e prestadores PJ, com auditoria e permissões granulares.",
 };

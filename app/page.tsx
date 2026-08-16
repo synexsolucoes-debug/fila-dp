@@ -5,10 +5,14 @@ import {
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { getD1 } from "@/db";
 import { selfSignupEnabled } from "@/lib/saas";
+import type { Metadata } from "next";
 import {
   faqEntries, featureHighlights, integrationCatalog, integrationStateLabels, pluralize, productBoundaries,
   productPositioning, siteNavigation,
 } from "@/lib/marketing";
+
+/** A home é a única página cuja canônica é a raiz — as outras declaram a sua. */
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 export const dynamic = "force-dynamic";
 
@@ -412,3 +416,4 @@ export default async function Home() {
     </main>
   );
 }
+

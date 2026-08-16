@@ -361,6 +361,37 @@ if (password) {
   }
 }
 
+// 4e. O site é encontrável (§45).
+//
+//     Medido contra o site de pé: antes desta correção /planos, /faq,
+//     /privacidade e /termos declaravam a home como canônica — cada uma dizendo
+//     ao buscador "sou cópia da home" —, e robots.txt e sitemap.xml davam 404.
+{
+  const canonicas = [];
+  for (const caminho of ["", "planos", "faq", "privacidade", "termos", "solucao", "funcionalidades"]) {
+    await page.goto(`${base}/${caminho}`, { waitUntil: "domcontentloaded" });
+    const href = await page.locator('link[rel="canonical"]').first().getAttribute("href").catch(() => null);
+    canonicas.push([caminho, href ?? ""]);
+  }
+  record("cada página declara a si mesma como canônica",
+    canonicas.every(([caminho, href]) => caminho ? href.endsWith(`/${caminho}`) : /\/?$/u.test(href)),
+    canonicas.map(([caminho, href]) => `${caminho || "/"}→${href.split("//")[1] ?? href}`).join(" "));
+
+  const robots = await page.goto(`${base}/robots.txt`);
+  const corpoRobots = robots ? await robots.text() : "";
+  record("robots.txt responde e aponta o sitemap",
+    robots?.status() === 200 && /Sitemap:/u.test(corpoRobots), `HTTP ${robots?.status()}`);
+  record("robots.txt mantém a área logada fora do rastreio",
+    /Disallow: \/painel/u.test(corpoRobots) && /Disallow: \/plataforma/u.test(corpoRobots));
+
+  const sitemap = await page.goto(`${base}/sitemap.xml`);
+  const corpoSitemap = sitemap ? await sitemap.text() : "";
+  const urls = (corpoSitemap.match(/<url>/gu) ?? []).length;
+  record("sitemap.xml lista as páginas públicas", sitemap?.status() === 200 && urls >= 10, `${urls} url(s)`);
+  record("o sitemap não expõe área logada",
+    !/\/painel|\/plataforma|\/login/u.test(corpoSitemap));
+}
+
 // 5. Responsividade do site público
 for (const width of widths) {
   await page.setViewportSize({ width, height: 900 });

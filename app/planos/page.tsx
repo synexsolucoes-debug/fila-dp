@@ -6,6 +6,7 @@ import { selfSignupEnabled } from "@/lib/saas";
 import { pluralize } from "@/lib/marketing";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/planos" },
   title: "Planos | Vinculato",
   description: "Planos publicados no catálogo do produto. Condições comerciais que ainda não estão ativas aparecem como conversa com a equipe, não como oferta.",
 };

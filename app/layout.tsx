@@ -29,7 +29,13 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "Vinculato | Sua operação, conectada.",
     description: "Centralize processos, demandas, documentos e integrações em uma plataforma criada para organizar a operação do seu Departamento Pessoal.",
     applicationName: "Vinculato",
-    alternates: { canonical: origin },
+    // Sem canônica global.
+    //
+    // `alternates: { canonical: origin }` no layout fazia *toda* página
+    // declarar a home como sua canônica: /planos, /faq, /privacidade e /termos
+    // diziam ao buscador "eu sou uma cópia da home". A consequência normal
+    // disso é a página sair do índice — e /planos e /funcionalidades são
+    // justamente as comerciais. Cada página declara a si mesma.
     openGraph: {
       title: "Vinculato — Sua operação, conectada.",
       description: "Centralize processos, demandas, documentos e integrações do Departamento Pessoal em uma plataforma só.",

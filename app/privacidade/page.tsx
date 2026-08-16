@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/privacidade" },
   title: "Política de privacidade | Vinculato",
   description: "Como o Vinculato trata dados pessoais, com bases legais, retenção, direitos do titular e resposta a incidentes conforme a LGPD.",
 };
