@@ -7,7 +7,7 @@ import {
   Search, ShieldAlert, ShieldCheck, TimerReset, UserCheck, UsersRound,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill, cycleStages } from "../shared";
 import { OperationDialog } from "./OperationDialogs";
 import {
   normalizeCompany, normalizeEmployee, normalizeMovement, normalizeOverview, normalizeProcess, normalizeVersion, requestJson,
@@ -30,13 +30,6 @@ const tabs: Array<{ id: OperationTab; label: string; icon: typeof Gauge }> = [
   { id: "library", label: "Biblioteca", icon: BookOpenCheck },
 ];
 
-const cycleStages: Array<{ status: Cycle["status"]; label: string; note: string }> = [
-  { status: "open", label: "Aberta", note: "Receber entradas" },
-  { status: "pre_closing", label: "Pré-fechamento", note: "Validar gates" },
-  { status: "processing", label: "Processamento", note: "Executar folha" },
-  { status: "post_closing", label: "Pós-fechamento", note: "Conciliar saídas" },
-  { status: "closed", label: "Concluída", note: "Ciclo protegido" },
-];
 const nextStatus: Partial<Record<Cycle["status"], Cycle["status"]>> = { open: "pre_closing", pre_closing: "processing", processing: "post_closing", post_closing: "closed" };
 const statusLabels: Record<string, string> = {
   open: "Aberta", pre_closing: "Pré-fechamento", processing: "Processamento", post_closing: "Pós-fechamento", closed: "Concluída",

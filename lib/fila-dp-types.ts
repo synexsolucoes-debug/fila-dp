@@ -277,4 +277,22 @@ export type WorkspaceSnapshot = {
   companies: Company[];
   hrMetrics: HrMetric[];
   recentActivity: ActivityEvent[];
+  /**
+   * Ciclos de folha da competência mais recente do grupo.
+   *
+   * O fechamento é o fato mais estruturante do DP: a operação inteira é
+   * cíclica e a interface não dizia isso em lugar nenhum. Vem no mesmo lote do
+   * snapshot — uma consulta a mais, nenhuma ida extra ao banco.
+   */
+  payrollCycles: PayrollCycleSummary[];
+};
+
+/** Um ciclo de folha, do jeito que a Visão geral precisa dele. */
+export type PayrollCycleSummary = {
+  id: string;
+  companyId: string;
+  competence: string;
+  /** `open` | `pre_closing` | `processing` | `post_closing` | `closed`. */
+  status: string;
+  closedAt: string | null;
 };

@@ -3599,6 +3599,12 @@
      dois papéis e a conferência acusou 2.49:1 no cabeçalho de Psicologia. */
   --module-psychology: #6550a1;
   --module-psychology-text: #6550a1;
+  /* O que se lê EM CIMA do acento do módulo. Violeta e âmbar são escuros nos
+     dois temas, então é branco nos dois — diferente de `--ui-on-accent`, que
+     vira navy no escuro porque lá o preenchimento é azul claro. Sem este par,
+     o botão primário de Psicologia dava 2,89:1 e o de PJ 3,53:1 no tema
+     escuro; nenhum ensaio media, porque a semente não alcançava as telas. */
+  --module-on-accent: #ffffff;
   --module-psychology-soft: #f0ecfa;
   --module-contractors: #9a5c20;
   --module-contractors-text: #9a5c20;
@@ -3819,3 +3825,48 @@
    navegador antes de salvar, e o ponto do fluxo no servidor era não fazer isso. */
 .export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .export-actions > a.export-button { text-decoration: none; }
+
+/* ── Fluxo da competência (Modelo 2, "Flow") ──────────────────────────────
+   Substitui a faixa marinho que brigava com a casca clara. As cinco etapas
+   são os estados que o servidor aceita, e o estado de cada uma é marcado por
+   FORMA além de cor — ícone de concluída, anel na atual, contorno vazio no
+   que falta —, para funcionar também para quem não distingue matiz. */
+.competence-flow { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
+.competence-flow > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.competence-flow > header > div:first-child { min-width: 0; }
+.competence-flow > header span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.competence-flow > header strong { display: block; margin-top: 6px; font-size: clamp(20px, 2vw, 26px); font-weight: 800; letter-spacing: -.03em; }
+.competence-flow > header p { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.5; }
+.competence-flow-actions { display: flex; gap: 9px; align-items: center; flex: 0 0 auto; }
+
+.competence-flow-track { margin: 22px 0 0; padding: 0; list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; }
+.competence-flow-track > li { position: relative; padding-top: 30px; text-align: center; }
+/* O fio entre as etapas é o que faz isto ser um fluxo e não cinco selos. Ele
+   nasce depois do círculo de uma e morre antes do da seguinte. */
+.competence-flow-track > li::before { content: ""; position: absolute; top: 10px; left: calc(-50% + 15px); width: calc(100% - 30px); height: 2px; background: var(--ui-border); }
+.competence-flow-track > li:first-child::before { display: none; }
+.competence-flow-track > li[data-state="done"]::before,
+.competence-flow-track > li[data-state="current"]::before { background: var(--ui-done); }
+
+.competence-flow-track > li > i { position: absolute; top: 0; left: 50%; width: 22px; height: 22px; margin-left: -11px; display: grid; place-items: center; border: 2px solid var(--ui-border-strong); border-radius: 50%; background: var(--ui-surface); }
+.competence-flow-track > li > i svg { width: 12px; height: 12px; stroke-width: 3; color: #fff; }
+.competence-flow-track > li[data-state="done"] > i { border-color: var(--ui-done); background: var(--ui-done); }
+/* Anel na etapa atual: o círculo fica vazio e ganha um halo, para se distinguir
+   da concluída sem depender da cor. */
+.competence-flow-track > li[data-state="current"] > i { border-color: var(--ui-primary); box-shadow: 0 0 0 3px var(--ui-primary-soft); }
+.competence-flow-track > li[data-state="current"] > i::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ui-primary); }
+
+.competence-flow-track > li > span { display: block; padding: 0 6px; }
+.competence-flow-track > li strong { display: block; font-size: 12px; font-weight: 650; color: var(--ui-text-soft); }
+.competence-flow-track > li small { display: block; margin-top: 2px; font-size: 10.5px; color: var(--ui-text-soft); }
+.competence-flow-track > li[data-state="current"] strong { color: var(--ui-primary); font-weight: 750; }
+.competence-flow-track > li[data-state="done"] strong { color: var(--ui-text); }
+
+@media (max-width: 760px) {
+  .competence-flow-track { grid-auto-flow: row; grid-auto-columns: auto; gap: 2px; }
+  .competence-flow-track > li { padding: 4px 0 4px 34px; text-align: left; }
+  .competence-flow-track > li::before { top: -8px; left: 10px; width: 2px; height: 16px; }
+  .competence-flow-track > li > i { top: 6px; left: 0; margin-left: 0; }
+  .competence-flow-track > li > span { padding: 0; }
+  .competence-flow > header { flex-direction: column; }
+}

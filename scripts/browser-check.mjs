@@ -291,7 +291,9 @@ if (password) {
     record("escolher empresa recorta os indicadores da visão geral",
       abertasNoGrupo > 0 && abertasNaFilial === 0, `grupo ${abertasNoGrupo} → filial sem demanda ${abertasNaFilial}`);
 
-    const resumo = await page.locator(".overview-hero span").first().innerText().catch(() => "");
+    // O rótulo do recorte migrou da faixa "RESUMO OPERACIONAL" para o
+    // cabeçalho do fluxo da competência, quando a faixa marinho saiu.
+    const resumo = await page.locator(".competence-flow > header span").first().innerText().catch(() => "");
     record("a visão geral diz de quem são os números", /FILIAL VAZIA/u.test(resumo), resumo);
 
     const ultima = chamadas[chamadas.length - 1] ?? "";

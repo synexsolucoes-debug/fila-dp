@@ -130,10 +130,31 @@ test("o seletor de empresa da barra superior recorta a visão geral (§18, §19)
 test("a visão geral diz de quem são os números que mostra", () => {
   // "3 demandas em andamento" com uma empresa escolhida e "3" com o grupo
   // inteiro são o mesmo texto para fatos diferentes.
-  assert.match(source, /RESUMO OPERACIONAL · \{scopeLabel\.toUpperCase\(\)\}/u);
+  //
+  // O rótulo migrou da faixa "RESUMO OPERACIONAL" para o cabeçalho do fluxo da
+  // competência, quando a faixa marinho saiu no redesenho. O requisito é o
+  // mesmo: o recorte precisa estar escrito na tela, não subentendido.
+  assert.match(source, /COMPETÊNCIA · \{scopeLabel\.toUpperCase\(\)\}/u);
   // E o cartão de empresas deixa de misturar um número do grupo entre três do
   // recorte.
   assert.match(source, /<span>Empresa em foco<\/span>/u);
+});
+
+test("o fluxo da competência respeita a empresa escolhida", () => {
+  // O seletor de empresa já foi enfeite fora do quadro uma vez. Elemento novo
+  // na visão geral entra recortado, ou repete o defeito.
+  assert.match(source, /const scopedCycles = useMemo\(/u);
+  assert.match(source, /companyFilter === "all" \|\| cycle\.companyId === companyFilter/u);
+  assert.match(source, /<OverviewView cycles=\{scopedCycles\}/u);
+});
+
+test("as etapas do ciclo têm uma definição só", () => {
+  // `cycleStages` era privado de OperationsView. Copiar a lista para a visão
+  // geral criaria a segunda definição — o defeito que a §16 gastou um commit
+  // inteiro para eliminar (cabeçalho 3×, selo 5×, aviso de erro 10×).
+  assert.doesNotMatch(source, /status: "pre_closing", label:/u,
+    "a visão geral não pode ter cópia própria das etapas");
+  assert.match(source, /import \{ competenceLabel, cycleProgress, cycleStages \} from "\.\/features\/shared"/u);
 });
 
 test("a verificação de navegador roda na CI, não só na máquina de quem lembrar", async () => {

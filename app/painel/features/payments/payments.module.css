@@ -22,8 +22,8 @@
  * O resultado seria a tela de Psicologia com o cabeçalho violeta e o ícone do
  * estado vazio azul, na mesma tela. Sobrescrever o token semântico dentro do
  * escopo alcança os dois, porque o alias local resolve a partir dele. */
-.workspace[data-module="psychology"] { --ui-accent: var(--module-psychology); --ui-accent-text: var(--module-psychology-text); --ui-accent-soft: var(--module-psychology-soft); }
-.workspace[data-module="contractors"] { --ui-accent: var(--module-contractors); --ui-accent-text: var(--module-contractors-text); --ui-accent-soft: var(--module-contractors-soft); }
+.workspace[data-module="psychology"] { --ui-accent: var(--module-psychology); --ui-accent-text: var(--module-psychology-text); --ui-accent-soft: var(--module-psychology-soft); --ui-on-accent: var(--module-on-accent); }
+.workspace[data-module="contractors"] { --ui-accent: var(--module-contractors); --ui-accent-text: var(--module-contractors-text); --ui-accent-soft: var(--module-contractors-soft); --ui-on-accent: var(--module-on-accent); }
 .workspace button, .workspace input, .workspace select, .workspace textarea { font: inherit; }
 .workspace button { color: inherit; }
 .workspace svg { width: 16px; height: 16px; stroke-width: 1.9; }

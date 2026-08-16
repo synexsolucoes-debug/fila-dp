@@ -105,6 +105,27 @@ try {
      VALUES ('co-ui-2', 'ws-ui', 'Filial Sem Demanda LTDA', 'Filial Vazia', '11222333000262', 0) ON CONFLICT DO NOTHING`,
   );
 
+  /* Duas competências abertas, em estágios diferentes.
+     Sem ciclo nenhum, o fluxo da competência na Visão geral só era exercitado
+     no estado vazio — e a etapa concluída, a atual e a pendente nunca chegavam
+     a ser pintadas. É a mesma armadilha do rótulo de processo logo abaixo:
+     conferência que não alcança o pixel não mede o pixel.
+
+     Estágios diferentes de propósito: com as duas iguais, o avanço "do ciclo
+     menos adiantado" daria o mesmo resultado que "do primeiro ciclo", e o
+     ensaio não distinguiria as duas regras. */
+  const competencia = new Date().toISOString().slice(0, 7);
+  for (const [id, companyId, status] of [
+    ["cy-ui-1", "co-ui", "processing"],
+    ["cy-ui-2", "co-ui-2", "pre_closing"],
+  ]) {
+    await client.query(
+      `INSERT INTO fdp_payroll_cycles (id, workspace_id, company_id, competence, status, notes, created_by)
+       VALUES ($1, 'ws-ui', $2, $3, $4, '', 'u-ui') ON CONFLICT DO NOTHING`,
+      [id, companyId, competencia, status],
+    );
+  }
+
   // Uma demanda por tipo de processo, e só.
   //
   // A semente era inteiramente vazia, para a auditoria passar pelos estados

@@ -10,6 +10,7 @@ import {
   Blocks,
   Building2,
   Cable,
+  Check,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -51,6 +52,7 @@ import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
+import { competenceLabel, cycleProgress, cycleStages } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -724,6 +726,12 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const scopedLists = useMemo(() => (snapshot?.lists ?? []).map((list) => companyFilter === "all"
     ? list
     : { ...list, cards: list.cards.filter((card) => card.companyId === companyFilter) }), [snapshot?.lists, companyFilter]);
+  /* O fluxo da competência respeita o seletor de empresa, como todo o resto da
+     Visão geral desde `db5300b`. Com uma empresa escolhida, o ciclo mostrado é
+     o dela; sem, é o do grupo, e o avanço é o do ciclo menos adiantado. */
+  const scopedCycles = useMemo(() => (snapshot?.payrollCycles ?? [])
+    .filter((cycle) => companyFilter === "all" || cycle.companyId === companyFilter),
+  [snapshot?.payrollCycles, companyFilter]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
   const filteredActiveCards = useMemo(() => {
     const now = new Date();
@@ -1409,7 +1417,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
 
-          {view === "overview" && <OverviewView onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
+          {view === "overview" && <OverviewView cycles={scopedCycles} onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
 
@@ -1699,12 +1707,76 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   );
 }
 
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel }: {
+
+/**
+ * O fluxo da competência (Modelo 2, "Flow").
+ *
+ * No lugar da faixa marinho que dizia "N demanda(s) em andamento" — texto que
+ * o indicador logo abaixo repetia, e cuja concordância "(s)" era ruído de
+ * gerador. O fechamento é o fato mais estruturante do DP: a operação é cíclica
+ * e fecha todo mês, e a interface não dizia isso em lugar nenhum.
+ *
+ * As cinco etapas são os estados que o servidor aceita (`cycleStatuses` em
+ * lib/operations.ts), não uma sequência decorativa: avançar entre elas passa
+ * pelos bloqueios de `describeClosingBlockers`.
+ *
+ * O estado é marcado por forma além de cor — ícone de concluído, anel na
+ * etapa atual, contorno vazio no que falta — para funcionar também para quem
+ * não distingue verde de azul.
+ */
+const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
+
+function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
+  cycles: WorkspaceSnapshot["payrollCycles"];
+  scopeLabel: string;
+  active: number;
+  onNew?: () => void;
+  onNavigate: (target: ActionTarget) => void;
+}) {
+  const progresso = cycleProgress(cycles);
+  const competencia = cycles[0]?.competence ?? "";
+
+  return <section className="competence-flow" aria-label="Fluxo da competência">
+    <header>
+      <div>
+        <span>COMPETÊNCIA · {scopeLabel.toUpperCase()}</span>
+        <strong>{competencia ? competenceLabel(competencia) : "Nenhuma competência aberta"}</strong>
+        {/* "1 ciclo(s) concluído(s)" é ruído de gerador, não texto de produto —
+            a mesma coisa que a §44 já tinha tirado da página de planos. */}
+        <p>{progresso
+          ? progresso.completa
+            ? `${plural(progresso.total, "ciclo concluído", "ciclos concluídos")}. Nada pendente nesta competência.`
+            : `${progresso.concluidos} de ${plural(progresso.total, "ciclo concluído", "ciclos concluídos")} · ${plural(active, "demanda em andamento", "demandas em andamento")}.`
+          : "Abra a competência em Operação DP para acompanhar o fechamento por aqui."}</p>
+      </div>
+      <div className="competence-flow-actions">
+        <button type="button" className="secondary-button" onClick={() => onNavigate("processes")}>Ver fechamento</button>
+        {onNew && <button type="button" className="primary-button" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
+      </div>
+    </header>
+
+    {progresso
+      ? <ol className="competence-flow-track">
+          {cycleStages.map((stage, index) => {
+            const estado = index < progresso.atual ? "done" : index === progresso.atual ? "current" : "todo";
+            return <li key={stage.status} data-state={estado}
+              aria-current={estado === "current" ? "step" : undefined}>
+              <i aria-hidden="true">{estado === "done" ? <Check /> : null}</i>
+              <span><strong>{stage.label}</strong><small>{estado === "done" ? "Concluída" : estado === "current" ? stage.note : "Pendente"}</small></span>
+            </li>;
+          })}
+        </ol>
+      : null}
+  </section>;
+}
+
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles }: {
   onNavigate: (target: ActionTarget) => void;
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
   activities: ActivityEvent[];
+  cycles: WorkspaceSnapshot["payrollCycles"];
   stats: { active: number; attention: number; waiting: number; onTime: number; completed: number; documentsPending: number; activeCompanies: number };
   onOpen: (card: Card) => void;
   onOpenBoard: () => void;
@@ -1724,13 +1796,8 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   return <div className="overview-layout">
     <ActionCenter onNavigate={onNavigate} companyId={companyId} />
 
-    <section className="overview-hero">
-      {/* O recorte é dito por extenso. Sem isso, "3 demandas em andamento" com
-          uma empresa escolhida e "3" com o grupo inteiro são o mesmo texto para
-          fatos diferentes, e não há como saber qual dos dois se está lendo. */}
-      <div><span>RESUMO OPERACIONAL · {scopeLabel.toUpperCase()}</span><strong>{stats.active ? `${stats.active} demanda(s) em andamento.` : "Tudo sob controle por enquanto."}</strong><p>Priorize o que vence primeiro e mantenha cada empresa atualizada sem abrir planilhas paralelas.</p></div>
-      {canEdit && <button className="primary-button overview-new-demand" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
-    </section>
+    <CompetenceFlow cycles={cycles} scopeLabel={scopeLabel} active={stats.active}
+      onNew={canEdit ? onNew : undefined} onNavigate={onNavigate} />
 
     <section className="overview-metrics" aria-label="Indicadores principais">
       <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{stats.completed} concluída(s) no quadro</small></article>
