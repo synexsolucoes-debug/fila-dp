@@ -1,5 +1,6 @@
 import { ApiError, apiError, computeSlaStatus, getApiUser, text, validDueAt, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 import { addBusinessDays, replaceCardRelations } from "@/lib/fila-dp-relations";
 import { workingDayMinutes } from "@/lib/fila-dp-sla";
 import { validCompetence } from "@/lib/operations";
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
 
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     const requestedBoardId = text(body.boardId, 100);
     let targetBoard = board;
     if (requestedBoardId && requestedBoardId !== board.id) {

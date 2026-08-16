@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 import { createRecoveryToken } from "@/lib/fila-dp-recovery";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { ApiError } from "@/lib/api-errors";
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
 
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "members.manage");
 
     const currentMembership = await d1.prepare("SELECT 1 AS member FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = (SELECT id FROM fdp_users WHERE email = ?)")
       .bind(workspace.id, email).first<{ member: number }>();

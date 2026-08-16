@@ -4,7 +4,7 @@ import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 import { getTenantContext, setTenantContext } from "./tenant-context";
 import { hasCapability } from "./authorization";
-import { resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
+import { deniedWriteCapabilities, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
@@ -268,6 +268,10 @@ export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, works
     if (granted) extraCapabilities.add(capability);
     else deniedCapabilities.add(capability);
   }
+  // Negar um módulo negava só a capacidade de leitura dele — a que decide se o
+  // módulo aparece. As de escrita continuavam valendo pelo papel, e quem tinha
+  // Demandas, Inbox e Planner negados criava demandas pela API sem ver o quadro.
+  for (const capability of deniedWriteCapabilities(byModule)) deniedCapabilities.add(capability);
   return { byModule, extraCapabilities, deniedCapabilities };
 }
 

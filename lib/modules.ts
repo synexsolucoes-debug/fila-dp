@@ -34,6 +34,87 @@ export type ModuleDefinition = {
   position: number;
 };
 
+/**
+ * Capacidades de **escrita** que cada módulo governa.
+ *
+ * A tabela `fdp_modules` guarda uma capacidade por módulo: a de leitura, que é
+ * a que decide se o módulo aparece. Negar um módulo para uma pessoa retirava
+ * só essa — e o resto continuava valendo pelo papel.
+ *
+ * Verificado contra o produto de pé: um membro com Demandas, Inbox e Planner
+ * todos negados criava demandas por `POST /api/cards` e recebia 201. Ele não
+ * via o quadro e escrevia nele.
+ *
+ * A negação é por família, e só quando **todos** os módulos que governam a
+ * capacidade estão negados: `cards.write` pertence a Demandas, Inbox e Planner
+ * ao mesmo tempo, e negar só o Inbox não pode calar o quadro de quem continua
+ * com ele liberado.
+ *
+ * A concessão continua sendo só de leitura, como a tela diz por escrito:
+ * liberar um módulo mostra o módulo; escrever continua vindo do papel. A
+ * assimetria é deliberada — liberar não pode promover ninguém.
+ */
+export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
+  board: ["cards.write", "comments.write", "attachments.write"],
+  inbox: ["cards.write"],
+  planner: ["cards.write"],
+  processes: [
+    "processes.manage", "processes.publish", "competences.manage", "competences.transition",
+    "competences.reopen", "movements.manage", "approvals.request", "approvals.decide",
+    "obligations.manage", "pending_items.manage",
+  ],
+  time_tracking: ["time.manage", "time.approve", "time.export", "time.mappings.manage"],
+  auxiliary: [
+    "benefits.manage", "psychology.manage", "contractors.manage",
+    "auxiliary.approvals.request", "auxiliary.approvals.decide", "auxiliary.close",
+  ],
+  psychologist_payments: ["psychology.payments.manage", "psychology.payments.close", "payments.reopen"],
+  contractor_payments: [
+    "contractors.payments.manage", "contractors.payments.close", "contractors.limits.manage",
+    "contractors.export_caju", "payments.reopen",
+  ],
+  registrations: ["companies.manage", "employees.manage", "registrations.catalogs.manage"],
+  integrations: ["integrations.manage", "integrations.run", "integrations.reconcile"],
+  sankhya_browser: ["integrations.credentials.manage", "integrations.execute", "integrations.logs.view"],
+  payroll: ["hr.write"],
+  access: ["members.manage"],
+  saas: ["saas.manage"],
+  // Relatórios são leitura; não há escrita a negar além da própria visão.
+  indicators: [],
+};
+
+/** Módulos que governam cada capacidade de escrita, derivado do mapa acima. */
+export const capabilityOwners = (() => {
+  const owners = new Map<string, Set<string>>();
+  for (const [module_, caps] of Object.entries(moduleWriteCapabilities)) {
+    for (const capability of caps) {
+      const set = owners.get(capability) ?? new Set<string>();
+      set.add(module_);
+      owners.set(capability, set);
+    }
+  }
+  return owners;
+})();
+
+/**
+ * Capacidades de escrita a negar, dadas as exceções individuais da pessoa.
+ *
+ * Só entra a capacidade cujos módulos donos estejam **todos** negados. Módulo
+ * sem exceção não conta como negado: ele segue o papel e o plano.
+ */
+export function deniedWriteCapabilities(byModule: ReadonlyMap<string, boolean>): Set<string> {
+  const denied = new Set<string>();
+  for (const [capability, owners] of capabilityOwners) {
+    if (owners.size === 0) continue;
+    let todosNegados = true;
+    for (const module_ of owners) {
+      if (byModule.get(module_) !== false) { todosNegados = false; break; }
+    }
+    if (todosNegados) denied.add(capability);
+  }
+  return denied;
+}
+
 export type ModuleAccessInput = {
   module: ModuleDefinition;
   /** Módulos incluídos no plano contratado. */

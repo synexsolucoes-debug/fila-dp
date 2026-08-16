@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -11,6 +12,7 @@ export async function POST(request: Request) {
     if (!name) return Response.json({ error: "Informe o nome do processo." }, { status: 400 });
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "workspace.manage");
     const boardId = crypto.randomUUID();
     const boardType = text(body.boardType, 30) || "general";
     const requestedColumns = Array.isArray(body.columns)

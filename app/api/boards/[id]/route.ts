@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +12,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "workspace.manage");
     const name = text(body.name, 80);
     const description = text(body.description, 300);
     if (!name) return Response.json({ error: "Informe o nome do quadro." }, { status: 400 });
@@ -30,6 +32,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "workspace.manage");
     const count = await d1.prepare("SELECT COUNT(*) AS value FROM fdp_boards WHERE workspace_id = ?").bind(workspace.id).first<{ value: number }>();
     if (Number(count?.value ?? 0) <= 1) return Response.json({ error: "O workspace precisa manter pelo menos um quadro." }, { status: 400 });
     const result = await d1.prepare("DELETE FROM fdp_boards WHERE id = ? AND workspace_id = ?").bind(id, workspace.id).run();

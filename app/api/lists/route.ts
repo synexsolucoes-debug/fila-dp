@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
     if (!name || !boardId) return Response.json({ error: "Informe o quadro e o nome da coluna." }, { status: 400 });
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "workspace.manage");
     const board = await d1.prepare("SELECT id FROM fdp_boards WHERE id = ? AND workspace_id = ?").bind(boardId, workspace.id).first();
     if (!board) return Response.json({ error: "Quadro não encontrado." }, { status: 404 });
     const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS value FROM fdp_lists WHERE board_id = ?").bind(boardId).first<{ value: number }>();

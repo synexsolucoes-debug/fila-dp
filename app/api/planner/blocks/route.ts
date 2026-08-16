@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
     if (!title || !startAt || !endAt || new Date(endAt).getTime() <= new Date(startAt).getTime()) return Response.json({ error: "Informe um bloco com título e horário válido." }, { status: 400 });
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     if (cardId) {
       const card = await d1.prepare("SELECT id FROM fdp_cards WHERE id = ? AND board_id IN (SELECT id FROM fdp_boards WHERE workspace_id = ?)").bind(cardId, workspace.id).first();
       if (!card) return Response.json({ error: "Demanda não encontrada." }, { status: 404 });

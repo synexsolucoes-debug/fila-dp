@@ -10,6 +10,11 @@ export async function POST(request: Request) {
     const config = body.config && typeof body.config === "object" && !Array.isArray(body.config) ? body.config as Record<string, unknown> : {};
     if (Object.keys(config).some((key) => /token|password|secret|senha|chave/i.test(key))) return Response.json({ error: "Tokens devem ficar no ambiente seguro." }, { status: 400 });
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    // Sem capability de propósito: esta rota grava a conexão de agenda *da
+    // própria pessoa* (`user_id`), não um recurso do grupo, e nenhum módulo do
+    // catálogo a governa. Inventar uma capacidade só para ela criaria uma linha
+    // na matriz de permissões que não corresponde a nada que se possa liberar
+    // ou negar na tela.
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
     await d1.prepare(`INSERT INTO fdp_calendar_connections (id, workspace_id, user_id, provider, status, config_json, external_calendar_id, updated_at)
       VALUES (?, ?, ?, ?, 'needs_credentials', ?, ?, CURRENT_TIMESTAMP)

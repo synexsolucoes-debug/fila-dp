@@ -1,5 +1,6 @@
 import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +12,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json() as { completed?: boolean };
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     const item = await d1.prepare(`SELECT ci.id, ci.card_id, ci.title, ci.completed
       FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id
       WHERE ci.id = ? AND c.board_id = ? AND c.archived = 0`)
