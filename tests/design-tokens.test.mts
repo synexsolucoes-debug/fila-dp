@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import test from "node:test";
 
 /**
@@ -111,16 +111,21 @@ test("o acento do módulo alcança os componentes compartilhados", async () => {
 });
 
 test("a escala semântica não é redeclarada por módulo", async () => {
-  // `--saas-green/amber/red` eram `--ui-success/warning/danger` copiados, nos
-  // dois temas — inclusive com um bloco de tema escuro só para repetir o que o
-  // token já fazia sozinho.
-  const saas = await readFile(new URL("saas/saas.module.css", FEATURES), "utf8");
-  assert.match(saas, /--saas-green: var\(--ui-success\)/u);
-  assert.match(saas, /--saas-amber: var\(--ui-warning\)/u);
-  assert.match(saas, /--saas-red: var\(--ui-danger\)/u);
-  const dark = saas.slice(saas.indexOf(":global(.theme-dark) .workspace"));
-  assert.doesNotMatch(dark.slice(0, 200), /--saas-(green|amber|red)/u,
-    "o tema escuro não precisa repetir o que o token já resolve");
+  /* `--saas-green/amber/red` eram `--ui-success/warning/danger` copiados nos
+     dois temas, e o módulo que os carregava foi removido — administrar
+     assinatura é da plataforma por desenho (tests/saas-phase7.test.mts).
+
+     A regra continua valendo para os módulos que ficaram: nenhum redeclara a
+     escala semântica com valor próprio. */
+  for (const nome of await readdir(FEATURES)) {
+    const dir = new URL(`${nome}/`, FEATURES);
+    if (!(await stat(dir).catch(() => null))?.isDirectory()) continue;
+    for (const arquivo of (await readdir(dir)).filter((f) => f.endsWith(".module.css"))) {
+      const css = await readFile(new URL(arquivo, dir), "utf8");
+      assert.doesNotMatch(css, /--[a-z]+-(green|amber|red):\s*#/u,
+        `${nome}/${arquivo} redeclara a escala semântica com valor próprio`);
+    }
+  }
 });
 
 test("o acento de módulo separa preenchimento de texto, com contrapartida no escuro", async () => {

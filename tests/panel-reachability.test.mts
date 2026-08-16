@@ -33,8 +33,7 @@ const FEATURES = new URL("../app/painel/features/", import.meta.url);
  * ser redescoberta daqui a seis meses.
  */
 const SEM_PORTA = new Map([
-  ["AccessView", "a administração de identidades foi movida para o console global (app/plataforma/features/UsersFeature.tsx); tests/access-screen.test.mts guarda essa decisão e reprova se ela voltar ao painel. Esta cópia ficou para trás."],
-  ["SaasView", "assinatura, faturas, cotas e sequência de ativação. Nada a importa e /api/saas/overview só é chamada por ela. Não encontrei commit que registre a decisão — pode ser intencional (assinatura administrada só pela plataforma) ou uma ligação perdida."],
+  ["AccessView", "duplica a gestão de membros que já vive em WorkspaceApp.tsx (papel, empresas, ativação, link, remoção) — mas `MemberModules` ao lado dela é a ÚNICA interface de /api/members/[id]/modules, a exceção de módulo por pessoa cuja autorização foi corrigida em f86fa6d. A decisão registrada em tests/access-screen.test.mts cobre administração GLOBAL de usuários, que é da plataforma; exceção por pessoa é do grupo e não tem outro lugar. Remover perderia a feature; reconectar criaria a segunda tela de acesso. A parte útil precisa migrar para a lista de membros viva."],
 ]);
 
 const modules = (await readdir(FEATURES, { withFileTypes: true }))
@@ -87,7 +86,14 @@ test("todo componente publicado por uma feature tem quem o renderize", () => {
 });
 
 test("a lista de telas sem porta não cresce em silêncio, e cada entrada diz por quê", () => {
-  assert.equal(SEM_PORTA.size, 2, "mudou o número de telas sem porta — atualize o motivo junto");
+  /* De duas para uma. `SaasView` foi removida: `tests/saas-phase7.test.mts`
+     registra que administrar assinatura é da plataforma por desenho e proíbe
+     `view === "saas"` no painel — coerente com o produto não ter autocadastro.
+     Ela era resto de um desenho anterior, em que o workspace se autoatendia.
+
+     `AccessView` fica, com motivo mais forte do que o anterior: ela carrega a
+     única interface de uma feature viva. */
+  assert.equal(SEM_PORTA.size, 1, "mudou o número de telas sem porta — atualize o motivo junto");
   for (const [component, motivo] of SEM_PORTA) {
     assert.ok(motivo.length > 80, `${component} precisa de um motivo, não de uma linha`);
     assert.ok(exported.has(component), `${component} saiu do index: tire-o da lista também`);

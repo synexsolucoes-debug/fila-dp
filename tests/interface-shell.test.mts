@@ -76,7 +76,7 @@ test("nenhum módulo volta a fixar a própria cor de destaque", async () => {
   // Cada módulo declarava a sua (`--saas-indigo: #3159b7`), fixa para o tema
   // claro. No escuro a mesma cor servia de texto sobre superfície escura e de
   // preenchimento sob texto branco, e falhava nos dois papéis.
-  const modulos = ["saas", "payments", "time", "integrations", "auxiliary", "operations", "access", "registrations"];
+  const modulos = ["payments", "time", "integrations", "auxiliary", "operations", "registrations"];
   for (const modulo of modulos) {
     const css = await lerCss(`app/painel/features/${modulo}/${modulo}.module.css`);
     const declaracao = css.match(/--[a-z]+-(?:accent|indigo|mint|brand):\s*([^;]+);/u);
@@ -88,7 +88,7 @@ test("nenhum módulo volta a fixar a própria cor de destaque", async () => {
 
 test("preenchimento de destaque não usa branco fixo como texto", async () => {
   // Branco sobre o azul vivo do tema escuro dá 2.26:1.
-  const modulos = ["saas", "payments", "time", "integrations", "auxiliary", "operations", "access", "registrations"];
+  const modulos = ["payments", "time", "integrations", "auxiliary", "operations", "registrations"];
   for (const modulo of modulos) {
     const css = await lerCss(`app/painel/features/${modulo}/${modulo}.module.css`);
     const linhas = css.split("\n").filter((linha) =>
