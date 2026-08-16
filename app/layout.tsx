@@ -42,13 +42,25 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "Vinculato",
       type: "website",
       locale: "pt_BR",
-      images: [{ url: `${origin}/og.png`, width: 1792, height: 917, alt: "Vinculato — Sua operação, conectada." }],
+      // Cartão de compartilhamento: gerado por `npm run og:generate` a partir
+      // do logotipo oficial, das cores de `--vin-*` e de `VINCULATO_TAGLINE`.
+      //
+      // O anterior era a marca antiga inteira — dizia "Fila DP", em verde, com
+      // o posicionamento antigo — enquanto este `alt` ao lado já dizia
+      // "Vinculato". O texto certo e a figura contradizendo o texto, em todo
+      // link enviado no WhatsApp, no LinkedIn ou no Slack. Nenhuma conferência
+      // pegava: a imagem é binária e ninguém a renderiza.
+      //
+      // Endereço novo de propósito: plataformas guardam o cartão em cache pela
+      // URL, então manter `/og.png` continuaria servindo "Fila DP" dos caches
+      // delas mesmo com o arquivo trocado.
+      images: [{ url: `${origin}/og-vinculato.jpg`, width: 1200, height: 630, alt: "Vinculato — Sua operação, conectada." }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Vinculato — Sua operação, conectada.",
       description: "Processos, demandas, documentos e integrações do DP em uma plataforma só.",
-      images: [`${origin}/og.png`],
+      images: [`${origin}/og-vinculato.jpg`],
     },
   };
 }

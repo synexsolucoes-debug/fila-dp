@@ -20,16 +20,46 @@ async function walk(directory: string, extensions: string[]): Promise<string[]> 
   return files;
 }
 
+/**
+ * Remove comentários antes de medir.
+ *
+ * O teste procura o nome antigo em *texto de interface*, e comentário não é
+ * interface. A distinção passou a importar quando o cartão de compartilhamento
+ * foi corrigido: o comentário que explica por que o endereço da imagem mudou
+ * precisa dizer que o arquivo anterior estampava a marca antiga — e nomear o
+ * defeito é a única forma de documentá-lo. Sem esta separação, o repositório
+ * fica proibido de contar a própria história.
+ *
+ * O `//` só conta como comentário quando não vem depois de `:`, para não comer
+ * o resto de uma linha que contenha `https://`.
+ */
+function interfaceTextOf(source: string) {
+  return source.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/(^|[^:])\/\/[^\n]*/gu, "$1");
+}
+
 test("nenhum texto de interface ainda diz o nome antigo", async () => {
   const files = await walk(root, [".ts", ".tsx", ".css"]);
   const offenders: string[] = [];
   for (const file of files) {
-    const source = await readFile(file, "utf8");
+    const source = interfaceTextOf(await readFile(file, "utf8"));
     // A marca também aparecia partida entre elementos ("Fila <strong>DP</strong>"),
     // que a busca por texto corrido não pegava. O padrão abaixo cobre os dois casos.
     if (/Fila DP|FilaDP|Fila\s*<(?:strong|b)>\s*DP/u.test(source)) offenders.push(file.replace(root, ""));
   }
   assert.deepEqual(offenders, [], `arquivos com o nome antigo: ${offenders.join(", ")}`);
+});
+
+test("a varredura continua vendo o nome antigo onde ele importa", () => {
+  // Contraprova: se tirar comentários tivesse cegado a busca, ela pararia de
+  // acusar o texto renderizado — e o teste viraria enfeite verde.
+  assert.match(interfaceTextOf(`<h1>Fila DP</h1>`), /Fila DP/u);
+  assert.match(interfaceTextOf(`const t = "Fila DP"; // marca`), /Fila DP/u);
+  assert.match(interfaceTextOf(`<p>Fila <strong>DP</strong></p>`), /Fila\s*<strong>\s*DP/u);
+  // E o comentário deixa de contar, que é o ponto.
+  assert.doesNotMatch(interfaceTextOf(`// o arquivo anterior dizia Fila DP`), /Fila DP/u);
+  assert.doesNotMatch(interfaceTextOf(`/* dizia Fila DP */`), /Fila DP/u);
+  // Sem comer o que vem depois de uma URL na mesma linha.
+  assert.match(interfaceTextOf(`const u = "https://exemplo.test"; const n = "Fila DP";`), /Fila DP/u);
 });
 
 test("identificadores técnicos foram preservados na renomeação", async () => {
