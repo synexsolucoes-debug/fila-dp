@@ -334,7 +334,7 @@
 .dashboard-content {
   width: 100%;
   max-width: none;
-  padding: 30px clamp(18px, 2vw, 34px) 42px;
+  padding: 24px clamp(18px, 2vw, 34px) 42px;
 }
 
 .dashboard-heading {
@@ -347,10 +347,13 @@
   letter-spacing: .11em;
 }
 
+/* 38px era manchete. O Modelo 2 abre com saudação discreta e devolve a dobra
+   ao conteúdo — a tela existe para mostrar a operação, não para se apresentar. */
 .dashboard-heading h1 {
-  margin: 9px 0 6px;
+  margin: 7px 0 5px;
   color: var(--ui-text);
-  font-size: clamp(29px, 2vw, 38px);
+  font-size: clamp(24px, 1.7vw, 30px);
+  letter-spacing: -.025em;
 }
 
 .dashboard-heading p {

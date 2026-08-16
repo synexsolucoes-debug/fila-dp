@@ -20,8 +20,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  min-height: 92px;
-  padding: 16px 20px;
+  min-height: 78px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--ui-border);
 }
 .panelHeader > div { min-width: 0; }
@@ -38,7 +38,7 @@
 .emptyState,
 .loadingState {
   display: flex;
-  min-height: 310px;
+  min-height: 250px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -49,7 +49,7 @@
 /* O carregamento da tela inteira ocupava 450px no módulo auxiliar. Sem isso, a
    página encolhe no instante entre a requisição e a resposta e o conteúdo
    pula quando chega. */
-.loadingState[data-size="page"] { min-height: 450px; }
+.loadingState[data-size="page"] { min-height: 380px; }
 /* Colunas estreitas — a lista lateral de prestadores, por exemplo. A altura
    cheia ali empurraria a seleção para fora da dobra. */
 .emptyState[data-size="compact"],
@@ -63,7 +63,7 @@
   height: 48px;
   margin-bottom: 3px;
   border: 1px solid color-mix(in srgb, var(--ui-accent, var(--brand)) 25%, var(--ui-border));
-  border-radius: 9px;
+  border-radius: 12px;
   background: var(--ui-accent-soft, var(--brand-soft));
   color: var(--ui-accent, var(--brand));
 }
@@ -80,9 +80,11 @@
   align-items: center;
   gap: 5px;
   width: max-content;
-  padding: 4px 8px;
+  padding: 4px 10px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  /* Totalmente arredondado (Modelo 2). Com 5px o selo lia como campo de
+     formulário; a forma redonda é o que separa "estado" de "entrada". */
+  border-radius: 999px;
   font-size: .62rem;
   font-weight: 730;
   white-space: nowrap;
