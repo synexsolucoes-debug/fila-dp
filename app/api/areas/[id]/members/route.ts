@@ -3,12 +3,14 @@ import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
+import { requirePlatformAdmin } from "@/lib/platform-authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PUT(request: Request, context: RouteContext) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
+    requirePlatformAdmin(auth.user);
     const { id } = await context.params;
     const body = await request.json() as { members?: Array<Record<string, unknown>> };
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);

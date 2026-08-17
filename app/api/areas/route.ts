@@ -4,6 +4,7 @@ import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
 import { areaCode, areaModuleList, areaName } from "@/lib/areas";
+import { requirePlatformAdmin } from "@/lib/platform-authorization";
 
 export async function GET() {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
@@ -35,6 +36,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
+    requirePlatformAdmin(auth.user);
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "departments.create", "criar áreas operacionais");

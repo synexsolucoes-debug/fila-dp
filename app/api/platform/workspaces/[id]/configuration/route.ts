@@ -1,6 +1,8 @@
 import { getD1, getPlatformScopedD1 } from "@/db";
 import { ApiError } from "@/lib/api-errors";
+import { areaCode, areaModuleList, areaName } from "@/lib/areas";
 import { apiError, getApiUser, validDate, validProcessType } from "@/lib/fila-dp-api";
+import { prepareMemberDepartmentAccess, resolveMemberDepartmentAccess } from "@/lib/member-departments";
 import { requiredPlatformReason, sanitizePlatformValue } from "@/lib/platform-console";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
@@ -10,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ id: string }> };
 type Row = Record<string, unknown>;
-const colors = new Set(["#dc2626", "#ea580c", "#d97706", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#64748b"]);
+const colors = new Set(["#dc2626", "#ea580c", "#d97706", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#64748b", "#475569"]);
 const roles = new Set(["admin", "member", "observer", "guest"]);
 const text = (value: unknown, max = 500) => cleanText(value, max);
 const truthy = (value: unknown) => value === true || value === 1 || value === "1" || value === "t" || value === "true";
@@ -19,16 +21,34 @@ const safeWebhookUrl = (value: unknown) => { try { const url = new URL(text(valu
 
 async function configuration(workspaceId: string, platformUserId: string) {
   const scoped = getPlatformScopedD1({ workspaceId, userId: platformUserId });
-  const [workspace, boards, lists, companies, members, labels, fields, templates, settings, holidays, sla, rules, modules, memberModuleGrants, apiKeys, webhooks] = await Promise.all([
+  const [workspace, boards, lists, companies, members, areas, labels, fields, templates, settings, holidays, sla, rules, modules, memberModuleGrants, apiKeys, webhooks] = await Promise.all([
     scoped.prepare(`SELECT id, name, slug, legal_name, tax_id, contact_email, timezone, status FROM fdp_workspaces WHERE id = ?`).bind(workspaceId).first<Row>(),
     scoped.prepare("SELECT id, name, description, board_type, created_at FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at, id").bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, board_id, name, kind, position, sla_behavior, (SELECT count(*)::int FROM fdp_cards c WHERE c.workspace_id = ? AND c.list_id = fdp_lists.id) AS card_count FROM fdp_lists WHERE workspace_id = ? ORDER BY board_id, position").bind(workspaceId, workspaceId).all<Row>(),
     scoped.prepare("SELECT id, parent_company_id, is_principal, legal_name, trade_name, tax_id, email, phone, status FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name").bind(workspaceId).all<Row>(),
     scoped.prepare(`SELECT member.user_id, users.name, users.email, member.role,
+        (workspace.owner_user_id = member.user_id) AS is_owner,
+        primary_area.id AS department_id, primary_area.name AS department_name,
         COALESCE(json_agg(access.company_id) FILTER (WHERE access.company_id IS NOT NULL), '[]'::json) AS company_ids
       FROM fdp_workspace_members member JOIN fdp_users users ON users.id = member.user_id
+      JOIN fdp_workspaces workspace ON workspace.id = member.workspace_id
       LEFT JOIN fdp_member_company_access access ON access.workspace_id = member.workspace_id AND access.user_id = member.user_id
-      WHERE member.workspace_id = ? GROUP BY member.user_id, users.name, users.email, member.role ORDER BY users.name`).bind(workspaceId).all<Row>(),
+      LEFT JOIN fdp_area_members primary_member ON primary_member.workspace_id = member.workspace_id
+        AND primary_member.user_id = member.user_id AND primary_member.is_primary = 1
+      LEFT JOIN fdp_areas primary_area ON primary_area.workspace_id = primary_member.workspace_id
+        AND primary_area.id = primary_member.area_id
+      WHERE member.workspace_id = ?
+      GROUP BY member.user_id, users.name, users.email, member.role, workspace.owner_user_id, primary_area.id, primary_area.name
+      ORDER BY (workspace.owner_user_id = member.user_id) DESC, users.name`).bind(workspaceId).all<Row>(),
+    scoped.prepare(`SELECT area.id, area.name, area.code, area.description, area.status, area.manager_user_id,
+        area.color, area.icon, area.default_sla_days,
+        COALESCE((SELECT count(*)::int FROM fdp_area_members member
+          WHERE member.workspace_id = area.workspace_id AND member.area_id = area.id), 0) AS members_count,
+        COALESCE((SELECT jsonb_agg(assignment.module_key ORDER BY assignment.module_key)
+          FROM fdp_area_module_assignments assignment
+          WHERE assignment.workspace_id = area.workspace_id AND assignment.area_id = area.id), '[]'::jsonb) AS module_keys
+      FROM fdp_areas area WHERE area.workspace_id = ?
+      ORDER BY (area.status = 'active') DESC, area.name`).bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, name, color, position FROM fdp_labels WHERE workspace_id = ? ORDER BY position").bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, name, field_key, field_type, options_json, required, position FROM fdp_custom_fields WHERE workspace_id = ? ORDER BY position").bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, name, process_type, description, checklist_json, default_sla_days, active, position FROM fdp_process_templates WHERE workspace_id = ? ORDER BY position").bind(workspaceId).all<Row>(),
@@ -40,12 +60,16 @@ async function configuration(workspaceId: string, platformUserId: string) {
     // consulta com `syntax error at or near "grant"` e a tela de configuração do
     // workspace no console da plataforma não abre. Daí `module_grant`.
     scoped.prepare(`SELECT module.key, module.name, module.description, module.category, module.status,
-        (plan_module.module_key IS NOT NULL) AS in_plan, module_grant.granted, module_grant.reason, module_grant.expires_at
+        (plan_module.module_key IS NOT NULL) AS in_plan, module_grant.granted, module_grant.reason, module_grant.expires_at,
+        assigned_area.id AS area_id, assigned_area.name AS area_name
       FROM fdp_modules module
       LEFT JOIN fdp_plan_modules plan_module ON plan_module.module_key = module.key
         AND plan_module.plan_id = (SELECT plan_id FROM fdp_workspace_subscriptions WHERE workspace_id = ?)
       LEFT JOIN fdp_workspace_module_grants module_grant ON module_grant.workspace_id = ? AND module_grant.module_key = module.key
-      ORDER BY module.position`).bind(workspaceId, workspaceId).all<Row>(),
+        AND (module_grant.expires_at IS NULL OR module_grant.expires_at > now())
+      LEFT JOIN fdp_area_module_assignments assignment ON assignment.workspace_id = ? AND assignment.module_key = module.key
+      LEFT JOIN fdp_areas assigned_area ON assigned_area.workspace_id = assignment.workspace_id AND assigned_area.id = assignment.area_id
+      ORDER BY module.position`).bind(workspaceId, workspaceId, workspaceId).all<Row>(),
     scoped.prepare("SELECT user_id, module_key, granted, reason, updated_at FROM fdp_member_module_grants WHERE workspace_id = ? ORDER BY user_id, module_key").bind(workspaceId).all<Row>(),
     scoped.prepare("SELECT id, name, prefix, scopes_json, rate_limit_per_minute, status, last_used_at, expires_at, created_at FROM fdp_api_keys WHERE workspace_id = ? ORDER BY created_at DESC").bind(workspaceId).all<Row>(),
     scoped.prepare(`SELECT endpoint.id, endpoint.name, endpoint.url, endpoint.event_types_json, endpoint.status, endpoint.failure_count,
@@ -59,7 +83,8 @@ async function configuration(workspaceId: string, platformUserId: string) {
     boards: boards.results,
     lists: lists.results,
     companies: companies.results.map((row) => ({ ...row, is_principal: truthy(row.is_principal) })),
-    members: members.results.map((row) => ({ ...row, company_ids: safeJson(row.company_ids, []) })),
+    members: members.results.map((row) => ({ ...row, is_owner: truthy(row.is_owner), company_ids: safeJson(row.company_ids, []) })),
+    areas: areas.results.map((row) => ({ ...row, module_keys: safeJson(row.module_keys, []) })),
     labels: labels.results,
     fields: fields.results.map((row) => ({ ...row, required: truthy(row.required), options: safeJson(row.options_json, []), options_json: undefined })),
     templates: templates.results.map((row) => ({ ...row, active: truthy(row.active), checklist: safeJson(row.checklist_json, []), checklist_json: undefined })),
@@ -182,13 +207,145 @@ export async function POST(request: Request, { params }: Params) {
           if (before.id) statements.push(scoped.prepare("UPDATE fdp_automation_rules SET name = ?, trigger = ?, condition_json = ?, action_json = ?, enabled = ? WHERE workspace_id = ? AND id = ?").bind(name, requestedTrigger, JSON.stringify(condition), JSON.stringify(ruleAction), after.enabled ? 1 : 0, workspaceId, entityId));
           else statements.push(scoped.prepare("INSERT INTO fdp_automation_rules (id, workspace_id, name, trigger, condition_json, action_json, enabled, position) VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position),0)+1000 FROM fdp_automation_rules WHERE workspace_id = ?))").bind(entityId, workspaceId, name, requestedTrigger, JSON.stringify(condition), JSON.stringify(ruleAction), after.enabled ? 1 : 0, workspaceId));
         }
+      } else if (action === "area.save") {
+        entityType = "operational_area"; entityId = text(payload.id, 120) || crypto.randomUUID();
+        const existing = await scoped.prepare("SELECT id, name, code, description, status, manager_user_id, color, icon, default_sla_days FROM fdp_areas WHERE workspace_id = ? AND id = ?")
+          .bind(workspaceId, entityId).first<Row>();
+        if (existing && text(existing.status) === "archived") throw new ApiError(409, "AREA_ARCHIVED", "Uma área arquivada não pode ser alterada.");
+        const catalog = await scoped.prepare("SELECT key, status FROM fdp_modules ORDER BY position").all<{ key: string; status: string }>();
+        const catalogKeys = catalog.results.map((item) => String(item.key));
+        const activeCatalogKeys = new Set(catalog.results.filter((item) => String(item.status) === "active").map((item) => String(item.key)));
+        const currentModules = existing
+          ? await scoped.prepare("SELECT module_key FROM fdp_area_module_assignments WHERE workspace_id = ? AND area_id = ? ORDER BY module_key").bind(workspaceId, entityId).all<{ module_key: string }>()
+          : { results: [] as Array<{ module_key: string }> };
+        const moduleKeys = payload.moduleKeys === undefined
+          ? currentModules.results.map((item) => String(item.module_key))
+          : areaModuleList(payload.moduleKeys, catalogKeys);
+        const realModuleKeys = moduleKeys.filter((key) => activeCatalogKeys.has(key));
+        const status = payload.status === "inactive" ? "inactive" : "active";
+        if (status === "active" && realModuleKeys.length === 0) {
+          throw new ApiError(409, "DEPARTMENT_WITHOUT_MODULES", "Uma área operacional ativa precisa ter pelo menos um módulo do catálogo.");
+        }
+        const name = areaName(payload.name); const code = areaCode(payload.code);
+        const managerUserId = text(payload.managerUserId, 120) || null;
+        if (managerUserId && !await scoped.prepare("SELECT 1 FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = ?").bind(workspaceId, managerUserId).first()) {
+          throw ApiError.badRequest("O responsável precisa ser integrante deste Workspace.", "AREA_MANAGER_NOT_MEMBER");
+        }
+        const duplicate = await scoped.prepare("SELECT id FROM fdp_areas WHERE workspace_id = ? AND code = ? AND id <> ?").bind(workspaceId, code, entityId).first();
+        if (duplicate) throw new ApiError(409, "AREA_CODE_CONFLICT", "Já existe uma área com este código.");
+
+        // Um módulo só pode pertencer a uma área. Se a mudança esvaziar a área
+        // principal de outra pessoa, a operação é recusada antes do lote.
+        const [areaStats, realAssignments] = await Promise.all([
+          scoped.prepare(`SELECT area.id, area.name, area.status,
+              (SELECT count(*)::int FROM fdp_area_module_assignments assignment
+                JOIN fdp_modules module ON module.key = assignment.module_key AND module.status = 'active'
+                WHERE assignment.workspace_id = area.workspace_id AND assignment.area_id = area.id) AS real_module_count,
+              (SELECT count(*)::int FROM fdp_area_members member
+                JOIN fdp_workspaces workspace ON workspace.id = member.workspace_id
+                WHERE member.workspace_id = area.workspace_id AND member.area_id = area.id AND member.is_primary = 1
+                  AND member.user_id <> workspace.owner_user_id) AS primary_members
+            FROM fdp_areas area WHERE area.workspace_id = ?`).bind(workspaceId).all<Row>(),
+          scoped.prepare(`SELECT assignment.module_key, assignment.area_id FROM fdp_area_module_assignments assignment
+              JOIN fdp_modules module ON module.key = assignment.module_key AND module.status = 'active'
+              WHERE assignment.workspace_id = ?`).bind(workspaceId).all<{ module_key: string; area_id: string }>(),
+        ]);
+        const selectedReal = new Set(realModuleKeys); const movedFrom = new Map<string, number>();
+        for (const assignment of realAssignments.results) {
+          if (String(assignment.area_id) !== entityId && selectedReal.has(String(assignment.module_key))) {
+            movedFrom.set(String(assignment.area_id), (movedFrom.get(String(assignment.area_id)) ?? 0) + 1);
+          }
+        }
+        for (const [donorId, moved] of movedFrom) {
+          const donor = areaStats.results.find((item) => text(item.id) === donorId);
+          if (donor && text(donor.status) === "active" && Number(donor.primary_members ?? 0) > 0 && Number(donor.real_module_count ?? 0) - moved <= 0) {
+            throw new ApiError(409, "DEPARTMENT_WITHOUT_MODULES", `O módulo não pode ser movido porque deixaria ${text(donor.name)} sem módulos para seus usuários.`);
+          }
+        }
+
+        const requestedColor = text(payload.color, 20);
+        const color = colors.has(requestedColor) ? requestedColor : text(existing?.color, 20) || "#64748b";
+        after = { id: entityId, name, code, description: text(payload.description, 1000), status, managerUserId, color,
+          defaultSlaDays: Math.min(365, Math.max(0, Math.trunc(Number(payload.defaultSlaDays) || 0))), moduleKeys };
+        before = existing ? { ...existing, moduleKeys: currentModules.results.map((item) => String(item.module_key)) } : {};
+        if (existing) {
+          statements.push(scoped.prepare(`UPDATE fdp_areas SET name = ?, code = ?, description = ?, status = ?, manager_user_id = ?, color = ?,
+              default_sla_days = ?, updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?`)
+            .bind(name, code, after.description, status, managerUserId, color, after.defaultSlaDays, platform.userId, workspaceId, entityId));
+        } else {
+          statements.push(scoped.prepare(`INSERT INTO fdp_areas
+              (id, workspace_id, name, code, description, status, manager_user_id, color, icon, default_sla_days, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'building-2', ?, ?, ?)`)
+            .bind(entityId, workspaceId, name, code, after.description, status, managerUserId, color, after.defaultSlaDays, platform.userId, platform.userId));
+        }
+        statements.push(
+          scoped.prepare("DELETE FROM fdp_area_module_assignments WHERE workspace_id = ? AND area_id = ?").bind(workspaceId, entityId),
+          ...moduleKeys.map((moduleKey) => scoped.prepare(`INSERT INTO fdp_area_module_assignments
+              (workspace_id, module_key, area_id, created_by) VALUES (?, ?, ?, ?)
+              ON CONFLICT (workspace_id, module_key) DO UPDATE SET area_id = EXCLUDED.area_id, updated_at = now()`)
+            .bind(workspaceId, moduleKey, entityId, platform.userId)),
+        );
+      } else if (action === "area.archive") {
+        entityType = "operational_area"; entityId = text(payload.id, 120);
+        before = await scoped.prepare("SELECT id, name, code, status FROM fdp_areas WHERE workspace_id = ? AND id = ?").bind(workspaceId, entityId).first<Row>() ?? {};
+        if (!before.id) throw ApiError.notFound("Área não encontrada.", "AREA_NOT_FOUND");
+        const primaryMembers = await scoped.prepare(`SELECT count(*)::int AS total FROM fdp_area_members member
+            JOIN fdp_workspaces workspace ON workspace.id = member.workspace_id
+            WHERE member.workspace_id = ? AND member.area_id = ? AND member.is_primary = 1
+              AND member.user_id <> workspace.owner_user_id`).bind(workspaceId, entityId).first<{ total: number }>();
+        if (Number(primaryMembers?.total ?? 0) > 0) throw new ApiError(409, "DEPARTMENT_HAS_PRIMARY_MEMBERS", "Mova os usuários deste departamento antes de arquivá-lo.");
+        after = { ...before, status: "archived" };
+        statements.push(
+          scoped.prepare("UPDATE fdp_areas SET status = 'archived', archived_at = now(), updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?").bind(platform.userId, workspaceId, entityId),
+          scoped.prepare("DELETE FROM fdp_area_module_assignments WHERE workspace_id = ? AND area_id = ?").bind(workspaceId, entityId),
+        );
       } else if (action === "module.set") {
         entityType = "workspace_module_grant"; entityId = text(payload.moduleKey, 80); if (!await scoped.prepare("SELECT key FROM fdp_modules WHERE key = ?").bind(entityId).first()) throw ApiError.notFound("Módulo não encontrado.", "MODULE_NOT_FOUND"); before = await scoped.prepare("SELECT module_key, granted, reason, expires_at FROM fdp_workspace_module_grants WHERE workspace_id = ? AND module_key = ?").bind(workspaceId, entityId).first<Row>() ?? {}; if (payload.granted == null) { after = { inheritedFromPlan: true }; statements.push(scoped.prepare("DELETE FROM fdp_workspace_module_grants WHERE workspace_id = ? AND module_key = ?").bind(workspaceId, entityId)); } else { after = { moduleKey: entityId, granted: payload.granted === true, expiresAt: text(payload.expiresAt, 30) || null }; statements.push(scoped.prepare("INSERT INTO fdp_workspace_module_grants (workspace_id, module_key, granted, reason, granted_by, expires_at) VALUES (?, ?, ?, ?, ?, ?::timestamptz) ON CONFLICT(workspace_id, module_key) DO UPDATE SET granted = excluded.granted, reason = excluded.reason, granted_by = excluded.granted_by, expires_at = excluded.expires_at, updated_at = now()").bind(workspaceId, entityId, after.granted ? 1 : 0, reason, platform.email, after.expiresAt)); }
       } else if (action === "member.scope") {
-        entityType = "member_access"; entityId = text(payload.userId, 120); const role = text(payload.role, 20); if (!roles.has(role)) throw ApiError.badRequest("Papel inválido.", "INVALID_ROLE"); const member = await scoped.prepare("SELECT member.role, (workspace.owner_user_id = member.user_id) AS is_owner FROM fdp_workspace_members member JOIN fdp_workspaces workspace ON workspace.id = member.workspace_id WHERE member.workspace_id = ? AND member.user_id = ?").bind(workspaceId, entityId).first<Row>(); if (!member) throw ApiError.notFound("Membro não encontrado.", "MEMBER_NOT_FOUND"); if (truthy(member.is_owner) && role !== "admin") throw ApiError.badRequest("O proprietário precisa permanecer administrador.", "OWNER_MUST_REMAIN_ADMIN"); const companyIds = Array.isArray(payload.companyIds) ? [...new Set(payload.companyIds.map((item) => text(item, 120)).filter(Boolean))] : []; if (companyIds.length) { const valid = await scoped.prepare(`SELECT id FROM fdp_companies WHERE workspace_id = ? AND id IN (${companyIds.map(() => "?").join(",")})`).bind(workspaceId, ...companyIds).all(); if (valid.results.length !== companyIds.length) throw ApiError.badRequest("Empresa inválida no escopo.", "INVALID_COMPANY_SCOPE"); } before = { role: member.role }; after = { role, companyIds }; statements.push(scoped.prepare("UPDATE fdp_workspace_members SET role = ? WHERE workspace_id = ? AND user_id = ?").bind(role, workspaceId, entityId), scoped.prepare("DELETE FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ?").bind(workspaceId, entityId), ...companyIds.map((companyId) => scoped.prepare("INSERT INTO fdp_member_company_access (workspace_id, user_id, company_id) VALUES (?, ?, ?)").bind(workspaceId, entityId, companyId)));
+        entityType = "member_access"; entityId = text(payload.userId, 120); const role = text(payload.role, 20);
+        if (!roles.has(role)) throw ApiError.badRequest("Papel inválido.", "INVALID_ROLE");
+        const member = await scoped.prepare(`SELECT member.role, (workspace.owner_user_id = member.user_id) AS is_owner,
+            primary_area.area_id AS department_id
+          FROM fdp_workspace_members member JOIN fdp_workspaces workspace ON workspace.id = member.workspace_id
+          LEFT JOIN fdp_area_members primary_area ON primary_area.workspace_id = member.workspace_id
+            AND primary_area.user_id = member.user_id AND primary_area.is_primary = 1
+          WHERE member.workspace_id = ? AND member.user_id = ?`).bind(workspaceId, entityId).first<Row>();
+        if (!member) throw ApiError.notFound("Membro não encontrado.", "MEMBER_NOT_FOUND");
+        const isOwner = truthy(member.is_owner);
+        if (isOwner && role !== "admin") throw ApiError.badRequest("O proprietário precisa permanecer administrador.", "OWNER_MUST_REMAIN_ADMIN");
+        const companyIds = Array.isArray(payload.companyIds) ? [...new Set(payload.companyIds.map((item) => text(item, 120)).filter(Boolean))] : [];
+        if (companyIds.length) {
+          const valid = await scoped.prepare(`SELECT id FROM fdp_companies WHERE workspace_id = ? AND id IN (${companyIds.map(() => "?").join(",")})`).bind(workspaceId, ...companyIds).all();
+          if (valid.results.length !== companyIds.length) throw ApiError.badRequest("Empresa inválida no escopo.", "INVALID_COMPANY_SCOPE");
+        }
+        const previousGrants = await scoped.prepare("SELECT module_key, granted FROM fdp_member_module_grants WHERE workspace_id = ? AND user_id = ? ORDER BY module_key").bind(workspaceId, entityId).all<Row>();
+        const departmentAccess = isOwner ? null : await resolveMemberDepartmentAccess(scoped, workspaceId, payload.departmentId, payload.moduleKeys);
+        before = { role: member.role, departmentId: member.department_id ?? null, moduleGrants: previousGrants.results };
+        after = { role, companyIds, departmentId: departmentAccess?.department.id ?? null, moduleKeys: departmentAccess?.selectedModuleKeys ?? [] };
+        statements.push(
+          scoped.prepare("UPDATE fdp_workspace_members SET role = ? WHERE workspace_id = ? AND user_id = ?").bind(role, workspaceId, entityId),
+          scoped.prepare("DELETE FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ?").bind(workspaceId, entityId),
+          ...companyIds.map((companyId) => scoped.prepare("INSERT INTO fdp_member_company_access (workspace_id, user_id, company_id) VALUES (?, ?, ?)").bind(workspaceId, entityId, companyId)),
+        );
+        if (departmentAccess) statements.push(...prepareMemberDepartmentAccess(scoped, {
+          workspaceId, userId: entityId, actorUserId: platform.userId, workspaceRole: role, access: departmentAccess,
+        }));
       } else if (action === "member.module.set") {
         entityType = "member_module_grant"; const userId = text(payload.userId, 120); const moduleKey = text(payload.moduleKey, 80); entityId = `${userId}:${moduleKey}`;
-        if (!await scoped.prepare("SELECT 1 FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = ?").bind(workspaceId, userId).first()) throw ApiError.notFound("Membro não encontrado.", "MEMBER_NOT_FOUND");
+        const memberDepartment = await scoped.prepare(`SELECT (workspace.owner_user_id = member.user_id) AS is_owner, primary_area.area_id
+            FROM fdp_workspace_members member JOIN fdp_workspaces workspace ON workspace.id = member.workspace_id
+            LEFT JOIN fdp_area_members primary_area ON primary_area.workspace_id = member.workspace_id
+              AND primary_area.user_id = member.user_id AND primary_area.is_primary = 1
+            WHERE member.workspace_id = ? AND member.user_id = ?`).bind(workspaceId, userId).first<Row>();
+        if (!memberDepartment) throw ApiError.notFound("Membro não encontrado.", "MEMBER_NOT_FOUND");
+        if (!truthy(memberDepartment.is_owner)) {
+          if (!memberDepartment.area_id) throw ApiError.badRequest("Defina o departamento principal antes dos módulos do usuário.", "MEMBER_DEPARTMENT_REQUIRED");
+          const assigned = await scoped.prepare(`SELECT 1 FROM fdp_area_module_assignments assignment
+              JOIN fdp_modules module ON module.key = assignment.module_key AND module.status = 'active'
+              WHERE assignment.workspace_id = ? AND assignment.area_id = ? AND assignment.module_key = ?`)
+            .bind(workspaceId, memberDepartment.area_id, moduleKey).first();
+          if (!assigned) throw ApiError.badRequest("O módulo não pertence ao departamento principal do usuário.", "MODULE_OUTSIDE_DEPARTMENT");
+        }
         const moduleAccess = await scoped.prepare(`SELECT module.key, module.status, (plan_module.module_key IS NOT NULL) AS in_plan, workspace_grant.granted
           FROM fdp_modules module
           LEFT JOIN fdp_plan_modules plan_module ON plan_module.module_key = module.key AND plan_module.plan_id = (SELECT plan_id FROM fdp_workspace_subscriptions WHERE workspace_id = ?)

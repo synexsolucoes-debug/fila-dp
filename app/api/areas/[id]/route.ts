@@ -4,6 +4,7 @@ import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
 import { areaCode, areaModuleList, areaName } from "@/lib/areas";
+import { requirePlatformAdmin } from "@/lib/platform-authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -33,6 +34,7 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
+    requirePlatformAdmin(auth.user);
     const { id } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
@@ -87,6 +89,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 export async function DELETE(request: Request, context: RouteContext) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
+    requirePlatformAdmin(auth.user);
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "departments.archive", "arquivar áreas operacionais");
