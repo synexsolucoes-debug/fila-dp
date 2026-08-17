@@ -163,7 +163,16 @@
   border: 0;
 }
 
-@media (max-width: 520px) {
-  .panel { right: 10px; left: 10px; bottom: 10px; width: auto; max-height: calc(100vh - 20px); }
-  .launcher { right: 12px; bottom: 12px; }
+/* No layout compacto existe uma barra fixa de 70px. O lançador ficava sobre o
+   quinto destino e capturava o toque do menu; painel e botão permanecem acima
+   da navegação, com uma faixa de respiro que também respeita a safe area. */
+@media (max-width: 760px) {
+  .panel {
+    right: 10px;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    left: 10px;
+    width: auto;
+    max-height: calc(100dvh - 102px - env(safe-area-inset-bottom));
+  }
+  .launcher { right: 12px; bottom: calc(82px + env(safe-area-inset-bottom)); }
 }
