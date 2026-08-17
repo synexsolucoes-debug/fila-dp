@@ -3,6 +3,7 @@ import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardC
 import { requireCapability } from "@/lib/authorization";
 import { replaceCardRelations } from "@/lib/fila-dp-relations";
 import { validCompetence } from "@/lib/operations";
+import { validateActiveAreaIds } from "@/lib/areas";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -42,9 +43,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     const competence = body.competence === undefined ? String(current.competence ?? "") : (body.competence ? validCompetence(body.competence) : "");
     const legalDueAt = body.legalDueAt === undefined ? (current.legal_due_at ? String(current.legal_due_at) : null) : validDueAt(body.legalDueAt);
     const processTemplateId = body.templateId === undefined ? (current.process_template_id ? String(current.process_template_id) : null) : (text(body.templateId, 120) || null);
+    const requesterAreaId = body.requesterAreaId === undefined ? (current.requester_area_id ? String(current.requester_area_id) : null) : (text(body.requesterAreaId, 120) || null);
+    const responsibleAreaId = body.responsibleAreaId === undefined ? (current.responsible_area_id ? String(current.responsible_area_id) : null) : (text(body.responsibleAreaId, 120) || null);
+    await validateActiveAreaIds(d1, workspace.id, [requesterAreaId, responsibleAreaId]);
     if (processTemplateId && !await d1.prepare("SELECT id FROM fdp_process_templates WHERE workspace_id = ? AND id = ? AND active = 1").bind(workspace.id, processTemplateId).first()) throw ApiError.badRequest("Template inválido.", "INVALID_PROCESS_TEMPLATE");
     await d1.prepare(`UPDATE fdp_cards SET
-      list_id = ?, title = ?, description = ?, company_id = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, competence = ?, legal_due_at = ?, process_template_id = ?, updated_at = CURRENT_TIMESTAMP
+      list_id = ?, title = ?, description = ?, company_id = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, competence = ?, legal_due_at = ?, process_template_id = ?, requester_area_id = ?, responsible_area_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND board_id = ?`)
       .bind(
         listId,
@@ -60,6 +64,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         competence,
         legalDueAt,
         processTemplateId,
+        requesterAreaId,
+        responsibleAreaId,
         id,
         board.id,
       ).run();
@@ -77,6 +83,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       dueAt: [current.due_at ? String(current.due_at) : "", dueAt ?? ""],
       competence: [String(current.competence ?? ""), competence],
       legalDueAt: [current.legal_due_at ? String(current.legal_due_at) : "", legalDueAt ?? ""],
+      requesterAreaId: [current.requester_area_id ? String(current.requester_area_id) : "", requesterAreaId ?? ""],
+      responsibleAreaId: [current.responsible_area_id ? String(current.responsible_area_id) : "", responsibleAreaId ?? ""],
     }).filter(([, [from, to]]) => from !== to).map(([field, [from, to]]) => [field, { from, to }]));
     await recordActivity(workspace.id, id, auth.user.email, "card.updated", { title, changes, automationApplied: listId !== current.list_id });
     return Response.json(await getWorkspaceSnapshot(auth.user));

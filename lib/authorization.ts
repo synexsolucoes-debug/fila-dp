@@ -36,6 +36,11 @@ export const capabilities = [
   "employees.read",
   "employees.manage",
   "registrations.catalogs.manage",
+  "departments.view",
+  "departments.create",
+  "departments.edit",
+  "departments.manage_members",
+  "departments.archive",
   "processes.read",
   "processes.manage",
   "processes.publish",
@@ -89,6 +94,7 @@ export const capabilities = [
   "epi.discount.analyze",
   "epi.export",
   "epi.audit.view",
+  "epi.stock.adjust",
 ] as const;
 
 export type Capability = typeof capabilities[number];
@@ -135,6 +141,7 @@ const roleCapabilities = {
     "attachments.read", "attachments.write", "reports.read", "hr.read", "hr.write",
     "integrations.status.read", "integrations.view",
     "companies.read", "employees.read", "employees.manage", "registrations.catalogs.manage",
+    "departments.view", "departments.create", "departments.edit", "departments.manage_members", "departments.archive",
     "processes.read", "competences.read", "competences.manage", "competences.transition",
     "movements.read", "movements.manage", "approvals.read", "approvals.request", "approvals.decide",
     "obligations.read", "obligations.manage", "pending_items.read", "pending_items.manage",
@@ -148,12 +155,12 @@ const roleCapabilities = {
     // fora é apagar cadastro e ler a trilha de auditoria — as duas ações que
     // servem para encobrir as outras, e por isso ficam com o administrador.
     "epi.view", "epi.create", "epi.edit", "epi.deliver", "epi.return", "epi.damage",
-    "epi.dispose", "epi.discount.analyze", "epi.export",
+    "epi.dispose", "epi.discount.analyze", "epi.export", "epi.stock.adjust",
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",
     "integrations.status.read", "integrations.view",
-    "companies.read", "employees.read",
+    "companies.read", "employees.read", "departments.view",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "time.read",
     "epi.view",

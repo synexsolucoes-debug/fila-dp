@@ -52,6 +52,7 @@ export const expectedMigrations = [
   "0042_member_company_access_rls.sql",
   "0043_lead_privacy_interest.sql",
   "0044_epi_control.sql",
+  "0045_workspace_areas_shared_stock.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

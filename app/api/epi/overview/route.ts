@@ -9,8 +9,8 @@ import { cleanText } from "@/lib/registrations";
  *
  * Sete contagens em sete requisições fariam a tela piscar sete vezes e
  * multiplicariam por sete a ida ao banco — que no driver HTTP é o custo real.
- * Aqui elas são subconsultas de uma instrução, com o mesmo recorte de empresa
- * aplicado a todas.
+ * Aqui elas são subconsultas de uma instrução. Saldo e validade do catálogo são
+ * do workspace; indicadores de uso mantêm o recorte de empresas do usuário.
  *
  * As permissões vão na resposta porque a tela precisa saber quais ações
  * desenhar. Elas não substituem a verificação no servidor: cada rota de escrita
@@ -37,18 +37,8 @@ export async function GET(request: Request) {
       analyzeDiscount: hasCapability(workspace, "epi.discount.analyze"),
       export: hasCapability(workspace, "epi.export"),
       audit: hasCapability(workspace, "epi.audit.view"),
+      stockAdjust: hasCapability(workspace, "epi.stock.adjust"),
     };
-
-    if (!access.unrestricted && access.companyIds.size === 0) {
-      return Response.json({
-        permissions, companies: [],
-        summary: {
-          stock: 0, delivered: 0, pendingSignature: 0, pendingSanitizing: 0,
-          awaitingDisposal: 0, discountsInAnalysis: 0, caExpiring: 0, caExpired: 0,
-        },
-        caWindowDays: caExpiryWindowDays,
-      });
-    }
 
     // O recorte é montado como condição **inteira**, não como um fragmento que
     // começa em `AND`. A diferença não é de estilo: `scripts/verify-inline-sql`
@@ -60,29 +50,30 @@ export async function GET(request: Request) {
     const conditions = ["workspace_id = ?"]; const scopedValues: unknown[] = [workspace.id];
     if (!access.unrestricted) {
       const ids = [...access.companyIds];
-      conditions.push(`company_id IN (${ids.map(() => "?").join(",")})`); scopedValues.push(...ids);
+      if (ids.length) { conditions.push(`company_id IN (${ids.map(() => "?").join(",")})`); scopedValues.push(...ids); }
+      else conditions.push("false");
     }
     if (companyId) { conditions.push("company_id = ?"); scopedValues.push(companyId); }
     // A mesma cláusula vale para as sete subconsultas, e cada uma recebe a
     // mesma lista de valores, na mesma ordem.
     const scope = conditions.join(" AND ");
-    const args = Array.from({ length: 7 }, () => scopedValues).flat();
+    const args = [workspace.id, ...Array.from({ length: 5 }, () => scopedValues).flat(), workspace.id];
 
     const summary = await d1.prepare(`SELECT
-        (SELECT COALESCE(SUM(stock_quantity), 0) FROM fdp_epi_products
-          WHERE ${scope} AND status NOT IN ('discarded', 'inactive')) AS stock,
+        (SELECT COALESCE(SUM(quantity), 0) FROM fdp_stock_balances
+          WHERE workspace_id = ?) AS stock,
         (SELECT COALESCE(SUM(quantity - settled_quantity), 0) FROM fdp_epi_deliveries
           WHERE ${scope} AND status <> 'canceled') AS delivered,
         (SELECT COUNT(*) FROM fdp_epi_deliveries
           WHERE ${scope} AND status = 'pending_signature') AS pending_signature,
-        (SELECT COUNT(*) FROM fdp_epi_products
-          WHERE ${scope} AND status = 'sanitizing') AS pending_sanitizing,
+        (SELECT COUNT(*) FROM fdp_epi_returns
+          WHERE ${scope} AND sanitization_status IN ('awaiting', 'in_progress')) AS pending_sanitizing,
         (SELECT COUNT(*) FROM fdp_epi_disposals
           WHERE ${scope} AND status = 'awaiting_disposal') AS awaiting_disposal,
         (SELECT COUNT(*) FROM fdp_epi_discount_requests
           WHERE ${scope} AND status IN ('awaiting_dp_analysis', 'awaiting_approval')) AS discounts_in_analysis,
         (SELECT COUNT(*) FROM fdp_epi_products
-          WHERE ${scope} AND ca_expires_on IS NOT NULL AND status NOT IN ('discarded', 'inactive')
+          WHERE workspace_id = ? AND ca_expires_on IS NOT NULL AND status <> 'inactive'
             AND ca_expires_on < CURRENT_DATE) AS ca_expired`)
       .bind(...args).first<Record<string, string | number>>();
 
@@ -90,14 +81,15 @@ export async function GET(request: Request) {
     // instrução recebem a mesma substituição no verificador, e `CURRENT_DATE +
     // true` tiraria esta consulta da cobertura.
     const expiring = await d1.prepare(`SELECT COUNT(*) AS total FROM fdp_epi_products
-      WHERE ${scope} AND ca_expires_on IS NOT NULL AND status NOT IN ('discarded', 'inactive')
+      WHERE workspace_id = ? AND ca_expires_on IS NOT NULL AND status <> 'inactive'
         AND ca_expires_on >= CURRENT_DATE AND ca_expires_on <= CURRENT_DATE + ?::int`)
-      .bind(...scopedValues, caExpiryWindowDays).first<{ total: string | number }>();
+      .bind(workspace.id, caExpiryWindowDays).first<{ total: string | number }>();
 
     const companyScope = ["c.workspace_id = ?"]; const companyValues: unknown[] = [workspace.id];
     if (!access.unrestricted) {
       const ids = [...access.companyIds];
-      companyScope.push(`c.id IN (${ids.map(() => "?").join(",")})`); companyValues.push(...ids);
+      if (ids.length) { companyScope.push(`c.id IN (${ids.map(() => "?").join(",")})`); companyValues.push(...ids); }
+      else companyScope.push("false");
     }
     const companies = await d1.prepare(`SELECT c.id, c.legal_name, c.trade_name, c.tax_id, c.status
       FROM fdp_companies c

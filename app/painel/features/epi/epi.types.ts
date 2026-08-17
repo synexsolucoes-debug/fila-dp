@@ -18,6 +18,7 @@ export type EpiPermissions = {
   analyzeDiscount: boolean;
   export: boolean;
   audit: boolean;
+  stockAdjust: boolean;
 };
 
 export type EpiSummary = {
@@ -58,6 +59,7 @@ export type EpiProduct = {
   model: string;
   unitValue: number;
   stockQuantity: number;
+  stockLocations: Array<{ id: string; code: string; name: string; quantity: number }>;
   assignedQuantity: number;
   registeredOn: string;
   status: EpiProductStatus;
@@ -109,6 +111,7 @@ export type EpiReturn = {
   size: string;
   condition: EpiReturnCondition;
   needsSanitizing: boolean;
+  sanitizationStatus: string;
   backToStock: boolean;
   sendToDisposal: boolean;
   generateDpDemand: boolean;
@@ -200,6 +203,8 @@ export type EpiDiscount = {
   decision: EpiDiscountDecision | "";
   decidedValue: number;
   decisionComment: string;
+  competence: string;
+  movementId: string;
   attachmentsCount: number;
 };
 

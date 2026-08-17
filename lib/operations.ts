@@ -1,7 +1,7 @@
 import { ApiError } from "./api-errors.ts";
 import { cleanText, optionalDate } from "./registrations.ts";
 
-export const movementTypes = ["salary_change", "vacation", "leave", "termination", "transfer", "benefit_change", "registration_sync", "other"] as const;
+export const movementTypes = ["salary_change", "vacation", "leave", "termination", "transfer", "benefit_change", "registration_sync", "epi_discount", "other"] as const;
 export const cycleStatuses = ["open", "pre_closing", "processing", "post_closing", "closed"] as const;
 export const workItemStatuses = ["pending", "in_progress", "blocked", "completed"] as const;
 export const obligationTypes = ["payroll", "social_security", "tax", "reporting", "union", "other"] as const;
@@ -40,6 +40,12 @@ export function sanitizeMovementDetails(type: typeof movementTypes[number], valu
   if (type === "transfer") return { targetCompanyId: cleanText(input.targetCompanyId, 120), departmentId: cleanText(input.departmentId, 120), positionId: cleanText(input.positionId, 120), costCenterId: cleanText(input.costCenterId, 120) };
   if (type === "benefit_change") return { benefit: cleanText(input.benefit, 100), action: cleanText(input.action, 40), reference: cleanText(input.reference, 160) };
   if (type === "registration_sync") return { sourceSystem: input.sourceSystem === "solides" ? "solides" : "manual", externalId: cleanText(input.externalId, 160), fields: Array.isArray(input.fields) ? input.fields.map((item) => cleanText(item, 80)).filter(Boolean).slice(0, 30) : [] };
+  if (type === "epi_discount") return {
+    discountRequestId: cleanText(input.discountRequestId, 120), cardId: cleanText(input.cardId, 120),
+    competence: cleanText(input.competence, 7), originalValue: Math.max(0, Number(input.originalValue) || 0),
+    approvedValue: Math.max(0, Number(input.approvedValue) || 0),
+    note: cleanText(input.note, 1000), automaticDeduction: false,
+  };
   return { description: cleanText(input.description, 1000) };
 }
 

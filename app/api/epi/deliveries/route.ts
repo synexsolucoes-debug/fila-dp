@@ -4,19 +4,17 @@ import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import {
-  applyStockChange, attachmentIds, employeeDisplayName, epiDate, epiMoney, epiQuantity, epiText,
-  loadCompany, loadEmployee, loadProduct, parseDeliveryStatus, parseRegistrationReason, prepareEpiMovement,
-  verifiedAttachments,
+  attachmentIds, employeeDisplayName, epiDate, epiMoney, epiQuantity, epiText,
+  loadCompany, loadEmployee, loadProduct, loadStockLocation, parseDeliveryStatus, parseRegistrationReason,
+  prepareEpiMovement, prepareStockChange, verifiedAttachments,
 } from "@/lib/epi-service";
 
 /**
  * Entrega de EPI ao colaborador.
  *
- * A ordem das operações é a que importa aqui: o estoque é debitado **antes** de
- * a entrega ser gravada, porque é o débito que pode falhar. Se ele falha —
- * saldo insuficiente, duas entregas simultâneas disputando a última unidade —
- * nada mais acontece, e a recusa diz o que fazer. O caminho inverso deixaria a
- * entrega registrada contra um estoque que não tinha o equipamento.
+ * Saldo, entrega, razão e auditoria são enviados no mesmo lote transacional.
+ * A função de saldo serializa o SKU e recusa débito insuficiente; se qualquer
+ * etapa falhar, nenhuma parte da entrega é persistida.
  */
 export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
@@ -72,7 +70,7 @@ export async function POST(request: Request) {
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const [company, product, employee] = await Promise.all([
       loadCompany(d1, workspace.id, companyId),
-      loadProduct(d1, workspace.id, companyId, epiText(body.productId, "o EPI", 120, true)),
+      loadProduct(d1, workspace.id, epiText(body.productId, "o EPI", 120, true)),
       loadEmployee(d1, workspace.id, companyId, epiText(body.employeeId, "o colaborador", 120, true)),
     ]);
     if (["discarded", "lost", "inactive"].includes(product.status)) {
@@ -80,6 +78,13 @@ export async function POST(request: Request) {
     }
 
     const quantity = epiQuantity(body.quantity, "Quantidade");
+    const idempotencyKey = epiText(request.headers.get("idempotency-key") ?? body.idempotencyKey, "a chave de idempotência", 160);
+    if (idempotencyKey) {
+      const replay = await d1.prepare("SELECT * FROM fdp_epi_deliveries WHERE workspace_id = ? AND idempotency_key = ?")
+        .bind(workspace.id, idempotencyKey).first<Record<string, unknown>>();
+      if (replay) return Response.json({ delivery: replay, replayed: true });
+    }
+    const location = await loadStockLocation(d1, workspace.id, epiText(body.stockLocationId, "o local de estoque", 120));
     const deliveredOn = epiDate(body.deliveredOn, "a data da entrega") as string;
     const delivery = {
       id: crypto.randomUUID(), companyId, productId: product.id, employeeId: employee.id, deliveredOn, quantity,
@@ -96,19 +101,22 @@ export async function POST(request: Request) {
     };
     const attachments = await verifiedAttachments(d1, workspace.id, attachmentIds(body.attachmentIds));
 
-    // Débito primeiro: é a única etapa que pode ser recusada pelo saldo.
-    await applyStockChange(d1, workspace.id, product.id, -quantity, "delivered", user.id);
-    try {
-      await d1.batch([
+    // Saldo, entrega, razão e auditoria participam do mesmo BEGIN/COMMIT.
+    await d1.batch([
+        prepareStockChange(d1, {
+          workspaceId: workspace.id, productId: product.id, stockLocationId: location.id,
+          delta: -quantity, actorId: user.id,
+        }),
         d1.prepare(`INSERT INTO fdp_epi_deliveries
           (id, workspace_id, company_id, product_id, employee_id, delivered_on, position_name, department_name,
            ca_number, size, quantity, unit_value, responsible_user_id, delivery_reason, status, signature_name,
-           signed_at, notes, created_by, updated_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+           signed_at, notes, created_by, updated_by, stock_location_id, idempotency_key)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .bind(delivery.id, workspace.id, companyId, product.id, employee.id, deliveredOn, delivery.positionName,
             delivery.departmentName, delivery.caNumber, delivery.size, quantity, delivery.unitValue,
             delivery.responsibleUserId, delivery.deliveryReason, delivery.status, delivery.signatureName,
-            delivery.status === "signed" ? new Date().toISOString() : null, delivery.notes, user.id, user.id),
+            delivery.status === "signed" ? new Date().toISOString() : null, delivery.notes, user.id, user.id,
+            location.id, idempotencyKey),
         prepareEpiMovement({
           workspaceId: workspace.id, companyId, cnpj: company.tax_id, movementDate: deliveredOn,
           movementType: "delivery", productId: product.id, epiName: product.name, caNumber: delivery.caNumber,
@@ -116,6 +124,7 @@ export async function POST(request: Request) {
           quantity, stockDelta: -quantity, unitValue: delivery.unitValue, reason: delivery.deliveryReason,
           status: delivery.status, sourceType: "delivery", sourceId: delivery.id,
           responsibleId: delivery.responsibleUserId, attachments, notes: delivery.notes, createdBy: user.id,
+          stockLocationId: location.id, idempotencyKey: idempotencyKey ? `${idempotencyKey}:movement` : "",
         }),
         prepareAuditEvent({
           workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_delivery.created",
@@ -124,12 +133,6 @@ export async function POST(request: Request) {
           requestId: request.headers.get("x-fila-dp-request-id"),
         }),
       ]);
-    } catch (error) {
-      // O estoque já saiu; sem a devolução do saldo o equipamento sumiria da
-      // contagem sem entrega nenhuma para explicar onde foi parar.
-      await applyStockChange(d1, workspace.id, product.id, quantity, null, user.id).catch(() => undefined);
-      throw error;
-    }
     return Response.json({ delivery }, { status: 201 });
   } catch (error) { return apiError(error); }
 }

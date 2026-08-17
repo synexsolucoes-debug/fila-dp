@@ -49,7 +49,7 @@ test("a navegação rola dentro da barra, sem levar marca e conta junto", async 
 });
 
 test("o layout de celular continua rolando pelo documento", async () => {
-  const css = await lerCss("app/dashboard-modern.css");
+  const css = (await lerCss("app/dashboard-modern.css")).replace(/\r\n?/gu, "\n");
   const bloco = css.slice(css.indexOf("@media (min-width: 761px)"));
   // A trava de viewport vale do tablet para cima. Abaixo disso o layout é uma
   // barra superior com navegação fixa embaixo, que depende da rolagem normal.

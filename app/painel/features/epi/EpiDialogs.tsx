@@ -5,7 +5,7 @@ import { AlertTriangle, Info, Paperclip, X } from "lucide-react";
 import {
   damageRouting, epiDamageDecisionLabels, epiDamageDecisions, epiDamageReasonLabels, epiDamageReasons,
   epiDeliveryStatusLabels, epiDisposalReasonLabels, epiDisposalReasons, epiDiscountDecisionLabels,
-  epiDiscountDecisions, epiProductStatusLabels, epiProductStatuses, epiRegistrationReasonLabels,
+  epiDiscountDecisions, epiRegistrationReasonLabels,
   epiRegistrationReasons, epiReturnConditionLabels, epiReturnConditions, epiTypeLabels, epiTypes,
   returnRouting, type EpiDamageDecision, type EpiDiscountDecision, type EpiReturnCondition,
 } from "@/lib/epi";
@@ -31,11 +31,12 @@ import styles from "./epi.module.css";
 const today = () => new Date().toISOString().slice(0, 10);
 const field = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 
-export function EpiDialog({ editor, products, employees, deliveries, busy, error, onClose, onSubmit }: {
+export function EpiDialog({ editor, products, employees, deliveries, companyId, busy, error, onClose, onSubmit }: {
   editor: NonNullable<EpiEditor>;
   products: EpiProduct[];
   employees: EmployeeOption[];
   deliveries: Array<{ id: string; label: string; outstanding: number }>;
+  companyId: string;
   busy: boolean;
   error: string;
   onClose: () => void;
@@ -72,18 +73,18 @@ export function EpiDialog({ editor, products, employees, deliveries, busy, error
             <AlertTriangle aria-hidden="true" /><span><strong>Não foi possível concluir</strong>{error}</span>
           </div>}
 
-          {editor.kind === "product" && <ProductForm product={editor.product} />}
+          {editor.kind === "product" && <ProductForm product={editor.product} companyId={companyId} />}
 
-          {editor.kind === "delivery" && <DeliveryForm products={products} employees={employees} preselected={editor.product} />}
+          {editor.kind === "delivery" && <DeliveryForm products={products} employees={employees} preselected={editor.product} companyId={companyId} />}
 
           {editor.kind === "return" && <ReturnForm
             delivery={editor.delivery} condition={condition} onCondition={setCondition} preview={returnPreview} />}
 
           {editor.kind === "damage" && <DamageForm
             products={products} employees={employees} deliveries={deliveries} delivery={editor.delivery}
-            decision={decision} onDecision={setDecision} preview={damagePreview} />}
+            decision={decision} onDecision={setDecision} preview={damagePreview} companyId={companyId} />}
 
-          {editor.kind === "disposal" && <DisposalForm products={products} preselected={editor.product} />}
+          {editor.kind === "disposal" && <DisposalForm products={products} preselected={editor.product} companyId={companyId} />}
 
           {editor.kind === "disposal-decision" && <DisposalDecisionForm disposal={editor.disposal} action={editor.action} />}
 
@@ -178,18 +179,17 @@ function buildPayload(editor: NonNullable<EpiEditor>, form: FormData, state: {
     case "discount":
       return {
         decision: state.discountDecision, decidedValue: Number(field(form, "decidedValue") || 0),
-        comment: field(form, "comment"),
+        comment: field(form, "comment"), competence: field(form, "competence"),
       };
   }
 }
 
 const Required = () => <b className={styles.requiredMark} aria-hidden="true"> *</b>;
 
-function ProductForm({ product }: { product?: EpiProduct }) {
+function ProductForm({ product, companyId }: { product?: EpiProduct; companyId: string }) {
   const [stock, setStock] = useState(String(product?.stockQuantity ?? 0));
-  const changed = Boolean(product) && Number(stock) !== product?.stockQuantity;
   return <>
-    <input type="hidden" name="companyId" value={product?.companyId ?? ""} />
+    <input type="hidden" name="companyId" value={product?.companyId ?? companyId} />
     <div className={styles.formGrid}>
       <label><span>NOME DO EPI<Required /></span><input name="name" defaultValue={product?.name ?? ""} required maxLength={160} /></label>
       <label><span>TIPO<Required /></span><select name="epiType" defaultValue={product?.epiType ?? "head"}>
@@ -201,11 +201,12 @@ function ProductForm({ product }: { product?: EpiProduct }) {
       <label><span>MODELO<Required /></span><input name="model" defaultValue={product?.model ?? ""} required maxLength={120} /></label>
       <label><span>VALOR UNITÁRIO<Required /></span><input name="unitValue" type="number" min="0" step="0.01" defaultValue={product?.unitValue ?? 0} required /></label>
       <label><span>QUANTIDADE EM ESTOQUE<Required /></span>
-        <input name="stockQuantity" type="number" min="0" step="1" value={stock} onChange={(event) => setStock(event.target.value)} required />
+        <input name="stockQuantity" type="number" min="0" step="1" value={stock} readOnly={Boolean(product)} onChange={(event) => setStock(event.target.value)} required />
+        {product && <em className={styles.fieldHint}>Use Entrada ou Transferência na aba Estoque para alterar o saldo por local.</em>}
       </label>
       <label><span>DATA DO CADASTRO<Required /></span><input name="registeredOn" type="date" defaultValue={product?.registeredOn || today()} required /></label>
-      <label><span>STATUS<Required /></span><select name="status" defaultValue={product?.status ?? "in_stock"}>
-        {epiProductStatuses.map((item) => <option key={item} value={item}>{epiProductStatusLabels[item]}</option>)}
+      <label><span>STATUS DO CADASTRO<Required /></span><select name="status" defaultValue={product?.status === "inactive" ? "inactive" : "active"}>
+        <option value="active">Ativo</option><option value="inactive">Inativo</option>
       </select></label>
       <label><span>MOTIVO DO CADASTRO<Required /></span><select name="registrationReason" defaultValue={product?.registrationReason ?? "initial_purchase"}>
         {epiRegistrationReasons.map((item) => <option key={item} value={item}>{epiRegistrationReasonLabels[item]}</option>)}
@@ -214,11 +215,6 @@ function ProductForm({ product }: { product?: EpiProduct }) {
       <label><span>VALIDADE DO CA</span><input name="caExpiresOn" type="date" defaultValue={product?.caExpiresOn ?? ""} /></label>
       <label><span>FORNECEDOR</span><input name="supplier" defaultValue={product?.supplier ?? ""} maxLength={160} /></label>
       <label><span>CÓDIGO INTERNO</span><input name="internalCode" defaultValue={product?.internalCode ?? ""} maxLength={80} /></label>
-      {changed && <label className={styles.formWide}>
-        <span>MOTIVO DO AJUSTE DE ESTOQUE<Required /></span>
-        <input name="stockAdjustmentReason" required maxLength={240} placeholder="Inventário, correção de lançamento, devolução de compra…" />
-        <em className={styles.fieldHint}>O saldo muda de {product?.stockQuantity} para {stock}. O ajuste entra no histórico com este motivo.</em>
-      </label>}
       <label className={styles.formWide}><span>OBSERVAÇÃO<Required /></span>
         <textarea name="notes" defaultValue={product?.notes ?? ""} required maxLength={2000} />
       </label>
@@ -226,7 +222,7 @@ function ProductForm({ product }: { product?: EpiProduct }) {
   </>;
 }
 
-function DeliveryForm({ products, employees, preselected }: { products: EpiProduct[]; employees: EmployeeOption[]; preselected?: EpiProduct }) {
+function DeliveryForm({ products, employees, preselected, companyId }: { products: EpiProduct[]; employees: EmployeeOption[]; preselected?: EpiProduct; companyId: string }) {
   const available = products.filter((item) => !["discarded", "lost", "inactive"].includes(item.status));
   const [productId, setProductId] = useState(preselected?.id ?? available[0]?.id ?? "");
   const product = available.find((item) => item.id === productId) ?? preselected;
@@ -238,7 +234,7 @@ function DeliveryForm({ products, employees, preselected }: { products: EpiProdu
       <span><strong>Nenhum EPI disponível</strong>Cadastre um equipamento com saldo em estoque antes de registrar a entrega.</span></div>;
   }
   return <>
-    <input type="hidden" name="companyId" value={product?.companyId ?? ""} />
+    <input type="hidden" name="companyId" value={companyId} />
     <div className={styles.formGrid}>
       <label className={styles.formWide}><span>EPI<Required /></span>
         <select name="productId" value={productId} onChange={(event) => setProductId(event.target.value)} required>
@@ -327,7 +323,7 @@ function ReturnForm({ delivery, condition, onCondition, preview }: {
   </>;
 }
 
-function DamageForm({ products, employees, deliveries, delivery, decision, onDecision, preview }: {
+function DamageForm({ products, employees, deliveries, delivery, decision, onDecision, preview, companyId }: {
   products: EpiProduct[];
   employees: EmployeeOption[];
   deliveries: Array<{ id: string; label: string; outstanding: number }>;
@@ -335,12 +331,12 @@ function DamageForm({ products, employees, deliveries, delivery, decision, onDec
   decision: EpiDamageDecision;
   onDecision: (value: EpiDamageDecision) => void;
   preview: ReturnType<typeof damageRouting>;
+  companyId: string;
 }) {
   const [productId, setProductId] = useState(delivery?.productId ?? products[0]?.id ?? "");
-  const product = products.find((item) => item.id === productId);
   const replacements = products.filter((item) => item.id !== productId && item.stockQuantity > 0);
   return <>
-    <input type="hidden" name="companyId" value={delivery?.companyId ?? product?.companyId ?? ""} />
+    <input type="hidden" name="companyId" value={delivery?.companyId ?? companyId} />
     <div className={styles.formGrid}>
       <label className={styles.formWide}><span>COLABORADOR<Required /></span>
         <select name="employeeId" defaultValue={delivery?.employeeId ?? employees[0]?.id ?? ""} required>
@@ -407,12 +403,12 @@ function DamageForm({ products, employees, deliveries, delivery, decision, onDec
   </>;
 }
 
-function DisposalForm({ products, preselected }: { products: EpiProduct[]; preselected?: { id: string; companyId: string; name: string; caNumber: string; size: string; stockQuantity: number } }) {
+function DisposalForm({ products, preselected, companyId }: { products: EpiProduct[]; preselected?: { id: string; companyId: string; name: string; caNumber: string; size: string; stockQuantity: number }; companyId: string }) {
   const [productId, setProductId] = useState(preselected?.id ?? products[0]?.id ?? "");
   const product = products.find((item) => item.id === productId);
   const stock = product?.stockQuantity ?? preselected?.stockQuantity ?? 0;
   return <>
-    <input type="hidden" name="companyId" value={product?.companyId ?? preselected?.companyId ?? ""} />
+    <input type="hidden" name="companyId" value={companyId || preselected?.companyId || product?.companyId || ""} />
     <div className={styles.formGrid}>
       <label className={styles.formWide}><span>EPI<Required /></span>
         <select name="productId" value={productId} onChange={(event) => setProductId(event.target.value)} required>
@@ -474,6 +470,7 @@ function DiscountForm({ discount, decision, onDecision }: {
   onDecision: (value: EpiDiscountDecision) => void;
 }) {
   const needsValue = decision === "partial_discount";
+  const createsMovement = decision === "partial_discount" || decision === "full_discount";
   return <>
     <dl className={styles.factList}>
       <div><dt>Colaborador</dt><dd>{discount.employeeName}</dd></div>
@@ -494,6 +491,10 @@ function DiscountForm({ discount, decision, onDecision }: {
         <input name="decidedValue" type="number" min="0.01" max={discount.totalValue} step="0.01" required />
         <em className={styles.fieldHint}>No máximo {currency(discount.totalValue)}.</em>
       </label>}
+      {createsMovement && <label><span>COMPETÊNCIA DE REFERÊNCIA<Required /></span>
+        <input name="competence" type="month" defaultValue={new Date().toISOString().slice(0, 7)} required />
+        <em className={styles.fieldHint}>Cria uma movimentação em rascunho na Central; não desconta automaticamente.</em>
+      </label>}
       <label className={styles.formWide}>
         <span>PARECER{(decision === "no_discount" || decision === "request_more_info") && <Required />}</span>
         <textarea name="comment" required={decision === "no_discount" || decision === "request_more_info"} maxLength={2000} />
@@ -503,7 +504,7 @@ function DiscountForm({ discount, decision, onDecision }: {
       <strong>O que fica registrado</strong>
       <ul>
         <li>A decisão e o parecer entram na demanda do DP e no histórico do colaborador.</li>
-        <li>Nenhum valor é lançado em folha por esta tela: o desconto aprovado segue para execução com o registro em mãos.</li>
+        <li>Se aprovado total ou parcialmente, nasce uma movimentação em rascunho na Central. Nenhum valor é descontado automaticamente.</li>
       </ul>
     </div>
   </>;

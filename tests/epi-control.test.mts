@@ -15,9 +15,9 @@ import {
  * O módulo tem duas promessas que não podem depender de disciplina de quem
  * escrever a próxima rota, e são elas que estes testes prendem:
  *
- *  1. **desconto nunca é lançado.** Extravio, não devolução e dano por uso
- *     inadequado abrem uma *análise* com demanda para o DP. Nenhum caminho do
- *     módulo grava valor a descontar sem alguém decidir.
+ *  1. **desconto nunca é aplicado automaticamente.** Extravio, não devolução e
+ *     dano por uso inadequado abrem uma *análise* com demanda para o DP. Uma
+ *     decisão aprovada gera só uma movimentação em rascunho na Central.
  *  2. **o destino do EPI é consequência da condição informada,** não uma caixa
  *     de seleção livre. "Extraviado" com "volta ao estoque" marcado faria o
  *     estoque contar equipamento que ninguém tem.
@@ -27,6 +27,7 @@ import {
  */
 
 const migration = await readFile(new URL("../drizzle/postgres/0044_epi_control.sql", import.meta.url), "utf8");
+const evolutionMigration = await readFile(new URL("../drizzle/postgres/0045_workspace_areas_shared_stock.sql", import.meta.url), "utf8");
 const tabelas = [
   "fdp_epi_products", "fdp_epi_deliveries", "fdp_epi_returns", "fdp_epi_damages",
   "fdp_epi_disposals", "fdp_epi_discount_requests", "fdp_epi_movements", "fdp_epi_attachments",
@@ -246,10 +247,10 @@ test("a exportação de relatório exige permissão própria e fica na auditoria
 /* Permissões e catálogo                                                      */
 /* -------------------------------------------------------------------------- */
 
-test("as onze permissões do módulo existem, são descritas e têm dono", () => {
+test("as doze permissões do módulo existem, são descritas e têm dono", () => {
   const esperadas = [
     "epi.view", "epi.create", "epi.edit", "epi.delete", "epi.deliver", "epi.return",
-    "epi.damage", "epi.dispose", "epi.discount.analyze", "epi.export", "epi.audit.view",
+    "epi.damage", "epi.dispose", "epi.discount.analyze", "epi.export", "epi.audit.view", "epi.stock.adjust",
   ] as const;
   for (const capability of esperadas) {
     assert.ok(capabilities.includes(capability), `${capability} fora do catálogo de permissões`);
@@ -328,16 +329,81 @@ test("o estoque não fica negativo nem a devolução ultrapassa a entrega", () =
   assert.match(migration, /fdp_epi_deliveries_settled_check[\s\S]{0,260}"settled_quantity" <= "fdp_epi_deliveries"\."quantity"/u);
 });
 
-test("o débito de estoque é condicional na própria instrução, não num if anterior", async () => {
+test("o débito de estoque compartilhado é serializado e atômico com o evento", async () => {
   const servico = await readFile(new URL("../lib/epi-service.ts", import.meta.url), "utf8");
   // Conferir antes e gravar depois deixaria duas entregas simultâneas passarem
   // juntas pela última unidade.
-  assert.match(servico, /WHERE workspace_id = \? AND id = \? AND stock_quantity \+ \? >= 0/u);
-  assert.match(servico, /EPI_INSUFFICIENT_STOCK/u);
+  assert.match(evolutionMigration, /FROM fdp_epi_products[\s\S]{0,180}FOR UPDATE/u);
+  assert.match(evolutionMigration, /UPDATE fdp_stock_balances[\s\S]{0,300}quantity \+ p_delta >= 0/u);
+  assert.match(evolutionMigration, /EPI_INSUFFICIENT_STOCK/u);
+  assert.match(servico, /SELECT fdp_apply_stock_change\(\?, \?, \?, \?, \?\)/u);
 
   const entrega = await readFile(new URL("../app/api/epi/deliveries/route.ts", import.meta.url), "utf8");
-  // E, se a gravação falhar depois do débito, o saldo volta.
-  assert.match(entrega, /await applyStockChange\(d1, workspace\.id, product\.id, quantity, null, user\.id\)\.catch/u);
+  // O débito, a entrega, o razão e a auditoria participam do mesmo lote.
+  assert.match(entrega, /prepareStockChange\(d1,[\s\S]{0,120}delta: -quantity/u);
+  assert.match(entrega, /await d1\.batch\(\[/u);
+  assert.doesNotMatch(entrega, /applyStockChange|compens/u);
+});
+
+test("o SKU e o saldo são compartilhados pelo workspace, preservando empresa consumidora", () => {
+  assert.match(evolutionMigration, /PRIMARY KEY \("workspace_id", "product_id", "stock_location_id"\)/u);
+  assert.doesNotMatch(evolutionMigration.match(/CREATE TABLE "fdp_stock_balances"[\s\S]*?\);/u)?.[0] ?? "", /company_id/u);
+  assert.match(evolutionMigration, /ALTER COLUMN "company_id" DROP NOT NULL/u);
+  assert.match(evolutionMigration, /FOREIGN KEY \("workspace_id", "product_id"\) REFERENCES "public"\."fdp_epi_products"\("workspace_id", "id"\)/u);
+  assert.match(evolutionMigration, /fdp_epi_stock_projection_guard/u);
+  assert.match(evolutionMigration, /fdp_epi_stock_projection_insert_guard/u);
+});
+
+test("catálogo compartilhado não revela o uso de empresas fora do escopo", async () => {
+  const products = await readFile(new URL("../app/api/epi/products/route.ts", import.meta.url), "utf8");
+  const detail = await readFile(new URL("../app/api/epi/products/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(products, /const assignedScope =/u);
+  assert.match(products, /d\.company_id IN/u);
+  assert.match(products, /company_tax_id: null/u);
+  assert.match(detail, /const visibleProduct =/u);
+  assert.match(detail, /companyClause/u);
+});
+
+test("áreas operacionais são N:N e governam a origem e o destino das demandas", async () => {
+  assert.match(evolutionMigration, /CREATE TABLE "fdp_areas"/u);
+  assert.match(evolutionMigration, /CREATE TABLE "fdp_area_members"/u);
+  assert.match(evolutionMigration, /fdp_area_members_workspace_area_user_uq/u);
+  assert.match(evolutionMigration, /fdp_cards" ADD COLUMN "requester_area_id"/u);
+  assert.match(evolutionMigration, /fdp_cards" ADD COLUMN "responsible_area_id"/u);
+  for (const table of ["fdp_areas", "fdp_area_members", "fdp_area_module_assignments"]) {
+    assert.match(evolutionMigration, new RegExp(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`, "u"));
+  }
+  const areaRoute = await readFile(new URL("../app/api/areas/route.ts", import.meta.url), "utf8");
+  const membersRoute = await readFile(new URL("../app/api/areas/[id]/members/route.ts", import.meta.url), "utf8");
+  assert.match(areaRoute, /requireNamedCapability\(workspace, "departments\.create"/u);
+  assert.match(membersRoute, /requireNamedCapability\(workspace, "departments\.manage_members"/u);
+});
+
+test("aprovar desconto cria rascunho na Central sem dedução automática", async () => {
+  const rota = await readFile(new URL("../app/api/epi/discounts/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /movement_type[\s\S]{0,180}'epi_discount'/u);
+  assert.match(rota, /'draft'/u);
+  assert.match(rota, /automaticDeduction: false/u);
+  assert.match(rota, /validCompetence\(body\.competence\)/u);
+  assert.match(evolutionMigration, /fdp_epi_discounts_movement_fk/u);
+});
+
+test("concluir higienização repõe o local no mesmo lote transacional", async () => {
+  const rota = await readFile(new URL("../app/api/epi/returns/[id]/sanitization/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /action === "complete"[\s\S]{0,220}prepareStockChange/u);
+  assert.match(rota, /sanitization_completed/u);
+  assert.match(rota, /await d1\.batch\(statements\)/u);
+});
+
+test("entrada e transferência devolvem o id real do razão e preservam um local padrão", async () => {
+  const service = await readFile(new URL("../lib/epi-service.ts", import.meta.url), "utf8");
+  const entry = await readFile(new URL("../app/api/epi/stock/entries/route.ts", import.meta.url), "utf8");
+  const transfer = await readFile(new URL("../app/api/epi/stock/transfers/route.ts", import.meta.url), "utf8");
+  const locations = await readFile(new URL("../app/api/epi/stock/locations/route.ts", import.meta.url), "utf8");
+  assert.match(service, /input\.id \?\? crypto\.randomUUID\(\)/u);
+  assert.match(entry, /id: movementId,[\s\S]{0,160}movementType: "stock_entry"/u);
+  assert.match(transfer, /id: movementId,[\s\S]{0,160}movementType: "stock_transfer"/u);
+  assert.match(locations, /Number\(before\.is_default\) === 1 && !next\.isDefault/u);
 });
 
 test("os anexos do EPI contam na mesma cota de armazenamento do plano", async () => {

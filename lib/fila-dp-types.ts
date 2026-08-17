@@ -159,6 +159,8 @@ export type Card = {
   description: string;
   companyId: string | null;
   company: string;
+  requesterAreaId: string | null;
+  responsibleAreaId: string | null;
   processType: string;
   priority: "low" | "normal" | "high" | "urgent";
   assigneeName: string;
@@ -184,6 +186,12 @@ export type Card = {
   legalDueAt: string | null;
   processTemplateId: string | null;
   closedAt: string | null;
+};
+
+export type OperationalArea = {
+  id: string; name: string; code: string; description: string; status: string;
+  managerUserId: string | null; color: string; icon: string; defaultSlaDays: number;
+  membersCount: number; moduleKeys: string[];
 };
 
 export type BoardList = {
@@ -275,6 +283,7 @@ export type WorkspaceSnapshot = {
   plannerBlocks: PlannerBlock[];
   calendarConnections: CalendarConnection[];
   companies: Company[];
+  areas: OperationalArea[];
   hrMetrics: HrMetric[];
   recentActivity: ActivityEvent[];
   /**

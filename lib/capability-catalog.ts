@@ -47,6 +47,11 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "employees.read": { area: "registrations", label: "Ver colaboradores" },
   "employees.manage": { area: "registrations", label: "Cadastrar e editar colaboradores" },
   "registrations.catalogs.manage": { area: "registrations", label: "Manter catálogos de cadastro" },
+  "departments.view": { area: "registrations", label: "Ver áreas operacionais do grupo" },
+  "departments.create": { area: "registrations", label: "Criar áreas operacionais" },
+  "departments.edit": { area: "registrations", label: "Editar áreas e seus roteamentos" },
+  "departments.manage_members": { area: "registrations", label: "Definir integrantes e área principal" },
+  "departments.archive": { area: "registrations", label: "Arquivar áreas sem apagar histórico" },
   "hr.read": { area: "registrations", label: "Ver dados de folha e indicadores de RH" },
   "hr.write": { area: "registrations", label: "Registrar dados de folha e indicadores de RH" },
 
@@ -103,6 +108,7 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "epi.discount.analyze": { area: "epi", label: "Analisar e decidir possível desconto de EPI" },
   "epi.export": { area: "epi", label: "Exportar relatórios do Controle de EPI" },
   "epi.audit.view": { area: "epi", label: "Consultar a trilha de auditoria do Controle de EPI" },
+  "epi.stock.adjust": { area: "epi", label: "Registrar entradas, transferências e ajustes de estoque" },
 
   "integrations.status.read": { area: "platform", label: "Ver o estado das integrações" },
   "integrations.manage": { area: "platform", label: "Configurar conectores e credenciais" },
