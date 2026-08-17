@@ -31,16 +31,20 @@ export async function GET(_request: Request, context: RouteContext) {
       return Response.json({ product, movements: movements.results, deliveries: [] });
     }
     const companyIds = [...access.companyIds];
+    const movementCompanyClause = access.unrestricted
+      ? "" : ` AND (company_id IS NULL OR company_id IN (${companyIds.map(() => "?").join(",")}))`;
+    const deliveryCompanyClause = access.unrestricted
+      ? "" : ` AND d.company_id IN (${companyIds.map(() => "?").join(",")})`;
     const [movements, deliveries] = await Promise.all([
       d1.prepare(`SELECT * FROM fdp_epi_movements WHERE workspace_id = ? AND product_id = ?
-        ${access.unrestricted ? "" : ` AND (company_id IS NULL OR company_id IN (${companyIds.map(() => "?").join(",")}))`}
+        ${movementCompanyClause}
         ORDER BY movement_date DESC, created_at DESC LIMIT 100`)
         .bind(workspace.id, id, ...companyIds).all<Record<string, unknown>>(),
       d1.prepare(`SELECT d.*, e.full_name AS employee_full_name, e.social_name AS employee_social_name
         FROM fdp_epi_deliveries d
         JOIN fdp_employees e ON e.workspace_id = d.workspace_id AND e.id = d.employee_id
         WHERE d.workspace_id = ? AND d.product_id = ?
-        ${access.unrestricted ? "" : ` AND d.company_id IN (${companyIds.map(() => "?").join(",")})`}
+        ${deliveryCompanyClause}
         ORDER BY d.delivered_on DESC LIMIT 100`)
         .bind(workspace.id, id, ...companyIds).all<Record<string, unknown>>(),
     ]);
