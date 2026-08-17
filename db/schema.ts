@@ -190,6 +190,63 @@ export const lists = pgTable("fdp_lists", {
   }).onDelete("cascade"),
 ]);
 
+/** Áreas operacionais cruzam empresas; departamentos abaixo continuam sendo lotação por CNPJ. */
+export const areas = pgTable("fdp_areas", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  code: text("code").notNull(),
+  description: text("description").notNull().default(""),
+  status: text("status").notNull().default("active"),
+  managerUserId: text("manager_user_id"),
+  color: text("color").notNull().default("#475569"),
+  icon: text("icon").notNull().default("building-2"),
+  defaultSlaDays: integer("default_sla_days").notNull().default(3),
+  settingsJson: jsonb("settings_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_areas_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_areas_workspace_code_uq").on(table.workspaceId, table.code),
+  index("fdp_areas_workspace_status_name_idx").on(table.workspaceId, table.status, table.name),
+  foreignKey({ name: "fdp_areas_manager_fk", columns: [table.workspaceId, table.managerUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_areas_status_check", sql`${table.status} IN ('active', 'inactive', 'archived')`),
+]);
+
+export const areaMembers = pgTable("fdp_area_members", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  areaId: text("area_id").notNull(),
+  userId: text("user_id").notNull(),
+  role: text("role").notNull().default("member"),
+  isPrimary: integer("is_primary").notNull().default(0),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_area_members_workspace_area_user_uq").on(table.workspaceId, table.areaId, table.userId),
+  uniqueIndex("fdp_area_members_workspace_user_primary_uq").on(table.workspaceId, table.userId).where(sql`${table.isPrimary} = 1`),
+  index("fdp_area_members_workspace_user_idx").on(table.workspaceId, table.userId, table.areaId),
+  foreignKey({ name: "fdp_area_members_area_fk", columns: [table.workspaceId, table.areaId], foreignColumns: [areas.workspaceId, areas.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_area_members_member_fk", columns: [table.workspaceId, table.userId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }).onDelete("cascade"),
+  check("fdp_area_members_role_check", sql`${table.role} IN ('manager', 'member', 'observer')`),
+]);
+
+export const areaModuleAssignments = pgTable("fdp_area_module_assignments", {
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  moduleKey: text("module_key").notNull(),
+  areaId: text("area_id").notNull(),
+  createdBy: text("created_by").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.moduleKey] }),
+  index("fdp_area_module_assignments_workspace_area_idx").on(table.workspaceId, table.areaId),
+  foreignKey({ name: "fdp_area_module_assignments_area_fk", columns: [table.workspaceId, table.areaId], foreignColumns: [areas.workspaceId, areas.id] }).onDelete("cascade"),
+]);
+
 export const cards = pgTable("fdp_cards", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
@@ -199,6 +256,8 @@ export const cards = pgTable("fdp_cards", {
   description: text("description").notNull().default(""),
   companyId: text("company_id").references(() => companies.id, { onDelete: "set null" }),
   company: text("company").notNull().default(""),
+  requesterAreaId: text("requester_area_id"),
+  responsibleAreaId: text("responsible_area_id"),
   processType: text("process_type").notNull().default("OUTROS"),
   priority: text("priority").notNull().default("normal"),
   assigneeName: text("assignee_name").notNull().default(""),
@@ -234,6 +293,10 @@ export const cards = pgTable("fdp_cards", {
     columns: [table.workspaceId, table.companyId],
     foreignColumns: [companies.workspaceId, companies.id],
   }),
+  foreignKey({ name: "fdp_cards_requester_area_fk", columns: [table.workspaceId, table.requesterAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_cards_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  index("fdp_cards_workspace_requester_area_idx").on(table.workspaceId, table.requesterAreaId, table.createdAt),
+  index("fdp_cards_workspace_responsible_area_idx").on(table.workspaceId, table.responsibleAreaId, table.createdAt),
 ]);
 
 export const checklistItems = pgTable("fdp_checklist_items", {
@@ -762,7 +825,7 @@ export const employeeMovements = pgTable("fdp_employee_movements", {
   foreignKey({ name: "fdp_employee_movements_workspace_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }),
   foreignKey({ name: "fdp_employee_movements_workspace_requester_fk", columns: [table.workspaceId, table.requestedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
   foreignKey({ name: "fdp_employee_movements_workspace_decider_fk", columns: [table.workspaceId, table.decidedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
-  check("fdp_employee_movements_type_check", sql`${table.movementType} IN ('salary_change', 'vacation', 'leave', 'termination', 'transfer', 'benefit_change', 'registration_sync', 'other')`),
+  check("fdp_employee_movements_type_check", sql`${table.movementType} IN ('salary_change', 'vacation', 'leave', 'termination', 'transfer', 'benefit_change', 'registration_sync', 'epi_discount', 'other')`),
   check("fdp_employee_movements_status_check", sql`${table.status} IN ('draft', 'pending_approval', 'approved', 'rejected', 'applied', 'canceled')`),
 ]);
 
@@ -2245,10 +2308,25 @@ export const movementSuggestions = pgTable("fdp_movement_suggestions", {
  * PostgreSQL, e `tests/sql-reserved-identifiers.test.mts` existe justamente
  * porque uma delas já derrubou uma varredura inteira em produção.
  */
+export const stockLocations = pgTable("fdp_stock_locations", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  code: text("code").notNull(), name: text("name").notNull(), description: text("description").notNull().default(""),
+  status: text("status").notNull().default("active"), isDefault: integer("is_default").notNull().default(0),
+  createdBy: text("created_by").notNull(), updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_stock_locations_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_stock_locations_workspace_code_uq").on(table.workspaceId, table.code),
+  uniqueIndex("fdp_stock_locations_workspace_default_uq").on(table.workspaceId).where(sql`${table.isDefault} = 1`),
+  index("fdp_stock_locations_workspace_status_idx").on(table.workspaceId, table.status, table.name),
+  check("fdp_stock_locations_status_check", sql`${table.status} IN ('active', 'inactive')`),
+]);
+
 export const epiProducts = pgTable("fdp_epi_products", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
-  companyId: text("company_id").notNull(),
   name: text("name").notNull(),
   epiType: text("epi_type").notNull(),
   caNumber: text("ca_number").notNull(),
@@ -2271,12 +2349,9 @@ export const epiProducts = pgTable("fdp_epi_products", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_epi_products_workspace_id_uq").on(table.workspaceId, table.id),
-  uniqueIndex("fdp_epi_products_workspace_company_id_uq").on(table.workspaceId, table.companyId, table.id),
-  uniqueIndex("fdp_epi_products_internal_code_uq").on(table.workspaceId, table.companyId, table.internalCode).where(sql`${table.internalCode} <> ''`),
+  uniqueIndex("fdp_epi_products_internal_code_workspace_uq").on(table.workspaceId, table.internalCode).where(sql`${table.internalCode} <> ''`),
   index("fdp_epi_products_workspace_status_idx").on(table.workspaceId, table.status, table.name),
-  index("fdp_epi_products_workspace_company_name_idx").on(table.workspaceId, table.companyId, table.name),
   index("fdp_epi_products_workspace_ca_idx").on(table.workspaceId, table.caNumber),
-  foreignKey({ name: "fdp_epi_products_workspace_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   check("fdp_epi_products_type_check", sql`${table.epiType} IN ('head', 'eye_face', 'hearing', 'respiratory', 'trunk', 'upper_limbs', 'lower_limbs', 'full_body', 'fall_protection', 'other')`),
   check("fdp_epi_products_status_check", sql`${table.status} IN ('active', 'inactive', 'in_stock', 'delivered', 'returned', 'sanitizing', 'discarded', 'damaged', 'lost')`),
   check("fdp_epi_products_reason_check", sql`${table.registrationReason} IN ('first_delivery', 'periodic_exchange', 'damage_replacement', 'loss_replacement', 'expiry_replacement', 'initial_purchase', 'stock_replenishment', 'manual_adjustment', 'other')`),
@@ -2284,11 +2359,28 @@ export const epiProducts = pgTable("fdp_epi_products", {
   check("fdp_epi_products_value_check", sql`${table.unitValue} >= 0`),
 ]);
 
+export const stockBalances = pgTable("fdp_stock_balances", {
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  productId: text("product_id").notNull(), stockLocationId: text("stock_location_id").notNull(),
+  quantity: integer("quantity").notNull().default(0), version: integer("version").notNull().default(0),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.productId, table.stockLocationId] }),
+  index("fdp_stock_balances_workspace_location_idx").on(table.workspaceId, table.stockLocationId, table.productId),
+  index("fdp_stock_balances_workspace_product_idx").on(table.workspaceId, table.productId),
+  foreignKey({ name: "fdp_stock_balances_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  foreignKey({ name: "fdp_stock_balances_location_fk", columns: [table.workspaceId, table.stockLocationId], foreignColumns: [stockLocations.workspaceId, stockLocations.id] }),
+  check("fdp_stock_balances_quantity_check", sql`${table.quantity} >= 0`),
+]);
+
 export const epiDeliveries = pgTable("fdp_epi_deliveries", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
   companyId: text("company_id").notNull(),
   productId: text("product_id").notNull(),
+  stockLocationId: text("stock_location_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
   employeeId: text("employee_id").notNull(),
   deliveredOn: date("delivered_on", { mode: "string" }).notNull(),
   positionName: text("position_name").notNull().default(""),
@@ -2314,7 +2406,9 @@ export const epiDeliveries = pgTable("fdp_epi_deliveries", {
   index("fdp_epi_deliveries_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.deliveredOn),
   index("fdp_epi_deliveries_workspace_status_idx").on(table.workspaceId, table.status, table.deliveredOn),
   index("fdp_epi_deliveries_workspace_product_idx").on(table.workspaceId, table.productId),
-  foreignKey({ name: "fdp_epi_deliveries_product_fk", columns: [table.workspaceId, table.companyId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.companyId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_deliveries_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_deliveries_stock_location_fk", columns: [table.workspaceId, table.stockLocationId], foreignColumns: [stockLocations.workspaceId, stockLocations.id] }),
+  uniqueIndex("fdp_epi_deliveries_idempotency_uq").on(table.workspaceId, table.idempotencyKey).where(sql`${table.idempotencyKey} <> ''`),
   foreignKey({ name: "fdp_epi_deliveries_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
   check("fdp_epi_deliveries_quantity_check", sql`${table.quantity} > 0`),
   check("fdp_epi_deliveries_settled_check", sql`${table.settledQuantity} >= 0 AND ${table.settledQuantity} <= ${table.quantity}`),
@@ -2328,6 +2422,8 @@ export const epiDisposals = pgTable("fdp_epi_disposals", {
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
   companyId: text("company_id").notNull(),
   productId: text("product_id").notNull(),
+  stockLocationId: text("stock_location_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
   employeeId: text("employee_id"),
   disposalDate: date("disposal_date", { mode: "string" }).notNull(),
   quantity: integer("quantity").notNull(),
@@ -2349,7 +2445,9 @@ export const epiDisposals = pgTable("fdp_epi_disposals", {
   uniqueIndex("fdp_epi_disposals_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_epi_disposals_workspace_status_idx").on(table.workspaceId, table.status, table.disposalDate),
   index("fdp_epi_disposals_workspace_product_idx").on(table.workspaceId, table.productId),
-  foreignKey({ name: "fdp_epi_disposals_product_fk", columns: [table.workspaceId, table.companyId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.companyId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_disposals_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_disposals_stock_location_fk", columns: [table.workspaceId, table.stockLocationId], foreignColumns: [stockLocations.workspaceId, stockLocations.id] }),
+  uniqueIndex("fdp_epi_disposals_idempotency_uq").on(table.workspaceId, table.idempotencyKey).where(sql`${table.idempotencyKey} <> ''`),
   foreignKey({ name: "fdp_epi_disposals_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
   check("fdp_epi_disposals_quantity_check", sql`${table.quantity} > 0`),
   check("fdp_epi_disposals_reason_check", sql`${table.disposalReason} IN ('damage', 'contamination', 'natural_wear', 'expired', 'inadequate', 'unusable_return', 'mandatory_exchange', 'other')`),
@@ -2366,6 +2464,11 @@ export const epiDiscountRequests = pgTable("fdp_epi_discount_requests", {
   productId: text("product_id").notNull(),
   deliveryId: text("delivery_id"),
   cardId: text("card_id"),
+  requesterAreaId: text("requester_area_id"),
+  responsibleAreaId: text("responsible_area_id"),
+  competence: text("competence").notNull().default(""),
+  movementId: text("movement_id"),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
   title: text("title").notNull(),
   caNumber: text("ca_number").notNull().default(""),
   size: text("size").notNull().default(""),
@@ -2392,7 +2495,11 @@ export const epiDiscountRequests = pgTable("fdp_epi_discount_requests", {
   index("fdp_epi_discounts_workspace_status_idx").on(table.workspaceId, table.status, table.occurredOn),
   index("fdp_epi_discounts_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.occurredOn),
   index("fdp_epi_discounts_workspace_card_idx").on(table.workspaceId, table.cardId),
-  foreignKey({ name: "fdp_epi_discounts_product_fk", columns: [table.workspaceId, table.companyId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.companyId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_discounts_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_discounts_requester_area_fk", columns: [table.workspaceId, table.requesterAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_epi_discounts_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_epi_discounts_movement_fk", columns: [table.workspaceId, table.movementId], foreignColumns: [employeeMovements.workspaceId, employeeMovements.id] }),
+  uniqueIndex("fdp_epi_discounts_idempotency_uq").on(table.workspaceId, table.idempotencyKey).where(sql`${table.idempotencyKey} <> ''`),
   foreignKey({ name: "fdp_epi_discounts_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
   foreignKey({ name: "fdp_epi_discounts_delivery_fk", columns: [table.workspaceId, table.deliveryId], foreignColumns: [epiDeliveries.workspaceId, epiDeliveries.id] }),
   foreignKey({ name: "fdp_epi_discounts_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }),
@@ -2411,6 +2518,8 @@ export const epiReturns = pgTable("fdp_epi_returns", {
   companyId: text("company_id").notNull(),
   deliveryId: text("delivery_id").notNull(),
   productId: text("product_id").notNull(),
+  stockLocationId: text("stock_location_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
   employeeId: text("employee_id").notNull(),
   returnedOn: date("returned_on", { mode: "string" }).notNull(),
   quantity: integer("quantity").notNull(),
@@ -2424,6 +2533,11 @@ export const epiReturns = pgTable("fdp_epi_returns", {
   generateDpDemand: integer("generate_dp_demand").notNull().default(0),
   discountRequestId: text("discount_request_id"),
   disposalId: text("disposal_id"),
+  sanitizationStatus: text("sanitization_status").notNull().default("not_required"),
+  sanitizationStartedAt: timestamp("sanitization_started_at", { withTimezone: true, mode: "string" }),
+  sanitizationCompletedAt: timestamp("sanitization_completed_at", { withTimezone: true, mode: "string" }),
+  sanitizationResponsibleId: text("sanitization_responsible_id"),
+  sanitizationResult: text("sanitization_result").notNull().default(""),
   notes: text("notes").notNull().default(""),
   createdBy: text("created_by").notNull(),
   updatedBy: text("updated_by").notNull(),
@@ -2434,7 +2548,9 @@ export const epiReturns = pgTable("fdp_epi_returns", {
   index("fdp_epi_returns_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.returnedOn),
   index("fdp_epi_returns_workspace_condition_idx").on(table.workspaceId, table.epiCondition, table.returnedOn),
   foreignKey({ name: "fdp_epi_returns_delivery_fk", columns: [table.workspaceId, table.deliveryId], foreignColumns: [epiDeliveries.workspaceId, epiDeliveries.id] }),
-  foreignKey({ name: "fdp_epi_returns_product_fk", columns: [table.workspaceId, table.companyId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.companyId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_returns_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_returns_stock_location_fk", columns: [table.workspaceId, table.stockLocationId], foreignColumns: [stockLocations.workspaceId, stockLocations.id] }),
+  uniqueIndex("fdp_epi_returns_idempotency_uq").on(table.workspaceId, table.idempotencyKey).where(sql`${table.idempotencyKey} <> ''`),
   foreignKey({ name: "fdp_epi_returns_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
   foreignKey({ name: "fdp_epi_returns_discount_fk", columns: [table.workspaceId, table.discountRequestId], foreignColumns: [epiDiscountRequests.workspaceId, epiDiscountRequests.id] }),
   foreignKey({ name: "fdp_epi_returns_disposal_fk", columns: [table.workspaceId, table.disposalId], foreignColumns: [epiDisposals.workspaceId, epiDisposals.id] }),
@@ -2442,6 +2558,7 @@ export const epiReturns = pgTable("fdp_epi_returns", {
   check("fdp_epi_returns_condition_check", sql`${table.epiCondition} IN ('returned_sanitized', 'returned_pending_sanitizing', 'returned_damaged', 'returned_unusable', 'returned_for_disposal', 'not_returned', 'lost')`),
   check("fdp_epi_returns_flags_check", sql`${table.needsSanitizing} IN (0, 1) AND ${table.backToStock} IN (0, 1) AND ${table.sendToDisposal} IN (0, 1) AND ${table.generateDpDemand} IN (0, 1)`),
   check("fdp_epi_returns_missing_check", sql`${table.epiCondition} NOT IN ('not_returned', 'lost') OR ${table.backToStock} = 0`),
+  check("fdp_epi_returns_sanitization_status_check", sql`${table.sanitizationStatus} IN ('not_required', 'awaiting', 'in_progress', 'sanitized', 'rejected')`),
 ]);
 
 export const epiDamages = pgTable("fdp_epi_damages", {
@@ -2450,6 +2567,8 @@ export const epiDamages = pgTable("fdp_epi_damages", {
   companyId: text("company_id").notNull(),
   employeeId: text("employee_id").notNull(),
   productId: text("product_id").notNull(),
+  stockLocationId: text("stock_location_id"),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
   deliveryId: text("delivery_id"),
   occurredOn: date("occurred_on", { mode: "string" }).notNull(),
   quantity: integer("quantity").notNull().default(1),
@@ -2473,7 +2592,9 @@ export const epiDamages = pgTable("fdp_epi_damages", {
   uniqueIndex("fdp_epi_damages_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_epi_damages_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.occurredOn),
   index("fdp_epi_damages_workspace_decision_idx").on(table.workspaceId, table.decision, table.occurredOn),
-  foreignKey({ name: "fdp_epi_damages_product_fk", columns: [table.workspaceId, table.companyId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.companyId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_damages_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_damages_stock_location_fk", columns: [table.workspaceId, table.stockLocationId], foreignColumns: [stockLocations.workspaceId, stockLocations.id] }),
+  uniqueIndex("fdp_epi_damages_idempotency_uq").on(table.workspaceId, table.idempotencyKey).where(sql`${table.idempotencyKey} <> ''`),
   foreignKey({ name: "fdp_epi_damages_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
   foreignKey({ name: "fdp_epi_damages_delivery_fk", columns: [table.workspaceId, table.deliveryId], foreignColumns: [epiDeliveries.workspaceId, epiDeliveries.id] }),
   foreignKey({ name: "fdp_epi_damages_discount_fk", columns: [table.workspaceId, table.discountRequestId], foreignColumns: [epiDiscountRequests.workspaceId, epiDiscountRequests.id] }),
@@ -2488,11 +2609,14 @@ export const epiDamages = pgTable("fdp_epi_damages", {
 export const epiMovements = pgTable("fdp_epi_movements", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
-  companyId: text("company_id").notNull(),
+  companyId: text("company_id"),
   movementDate: date("movement_date", { mode: "string" }).notNull(),
   movementType: text("movement_type").notNull(),
   cnpj: text("cnpj").notNull().default(""),
   productId: text("product_id").notNull(),
+  stockLocationId: text("stock_location_id"),
+  targetStockLocationId: text("target_stock_location_id"),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
   epiName: text("epi_name").notNull(),
   caNumber: text("ca_number").notNull().default(""),
   size: text("size").notNull().default(""),
@@ -2520,18 +2644,26 @@ export const epiMovements = pgTable("fdp_epi_movements", {
   index("fdp_epi_movements_workspace_product_idx").on(table.workspaceId, table.productId, table.movementDate),
   index("fdp_epi_movements_workspace_type_idx").on(table.workspaceId, table.movementType, table.movementDate),
   index("fdp_epi_movements_workspace_company_date_idx").on(table.workspaceId, table.companyId, table.movementDate),
-  foreignKey({ name: "fdp_epi_movements_product_fk", columns: [table.workspaceId, table.companyId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.companyId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_movements_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  foreignKey({ name: "fdp_epi_movements_stock_location_fk", columns: [table.workspaceId, table.stockLocationId], foreignColumns: [stockLocations.workspaceId, stockLocations.id] }),
+  foreignKey({ name: "fdp_epi_movements_target_stock_location_fk", columns: [table.workspaceId, table.targetStockLocationId], foreignColumns: [stockLocations.workspaceId, stockLocations.id] }),
+  uniqueIndex("fdp_epi_movements_idempotency_uq").on(table.workspaceId, table.idempotencyKey).where(sql`${table.idempotencyKey} <> ''`),
   foreignKey({ name: "fdp_epi_movements_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
-  check("fdp_epi_movements_type_check", sql`${table.movementType} IN ('registration', 'delivery', 'exchange', 'return', 'sanitizing', 'disposal', 'discount_analysis', 'manual_adjustment')`),
-  check("fdp_epi_movements_source_check", sql`${table.sourceType} IN ('product', 'delivery', 'return', 'damage', 'disposal', 'discount')`),
+  check("fdp_epi_movements_type_check", sql`${table.movementType} IN ('registration', 'stock_entry', 'stock_transfer', 'delivery', 'exchange', 'return', 'sanitizing', 'sanitization_completed', 'disposal', 'discount_analysis', 'manual_adjustment')`),
+  check("fdp_epi_movements_source_check", sql`${table.sourceType} IN ('product', 'entry', 'transfer', 'delivery', 'return', 'sanitization', 'damage', 'disposal', 'discount')`),
   check("fdp_epi_movements_flag_check", sql`${table.generateDpDemand} IN (0, 1)`),
   check("fdp_epi_movements_quantity_check", sql`${table.quantity} >= 0`),
+  check("fdp_epi_movements_scope_check", sql`(
+    ${table.movementType} IN ('registration', 'stock_entry', 'stock_transfer', 'manual_adjustment') AND ${table.companyId} IS NULL
+  ) OR (
+    ${table.movementType} NOT IN ('registration', 'stock_entry', 'stock_transfer', 'manual_adjustment') AND ${table.companyId} IS NOT NULL
+  )`),
 ]);
 
 export const epiAttachments = pgTable("fdp_epi_attachments", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
-  companyId: text("company_id").notNull(),
+  companyId: text("company_id"),
   entityType: text("entity_type").notNull(),
   entityId: text("entity_id").notNull(),
   attachmentKind: text("attachment_kind").notNull().default("evidence"),
@@ -2548,4 +2680,9 @@ export const epiAttachments = pgTable("fdp_epi_attachments", {
   check("fdp_epi_attachments_entity_check", sql`${table.entityType} IN ('product', 'delivery', 'return', 'damage', 'disposal', 'discount')`),
   check("fdp_epi_attachments_kind_check", sql`${table.attachmentKind} IN ('evidence', 'delivery_term', 'photo', 'document')`),
   check("fdp_epi_attachments_size_check", sql`${table.sizeBytes} >= 0`),
+  check("fdp_epi_attachments_scope_check", sql`(
+    ${table.entityType} = 'product' AND ${table.companyId} IS NULL
+  ) OR (
+    ${table.entityType} <> 'product' AND ${table.companyId} IS NOT NULL
+  )`),
 ]);

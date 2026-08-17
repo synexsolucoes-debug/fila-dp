@@ -34,21 +34,19 @@ const companyColumns = [
 const reports: Record<string, ReportDefinition> = {
   stock: {
     title: "Estoque de EPI",
-    description: "Saldo disponível, valor unitário e validade do CA por item cadastrado.",
+    description: "Catálogo e saldo compartilhados pelo grupo, com valor unitário e validade do CA.",
     date: "p.registered_on",
-    columns: [...companyColumns,
-      { key: "epi_name", label: "EPI" }, { key: "ca_number", label: "CA" }, { key: "size", label: "Tamanho" },
+    columns: [{ key: "epi_name", label: "EPI" }, { key: "ca_number", label: "CA" }, { key: "size", label: "Tamanho" },
       { key: "status", label: "Status" }, { key: "stock_quantity", label: "Em estoque" },
-      { key: "assigned_quantity", label: "Com colaboradores" }, { key: "unit_value", label: "Valor unitário" },
+      { key: "unit_value", label: "Valor unitário" },
       { key: "ca_expires_on", label: "Validade do CA" }],
     build: ({ where, values }) => ({
-      sql: `SELECT COALESCE(NULLIF(c.trade_name, ''), c.legal_name) AS company_name, c.tax_id AS company_tax_id,
-          p.name AS epi_name, p.ca_number, p.size, p.status, p.stock_quantity, p.unit_value, p.ca_expires_on,
-          (SELECT COALESCE(SUM(d.quantity - d.settled_quantity), 0) FROM fdp_epi_deliveries d
-            WHERE d.workspace_id = p.workspace_id AND d.product_id = p.id AND d.status <> 'canceled') AS assigned_quantity
+      sql: `SELECT p.name AS epi_name, p.ca_number, p.size, p.status,
+          COALESCE((SELECT SUM(b.quantity) FROM fdp_stock_balances b
+            WHERE b.workspace_id = p.workspace_id AND b.product_id = p.id), 0) AS stock_quantity,
+          p.unit_value, p.ca_expires_on
         FROM fdp_epi_products p
-        JOIN fdp_companies c ON c.workspace_id = p.workspace_id AND c.id = p.company_id
-        WHERE ${where.join(" AND ")} ORDER BY company_name, p.name`,
+        WHERE ${where.join(" AND ")} ORDER BY p.name`,
       values,
     }),
   },
@@ -101,16 +99,18 @@ const reports: Record<string, ReportDefinition> = {
     }),
   },
   by_company: {
-    title: "EPIs por empresa/CNPJ",
-    description: "Totais de estoque, entregas em aberto e casos abertos por empresa.",
+    title: "Consumo de EPI por empresa/CNPJ",
+    description: "Uso e ocorrências por empresa consumidora; o estoque permanece único no grupo.",
     date: null,
     columns: [...companyColumns,
-      { key: "products", label: "Itens cadastrados" }, { key: "stock", label: "Em estoque" },
-      { key: "outstanding", label: "Com colaboradores" }, { key: "awaiting_disposal", label: "Aguardando descarte" },
+      { key: "products_in_use", label: "Tipos em uso" }, { key: "outstanding", label: "Com colaboradores" },
+      { key: "awaiting_disposal", label: "Aguardando descarte" },
       { key: "discounts_open", label: "Descontos em análise" }],
     build: ({ where, values }) => ({
       sql: `SELECT COALESCE(NULLIF(c.trade_name, ''), c.legal_name) AS company_name, c.tax_id AS company_tax_id,
-          COUNT(p.id) AS products, COALESCE(SUM(p.stock_quantity), 0) AS stock,
+          (SELECT COUNT(DISTINCT d.product_id) FROM fdp_epi_deliveries d
+            WHERE d.workspace_id = c.workspace_id AND d.company_id = c.id
+              AND d.status <> 'canceled' AND d.quantity > d.settled_quantity) AS products_in_use,
           (SELECT COALESCE(SUM(d.quantity - d.settled_quantity), 0) FROM fdp_epi_deliveries d
             WHERE d.workspace_id = c.workspace_id AND d.company_id = c.id AND d.status <> 'canceled') AS outstanding,
           (SELECT COUNT(*) FROM fdp_epi_disposals dp
@@ -118,10 +118,9 @@ const reports: Record<string, ReportDefinition> = {
           (SELECT COUNT(*) FROM fdp_epi_discount_requests dr
             WHERE dr.workspace_id = c.workspace_id AND dr.company_id = c.id
               AND dr.status IN ('awaiting_dp_analysis', 'awaiting_approval')) AS discounts_open
-        FROM fdp_epi_products p
-        JOIN fdp_companies c ON c.workspace_id = p.workspace_id AND c.id = p.company_id
+        FROM fdp_companies c
         WHERE ${where.join(" AND ")}
-        GROUP BY c.workspace_id, c.id, company_name, c.tax_id ORDER BY company_name`,
+        ORDER BY company_name`,
       values,
     }),
   },
@@ -265,14 +264,11 @@ const reports: Record<string, ReportDefinition> = {
     date: "p.registered_on",
     columns: [{ key: "ca_number", label: "CA" }, { key: "epi_name", label: "EPI" },
       { key: "items", label: "Cadastros" }, { key: "stock", label: "Em estoque" },
-      { key: "outstanding", label: "Com colaboradores" }, { key: "ca_expires_on", label: "Validade do CA" }],
+      { key: "ca_expires_on", label: "Validade do CA" }],
     build: ({ where, values }) => ({
       sql: `SELECT p.ca_number, p.name AS epi_name, COUNT(*) AS items,
-          COALESCE(SUM(p.stock_quantity), 0) AS stock, MIN(p.ca_expires_on) AS ca_expires_on,
-          (SELECT COALESCE(SUM(d.quantity - d.settled_quantity), 0) FROM fdp_epi_deliveries d
-            WHERE d.workspace_id = p.workspace_id AND d.ca_number = p.ca_number AND d.status <> 'canceled') AS outstanding
+          COALESCE(SUM(p.stock_quantity), 0) AS stock, MIN(p.ca_expires_on) AS ca_expires_on
         FROM fdp_epi_products p
-        JOIN fdp_companies c ON c.workspace_id = p.workspace_id AND c.id = p.company_id
         WHERE ${where.join(" AND ")}
         GROUP BY p.workspace_id, p.ca_number, p.name ORDER BY p.ca_number`,
       values,
@@ -289,11 +285,12 @@ const reports: Record<string, ReportDefinition> = {
       { key: "movement_reason", label: "Motivo" }, { key: "status", label: "Status" }],
     build: ({ where, values }) => ({
       sql: `SELECT to_char(m.movement_date, 'YYYY-MM') AS competence,
-          COALESCE(NULLIF(c.trade_name, ''), c.legal_name) AS company_name, c.tax_id AS company_tax_id,
+          COALESCE(COALESCE(NULLIF(c.trade_name, ''), c.legal_name), 'Grupo inteiro') AS company_name,
+          COALESCE(c.tax_id, '') AS company_tax_id,
           m.movement_date, m.movement_type, m.epi_name, m.employee_name, m.quantity, m.stock_delta,
           m.movement_reason, m.status
         FROM fdp_epi_movements m
-        JOIN fdp_companies c ON c.workspace_id = m.workspace_id AND c.id = m.company_id
+        LEFT JOIN fdp_companies c ON c.workspace_id = m.workspace_id AND c.id = m.company_id
         WHERE ${where.join(" AND ")} ORDER BY m.movement_date DESC, m.created_at DESC`,
       values,
     }),
@@ -323,10 +320,13 @@ const reports: Record<string, ReportDefinition> = {
 
 /** Prefixo da tabela de cada relatório, para o recorte de empresa acertar o alvo. */
 const scopeAlias: Record<string, string> = {
-  stock: "p", deliveries: "d", by_employee: "d", by_company: "p", returns: "r", damages: "dm",
+  stock: "p", deliveries: "d", by_employee: "d", by_company: "c", returns: "r", damages: "dm",
   disposals: "dp", sanitizing: "r", discounts: "dr", unsigned: "d", by_ca: "p",
   movements: "m", employee_history: "m",
 };
+
+const groupScopedReports = new Set(["stock", "by_ca"]);
+const nullableCompanyReports = new Set(["movements"]);
 
 export const epiReportCatalog = Object.entries(reports).map(([key, definition]) => ({
   key, title: definition.title, description: definition.description, columns: definition.columns,
@@ -358,7 +358,8 @@ export async function GET(request: Request) {
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
-    if (!access.unrestricted && access.companyIds.size === 0) {
+    if (!access.unrestricted && access.companyIds.size === 0
+      && !groupScopedReports.has(key) && !nullableCompanyReports.has(key)) {
       return format === "csv"
         ? new Response("", { headers: { "Content-Type": "text/csv; charset=utf-8" } })
         : Response.json({ report: key, title: definition.title, columns: definition.columns, rows: [] });
@@ -366,11 +367,19 @@ export async function GET(request: Request) {
 
     const alias = scopeAlias[key];
     const where = [`${alias}.workspace_id = ?`]; const values: unknown[] = [workspace.id];
-    if (!access.unrestricted) {
+    if (!groupScopedReports.has(key) && !access.unrestricted) {
       const ids = [...access.companyIds];
-      where.push(`${alias}.company_id IN (${ids.map(() => "?").join(",")})`); values.push(...ids);
+      if (nullableCompanyReports.has(key)) {
+        where.push(ids.length ? `(${alias}.company_id IS NULL OR ${alias}.company_id IN (${ids.map(() => "?").join(",")}))` : `${alias}.company_id IS NULL`);
+        values.push(...ids);
+      } else {
+        where.push(`${alias}.company_id IN (${ids.map(() => "?").join(",")})`); values.push(...ids);
+      }
     }
-    if (companyId) { where.push(`${alias}.company_id = ?`); values.push(companyId); }
+    if (companyId && !groupScopedReports.has(key)) {
+      where.push(nullableCompanyReports.has(key) ? `(${alias}.company_id IS NULL OR ${alias}.company_id = ?)` : `${alias}.company_id = ?`);
+      values.push(companyId);
+    }
     const employeeId = cleanText(url.searchParams.get("employeeId"), 120);
     if (employeeId && ["by_employee", "deliveries", "returns", "damages", "disposals", "discounts", "unsigned", "employee_history"].includes(key)) {
       where.push(`${alias === "m" ? "m.employee_id" : `${alias}.employee_id`} = ?`); values.push(employeeId);

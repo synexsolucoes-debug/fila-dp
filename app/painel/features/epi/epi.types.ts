@@ -18,6 +18,7 @@ export type EpiPermissions = {
   analyzeDiscount: boolean;
   export: boolean;
   audit: boolean;
+  stockAdjust: boolean;
 };
 
 export type EpiSummary = {
@@ -47,9 +48,6 @@ export type EpiOverview = {
 
 export type EpiProduct = {
   id: string;
-  companyId: string;
-  companyName: string;
-  companyTaxId: string;
   name: string;
   epiType: EpiType;
   caNumber: string;
@@ -58,6 +56,7 @@ export type EpiProduct = {
   model: string;
   unitValue: number;
   stockQuantity: number;
+  stockLocations: Array<{ id: string; code: string; name: string; quantity: number }>;
   assignedQuantity: number;
   registeredOn: string;
   status: EpiProductStatus;
@@ -109,6 +108,7 @@ export type EpiReturn = {
   size: string;
   condition: EpiReturnCondition;
   needsSanitizing: boolean;
+  sanitizationStatus: string;
   backToStock: boolean;
   sendToDisposal: boolean;
   generateDpDemand: boolean;
@@ -162,8 +162,6 @@ export type EpiDisposal = {
 /** Item do estoque que já está em estado de descarte e ainda não tem registro aberto. */
 export type DisposableProduct = {
   id: string;
-  companyId: string;
-  companyName: string;
   name: string;
   caNumber: string;
   size: string;
@@ -200,6 +198,8 @@ export type EpiDiscount = {
   decision: EpiDiscountDecision | "";
   decidedValue: number;
   decisionComment: string;
+  competence: string;
+  movementId: string;
   attachmentsCount: number;
 };
 

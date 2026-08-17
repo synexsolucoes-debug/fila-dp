@@ -5,6 +5,31 @@ import { publicCredentialFingerprint, safeIntegrationError } from "@/lib/integra
 import { parseSankhyaConfig } from "@/lib/sankhya/config";
 import { isSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 
+const sensitiveQueryKey = /token|password|secret|senha|chave|authorization|cookie|api.?key/iu;
+
+function publicConnectorConfig(value: unknown) {
+  let parsed: Record<string, unknown> = {};
+  try {
+    const candidate = typeof value === "string" ? JSON.parse(value) : value;
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) parsed = candidate as Record<string, unknown>;
+  } catch { return {}; }
+
+  const config: Record<string, string | number> = {};
+  if (typeof parsed.endpoint === "string" && parsed.endpoint.length <= 500) {
+    try {
+      const endpoint = new URL(parsed.endpoint);
+      const hasSensitiveQuery = [...endpoint.searchParams.keys()].some((key) => sensitiveQueryKey.test(key));
+      if (endpoint.protocol === "https:" && !endpoint.username && !endpoint.password && !hasSensitiveQuery) config.endpoint = endpoint.toString();
+    } catch { /* Configuração legada inválida não deve derrubar o overview. */ }
+  }
+  for (const key of ["accountReference", "admissionsSince", "boardId", "companyId"] as const) {
+    if (typeof parsed[key] === "string" && parsed[key].length <= 160) config[key] = parsed[key];
+  }
+  const pageSize = Math.trunc(Number(parsed.pageSize) || 0);
+  if (pageSize > 0) config.pageSize = Math.min(150, pageSize);
+  return config;
+}
+
 export async function GET() {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
@@ -46,7 +71,7 @@ export async function GET() {
     return Response.json({
       connectors: visibleConnectors.map((row) => ({
         ...row,
-        config: row.channel === "sankhya_browser" ? parseSankhyaConfig(row.config_json) : undefined,
+        config: row.channel === "sankhya_browser" ? parseSankhyaConfig(row.config_json) : publicConnectorConfig(row.config_json),
         config_json: undefined,
         fingerprint: row.fingerprint ? publicCredentialFingerprint(String(row.fingerprint)) : "",
         last_error: hasCapability(workspace, "integrations.manage") && row.last_error

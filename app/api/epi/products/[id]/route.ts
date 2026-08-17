@@ -1,10 +1,10 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import {
-  epiDate, epiMoney, epiQuantity, epiText, loadCompany, parseEpiType, parseProductStatus,
-  parseRegistrationReason, prepareEpiMovement,
+  epiDate, epiMoney, epiQuantity, epiText, loadStockLocation, parseEpiType, parseProductStatus,
+  parseRegistrationReason, prepareEpiMovement, prepareStockChange,
 } from "@/lib/epi-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -23,15 +23,27 @@ export async function GET(_request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.view", "consultar o Controle de EPI");
     const product = await productOf(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(product.company_id));
+    const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
+    const unrestricted = access.unrestricted ? 1 : 0;
     const [movements, deliveries] = await Promise.all([
-      d1.prepare(`SELECT * FROM fdp_epi_movements WHERE workspace_id = ? AND product_id = ?
-        ORDER BY movement_date DESC, created_at DESC LIMIT 100`).bind(workspace.id, id).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT m.* FROM fdp_epi_movements m
+        WHERE m.workspace_id = ? AND m.product_id = ?
+          AND (m.company_id IS NULL OR ?::int = 1 OR EXISTS (
+            SELECT 1 FROM fdp_member_company_access access
+            WHERE access.workspace_id = m.workspace_id AND access.user_id = ? AND access.company_id = m.company_id
+          ))
+        ORDER BY m.movement_date DESC, m.created_at DESC LIMIT 100`)
+        .bind(workspace.id, id, unrestricted, user.id).all<Record<string, unknown>>(),
       d1.prepare(`SELECT d.*, e.full_name AS employee_full_name, e.social_name AS employee_social_name
         FROM fdp_epi_deliveries d
         JOIN fdp_employees e ON e.workspace_id = d.workspace_id AND e.id = d.employee_id
-        WHERE d.workspace_id = ? AND d.product_id = ? ORDER BY d.delivered_on DESC LIMIT 100`)
-        .bind(workspace.id, id).all<Record<string, unknown>>(),
+        WHERE d.workspace_id = ? AND d.product_id = ?
+          AND (?::int = 1 OR EXISTS (
+            SELECT 1 FROM fdp_member_company_access access
+            WHERE access.workspace_id = d.workspace_id AND access.user_id = ? AND access.company_id = d.company_id
+          ))
+        ORDER BY d.delivered_on DESC LIMIT 100`)
+        .bind(workspace.id, id, unrestricted, user.id).all<Record<string, unknown>>(),
     ]);
     return Response.json({ product, movements: movements.results, deliveries: deliveries.results });
   } catch (error) { return apiError(error); }
@@ -40,9 +52,8 @@ export async function GET(_request: Request, context: RouteContext) {
 /**
  * Edição do cadastro.
  *
- * A empresa do EPI não muda: mover o equipamento entre empresas invalidaria as
- * entregas, devoluções e descartes já gravados contra a chave composta
- * (workspace, empresa, EPI). Quem precisa disso cadastra na empresa certa.
+ * O SKU e o saldo pertencem ao workspace; entregas, devoluções e descartes
+ * registram separadamente a empresa consumidora.
  *
  * O ajuste de estoque é registrado como movimentação própria, com o motivo, em
  * vez de sobrescrever o saldo em silêncio.
@@ -55,10 +66,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.edit", "editar o cadastro de EPI");
     const before = await productOf(d1, workspace.id, id);
-    const companyId = String(before.company_id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
-    const company = await loadCompany(d1, workspace.id, companyId);
-
     const next = {
       name: body.name === undefined ? String(before.name) : epiText(body.name, "o nome do EPI", 160, true),
       epiType: body.epiType === undefined ? String(before.epi_type) : parseEpiType(body.epiType),
@@ -83,18 +90,20 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw ApiError.badRequest("Informe o motivo do ajuste de estoque.", "EPI_STOCK_ADJUSTMENT_REASON_REQUIRED");
     }
     if (next.internalCode && next.internalCode !== String(before.internal_code)) {
-      const duplicate = await d1.prepare("SELECT id FROM fdp_epi_products WHERE workspace_id = ? AND company_id = ? AND internal_code = ? AND id <> ?")
-        .bind(workspace.id, companyId, next.internalCode, id).first();
-      if (duplicate) throw new ApiError(409, "EPI_INTERNAL_CODE_CONFLICT", "Já existe um EPI com este código interno nesta empresa.");
+      const duplicate = await d1.prepare("SELECT id FROM fdp_epi_products WHERE workspace_id = ? AND internal_code = ? AND id <> ?")
+        .bind(workspace.id, next.internalCode, id).first();
+      if (duplicate) throw new ApiError(409, "EPI_INTERNAL_CODE_CONFLICT", "Já existe um EPI com este código interno neste grupo.");
     }
+    const location = stockDelta !== 0 ? await loadStockLocation(d1, workspace.id, epiText(body.stockLocationId, "o local de estoque", 120)) : null;
+    if (stockDelta !== 0) requireNamedCapability(workspace, "epi.stock.adjust", "ajustar o saldo de estoque");
 
     const statements = [
       d1.prepare(`UPDATE fdp_epi_products SET name = ?, epi_type = ?, ca_number = ?, size = ?, brand = ?, model = ?,
-        unit_value = ?, stock_quantity = ?, status = ?, registration_reason = ?, notes = ?, product_expires_on = ?,
+        unit_value = ?, status = ?, registration_reason = ?, notes = ?, product_expires_on = ?,
         ca_expires_on = ?, supplier = ?, internal_code = ?, updated_by = ?, updated_at = now()
         WHERE workspace_id = ? AND id = ?`)
         .bind(next.name, next.epiType, next.caNumber, next.size, next.brand, next.model, next.unitValue,
-          stockQuantity, next.status, next.registrationReason, next.notes, next.productExpiresOn, next.caExpiresOn,
+          next.status, next.registrationReason, next.notes, next.productExpiresOn, next.caExpiresOn,
           next.supplier, next.internalCode, user.id, workspace.id, id),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_product.updated",
@@ -103,17 +112,21 @@ export async function PATCH(request: Request, context: RouteContext) {
       }),
     ];
     if (stockDelta !== 0) {
+      statements.splice(1, 0, prepareStockChange(d1, {
+        workspaceId: workspace.id, productId: id, stockLocationId: location!.id, delta: stockDelta, actorId: user.id,
+      }));
       statements.splice(1, 0, prepareEpiMovement({
-        workspaceId: workspace.id, companyId, cnpj: company.tax_id,
+        workspaceId: workspace.id, companyId: null, cnpj: "",
         movementDate: new Date().toISOString().slice(0, 10), movementType: "manual_adjustment",
         productId: id, epiName: next.name, caNumber: next.caNumber, size: next.size,
         quantity: Math.abs(stockDelta), stockDelta, unitValue: next.unitValue,
         reason: "manual_adjustment", status: next.status, sourceType: "product", sourceId: id,
         responsibleId: user.id, notes: adjustmentNote, createdBy: user.id,
+        stockLocationId: location!.id,
       }));
     }
     await d1.batch(statements);
-    return Response.json({ product: { id, companyId, ...next, stockQuantity } });
+    return Response.json({ product: { id, ...next, stockQuantity } });
   } catch (error) { return apiError(error); }
 }
 
@@ -137,7 +150,6 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.delete", "dar baixa em cadastro de EPI");
     const before = await productOf(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(before.company_id));
     if (before.status === "inactive") throw ApiError.badRequest("Este cadastro já está inativo.", "EPI_PRODUCT_ALREADY_INACTIVE");
     const outstanding = await d1.prepare(`SELECT COALESCE(SUM(quantity - settled_quantity), 0) AS pending
       FROM fdp_epi_deliveries WHERE workspace_id = ? AND product_id = ? AND status <> 'canceled'`)

@@ -284,7 +284,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
     String((workspace as Record<string, unknown>).status ?? "active"),
     (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants);
-  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult, cyclesResult] = await Promise.all([
+  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
@@ -354,6 +354,11 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       WHERE workspace_id = ?
         AND competence = (SELECT MAX(competence) FROM fdp_payroll_cycles WHERE workspace_id = ?)
       ORDER BY company_id`).bind(workspace.id, workspace.id).all(),
+    d1.prepare(`SELECT a.*,
+      COALESCE((SELECT COUNT(*) FROM fdp_area_members am WHERE am.workspace_id = a.workspace_id AND am.area_id = a.id), 0) AS members_count,
+      COALESCE((SELECT jsonb_agg(ma.module_key ORDER BY ma.module_key) FROM fdp_area_module_assignments ma
+        WHERE ma.workspace_id = a.workspace_id AND ma.area_id = a.id), '[]'::jsonb) AS module_keys
+      FROM fdp_areas a WHERE a.workspace_id = ? ORDER BY (a.status = 'active') DESC, a.name`).bind(workspace.id).all(),
   ]);
 
   const checklistRows = checklistResult.results as Array<Record<string, unknown>>;
@@ -428,6 +433,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,
     company: String(row.company ?? ""),
+    requesterAreaId: row.requester_area_id ? String(row.requester_area_id) : null,
+    responsibleAreaId: row.responsible_area_id ? String(row.responsible_area_id) : null,
     processType: String(row.process_type ?? "OUTROS"),
     priority: String(row.priority ?? "normal") as "low" | "normal" | "high" | "urgent",
     assigneeName: String(row.assignee_name ?? ""),
@@ -570,6 +577,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: String(row.start_at), endAt: String(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
     calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), provider: String(row.provider), status: String(row.status), config: safeJson(String(row.config_json)), externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
     companies: visibleCompanyRows.map((row) => ({ id: String(row.id), parentCompanyId: row.parent_company_id ? String(row.parent_company_id) : null, isPrincipal: Boolean(row.is_principal), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
+    areas: (areasResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id), name: String(row.name), code: String(row.code), description: String(row.description ?? ""),
+      status: String(row.status), managerUserId: row.manager_user_id ? String(row.manager_user_id) : null,
+      color: String(row.color ?? "#475569"), icon: String(row.icon ?? "building-2"),
+      defaultSlaDays: Number(row.default_sla_days ?? 3), membersCount: Number(row.members_count ?? 0),
+      moduleKeys: Array.isArray(row.module_keys) ? row.module_keys.map(String) : safeArray(String(row.module_keys ?? "[]")),
+    })),
     hrMetrics: canReadHr ? visibleMetricRows.map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), headcountStart: Number(row.headcount_start ?? row.headcount ?? 0), headcountEnd: Number(row.headcount_end ?? row.headcount ?? 0), leavesCount: Number(row.leaves_count ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), voluntaryTerminations: Number(row.voluntary_terminations ?? 0), involuntaryTerminations: Number(row.involuntary_terminations ?? 0), baseSalary: Number(row.base_salary ?? 0), variablePay: Number(row.variable_pay ?? 0), overtimePay: Number(row.overtime_pay ?? 0), additionalPay: Number(row.additional_pay ?? 0), vacationPay: Number(row.vacation_pay ?? 0), thirteenthPay: Number(row.thirteenth_pay ?? 0), terminationPay: Number(row.termination_pay ?? 0), grossPayroll: Number(row.gross_payroll ?? 0), employeeInss: Number(row.employee_inss ?? 0), employeeIrrf: Number(row.employee_irrf ?? 0), employeeOtherDeductions: Number(row.employee_other_deductions ?? 0), netPay: Number(row.net_pay ?? 0), employerInss: Number(row.employer_inss ?? 0), ratContribution: Number(row.rat_contribution ?? 0), thirdPartyContributions: Number(row.third_party_contributions ?? 0), fgts: Number(row.fgts ?? 0), fgtsPenalty: Number(row.fgts_penalty ?? 0), employerCharges: Number(row.employer_charges ?? 0), benefitsCost: Number(row.benefits_cost ?? 0), provisionsCost: Number(row.provisions_cost ?? 0), otherCosts: Number(row.other_costs ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })) : [],
     recentActivity: activityRows.slice(0, 50).map(mapActivity),
     payrollCycles: (cyclesResult.results as Array<Record<string, unknown>>).map((row) => ({

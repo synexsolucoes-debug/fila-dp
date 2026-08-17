@@ -104,7 +104,9 @@ test("o painel é operacional e recebe o conector Sankhya pronto da Plataforma G
   assert.doesNotMatch(panel, /title="Configurações"/u);
   assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/u);
   assert.match(integrations, /SankhyaConnectorPanel/u);
-  assert.doesNotMatch(integrations, /IntegrationDrawer|type="password"|method: "(?:POST|PATCH|DELETE)"/u);
+  assert.match(integrations, /IntegrationDrawer/u);
+  assert.match(integrations, /Configurar[\s\S]+Credencial[\s\S]+Testar conexão/u);
+  assert.doesNotMatch(integrations, /type="password"/u);
   assert.match(sankhya, /Gerenciada pela Plataforma Global/u);
   assert.doesNotMatch(sankhya, /Alterar credenciais Sankhya|type="password"|Salvar configuração/u);
   assert.match(integrationRoute, /SANKHYA_PLATFORM_ADMIN_REQUIRED/u);

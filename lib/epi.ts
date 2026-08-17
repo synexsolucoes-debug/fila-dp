@@ -209,17 +209,20 @@ export const epiDiscountDecisionLabels: Record<EpiDiscountDecision, string> = {
 };
 
 export const epiMovementTypes = [
-  "registration", "delivery", "exchange", "return",
-  "sanitizing", "disposal", "discount_analysis", "manual_adjustment",
+  "registration", "stock_entry", "stock_transfer", "delivery", "exchange", "return",
+  "sanitizing", "sanitization_completed", "disposal", "discount_analysis", "manual_adjustment",
 ] as const;
 export type EpiMovementType = typeof epiMovementTypes[number];
 
 export const epiMovementTypeLabels: Record<EpiMovementType, string> = {
   registration: "Cadastro",
+  stock_entry: "Entrada de estoque",
+  stock_transfer: "Transferência entre locais",
   delivery: "Entrega",
   exchange: "Troca",
   return: "Devolução",
   sanitizing: "Higienização",
+  sanitization_completed: "Higienização concluída",
   disposal: "Descarte",
   discount_analysis: "Análise de desconto",
   manual_adjustment: "Ajuste manual",

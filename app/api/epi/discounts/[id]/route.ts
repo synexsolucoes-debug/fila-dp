@@ -4,6 +4,7 @@ import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { decidedValueFor, discountStatusFor, epiDiscountDecisionLabels } from "@/lib/epi";
 import { epiMoney, epiText, parseDiscountDecision, prepareEpiMovement } from "@/lib/epi-service";
+import { validCompetence } from "@/lib/operations";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +12,7 @@ type DiscountRow = {
   id: string; company_id: string; employee_id: string; product_id: string; card_id: string | null;
   title: string; ca_number: string; size: string; quantity: number; unit_value: string | number;
   total_value: string | number; occurred_on: string; trigger_reason: string; status: string; decision: string;
+  movement_id: string | null;
 };
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -91,6 +93,9 @@ export async function POST(request: Request, context: RouteContext) {
     }
     const status = discountStatusFor(decision);
     const comment = epiText(body.comment, "o parecer", 2000, decision === "request_more_info" || decision === "no_discount");
+    const createsMovement = decision === "full_discount" || decision === "partial_discount";
+    const competence = createsMovement ? validCompetence(body.competence) : "";
+    const movementId = createsMovement ? crypto.randomUUID() : null;
 
     const product = await d1.prepare("SELECT name FROM fdp_epi_products WHERE workspace_id = ? AND id = ?")
       .bind(workspace.id, before.product_id).first<{ name: string }>();
@@ -100,10 +105,20 @@ export async function POST(request: Request, context: RouteContext) {
       .bind(workspace.id, before.employee_id).first<{ full_name: string; social_name: string }>();
 
     await d1.batch([
+      ...(movementId ? [d1.prepare(`INSERT INTO fdp_employee_movements
+        (id, workspace_id, company_id, employee_id, card_id, movement_type, effective_date, title,
+         details_json, status, requested_by)
+        VALUES (?, ?, ?, ?, ?, 'epi_discount', ?, ?, ?::jsonb, 'draft', ?)`)
+        .bind(movementId, workspace.id, before.company_id, before.employee_id, before.card_id,
+          `${competence}-01`, `Desconto de EPI — ${before.title}`,
+          JSON.stringify({
+            discountRequestId: id, cardId: before.card_id, competence, originalValue: total,
+            approvedValue: decidedValue, decision, note: comment, automaticDeduction: false,
+          }), user.id)] : []),
       d1.prepare(`UPDATE fdp_epi_discount_requests SET status = ?, decision = ?, decided_value = ?,
-        decided_by = ?, decided_at = now(), decision_comment = ?, updated_by = ?, updated_at = now()
+        decided_by = ?, decided_at = now(), decision_comment = ?, competence = ?, movement_id = ?, updated_by = ?, updated_at = now()
         WHERE workspace_id = ? AND id = ?`)
-        .bind(status, decision, decidedValue, user.id, comment, user.id, workspace.id, id),
+        .bind(status, decision, decidedValue, user.id, comment, competence, movementId, user.id, workspace.id, id),
       prepareEpiMovement({
         workspaceId: workspace.id, companyId: before.company_id, cnpj: company?.tax_id ?? "",
         movementDate: new Date().toISOString().slice(0, 10), movementType: "discount_analysis",
@@ -117,16 +132,19 @@ export async function POST(request: Request, context: RouteContext) {
       // A decisão aparece na linha do tempo da própria demanda: quem estiver no
       // quadro vê o desfecho sem precisar abrir o módulo de EPI.
       ...(before.card_id ? [prepareActivity(workspace.id, before.card_id, auth.user.email, "epi.discount.decided", {
-        decision, decidedValue, status, discountRequestId: id,
+        decision, decidedValue, status, discountRequestId: id, competence, movementId,
       })] : []),
+      ...(before.card_id && decision === "request_more_info" ? [d1.prepare(`INSERT INTO fdp_card_comments
+        (id, workspace_id, card_id, author_user_id, body) VALUES (?, ?, ?, ?, ?)`)
+        .bind(crypto.randomUUID(), workspace.id, before.card_id, user.id, comment)] : []),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_discount.decided",
         entityType: "epi_discount_request", entityId: id, before,
-        after: { status, decision, decidedValue, comment },
-        metadata: { cardId: before.card_id, totalValue: total, employeeId: before.employee_id },
+        after: { status, decision, decidedValue, comment, competence, movementId },
+        metadata: { cardId: before.card_id, totalValue: total, employeeId: before.employee_id, automaticDeduction: false },
         requestId: request.headers.get("x-fila-dp-request-id"),
       }),
     ]);
-    return Response.json({ discount: { id, status, decision, decidedValue, comment } });
+    return Response.json({ discount: { id, status, decision, decidedValue, comment, competence, movementId } });
   } catch (error) { return apiError(error); }
 }

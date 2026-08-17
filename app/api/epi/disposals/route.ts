@@ -4,7 +4,7 @@ import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import {
-  attachmentIds, epiDate, epiQuantity, epiText, loadCompany, loadEmployee, loadProduct,
+  attachmentIds, epiDate, epiQuantity, epiText, loadCompany, loadEmployee, loadProduct, loadStockLocation,
   parseDisposalReason, prepareEpiMovement, verifiedAttachments,
 } from "@/lib/epi-service";
 
@@ -62,15 +62,9 @@ export async function GET(request: Request) {
     // é o que faz a janela mostrar o problema antes de alguém abrir o chamado.
     const stockWhere = ["p.workspace_id = ?", "p.status IN ('damaged', 'lost', 'discarded')"];
     const stockValues: unknown[] = [workspace.id];
-    if (!access.unrestricted) {
-      const ids = [...access.companyIds];
-      stockWhere.push(`p.company_id IN (${ids.map(() => "?").join(",")})`); stockValues.push(...ids);
-    }
-    if (companyId) { stockWhere.push("p.company_id = ?"); stockValues.push(companyId); }
-    const disposable = await d1.prepare(`SELECT p.id, p.company_id, p.name, p.ca_number, p.size, p.status,
-        p.stock_quantity, p.unit_value, p.ca_expires_on, c.trade_name AS company_trade_name, c.legal_name AS company_legal_name
+    const disposable = await d1.prepare(`SELECT p.id, p.name, p.ca_number, p.size, p.status,
+        p.stock_quantity, p.unit_value, p.ca_expires_on
       FROM fdp_epi_products p
-      JOIN fdp_companies c ON c.workspace_id = p.workspace_id AND c.id = p.company_id
       WHERE ${stockWhere.join(" AND ")}
         AND NOT EXISTS (SELECT 1 FROM fdp_epi_disposals d
           WHERE d.workspace_id = p.workspace_id AND d.product_id = p.id AND d.status = 'awaiting_disposal')
@@ -94,7 +88,7 @@ export async function POST(request: Request) {
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const [company, product] = await Promise.all([
       loadCompany(d1, workspace.id, companyId),
-      loadProduct(d1, workspace.id, companyId, epiText(body.productId, "o EPI", 120, true)),
+      loadProduct(d1, workspace.id, epiText(body.productId, "o EPI", 120, true)),
     ]);
     const employeeId = epiText(body.employeeId, "o colaborador", 120) || null;
     const employee = employeeId ? await loadEmployee(d1, workspace.id, companyId, employeeId) : null;
@@ -104,11 +98,21 @@ export async function POST(request: Request) {
     const disposalReason = parseDisposalReason(body.disposalReason);
     const notes = epiText(body.notes, "a observação", 2000);
     const attachments = await verifiedAttachments(d1, workspace.id, attachmentIds(body.attachmentIds));
+    const location = await loadStockLocation(d1, workspace.id, epiText(body.stockLocationId, "o local de estoque", 120));
+    const idempotencyKey = epiText(request.headers.get("idempotency-key") ?? body.idempotencyKey, "a chave de idempotência", 160);
+    if (idempotencyKey) {
+      const replay = await d1.prepare("SELECT * FROM fdp_epi_disposals WHERE workspace_id = ? AND idempotency_key = ?")
+        .bind(workspace.id, idempotencyKey).first<Record<string, unknown>>();
+      if (replay) return Response.json({ disposal: replay, replayed: true });
+    }
+    const locationBalance = await d1.prepare(`SELECT quantity FROM fdp_stock_balances
+      WHERE workspace_id = ? AND product_id = ? AND stock_location_id = ?`)
+      .bind(workspace.id, product.id, location.id).first<{ quantity: number }>();
     // Descarte aberto manualmente sai do estoque, então a quantidade precisa
     // caber nele. O que veio de devolução ou troca já saiu na entrega.
-    if (quantity > Number(product.stock_quantity)) {
+    if (quantity > Number(locationBalance?.quantity ?? 0)) {
       throw ApiError.badRequest(
-        `O estoque deste EPI tem ${Number(product.stock_quantity)} unidade(s), menos do que a quantidade informada para descarte.`,
+        `O local ${location.name} tem ${Number(locationBalance?.quantity ?? 0)} unidade(s), menos do que a quantidade informada para descarte.`,
         "EPI_INSUFFICIENT_STOCK",
       );
     }
@@ -123,10 +127,12 @@ export async function POST(request: Request) {
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_epi_disposals
         (id, workspace_id, company_id, product_id, employee_id, disposal_date, quantity, ca_number, size,
-         disposal_reason, responsible_user_id, status, origin_type, notes, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_disposal', 'manual', ?, ?, ?)`)
+         disposal_reason, responsible_user_id, status, origin_type, notes, created_by, updated_by,
+         stock_location_id, idempotency_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_disposal', 'manual', ?, ?, ?, ?, ?)`)
         .bind(disposal.id, workspace.id, companyId, product.id, employeeId, disposalDate, quantity,
-          disposal.caNumber, disposal.size, disposalReason, disposal.responsibleUserId, notes, user.id, user.id),
+          disposal.caNumber, disposal.size, disposalReason, disposal.responsibleUserId, notes, user.id, user.id,
+          location.id, idempotencyKey),
       prepareEpiMovement({
         workspaceId: workspace.id, companyId, cnpj: company.tax_id, movementDate: disposalDate,
         movementType: "disposal", productId: product.id, epiName: product.name, caNumber: disposal.caNumber,
@@ -134,6 +140,7 @@ export async function POST(request: Request) {
         quantity, stockDelta: 0, unitValue: Number(product.unit_value), reason: disposalReason,
         status: "awaiting_disposal", sourceType: "disposal", sourceId: disposal.id,
         responsibleId: disposal.responsibleUserId, attachments, notes, createdBy: user.id,
+        stockLocationId: location.id, idempotencyKey: idempotencyKey ? `${idempotencyKey}:movement` : "",
       }),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_disposal.created",

@@ -5,8 +5,9 @@ import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { epiDiscountTriggerLabels, epiReturnConditionLabels, returnRouting } from "@/lib/epi";
 import {
-  applyStockChange, attachmentIds, createDiscountRequest, employeeDisplayName, epiDate, epiQuantity, epiText,
-  loadCompany, loadEmployee, loadProduct, parseReturnCondition, prepareEpiMovement, verifiedAttachments,
+  attachmentIds, createDiscountRequest, employeeDisplayName, epiDate, epiQuantity, epiText,
+  loadCompany, loadEmployee, loadProduct, loadStockLocation, parseReturnCondition, prepareEpiMovement,
+  prepareStockChange, verifiedAttachments,
 } from "@/lib/epi-service";
 
 /**
@@ -92,12 +93,19 @@ export async function POST(request: Request) {
 
     const [company, product, employee] = await Promise.all([
       loadCompany(d1, workspace.id, delivery.company_id),
-      loadProduct(d1, workspace.id, delivery.company_id, delivery.product_id),
+      loadProduct(d1, workspace.id, delivery.product_id),
       loadEmployee(d1, workspace.id, delivery.company_id, delivery.employee_id),
     ]);
 
     const returnId = crypto.randomUUID();
     const statements = [] as ReturnType<typeof prepareEpiMovement>[];
+    const idempotencyKey = epiText(request.headers.get("idempotency-key") ?? body.idempotencyKey, "a chave de idempotência", 160);
+    if (idempotencyKey) {
+      const replay = await d1.prepare("SELECT * FROM fdp_epi_returns WHERE workspace_id = ? AND idempotency_key = ?")
+        .bind(workspace.id, idempotencyKey).first<Record<string, unknown>>();
+      if (replay) return Response.json({ return: replay, replayed: true });
+    }
+    const location = await loadStockLocation(d1, workspace.id, epiText(body.stockLocationId, "o local de estoque", 120));
     let disposalId: string | null = null;
     let discountRequestId: string | null = null;
     let demandCardId: string | null = null;
@@ -106,21 +114,23 @@ export async function POST(request: Request) {
       // Volta ao estoque de fato, e o saldo sobe na mesma requisição em que a
       // devolução é aceita. Marcar "devolvido" sem repor deixaria o EPI fora
       // das duas contagens: nem com o colaborador, nem disponível.
-      await applyStockChange(d1, workspace.id, product.id, quantity, routing.productStatus, user.id);
-    } else {
-      statements.push(d1.prepare("UPDATE fdp_epi_products SET status = ?, updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
-        .bind(routing.productStatus, user.id, workspace.id, product.id));
+      statements.push(prepareStockChange(d1, {
+        workspaceId: workspace.id, productId: product.id, stockLocationId: location.id,
+        delta: quantity, actorId: user.id,
+      }));
     }
 
     if (routing.sendToDisposal && routing.disposalReason) {
       disposalId = crypto.randomUUID();
       statements.push(d1.prepare(`INSERT INTO fdp_epi_disposals
         (id, workspace_id, company_id, product_id, employee_id, disposal_date, quantity, ca_number, size,
-         disposal_reason, responsible_user_id, status, origin_type, origin_id, notes, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_disposal', 'return', ?, ?, ?, ?)`)
+         disposal_reason, responsible_user_id, status, origin_type, origin_id, notes, created_by, updated_by,
+         stock_location_id, idempotency_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_disposal', 'return', ?, ?, ?, ?, ?, ?)`)
         .bind(disposalId, workspace.id, delivery.company_id, product.id, employee.id, returnedOn, quantity,
           delivery.ca_number, delivery.size, routing.disposalReason, user.id, returnId,
-          `Devolução classificada como ${epiReturnConditionLabels[condition]}.`, user.id, user.id));
+          `Devolução classificada como ${epiReturnConditionLabels[condition]}.`, user.id, user.id,
+          location.id, idempotencyKey ? `${idempotencyKey}:disposal` : ""));
     }
 
     if (routing.generateDpDemand && routing.discountTrigger) {
@@ -142,12 +152,14 @@ export async function POST(request: Request) {
       d1.prepare(`INSERT INTO fdp_epi_returns
         (id, workspace_id, company_id, delivery_id, product_id, employee_id, returned_on, quantity, ca_number, size,
          epi_condition, received_by, needs_sanitizing, back_to_stock, send_to_disposal, generate_dp_demand,
-         discount_request_id, disposal_id, notes, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+         discount_request_id, disposal_id, notes, created_by, updated_by, stock_location_id, idempotency_key,
+         sanitization_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(returnId, workspace.id, delivery.company_id, delivery.id, product.id, employee.id, returnedOn, quantity,
           delivery.ca_number, delivery.size, condition, epiText(body.receivedBy, "o responsável pelo recebimento", 120) || user.id,
           routing.needsSanitizing ? 1 : 0, routing.backToStock ? 1 : 0, routing.sendToDisposal ? 1 : 0,
-          routing.generateDpDemand ? 1 : 0, discountRequestId, disposalId, notes, user.id, user.id),
+          routing.generateDpDemand ? 1 : 0, discountRequestId, disposalId, notes, user.id, user.id,
+          location.id, idempotencyKey, routing.needsSanitizing ? "awaiting" : "not_required"),
       // A baixa na entrega é o que faz o colaborador deixar de constar com o
       // equipamento. Sem ela, "EPIs ativos com o colaborador" nunca zeraria.
       d1.prepare("UPDATE fdp_epi_deliveries SET settled_quantity = settled_quantity + ?, updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
@@ -160,6 +172,7 @@ export async function POST(request: Request) {
         unitValue: Number(delivery.unit_value), reason: condition, condition, status: routing.productStatus,
         generateDpDemand: routing.generateDpDemand, demandId: demandCardId, discountRequestId,
         sourceType: "return", sourceId: returnId, responsibleId: user.id, attachments, notes, createdBy: user.id,
+        stockLocationId: location.id, idempotencyKey: idempotencyKey ? `${idempotencyKey}:movement` : "",
       }),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_return.created",
@@ -169,12 +182,7 @@ export async function POST(request: Request) {
       }),
     );
 
-    try {
-      await d1.batch(statements);
-    } catch (error) {
-      if (routing.backToStock) await applyStockChange(d1, workspace.id, product.id, -quantity, null, user.id).catch(() => undefined);
-      throw error;
-    }
+    await d1.batch(statements);
     return Response.json({
       return: { id: returnId, deliveryId: delivery.id, condition, quantity, ...routing },
       disposalId, discountRequestId, demandCardId,

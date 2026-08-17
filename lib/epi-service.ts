@@ -3,6 +3,7 @@ import { ApiError } from "./api-errors.ts";
 import { cleanText } from "./clean-text.ts";
 import { optionalDate } from "./registrations.ts";
 import { getTenantContext } from "./tenant-context.ts";
+import { resolveAreaModule } from "./areas.ts";
 import {
   discountTitle, epiAttachmentEntities, epiDamageDecisions, epiDamageReasons, epiDeliveryStatuses,
   epiDisposalReasons, epiDiscountDecisions, epiDiscountTriggers, epiProductStatuses,
@@ -119,7 +120,6 @@ export async function verifiedAttachments(d1: Database, workspaceId: string, ids
 
 export type EpiProductRow = {
   id: string;
-  company_id: string;
   name: string;
   ca_number: string;
   size: string;
@@ -128,13 +128,32 @@ export type EpiProductRow = {
   stock_quantity: number;
 };
 
-/** O EPI existe, é desta empresa e é deste workspace — as três, numa consulta. */
-export async function loadProduct(d1: Database, workspaceId: string, companyId: string, productId: string) {
-  const product = await d1.prepare(`SELECT id, company_id, name, ca_number, size, status, unit_value, stock_quantity
-    FROM fdp_epi_products WHERE workspace_id = ? AND company_id = ? AND id = ?`)
-    .bind(workspaceId, companyId, productId).first<EpiProductRow>();
-  if (!product) throw ApiError.notFound("EPI não encontrado nesta empresa.", "EPI_PRODUCT_NOT_FOUND");
+/** O SKU e todo o saldo pertencem ao workspace, sem vínculo com CNPJ. */
+export async function loadProduct(d1: Database, workspaceId: string, productId: string) {
+  const product = await d1.prepare(`SELECT id, name, ca_number, size, status, unit_value, stock_quantity
+    FROM fdp_epi_products WHERE workspace_id = ? AND id = ?`)
+    .bind(workspaceId, productId).first<EpiProductRow>();
+  if (!product) throw ApiError.notFound("EPI não encontrado neste grupo.", "EPI_PRODUCT_NOT_FOUND");
   return product;
+}
+
+export type StockLocationRow = { id: string; code: string; name: string; status: string; is_default: number };
+
+/** Resolve local explícito ou o local padrão ativo do workspace. */
+export async function loadStockLocation(d1: Database, workspaceId: string, stockLocationId?: string | null) {
+  const id = cleanText(stockLocationId, 120);
+  const location = id
+    ? await d1.prepare(`SELECT id, code, name, status, is_default FROM fdp_stock_locations
+        WHERE workspace_id = ? AND id = ? AND status = 'active'`).bind(workspaceId, id).first<StockLocationRow>()
+    : await d1.prepare(`SELECT id, code, name, status, is_default FROM fdp_stock_locations
+        WHERE workspace_id = ? AND is_default = 1 AND status = 'active'`).bind(workspaceId).first<StockLocationRow>();
+  if (!location) {
+    throw ApiError.badRequest(
+      id ? "O local de estoque informado não existe ou está inativo." : "Configure um local de estoque padrão antes de movimentar EPI.",
+      "EPI_STOCK_LOCATION_NOT_FOUND",
+    );
+  }
+  return location;
 }
 
 export type EpiEmployeeRow = { id: string; full_name: string; social_name: string; company_id: string; position_name: string | null; department_name: string | null };
@@ -162,8 +181,10 @@ export const employeeDisplayName = (employee: { full_name: string; social_name: 
   employee.social_name || employee.full_name;
 
 export type EpiMovementInput = {
+  id?: string;
   workspaceId: string;
-  companyId: string;
+  /** Nulo nas movimentações do estoque do grupo; preenchido apenas em eventos de consumo. */
+  companyId: string | null;
   cnpj: string;
   movementDate: string;
   movementType: EpiMovementType;
@@ -182,9 +203,12 @@ export type EpiMovementInput = {
   generateDpDemand?: boolean;
   demandId?: string | null;
   discountRequestId?: string | null;
-  sourceType: "product" | "delivery" | "return" | "damage" | "disposal" | "discount";
+  sourceType: "product" | "delivery" | "return" | "damage" | "disposal" | "discount" | "entry" | "transfer" | "sanitization";
   sourceId: string;
   responsibleId?: string | null;
+  stockLocationId?: string | null;
+  targetStockLocationId?: string | null;
+  idempotencyKey?: string;
   attachments?: readonly string[];
   notes?: string;
   createdBy: string;
@@ -204,16 +228,17 @@ export function prepareEpiMovement(input: EpiMovementInput) {
     (id, workspace_id, company_id, movement_date, movement_type, cnpj, product_id, epi_name, ca_number, size,
      employee_id, employee_name, quantity, stock_delta, unit_value, movement_reason, epi_condition, status,
      generate_dp_demand, demand_id, discount_request_id, source_type, source_id, responsible_id,
-     attachments_json, notes, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?)`)
+     attachments_json, notes, created_by, stock_location_id, target_stock_location_id, idempotency_key)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?)`)
     .bind(
-      crypto.randomUUID(), input.workspaceId, input.companyId, input.movementDate, input.movementType,
+      input.id ?? crypto.randomUUID(), input.workspaceId, input.companyId, input.movementDate, input.movementType,
       input.cnpj, input.productId, input.epiName, input.caNumber ?? "", input.size ?? "",
       input.employeeId ?? null, input.employeeName ?? "", input.quantity ?? 0, input.stockDelta ?? 0,
       input.unitValue ?? 0, input.reason ?? "", input.condition ?? "", input.status ?? "",
       input.generateDpDemand ? 1 : 0, input.demandId ?? null, input.discountRequestId ?? null,
       input.sourceType, input.sourceId, input.responsibleId ?? null,
       JSON.stringify(input.attachments ?? []), input.notes ?? "", input.createdBy,
+      input.stockLocationId ?? null, input.targetStockLocationId ?? null, input.idempotencyKey ?? "",
     );
 }
 
@@ -225,22 +250,11 @@ export function prepareEpiMovement(input: EpiMovementInput) {
  * afetada, em vez de com estoque negativo. Nenhuma linha afetada vira recusa
  * explícita, com a mensagem que diz o que fazer.
  */
-export async function applyStockChange(d1: Database, workspaceId: string, productId: string, delta: number, status: EpiProductStatus | null, actorId: string) {
-  const updated = await d1.prepare(`UPDATE fdp_epi_products
-    SET stock_quantity = stock_quantity + ?,
-        status = COALESCE(?, status),
-        updated_by = ?, updated_at = now()
-    WHERE workspace_id = ? AND id = ? AND stock_quantity + ? >= 0
-    RETURNING id, stock_quantity`)
-    .bind(delta, status, actorId, workspaceId, productId, delta)
-    .first<{ id: string; stock_quantity: number }>();
-  if (!updated) {
-    throw ApiError.badRequest(
-      "O estoque disponível deste EPI é menor do que a quantidade informada. Faça a reposição antes de continuar.",
-      "EPI_INSUFFICIENT_STOCK",
-    );
-  }
-  return updated;
+export function prepareStockChange(d1: Database, input: {
+  workspaceId: string; productId: string; stockLocationId: string; delta: number; actorId: string;
+}) {
+  return d1.prepare("SELECT fdp_apply_stock_change(?, ?, ?, ?, ?) AS quantity")
+    .bind(input.workspaceId, input.productId, input.stockLocationId, input.delta, input.actorId);
 }
 
 export type DiscountDemandInput = {
@@ -266,6 +280,10 @@ export type DiscountDemandInput = {
  * coluna "Novas demandas" é permitido e não pode quebrar a abertura automática.
  */
 export async function prepareDiscountDemand(d1: Database, input: DiscountDemandInput) {
+  const [requesterArea, responsibleArea] = await Promise.all([
+    resolveAreaModule(d1, input.workspaceId, "epi.owner"),
+    resolveAreaModule(d1, input.workspaceId, "epi.discount_analysis"),
+  ]);
   const list = await d1.prepare(`SELECT id FROM fdp_lists WHERE board_id = ?
     ORDER BY (kind = 'new') DESC, position, id LIMIT 1`).bind(input.boardId).first<{ id: string }>();
   if (!list) {
@@ -284,11 +302,12 @@ export async function prepareDiscountDemand(d1: Database, input: DiscountDemandI
   // do DP analisando um desconto que não existe.
   const statement = d1.prepare(`INSERT INTO fdp_cards
     (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority,
-     assignee_name, sla_status, position, source_type, created_by, sla_started_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OUTROS', 'normal', '', 'safe', ?, 'automation', ?, CURRENT_TIMESTAMP)`)
+     assignee_name, sla_status, position, source_type, created_by, sla_started_at, requester_area_id, responsible_area_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OUTROS', 'normal', '', 'safe', ?, 'automation', ?, CURRENT_TIMESTAMP, ?, ?)`)
     .bind(cardId, input.workspaceId, input.boardId, list.id, title, input.summary,
-      input.companyId, input.companyName, Number(position?.max_position ?? 0) + 1000, input.actorEmail);
-  return { cardId, title, listId: list.id, statement };
+      input.companyId, input.companyName, Number(position?.max_position ?? 0) + 1000, input.actorEmail,
+      requesterArea.id, responsibleArea.id);
+  return { cardId, title, listId: list.id, statement, requesterArea, responsibleArea };
 }
 
 export type DiscountRequestInput = {
@@ -310,6 +329,7 @@ export type DiscountRequestInput = {
   attachments: readonly string[];
   actorUserId: string;
   actorEmail: string;
+  idempotencyKey?: string;
 };
 
 /**
@@ -343,12 +363,13 @@ export async function createDiscountRequest(d1: Database, input: DiscountRequest
   const statement = scoped.prepare(`INSERT INTO fdp_epi_discount_requests
     (id, workspace_id, company_id, employee_id, product_id, delivery_id, card_id, title, ca_number, size,
      quantity, unit_value, total_value, delivered_on, occurred_on, trigger_reason, reason_note, analyst_user_id,
-     status, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_dp_analysis', ?, ?)`)
+     status, created_by, updated_by, requester_area_id, responsible_area_id, idempotency_key)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_dp_analysis', ?, ?, ?, ?, ?)`)
     .bind(id, input.workspaceId, input.companyId, input.employee.id, input.product.id, input.deliveryId,
       demand.cardId, demand.title, input.product.ca_number, input.product.size, input.quantity,
       input.unitValue, totalValue, input.deliveredOn, input.occurredOn, input.trigger, input.note,
-      input.analystUserId, input.actorUserId, input.actorUserId);
+      input.analystUserId, input.actorUserId, input.actorUserId,
+      demand.requesterArea.id, demand.responsibleArea.id, input.idempotencyKey ?? "");
   const movement = prepareEpiMovement({
     workspaceId: input.workspaceId, companyId: input.companyId, cnpj: input.company.tax_id,
     movementDate: input.occurredOn, movementType: "discount_analysis", productId: input.product.id,

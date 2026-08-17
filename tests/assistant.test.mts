@@ -207,3 +207,10 @@ test("a tela avisa o que foi removido da pergunta", async () => {
   // Esc fecha: o painel não pode virar parede entre a pessoa e a tela.
   assert.match(source, /event\.key === "Escape"/u);
 });
+
+test("o assistente não cobre a navegação inferior no celular", async () => {
+  const css = await readFile(new URL("../app/painel/features/assistant/assistant.module.css", import.meta.url), "utf8");
+  assert.match(css, /@media \(max-width: 760px\)/u);
+  assert.match(css, /\.launcher \{ right: 12px; bottom: calc\(82px \+ env\(safe-area-inset-bottom\)\); \}/u);
+  assert.match(css, /\.panel \{[\s\S]{0,180}bottom: calc\(82px \+ env\(safe-area-inset-bottom\)\)/u);
+});

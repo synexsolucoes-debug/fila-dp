@@ -73,7 +73,10 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
     "contractors.payments.manage", "contractors.payments.close", "contractors.limits.manage",
     "contractors.export_caju", "payments.reopen",
   ],
-  registrations: ["companies.manage", "employees.manage", "registrations.catalogs.manage"],
+  registrations: [
+    "companies.manage", "employees.manage", "registrations.catalogs.manage",
+    "departments.create", "departments.edit", "departments.manage_members", "departments.archive",
+  ],
   epi: [
     "epi.create", "epi.edit", "epi.delete", "epi.deliver", "epi.return",
     "epi.damage", "epi.dispose", "epi.discount.analyze", "epi.export",
@@ -81,7 +84,7 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
     // leitura que o módulo já governa é `epi.view`, a do catálogo. Negar o
     // módulo a uma pessoa precisa fechar as duas portas — sem esta linha, quem
     // perdesse a tela continuaria lendo a trilha do EPI pela auditoria.
-    "epi.audit.view",
+    "epi.audit.view", "epi.stock.adjust",
   ],
   integrations: ["integrations.manage", "integrations.run", "integrations.reconcile"],
   sankhya_browser: ["integrations.credentials.manage", "integrations.execute", "integrations.logs.view"],

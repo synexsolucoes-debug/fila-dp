@@ -82,13 +82,21 @@ test("a visibilidade é decidida num lugar só", () => {
   assert.doesNotMatch(jsx.slice(0, 1400), /role !== "guest"|role !== "observer"/u);
 });
 
-test("o menu vira barra inferior sem que os grupos quebrem a grade", async () => {
+test("o menu mobile mantém todos os módulos alcançáveis", async () => {
   // `display: contents` devolve os botões à grade da barra. Sem isso ela
   // posicionaria os quatro grupos e mostraria quatro colunas com os itens
   // empilhados dentro — regressão que nenhum teste de unidade veria.
   const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
   assert.match(css, /\.sidebar-nav-group \{ display: contents; \}/u);
   assert.match(css, /\.sidebar-nav-group \{ display: flex; flex-direction: column; gap: 4px; \}/u);
+  assert.match(source, /const mobilePrimaryViews = new Set<View>/u);
+  assert.match(source, /className="sidebar-mobile-more-panel"/u);
+  assert.match(source, /aria-label="Abrir todos os módulos"/u);
+  assert.match(source, /mobileNavigationRef\.current\?\.removeAttribute\("open"\)/u);
+  assert.match(css, /\.dashboard-sidebar nav \.mobile-secondary \{ display: none; \}/u);
+  assert.match(css, /\.sidebar-mobile-more:not\(\[open\]\) > \.sidebar-mobile-more-panel \{ display: none; \}/u,
+    "o menu completo fechado não pode deixar alvos invisíveis mensuráveis");
+  assert.match(css, /min-height: 48px;/u, "os destinos do menu completo precisam de alvo de toque suficiente");
 });
 
 test("o catálogo é a única fonte do título de tela", () => {

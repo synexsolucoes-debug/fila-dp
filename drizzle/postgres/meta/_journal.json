@@ -330,6 +330,27 @@
       "when": 1787299203000,
       "tag": "0044_epi_control",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1787299204000,
+      "tag": "0045_workspace_areas_shared_stock",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1787299205000,
+      "tag": "0046_department_module_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1787299206000,
+      "tag": "0047_group_owned_epi_products",
+      "breakpoints": true
     }
   ]
 }

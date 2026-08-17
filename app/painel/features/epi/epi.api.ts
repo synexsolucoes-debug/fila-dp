@@ -56,7 +56,7 @@ export function normalizeOverview(payload: Row): EpiOverview {
       remove: bool(permissions.remove), deliver: bool(permissions.deliver),
       receiveReturn: bool(permissions.receiveReturn), damage: bool(permissions.damage),
       dispose: bool(permissions.dispose), analyzeDiscount: bool(permissions.analyzeDiscount),
-      export: bool(permissions.export), audit: bool(permissions.audit),
+      export: bool(permissions.export), audit: bool(permissions.audit), stockAdjust: bool(permissions.stockAdjust),
     },
     companies: Array.isArray(payload.companies) ? (payload.companies as Row[]).map(normalizeCompany) : [],
     caWindowDays: number(value(payload, "caWindowDays", "ca_window_days")) || 60,
@@ -72,9 +72,6 @@ export function normalizeOverview(payload: Row): EpiOverview {
 export function normalizeProduct(row: Row): EpiProduct {
   return {
     id: text(row.id),
-    companyId: text(value(row, "companyId", "company_id")),
-    companyName: companyName(row),
-    companyTaxId: text(value(row, "companyTaxId", "company_tax_id")),
     name: text(row.name),
     epiType: text(value(row, "epiType", "epi_type")) as EpiProduct["epiType"],
     caNumber: text(value(row, "caNumber", "ca_number")),
@@ -82,7 +79,11 @@ export function normalizeProduct(row: Row): EpiProduct {
     brand: text(row.brand),
     model: text(row.model),
     unitValue: number(value(row, "unitValue", "unit_value")),
-    stockQuantity: number(value(row, "stockQuantity", "stock_quantity")),
+    stockQuantity: number(value(row, "availableQuantity", "available_quantity") ?? value(row, "stockQuantity", "stock_quantity")),
+    stockLocations: (Array.isArray(value(row, "stockLocations", "stock_locations"))
+      ? value(row, "stockLocations", "stock_locations") as Row[] : []).map((item) => ({
+        id: text(item.id), code: text(item.code), name: text(item.name), quantity: number(item.quantity),
+      })),
     assignedQuantity: number(value(row, "assignedQuantity", "assigned_quantity")),
     registeredOn: day(value(row, "registeredOn", "registered_on")),
     status: text(row.status) as EpiProduct["status"],
@@ -144,6 +145,7 @@ export function normalizeReturn(row: Row): EpiReturn {
     size: text(row.size),
     condition: text(value(row, "condition", "epi_condition")) as EpiReturn["condition"],
     needsSanitizing: bool(value(row, "needsSanitizing", "needs_sanitizing")),
+    sanitizationStatus: text(value(row, "sanitizationStatus", "sanitization_status")),
     backToStock: bool(value(row, "backToStock", "back_to_stock")),
     sendToDisposal: bool(value(row, "sendToDisposal", "send_to_disposal")),
     generateDpDemand: bool(value(row, "generateDpDemand", "generate_dp_demand")),
@@ -202,8 +204,6 @@ export function normalizeDisposal(row: Row): EpiDisposal {
 export function normalizeDisposable(row: Row): DisposableProduct {
   return {
     id: text(row.id),
-    companyId: text(value(row, "companyId", "company_id")),
-    companyName: companyName(row),
     name: text(row.name),
     caNumber: text(value(row, "caNumber", "ca_number")),
     size: text(row.size),
@@ -242,6 +242,7 @@ export function normalizeDiscount(row: Row): EpiDiscount {
     decision: text(row.decision) as EpiDiscount["decision"],
     decidedValue: number(value(row, "decidedValue", "decided_value")),
     decisionComment: text(value(row, "decisionComment", "decision_comment")),
+    competence: text(row.competence), movementId: text(value(row, "movementId", "movement_id")),
     attachmentsCount: number(value(row, "attachmentsCount", "attachments_count")),
   };
 }

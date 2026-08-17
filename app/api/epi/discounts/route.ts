@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const [company, product, employee] = await Promise.all([
       loadCompany(d1, workspace.id, companyId),
-      loadProduct(d1, workspace.id, companyId, epiText(body.productId, "o EPI", 120, true)),
+      loadProduct(d1, workspace.id, epiText(body.productId, "o EPI", 120, true)),
       loadEmployee(d1, workspace.id, companyId, epiText(body.employeeId, "o colaborador", 120, true)),
     ]);
     const deliveryId = epiText(body.deliveryId, "a entrega", 120) || null;
@@ -89,6 +89,12 @@ export async function POST(request: Request) {
     if (deliveryId && !delivery) throw ApiError.notFound("Entrega não encontrada.", "EPI_DELIVERY_NOT_FOUND");
 
     const trigger = parseDiscountTrigger(body.triggerReason ?? "manual_request");
+    const idempotencyKey = epiText(request.headers.get("idempotency-key") ?? body.idempotencyKey, "a chave de idempotência", 160);
+    if (idempotencyKey) {
+      const replay = await d1.prepare("SELECT * FROM fdp_epi_discount_requests WHERE workspace_id = ? AND idempotency_key = ?")
+        .bind(workspace.id, idempotencyKey).first<Record<string, unknown>>();
+      if (replay) return Response.json({ discount: replay, replayed: true });
+    }
     const quantity = epiQuantity(body.quantity ?? 1, "Quantidade");
     const unitValue = body.unitValue === undefined
       ? Number(delivery?.unit_value ?? product.unit_value)
@@ -101,7 +107,7 @@ export async function POST(request: Request) {
       note: epiText(body.reasonNote, "o motivo", 2000, true),
       analystUserId: epiText(body.analystUserId, "o responsável pela análise", 120) || user.id,
       attachments: await verifiedAttachments(d1, workspace.id, attachmentIds(body.attachmentIds)),
-      actorUserId: user.id, actorEmail: auth.user.email,
+      actorUserId: user.id, actorEmail: auth.user.email, idempotencyKey,
     });
     await d1.batch([
       ...analysis.statements,

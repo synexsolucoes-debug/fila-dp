@@ -3,7 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { disposalTouchesStock } from "@/lib/epi";
-import { applyStockChange, epiText, loadCompany, loadProduct, prepareEpiMovement } from "@/lib/epi-service";
+import { epiText, loadCompany, loadProduct, prepareEpiMovement, prepareStockChange } from "@/lib/epi-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +11,7 @@ type DisposalRow = {
   id: string; company_id: string; product_id: string; employee_id: string | null; quantity: number;
   ca_number: string; size: string; disposal_reason: string; status: string; origin_type: "manual" | "return" | "damage";
   disposal_date: string;
+  stock_location_id: string;
 };
 
 /**
@@ -48,22 +49,20 @@ export async function POST(request: Request, context: RouteContext) {
     const notes = epiText(body.notes, "o motivo", 2000, action !== "confirm");
     const [company, product] = await Promise.all([
       loadCompany(d1, workspace.id, before.company_id),
-      loadProduct(d1, workspace.id, before.company_id, before.product_id),
+      loadProduct(d1, workspace.id, before.product_id),
     ]);
 
     if (action === "confirm") {
       const touchesStock = disposalTouchesStock(before.origin_type);
-      if (touchesStock) {
-        await applyStockChange(d1, workspace.id, before.product_id, -Number(before.quantity), "discarded", user.id);
-      }
-      try {
-        await d1.batch([
+      await d1.batch([
+          ...(touchesStock ? [prepareStockChange(d1, {
+            workspaceId: workspace.id, productId: before.product_id, stockLocationId: before.stock_location_id,
+            delta: -Number(before.quantity), actorId: user.id,
+          })] : []),
           d1.prepare(`UPDATE fdp_epi_disposals SET status = 'disposed', confirmed_by = ?, confirmed_at = now(),
             notes = CASE WHEN ? = '' THEN notes ELSE ? END, updated_by = ?, updated_at = now()
             WHERE workspace_id = ? AND id = ?`)
             .bind(user.id, notes, notes, user.id, workspace.id, id),
-          ...(touchesStock ? [] : [d1.prepare("UPDATE fdp_epi_products SET status = 'discarded', updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
-            .bind(user.id, workspace.id, before.product_id)]),
           prepareEpiMovement({
             workspaceId: workspace.id, companyId: before.company_id, cnpj: company.tax_id,
             movementDate: new Date().toISOString().slice(0, 10), movementType: "disposal",
@@ -71,7 +70,7 @@ export async function POST(request: Request, context: RouteContext) {
             employeeId: before.employee_id, quantity: Number(before.quantity),
             stockDelta: touchesStock ? -Number(before.quantity) : 0, unitValue: Number(product.unit_value),
             reason: before.disposal_reason, status: "disposed", sourceType: "disposal", sourceId: id,
-            responsibleId: user.id, notes, createdBy: user.id,
+            responsibleId: user.id, notes, createdBy: user.id, stockLocationId: before.stock_location_id,
           }),
           prepareAuditEvent({
             workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_disposal.confirmed",
@@ -80,10 +79,6 @@ export async function POST(request: Request, context: RouteContext) {
             requestId: request.headers.get("x-fila-dp-request-id"),
           }),
         ]);
-      } catch (error) {
-        if (touchesStock) await applyStockChange(d1, workspace.id, before.product_id, Number(before.quantity), null, user.id).catch(() => undefined);
-        throw error;
-      }
       return Response.json({ disposal: { id, status: "disposed" } });
     }
 
@@ -91,12 +86,6 @@ export async function POST(request: Request, context: RouteContext) {
     await d1.batch([
       d1.prepare("UPDATE fdp_epi_disposals SET status = ?, notes = ?, updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
         .bind(status, notes, user.id, workspace.id, id),
-      // Reavaliar devolve o equipamento à higienização: ele não foi descartado,
-      // então precisa de um estado que diga o que fazer com ele em seguida.
-      ...(status === "reevaluated"
-        ? [d1.prepare("UPDATE fdp_epi_products SET status = 'sanitizing', updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
-          .bind(user.id, workspace.id, before.product_id)]
-        : []),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
         action: status === "canceled" ? "epi_disposal.canceled" : "epi_disposal.reevaluated",

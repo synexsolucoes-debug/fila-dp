@@ -4,10 +4,15 @@ Módulo operacional que acompanha a jornada completa do equipamento de proteçã
 individual: cadastro, entrega ao colaborador, troca por danificação, devolução,
 higienização, descarte e análise de possível desconto.
 
-O módulo não é um controle de almoxarifado nem um lançador de folha. Ele existe
-para produzir **rastreabilidade**: quem recebeu o quê, quando, com qual CA, em
-que condição devolveu, quem autorizou o descarte e quem decidiu sobre o
-desconto — com evidência anexada em cada etapa.
+O módulo combina estoque operacional compartilhado e **rastreabilidade**: quem
+recebeu o quê, quando, com qual CA, de qual local saiu, em que condição
+devolveu, quem concluiu a higienização, quem autorizou o descarte e quem decidiu
+sobre o desconto — com evidência anexada em cada etapa.
+
+O SKU e o saldo pertencem ao workspace. A empresa do cadastro é apenas a origem
+da compra; a empresa consumidora fica em cada entrega, devolução, dano,
+descarte e movimentação. Assim, empresas do mesmo grupo usam o mesmo estoque
+sem duplicar o produto por CNPJ.
 
 ## A regra que governa o módulo
 
@@ -22,8 +27,11 @@ Analisar possível desconto de EPI — [Nome do colaborador]
 ```
 
 O valor fica registrado como "em análise" até que alguém com
-`epi.discount.analyze` decida. Mesmo "descontar integral" grava apenas o parecer
-e o valor aprovado; a execução é da folha, com o registro em mãos.
+`epi.discount.analyze` decida. "Descontar integral" e "descontar parcialmente"
+criam uma movimentação `epi_discount` em estado `draft` na Central de
+Movimentações, com a competência e o valor aprovado. Essa movimentação é um
+encaminhamento explícito: `automaticDeduction` permanece falso e nenhuma folha
+ou salário é alterado automaticamente.
 
 A separação está no banco, não só no código: `fdp_epi_discount_requests` aponta
 para `fdp_cards` em vez de guardar um valor a descontar como fato consumado, e
@@ -66,12 +74,14 @@ explicitamente, e o registro da recusa fica como evidência.
 
 ## Estrutura de dados
 
-Oito tabelas, todas com `workspace_id`, `company_id`, `created_at`,
-`updated_at`, `created_by` e `updated_by`. Migration `0044_epi_control.sql`.
+A base do módulo está em `0044_epi_control.sql`; áreas, locais e o saldo
+compartilhado são introduzidos por `0045_workspace_areas_shared_stock.sql`.
 
 | Tabela | Papel |
 | --- | --- |
-| `fdp_epi_products` | Cadastro do EPI e saldo em estoque |
+| `fdp_epi_products` | Catálogo compartilhado de SKUs; `stock_quantity` é projeção compatível |
+| `fdp_stock_locations` | Locais físicos do estoque do workspace |
+| `fdp_stock_balances` | Fonte de verdade do saldo por SKU e local |
 | `fdp_epi_deliveries` | Entrega ao colaborador, termo e baixa |
 | `fdp_epi_returns` | Devolução, condição e destino |
 | `fdp_epi_damages` | Ocorrência de dano, análise e decisão |
@@ -79,16 +89,21 @@ Oito tabelas, todas com `workspace_id`, `company_id`, `created_at`,
 | `fdp_epi_discount_requests` | Análise de desconto, ligada à demanda |
 | `fdp_epi_movements` | Razão append-only de todas as movimentações |
 | `fdp_epi_attachments` | Termos, fotos e evidências |
+| `fdp_areas` | Áreas operacionais transversais às empresas |
+| `fdp_area_members` | Vínculo N:N entre usuários e áreas, com área principal opcional |
+| `fdp_area_module_assignments` | Roteamento de módulos para áreas responsáveis |
 
 ### O que o banco garante sozinho
 
 Três invariantes ficam no schema porque não podem depender de disciplina de
 quem escrever a próxima rota:
 
-- **estoque nunca fica negativo** — `CHECK` em `stock_quantity`, e o débito é
-  condicional na própria instrução (`WHERE … AND stock_quantity + ? >= 0`), de
-  modo que duas entregas simultâneas disputando a última unidade terminam com
-  uma delas recusada em vez de com saldo negativo;
+- **estoque nunca fica negativo** — `fdp_apply_stock_change` bloqueia o SKU com
+  `FOR UPDATE` e aplica o delta em `fdp_stock_balances` somente quando o saldo do
+  local continua não negativo. O evento operacional, o razão, o saldo e a
+  auditoria são enviados no mesmo lote transacional;
+- **`stock_quantity` não aceita escrita direta** — um gatilho restringe a
+  coluna à projeção atualizada pela função de saldo;
 - **devolução nunca soma mais do que foi entregue** — `CHECK` de
   `settled_quantity <= quantity`;
 - **o razão é append-only** e **o descarte confirmado é imutável** — dois
@@ -96,13 +111,28 @@ quem escrever a próxima rota:
   registro não aceita alteração.
 
 Toda tabela tem RLS habilitada e forçada, com política por
-`current_setting('app.workspace_id')`. As referências entre tabelas são
-compostas (`workspace_id, company_id, id`), então apontar para a linha de outro
-cliente não é representável.
+`current_setting('app.workspace_id')`. As referências carregam
+`workspace_id`; relações de uso preservam também a empresa consumidora. O
+catálogo compartilhado não expõe entregas e movimentações de empresas fora do
+escopo do usuário.
+
+## Áreas operacionais
+
+Áreas são independentes de CNPJ e não substituem departamentos ou lotações de
+colaboradores. Um usuário pode participar de várias áreas e ter, no máximo, uma
+área principal. As demandas guardam `requester_area_id` e
+`responsible_area_id`, portanto origem e destino continuam consultáveis mesmo
+quando pessoas mudam de equipe.
+
+O roteamento do Controle de EPI usa duas atribuições configuráveis:
+`epi.owner`, para a área solicitante (por exemplo SESMT), e
+`epi.discount_analysis`, para a área responsável pela análise (por exemplo
+Departamento Pessoal). Ausência de configuração gera erro explícito; o sistema
+não escolhe uma área silenciosamente.
 
 ## Permissões
 
-Onze capacidades, na área "Controle de EPI" da tela de usuários:
+Doze capacidades, na área "Controle de EPI" da tela de usuários:
 
 | Capacidade | Admin | Membro | Observador | Convidado |
 | --- | --- | --- | --- | --- |
@@ -117,6 +147,7 @@ Onze capacidades, na área "Controle de EPI" da tela de usuários:
 | `epi.export` | ✓ | ✓ | — | — |
 | `epi.delete` | ✓ | — | — | — |
 | `epi.audit.view` | ✓ | — | — | — |
+| `epi.stock.adjust` | ✓ | ✓ | — | — |
 
 O analista de DP opera o módulo inteiro. O que fica só com o administrador é dar
 baixa em cadastro e ler a trilha de auditoria — as duas ações que serviriam para
@@ -132,22 +163,26 @@ devolução, depois a baixa.
 
 ## Fluxo operacional
 
-1. **Cadastro** — EPI, tipo, CA, tamanho, marca, modelo, valor e quantidade. A
-   entrada em estoque já é a primeira movimentação no razão.
-2. **Entrega** — o estoque é debitado *antes* de a entrega ser gravada, porque é
-   o débito que pode falhar. Falhou, nada mais acontece. Gravou e a entrega
-   falhou depois, o saldo volta.
-3. **Devolução** — a condição decide o destino (tabela acima). A baixa é
+1. **Cadastro** — EPI, tipo, CA, tamanho, marca, modelo e valor. Uma quantidade
+   inicial gera entrada no local escolhido e a primeira movimentação no razão.
+2. **Entrada e transferência** — entradas somam ao local de destino;
+   transferências debitam a origem e creditam o destino no mesmo lote.
+3. **Entrega** — saldo, entrega, razão e auditoria são atômicos. Se o local não
+   tiver quantidade suficiente, nada do evento é persistido.
+4. **Devolução** — a condição decide o destino (tabela acima). A baixa é
    registrada na entrega, e é ela que faz o colaborador deixar de constar com o
    equipamento.
-4. **Troca por dano** — a decisão da análise governa o antigo e o novo.
-5. **Descarte** — a janela recolhe o que a devolução e a troca encaminharam,
+5. **Higienização** — itens pendentes passam por início e conclusão ou rejeição;
+   somente a conclusão repõe o saldo no local registrado.
+6. **Troca por dano** — a decisão da análise governa o antigo e o novo.
+7. **Descarte** — a janela recolhe o que a devolução e a troca encaminharam,
    mais o que for aberto à mão a partir do estoque. Confirmar exige responsável
    e data, e é definitivo. Descarte aberto do estoque debita o saldo na
    confirmação; o que veio de devolução ou troca já saiu na entrega, e debitar
    de novo tiraria duas unidades por uma.
-6. **Análise de desconto** — abre demanda no quadro do DP; a decisão fica
-   registrada na análise, no razão e na linha do tempo da própria demanda.
+8. **Análise de desconto** — abre demanda roteada entre áreas; a decisão fica
+   na análise, no razão e na linha do tempo. Aprovação cria um rascunho na
+   Central de Movimentações, nunca um desconto automático.
 
 ## Telas
 
@@ -183,9 +218,13 @@ planilha viraria fórmula executável.
 | `/api/epi/overview` | GET | `epi.view` |
 | `/api/epi/products` | GET, POST | `epi.view`, `epi.create` |
 | `/api/epi/products/[id]` | GET, PATCH, DELETE | `epi.view`, `epi.edit`, `epi.delete` |
+| `/api/epi/stock/locations` | GET, POST, PATCH | `epi.view`, `epi.stock.adjust` |
+| `/api/epi/stock/entries` | POST | `epi.stock.adjust` |
+| `/api/epi/stock/transfers` | POST | `epi.stock.adjust` |
 | `/api/epi/deliveries` | GET, POST | `epi.view`, `epi.deliver` |
 | `/api/epi/deliveries/[id]` | GET, PATCH | `epi.view`, `epi.deliver` |
 | `/api/epi/returns` | GET, POST | `epi.view`, `epi.return` |
+| `/api/epi/returns/[id]/sanitization` | POST | `epi.return` |
 | `/api/epi/damages` | GET, POST | `epi.view`, `epi.damage` |
 | `/api/epi/disposals` | GET, POST | `epi.view`, `epi.dispose` |
 | `/api/epi/disposals/[id]` | POST | `epi.dispose` |
@@ -195,9 +234,13 @@ planilha viraria fórmula executável.
 | `/api/epi/reports` | GET | `epi.view`, `epi.export` para CSV |
 | `/api/epi/attachments` | GET, POST | `epi.view`, `epi.edit` |
 | `/api/epi/attachments/[id]` | GET, DELETE | `epi.view`, `epi.edit` |
+| `/api/areas` | GET, POST | `departments.view`, `departments.create` |
+| `/api/areas/[id]` | GET, PATCH, DELETE | permissões de área correspondentes |
+| `/api/areas/[id]/members` | PUT | `departments.manage_members` |
 
-Todas aplicam o recorte por empresa do usuário: sem escopo, a resposta é vazia —
-nunca "tudo".
+Eventos com empresa consumidora aplicam o recorte de empresas do usuário: sem
+escopo, a resposta é vazia — nunca "tudo". Catálogo, locais e saldos são do
+workspace; no detalhe do SKU, as movimentações continuam filtradas por empresa.
 
 ## Anexos
 
@@ -216,10 +259,10 @@ ato que o banco tornou imutável.
 npm run db:migrate
 ```
 
-A migration é aditiva — nenhuma tabela existente é removida ou reescrita — e
-semeia o módulo em `fdp_modules` e em todos os planos. Entrega de EPI com termo
-assinado é obrigação de segurança do trabalho de qualquer empresa com
-colaborador, não recurso de porte; a decisão segue o precedente de "Usuários e
-permissões", que também entra em todos os planos.
+As migrations preservam o histórico. A `0045` cria um local padrão por workspace,
+migra o saldo legado para esse local, troca as referências operacionais de
+produto para a identidade `(workspace_id, product_id)` e mantém
+`stock_quantity` como projeção. Faça backup e ensaie a migração conforme o
+procedimento de produção antes da aplicação definitiva.
 
 Ver `docs/aplicar-migracoes-em-producao.md` para o procedimento completo.

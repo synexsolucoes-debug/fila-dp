@@ -3,8 +3,8 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import {
-  applyStockChange, employeeDisplayName, epiText, loadCompany, loadEmployee, loadProduct,
-  parseDeliveryStatus, prepareEpiMovement,
+  employeeDisplayName, epiText, loadCompany, loadEmployee, loadProduct,
+  parseDeliveryStatus, prepareEpiMovement, prepareStockChange,
 } from "@/lib/epi-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -13,6 +13,7 @@ type DeliveryRow = {
   id: string; company_id: string; product_id: string; employee_id: string; quantity: number;
   settled_quantity: number; status: string; ca_number: string; size: string; unit_value: string | number;
   delivered_on: string; signature_name: string;
+  stock_location_id: string;
 };
 
 async function deliveryOf(d1: Awaited<ReturnType<typeof getWorkspaceContext>>["d1"], workspaceId: string, id: string) {
@@ -78,11 +79,14 @@ export async function PATCH(request: Request, context: RouteContext) {
       const reason = epiText(body.canceledReason, "o motivo do cancelamento", 400, true);
       const [company, product, employee] = await Promise.all([
         loadCompany(d1, workspace.id, before.company_id),
-        loadProduct(d1, workspace.id, before.company_id, before.product_id),
+        loadProduct(d1, workspace.id, before.product_id),
         loadEmployee(d1, workspace.id, before.company_id, before.employee_id),
       ]);
-      await applyStockChange(d1, workspace.id, before.product_id, Number(before.quantity), "in_stock", user.id);
       await d1.batch([
+        prepareStockChange(d1, {
+          workspaceId: workspace.id, productId: before.product_id, stockLocationId: before.stock_location_id,
+          delta: Number(before.quantity), actorId: user.id,
+        }),
         d1.prepare(`UPDATE fdp_epi_deliveries SET status = 'canceled', canceled_reason = ?, updated_by = ?, updated_at = now()
           WHERE workspace_id = ? AND id = ?`).bind(reason, user.id, workspace.id, id),
         prepareEpiMovement({
@@ -93,6 +97,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           quantity: Number(before.quantity), stockDelta: Number(before.quantity), unitValue: Number(before.unit_value),
           reason: "manual_adjustment", status: "canceled", sourceType: "delivery", sourceId: id,
           responsibleId: user.id, notes: reason, createdBy: user.id,
+          stockLocationId: before.stock_location_id,
         }),
         prepareAuditEvent({
           workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_delivery.canceled",

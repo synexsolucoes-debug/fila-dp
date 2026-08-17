@@ -5,9 +5,9 @@ import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { damageRouting, epiDamageReasonLabels, epiDiscountTriggerLabels } from "@/lib/epi";
 import {
-  applyStockChange, attachmentIds, createDiscountRequest, employeeDisplayName, epiDate, epiQuantity, epiText,
-  loadCompany, loadEmployee, loadProduct, parseDamageDecision, parseDamageReason, prepareEpiMovement,
-  verifiedAttachments,
+  attachmentIds, createDiscountRequest, employeeDisplayName, epiDate, epiQuantity, epiText,
+  loadCompany, loadEmployee, loadProduct, loadStockLocation, parseDamageDecision, parseDamageReason,
+  prepareEpiMovement, prepareStockChange, verifiedAttachments,
 } from "@/lib/epi-service";
 
 /**
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
 
     const [company, product, employee] = await Promise.all([
       loadCompany(d1, workspace.id, companyId),
-      loadProduct(d1, workspace.id, companyId, epiText(body.productId, "o EPI danificado", 120, true)),
+      loadProduct(d1, workspace.id, epiText(body.productId, "o EPI danificado", 120, true)),
       loadEmployee(d1, workspace.id, companyId, epiText(body.employeeId, "o colaborador", 120, true)),
     ]);
 
@@ -107,8 +107,15 @@ export async function POST(request: Request) {
     if (routing.deliverReplacement && decision === "exchange_without_discount" && !replacementProductId) {
       throw ApiError.badRequest("Informe o novo EPI que será entregue na troca.", "EPI_REPLACEMENT_REQUIRED");
     }
-    const replacement = replacementProductId ? await loadProduct(d1, workspace.id, companyId, replacementProductId) : null;
+    const replacement = replacementProductId ? await loadProduct(d1, workspace.id, replacementProductId) : null;
     const replacementQuantity = replacement ? epiQuantity(body.replacementQuantity ?? quantity, "Quantidade do novo EPI") : 0;
+    const location = await loadStockLocation(d1, workspace.id, epiText(body.stockLocationId, "o local de estoque", 120));
+    const idempotencyKey = epiText(request.headers.get("idempotency-key") ?? body.idempotencyKey, "a chave de idempotência", 160);
+    if (idempotencyKey) {
+      const replay = await d1.prepare("SELECT * FROM fdp_epi_damages WHERE workspace_id = ? AND idempotency_key = ?")
+        .bind(workspace.id, idempotencyKey).first<Record<string, unknown>>();
+      if (replay) return Response.json({ damage: replay, replayed: true });
+    }
 
     const damageId = crypto.randomUUID();
     const statements = [] as ReturnType<typeof prepareEpiMovement>[];
@@ -116,9 +123,6 @@ export async function POST(request: Request) {
     let discountRequestId: string | null = null;
     let demandCardId: string | null = null;
     let replacementDeliveryId: string | null = null;
-
-    statements.push(d1.prepare("UPDATE fdp_epi_products SET status = ?, updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
-      .bind(routing.productStatus, user.id, workspace.id, product.id));
 
     if (routing.settleOldDelivery && delivery) {
       statements.push(d1.prepare("UPDATE fdp_epi_deliveries SET settled_quantity = settled_quantity + ?, updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
@@ -129,11 +133,13 @@ export async function POST(request: Request) {
       disposalId = crypto.randomUUID();
       statements.push(d1.prepare(`INSERT INTO fdp_epi_disposals
         (id, workspace_id, company_id, product_id, employee_id, disposal_date, quantity, ca_number, size,
-         disposal_reason, responsible_user_id, status, origin_type, origin_id, notes, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_disposal', 'damage', ?, ?, ?, ?)`)
+         disposal_reason, responsible_user_id, status, origin_type, origin_id, notes, created_by, updated_by,
+         stock_location_id, idempotency_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_disposal', 'damage', ?, ?, ?, ?, ?, ?)`)
         .bind(disposalId, workspace.id, companyId, product.id, employee.id, occurredOn, quantity,
           product.ca_number, product.size, routing.disposalReason, analystUserId, damageId,
-          `Danificação: ${epiDamageReasonLabels[damageReason]}.`, user.id, user.id));
+          `Danificação: ${epiDamageReasonLabels[damageReason]}.`, user.id, user.id,
+          location.id, idempotencyKey ? `${idempotencyKey}:disposal` : ""));
     }
 
     if (routing.discountTrigger) {
@@ -153,19 +159,24 @@ export async function POST(request: Request) {
     if (replacement && routing.deliverReplacement && replacementQuantity > 0) {
       // A entrega do substituto é uma entrega comum: debita estoque, gera termo
       // e entra no histórico do colaborador como qualquer outra.
-      await applyStockChange(d1, workspace.id, replacement.id, -replacementQuantity, "delivered", user.id);
+      statements.push(prepareStockChange(d1, {
+        workspaceId: workspace.id, productId: replacement.id, stockLocationId: location.id,
+        delta: -replacementQuantity, actorId: user.id,
+      }));
       replacementDeliveryId = crypto.randomUUID();
       statements.push(
         d1.prepare(`INSERT INTO fdp_epi_deliveries
           (id, workspace_id, company_id, product_id, employee_id, delivered_on, position_name, department_name,
-           ca_number, size, quantity, unit_value, responsible_user_id, delivery_reason, status, notes, created_by, updated_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'damage_replacement', 'pending_signature', ?, ?, ?)`)
+           ca_number, size, quantity, unit_value, responsible_user_id, delivery_reason, status, notes, created_by, updated_by,
+           stock_location_id, idempotency_key)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'damage_replacement', 'pending_signature', ?, ?, ?, ?, ?)`)
           .bind(replacementDeliveryId, workspace.id, companyId, replacement.id, employee.id, occurredOn,
             employee.position_name ?? "", employee.department_name ?? "",
             epiText(body.replacementCaNumber, "o CA do novo EPI", 40) || replacement.ca_number,
             epiText(body.replacementSize, "o tamanho do novo EPI", 40) || replacement.size,
             replacementQuantity, Number(replacement.unit_value), analystUserId,
-            `Substituição por danificação registrada em ${occurredOn}.`, user.id, user.id),
+            `Substituição por danificação registrada em ${occurredOn}.`, user.id, user.id,
+            location.id, idempotencyKey ? `${idempotencyKey}:replacement` : ""),
         prepareEpiMovement({
           workspaceId: workspace.id, companyId, cnpj: company.tax_id, movementDate: occurredOn,
           movementType: "exchange", productId: replacement.id, epiName: replacement.name,
@@ -174,6 +185,7 @@ export async function POST(request: Request) {
           stockDelta: -replacementQuantity, unitValue: Number(replacement.unit_value),
           reason: "damage_replacement", status: "pending_signature", sourceType: "delivery",
           sourceId: replacementDeliveryId, responsibleId: analystUserId, createdBy: user.id,
+          stockLocationId: location.id, idempotencyKey: idempotencyKey ? `${idempotencyKey}:replacement-movement` : "",
         }),
       );
     }
@@ -182,12 +194,14 @@ export async function POST(request: Request) {
       d1.prepare(`INSERT INTO fdp_epi_damages
         (id, workspace_id, company_id, employee_id, product_id, delivery_id, occurred_on, quantity, damage_reason,
          description, analyst_user_id, decision, replacement_product_id, replacement_ca_number, replacement_size,
-         replacement_quantity, replacement_delivery_id, disposal_id, discount_request_id, notes, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+         replacement_quantity, replacement_delivery_id, disposal_id, discount_request_id, notes, created_by, updated_by,
+         stock_location_id, idempotency_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(damageId, workspace.id, companyId, employee.id, product.id, delivery?.id ?? null, occurredOn, quantity,
           damageReason, description, analystUserId, decision, replacement?.id ?? null,
           epiText(body.replacementCaNumber, "o CA do novo EPI", 40), epiText(body.replacementSize, "o tamanho do novo EPI", 40),
-          replacementQuantity, replacementDeliveryId, disposalId, discountRequestId, notes, user.id, user.id),
+          replacementQuantity, replacementDeliveryId, disposalId, discountRequestId, notes, user.id, user.id,
+          location.id, idempotencyKey),
       prepareEpiMovement({
         workspaceId: workspace.id, companyId, cnpj: company.tax_id, movementDate: occurredOn,
         movementType: routing.productStatus === "sanitizing" ? "sanitizing" : "exchange", productId: product.id,
@@ -196,7 +210,8 @@ export async function POST(request: Request) {
         reason: damageReason, condition: "returned_damaged", status: decision,
         generateDpDemand: Boolean(routing.discountTrigger), demandId: demandCardId, discountRequestId,
         sourceType: "damage", sourceId: damageId, responsibleId: analystUserId, attachments,
-        notes: description, createdBy: user.id,
+        notes: description, createdBy: user.id, stockLocationId: location.id,
+        idempotencyKey: idempotencyKey ? `${idempotencyKey}:movement` : "",
       }),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "epi_damage.created",
@@ -207,14 +222,7 @@ export async function POST(request: Request) {
       }),
     );
 
-    try {
-      await d1.batch(statements);
-    } catch (error) {
-      if (replacement && replacementQuantity > 0) {
-        await applyStockChange(d1, workspace.id, replacement.id, replacementQuantity, null, user.id).catch(() => undefined);
-      }
-      throw error;
-    }
+    await d1.batch(statements);
     return Response.json({
       damage: { id: damageId, decision, damageReason, quantity, ...routing },
       disposalId, discountRequestId, demandCardId, replacementDeliveryId,

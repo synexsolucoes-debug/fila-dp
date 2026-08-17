@@ -25,6 +25,7 @@ import {
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { ContractorsPanel } from "./ContractorsPanel";
+import { AreasPanel } from "./AreasPanel";
 import { EmployeeEpiPanel } from "../epi";
 import styles from "./registrations.module.css";
 import type {
@@ -138,6 +139,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
   // Contador, não booleano: dois cliques seguidos no mesmo botão precisam
   // reabrir o formulário, e um booleano já ligado não avisaria a segunda vez.
   const [contractorCreateSignal, setContractorCreateSignal] = useState(0);
+  const [areaCreateSignal, setAreaCreateSignal] = useState(0);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [companiesLoading, setCompaniesLoading] = useState(true);
@@ -258,6 +260,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
     if (tab === "employees") openEmployee("new");
     if (tab === "catalogs") setCatalogEditor("new");
     if (tab === "contractors") setContractorCreateSignal((current) => current + 1);
+    if (tab === "areas") setAreaCreateSignal((current) => current + 1);
   }
 
   function selectCompany(id: string) { setSelectedCompanyId(id); setCursor(""); setCursorHistory([]); }
@@ -291,8 +294,9 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
           <button className={tab === "employees" ? styles.activeTab : ""} onClick={() => setTab("employees")}><UsersRound aria-hidden="true" /> Colaboradores</button>
           <button className={tab === "contractors" ? styles.activeTab : ""} onClick={() => setTab("contractors")}><Briefcase aria-hidden="true" /> Prestadores PJ</button>
           <button className={tab === "catalogs" ? styles.activeTab : ""} onClick={() => setTab("catalogs")}><SlidersHorizontal aria-hidden="true" /> Cadastros auxiliares</button>
+          <button className={tab === "areas" ? styles.activeTab : ""} onClick={() => setTab("areas")}><Building2 aria-hidden="true" /> Departamentos e módulos</button>
         </nav>
-        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
+        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : tab === "areas" ? "Novo departamento" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
       </header>
 
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
@@ -315,6 +319,8 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
         <CatalogsPanel companies={companies} companyId={selectedCompanyId} onCompanyChange={selectCompany} resource={catalogResource} onResourceChange={setCatalogResource}
           items={catalogs[catalogResource]} loading={catalogLoading} onEdit={setCatalogEditor} onCreate={contextualCreate} canManage={canManageRegistrations} />
       )}
+
+      {tab === "areas" && <AreasPanel canManage={canManageRegistrations} createSignal={areaCreateSignal} />}
 
       {companyEditor && <CompanyEditor company={companyEditor === "new" ? null : companyEditor} companies={companies} busy={busy} onClose={() => setCompanyEditor(null)} onSaved={async () => { setCompanyEditor(null); setToast(companyEditor === "new" ? "Empresa criada." : "Empresa atualizada."); await loadCompanies(); }} onBusy={setBusy} onError={setError} onInactivate={(company) => setConfirmAction({ title: "Inativar empresa?", description: `${displayCompany(company)} deixará de aparecer nos fluxos ativos. O histórico será preservado.`, run: () => inactivateCompany(company) })} />}
 
