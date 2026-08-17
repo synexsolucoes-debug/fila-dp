@@ -11,9 +11,30 @@ export async function isSankhyaWorkspaceEnabled(d1: Database, workspaceId: strin
   return Boolean(row);
 }
 
+/**
+ * A frase que o portão devolve quando o módulo não está liberado.
+ *
+ * A anterior — "O Sankhya Browser Connector não está habilitado para este
+ * workspace." — dizia o estado e parava aí. Quem a recebia não tinha como saber
+ * se era falha do sistema, se faltava contratar algo, ou a quem pedir; e ela
+ * aparece justamente no fim de um formulário preenchido, no momento de vincular
+ * o Sankhya. Beco sem saída é a mesma classe de defeito que esta auditoria já
+ * corrigiu na redefinição de senha: a mensagem precisa dizer o que destrava.
+ *
+ * O que destrava está na migration 0038: "O módulo não entra em nenhum plano
+ * automaticamente. A plataforma o libera por workspace." Não há plano que o
+ * inclua — a liberação é sempre individual. Isso é o que a frase precisa
+ * carregar, porque ela alcança dois públicos: o usuário do workspace, que não
+ * tem esse botão e precisa saber a quem pedir, e o administrador da plataforma,
+ * que tem, e precisa saber onde ele fica.
+ */
+export const SANKHYA_MODULE_DISABLED_MESSAGE = "O conector Sankhya ainda não está liberado para este workspace. "
+  + "Ele não faz parte de nenhum plano: a liberação é individual e feita pela plataforma, "
+  + "em Configuração operacional › Acessos e módulos › Módulos do workspace.";
+
 export async function requireSankhyaWorkspaceEnabled(d1: Database, workspaceId: string) {
   if (!await isSankhyaWorkspaceEnabled(d1, workspaceId)) {
-    throw ApiError.forbidden("O Sankhya Browser Connector não está habilitado para este workspace.", "SANKHYA_FEATURE_DISABLED");
+    throw ApiError.forbidden(SANKHYA_MODULE_DISABLED_MESSAGE, "SANKHYA_FEATURE_DISABLED");
   }
 }
 

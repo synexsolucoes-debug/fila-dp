@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { KeyRound, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { KeyRound, Lock, RefreshCw, Save, ShieldCheck, Unlock } from "lucide-react";
 import styles from "../platform.module.css";
 import { Row, Status, date, text } from "./core";
 
@@ -24,9 +24,14 @@ type Props = {
   companies: Row[];
   credentials: Row[];
   onSend: (kind: string, payload: Row, reason: string) => Promise<void>;
+  /** Liberação do módulo `sankhya_browser` para este workspace, lida do servidor. */
+  moduleEnabled: boolean;
+  /** A frase do próprio servidor, para a tela não escrever uma versão diferente. */
+  moduleDisabledMessage: string;
+  onEnableModule: () => void;
 };
 
-export function SankhyaPlatformConfiguration({ integration, configuration, companies, credentials, onSend }: Props) {
+export function SankhyaPlatformConfiguration({ integration, configuration, companies, credentials, onSend, moduleEnabled, moduleDisabledMessage, onEnableModule }: Props) {
   const [config, setConfig] = useState<SankhyaPlatformConfig>({ ...defaultSankhyaConfig, ...configuration });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -60,6 +65,22 @@ export function SankhyaPlatformConfiguration({ integration, configuration, compa
 
   function testConnection() {
     void perform("test", () => onSend("test_connection", {}, reason));
+  }
+
+  if (!moduleEnabled) {
+    // Este era o fim do caminho que o defeito abria: o formulário aparecia
+    // inteiro, aceitava endereço, empresa, usuário e senha, e só ao salvar o
+    // servidor recusava por falta da liberação do módulo. Formulário que será
+    // recusado não é formulário — é armadilha. Aqui a tela diz o mesmo que o
+    // servidor diria e leva até onde a liberação é feita.
+    return <section className={styles.detailSection} aria-labelledby="sankhya-platform-config">
+      <div className={styles.detailSectionHeader}><h3 id="sankhya-platform-config">Configuração Sankhya do workspace</h3><Status value={text(integration.status)} /></div>
+      <div className={styles.inlineWarning}><Lock aria-hidden="true" /><span>{moduleDisabledMessage || "O conector Sankhya ainda não está liberado para este workspace."}</span></div>
+      <div className={styles.sankhyaSecretSummary}>
+        <div><strong>O que a liberação destrava</strong><span>Endereço do ambiente, empresa de destino e agendamento passam a ser editáveis aqui.</span><span>Credencial dedicada, teste de conexão e execução manual passam a ser aceitos pelo servidor.</span></div>
+        <button type="button" onClick={onEnableModule}><Unlock aria-hidden="true" />Liberar módulo</button>
+      </div>
+    </section>;
   }
 
   return <section className={styles.detailSection} aria-labelledby="sankhya-platform-config">

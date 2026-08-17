@@ -161,7 +161,7 @@ export async function POST(request: Request, { params }: Params) {
         if (!mappingId) throw ApiError.badRequest("Informe o mapeamento em rascunho.", "MAPPING_ID_REQUIRED");
         const draft = await scoped.prepare(`SELECT id, resource_type, direction, version, status, checksum FROM fdp_integration_mappings
           WHERE workspace_id = ? AND integration_id = ? AND id = ?`).bind(workspaceId, id, mappingId).first<Row>();
-        if (!draft || draft.status !== "draft") throw ApiError.notFound("Mapeamento em rascunho nÃ£o encontrado.", "MAPPING_DRAFT_NOT_FOUND");
+        if (!draft || draft.status !== "draft") throw ApiError.notFound("Mapeamento em rascunho não encontrado.", "MAPPING_DRAFT_NOT_FOUND");
         const published = await scoped.prepare(`WITH target AS (
             SELECT id, resource_type, direction FROM fdp_integration_mappings
             WHERE workspace_id = ? AND integration_id = ? AND id = ? AND status = 'draft'
@@ -174,7 +174,7 @@ export async function POST(request: Request, { params }: Params) {
             FROM target WHERE mapping.id = target.id AND (SELECT COUNT(*) FROM archived) >= 0
             RETURNING mapping.id, mapping.resource_type, mapping.direction, mapping.version, mapping.status, mapping.checksum, mapping.published_at`)
           .bind(workspaceId, id, mappingId, workspaceId, id, workspace.owner_user_id).first<Row>();
-        if (!published) throw ApiError.notFound("Mapeamento em rascunho nÃ£o encontrado.", "MAPPING_DRAFT_NOT_FOUND");
+        if (!published) throw ApiError.notFound("Mapeamento em rascunho não encontrado.", "MAPPING_DRAFT_NOT_FOUND");
         before = sanitizePlatformValue({ workspaceId, integrationId: id, ...draft }) as Record<string, unknown>;
         result = sanitizePlatformValue(published) as Record<string, unknown>;
         auditEntityType = "integration_mapping";
@@ -185,14 +185,14 @@ export async function POST(request: Request, { params }: Params) {
         const note = cleanText(body.note, 500);
         const internalId = resolution === "link" ? cleanText(body.internalId, 160) : "";
         if (!reconciliationId || !["link", "accept_external", "keep_internal", "ignore"].includes(resolution)) {
-          throw ApiError.badRequest("ResoluÃ§Ã£o de conciliaÃ§Ã£o invÃ¡lida.", "RECONCILIATION_RESOLUTION_INVALID");
+          throw ApiError.badRequest("Resolução de conciliação inválida.", "RECONCILIATION_RESOLUTION_INVALID");
         }
-        if (!note) throw ApiError.badRequest("Registre uma justificativa para a conciliaÃ§Ã£o.", "RECONCILIATION_NOTE_REQUIRED");
-        if (resolution === "link" && !internalId) throw ApiError.badRequest("Informe o registro interno que serÃ¡ vinculado.", "RECONCILIATION_INTERNAL_ID_REQUIRED");
+        if (!note) throw ApiError.badRequest("Registre uma justificativa para a conciliação.", "RECONCILIATION_NOTE_REQUIRED");
+        if (resolution === "link" && !internalId) throw ApiError.badRequest("Informe o registro interno que será vinculado.", "RECONCILIATION_INTERNAL_ID_REQUIRED");
         const pending = await scoped.prepare(`SELECT id, status, entity_type, run_id FROM fdp_integration_reconciliations
           WHERE workspace_id = ? AND integration_id = ? AND id = ?`).bind(workspaceId, id, reconciliationId).first<Row>();
         if (!pending || !["unmatched", "conflict"].includes(String(pending.status))) {
-          throw ApiError.notFound("ConciliaÃ§Ã£o pendente nÃ£o encontrada.", "RECONCILIATION_NOT_FOUND");
+          throw ApiError.notFound("Conciliação pendente não encontrada.", "RECONCILIATION_NOT_FOUND");
         }
         const resolved = await scoped.prepare(`WITH updated AS (
             UPDATE fdp_integration_reconciliations
@@ -208,7 +208,7 @@ export async function POST(request: Request, { params }: Params) {
             FROM updated WHERE item.workspace_id = updated.workspace_id AND item.id = updated.item_id RETURNING item.id
           ) SELECT id, status, resolution, resolved_at, (internal_id <> '') AS internal_id_provided FROM updated`)
           .bind(resolution, resolution, note, internalId, internalId, workspace.owner_user_id, workspaceId, id, reconciliationId).first<Row>();
-        if (!resolved) throw ApiError.notFound("ConciliaÃ§Ã£o pendente nÃ£o encontrada.", "RECONCILIATION_NOT_FOUND");
+        if (!resolved) throw ApiError.notFound("Conciliação pendente não encontrada.", "RECONCILIATION_NOT_FOUND");
         before = sanitizePlatformValue({ workspaceId, integrationId: id, ...pending }) as Record<string, unknown>;
         result = sanitizePlatformValue({ ...resolved, noteProvided: true, differencesOmitted: true }) as Record<string, unknown>;
         auditEntityType = "integration_reconciliation";

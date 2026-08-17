@@ -357,8 +357,11 @@
 .sankhyaCard > footer, .sankhyaConfig > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 12px; }
 .managedBadge { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; color: var(--int-soft); font-size: .56rem; font-weight: 700; }.managedBadge svg { width: 15px; height: 15px; color: var(--int-accent); }
 .sankhyaConfig .formGrid { padding-bottom: 4px; }
-.toggleField { display: flex !important; grid-column: 1 / -1; align-items: center; grid-template-columns: 18px minmax(0, 1fr); padding: 9px 10px; border: 1px solid var(--int-border); border-radius: 4px; background: var(--int-muted); }
-.toggleField input { width: 16px !important; min-height: 16px !important; }
+/* Rótulo e selo lado a lado, não nas duas pontas: a linha ocupa a grade
+   inteira, e empurrar o selo para a direita o joga embaixo do botão flutuante
+   do assistente nas larguras de desktop. */
+.toggleField { display: flex !important; grid-column: 1 / -1; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--int-border); border-radius: 4px; background: var(--int-muted); }
+.toggleField > span { color: var(--int-soft); font-size: .68rem; font-weight: 700; }
 .sankhyaHistory { min-width: 0; }
 .sankhyaHistory .dataTable td { white-space: nowrap; }
 .logList { display: grid; gap: 1px; border: 1px solid var(--int-border); background: var(--int-border); }

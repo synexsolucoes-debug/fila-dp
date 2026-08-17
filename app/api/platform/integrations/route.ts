@@ -3,6 +3,7 @@ import { ApiError } from "@/lib/api-errors";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { publicCredentialFingerprint, safeIntegrationError } from "@/lib/integrations";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
+import { isSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 import { withPlatformContext } from "@/lib/platform-context";
 import { decodePlatformCursor, encodePlatformCursor, platformListLimit } from "@/lib/platform-console";
 import { cleanText } from "@/lib/registrations";
@@ -46,7 +47,12 @@ export async function GET(request: Request) {
 
       const grouped = await Promise.all(workspaces.results.map(async (workspace) => {
         const scoped = getPlatformScopedD1({ workspaceId: workspace.id, userId: platform.userId });
-        const rows = await scoped.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.last_sync_at, i.last_connection_at, i.last_successful_sync_at,
+        // O portão do módulo é lido pela mesma função que o servidor usa para
+        // recusar a ação, e não por uma cópia do critério aqui: cópia é o que
+        // deixa a tela e o servidor discordarem com o tempo. Vai no mesmo
+        // `Promise.all` da listagem, então não custa uma ida a mais ao banco.
+        const [rows, sankhyaEnabled] = await Promise.all([
+          scoped.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.last_sync_at, i.last_connection_at, i.last_successful_sync_at,
             i.next_sync_at, i.last_error, i.created_at, i.updated_at,
             NULLIF(i.config_json, '')::jsonb->>'companyId' AS company_id,
             company.trade_name AS company_name,
@@ -95,13 +101,15 @@ export async function GET(request: Request) {
               COALESCE(sum(processed_count), 0)::int AS processed_total
             FROM fdp_integration_sync_runs WHERE workspace_id = i.workspace_id AND integration_id = i.id
           ) health ON TRUE
-          WHERE i.workspace_id = ? ORDER BY i.created_at DESC, i.id DESC`).bind(workspace.id).all<Row>();
-        return rows.results.map((row) => ({ workspace, row }));
+          WHERE i.workspace_id = ? ORDER BY i.created_at DESC, i.id DESC`).bind(workspace.id).all<Row>(),
+          isSankhyaWorkspaceEnabled(scoped, workspace.id),
+        ]);
+        return rows.results.map((row) => ({ workspace, row, sankhyaEnabled }));
       }));
 
       const now = Date.now();
       const expiringCutoff = now + 30 * 24 * 60 * 60 * 1000;
-      let integrations = grouped.flat().map(({ workspace, row }) => {
+      let integrations = grouped.flat().map(({ workspace, row, sankhyaEnabled }) => {
         const lastError = text(row.last_error);
         const expiresAt = text(row.expires_at);
         const queueTotal = number(row.queued) + number(row.processing);
@@ -109,6 +117,9 @@ export async function GET(request: Request) {
           id: text(row.id), workspaceId: workspace.id, workspaceName: workspace.name,
           companyId: text(row.company_id), companyName: text(row.company_name),
           connector: text(row.channel), displayName: text(row.display_name), status: text(row.status),
+          // Só o Sankhya depende de liberação por workspace; para os demais o
+          // campo é verdadeiro para que a tela tenha uma regra só a aplicar.
+          moduleEnabled: text(row.channel) !== "sankhya_browser" || sankhyaEnabled,
           hasCredential: truthy(row.has_credentials),
           fingerprint: row.fingerprint ? publicCredentialFingerprint(text(row.fingerprint)) : "",
           credentialVersion: number(row.key_version), verifiedAt: text(row.verified_at) || null, expiresAt: expiresAt || null,

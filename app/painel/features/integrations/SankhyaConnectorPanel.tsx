@@ -132,7 +132,15 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
         <label><span>Frequência</span><select value={config.frequency} disabled><option value="hourly">A cada hora</option><option value="daily">Diariamente</option><option value="weekly">Semanalmente</option></select></label>
         <label><span>Horário</span><input type="time" value={config.scheduleTime} disabled /></label>
         {config.frequency === "weekly" && <label><span>Dia da semana</span><select value={config.scheduleWeekday} disabled><option value={1}>Segunda-feira</option><option value={2}>Terça-feira</option><option value={3}>Quarta-feira</option><option value={4}>Quinta-feira</option><option value={5}>Sexta-feira</option><option value={6}>Sábado</option><option value={0}>Domingo</option></select></label>}
-        <label className={styles.toggleField}><input type="checkbox" checked={config.automaticEnabled} disabled /><span>Sincronização automática</span></label>
+        {/* Esta seção inteira é leitura: quem altera é a Plataforma Global. Um
+            checkbox desabilitado mostrando o estado dava dois problemas de uma
+            vez — 16×16 reprova o tamanho de alvo da WCAG 2.2, e o leitor de tela
+            anunciava "caixa de seleção, não marcada, desabilitada" no lugar do
+            fato. Nenhuma conferência media, porque a semente não liberava o
+            módulo e a seção nunca chegava a ser pintada. */}
+        <div className={styles.toggleField}><span>Sincronização automática</span>
+          <StatusPill status={config.automaticEnabled ? "active" : "paused"} tone={config.automaticEnabled ? "safe" : "neutral"}
+            label={config.automaticEnabled ? "Ativada" : "Desativada"} /></div>
       </div>
     </section>
 
