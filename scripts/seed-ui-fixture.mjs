@@ -22,6 +22,26 @@ import { promisify } from "node:util";
 
 const scryptAsync = promisify(scrypt);
 
+/**
+ * Chave de cofre do ensaio.
+ *
+ * A credencial Sankhya da semente é selada com a mesma função do produto, e
+ * selar exige chave. Quando o ambiente não traz uma, a semente fixa esta — que
+ * é determinística, está no repositório e vale só para banco descartável — e
+ * **avisa**, porque o app precisa subir com a mesma: chaves diferentes gravam
+ * um segredo que ninguém abre, e a tela passaria a mentir de outro jeito.
+ */
+const CHAVE_DE_ENSAIO = Buffer.alloc(32, 19).toString("base64");
+if (!process.env.FDP_SANKHYA_VAULT_KEYS && !process.env.FDP_SANKHYA_VAULT_KEY) {
+  process.env.FDP_SANKHYA_VAULT_KEY = CHAVE_DE_ENSAIO;
+  process.env.FDP_SANKHYA_VAULT_KEY_VERSION ??= "1";
+  console.log(`Cofre do ensaio: suba o app com FDP_SANKHYA_VAULT_KEY=${CHAVE_DE_ENSAIO}`);
+}
+
+const { credentialPublicHint, sealCredentials } = await import("../lib/integrations.ts");
+const credenciaisDeEnsaio = { username: "robo.ensaio", password: "SenhaDeEnsaio!2026" };
+const selada = sealCredentials("sankhya_browser", credenciaisDeEnsaio);
+
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 if (!databaseUrl?.startsWith("postgres")) {
   throw new Error("Defina DATABASE_URL com um PostgreSQL descartável e com as migrations aplicadas.");
@@ -167,6 +187,22 @@ try {
       [id, canal, nome, status, canal === "sankhya_browser" ? configSankhya : "{}"],
     );
   }
+
+  /* Uma credencial de verdade para o conector Sankhya.
+     Sem ela o conector ficava "connected" sem credencial nenhuma — outro estado
+     que o produto não produz, e que fazia a conferência medir um cartão que o
+     servidor recusaria. É selada com a mesma função do produto, então o que está
+     no banco é abrível pelo mesmo cofre; um valor inventado à mão seria um
+     segredo que não abre, e a tela mentiria de outro jeito. */
+  await client.query(
+    `INSERT INTO fdp_integration_credentials
+       (id, workspace_id, integration_id, credential_type, encrypted_value, initialization_vector, auth_tag,
+        key_version, fingerprint, public_hint, created_by)
+     VALUES ('cred-ui-1', 'ws-ui', 'int-ui-1', 'provider_auth', $1, $2, $3, $4, $5, $6, 'u-ui')
+     ON CONFLICT (id) DO NOTHING`,
+    [selada.encryptedValue, selada.initializationVector, selada.authTag, selada.keyVersion, selada.fingerprint,
+      credentialPublicHint("sankhya_browser", credenciaisDeEnsaio)],
+  );
 
   /* O módulo `sankhya_browser` não entra em plano nenhum: a plataforma o libera
      workspace a workspace. Sem esta linha, *todo* workspace da semente fica no

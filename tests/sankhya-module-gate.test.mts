@@ -232,6 +232,39 @@ test("o cartão do console não oferece executar sobre configuração que não e
     "executar e retry só podem existir quando o servidor os aceitaria");
 });
 
+test("o cartão oferece o degrau seguinte da escada, não o último", async () => {
+  // A escada do servidor em `queueSankhyaRun`: módulo liberado → configuração
+  // gravada → credencial ativa → conector em `connected`. O cartão oferecia
+  // "Executar" em todos os degraus, e a recusa mandava testar a conexão — cujo
+  // botão vivia dentro de outro painel, acima do formulário recém-preenchido.
+  const fonte = await ler("app/plataforma/features/IntegrationsFeature.tsx");
+  assert.match(fonte, /needsCredential = isSankhya && !moduleBlocked && !needsSetup && row\.hasCredential === false/u);
+  assert.match(fonte, /needsTest = isSankhya && !moduleBlocked && !needsSetup && row\.hasCredential === true\s*\n?\s*&& !\["connected", "paused"\]\.includes\(text\(row\.status\)\)/u);
+  assert.match(fonte, /cannotRun = moduleBlocked \|\| needsSetup \|\| needsCredential \|\| needsTest/u);
+  // E o degrau seguinte precisa ser oferecível: sem esta ação o cartão apenas
+  // explicaria o bloqueio, que é o mesmo beco de antes com outra frase.
+  assert.match(fonte, /needsTest && <button onClick=\{\(\) => onPerform\("test_connection"\)\}/u);
+  assert.match(fonte, /test_connection: "Testar conexão"/u);
+
+  // `test_connection` é aceito pelo servidor justamente quando `run` não é:
+  // a verificação de saúde pula a exigência de `connected`.
+  const acoes = await ler("app/api/platform/integrations/[id]/actions/route.ts");
+  assert.match(acoes, /"test_connection"/u);
+  const fila = await ler("lib/sankhya/queue.ts");
+  assert.match(fila, /input\.triggerType !== "health_check" && integration\.status !== "connected"/u);
+});
+
+test("o botão desabilitado do painel diz por que está desabilitado", async () => {
+  // Gravar a credencial recarrega o painel e limpa o motivo administrativo, que
+  // fica no topo. O botão de teste desabilitava logo depois da ação que deveria
+  // levar até ele, calado.
+  const painel = await ler("app/plataforma/features/SankhyaPlatformConfiguration.tsx");
+  assert.match(painel, /Grave a credencial abaixo para habilitar o teste/u);
+  assert.match(painel, /Preencha o motivo administrativo acima para habilitar o teste/u);
+  // As duas frases precisam cobrir exatamente as condições do `disabled`.
+  assert.match(painel, /disabled=\{!activeCredential \|\| Boolean\(pending\) \|\| !reasonValid\}/u);
+});
+
 test("nenhuma mensagem do produto sai com acento quebrado", async () => {
   // Sete mensagens desta mesma área saíam com os acentos duplamente
   // codificados — "resolução de conciliação inválida" chegava ao cliente com
