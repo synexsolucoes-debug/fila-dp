@@ -7,8 +7,9 @@ import test from "node:test";
  *
  * O que este arquivo registra é uma **decisão**, não um defeito. Em `d2d8d5a`
  * ("Restringe o painel ao fluxo operacional") o menu de configurações perdeu
- * oito entradas de propósito, e sobrou uma: Segurança. As oito seções
- * continuam implementadas no código e nenhum caminho as abre.
+ * oito entradas de propósito, e sobrou uma: Segurança. A administração de
+ * usuários foi reaberta depois, deliberadamente, para sustentar a hierarquia
+ * Workspace → Departamento → Módulos. As outras sete seções continuam fechadas.
  *
  * O registro existe porque a leitura natural de quem chega depois é "sumiu um
  * menu, isso é regressão" — e restaurá-lo desfaria a decisão sem discussão.
@@ -37,15 +38,16 @@ test("o estado inicial é uma seção que a tela consegue mostrar", () => {
   assert.match(source, /useState<SettingsSection>\("security"\)/u);
 });
 
-test("as oito seções fechadas seguem fechadas — é decisão, não esquecimento", () => {
-  // Se alguém quiser reabri-las, que seja de propósito e com este teste no
-  // diff. O menu tem um rótulo e um botão.
+test("Usuários e acessos é a única exceção; as outras sete seções seguem fechadas", () => {
+  // A reabertura de usuários é intencional e limitada. Se alguém quiser
+  // reabrir as demais seções, que seja de propósito e com este teste no diff.
   const nav = source.slice(source.indexOf('<nav className="settings-nav"'));
   const menu = nav.slice(0, nav.indexOf("</nav>"));
   const botoes = menu.match(/<button/gu) ?? [];
-  assert.equal(botoes.length, 1, "o menu de configurações voltou a ter mais de uma entrada");
+  assert.equal(botoes.length, 2, "o menu deve conter somente Segurança e Usuários e acessos");
   assert.match(menu, /Segurança<small>Dispositivos e sessões<\/small>/u);
-  for (const secao of ["general", "companies", "columns", "team", "fields", "templates", "sla", "automations"]) {
+  assert.match(menu, /setSettingsSection\("team"\).*Usuários e acessos<small>Departamento e módulos<\/small>/u);
+  for (const secao of ["general", "companies", "columns", "fields", "templates", "sla", "automations"]) {
     assert.doesNotMatch(menu, new RegExp(`setSettingsSection\\("${secao}"\\)`, "u"),
       `a seção ${secao} voltou ao menu — se for intencional, atualize este teste`);
   }
