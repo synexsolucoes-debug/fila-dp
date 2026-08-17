@@ -10,6 +10,7 @@ import {
   epiDisposalStatusLabels, epiDiscountDecisionLabels, epiDiscountStatusLabels, epiDiscountTriggerLabels,
   epiMovementTypeLabels, epiReturnConditionLabels,
 } from "@/lib/epi";
+import { epiComplianceStatusLabels, type EpiComplianceStatus } from "@/lib/epi-compliance";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { currency, dateLabel, fileSize, normalizeDossier, requestJson, type Row } from "./epi.api";
 import type { EmployeeEpiDossier } from "./epi.types";
@@ -74,7 +75,7 @@ export function EmployeeEpiPanel({ employeeId }: { employeeId: string }) {
   const nothing = !dossier.deliveries.length && !dossier.returns.length && !dossier.damages.length
     && !dossier.disposals.length && !dossier.discounts.length;
 
-  if (nothing) {
+  if (nothing && !dossier.compliance) {
     return <div className={styles.workspace}>
       <EmptyState icon={HardHat} size="compact" title="Nenhum EPI registrado para este colaborador"
         text="Quando um equipamento for entregue no Controle de EPI, a entrega, o termo e todo o histórico aparecem aqui." />
@@ -83,6 +84,13 @@ export function EmployeeEpiPanel({ employeeId }: { employeeId: string }) {
 
   return <div className={`${styles.workspace} ${styles.employeePanel}`}>
     <div className={styles.summaryGrid}>
+      {dossier.compliance && <article className={styles.summaryCard}
+        data-tone={["missing", "expired"].includes(dossier.compliance.status) ? "danger"
+          : ["overdue", "due_soon"].includes(dossier.compliance.status) ? "warning" : "safe"}>
+        <span><ShieldCheckIcon />Conformidade da lotação</span>
+        <strong>{dossier.compliance.requiredItems ? `${dossier.compliance.compliantItems}/${dossier.compliance.requiredItems}` : "—"}</strong>
+        <small>{epiComplianceStatusLabels[dossier.compliance.status]}</small>
+      </article>}
       <article className={styles.summaryCard} data-tone={activeUnits ? "neutral" : "safe"}>
         <span><Boxes aria-hidden="true" />Em poder do colaborador</span>
         <strong>{activeUnits}</strong><small>{currency(activeValue)} em equipamentos</small>
@@ -100,6 +108,18 @@ export function EmployeeEpiPanel({ employeeId }: { employeeId: string }) {
         <strong>{dossier.movements.length}</strong><small>Registros no histórico</small>
       </article>
     </div>
+
+    {dossier.compliance && <Section title="Cobertura obrigatória do cargo e departamento" count={dossier.compliance.items.length}>
+      {dossier.compliance.items.length ? <Table
+        head={["EPI obrigatório", "Necessário", "Em poder", "Última entrega", "Próxima troca", "Validade", "Situação"]}
+        rows={dossier.compliance.items.map((item) => [
+          item.productName, String(item.requiredQuantity), String(item.heldQuantity), dateLabel(item.lastDeliveredOn),
+          dateLabel(item.nextExchangeOn), item.expiresOn ? `${dateLabel(item.expiresOn)}${item.expiryReason ? ` · ${item.expiryReason}` : ""}` : "—",
+          <StatusPill key={item.requirementId} status={complianceTone(item.status)} label={epiComplianceStatusLabels[item.status]} />,
+        ])} /> : <div className={styles.noticeBar}><AlertTriangle aria-hidden="true" /><span>
+          <strong>Sem regra obrigatória definida</strong>Cadastre os EPIs exigidos para este cargo ou departamento no Controle de EPI.
+        </span></div>}
+    </Section>}
 
     <Section title="EPIs ativos com o colaborador" count={dossier.activeDeliveries.length}>
       {dossier.activeDeliveries.length ? <Table
@@ -213,6 +233,17 @@ function movementIcon(type: string) {
   if (type === "disposal") return Trash2;
   if (type === "discount_analysis") return Scale;
   return Boxes;
+}
+
+function complianceTone(status: EpiComplianceStatus) {
+  if (["missing", "expired"].includes(status)) return "danger";
+  if (["overdue", "due_soon"].includes(status)) return "warning";
+  if (status === "compliant") return "active";
+  return "neutral";
+}
+
+function ShieldCheckIcon() {
+  return <HardHat aria-hidden="true" />;
 }
 
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {

@@ -2,6 +2,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
+import { buildEpiCompliance, type EpiHoldingInput, type EpiRequirementInput } from "@/lib/epi-compliance";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -24,14 +25,17 @@ export async function GET(_request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.view", "consultar os EPIs do colaborador");
     const employee = await d1.prepare(`SELECT e.id, e.company_id, e.full_name, e.social_name, e.registration_number,
+        e.department_id, e.position_id, COALESCE(dep.name, '') AS department_name, COALESCE(pos.name, '') AS position_name,
         c.legal_name AS company_legal_name, c.trade_name AS company_trade_name, c.tax_id AS company_tax_id
       FROM fdp_employees e
       JOIN fdp_companies c ON c.workspace_id = e.workspace_id AND c.id = e.company_id
+      LEFT JOIN fdp_departments dep ON dep.workspace_id = e.workspace_id AND dep.company_id = e.company_id AND dep.id = e.department_id
+      LEFT JOIN fdp_positions pos ON pos.workspace_id = e.workspace_id AND pos.company_id = e.company_id AND pos.id = e.position_id
       WHERE e.workspace_id = ? AND e.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
     if (!employee) throw ApiError.notFound("Colaborador não encontrado.", "EPI_EMPLOYEE_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(employee.company_id));
 
-    const [deliveries, returns, damages, disposals, discounts, movements, attachments] = await Promise.all([
+    const [deliveries, returns, damages, disposals, discounts, movements, attachments, requirements] = await Promise.all([
       d1.prepare(`SELECT d.*, p.name AS epi_name, p.epi_type,
           (SELECT COUNT(*) FROM fdp_epi_attachments a WHERE a.workspace_id = d.workspace_id AND a.entity_type = 'delivery' AND a.entity_id = d.id) AS attachments_count
         FROM fdp_epi_deliveries d
@@ -70,13 +74,50 @@ export async function GET(_request: Request, context: RouteContext) {
         ) ORDER BY a.created_at DESC LIMIT 200`)
         .bind(workspace.id, workspace.id, id, workspace.id, id, workspace.id, id, workspace.id, id)
         .all<Record<string, unknown>>(),
+      d1.prepare(`SELECT r.*, p.name AS product_name, p.ca_number, p.ca_expires_on, p.product_expires_on,
+          COALESCE(dep.name, '') AS department_name, COALESCE(pos.name, '') AS position_name
+        FROM fdp_epi_requirements r
+        JOIN fdp_epi_products p ON p.workspace_id = r.workspace_id AND p.id = r.product_id
+        JOIN fdp_employees e ON e.workspace_id = r.workspace_id AND e.company_id = r.company_id AND e.id = ?
+        LEFT JOIN fdp_departments dep ON dep.workspace_id = r.workspace_id AND dep.company_id = r.company_id AND dep.id = r.department_id
+        LEFT JOIN fdp_positions pos ON pos.workspace_id = r.workspace_id AND pos.company_id = r.company_id AND pos.id = r.position_id
+        WHERE r.workspace_id = ? AND r.active = 1 AND p.status <> 'inactive'
+          AND (r.department_id IS NULL OR r.department_id = e.department_id)
+          AND (r.position_id IS NULL OR r.position_id = e.position_id)
+        ORDER BY p.name`).bind(id, workspace.id).all<Record<string, unknown>>(),
     ]);
 
     const active = deliveries.results.filter((row) =>
       String(row.status) !== "canceled" && Number(row.quantity) - Number(row.settled_quantity) > 0);
+    const holdingMap = new Map<string, EpiHoldingInput>();
+    for (const row of active) {
+      const productId = String(row.product_id);
+      const current = holdingMap.get(productId) ?? {
+        employeeId: id, productId, productName: String(row.epi_name ?? ""), quantity: 0, lastDeliveredOn: "",
+      };
+      current.quantity += Number(row.quantity) - Number(row.settled_quantity);
+      const date = String(row.delivered_on ?? "").slice(0, 10);
+      if (date > current.lastDeliveredOn) current.lastDeliveredOn = date;
+      holdingMap.set(productId, current);
+    }
+    const requirementInput: EpiRequirementInput[] = requirements.results.map((row) => ({
+      id: String(row.id), companyId: String(row.company_id), departmentId: String(row.department_id ?? ""),
+      departmentName: String(row.department_name ?? ""), positionId: String(row.position_id ?? ""),
+      positionName: String(row.position_name ?? ""), productId: String(row.product_id), productName: String(row.product_name),
+      caNumber: String(row.ca_number ?? ""), caExpiresOn: String(row.ca_expires_on ?? "").slice(0, 10),
+      productExpiresOn: String(row.product_expires_on ?? "").slice(0, 10), quantity: Number(row.quantity),
+      replacementDays: Number(row.replacement_days), warningDays: Number(row.warning_days),
+    }));
+    const compliance = buildEpiCompliance([{
+      id, companyId: String(employee.company_id),
+      name: String(employee.social_name || employee.full_name), registrationNumber: String(employee.registration_number),
+      departmentId: String(employee.department_id ?? ""), departmentName: String(employee.department_name ?? ""),
+      positionId: String(employee.position_id ?? ""), positionName: String(employee.position_name ?? ""),
+    }], requirementInput, [...holdingMap.values()], new Date().toISOString().slice(0, 10))[0];
 
     return Response.json({
       employee,
+      compliance,
       permissions: {
         deliver: hasCapability(workspace, "epi.deliver"),
         receiveReturn: hasCapability(workspace, "epi.return"),

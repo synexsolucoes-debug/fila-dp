@@ -8,6 +8,7 @@ import {
   caExpiryTone, damageRouting, decidedValueFor, discountStatusFor, discountTitle, discountTotal,
   disposalTouchesStock, epiDamageDecisions, epiDiscountDecisions, epiReturnConditions, returnRouting,
 } from "../lib/epi.ts";
+import { buildEpiCompliance } from "../lib/epi-compliance.ts";
 
 /**
  * Controle de EPI.
@@ -29,6 +30,7 @@ import {
 const migration = await readFile(new URL("../drizzle/postgres/0044_epi_control.sql", import.meta.url), "utf8");
 const evolutionMigration = await readFile(new URL("../drizzle/postgres/0045_workspace_areas_shared_stock.sql", import.meta.url), "utf8");
 const groupProductMigration = await readFile(new URL("../drizzle/postgres/0047_group_owned_epi_products.sql", import.meta.url), "utf8");
+const complianceMigration = await readFile(new URL("../drizzle/postgres/0048_epi_compliance.sql", import.meta.url), "utf8");
 const tabelas = [
   "fdp_epi_products", "fdp_epi_deliveries", "fdp_epi_returns", "fdp_epi_damages",
   "fdp_epi_disposals", "fdp_epi_discount_requests", "fdp_epi_movements", "fdp_epi_attachments",
@@ -143,6 +145,39 @@ test("o CA vencido e o que está por vencer são estados diferentes", () => {
   assert.equal(caExpiryTone(null, "2026-06-01"), "unknown");
 });
 
+test("o mapa de conformidade distingue falta, troca próxima e lotação sem regra", () => {
+  const employees = [
+    { id: "ana", companyId: "c1", name: "Ana", registrationNumber: "1", departmentId: "d1", departmentName: "Operação", positionId: "p1", positionName: "Operadora" },
+    { id: "bruno", companyId: "c1", name: "Bruno", registrationNumber: "2", departmentId: "d1", departmentName: "Operação", positionId: "p1", positionName: "Operador" },
+    { id: "carla", companyId: "c1", name: "Carla", registrationNumber: "3", departmentId: "d2", departmentName: "Administrativo", positionId: "p2", positionName: "Analista" },
+  ];
+  const requirements = [{
+    id: "r1", companyId: "c1", departmentId: "d1", departmentName: "Operação", positionId: "", positionName: "",
+    productId: "helmet", productName: "Capacete", caNumber: "123", caExpiresOn: "2027-01-01", productExpiresOn: "",
+    quantity: 1, replacementDays: 180, warningDays: 30,
+  }];
+  const compliance = buildEpiCompliance(employees, requirements, [
+    { employeeId: "ana", productId: "helmet", productName: "Capacete", quantity: 1, lastDeliveredOn: "2026-01-01" },
+  ], "2026-06-01");
+  assert.equal(compliance[0].status, "due_soon");
+  assert.equal(compliance[0].nextExchangeOn, "2026-06-30");
+  assert.equal(compliance[1].status, "missing");
+  assert.equal(compliance[1].items[0].missingQuantity, 1);
+  assert.equal(compliance[2].status, "unconfigured");
+});
+
+test("validade vencida prevalece sobre ciclo futuro quando o EPI está entregue", () => {
+  const result = buildEpiCompliance([
+    { id: "e1", companyId: "c1", name: "Ana", registrationNumber: "1", departmentId: "", departmentName: "", positionId: "", positionName: "" },
+  ], [{
+    id: "r1", companyId: "c1", departmentId: "", departmentName: "", positionId: "", positionName: "",
+    productId: "p1", productName: "Luva", caNumber: "CA", caExpiresOn: "2026-05-31", productExpiresOn: "",
+    quantity: 1, replacementDays: 365, warningDays: 30,
+  }], [{ employeeId: "e1", productId: "p1", quantity: 1, lastDeliveredOn: "2026-05-01" }], "2026-06-01");
+  assert.equal(result[0].status, "expired");
+  assert.equal(result[0].items[0].expiryReason, "CA");
+});
+
 /* -------------------------------------------------------------------------- */
 /* Multi-tenancy                                                              */
 /* -------------------------------------------------------------------------- */
@@ -156,6 +191,15 @@ test("toda tabela do módulo tem RLS forçada e política por workspace", () => 
     assert.match(migration, new RegExp(`WITH CHECK \\("workspace_id" = NULLIF\\(current_setting\\('app\\.workspace_id', true\\), ''\\)\\);--> statement-breakpoint\\nALTER TABLE|WITH CHECK \\("workspace_id" = NULLIF\\(current_setting\\('app\\.workspace_id', true\\), ''\\)\\);`, "u"),
       `${tabela} sem política de escrita por tenant`);
   }
+});
+
+test("regras obrigatórias têm escopo tenant, lotação válida e não duplicam o mesmo EPI", () => {
+  assert.match(complianceMigration, /CREATE TABLE "fdp_epi_requirements"/u);
+  assert.match(complianceMigration, /fdp_epi_requirements_scope_product_uq[\s\S]{0,260}COALESCE\("department_id", ''\)[\s\S]{0,120}COALESCE\("position_id", ''\)/u);
+  assert.match(complianceMigration, /fdp_epi_requirements_department_fk[\s\S]{0,300}"workspace_id", "company_id", "department_id"/u);
+  assert.match(complianceMigration, /fdp_epi_requirements_position_fk[\s\S]{0,300}"workspace_id", "company_id", "position_id"/u);
+  assert.match(complianceMigration, /ALTER TABLE "fdp_epi_requirements" FORCE ROW LEVEL SECURITY/u);
+  assert.match(complianceMigration, /fdp_epi_requirements_workspace_isolation/u);
 });
 
 test("as referências entre tabelas carregam o workspace, então apontar para outro cliente não é representável", () => {

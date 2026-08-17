@@ -1,6 +1,7 @@
 import type {
-  CompanyOption, DisposableProduct, EmployeeEpiDossier, EmployeeOption, EpiAttachment, EpiDamage,
-  EpiDelivery, EpiDiscount, EpiDisposal, EpiMovement, EpiOverview, EpiProduct, EpiReturn,
+  CompanyOption, DisposableProduct, EmployeeEpiDossier, EmployeeOption, EpiAttachment, EpiCatalogOption,
+  EpiDamage, EpiDashboard, EpiDelivery, EpiDiscount, EpiDisposal, EpiEmployeeCompliance, EpiMovement,
+  EpiOverview, EpiProduct, EpiRequirement, EpiReturn,
 } from "./epi.types";
 
 /**
@@ -66,6 +67,79 @@ export function normalizeOverview(payload: Row): EpiOverview {
       awaitingDisposal: number(summary.awaitingDisposal), discountsInAnalysis: number(summary.discountsInAnalysis),
       caExpiring: number(summary.caExpiring), caExpired: number(summary.caExpired),
     },
+  };
+}
+
+export function normalizeRequirement(row: Row): EpiRequirement {
+  return {
+    id: text(row.id), companyId: text(value(row, "companyId", "company_id")),
+    departmentId: text(value(row, "departmentId", "department_id")),
+    departmentName: text(value(row, "departmentName", "department_name")),
+    positionId: text(value(row, "positionId", "position_id")),
+    positionName: text(value(row, "positionName", "position_name")),
+    productId: text(value(row, "productId", "product_id")), productName: text(value(row, "productName", "product_name")),
+    caNumber: text(value(row, "caNumber", "ca_number")), quantity: number(row.quantity),
+    replacementDays: number(value(row, "replacementDays", "replacement_days")),
+    warningDays: number(value(row, "warningDays", "warning_days")), active: bool(row.active), notes: text(row.notes),
+  };
+}
+
+export function normalizeCatalogOption(row: Row): EpiCatalogOption {
+  return { id: text(row.id), name: text(row.name), code: text(row.code), status: text(row.status) };
+}
+
+export function normalizeCompliance(row: Row): EpiEmployeeCompliance {
+  const items = Array.isArray(row.items) ? row.items as Row[] : [];
+  const holdings = Array.isArray(row.holdings) ? row.holdings as Row[] : [];
+  return {
+    id: text(row.id), companyId: text(value(row, "companyId", "company_id")), name: text(row.name),
+    registrationNumber: text(value(row, "registrationNumber", "registration_number")),
+    departmentId: text(value(row, "departmentId", "department_id")), departmentName: text(value(row, "departmentName", "department_name")),
+    positionId: text(value(row, "positionId", "position_id")), positionName: text(value(row, "positionName", "position_name")),
+    status: text(row.status) as EpiEmployeeCompliance["status"],
+    items: items.map((item) => ({
+      requirementId: text(value(item, "requirementId", "requirement_id")), productId: text(value(item, "productId", "product_id")),
+      productName: text(value(item, "productName", "product_name")), caNumber: text(value(item, "caNumber", "ca_number")),
+      requiredQuantity: number(value(item, "requiredQuantity", "required_quantity")), heldQuantity: number(value(item, "heldQuantity", "held_quantity")),
+      missingQuantity: number(value(item, "missingQuantity", "missing_quantity")), lastDeliveredOn: day(value(item, "lastDeliveredOn", "last_delivered_on")),
+      nextExchangeOn: day(value(item, "nextExchangeOn", "next_exchange_on")), expiresOn: day(value(item, "expiresOn", "expires_on")),
+      expiryReason: text(value(item, "expiryReason", "expiry_reason")) as "CA" | "produto" | "",
+      status: text(item.status) as EpiEmployeeCompliance["items"][number]["status"],
+    })),
+    holdings: holdings.map((item) => ({
+      productId: text(value(item, "productId", "product_id")), productName: text(value(item, "productName", "product_name")), quantity: number(item.quantity),
+    })),
+    requiredItems: number(value(row, "requiredItems", "required_items")), compliantItems: number(value(row, "compliantItems", "compliant_items")),
+    missingItems: number(value(row, "missingItems", "missing_items")), expiredItems: number(value(row, "expiredItems", "expired_items")),
+    overdueItems: number(value(row, "overdueItems", "overdue_items")), dueSoonItems: number(value(row, "dueSoonItems", "due_soon_items")),
+    nextExchangeOn: day(value(row, "nextExchangeOn", "next_exchange_on")),
+  };
+}
+
+export function normalizeDashboard(payload: Row): EpiDashboard {
+  const summary = (payload.summary ?? {}) as Row;
+  const metric = (camel: string, snake: string) => number(value(summary, camel, snake));
+  return {
+    month: text(payload.month), canManageRequirements: bool(value(payload, "canManageRequirements", "can_manage_requirements")),
+    summary: {
+      activeEmployees: metric("activeEmployees", "active_employees"), employeesWithRequiredEpi: metric("employeesWithRequiredEpi", "employees_with_required_epi"),
+      compliantEmployees: metric("compliantEmployees", "compliant_employees"), missingEmployees: metric("missingEmployees", "missing_employees"),
+      expiredEmployees: metric("expiredEmployees", "expired_employees"), overdueEmployees: metric("overdueEmployees", "overdue_employees"),
+      dueSoonEmployees: metric("dueSoonEmployees", "due_soon_employees"), unconfiguredEmployees: metric("unconfiguredEmployees", "unconfigured_employees"),
+      stockShortages: metric("stockShortages", "stock_shortages"), monthlyDeliveries: metric("monthlyDeliveries", "monthly_deliveries"),
+      monthlyEmployeesServed: metric("monthlyEmployeesServed", "monthly_employees_served"), monthlyDeliveredValue: metric("monthlyDeliveredValue", "monthly_delivered_value"),
+      monthlyPendingSignatures: metric("monthlyPendingSignatures", "monthly_pending_signatures"),
+    },
+    employees: Array.isArray(payload.employees) ? (payload.employees as Row[]).map(normalizeCompliance) : [],
+    utilization: Array.isArray(payload.utilization) ? (payload.utilization as Row[]).map((row) => ({
+      productId: text(value(row, "productId", "product_id")), productName: text(value(row, "productName", "product_name")),
+      delivered: number(row.delivered), returned: number(row.returned), damaged: number(row.damaged), disposed: number(row.disposed),
+      deliveredValue: number(value(row, "deliveredValue", "delivered_value")), availableQuantity: number(value(row, "availableQuantity", "available_quantity")),
+    })) : [],
+    shortages: Array.isArray(payload.shortages) ? (payload.shortages as Row[]).map((row) => ({
+      productId: text(value(row, "productId", "product_id")), productName: text(value(row, "productName", "product_name")),
+      missing: number(row.missing), available: number(row.available), shortage: number(row.shortage),
+    })) : [],
   };
 }
 
@@ -301,6 +375,7 @@ export function normalizeDossier(payload: Row): EmployeeEpiDossier {
   return {
     employeeName: text(value(employee, "socialName", "social_name")) || text(value(employee, "fullName", "full_name")),
     companyName: companyName(employee),
+    compliance: payload.compliance && typeof payload.compliance === "object" ? normalizeCompliance(payload.compliance as Row) : null,
     permissions: {
       deliver: bool(permissions.deliver), receiveReturn: bool(permissions.receiveReturn),
       damage: bool(permissions.damage), analyzeDiscount: bool(permissions.analyzeDiscount),
