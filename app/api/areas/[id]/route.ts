@@ -92,6 +92,16 @@ export async function DELETE(request: Request, context: RouteContext) {
     requireNamedCapability(workspace, "departments.archive", "arquivar áreas operacionais");
     const before = await d1.prepare("SELECT * FROM fdp_areas WHERE workspace_id = ? AND id = ?").bind(workspace.id, id).first();
     if (!before) throw ApiError.notFound("Área não encontrada.", "AREA_NOT_FOUND");
+    const primaryMembers = await d1.prepare(`SELECT COUNT(*)::integer AS total
+        FROM fdp_area_members member
+        JOIN fdp_workspaces workspace ON workspace.id = member.workspace_id
+        WHERE member.workspace_id = ? AND member.area_id = ? AND member.is_primary = 1
+          AND member.user_id <> workspace.owner_user_id`)
+      .bind(workspace.id, id).first<{ total: number }>();
+    if (Number(primaryMembers?.total ?? 0) > 0) {
+      throw new ApiError(409, "DEPARTMENT_HAS_PRIMARY_MEMBERS",
+        "Este departamento ainda é a lotação principal de usuários. Mova essas pessoas para outro departamento antes de arquivá-lo.");
+    }
     await d1.batch([
       d1.prepare("UPDATE fdp_areas SET status = 'archived', archived_at = now(), updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
         .bind(user.id, workspace.id, id),

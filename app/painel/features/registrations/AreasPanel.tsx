@@ -63,7 +63,7 @@ export function AreasPanel({ canManage, createSignal }: { canManage: boolean; cr
       setAreas(next); setModules(areaPayload.modules ?? []); setWorkspaceMembers(snapshot.members ?? []);
       setSelected((current) => next.find((item) => item.id === (preferredId || (current === "new" ? "" : current?.id))) ?? next[0] ?? null);
       setError("");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao carregar áreas."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao carregar departamentos."); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { const frame = requestAnimationFrame(() => void load()); return () => cancelAnimationFrame(frame); }, [load]);
@@ -85,7 +85,7 @@ export function AreasPanel({ canManage, createSignal }: { canManage: boolean; cr
       })));
       setSelected((current) => current && current !== "new" && current.id === active.id
         ? { ...current, moduleKeys: detail.moduleKeys ?? current.moduleKeys } : current);
-    }).catch((cause) => { if (!canceled) setError(cause instanceof Error ? cause.message : "Erro ao abrir a área."); });
+    }).catch((cause) => { if (!canceled) setError(cause instanceof Error ? cause.message : "Erro ao abrir o departamento."); });
     return () => { canceled = true; };
   }, [active?.id]);
   const select = useCallback((area: Area) => { setSelected(area); setAreaMembers([]); setError(""); }, []);
@@ -118,25 +118,25 @@ export function AreasPanel({ canManage, createSignal }: { canManage: boolean; cr
         ? await requestJson<{ area: { id: string } }>(`/api/areas/${active.id}`, { method: "PATCH", body: JSON.stringify(payload) })
         : await requestJson<{ area: { id: string } }>("/api/areas", { method: "POST", body: JSON.stringify(payload) });
       await requestJson(`/api/areas/${result.area.id}/members`, { method: "PUT", body: JSON.stringify({ members: areaMembers }) });
-      setSaved("Área e integrantes salvos."); await load(result.area.id);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar a área."); }
+      setSaved("Departamento, módulos e integrantes salvos."); await load(result.area.id);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar o departamento."); }
     finally { setBusy(false); }
   }
   async function archive() {
-    if (!active || !window.confirm(`Arquivar a área ${active.name}? O histórico será preservado.`)) return;
+    if (!active || !window.confirm(`Arquivar o departamento ${active.name}? O histórico será preservado.`)) return;
     setBusy(true);
-    try { await requestJson(`/api/areas/${active.id}`, { method: "DELETE" }); setSaved("Área arquivada."); setSelected(null); await load(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível arquivar a área."); }
+    try { await requestJson(`/api/areas/${active.id}`, { method: "DELETE" }); setSaved("Departamento arquivado."); setSelected(null); await load(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível arquivar o departamento."); }
     finally { setBusy(false); }
   }
 
-  if (loading) return <LoadingState title="Carregando áreas operacionais" />;
-  if (!areas.length && selected !== "new") return <EmptyState icon={Building2} title="Nenhuma área operacional"
-    text="Crie áreas do Workspace como SESMT e Departamento Pessoal. Elas atravessam empresas e roteiam as demandas."
-    action={canManage && <button className={styles.secondaryButton} onClick={() => setSelected("new")}>Criar primeira área</button>} />;
+  if (loading) return <LoadingState title="Carregando departamentos" />;
+  if (!areas.length && selected !== "new") return <EmptyState icon={Building2} title="Nenhum departamento"
+    text="Crie os departamentos do Workspace, vincule os módulos de cada um e depois lote os usuários."
+    action={canManage && <button className={styles.secondaryButton} onClick={() => setSelected("new")}>Criar primeiro departamento</button>} />;
   return <div className={styles.areasLayout}>
     <aside className={styles.areaList}>
-      <header><div><span>ÁREAS DO WORKSPACE</span><strong>{areas.filter((item) => item.status === "active").length} ativas</strong></div>
+      <header><div><span>DEPARTAMENTOS DO WORKSPACE</span><strong>{areas.filter((item) => item.status === "active").length} ativos</strong></div>
         <button aria-label="Atualizar áreas" onClick={() => void load()}><RefreshCw /></button></header>
       {areas.map((area) => <button key={area.id} data-selected={active?.id === area.id} onClick={() => void select(area)}>
         <span style={{ background: area.color }} /><div><strong>{area.name}</strong><small>{area.code} · {area.membersCount} integrante(s)</small></div>
@@ -145,7 +145,7 @@ export function AreasPanel({ canManage, createSignal }: { canManage: boolean; cr
     </aside>
     <form key={active?.id ?? "new"} className={styles.areaEditor} onSubmit={(event) => void submit(event)}>
       <header><div><span>{active ? active.code : "NOVA ÁREA"}</span><h2>{active?.name ?? "Criar área operacional"}</h2>
-        <p>Área transversal ao Workspace, independente de empresa ou CNPJ.</p></div></header>
+        <p>Departamento do Workspace, independente de empresa ou CNPJ, que limita os módulos dos seus usuários.</p></div></header>
       {error && <p className={styles.inlineError}>{error}</p>}{saved && <p className={styles.inlineSuccess}><Check />{saved}</p>}
       <div className={styles.formGrid}>
         <label><span>NOME *</span><input name="name" required defaultValue={active?.name ?? ""} /></label>

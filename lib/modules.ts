@@ -135,6 +135,12 @@ export type ModuleAccessInput = {
   workspaceGrants: ReadonlyMap<string, boolean>;
   /** Exceções individuais do usuário dentro do grupo. */
   memberGrants?: ReadonlyMap<string, boolean>;
+  /**
+   * Módulos do departamento principal do usuário. `undefined` preserva o
+   * acesso legado de proprietários e pessoas ainda sem lotação; quando existe,
+   * funciona como limite máximo e uma exceção individual nunca o ultrapassa.
+   */
+  departmentModules?: ReadonlySet<string>;
   role: string;
   workspaceStatus: string;
   subscriptionStatus: string;
@@ -151,6 +157,7 @@ export type ModuleAccessReason =
   | "revoked_by_platform"
   | "dependency_missing"
   | "missing_capability"
+  | "not_in_department"
   | "denied_for_member";
 
 export type ModuleAccess = { allowed: boolean; reason: ModuleAccessReason; upgradeable: boolean };
@@ -165,6 +172,7 @@ export const moduleAccessMessages: Record<ModuleAccessReason, string> = {
   revoked_by_platform: "O acesso a este módulo foi bloqueado pela administração da plataforma.",
   dependency_missing: "Este módulo depende de outro que não está liberado.",
   missing_capability: "Seu perfil não tem permissão para este módulo. Peça ao administrador do grupo.",
+  not_in_department: "Este módulo não pertence ao seu departamento principal.",
   denied_for_member: "O administrador do grupo bloqueou este módulo para o seu acesso.",
 };
 
@@ -194,6 +202,13 @@ export function resolveModuleAccess(input: ModuleAccessInput): ModuleAccess {
   if (grant === false) return { allowed: false, reason: "revoked_by_platform", upgradeable: false };
   const contracted = input.planModules.has(definition.key) || grant === true;
   if (!contracted) return { allowed: false, reason: "not_in_plan", upgradeable: true };
+
+  // O departamento é o limite organizacional do acesso. Esta checagem vem
+  // antes da exceção individual para impedir que uma liberação nominal abra um
+  // módulo pertencente a outro departamento.
+  if (input.departmentModules && !input.departmentModules.has(definition.key)) {
+    return { allowed: false, reason: "not_in_department", upgradeable: false };
+  }
 
   // Bloqueio individual vem depois do plano e antes de tudo mais: é exceção do
   // grupo sobre a pessoa, não sobre o contrato.
@@ -232,6 +247,7 @@ export function resolveModules(input: {
   planModules: ReadonlySet<string>;
   workspaceGrants: ReadonlyMap<string, boolean>;
   memberGrants?: ReadonlyMap<string, boolean>;
+  departmentModules?: ReadonlySet<string>;
   role: string;
   workspaceStatus: string;
   subscriptionStatus: string;
@@ -245,6 +261,7 @@ export function resolveModules(input: {
       planModules: input.planModules,
       workspaceGrants: input.workspaceGrants,
       memberGrants: input.memberGrants,
+      departmentModules: input.departmentModules,
       role: input.role,
       workspaceStatus: input.workspaceStatus,
       subscriptionStatus: input.subscriptionStatus,

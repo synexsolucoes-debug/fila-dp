@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { LoaderCircle, Lock, MinusCircle, PlusCircle, RotateCcw } from "lucide-react";
+import { Building2, LoaderCircle, Lock, MinusCircle, PlusCircle, RotateCcw } from "lucide-react";
 import { ErrorBanner } from "./panel-ui";
 import styles from "./member-modules.module.css";
 
@@ -26,10 +26,16 @@ type ModuleRow = {
   /** `null` = segue o papel; `true` = liberado; `false` = bloqueado. */
   override: boolean | null;
   lockedByPlan: boolean;
+  inDepartment: boolean;
+  lockedByDepartment: boolean;
 };
 
 type Payload = {
-  member: { id: string; name: string; role: string };
+  member: {
+    id: string; name: string; role: string;
+    department: { id: string; name: string; code: string } | null;
+    departmentRequired: boolean;
+  };
   modules: ModuleRow[];
   permissions: { manage: boolean };
 };
@@ -97,16 +103,22 @@ export function MemberModules({ memberId, memberName, canManage }: {
     return <ErrorBanner message={error || "Não foi possível carregar os acessos."} />;
   }
 
-  const exceptions = payload.modules.filter((item) => item.override !== null).length;
+  const approved = payload.modules.filter((item) => item.inDepartment && item.override === true).length;
+  const departmentModules = payload.modules.filter((item) => item.inDepartment).length;
 
   return (
     <div className={styles.matrixArea}>
       <p className={styles.detailNote}>
-        O papel <b>{payload.member.role}</b> decide o acesso padrão. Aqui você abre exceções para esta pessoa —{" "}
-        {exceptions === 0 ? "nenhuma aberta até agora" : exceptions === 1 ? "1 exceção aberta" : `${exceptions} exceções abertas`}.
-        {" "}Liberar concede a <b>leitura</b> do módulo; as ações de escrita continuam vindo do papel.
+        {payload.member.department ? <>
+          <Building2 aria-hidden="true" /> O departamento <b>{payload.member.department.name}</b> limita o acesso a {departmentModules} módulo(s).
+          {" "}{approved} estão explicitamente liberados para {memberName}.
+        </> : <>
+          O papel <b>{payload.member.role}</b> ainda decide o acesso porque não há departamento principal cadastrado.
+        </>}
+        {" "}A liberação concede a <b>leitura</b>; as ações de escrita continuam vindo do papel.
       </p>
 
+      {payload.member.departmentRequired && <ErrorBanner message="Defina o departamento principal deste usuário antes de alterar os módulos." />}
       {error && <ErrorBanner message={error} />}
 
       <div className={styles.tableScroll}>
@@ -115,9 +127,9 @@ export function MemberModules({ memberId, memberName, canManage }: {
           <thead>
             <tr>
               <th scope="col">Módulo</th>
-              <th scope="col">Pelo papel</th>
-              <th scope="col">Agora</th>
-              {canManage && <th scope="col">Exceção</th>}
+              <th scope="col">Departamento</th>
+              <th scope="col">Acesso efetivo</th>
+              {canManage && <th scope="col">Liberação individual</th>}
             </tr>
           </thead>
           <tbody>
@@ -128,9 +140,10 @@ export function MemberModules({ memberId, memberName, canManage }: {
                   <small>{categoryLabels[item.category] ?? item.category} · {item.description}</small>
                 </th>
                 <td>
-                  <span className={item.allowedByRole ? undefined : styles.matrixDenied}>
-                    {item.allowedByRole ? "Libera" : "Não libera"}
+                  <span className={item.inDepartment ? undefined : styles.matrixDenied}>
+                    {item.inDepartment ? "Incluído" : payload.member.departmentRequired ? "Departamento não definido" : "Fora do departamento"}
                   </span>
+                  {item.inDepartment && <small>{item.allowedByRole ? "O papel também permite" : "Depende de liberação individual"}</small>}
                 </td>
                 <td>
                   <span className={item.allowed ? undefined : styles.matrixDenied}>
@@ -140,7 +153,15 @@ export function MemberModules({ memberId, memberName, canManage }: {
                 </td>
                 {canManage && (
                   <td className={styles.rowActions}>
-                    {item.lockedByPlan ? (
+                    {payload.member.departmentRequired ? (
+                      <span className={styles.detailEmpty}>
+                        <Building2 aria-hidden="true" /> Defina o departamento
+                      </span>
+                    ) : item.lockedByDepartment ? (
+                      <span className={styles.detailEmpty}>
+                        <Building2 aria-hidden="true" /> Outro departamento
+                      </span>
+                    ) : item.lockedByPlan ? (
                       // Fora do plano nem o administrador do grupo pode liberar: dizer
                       // isso é mais útil que esconder o botão.
                       <span className={styles.detailEmpty}>
@@ -160,7 +181,7 @@ export function MemberModules({ memberId, memberName, canManage }: {
                             <MinusCircle aria-hidden="true" /> Bloquear
                           </button>
                         )}
-                        {item.override !== null && (
+                        {!payload.member.department && item.override !== null && (
                           <button type="button" className={styles.secondaryButton} disabled={busy === item.key}
                             onClick={() => void apply(item.key, null)}
                             title="Remove a exceção e devolve esta pessoa ao que o papel decide">
