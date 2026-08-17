@@ -35,6 +35,20 @@ export function parseSankhyaConfig(value: unknown): SankhyaConfig {
   };
 }
 
+/**
+ * O que fazer quando o domínio é recusado.
+ *
+ * Só `*.sankhya.com.br` é aceito por padrão. Um Sankhya hospedado no domínio do
+ * próprio cliente — `erp.grupo.com.br`, o caso comum de instalação on-premise —
+ * é recusado, e a frase anterior parava em "o domínio X não está autorizado":
+ * o estado, sem o que destrava. O destravamento não está nesta tela nem em
+ * nenhuma outra; é uma variável de ambiente que só o operador da plataforma
+ * define. Quem não sabe disso preenche o formulário de novo, com a mesma URL.
+ */
+export const SANKHYA_HOST_HINT = "Por padrão só endereços em *.sankhya.com.br são aceitos: "
+  + "um ambiente hospedado em domínio próprio precisa ser incluído em FDP_SANKHYA_BROWSER_ALLOWED_HOSTS "
+  + "pelo operador da plataforma antes de a configuração poder ser gravada.";
+
 export function sanitizeSankhyaConfig(value: unknown) {
   const config = parseSankhyaConfig(value);
   if (!config.endpoint) throw ApiError.badRequest("Informe a URL HTTPS do ambiente Sankhya.", "SANKHYA_URL_REQUIRED");
@@ -46,15 +60,32 @@ export function sanitizeSankhyaConfig(value: unknown) {
       process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS ?? "",
     );
   } catch (error) {
-    throw ApiError.badRequest(error instanceof Error ? error.message : "URL Sankhya inválida.", "SANKHYA_URL_UNSAFE");
+    const motivo = error instanceof Error ? error.message : "URL Sankhya inválida.";
+    throw ApiError.badRequest(`${motivo} ${SANKHYA_HOST_HINT}`, "SANKHYA_URL_UNSAFE");
   }
   return config;
 }
 
+/** O que falta na configuração gravada; vazio quando ela permite executar. */
+export function missingSankhyaConfig(config: SankhyaConfig) {
+  return [
+    config.endpoint ? "" : "a URL HTTPS do ambiente Sankhya",
+    config.companyId ? "" : "a empresa Vinculato de destino",
+  ].filter(Boolean);
+}
+
 export function assertRunnableSankhyaConfig(config: SankhyaConfig) {
-  if (!config.endpoint || !config.companyId) {
-    throw new ApiError(409, "SANKHYA_CONFIG_INCOMPLETE", "Configure a URL e a empresa de destino antes de executar o Sankhya.");
-  }
+  const faltando = missingSankhyaConfig(config);
+  if (!faltando.length) return;
+  // A frase anterior era "Configure a URL e a empresa de destino antes de
+  // executar o Sankhya." — lida logo depois de preencher o formulário, ela
+  // parece dizer que o formulário não foi preenchido. Não foi isso: ou nada
+  // chegou a ser gravado, ou a gravação foi recusada e a recusa ficou no topo
+  // do painel, longe do botão. A frase precisa distinguir as duas coisas.
+  throw new ApiError(409, "SANKHYA_CONFIG_INCOMPLETE",
+    `A configuração gravada deste conector não tem ${faltando.join(" nem ")}. `
+    + "Preencha em Integrações › Configurar; se você acabou de preencher, a gravação foi recusada "
+    + "e o motivo aparece no topo do painel de configuração.");
 }
 
 export function nextSankhyaRunAt(config: SankhyaConfig, from = new Date()) {

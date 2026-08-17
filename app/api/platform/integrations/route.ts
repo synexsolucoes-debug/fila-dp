@@ -55,6 +55,9 @@ export async function GET(request: Request) {
           scoped.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.last_sync_at, i.last_connection_at, i.last_successful_sync_at,
             i.next_sync_at, i.last_error, i.created_at, i.updated_at,
             NULLIF(i.config_json, '')::jsonb->>'companyId' AS company_id,
+            -- Só a presença, não o endereço: o cartão precisa saber se a
+            -- configuração gravada permite executar, e nada além disso.
+            (NULLIF(i.config_json, '')::jsonb->>'endpoint' <> '') AS has_endpoint,
             company.trade_name AS company_name,
             credential.fingerprint, credential.key_version, credential.verified_at, credential.expires_at,
             (credential.id IS NOT NULL) AS has_credentials,
@@ -120,6 +123,12 @@ export async function GET(request: Request) {
           // Só o Sankhya depende de liberação por workspace; para os demais o
           // campo é verdadeiro para que a tela tenha uma regra só a aplicar.
           moduleEnabled: text(row.channel) !== "sankhya_browser" || sankhyaEnabled,
+          // Mesma condição que `assertRunnableSankhyaConfig` aplica antes de
+          // enfileirar: sem URL ou sem empresa de destino, executar é recusado.
+          // Sem isto o cartão oferecia executar sobre um conector cuja gravação
+          // de configuração tinha sido recusada — e a recusa do run soava como
+          // "você não preencheu o formulário", que não era o que havia ocorrido.
+          configured: text(row.channel) !== "sankhya_browser" || Boolean(truthy(row.has_endpoint) && text(row.company_id)),
           hasCredential: truthy(row.has_credentials),
           fingerprint: row.fingerprint ? publicCredentialFingerprint(text(row.fingerprint)) : "",
           credentialVersion: number(row.key_version), verifiedAt: text(row.verified_at) || null, expiresAt: expiresAt || null,

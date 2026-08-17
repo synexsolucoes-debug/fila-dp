@@ -512,6 +512,34 @@ if (password) {
       const abas = await page.locator('[role="tab"]').allInnerTexts().catch(() => []);
       record("e a aba citada na recusa existe mesmo",
         abas.some((aba) => /Acessos e módulos/u.test(aba)), abas.join(" | ").slice(0, 100));
+
+      // Liberar de verdade, e voltar: o estado seguinte é o que produziu o
+      // segundo relato — módulo liberado, configuração ainda não gravada, e o
+      // cartão oferecendo "Executar" sobre ela. A recusa do servidor chegava
+      // como "Configure a URL e a empresa de destino" logo depois de alguém ter
+      // preenchido o formulário e tido a gravação recusada sem perceber.
+      const workspaceLiberado = destino.searchParams.get("workspace") ?? "";
+      await page.locator('[role="tab"]').filter({ hasText: /Acessos e módulos/u }).first().click().catch(() => undefined);
+      const linhaModulo = page.locator("form").filter({ hasText: /Sankhya Browser Connector/u }).first();
+      await linhaModulo.waitFor({ timeout: 25000 }).catch(() => undefined);
+      await linhaModulo.locator("select").selectOption("allow").catch(() => undefined);
+      await linhaModulo.getByRole("button", { name: /Revisar/u }).click().catch(() => undefined);
+      await page.waitForSelector('form[role="dialog"]', { timeout: 20000 }).catch(() => undefined);
+      await page.locator('form[role="dialog"] textarea').first().fill("Ensaio automatizado de liberação do módulo.").catch(() => undefined);
+      await page.locator('form[role="dialog"]').getByRole("button", { name: /Confirmar alteração/u }).click().catch(() => undefined);
+      await page.waitForSelector('form[role="dialog"]', { state: "detached", timeout: 25000 }).catch(() => undefined);
+
+      await page.goto(`${base}/plataforma?area=integrations&workspace=${encodeURIComponent(workspaceLiberado)}`,
+        { waitUntil: "domcontentloaded" });
+      const recemLiberado = sankhya().first();
+      await recemLiberado.waitFor({ timeout: 25000 }).catch(() => undefined);
+      const textoLiberado = await recemLiberado.innerText().catch(() => "");
+      record("liberar o módulo pela interface tira o cartão do estado bloqueado",
+        !/não liberado/u.test(textoLiberado), textoLiberado.replace(/\n/gu, " · ").slice(0, 90));
+      record("mas o cartão sem configuração gravada diz isso, em vez de oferecer executar",
+        /Configuração incompleta/u.test(textoLiberado)
+        && await recemLiberado.getByRole("button", { name: /Executar|Retry/u }).count() === 0,
+        `${await recemLiberado.getByRole("button", { name: /Executar|Retry/u }).count()} botão(ões) de execução`);
     }
   }
 }
