@@ -238,11 +238,17 @@ test("configuração operacional global é tenant-scoped, auditada e ligada à i
   assert.match(route, /fdp_platform_audit_events/u);
   assert.match(route, /request_id/u);
   assert.match(route, /OWNER_MUST_REMAIN_ADMIN/u);
-  for (const action of ["workspace.update", "company.save", "board.save", "list.save", "label.save", "field.save", "template.save", "calendar.update", "holiday.save", "sla.save", "rule.save", "module.set", "member.scope", "member.module.set", "api_key.revoke", "webhook.status"]) {
+  for (const action of ["workspace.update", "company.save", "board.save", "list.save", "label.save", "field.save", "template.save", "calendar.update", "holiday.save", "sla.save", "rule.save", "area.save", "area.archive", "module.set", "member.scope", "api_key.revoke", "webhook.status"]) {
     const pattern = new RegExp(action.replace(".", "\\."));
     assert.match(route, pattern, `ação ${action} ausente no servidor`);
     assert.match(feature, pattern, `ação ${action} sem interface`);
   }
+  assert.match(route, /member\.module\.set/u);
+  assert.match(route, /FROM fdp_areas/u);
+  assert.match(route, /resolveMemberDepartmentAccess/u);
+  assert.match(feature, /Áreas operacionais e módulos/u);
+  assert.match(feature, /Departamento principal/u);
+  assert.match(feature, /Módulos liberados neste departamento/u);
   assert.match(operations, /WorkspaceConfiguration/u);
   assert.match(operations, /params\.get\("workspace"\)/u);
   assert.match(feature, /AdminActionDialog/u);

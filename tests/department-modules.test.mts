@@ -28,15 +28,32 @@ test("API entrega o catálogo real e valida as chaves antes de persistir", async
   }
 });
 
-test("tela separa módulos do departamento do roteamento operacional", async () => {
-  const [panel, registrations] = await Promise.all([
-    readFile(new URL("../app/painel/features/registrations/AreasPanel.tsx", import.meta.url), "utf8"),
+test("plataforma administrativa separa módulos do departamento do roteamento operacional", async () => {
+  const [platform, registrations] = await Promise.all([
+    readFile(new URL("../app/plataforma/features/WorkspaceConfiguration.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(registrations, /Departamentos e módulos/u);
-  assert.match(panel, /Módulos do departamento/u);
-  assert.match(panel, /name="departmentModules" value=\{module\.key\}/u);
-  assert.match(panel, /Roteamento SESMT → DP/u);
+  assert.match(platform, /Áreas operacionais e módulos/u);
+  assert.match(platform, /Módulos do departamento/u);
+  assert.match(platform, /name="departmentModules"/u);
+  assert.match(platform, /Roteamento SESMT → DP/u);
+  assert.match(platform, /Plataforma → Operações → Workspace → Acessos e módulos/u);
+  assert.doesNotMatch(registrations, /AreasPanel|setTab\("areas"\)|Departamentos e módulos/u);
+});
+
+test("somente a Plataforma administra áreas; o painel conserva leitura para os cadastros de usuário", async () => {
+  const [collection, detail, members, platform] = await Promise.all([
+    readFile(new URL("../app/api/areas/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/areas/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/areas/[id]/members/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/platform/workspaces/[id]/configuration/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(collection, /export async function GET[\s\S]+export async function POST[\s\S]+requirePlatformAdmin\(auth\.user\)/u);
+  assert.match(detail, /export async function PATCH[\s\S]+requirePlatformAdmin\(auth\.user\)[\s\S]+export async function DELETE[\s\S]+requirePlatformAdmin\(auth\.user\)/u);
+  assert.match(members, /export async function PUT[\s\S]+requirePlatformAdmin\(auth\.user\)/u);
+  assert.match(platform, /action === "area\.save"/u);
+  assert.match(platform, /action === "area\.archive"/u);
+  assert.match(platform, /resolveMemberDepartmentAccess/u);
 });
 
 test("SESMT existente recebe o módulo de EPI sem sobrescrever associação manual", async () => {

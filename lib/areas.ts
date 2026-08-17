@@ -37,7 +37,7 @@ export async function resolveAreaModule(
   if (!area) {
     const label = moduleKey === "epi.owner" ? "responsável pelo EPI/SESMT" : "responsável pela análise do DP";
     throw ApiError.badRequest(
-      `Configure uma área ativa como ${label} em Cadastros > Áreas antes de continuar.`,
+      `Configure uma área ativa como ${label} em Plataforma → Operações → Workspace → Acessos e módulos antes de continuar.`,
       "AREA_MODULE_NOT_CONFIGURED",
     );
   }

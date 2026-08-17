@@ -34,28 +34,48 @@ export async function resolveMemberDepartmentAccess(
     throw ApiError.badRequest("O departamento selecionado não existe ou não está ativo.", "MEMBER_DEPARTMENT_INVALID");
   }
 
-  const assigned = await d1.prepare(`SELECT assignment.module_key
+  const assigned = await d1.prepare(`SELECT assignment.module_key,
+        (plan_module.module_key IS NOT NULL) AS in_plan, workspace_grant.granted AS workspace_granted
       FROM fdp_area_module_assignments assignment
       JOIN fdp_modules module ON module.key = assignment.module_key AND module.status = 'active'
+      LEFT JOIN fdp_plan_modules plan_module ON plan_module.module_key = module.key
+        AND plan_module.plan_id = (SELECT plan_id FROM fdp_workspace_subscriptions
+          WHERE workspace_id = ? AND status IN ('trialing', 'active'))
+      LEFT JOIN fdp_workspace_module_grants workspace_grant
+        ON workspace_grant.workspace_id = assignment.workspace_id AND workspace_grant.module_key = module.key
+          AND (workspace_grant.expires_at IS NULL OR workspace_grant.expires_at > now())
       WHERE assignment.workspace_id = ? AND assignment.area_id = ?
       ORDER BY module.position, assignment.module_key`)
-    .bind(workspaceId, departmentId)
-    .all<{ module_key: string }>();
+    .bind(workspaceId, workspaceId, departmentId)
+    .all<{ module_key: string; in_plan: boolean | number; workspace_granted: boolean | number | null }>();
   const departmentModuleKeys = assigned.results.map((row) => String(row.module_key));
   if (departmentModuleKeys.length === 0) {
     throw new ApiError(409, "DEPARTMENT_WITHOUT_MODULES",
       "Este departamento ainda não possui módulos. Configure os módulos do departamento antes de criar ou mover usuários.");
   }
 
+  const availableModuleKeys = assigned.results.filter((row) => row.workspace_granted == null
+    ? row.in_plan === true || Number(row.in_plan) === 1
+    : row.workspace_granted === true || Number(row.workspace_granted) === 1).map((row) => String(row.module_key));
+  if (availableModuleKeys.length === 0) {
+    throw new ApiError(409, "DEPARTMENT_WITHOUT_AVAILABLE_MODULES",
+      "Os módulos deste departamento estão bloqueados no Workspace. Libere pelo menos um módulo antes de criar ou alterar usuários.");
+  }
+
   const selectedModuleKeys = Array.isArray(rawModuleKeys)
     ? [...new Set(rawModuleKeys.map((key) => cleanText(key, 80)).filter(Boolean))]
-    : [...departmentModuleKeys];
+    : [...availableModuleKeys];
   if (selectedModuleKeys.length === 0) {
     throw ApiError.badRequest("Libere pelo menos um módulo do departamento para o usuário.", "MEMBER_MODULE_REQUIRED");
   }
   const departmentSet = new Set(departmentModuleKeys);
   if (selectedModuleKeys.some((key) => !departmentSet.has(key))) {
     throw ApiError.badRequest("Um dos módulos selecionados não pertence ao departamento informado.", "MEMBER_MODULE_OUTSIDE_DEPARTMENT");
+  }
+  const availableSet = new Set(availableModuleKeys);
+  if (selectedModuleKeys.some((key) => !availableSet.has(key))) {
+    throw new ApiError(409, "MEMBER_MODULE_NOT_AVAILABLE",
+      "Um dos módulos selecionados ainda não está liberado para este Workspace.");
   }
 
   return {
