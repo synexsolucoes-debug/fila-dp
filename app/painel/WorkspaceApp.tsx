@@ -505,16 +505,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [view, setView] = useState<View>("overview");
   const [boardMode, setBoardMode] = useState<BoardMode>("kanban");
   const [cardTab, setCardTab] = useState<CardTab>("details");
-  /**
-   * O modal de configurações é o de segurança, e só (§35).
-   *
-   * O painel foi restringido ao fluxo operacional em `d2d8d5a`, e o menu de
-   * configurações perdeu oito entradas. O estado inicial ficou em "general" —
-   * uma seção que nenhum caminho consegue abrir: o único botão que abre o modal
-   * chama `openSecuritySettings`, que fixa "security". Um estado inicial que a
-   * tela não consegue mostrar é um convite a bug: bastaria alguém abrir o modal
-   * por outro caminho para a pessoa ver um painel com um menu que não o aponta.
-   */
+  /** Segurança continua sendo a abertura padrão; administradores também podem
+   * alcançar daqui o cadastro hierárquico de usuários do Workspace. */
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("security");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -1771,11 +1763,15 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       {workspaceModalOpen && (
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setWorkspaceModalOpen(false); }}>
           <section className="workspace-modal workspace-settings-modal" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
-            <header><div><span>CONTA PESSOAL</span><h2 id="workspace-modal-title">Perfil e segurança</h2><p>Revise apenas as sessões da identidade atual.</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>{settingsSection === "security" ? "CONTA PESSOAL" : "ADMINISTRAÇÃO DO WORKSPACE"}</span><h2 id="workspace-modal-title">{settingsSection === "security" ? "Perfil e segurança" : "Usuários e acessos"}</h2><p>{settingsSection === "security" ? "Revise apenas as sessões da identidade atual." : "Defina o departamento e os módulos disponíveis para cada usuário."}</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
             <div className="workspace-settings-layout">
               <nav className="settings-nav" aria-label="Seções das configurações">
                 <span className="settings-nav-label">CONTA</span>
                 <button className={settingsSection === "security" ? "active" : ""} onClick={() => { setSettingsSection("security"); void loadAuthSessions(); }}><Smartphone aria-hidden="true" /><span>Segurança<small>Dispositivos e sessões</small></span></button>
+                {isAdmin && <>
+                  <span className="settings-nav-label">WORKSPACE</span>
+                  <button className={settingsSection === "team" ? "active" : ""} onClick={() => setSettingsSection("team")}><Users aria-hidden="true" /><span>Usuários e acessos<small>Departamento e módulos</small></span></button>
+                </>}
               </nav>
               <div className="workspace-settings-content">
                 {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}

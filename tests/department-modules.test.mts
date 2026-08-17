@@ -108,6 +108,7 @@ test("criação e alteração persistem departamento e módulos no mesmo fluxo",
   assert.match(helper, /fdp_member_module_grants/u);
   assert.match(screen, /departmentId: memberDepartmentId/u);
   assert.match(screen, /Workspace → Departamento → Módulos/u);
+  assert.match(screen, /onClick=\{\(\) => setSettingsSection\("team"\)\}.*Usuários e acessos/u);
   assert.match(screen, /Departamento principal/u);
   assert.match(screen, /Módulos liberados neste departamento/u);
 });
