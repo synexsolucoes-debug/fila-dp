@@ -257,6 +257,13 @@ const viewCatalog: Record<View, ViewEntry> = {
  *  criaria a quinta lista para desalinhar. */
 const navOrder = Object.keys(viewCatalog) as View[];
 
+/**
+ * A barra inferior cabe em cinco alvos de toque. Os quatro destinos usados em
+ * toda rotina ficam expostos; os demais continuam alcançáveis pelo botão
+ * "Mais", agrupados com os mesmos contextos do menu lateral.
+ */
+const mobilePrimaryViews = new Set<View>(["overview", "board", "inbox", "planner"]);
+
 /** Estados do ciclo de vida do workspace, para o seletor dizer por que um grupo
     não pode ser aberto em vez de apenas desabilitar o botão. */
 const workspaceStatusLabels: Record<string, string> = {
@@ -546,6 +553,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("syncing");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const sidebarPreferenceLoaded = useRef(false);
+  const mobileNavigationRef = useRef<HTMLDetailsElement>(null);
   const realtimeCursorRef = useRef("");
   const touchCardMoveRef = useRef<{ cardId: string; x: number; y: number } | null>(null);
   const suppressCardOpenRef = useRef<string | null>(null);
@@ -1328,7 +1336,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                 const entry = viewCatalog[id];
                 const Icon = entry.icon;
                 const badge = navBadges[id];
-                return <button key={id} type="button" title={entry.label} className={view === id ? "active" : ""}
+                const mobilePosition = mobilePrimaryViews.has(id) ? "mobile-primary" : "mobile-secondary";
+                return <button key={id} type="button" title={entry.label} className={`${view === id ? "active " : ""}sidebar-nav-item ${mobilePosition}`}
                   onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}>
                   <span aria-hidden="true"><Icon /></span> {entry.label}
                   {badge ? <b>{badge}</b> : null}
@@ -1336,6 +1345,30 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               })}
             </div>;
           })}
+          <details ref={mobileNavigationRef} className="sidebar-mobile-more">
+            <summary className={mobilePrimaryViews.has(view) ? "" : "active"} aria-label="Abrir todos os módulos">
+              <span aria-hidden="true"><MoreHorizontal /></span><span>Mais</span>
+            </summary>
+            <div className="sidebar-mobile-more-panel">
+              {navSections.map((section) => {
+                const items = visibleViews.filter((id) => !mobilePrimaryViews.has(id) && viewCatalog[id].section === section.id);
+                if (!items.length) return null;
+                return <section key={section.id} aria-labelledby={`mobile-nav-${section.id}`}>
+                  <span id={`mobile-nav-${section.id}`}>{section.label}</span>
+                  <div>{items.map((id) => {
+                    const entry = viewCatalog[id];
+                    const Icon = entry.icon;
+                    const badge = navBadges[id];
+                    return <button key={id} type="button" className={view === id ? "active" : ""}
+                      onClick={() => { setView(id); mobileNavigationRef.current?.removeAttribute("open"); }}
+                      aria-current={view === id ? "page" : undefined}>
+                      <span aria-hidden="true"><Icon /></span><span>{entry.label}</span>{badge ? <b>{badge}</b> : null}
+                    </button>;
+                  })}</div>
+                </section>;
+              })}
+            </div>
+          </details>
         </nav>
         {snapshot.availableWorkspaces.length > 1 && (
           <div className="sidebar-workspace sidebar-workspace-switcher">

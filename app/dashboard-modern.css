@@ -193,6 +193,10 @@
   color: var(--ui-rail-active-text);
 }
 
+/* O seletor completo só participa da navegação compacta. No desktop o menu
+   lateral já tem altura rolável e mostra todos os módulos no próprio contexto. */
+.sidebar-mobile-more { display: none; }
+
 .sidebar-collapsed .dashboard-sidebar nav button {
   padding-inline: 0;
   justify-content: center;
@@ -1041,6 +1045,129 @@
   .sidebar-collapsed .dashboard-sidebar nav button b {
     top: 4px;
     right: calc(50% - 24px);
+  }
+
+  /* A grade de cinco colunas mostrava somente a primeira linha e deixava os
+     outros módulos abaixo de uma barra com altura fixa. Quatro atalhos ficam
+     sempre visíveis; o quinto abre todos os demais sem exigir gesto oculto. */
+  .dashboard-sidebar nav .mobile-secondary { display: none; }
+
+  .sidebar-mobile-more {
+    position: static;
+    min-width: 0;
+    display: block;
+  }
+
+  .sidebar-mobile-more > summary {
+    min-width: 0;
+    min-height: 60px;
+    padding: 5px 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 9px;
+    color: var(--ui-rail-text);
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1;
+    list-style: none;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .sidebar-mobile-more > summary::-webkit-details-marker { display: none; }
+  .sidebar-mobile-more > summary::marker { content: ""; }
+  .sidebar-mobile-more > summary:hover,
+  .sidebar-mobile-more > summary.active,
+  .sidebar-mobile-more[open] > summary {
+    background: var(--ui-rail-active);
+    color: var(--ui-rail-active-text);
+  }
+  .sidebar-mobile-more > summary:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--ui-accent) 42%, transparent);
+    outline-offset: 2px;
+  }
+  .sidebar-mobile-more > summary > span:first-child {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+  }
+  .sidebar-mobile-more > summary svg { width: 19px; height: 19px; }
+
+  .sidebar-mobile-more-panel {
+    position: fixed;
+    z-index: 95;
+    right: 8px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 8px;
+    max-height: min(62dvh, 520px);
+    padding: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--ui-border);
+    border-radius: 16px;
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow-modal);
+  }
+
+  .sidebar-mobile-more-panel > section + section {
+    margin-top: 13px;
+    padding-top: 13px;
+    border-top: 1px solid var(--ui-border);
+  }
+
+  .sidebar-mobile-more-panel > section > span {
+    display: block;
+    margin: 0 4px 7px;
+    color: var(--ui-text-soft);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: .08em;
+  }
+
+  .sidebar-mobile-more-panel > section > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button,
+  .sidebar-collapsed .dashboard-sidebar nav .sidebar-mobile-more-panel button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 7px 9px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+    border: 1px solid var(--ui-border);
+    background: var(--ui-surface-muted);
+    color: var(--ui-text);
+    font-size: 11px;
+    line-height: 1.25;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button:hover,
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button.active {
+    border-color: color-mix(in srgb, var(--ui-primary) 38%, var(--ui-border));
+    background: var(--ui-rail-active);
+    color: var(--ui-rail-active-text);
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button > span:first-child {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button > span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .dashboard-header {
