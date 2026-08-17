@@ -2327,7 +2327,6 @@ export const stockLocations = pgTable("fdp_stock_locations", {
 export const epiProducts = pgTable("fdp_epi_products", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
-  companyId: text("company_id"),
   name: text("name").notNull(),
   epiType: text("epi_type").notNull(),
   caNumber: text("ca_number").notNull(),
@@ -2352,9 +2351,7 @@ export const epiProducts = pgTable("fdp_epi_products", {
   uniqueIndex("fdp_epi_products_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_epi_products_internal_code_workspace_uq").on(table.workspaceId, table.internalCode).where(sql`${table.internalCode} <> ''`),
   index("fdp_epi_products_workspace_status_idx").on(table.workspaceId, table.status, table.name),
-  index("fdp_epi_products_workspace_company_name_idx").on(table.workspaceId, table.companyId, table.name),
   index("fdp_epi_products_workspace_ca_idx").on(table.workspaceId, table.caNumber),
-  foreignKey({ name: "fdp_epi_products_workspace_purchasing_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   check("fdp_epi_products_type_check", sql`${table.epiType} IN ('head', 'eye_face', 'hearing', 'respiratory', 'trunk', 'upper_limbs', 'lower_limbs', 'full_body', 'fall_protection', 'other')`),
   check("fdp_epi_products_status_check", sql`${table.status} IN ('active', 'inactive', 'in_stock', 'delivered', 'returned', 'sanitizing', 'discarded', 'damaged', 'lost')`),
   check("fdp_epi_products_reason_check", sql`${table.registrationReason} IN ('first_delivery', 'periodic_exchange', 'damage_replacement', 'loss_replacement', 'expiry_replacement', 'initial_purchase', 'stock_replenishment', 'manual_adjustment', 'other')`),
@@ -2612,7 +2609,7 @@ export const epiDamages = pgTable("fdp_epi_damages", {
 export const epiMovements = pgTable("fdp_epi_movements", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
-  companyId: text("company_id").notNull(),
+  companyId: text("company_id"),
   movementDate: date("movement_date", { mode: "string" }).notNull(),
   movementType: text("movement_type").notNull(),
   cnpj: text("cnpj").notNull().default(""),
@@ -2656,12 +2653,17 @@ export const epiMovements = pgTable("fdp_epi_movements", {
   check("fdp_epi_movements_source_check", sql`${table.sourceType} IN ('product', 'entry', 'transfer', 'delivery', 'return', 'sanitization', 'damage', 'disposal', 'discount')`),
   check("fdp_epi_movements_flag_check", sql`${table.generateDpDemand} IN (0, 1)`),
   check("fdp_epi_movements_quantity_check", sql`${table.quantity} >= 0`),
+  check("fdp_epi_movements_scope_check", sql`(
+    ${table.movementType} IN ('registration', 'stock_entry', 'stock_transfer', 'manual_adjustment') AND ${table.companyId} IS NULL
+  ) OR (
+    ${table.movementType} NOT IN ('registration', 'stock_entry', 'stock_transfer', 'manual_adjustment') AND ${table.companyId} IS NOT NULL
+  )`),
 ]);
 
 export const epiAttachments = pgTable("fdp_epi_attachments", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
-  companyId: text("company_id").notNull(),
+  companyId: text("company_id"),
   entityType: text("entity_type").notNull(),
   entityId: text("entity_id").notNull(),
   attachmentKind: text("attachment_kind").notNull().default("evidence"),
@@ -2678,4 +2680,9 @@ export const epiAttachments = pgTable("fdp_epi_attachments", {
   check("fdp_epi_attachments_entity_check", sql`${table.entityType} IN ('product', 'delivery', 'return', 'damage', 'disposal', 'discount')`),
   check("fdp_epi_attachments_kind_check", sql`${table.attachmentKind} IN ('evidence', 'delivery_term', 'photo', 'document')`),
   check("fdp_epi_attachments_size_check", sql`${table.sizeBytes} >= 0`),
+  check("fdp_epi_attachments_scope_check", sql`(
+    ${table.entityType} = 'product' AND ${table.companyId} IS NULL
+  ) OR (
+    ${table.entityType} <> 'product' AND ${table.companyId} IS NOT NULL
+  )`),
 ]);

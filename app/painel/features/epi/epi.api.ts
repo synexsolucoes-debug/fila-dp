@@ -72,9 +72,6 @@ export function normalizeOverview(payload: Row): EpiOverview {
 export function normalizeProduct(row: Row): EpiProduct {
   return {
     id: text(row.id),
-    companyId: text(value(row, "companyId", "company_id")),
-    companyName: companyName(row),
-    companyTaxId: text(value(row, "companyTaxId", "company_tax_id")),
     name: text(row.name),
     epiType: text(value(row, "epiType", "epi_type")) as EpiProduct["epiType"],
     caNumber: text(value(row, "caNumber", "ca_number")),
@@ -207,8 +204,6 @@ export function normalizeDisposal(row: Row): EpiDisposal {
 export function normalizeDisposable(row: Row): DisposableProduct {
   return {
     id: text(row.id),
-    companyId: text(value(row, "companyId", "company_id")),
-    companyName: companyName(row),
     name: text(row.name),
     caNumber: text(value(row, "caNumber", "ca_number")),
     size: text(row.size),

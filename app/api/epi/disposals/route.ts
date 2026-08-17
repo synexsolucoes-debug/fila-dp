@@ -62,15 +62,9 @@ export async function GET(request: Request) {
     // é o que faz a janela mostrar o problema antes de alguém abrir o chamado.
     const stockWhere = ["p.workspace_id = ?", "p.status IN ('damaged', 'lost', 'discarded')"];
     const stockValues: unknown[] = [workspace.id];
-    if (!access.unrestricted) {
-      const ids = [...access.companyIds];
-      stockWhere.push(`p.company_id IN (${ids.map(() => "?").join(",")})`); stockValues.push(...ids);
-    }
-    if (companyId) { stockWhere.push("p.company_id = ?"); stockValues.push(companyId); }
-    const disposable = await d1.prepare(`SELECT p.id, p.company_id, p.name, p.ca_number, p.size, p.status,
-        p.stock_quantity, p.unit_value, p.ca_expires_on, c.trade_name AS company_trade_name, c.legal_name AS company_legal_name
+    const disposable = await d1.prepare(`SELECT p.id, p.name, p.ca_number, p.size, p.status,
+        p.stock_quantity, p.unit_value, p.ca_expires_on
       FROM fdp_epi_products p
-      JOIN fdp_companies c ON c.workspace_id = p.workspace_id AND c.id = p.company_id
       WHERE ${stockWhere.join(" AND ")}
         AND NOT EXISTS (SELECT 1 FROM fdp_epi_disposals d
           WHERE d.workspace_id = p.workspace_id AND d.product_id = p.id AND d.status = 'awaiting_disposal')

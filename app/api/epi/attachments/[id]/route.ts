@@ -6,7 +6,7 @@ import { requireNamedCapability } from "@/lib/authorization";
 type RouteContext = { params: Promise<{ id: string }> };
 
 type AttachmentRow = {
-  id: string; company_id: string; entity_type: string; entity_id: string; object_key: string;
+  id: string; company_id: string | null; entity_type: string; entity_id: string; object_key: string;
   filename: string; content_type: string; size_bytes: number;
 };
 
@@ -28,7 +28,7 @@ export async function GET(request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.view", "baixar anexos do Controle de EPI");
     const attachment = await attachmentOf(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, attachment.company_id);
+    if (attachment.company_id) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, attachment.company_id);
     const object = await getAttachmentsBucket().get(attachment.object_key);
     if (!object) throw ApiError.notFound("Anexo não encontrado.", "EPI_ATTACHMENT_NOT_FOUND");
     const headers = new Headers();
@@ -60,7 +60,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.edit", "remover anexos do Controle de EPI");
     const attachment = await attachmentOf(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, attachment.company_id);
+    if (attachment.company_id) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, attachment.company_id);
     if (attachment.entity_type === "disposal") {
       const disposal = await d1.prepare("SELECT status FROM fdp_epi_disposals WHERE workspace_id = ? AND id = ?")
         .bind(workspace.id, attachment.entity_id).first<{ status: string }>();

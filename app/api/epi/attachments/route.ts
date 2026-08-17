@@ -17,7 +17,7 @@ const allowedExtensions = new Set(["pdf", "jpg", "jpeg", "png", "webp", "txt", "
 const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(bytes < 1024 * 1024 * 10 ? 1 : 0)} MB`;
 
 /**
- * Empresa dona do registro que vai receber o anexo.
+ * Escopo do registro que vai receber o anexo.
  *
  * A alternativa óbvia — interpolar o nome da tabela a partir do tipo — deixa a
  * consulta fora da verificação de `scripts/verify-inline-sql`, que prepara cada
@@ -37,7 +37,7 @@ async function entityOwner(
   entityId: string,
 ) {
   const owner = await d1.prepare(`SELECT company_id FROM (
-      SELECT 'product' AS entity_kind, id, workspace_id, company_id FROM fdp_epi_products
+      SELECT 'product' AS entity_kind, id, workspace_id, NULL::text AS company_id FROM fdp_epi_products
       UNION ALL SELECT 'delivery', id, workspace_id, company_id FROM fdp_epi_deliveries
       UNION ALL SELECT 'return', id, workspace_id, company_id FROM fdp_epi_returns
       UNION ALL SELECT 'damage', id, workspace_id, company_id FROM fdp_epi_damages
@@ -45,7 +45,7 @@ async function entityOwner(
       UNION ALL SELECT 'discount', id, workspace_id, company_id FROM fdp_epi_discount_requests
     ) epi_entity
     WHERE epi_entity.workspace_id = ? AND epi_entity.entity_kind = ? AND epi_entity.id = ?`)
-    .bind(workspaceId, entityType, entityId).first<{ company_id: string }>();
+    .bind(workspaceId, entityType, entityId).first<{ company_id: string | null }>();
   if (!owner) throw ApiError.notFound("Registro de EPI não encontrado.", "EPI_ENTITY_NOT_FOUND");
   return owner;
 }
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     const kind = (epiAttachmentKinds.includes(kindValue as EpiAttachmentKind) ? kindValue : "evidence") as EpiAttachmentKind;
 
     const owner = await entityOwner(d1, workspace.id, entityType, entityId);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, owner.company_id);
+    if (owner.company_id) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, owner.company_id);
 
     const file = form.get("file");
     if (!(file instanceof File) || file.size === 0) return Response.json({ error: "Selecione um arquivo válido." }, { status: 400 });
@@ -176,7 +176,7 @@ export async function GET(request: Request) {
     const entityType = parseAttachmentEntity(url.searchParams.get("entityType"));
     const entityId = epiText(url.searchParams.get("entityId"), "o registro", 120, true);
     const owner = await entityOwner(d1, workspace.id, entityType, entityId);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, owner.company_id);
+    if (owner.company_id) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, owner.company_id);
     const attachments = await d1.prepare(`SELECT id, entity_type, entity_id, attachment_kind, filename, content_type,
         size_bytes, created_at FROM fdp_epi_attachments
       WHERE workspace_id = ? AND entity_type = ? AND entity_id = ? ORDER BY created_at`)

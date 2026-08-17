@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowLeftRight, BadgeCheck, Boxes, Building2, Check, ClipboardList, Download,
-  FileSignature, HardHat, PackageCheck, RefreshCw, Scale, ShieldAlert, Sparkles, Trash2, Undo2,
+  FileSignature, HardHat, Info, PackageCheck, RefreshCw, Scale, ShieldAlert, Sparkles, Trash2, Undo2,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import {
@@ -110,7 +110,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   }, [companyId, filters]);
 
   const loadTab = useCallback(async (target: EpiTab) => {
-    if (!companyId) return;
+    if (!companyId && target !== "stock" && target !== "reports") return;
     setTabLoading(true);
     try {
       if (target === "stock") {
@@ -154,24 +154,21 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   // junto com a aba deixaria a gaveta abrir com listas vazias no primeiro
   // clique — que foi como o formulário de entrega nasceu inutilizável.
   const loadOptions = useCallback(async () => {
-    if (!companyId) return;
     try {
-      const [productPayload, employeePayload] = await Promise.all([
-        requestJson<{ products?: Row[] }>("/api/epi/products?limit=200"),
-        requestJson<{ employees?: Row[] }>(`/api/employees?companyId=${encodeURIComponent(companyId)}&status=active&limit=200`),
-      ]);
+      const productPayload = await requestJson<{ products?: Row[] }>("/api/epi/products?limit=200");
       setProducts((current) => current.length ? current : (productPayload.products ?? []).map(normalizeProduct));
+      if (!companyId) { setEmployees([]); return; }
+      const employeePayload = await requestJson<{ employees?: Row[] }>(`/api/employees?companyId=${encodeURIComponent(companyId)}&status=active&limit=200`);
       setEmployees((employeePayload.employees ?? []).map(normalizeEmployeeOption));
     } catch { /* as listas ficam vazias e o formulário diz o que falta */ }
   }, [companyId]);
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!companyId && tab !== "stock" && tab !== "reports") return;
     const frame = window.requestAnimationFrame(() => void loadTab(tab));
     return () => window.cancelAnimationFrame(frame);
   }, [companyId, tab, loadTab]);
   useEffect(() => {
-    if (!companyId) return;
     const frame = window.requestAnimationFrame(() => void loadOptions());
     return () => window.cancelAnimationFrame(frame);
   }, [companyId, loadOptions]);
@@ -268,27 +265,27 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
         action={<button className={styles.secondaryButton} onClick={() => void loadOverview(companyId)}><RefreshCw aria-hidden="true" /> Tentar novamente</button>} />
     </section>;
   }
-  if (!overview?.companies.length) {
+  if (!overview) {
     return <section className={styles.workspace}>
-      <EmptyState icon={Building2} title="Nenhuma empresa disponível"
-        text="O Controle de EPI é organizado por empresa e CNPJ. Cadastre uma empresa ativa, ou peça acesso a uma, para começar." />
+      <LoadingState size="page" title="Abrindo o Controle de EPI" text="Preparando o estoque compartilhado do grupo…" />
     </section>;
   }
-
   const summary = overview.summary;
   const company = overview.companies.find((item) => item.id === companyId);
 
   return <section className={styles.workspace} aria-label="Controle de EPI">
     <div className={styles.commandBar}>
       <div className={styles.commandSelectors}>
-        <label>
-          <span>EMPRESA CONSUMIDORA</span>
+        {overview.companies.length ? <label>
+          <span>EMPRESA PARA COLABORADORES E CONSUMO</span>
           <select value={companyId} onChange={(event) => { setCompanyId(event.target.value); setFilters({}); }} aria-label="Empresa do Controle de EPI">
             {overview.companies.map((item) => <option key={item.id} value={item.id}>
               {item.name}{item.taxId ? ` · ${item.taxId}` : ""}{item.status === "inactive" ? " (inativa)" : ""}
             </option>)}
           </select>
-        </label>
+        </label> : <div className={styles.noticeBar}><Building2 aria-hidden="true" />
+          <span><strong>Sem empresa consumidora disponível</strong>O catálogo continua acessível; entregas exigem uma empresa ativa e permitida.</span>
+        </div>}
       </div>
       <div className={styles.commandActions}>
         <button type="button" className={styles.secondaryButton} disabled={tabLoading}
@@ -299,6 +296,10 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
           <HardHat aria-hidden="true" /> Cadastrar EPI
         </button>}
       </div>
+    </div>
+
+    <div className={styles.noticeBar}><Info aria-hidden="true" />
+      <span><strong>Estoque único do grupo</strong>Produtos, códigos e saldos não pertencem a um CNPJ. A empresa selecionada é usada somente nas entregas e demais eventos de consumo.</span>
     </div>
 
     {error && <ErrorBanner title="Algo exige atenção" message={error} onDismiss={() => setError("")} />}
@@ -336,7 +337,8 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
 
     {!tabLoading && tab === "stock" && <StockPanel
       products={products} filters={filters} onFilters={setFilters} permissions={permissions}
-      companyId={companyId} onChanged={() => void Promise.all([loadOverview(companyId), loadTab("stock")])}
+      canConsume={Boolean(companyId)}
+      onChanged={() => void Promise.all([loadOverview(companyId), loadTab("stock")])}
       onCreate={() => { setDialogError(""); setEditor({ kind: "product" }); }}
       onEdit={(product) => { setDialogError(""); setEditor({ kind: "product", product }); }}
       onDeliver={(product) => { setDialogError(""); setEditor({ kind: "delivery", product }); }} />}
@@ -393,17 +395,17 @@ function SummaryCard({ icon: Icon, label, value, note, tone, onClick }: {
 
 const pill = (status: string, label: string) => <StatusPill status={status} label={label} />;
 
-function StockPanel({ products, filters, onFilters, permissions, companyId, onChanged, onCreate, onEdit, onDeliver }: {
+function StockPanel({ products, filters, onFilters, permissions, canConsume, onChanged, onCreate, onEdit, onDeliver }: {
   products: EpiProduct[]; filters: Record<string, string>; onFilters: (value: Record<string, string>) => void;
   permissions?: EpiOverview["permissions"]; onCreate: () => void; onEdit: (product: EpiProduct) => void;
-  onDeliver: (product: EpiProduct) => void; companyId: string; onChanged: () => void;
+  onDeliver: (product: EpiProduct) => void; canConsume: boolean; onChanged: () => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   return <>
     <PanelHeader eyebrow="ESTOQUE COMPARTILHADO DO GRUPO" title="EPIs cadastrados"
-      description="O saldo pertence ao Workspace e é separado por local físico; a empresa identifica apenas compra e consumo."
+      description="Produto, código e saldo pertencem ao Workspace e são separados somente por local físico."
       action={permissions?.create && <button className={styles.primaryButton} onClick={onCreate}><HardHat aria-hidden="true" /> Cadastrar EPI</button>} />
-    {permissions?.stockAdjust && <StockOperations products={products} companyId={companyId} onChanged={onChanged} />}
+    {permissions?.stockAdjust && <StockOperations products={products} onChanged={onChanged} />}
     <FilterBar filters={filters} onFilters={onFilters} fields={[
       { name: "search", label: "NOME", type: "text" },
       { name: "ca", label: "CA", type: "text" },
@@ -436,7 +438,7 @@ function StockPanel({ products, filters, onFilters, permissions, companyId, onCh
               : <small>Não informada</small>}</td>
             <td>{pill(product.status, epiProductStatusLabels[product.status] ?? product.status)}</td>
             <td><div className={styles.rowActions}>
-              {permissions?.deliver && product.stockQuantity > 0 && <button onClick={() => onDeliver(product)}>
+              {permissions?.deliver && canConsume && product.stockQuantity > 0 && <button onClick={() => onDeliver(product)}>
                 <PackageCheck aria-hidden="true" /> Entregar
               </button>}
               {permissions?.edit && <button onClick={() => onEdit(product)}>Editar</button>}
@@ -452,7 +454,7 @@ function StockPanel({ products, filters, onFilters, permissions, companyId, onCh
 
 type StockLocationOption = { id: string; code: string; name: string; status: string; is_default: number; total_quantity: number };
 
-function StockOperations({ products, companyId, onChanged }: { products: EpiProduct[]; companyId: string; onChanged: () => void }) {
+function StockOperations({ products, onChanged }: { products: EpiProduct[]; onChanged: () => void }) {
   const [locations, setLocations] = useState<StockLocationOption[]>([]);
   const [mode, setMode] = useState<"entry" | "transfer" | "location">("entry");
   const [form, setForm] = useState<Record<string, string>>({ movementDate: new Date().toISOString().slice(0, 10) });
@@ -477,14 +479,14 @@ function StockOperations({ products, companyId, onChanged }: { products: EpiProd
         setMessage("Local de estoque criado.");
       } else if (mode === "entry") {
         await requestJson("/api/epi/stock/entries", { method: "POST", body: JSON.stringify({
-          companyId, productId: form.productId, stockLocationId: form.stockLocationId,
+          productId: form.productId, stockLocationId: form.stockLocationId,
           quantity: Number(form.quantity), movementDate: form.movementDate, reason: form.reason,
           notes: form.notes, idempotencyKey,
         }) });
         setMessage("Entrada registrada no saldo compartilhado.");
       } else {
         await requestJson("/api/epi/stock/transfers", { method: "POST", body: JSON.stringify({
-          companyId, productId: form.productId, sourceStockLocationId: form.sourceStockLocationId,
+          productId: form.productId, sourceStockLocationId: form.sourceStockLocationId,
           targetStockLocationId: form.targetStockLocationId, quantity: Number(form.quantity),
           movementDate: form.movementDate, notes: form.notes, idempotencyKey,
         }) });
@@ -499,10 +501,13 @@ function StockOperations({ products, companyId, onChanged }: { products: EpiProd
     <div className={styles.stockOperationTabs}>
       <strong>Operações de estoque</strong>
       <button type="button" data-active={mode === "entry"} onClick={() => setMode("entry")}>Entrada</button>
-      <button type="button" data-active={mode === "transfer"} onClick={() => setMode("transfer")}>Transferência</button>
+      <button type="button" data-active={mode === "transfer"} onClick={() => setMode("transfer")}>Entre locais</button>
       <button type="button" data-active={mode === "location"} onClick={() => setMode("location")}>Novo local</button>
       <small>{locations.length} local(is) · saldo total {locations.reduce((sum, item) => sum + Number(item.total_quantity ?? 0), 0)}</small>
     </div>
+    {mode === "transfer" && <div className={styles.noticeBar}><Info aria-hidden="true" />
+      <span><strong>Movimentação física</strong>Move saldo entre locais do mesmo grupo; nunca entre CNPJs.</span>
+    </div>}
     <form className={styles.stockOperationForm} onSubmit={(event) => void submit(event)}>
       {mode === "location" ? <>
         <label><span>CÓDIGO</span><input required value={form.code ?? ""} onChange={(event) => set("code", event.target.value)} placeholder="ALMOX" /></label>

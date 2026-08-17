@@ -1,9 +1,9 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import {
-  epiDate, epiMoney, epiQuantity, epiText, loadCompany, loadStockLocation, parseEpiType, parseProductStatus,
+  epiDate, epiMoney, epiQuantity, epiText, loadStockLocation, parseEpiType, parseProductStatus,
   parseRegistrationReason, prepareEpiMovement, prepareStockChange,
 } from "@/lib/epi-service";
 
@@ -24,16 +24,17 @@ export async function GET(_request: Request, context: RouteContext) {
     requireNamedCapability(workspace, "epi.view", "consultar o Controle de EPI");
     const product = await productOf(d1, workspace.id, id);
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
-    const visibleProduct = access.unrestricted || !product.company_id || access.companyIds.has(String(product.company_id))
-      ? product : { ...product, company_id: null };
     if (!access.unrestricted && access.companyIds.size === 0) {
-      return Response.json({ product: visibleProduct, movements: [], deliveries: [] });
+      const movements = await d1.prepare(`SELECT * FROM fdp_epi_movements
+        WHERE workspace_id = ? AND product_id = ? AND company_id IS NULL
+        ORDER BY movement_date DESC, created_at DESC LIMIT 100`).bind(workspace.id, id).all<Record<string, unknown>>();
+      return Response.json({ product, movements: movements.results, deliveries: [] });
     }
     const companyIds = [...access.companyIds];
-    const companyClause = access.unrestricted ? "" : ` AND company_id IN (${companyIds.map(() => "?").join(",")})`;
     const [movements, deliveries] = await Promise.all([
       d1.prepare(`SELECT * FROM fdp_epi_movements WHERE workspace_id = ? AND product_id = ?
-        ${companyClause} ORDER BY movement_date DESC, created_at DESC LIMIT 100`)
+        ${access.unrestricted ? "" : ` AND (company_id IS NULL OR company_id IN (${companyIds.map(() => "?").join(",")}))`}
+        ORDER BY movement_date DESC, created_at DESC LIMIT 100`)
         .bind(workspace.id, id, ...companyIds).all<Record<string, unknown>>(),
       d1.prepare(`SELECT d.*, e.full_name AS employee_full_name, e.social_name AS employee_social_name
         FROM fdp_epi_deliveries d
@@ -43,16 +44,15 @@ export async function GET(_request: Request, context: RouteContext) {
         ORDER BY d.delivered_on DESC LIMIT 100`)
         .bind(workspace.id, id, ...companyIds).all<Record<string, unknown>>(),
     ]);
-    return Response.json({ product: visibleProduct, movements: movements.results, deliveries: deliveries.results });
+    return Response.json({ product, movements: movements.results, deliveries: deliveries.results });
   } catch (error) { return apiError(error); }
 }
 
 /**
  * Edição do cadastro.
  *
- * A empresa compradora do cadastro não muda por esta rota. Ela é apenas
- * rastreabilidade fiscal; o SKU e o saldo pertencem ao workspace, enquanto as
- * entregas, devoluções e descartes registram a empresa consumidora.
+ * O SKU e o saldo pertencem ao workspace; entregas, devoluções e descartes
+ * registram separadamente a empresa consumidora.
  *
  * O ajuste de estoque é registrado como movimentação própria, com o motivo, em
  * vez de sobrescrever o saldo em silêncio.
@@ -65,11 +65,6 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.edit", "editar o cadastro de EPI");
     const before = await productOf(d1, workspace.id, id);
-    const companyId = String(before.company_id ?? "");
-    if (!companyId) throw ApiError.badRequest("Defina uma empresa compradora no cadastro antes de editá-lo.", "EPI_PURCHASING_COMPANY_REQUIRED");
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
-    const company = await loadCompany(d1, workspace.id, companyId);
-
     const next = {
       name: body.name === undefined ? String(before.name) : epiText(body.name, "o nome do EPI", 160, true),
       epiType: body.epiType === undefined ? String(before.epi_type) : parseEpiType(body.epiType),
@@ -120,7 +115,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         workspaceId: workspace.id, productId: id, stockLocationId: location!.id, delta: stockDelta, actorId: user.id,
       }));
       statements.splice(1, 0, prepareEpiMovement({
-        workspaceId: workspace.id, companyId, cnpj: company.tax_id,
+        workspaceId: workspace.id, companyId: null, cnpj: "",
         movementDate: new Date().toISOString().slice(0, 10), movementType: "manual_adjustment",
         productId: id, epiName: next.name, caNumber: next.caNumber, size: next.size,
         quantity: Math.abs(stockDelta), stockDelta, unitValue: next.unitValue,
@@ -130,7 +125,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       }));
     }
     await d1.batch(statements);
-    return Response.json({ product: { id, companyId, ...next, stockQuantity } });
+    return Response.json({ product: { id, ...next, stockQuantity } });
   } catch (error) { return apiError(error); }
 }
 
@@ -154,7 +149,6 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.delete", "dar baixa em cadastro de EPI");
     const before = await productOf(d1, workspace.id, id);
-    if (before.company_id) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(before.company_id));
     if (before.status === "inactive") throw ApiError.badRequest("Este cadastro já está inativo.", "EPI_PRODUCT_ALREADY_INACTIVE");
     const outstanding = await d1.prepare(`SELECT COALESCE(SUM(quantity - settled_quantity), 0) AS pending
       FROM fdp_epi_deliveries WHERE workspace_id = ? AND product_id = ? AND status <> 'canceled'`)

@@ -28,6 +28,7 @@ import {
 
 const migration = await readFile(new URL("../drizzle/postgres/0044_epi_control.sql", import.meta.url), "utf8");
 const evolutionMigration = await readFile(new URL("../drizzle/postgres/0045_workspace_areas_shared_stock.sql", import.meta.url), "utf8");
+const groupProductMigration = await readFile(new URL("../drizzle/postgres/0047_group_owned_epi_products.sql", import.meta.url), "utf8");
 const tabelas = [
   "fdp_epi_products", "fdp_epi_deliveries", "fdp_epi_returns", "fdp_epi_damages",
   "fdp_epi_disposals", "fdp_epi_discount_requests", "fdp_epi_movements", "fdp_epi_attachments",
@@ -346,23 +347,47 @@ test("o débito de estoque compartilhado é serializado e atômico com o evento"
   assert.doesNotMatch(entrega, /applyStockChange|compens/u);
 });
 
-test("o SKU e o saldo são compartilhados pelo workspace, preservando empresa consumidora", () => {
+test("produto, SKU e saldo pertencem ao grupo; CNPJ fica somente nos eventos de consumo", () => {
   assert.match(evolutionMigration, /PRIMARY KEY \("workspace_id", "product_id", "stock_location_id"\)/u);
   assert.doesNotMatch(evolutionMigration.match(/CREATE TABLE "fdp_stock_balances"[\s\S]*?\);/u)?.[0] ?? "", /company_id/u);
-  assert.match(evolutionMigration, /ALTER COLUMN "company_id" DROP NOT NULL/u);
   assert.match(evolutionMigration, /FOREIGN KEY \("workspace_id", "product_id"\) REFERENCES "public"\."fdp_epi_products"\("workspace_id", "id"\)/u);
   assert.match(evolutionMigration, /fdp_epi_stock_projection_guard/u);
   assert.match(evolutionMigration, /fdp_epi_stock_projection_insert_guard/u);
+  assert.match(groupProductMigration, /fdp_epi_products" DROP COLUMN "company_id"/u);
+  assert.match(groupProductMigration, /fdp_epi_movements" ALTER COLUMN "company_id" DROP NOT NULL/u);
+  assert.match(groupProductMigration, /movement_type" IN \('registration', 'stock_entry', 'stock_transfer', 'manual_adjustment'\)[\s\S]{0,100}"company_id" IS NULL/u);
+  assert.match(groupProductMigration, /fdp_epi_movements_scope_check/u);
 });
 
-test("catálogo compartilhado não revela o uso de empresas fora do escopo", async () => {
+test("catálogo do grupo não recebe CNPJ e o uso continua recortado por empresa", async () => {
   const products = await readFile(new URL("../app/api/epi/products/route.ts", import.meta.url), "utf8");
   const detail = await readFile(new URL("../app/api/epi/products/[id]/route.ts", import.meta.url), "utf8");
+  const entry = await readFile(new URL("../app/api/epi/stock/entries/route.ts", import.meta.url), "utf8");
+  const transfer = await readFile(new URL("../app/api/epi/stock/transfers/route.ts", import.meta.url), "utf8");
+  const reports = await readFile(new URL("../app/api/epi/reports/route.ts", import.meta.url), "utf8");
   assert.match(products, /const assignedScope =/u);
   assert.match(products, /d\.company_id IN/u);
-  assert.match(products, /company_tax_id: null/u);
-  assert.match(detail, /const visibleProduct =/u);
-  assert.match(detail, /companyClause/u);
+  assert.doesNotMatch(products, /p\.company_id|body\.companyId|loadCompany/u);
+  assert.match(detail, /company_id IS NULL OR company_id IN/u);
+  assert.match(detail, /d\.company_id IN/u);
+  for (const source of [entry, transfer]) {
+    assert.match(source, /companyId: null, cnpj: ""/u);
+    assert.doesNotMatch(source, /body\.companyId|requireCompanyAccess|loadCompany/u);
+  }
+  assert.doesNotMatch(reports, /c\.id = p\.company_id/u);
+  assert.match(reports, /Consumo de EPI por empresa\/CNPJ/u);
+});
+
+test("a interface explica o estoque do grupo e nunca envia CNPJ ao cadastro ou à movimentação física", async () => {
+  const dialogs = await readFile(new URL("../app/painel/features/epi/EpiDialogs.tsx", import.meta.url), "utf8");
+  const view = await readFile(new URL("../app/painel/features/epi/EpiControlView.tsx", import.meta.url), "utf8");
+  const productForm = dialogs.match(/function ProductForm[\s\S]*?function DeliveryForm/u)?.[0] ?? "";
+  const stockOperations = view.match(/function StockOperations[\s\S]*?function DeliveriesPanel/u)?.[0] ?? "";
+  assert.match(productForm, /Cadastro do grupo inteiro/u);
+  assert.doesNotMatch(productForm, /companyId|name="companyId"/u);
+  assert.match(view, /Estoque único do grupo/u);
+  assert.match(stockOperations, /nunca entre CNPJs/u);
+  assert.doesNotMatch(stockOperations, /companyId/u);
 });
 
 test("áreas operacionais são N:N e governam a origem e o destino das demandas", async () => {

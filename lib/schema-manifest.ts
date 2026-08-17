@@ -54,6 +54,7 @@ export const expectedMigrations = [
   "0044_epi_control.sql",
   "0045_workspace_areas_shared_stock.sql",
   "0046_department_module_backfill.sql",
+  "0047_group_owned_epi_products.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

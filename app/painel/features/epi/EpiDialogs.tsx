@@ -73,7 +73,7 @@ export function EpiDialog({ editor, products, employees, deliveries, companyId, 
             <AlertTriangle aria-hidden="true" /><span><strong>Não foi possível concluir</strong>{error}</span>
           </div>}
 
-          {editor.kind === "product" && <ProductForm product={editor.product} companyId={companyId} />}
+          {editor.kind === "product" && <ProductForm product={editor.product} />}
 
           {editor.kind === "delivery" && <DeliveryForm products={products} employees={employees} preselected={editor.product} companyId={companyId} />}
 
@@ -132,7 +132,7 @@ function buildPayload(editor: NonNullable<EpiEditor>, form: FormData, state: {
   switch (editor.kind) {
     case "product":
       return {
-        companyId: field(form, "companyId"), name: field(form, "name"), epiType: field(form, "epiType"),
+        name: field(form, "name"), epiType: field(form, "epiType"),
         caNumber: field(form, "caNumber"), size: field(form, "size"), brand: field(form, "brand"),
         model: field(form, "model"), unitValue: Number(field(form, "unitValue") || 0),
         stockQuantity: Number(field(form, "stockQuantity") || 0), registeredOn: field(form, "registeredOn"),
@@ -186,10 +186,12 @@ function buildPayload(editor: NonNullable<EpiEditor>, form: FormData, state: {
 
 const Required = () => <b className={styles.requiredMark} aria-hidden="true"> *</b>;
 
-function ProductForm({ product, companyId }: { product?: EpiProduct; companyId: string }) {
+function ProductForm({ product }: { product?: EpiProduct }) {
   const [stock, setStock] = useState(String(product?.stockQuantity ?? 0));
   return <>
-    <input type="hidden" name="companyId" value={product?.companyId ?? companyId} />
+    <div className={styles.noticeBar}><Info aria-hidden="true" />
+      <span><strong>Cadastro do grupo inteiro</strong>Este EPI, seu código e todo o saldo ficam disponíveis para o workspace, sem vínculo com um CNPJ.</span>
+    </div>
     <div className={styles.formGrid}>
       <label><span>NOME DO EPI<Required /></span><input name="name" defaultValue={product?.name ?? ""} required maxLength={160} /></label>
       <label><span>TIPO<Required /></span><select name="epiType" defaultValue={product?.epiType ?? "head"}>
@@ -403,12 +405,12 @@ function DamageForm({ products, employees, deliveries, delivery, decision, onDec
   </>;
 }
 
-function DisposalForm({ products, preselected, companyId }: { products: EpiProduct[]; preselected?: { id: string; companyId: string; name: string; caNumber: string; size: string; stockQuantity: number }; companyId: string }) {
+function DisposalForm({ products, preselected, companyId }: { products: EpiProduct[]; preselected?: { id: string; name: string; caNumber: string; size: string; stockQuantity: number }; companyId: string }) {
   const [productId, setProductId] = useState(preselected?.id ?? products[0]?.id ?? "");
   const product = products.find((item) => item.id === productId);
   const stock = product?.stockQuantity ?? preselected?.stockQuantity ?? 0;
   return <>
-    <input type="hidden" name="companyId" value={companyId || preselected?.companyId || product?.companyId || ""} />
+    <input type="hidden" name="companyId" value={companyId} />
     <div className={styles.formGrid}>
       <label className={styles.formWide}><span>EPI<Required /></span>
         <select name="productId" value={productId} onChange={(event) => setProductId(event.target.value)} required>

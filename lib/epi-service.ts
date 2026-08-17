@@ -120,7 +120,6 @@ export async function verifiedAttachments(d1: Database, workspaceId: string, ids
 
 export type EpiProductRow = {
   id: string;
-  company_id: string | null;
   name: string;
   ca_number: string;
   size: string;
@@ -129,9 +128,9 @@ export type EpiProductRow = {
   stock_quantity: number;
 };
 
-/** O SKU pertence ao workspace; a empresa é apenas rastreabilidade da compra. */
+/** O SKU e todo o saldo pertencem ao workspace, sem vínculo com CNPJ. */
 export async function loadProduct(d1: Database, workspaceId: string, productId: string) {
-  const product = await d1.prepare(`SELECT id, company_id, name, ca_number, size, status, unit_value, stock_quantity
+  const product = await d1.prepare(`SELECT id, name, ca_number, size, status, unit_value, stock_quantity
     FROM fdp_epi_products WHERE workspace_id = ? AND id = ?`)
     .bind(workspaceId, productId).first<EpiProductRow>();
   if (!product) throw ApiError.notFound("EPI não encontrado neste grupo.", "EPI_PRODUCT_NOT_FOUND");
@@ -184,7 +183,8 @@ export const employeeDisplayName = (employee: { full_name: string; social_name: 
 export type EpiMovementInput = {
   id?: string;
   workspaceId: string;
-  companyId: string;
+  /** Nulo nas movimentações do estoque do grupo; preenchido apenas em eventos de consumo. */
+  companyId: string | null;
   cnpj: string;
   movementDate: string;
   movementType: EpiMovementType;

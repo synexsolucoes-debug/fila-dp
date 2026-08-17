@@ -48,9 +48,6 @@ export type EpiOverview = {
 
 export type EpiProduct = {
   id: string;
-  companyId: string;
-  companyName: string;
-  companyTaxId: string;
   name: string;
   epiType: EpiType;
   caNumber: string;
@@ -165,8 +162,6 @@ export type EpiDisposal = {
 /** Item do estoque que já está em estado de descarte e ainda não tem registro aberto. */
 export type DisposableProduct = {
   id: string;
-  companyId: string;
-  companyName: string;
   name: string;
   caNumber: string;
   size: string;
