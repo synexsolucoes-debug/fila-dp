@@ -588,6 +588,59 @@ for (const width of widths) {
   record(`site público sem rolagem horizontal em ${width}px`, overflow <= 1, `sobra ${overflow}px`);
 }
 
+// Cadastro de EPI de ponta a ponta.
+//
+// Existe por um defeito que passou por typecheck, lint e a bateria inteira de
+// testes e chegou ao cliente: o formulário de EPI novo mandava um campo
+// obrigatório vazio, e o servidor recusava com "Informe a empresa." sem que a
+// tela oferecesse onde corrigir. A causa mudou desde então — o cadastro passou
+// a ser do grupo —, mas a classe do defeito não: **o formulário que a tela
+// apresenta precisa ser um que o servidor aceite**, e isso só se mede
+// preenchendo.
+//
+// Nenhuma verificação estática alcança isso. O payload só fica errado quando
+// alguém digita.
+{
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  await page.getByRole("button", { name: /^Controle de EPI$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(2000);
+
+  const abriu = await page.getByRole("button", { name: /Cadastrar EPI/u }).count();
+  record("o Controle de EPI abre com a ação de cadastro", abriu > 0, `${abriu} botão(ões)`);
+
+  await page.getByRole("button", { name: /Cadastrar EPI/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(900);
+  const gaveta = page.getByRole("dialog");
+  record("o formulário de novo EPI abre", await gaveta.count() > 0);
+
+  // Todo campo obrigatório da gaveta precisa ser preenchível pela tela. Um
+  // `required` que a pessoa não consegue satisfazer é a assinatura do defeito.
+  const obrigatoriosOcultos = await gaveta.locator('[required]:not(:visible)').count().catch(() => 0);
+  record("nenhum campo obrigatório do EPI está fora do alcance de quem preenche",
+    obrigatoriosOcultos === 0, `${obrigatoriosOcultos} campo(s) obrigatório(s) oculto(s)`);
+
+  const ca = `CA-ENSAIO-${Date.now().toString().slice(-6)}`;
+  await gaveta.locator('input[name="name"]').fill("Capacete de segurança").catch(() => undefined);
+  await gaveta.locator('input[name="caNumber"]').fill(ca).catch(() => undefined);
+  await gaveta.locator('input[name="size"]').fill("Único").catch(() => undefined);
+  await gaveta.locator('input[name="brand"]').fill("Marca do ensaio").catch(() => undefined);
+  await gaveta.locator('input[name="model"]').fill("Modelo do ensaio").catch(() => undefined);
+  await gaveta.locator('input[name="unitValue"]').fill("48.90").catch(() => undefined);
+  await gaveta.locator('input[name="stockQuantity"]').fill("12").catch(() => undefined);
+  await gaveta.locator('textarea[name="notes"]').fill("Criado pela verificação de navegador.").catch(() => undefined);
+  await gaveta.getByRole("button", { name: /Cadastrar EPI/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(3000);
+
+  const recusa = await page.getByRole("dialog").getByRole("alert").count();
+  const motivo = recusa ? (await page.getByRole("dialog").getByRole("alert").first().innerText()).replace(/\s+/gu, " ").slice(0, 140) : "";
+  record("o servidor aceita o cadastro que a tela montou", recusa === 0, motivo);
+
+  const naListagem = await page.getByText(ca, { exact: false }).count();
+  record("o EPI cadastrado aparece no estoque", naListagem > 0, `${naListagem} ocorrência(s)`);
+}
+
 // A marca precisa aparecer como arquivo oficial, e em branco sobre fundo escuro.
 await page.goto(`${base}/login`, { waitUntil: "networkidle" });
 const brandSources = await page.evaluate(() => [...document.querySelectorAll("img")].map((img) => img.getAttribute("src") ?? ""));
