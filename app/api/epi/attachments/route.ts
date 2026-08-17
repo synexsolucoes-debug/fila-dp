@@ -16,11 +16,39 @@ const allowedExtensions = new Set(["pdf", "jpg", "jpeg", "png", "webp", "txt", "
 
 const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(bytes < 1024 * 1024 * 10 ? 1 : 0)} MB`;
 
-/** Tabela e coluna de empresa de cada registro que aceita anexo. */
-const entityTables: Record<string, string> = {
-  product: "fdp_epi_products", delivery: "fdp_epi_deliveries", return: "fdp_epi_returns",
-  damage: "fdp_epi_damages", disposal: "fdp_epi_disposals", discount: "fdp_epi_discount_requests",
-};
+/**
+ * Empresa dona do registro que vai receber o anexo.
+ *
+ * A alternativa óbvia — interpolar o nome da tabela a partir do tipo — deixa a
+ * consulta fora da verificação de `scripts/verify-inline-sql`, que prepara cada
+ * instrução contra o schema real: um nome de coluna errado numa das seis
+ * tabelas só apareceria no cliente. Escrita como união estática, a consulta é
+ * verificável, e o planejador empurra os dois filtros para dentro de cada ramo.
+ *
+ * O SQL fica aqui dentro, e não numa constante compartilhada, porque o coletor
+ * do verificador só enxerga o literal escrito em `.prepare(`. Guardá-lo numa
+ * constante tiraria a consulta da contagem de não verificadas — sem verificá-la,
+ * que é o pior dos dois resultados.
+ */
+async function entityOwner(
+  d1: Awaited<ReturnType<typeof getWorkspaceContext>>["d1"],
+  workspaceId: string,
+  entityType: string,
+  entityId: string,
+) {
+  const owner = await d1.prepare(`SELECT company_id FROM (
+      SELECT 'product' AS entity_kind, id, workspace_id, company_id FROM fdp_epi_products
+      UNION ALL SELECT 'delivery', id, workspace_id, company_id FROM fdp_epi_deliveries
+      UNION ALL SELECT 'return', id, workspace_id, company_id FROM fdp_epi_returns
+      UNION ALL SELECT 'damage', id, workspace_id, company_id FROM fdp_epi_damages
+      UNION ALL SELECT 'disposal', id, workspace_id, company_id FROM fdp_epi_disposals
+      UNION ALL SELECT 'discount', id, workspace_id, company_id FROM fdp_epi_discount_requests
+    ) epi_entity
+    WHERE epi_entity.workspace_id = ? AND epi_entity.entity_kind = ? AND epi_entity.id = ?`)
+    .bind(workspaceId, entityType, entityId).first<{ company_id: string }>();
+  if (!owner) throw ApiError.notFound("Registro de EPI não encontrado.", "EPI_ENTITY_NOT_FOUND");
+  return owner;
+}
 
 async function storageQuotaError(
   d1: Awaited<ReturnType<typeof getWorkspaceContext>>["d1"],
@@ -73,9 +101,7 @@ export async function POST(request: Request) {
     const kindValue = cleanText(form.get("kind"), 40) || "evidence";
     const kind = (epiAttachmentKinds.includes(kindValue as EpiAttachmentKind) ? kindValue : "evidence") as EpiAttachmentKind;
 
-    const owner = await d1.prepare(`SELECT company_id FROM ${entityTables[entityType]} WHERE workspace_id = ? AND id = ?`)
-      .bind(workspace.id, entityId).first<{ company_id: string }>();
-    if (!owner) throw ApiError.notFound("Registro de EPI não encontrado.", "EPI_ENTITY_NOT_FOUND");
+    const owner = await entityOwner(d1, workspace.id, entityType, entityId);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, owner.company_id);
 
     const file = form.get("file");
@@ -149,9 +175,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const entityType = parseAttachmentEntity(url.searchParams.get("entityType"));
     const entityId = epiText(url.searchParams.get("entityId"), "o registro", 120, true);
-    const owner = await d1.prepare(`SELECT company_id FROM ${entityTables[entityType]} WHERE workspace_id = ? AND id = ?`)
-      .bind(workspace.id, entityId).first<{ company_id: string }>();
-    if (!owner) throw ApiError.notFound("Registro de EPI não encontrado.", "EPI_ENTITY_NOT_FOUND");
+    const owner = await entityOwner(d1, workspace.id, entityType, entityId);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, owner.company_id);
     const attachments = await d1.prepare(`SELECT id, entity_type, entity_id, attachment_kind, filename, content_type,
         size_bytes, created_at FROM fdp_epi_attachments

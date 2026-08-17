@@ -177,6 +177,11 @@ test("nenhuma consulta do módulo lê sem filtrar por workspace", async () => {
 
   const semTenant: string[] = [];
   for (const [caminho, fonte] of arquivos) {
+    // Recorte montado em variável — `const conditions = ["workspace_id = ?"]`.
+    // A lista **nasce** com o tenant, então toda condição acrescentada depois
+    // se soma a ele em vez de substituí-lo. Aceitar a interpolação sem exigir
+    // isto transformaria este teste em carimbo.
+    const escopoAncorado = /(?:const|let)\s+\w+(?:\s*:\s*string\[\])?\s*=\s*\[\s*"(?:\w+\.)?workspace_id = \?"/u.test(fonte);
     for (const match of fonte.matchAll(/\.prepare\(\s*(`|")([\s\S]*?)\1/gu)) {
       const sql = match[2];
       if (!/\bfdp_epi_/u.test(sql)) continue;
@@ -188,7 +193,11 @@ test("nenhuma consulta do módulo lê sem filtrar por workspace", async () => {
         if (!/\(\s*id\s*,\s*workspace_id\b/u.test(sql)) semTenant.push(resumo);
         continue;
       }
-      if (!/workspace_id\s*=/u.test(sql)) semTenant.push(resumo);
+      if (/workspace_id\s*=/u.test(sql)) continue;
+      // Sem `workspace_id` literal, só passa quem interpola um recorte que o
+      // arquivo comprovadamente ancora no tenant.
+      if (/\$\{/u.test(sql) && escopoAncorado) continue;
+      semTenant.push(resumo);
     }
   }
   assert.deepEqual(semTenant, [], "consulta do Controle de EPI sem recorte de workspace");

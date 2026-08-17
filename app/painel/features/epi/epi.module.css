@@ -39,14 +39,20 @@
   border-radius: 7px; font-size: .72rem; font-weight: 740; white-space: nowrap; cursor: pointer; text-decoration: none;
   transition: transform .14s ease, border-color .14s ease, background .14s ease;
 }
-.primaryButton { border: 1px solid var(--epi-accent); background: var(--epi-accent); color: var(--epi-on-accent); }
+/* `!important` nas três cores abaixo, e não por preguiça: `.workspace button`
+   acima é (0,1,1) e vence `.primaryButton`, que é (0,1,0). Sem isso o botão
+   primário herda o texto escuro da página sobre o preenchimento de destaque —
+   2.34:1, medido pela conferência de acessibilidade contra o produto de pé —, e
+   os botões fantasma e de perigo perdem a própria cor em silêncio. É o mesmo
+   tratamento que o módulo de Ponto já aplica pelo mesmo motivo. */
+.primaryButton { border: 1px solid var(--epi-accent); background: var(--epi-accent); color: var(--epi-on-accent, #fff) !important; }
 .primaryButton:hover:not(:disabled) { transform: translateY(-1px); background: color-mix(in srgb, var(--epi-accent) 88%, black); }
 .secondaryButton { border: 1px solid var(--epi-border); background: var(--epi-surface); color: inherit; }
 .secondaryButton:hover:not(:disabled) { border-color: var(--epi-accent); color: var(--epi-accent-text); }
-.ghostButton { border: 1px solid transparent; background: transparent; color: var(--epi-soft); min-height: 32px; padding: 0 9px; font-size: .69rem; }
-.ghostButton:hover:not(:disabled) { border-color: var(--epi-border); color: var(--epi-text); }
+.ghostButton { border: 1px solid transparent; background: transparent; color: var(--epi-soft) !important; min-height: 32px; padding: 0 9px; font-size: .69rem; }
+.ghostButton:hover:not(:disabled) { border-color: var(--epi-border); color: var(--epi-text) !important; }
 .primaryButton:disabled, .secondaryButton:disabled, .ghostButton:disabled { cursor: not-allowed; opacity: .48; transform: none; }
-.dangerButton { border-color: color-mix(in srgb, var(--epi-danger) 55%, transparent); color: var(--epi-danger); }
+.dangerButton { border-color: color-mix(in srgb, var(--epi-danger) 55%, transparent); color: var(--epi-danger) !important; }
 
 .commandBar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
 .commandSelectors { display: flex; align-items: flex-end; gap: 10px; min-width: 0; flex-wrap: wrap; }

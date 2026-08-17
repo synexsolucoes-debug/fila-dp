@@ -50,45 +50,60 @@ export async function GET(request: Request) {
       });
     }
 
-    const scope: string[] = []; const values: unknown[] = [workspace.id];
+    // O recorte é montado como condição **inteira**, não como um fragmento que
+    // começa em `AND`. A diferença não é de estilo: `scripts/verify-inline-sql`
+    // prepara cada consulta contra o schema real substituindo o trecho
+    // interpolado, e um fragmento colado depois de `workspace_id = ?` não tem
+    // substituição válida — a consulta sairia da cobertura sem ninguém notar.
+    // Como condição completa, `true` no lugar dela é SQL legítimo e o
+    // verificador confere o resto.
+    const conditions = ["workspace_id = ?"]; const scopedValues: unknown[] = [workspace.id];
     if (!access.unrestricted) {
       const ids = [...access.companyIds];
-      scope.push(`AND company_id IN (${ids.map(() => "?").join(",")})`); values.push(...ids);
+      conditions.push(`company_id IN (${ids.map(() => "?").join(",")})`); scopedValues.push(...ids);
     }
-    // A cláusula de empresa é montada uma vez e repetida em cada subconsulta;
-    // cada uma recebe a mesma lista de valores, na mesma ordem.
-    const filter = companyId ? `${scope.join(" ")} AND company_id = ?` : scope.join(" ");
-    const scopedValues = companyId ? [...values, companyId] : values;
-    const args = [...scopedValues, ...scopedValues, ...scopedValues, ...scopedValues, ...scopedValues, ...scopedValues, ...scopedValues];
+    if (companyId) { conditions.push("company_id = ?"); scopedValues.push(companyId); }
+    // A mesma cláusula vale para as sete subconsultas, e cada uma recebe a
+    // mesma lista de valores, na mesma ordem.
+    const scope = conditions.join(" AND ");
+    const args = Array.from({ length: 7 }, () => scopedValues).flat();
 
     const summary = await d1.prepare(`SELECT
         (SELECT COALESCE(SUM(stock_quantity), 0) FROM fdp_epi_products
-          WHERE workspace_id = ? ${filter} AND status NOT IN ('discarded', 'inactive')) AS stock,
+          WHERE ${scope} AND status NOT IN ('discarded', 'inactive')) AS stock,
         (SELECT COALESCE(SUM(quantity - settled_quantity), 0) FROM fdp_epi_deliveries
-          WHERE workspace_id = ? ${filter} AND status <> 'canceled') AS delivered,
+          WHERE ${scope} AND status <> 'canceled') AS delivered,
         (SELECT COUNT(*) FROM fdp_epi_deliveries
-          WHERE workspace_id = ? ${filter} AND status = 'pending_signature') AS pending_signature,
+          WHERE ${scope} AND status = 'pending_signature') AS pending_signature,
         (SELECT COUNT(*) FROM fdp_epi_products
-          WHERE workspace_id = ? ${filter} AND status = 'sanitizing') AS pending_sanitizing,
+          WHERE ${scope} AND status = 'sanitizing') AS pending_sanitizing,
         (SELECT COUNT(*) FROM fdp_epi_disposals
-          WHERE workspace_id = ? ${filter} AND status = 'awaiting_disposal') AS awaiting_disposal,
+          WHERE ${scope} AND status = 'awaiting_disposal') AS awaiting_disposal,
         (SELECT COUNT(*) FROM fdp_epi_discount_requests
-          WHERE workspace_id = ? ${filter} AND status IN ('awaiting_dp_analysis', 'awaiting_approval')) AS discounts_in_analysis,
+          WHERE ${scope} AND status IN ('awaiting_dp_analysis', 'awaiting_approval')) AS discounts_in_analysis,
         (SELECT COUNT(*) FROM fdp_epi_products
-          WHERE workspace_id = ? ${filter} AND ca_expires_on IS NOT NULL AND status NOT IN ('discarded', 'inactive')
+          WHERE ${scope} AND ca_expires_on IS NOT NULL AND status NOT IN ('discarded', 'inactive')
             AND ca_expires_on < CURRENT_DATE) AS ca_expired`)
       .bind(...args).first<Record<string, string | number>>();
 
+    // A janela vai como parâmetro, não interpolada: duas interpolações na mesma
+    // instrução recebem a mesma substituição no verificador, e `CURRENT_DATE +
+    // true` tiraria esta consulta da cobertura.
     const expiring = await d1.prepare(`SELECT COUNT(*) AS total FROM fdp_epi_products
-      WHERE workspace_id = ? ${filter} AND ca_expires_on IS NOT NULL AND status NOT IN ('discarded', 'inactive')
-        AND ca_expires_on >= CURRENT_DATE AND ca_expires_on <= CURRENT_DATE + ${caExpiryWindowDays}`)
-      .bind(...scopedValues).first<{ total: string | number }>();
+      WHERE ${scope} AND ca_expires_on IS NOT NULL AND status NOT IN ('discarded', 'inactive')
+        AND ca_expires_on >= CURRENT_DATE AND ca_expires_on <= CURRENT_DATE + ?::int`)
+      .bind(...scopedValues, caExpiryWindowDays).first<{ total: string | number }>();
 
+    const companyScope = ["c.workspace_id = ?"]; const companyValues: unknown[] = [workspace.id];
+    if (!access.unrestricted) {
+      const ids = [...access.companyIds];
+      companyScope.push(`c.id IN (${ids.map(() => "?").join(",")})`); companyValues.push(...ids);
+    }
     const companies = await d1.prepare(`SELECT c.id, c.legal_name, c.trade_name, c.tax_id, c.status
       FROM fdp_companies c
-      WHERE c.workspace_id = ? ${access.unrestricted ? "" : `AND c.id IN (${[...access.companyIds].map(() => "?").join(",")})`}
+      WHERE ${companyScope.join(" AND ")}
       ORDER BY c.status, COALESCE(NULLIF(c.trade_name, ''), c.legal_name)`)
-      .bind(workspace.id, ...(access.unrestricted ? [] : [...access.companyIds])).all<Record<string, unknown>>();
+      .bind(...companyValues).all<Record<string, unknown>>();
 
     return Response.json({
       permissions,
