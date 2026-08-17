@@ -5,7 +5,7 @@ import {
   AlertTriangle, ArrowRight, Cable, CircleDot, GitCompareArrows, KeyRound, ListRestart,
   LoaderCircle, Plus, Trash2, Vault, X,
 } from "lucide-react";
-import type { Connector, IntegrationEditor, Mapping, RunDetail } from "./integrations.types";
+import type { Connector, IntegrationEditor, Mapping, RunDetail, StandardConnectorConfig } from "./integrations.types";
 import { StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
@@ -121,21 +121,23 @@ function submitLabel(editor: NonNullable<IntegrationEditor>) {
 }
 
 function ConfigureFields({ connector }: { connector: Connector }) {
+  const config = (connector.config ?? {}) as StandardConnectorConfig;
+  const endpoint = config.endpoint ?? "";
   return <>
     <ContextStrip icon={Cable} label="CONECTOR" value={`${connector.displayName} · ${connector.channel}`} />
     <section className={styles.formSection}><header><strong>Identificação e operação</strong><span>Salvar configurações nunca comprova uma conexão.</span></header><div className={styles.formGrid}>
       <label className={styles.fieldWide}><span>Nome de exibição</span><input name="displayName" defaultValue={connector.displayName} maxLength={120} required /></label>
-      {!isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" placeholder="https://api.fornecedor.com/v1/recurso" required /></label>}
-      {connector.channel === "solides" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides</span><input name="endpoint" type="url" inputMode="url" defaultValue="https://app.solides.com/pt-BR/api/v1/colaboradores" pattern="https://app\.solides\.com/(pt-BR|es|en)/api/v1/colaboradores" required /></label>}
-      {connector.channel === "tangerino" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides DP</span><input name="endpoint" type="url" inputMode="url" defaultValue="https://employer.tangerino.com.br/employee/find-all" pattern="https://(employer|api)\.tangerino\.com\.br(/api/employer)?/employee/find-all" required /></label>}
-      {isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Referência da conta</span><input name="accountReference" maxLength={160} placeholder="Referência administrativa da conta" /></label>}
+      {!isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint} placeholder="https://api.fornecedor.com/v1/recurso" required /><small>Use um recurso HTTPS oficial do provedor. O teste fará uma requisição real a este endereço.</small></label>}
+      {connector.channel === "solides" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint || "https://app.solides.com/pt-BR/api/v1/colaboradores"} pattern="https://app\.solides\.com/(pt-BR|es|en)/api/v1/colaboradores" required /></label>}
+      {connector.channel === "tangerino" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides DP</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint || "https://employer.tangerino.com.br/employee/find-all"} pattern="https://(employer|api)\.tangerino\.com\.br(/api/employer)?/employee/find-all" required /></label>}
+      {isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Referência da conta</span><input name="accountReference" defaultValue={config.accountReference ?? ""} maxLength={160} placeholder="Referência administrativa da conta" /></label>}
       <label><span>Estado operacional</span><select name="status" defaultValue={connector.status === "paused" ? "paused" : "needs_credentials"}><option value="needs_credentials">Aguardando verificação</option><option value="paused">Pausado</option></select></label>
     </div></section>
     {isAdmissionSource(connector.channel) && <section className={styles.formSection}><header><strong>Destino das conciliações</strong><span>Onde as admissões concluídas na Sólides viram tarefa.</span></header><div className={styles.formGrid}>
-      <label><span>Admitidos a partir de</span><input name="admissionsSince" type="date" required /></label>
-      <label><span>Colaboradores por página</span><input name="pageSize" type="number" min={1} max={150} defaultValue={150} /></label>
-      <label className={styles.fieldWide}><span>Quadro de destino</span><input name="boardId" maxLength={80} placeholder="Vazio usa o primeiro quadro com coluna de entrada" /></label>
-      <label className={styles.fieldWide}><span>Empresa</span><input name="companyId" maxLength={80} placeholder="Vazio usa a unidade informada pela Sólides" /></label>
+      <label><span>Admitidos a partir de</span><input name="admissionsSince" type="date" defaultValue={config.admissionsSince?.slice(0, 10) ?? ""} required /></label>
+      <label><span>Colaboradores por página</span><input name="pageSize" type="number" min={1} max={150} defaultValue={config.pageSize ?? 150} /></label>
+      <label className={styles.fieldWide}><span>Quadro de destino</span><input name="boardId" defaultValue={config.boardId ?? ""} maxLength={80} placeholder="Vazio usa o primeiro quadro com coluna de entrada" /></label>
+      <label className={styles.fieldWide}><span>Empresa</span><input name="companyId" defaultValue={config.companyId ?? ""} maxLength={80} placeholder="Vazio usa a unidade informada pela Sólides" /></label>
     </div></section>}
     {isAdmissionSource(connector.channel) && <SolidesNotice channel={connector.channel} />}
   </>;

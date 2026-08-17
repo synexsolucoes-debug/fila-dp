@@ -31,6 +31,15 @@ export type SankhyaConfig = {
   diagnosticRetentionHours: number;
 };
 
+export type StandardConnectorConfig = {
+  endpoint?: string;
+  accountReference?: string;
+  admissionsSince?: string;
+  pageSize?: number;
+  boardId?: string;
+  companyId?: string;
+};
+
 export type Connector = {
   id: string;
   channel: IntegrationChannel;
@@ -46,7 +55,7 @@ export type Connector = {
   verifiedAt: string;
   expiresAt: string;
   publicHint: string;
-  config: SankhyaConfig | null;
+  config: SankhyaConfig | StandardConnectorConfig | null;
   lastConnectionAt: string;
   lastSuccessfulSyncAt: string;
   nextSyncAt: string;

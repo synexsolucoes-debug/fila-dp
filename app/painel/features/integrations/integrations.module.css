@@ -111,6 +111,11 @@
 .connectorRack dt { color: var(--int-soft); font-size: .48rem; font-weight: 760; letter-spacing: .05em; text-transform: uppercase; }
 .connectorRack dd { display: flex; align-items: center; gap: 5px; min-width: 0; margin: 4px 0 0; overflow: hidden; font-size: .56rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .connectorRack dd svg { width: 13px; height: 13px; color: var(--int-accent); }
+.pilotFlow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; padding: 8px 12px; border-bottom: 1px solid var(--int-border); background: var(--int-muted); }
+.pilotFlow span { display: flex; align-items: center; gap: 5px; color: var(--int-soft); font-size: .5rem; font-weight: 700; }
+.pilotFlow b { display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--int-border-strong); border-radius: 50%; background: var(--int-surface); font-size: .47rem; }
+.pilotFlow span[data-done="true"] { color: var(--int-success); }
+.pilotFlow span[data-done="true"] b { border-color: color-mix(in srgb, var(--int-success) 42%, var(--int-border)); background: color-mix(in srgb, var(--int-success) 9%, var(--int-surface)); }
 .safeError { display: flex; align-items: center; gap: 8px; margin: 9px 12px 0; padding: 7px 8px; border-left: 2px solid var(--int-danger); background: color-mix(in srgb, var(--int-danger) 6%, var(--int-surface)); color: var(--int-danger); }
 .safeError > span { display: grid; gap: 2px; color: var(--int-soft); font-size: .52rem; }
 .safeError strong { color: var(--int-danger); font-size: .5rem; }

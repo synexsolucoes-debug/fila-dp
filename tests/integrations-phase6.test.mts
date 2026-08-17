@@ -103,8 +103,10 @@ test("phase 6 capabilities keep management and reconciliation admin-only", async
 });
 
 test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessible", async () => {
-  const [view, sankhyaPanel, platform, platformSankhya, core, api, types, workspace] = await Promise.all([
+  const [view, drawer, overview, sankhyaPanel, platform, platformSankhya, core, api, types, workspace] = await Promise.all([
     readFile(new URL("../app/painel/features/integrations/IntegrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/integrations/IntegrationDrawers.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/integrations/overview/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/integrations/SankhyaConnectorPanel.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/features/IntegrationsFeature.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/features/SankhyaPlatformConfiguration.tsx", import.meta.url), "utf8"),
@@ -115,7 +117,17 @@ test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessibl
   ]);
   assert.match(view, /INTEGRAÇÕES DO WORKSPACE/u);
   assert.match(view, /SankhyaConnectorPanel/u);
-  assert.doesNotMatch(view, /IntegrationDrawer|type="password"|Rotacionar|Revogar/u);
+  assert.match(view, /IntegrationDrawer/u);
+  assert.match(view, /Configurar[\s\S]+Credencial[\s\S]+Testar conexão/u);
+  assert.match(view, /\/api\/integrations\/\$\{nextEditor\.connector\.id\}\/credentials/u);
+  assert.match(view, /\/api\/integrations\/\$\{connector\.id\}\/verify/u);
+  assert.match(view, /Rotacionar|Revogar/u);
+  assert.match(drawer, /type="password"/u);
+  assert.match(drawer, /autoComplete="new-password"/u);
+  const credentialForm = drawer.slice(drawer.indexOf("function CredentialFields"), drawer.indexOf("function RevokeFields"));
+  assert.doesNotMatch(credentialForm, /<input[^>]*(?:defaultValue|value)=/iu);
+  assert.match(overview, /publicConnectorConfig/u);
+  assert.match(overview, /config_json: undefined/u);
   assert.match(sankhyaPanel, /Testar conexão/u);
   assert.match(sankhyaPanel, /Gerenciada pela Plataforma Global/u);
   assert.doesNotMatch(sankhyaPanel, /type="password"|Alterar credenciais/u);
