@@ -74,6 +74,15 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
     "contractors.export_caju", "payments.reopen",
   ],
   registrations: ["companies.manage", "employees.manage", "registrations.catalogs.manage"],
+  epi: [
+    "epi.create", "epi.edit", "epi.delete", "epi.deliver", "epi.return",
+    "epi.damage", "epi.dispose", "epi.discount.analyze", "epi.export",
+    // `epi.audit.view` é leitura, e entra aqui de propósito: a capacidade de
+    // leitura que o módulo já governa é `epi.view`, a do catálogo. Negar o
+    // módulo a uma pessoa precisa fechar as duas portas — sem esta linha, quem
+    // perdesse a tela continuaria lendo a trilha do EPI pela auditoria.
+    "epi.audit.view",
+  ],
   integrations: ["integrations.manage", "integrations.run", "integrations.reconcile"],
   sankhya_browser: ["integrations.credentials.manage", "integrations.execute", "integrations.logs.view"],
   payroll: ["hr.write"],

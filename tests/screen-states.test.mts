@@ -26,6 +26,7 @@ const telasDoPainel: Array<[string, string]> = [
   ["integrations", "IntegrationsView.tsx"],
   ["payments", "PaymentsView.tsx"],
   ["time", "TimeTrackingView.tsx"],
+  ["epi", "EpiControlView.tsx"],
 ];
 
 // Aceita o componente compartilhado ou uma mensagem própria: o que importa é a
