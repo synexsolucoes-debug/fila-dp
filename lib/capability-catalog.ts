@@ -18,6 +18,7 @@ export const capabilityAreas = [
   { key: "operations", label: "Operação do DP" },
   { key: "payments", label: "Pagamentos auxiliares" },
   { key: "time", label: "Ponto" },
+  { key: "epi", label: "Controle de EPI" },
   { key: "platform", label: "Integrações, plano e auditoria" },
 ] as const;
 
@@ -90,6 +91,18 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "time.approve": { area: "time", label: "Aprovar a conferência de ponto" },
   "time.export": { area: "time", label: "Exportar eventos de hora para a folha" },
   "time.mappings.manage": { area: "time", label: "Configurar rubricas e mapeamentos de ponto" },
+
+  "epi.view": { area: "epi", label: "Ver o estoque, as entregas e o histórico de EPI" },
+  "epi.create": { area: "epi", label: "Cadastrar EPI e registrar entrada em estoque" },
+  "epi.edit": { area: "epi", label: "Editar o cadastro de EPI" },
+  "epi.delete": { area: "epi", label: "Inativar cadastro de EPI sem movimentação" },
+  "epi.deliver": { area: "epi", label: "Entregar EPI ao colaborador e registrar o termo" },
+  "epi.return": { area: "epi", label: "Receber devolução e classificar a condição do EPI" },
+  "epi.damage": { area: "epi", label: "Registrar danificação e decidir sobre a troca" },
+  "epi.dispose": { area: "epi", label: "Confirmar o descarte definitivo de EPI" },
+  "epi.discount.analyze": { area: "epi", label: "Analisar e decidir possível desconto de EPI" },
+  "epi.export": { area: "epi", label: "Exportar relatórios do Controle de EPI" },
+  "epi.audit.view": { area: "epi", label: "Consultar a trilha de auditoria do Controle de EPI" },
 
   "integrations.status.read": { area: "platform", label: "Ver o estado das integrações" },
   "integrations.manage": { area: "platform", label: "Configurar conectores e credenciais" },

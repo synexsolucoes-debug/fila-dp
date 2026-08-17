@@ -117,13 +117,18 @@ test("cada capacidade de escrita tem ao menos um módulo dono", () => {
   // Uma capacidade de escrita sem dono é uma linha da matriz que a tela de
   // acessos não consegue mexer: o administrador vê o módulo, nega, e aquela
   // ação continua liberada sem explicação.
-  const somenteLeitura = /\.(read|directory\.read|status\.read)$/u;
+  // `.view` conta como leitura junto com `.read`. O vocabulário do produto usa
+  // os dois sufixos — `integrations.view` estava aqui como exceção nominal, e
+  // `epi.view` repetiria a exceção; o sufixo generaliza o que a lista fazia
+  // caso a caso, sem afrouxar nada: capacidade de escrita continua exigindo
+  // dono.
+  const somenteLeitura = /\.(read|view|directory\.read|status\.read)$/u;
   const orfas = capabilities.filter((capability) =>
     !somenteLeitura.test(capability)
     && !capabilityOwners.has(capability)
     // Ciclo de vida do grupo e trilha global não são módulo: quem os exerce é
     // o dono ou a plataforma, e a tela de acessos não os oferece.
-    && !/^workspace\.|^audit\.|^integrations\.view$/u.test(capability));
+    && !/^workspace\.|^audit\./u.test(capability));
   assert.deepEqual(orfas, []);
 });
 

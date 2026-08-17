@@ -75,6 +75,20 @@ export const capabilities = [
   "time.approve",
   "time.export",
   "time.mappings.manage",
+  // Controle de EPI. As ações estão separadas porque as consequências são
+  // diferentes: entregar move estoque, descartar é irreversível, e analisar
+  // desconto decide sobre o salário de alguém.
+  "epi.view",
+  "epi.create",
+  "epi.edit",
+  "epi.delete",
+  "epi.deliver",
+  "epi.return",
+  "epi.damage",
+  "epi.dispose",
+  "epi.discount.analyze",
+  "epi.export",
+  "epi.audit.view",
 ] as const;
 
 export type Capability = typeof capabilities[number];
@@ -129,6 +143,12 @@ const roleCapabilities = {
     "psychology.payments.read", "psychology.payments.manage", "psychology.payments.close",
     "contractors.payments.read", "contractors.payments.manage", "contractors.payments.close",
     "time.read", "time.manage", "time.approve", "time.export",
+    // O analista de DP opera o EPI inteiro: é ele quem entrega, recebe de
+    // volta, trata a troca e leva o caso de desconto ao parecer. O que fica
+    // fora é apagar cadastro e ler a trilha de auditoria — as duas ações que
+    // servem para encobrir as outras, e por isso ficam com o administrador.
+    "epi.view", "epi.create", "epi.edit", "epi.deliver", "epi.return", "epi.damage",
+    "epi.dispose", "epi.discount.analyze", "epi.export",
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",
@@ -136,6 +156,7 @@ const roleCapabilities = {
     "companies.read", "employees.read",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "time.read",
+    "epi.view",
   ]),
   guest: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "comments.write",

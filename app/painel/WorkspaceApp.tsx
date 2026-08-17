@@ -10,6 +10,7 @@ import {
   Blocks,
   Building2,
   Cable,
+  HardHat,
   Check,
   CalendarClock,
   CalendarDays,
@@ -61,9 +62,10 @@ import { AuxiliaryModulesView } from "./features/auxiliary";
 import { IntegrationsView } from "./features/integrations";
 import { PaymentsView } from "./features/payments";
 import { TimeTrackingView } from "./features/time";
+import { EpiControlView } from "./features/epi";
 import { ActionCenter } from "./features/action-center";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "integrations" | "registrations" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "epi" | "integrations" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -213,6 +215,11 @@ const viewCatalog: Record<View, ViewEntry> = {
     label: "Ponto", icon: Timer, section: "pessoas", module: "timeTracking", hiddenFor: ["guest"],
     eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto",
     description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada.",
+  },
+  epi: {
+    label: "Controle de EPI", icon: HardHat, section: "pessoas", module: "epi", hiddenFor: ["guest"],
+    eyebrow: "SEGURANÇA DO TRABALHO", title: "Controle de EPI",
+    description: "Cadastro, entrega, devolução, troca, descarte e análise de desconto de equipamentos de proteção.",
   },
   payroll: {
     label: "Folha", icon: WalletCards, section: "financeiro", module: "payroll",
@@ -1428,6 +1435,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "contractorPayments" && <PaymentsView role={snapshot.workspace.role} module="contractors" />}
 
           {view === "timeTracking" && <TimeTrackingView role={snapshot.workspace.role} />}
+
+          {view === "epi" && <EpiControlView role={snapshot.workspace.role} />}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
 
