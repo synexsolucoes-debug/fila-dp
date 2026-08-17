@@ -176,6 +176,51 @@ test("o domínio recusado diz quem destrava e como, em vez de só constatar", ()
   assert.match(SANKHYA_HOST_HINT, /\*\.sankhya\.com\.br/u);
 });
 
+test("cada recusa aponta o remédio que resolve ela, e não o remédio do vizinho", () => {
+  const anterior = process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS;
+  try {
+    // O endereço que o cliente informou: HTTP, IP puro, porta alta. Liberar o
+    // host não destrava nada aqui — o bloqueio é o protocolo. A primeira versão
+    // desta correção mandava liberar o host mesmo assim, inclusive quando o host
+    // já estava liberado, o que faria a pessoa repetir o que não funcionou.
+    for (const hosts of ["", "143.208.246.6"]) {
+      process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS = hosts;
+      assert.throws(() => sanitizeSankhyaConfig({ endpoint: "http://143.208.246.6:8280/mge/login.jsp", companyId: "co-1" }),
+        (erro: unknown) => {
+          assert.ok(erro instanceof ApiError);
+          assert.match(erro.message, /precisa começar com https:\/\//u);
+          assert.doesNotMatch(erro.message, /FDP_SANKHYA_BROWSER_ALLOWED_HOSTS/u,
+            "com o host já liberado, mandar liberar o host manda repetir o que não funcionou");
+          return true;
+        });
+    }
+
+    // O mesmo endereço em HTTPS passa a depender da lista — e aí, sim, é a lista
+    // que a mensagem cita, e liberar resolve.
+    process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS = "";
+    assert.throws(() => sanitizeSankhyaConfig({ endpoint: "https://143.208.246.6:8280/mge/login.jsp", companyId: "co-1" }),
+      (erro: unknown) => {
+        assert.ok(erro instanceof ApiError);
+        assert.match(erro.message, /FDP_SANKHYA_BROWSER_ALLOWED_HOSTS/u);
+        return true;
+      });
+    process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS = "143.208.246.6";
+    assert.equal(sanitizeSankhyaConfig({ endpoint: "https://143.208.246.6:8280/mge/login.jsp", companyId: "co-1" }).endpoint,
+      "https://143.208.246.6:8280/mge/login.jsp");
+
+    // E o que nem URL é recebe a forma esperada, não a lista de hosts.
+    assert.throws(() => sanitizeSankhyaConfig({ endpoint: "143.208.246.6:8280", companyId: "co-1" }), (erro: unknown) => {
+      assert.ok(erro instanceof ApiError);
+      assert.match(erro.message, /endereço completo/u);
+      assert.doesNotMatch(erro.message, /FDP_SANKHYA_BROWSER_ALLOWED_HOSTS/u);
+      return true;
+    });
+  } finally {
+    if (anterior === undefined) delete process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS;
+    else process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS = anterior;
+  }
+});
+
 test("o cartão do console não oferece executar sobre configuração que não existe", async () => {
   const rota = await ler("app/api/platform/integrations/route.ts");
   // A condição da tela é a mesma que o servidor aplica antes de enfileirar.

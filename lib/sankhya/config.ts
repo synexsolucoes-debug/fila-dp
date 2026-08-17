@@ -1,5 +1,5 @@
 import { ApiError } from "../api-errors.ts";
-import { validateIntegrationEndpoint } from "../integration-security.ts";
+import { IntegrationEndpointError, validateIntegrationEndpoint } from "../integration-security.ts";
 import type { SankhyaConfig } from "./types.ts";
 
 const frequencies = new Set(["hourly", "daily", "weekly"]);
@@ -36,18 +36,30 @@ export function parseSankhyaConfig(value: unknown): SankhyaConfig {
 }
 
 /**
- * O que fazer quando o domínio é recusado.
+ * O que fazer, por motivo de recusa.
  *
- * Só `*.sankhya.com.br` é aceito por padrão. Um Sankhya hospedado no domínio do
- * próprio cliente — `erp.grupo.com.br`, o caso comum de instalação on-premise —
- * é recusado, e a frase anterior parava em "o domínio X não está autorizado":
- * o estado, sem o que destrava. O destravamento não está nesta tela nem em
- * nenhuma outra; é uma variável de ambiente que só o operador da plataforma
- * define. Quem não sabe disso preenche o formulário de novo, com a mesma URL.
+ * A primeira versão disto tinha uma dica só, sobre a lista de hosts, colada em
+ * qualquer recusa de endpoint. Conferindo contra um endereço real de cliente —
+ * `http://143.208.246.6:8280` — a dica mandava liberar o host, e liberar o host
+ * não resolveria nada: o bloqueio era o protocolo. Apontar o remédio errado é
+ * pior do que não apontar nenhum, porque manda a pessoa tentar de novo o que já
+ * não funcionou. Cada motivo tem o seu.
  */
 export const SANKHYA_HOST_HINT = "Por padrão só endereços em *.sankhya.com.br são aceitos: "
-  + "um ambiente hospedado em domínio próprio precisa ser incluído em FDP_SANKHYA_BROWSER_ALLOWED_HOSTS "
+  + "um ambiente hospedado em domínio ou IP próprio precisa ser incluído em FDP_SANKHYA_BROWSER_ALLOWED_HOSTS "
   + "pelo operador da plataforma antes de a configuração poder ser gravada.";
+
+/**
+ * O HTTPS não é preferência de estilo: o robô faz login no Sankhya com o usuário
+ * e a senha dedicados do cliente. Em HTTP eles atravessam a internet em texto
+ * claro, legíveis por qualquer ponto no caminho. Por isso a recusa é definitiva
+ * e não tem variável de ambiente que a contorne — o remédio está do lado do
+ * ambiente Sankhya.
+ */
+export const SANKHYA_HTTPS_HINT = "O endereço precisa começar com https:// — o robô faz login com o usuário e a "
+  + "senha dedicados, que em HTTP trafegariam em texto claro. Publique o Sankhya com certificado "
+  + "(ou atrás de um túnel HTTPS) e informe o endereço seguro; endereços de rede interna também são recusados, "
+  + "porque o robô roda fora da rede do cliente.";
 
 export function sanitizeSankhyaConfig(value: unknown) {
   const config = parseSankhyaConfig(value);
@@ -61,7 +73,11 @@ export function sanitizeSankhyaConfig(value: unknown) {
     );
   } catch (error) {
     const motivo = error instanceof Error ? error.message : "URL Sankhya inválida.";
-    throw ApiError.badRequest(`${motivo} ${SANKHYA_HOST_HINT}`, "SANKHYA_URL_UNSAFE");
+    const razao = error instanceof IntegrationEndpointError ? error.reason : "";
+    const saida = razao === "insecure" ? SANKHYA_HTTPS_HINT
+      : razao === "host_not_allowed" ? SANKHYA_HOST_HINT
+        : razao === "unparseable" ? "Informe o endereço completo, como https://cliente.sankhya.com.br/mge/." : "";
+    throw ApiError.badRequest(saida ? `${motivo} ${saida}` : motivo, "SANKHYA_URL_UNSAFE");
   }
   return config;
 }
