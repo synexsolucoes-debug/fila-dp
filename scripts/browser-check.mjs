@@ -445,9 +445,13 @@ if (password) {
   record("o console lista o conector Sankhya do workspace liberado", achouLiberado > 0);
   if (achouLiberado) {
     const texto = await liberado.innerText().catch(() => "");
-    record("com o módulo liberado, o cartão oferece a execução",
+    record("com o módulo liberado, configurado e conectado, o cartão oferece a execução",
       !/não liberado/u.test(texto) && await liberado.getByRole("button", { name: /Executar/u }).count() > 0,
       texto.replace(/\n/gu, " · ").slice(0, 90));
+    // O degrau seguinte só aparece quando o anterior falta: um cartão já
+    // conectado oferecendo "Testar conexão" seria a escada lida ao contrário.
+    record("e não repete o degrau anterior quando já está conectado",
+      await liberado.getByRole("button", { name: /Testar conexão/u }).count() === 0);
 
     // E o formulário de configuração está lá — sem isto, o estado bloqueado
     // medido logo abaixo passaria também num painel que nunca abre formulário.

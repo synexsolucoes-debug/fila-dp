@@ -103,7 +103,14 @@ export function SankhyaPlatformConfiguration({ integration, configuration, compa
       <button type="submit" disabled={Boolean(pending) || !reasonValid}><Save aria-hidden="true" />{pending === "config" ? "Salvando…" : "Salvar configuração"}</button>
     </form>
 
-    <div className={styles.sankhyaSecretSummary}><div><strong>Credencial ativa</strong><span>Usuário: {text(activeCredential?.public_hint) || "não configurado"}</span><span>Senha: {activeCredential ? "••••••••••••" : "não configurada"}</span><span>Última conexão: {date(integration.last_connection_at)}</span></div><button type="button" disabled={!activeCredential || Boolean(pending) || !reasonValid} onClick={testConnection}><RefreshCw aria-hidden="true" />{pending === "test" ? "Enfileirando…" : "Testar conexão"}</button></div>
+    {/* Por que o botão está cinza.
+        Salvar a credencial recarrega o painel, e o motivo administrativo — que
+        fica lá em cima — volta vazio. O botão então desabilita logo depois da
+        ação que deveria levar até ele, sem dizer nada. Numa implantação real
+        isso travou o vínculo: a pessoa gravava a senha, encontrava o botão
+        apagado e voltava a clicar em "Executar", que respondia "teste a conexão
+        antes de sincronizar". Estado desabilitado sem explicação é um beco. */}
+    <div className={styles.sankhyaSecretSummary}><div><strong>Credencial ativa</strong><span>Usuário: {text(activeCredential?.public_hint) || "não configurado"}</span><span>Senha: {activeCredential ? "••••••••••••" : "não configurada"}</span><span>Última conexão: {date(integration.last_connection_at)}</span>{!activeCredential ? <span>Grave a credencial abaixo para habilitar o teste.</span> : !reasonValid ? <span>Preencha o motivo administrativo acima para habilitar o teste.</span> : <span>É o teste que libera a sincronização.</span>}</div><button type="button" disabled={!activeCredential || Boolean(pending) || !reasonValid} onClick={testConnection}><RefreshCw aria-hidden="true" />{pending === "test" ? "Enfileirando…" : "Testar conexão"}</button></div>
     <form className={styles.configForm} onSubmit={saveCredentials}>
       <label><span>Usuário dedicado Sankhya</span><input required minLength={2} autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
       <label><span>Nova senha</span><input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>

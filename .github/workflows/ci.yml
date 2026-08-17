@@ -139,6 +139,12 @@ jobs:
       # login como uma pessoa entra, e um segredo de repositório aqui daria a
       # impressão errada de que existe uma conta real por trás.
       FIXTURE_PASSWORD: ensaio-de-interface-em-ci-2026
+      # Mesma natureza da senha acima: chave de cofre de um banco efêmero, fixa
+      # e pública de propósito. Ela precisa ser a mesma na semente e no app —
+      # chaves diferentes gravariam uma credencial que ninguém abre, e a
+      # conferência mediria um estado que o produto não produz.
+      FDP_SANKHYA_VAULT_KEY: ExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExM=
+      FDP_SANKHYA_VAULT_KEY_VERSION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
