@@ -315,6 +315,7 @@ test("o razão de movimentações é append-only e sustenta o histórico do cola
   assert.match(migration, /CREATE OR REPLACE FUNCTION "fdp_epi_movements_append_only"/u);
   assert.match(migration, /BEFORE UPDATE OR DELETE ON "fdp_epi_movements"/u);
   assert.match(migration, /epi movements are append-only/u);
+  assert.match(evolutionMigration, /DISABLE TRIGGER "fdp_epi_movements_append_only"[\s\S]{0,320}UPDATE "fdp_epi_movements"[\s\S]{0,320}ENABLE TRIGGER "fdp_epi_movements_append_only"/u);
 });
 
 test("descarte confirmado é imutável e não devolve o EPI ao estoque", () => {

@@ -92,7 +92,12 @@ UPDATE "fdp_epi_deliveries" d SET stock_location_id = l.id FROM "fdp_stock_locat
 UPDATE "fdp_epi_returns" r SET stock_location_id = l.id FROM "fdp_stock_locations" l WHERE l.workspace_id = r.workspace_id AND l.is_default = 1 AND r.stock_location_id IS NULL;--> statement-breakpoint
 UPDATE "fdp_epi_damages" d SET stock_location_id = l.id FROM "fdp_stock_locations" l WHERE l.workspace_id = d.workspace_id AND l.is_default = 1 AND d.stock_location_id IS NULL;--> statement-breakpoint
 UPDATE "fdp_epi_disposals" d SET stock_location_id = l.id FROM "fdp_stock_locations" l WHERE l.workspace_id = d.workspace_id AND l.is_default = 1 AND d.stock_location_id IS NULL;--> statement-breakpoint
+-- O razão é append-only durante a operação normal. Este backfill é a única
+-- reescrita autorizada: preenche metadado estrutural sem alterar o fato, e o
+-- gatilho volta a ficar ativo ainda dentro da mesma transação da migration.
+ALTER TABLE "fdp_epi_movements" DISABLE TRIGGER "fdp_epi_movements_append_only";--> statement-breakpoint
 UPDATE "fdp_epi_movements" m SET stock_location_id = l.id FROM "fdp_stock_locations" l WHERE l.workspace_id = m.workspace_id AND l.is_default = 1 AND m.stock_location_id IS NULL;--> statement-breakpoint
+ALTER TABLE "fdp_epi_movements" ENABLE TRIGGER "fdp_epi_movements_append_only";--> statement-breakpoint
 ALTER TABLE "fdp_epi_deliveries" ALTER COLUMN "stock_location_id" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "fdp_epi_returns" ALTER COLUMN "stock_location_id" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "fdp_epi_disposals" ALTER COLUMN "stock_location_id" SET NOT NULL;--> statement-breakpoint
