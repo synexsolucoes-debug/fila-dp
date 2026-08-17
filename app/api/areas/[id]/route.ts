@@ -66,7 +66,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       .bind(next.name, next.code, next.description, next.managerUserId, next.color, next.icon,
         next.defaultSlaDays, next.status, next.status, user.id, workspace.id, id)];
     if (body.moduleKeys !== undefined) {
-      const modules = areaModuleList(body.moduleKeys);
+      const catalog = await d1.prepare("SELECT key FROM fdp_modules").all<{ key: string }>();
+      const modules = areaModuleList(body.moduleKeys, catalog.results.map((item) => String(item.key)));
       statements.push(d1.prepare("DELETE FROM fdp_area_module_assignments WHERE workspace_id = ? AND area_id = ?").bind(workspace.id, id));
       statements.push(...modules.map((moduleKey) => d1.prepare(`INSERT INTO fdp_area_module_assignments
         (workspace_id, module_key, area_id, created_by) VALUES (?, ?, ?, ?)

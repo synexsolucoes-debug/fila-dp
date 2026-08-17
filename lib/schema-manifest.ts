@@ -53,6 +53,7 @@ export const expectedMigrations = [
   "0043_lead_privacy_interest.sql",
   "0044_epi_control.sql",
   "0045_workspace_areas_shared_stock.sql",
+  "0046_department_module_backfill.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

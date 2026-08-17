@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, getWorkspaceModules, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
@@ -10,13 +10,25 @@ export async function GET() {
   try {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "departments.view", "consultar áreas operacionais");
-    const areas = await d1.prepare(`SELECT a.*,
-      COALESCE((SELECT COUNT(*) FROM fdp_area_members am WHERE am.workspace_id = a.workspace_id AND am.area_id = a.id), 0) AS members_count,
-      COALESCE((SELECT jsonb_agg(ma.module_key ORDER BY ma.module_key) FROM fdp_area_module_assignments ma
-        WHERE ma.workspace_id = a.workspace_id AND ma.area_id = a.id), '[]'::jsonb) AS module_keys
-      FROM fdp_areas a WHERE a.workspace_id = ? ORDER BY (a.status = 'active') DESC, a.name`)
-      .bind(workspace.id).all<Record<string, unknown>>();
-    return Response.json({ areas: areas.results });
+    const [areas, modules] = await Promise.all([
+      d1.prepare(`SELECT a.*,
+        COALESCE((SELECT COUNT(*) FROM fdp_area_members am WHERE am.workspace_id = a.workspace_id AND am.area_id = a.id), 0) AS members_count,
+        COALESCE((SELECT jsonb_agg(ma.module_key ORDER BY ma.module_key) FROM fdp_area_module_assignments ma
+          WHERE ma.workspace_id = a.workspace_id AND ma.area_id = a.id), '[]'::jsonb) AS module_keys
+        FROM fdp_areas a WHERE a.workspace_id = ? ORDER BY (a.status = 'active') DESC, a.name`)
+        .bind(workspace.id).all<Record<string, unknown>>(),
+      // A associação descreve a estrutura do grupo, não o acesso individual de
+      // quem abriu a tela. O papel administrativo resolve plano, dependências e
+      // bloqueios do workspace sem esconder módulos que outro membro não vê.
+      getWorkspaceModules(d1, workspace.id, "admin", String((workspace as Record<string, unknown>).status ?? "active")),
+    ]);
+    return Response.json({
+      areas: areas.results,
+      modules: modules.map((module) => ({
+        key: module.key, name: module.name, description: module.description, category: module.category,
+        route: module.route, status: module.status, available: module.allowed, message: module.message,
+      })),
+    });
   } catch (error) { return apiError(error); }
 }
 
@@ -32,7 +44,8 @@ export async function POST(request: Request) {
       color: cleanText(body.color, 20) || "#475569", icon: cleanText(body.icon, 40) || "building-2",
       defaultSlaDays: Math.min(Math.max(Math.trunc(Number(body.defaultSlaDays ?? 3)), 0), 365),
     };
-    const modules = areaModuleList(body.moduleKeys);
+    const catalog = await d1.prepare("SELECT key FROM fdp_modules").all<{ key: string }>();
+    const modules = areaModuleList(body.moduleKeys, catalog.results.map((item) => String(item.key)));
     const duplicate = await d1.prepare("SELECT id FROM fdp_areas WHERE workspace_id = ? AND code = ?")
       .bind(workspace.id, area.code).first();
     if (duplicate) throw new ApiError(409, "AREA_CODE_CONFLICT", "Já existe uma área com este código.");

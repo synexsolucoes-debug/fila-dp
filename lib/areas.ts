@@ -16,12 +16,13 @@ export function areaName(value: unknown) {
   return name;
 }
 
-export function areaModuleList(value: unknown): AreaModuleKey[] {
+export function areaModuleList(value: unknown, catalogKeys: readonly string[] = []): string[] {
   if (!Array.isArray(value)) return [];
   const result = [...new Set(value.map((item) => cleanText(item, 60)))];
-  const invalid = result.find((item) => !areaModuleKeys.includes(item as AreaModuleKey));
+  const allowed = new Set<string>([...areaModuleKeys, ...catalogKeys]);
+  const invalid = result.find((item) => !allowed.has(item));
   if (invalid) throw ApiError.badRequest(`Roteamento de módulo inválido: ${invalid}.`, "AREA_MODULE_INVALID");
-  return result as AreaModuleKey[];
+  return result;
 }
 
 export async function resolveAreaModule(

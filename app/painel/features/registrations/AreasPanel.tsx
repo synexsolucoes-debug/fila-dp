@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, Building2, Check, RefreshCw, UsersRound } from "lucide-react";
+import { Archive, Blocks, Building2, Check, RefreshCw, Route, UsersRound } from "lucide-react";
 import { EmptyState, LoadingState, StatusPill } from "../shared";
 import styles from "./registrations.module.css";
 
@@ -12,6 +12,15 @@ type Area = {
 };
 type Member = { userId: string; name: string; email: string; role: string };
 type AreaMember = { userId: string; role: string; isPrimary: boolean };
+type ModuleOption = {
+  key: string; name: string; description: string; category: string; route: string;
+  status: string; available: boolean; message: string;
+};
+
+const routingModuleKeys = new Set(["epi.owner", "epi.discount_analysis"]);
+const moduleCategoryLabels: Record<string, string> = {
+  operacao: "Operação", folha: "Folha e competências", pessoas: "Pessoas", gestao: "Gestão", plataforma: "Plataforma",
+};
 
 const text = (value: unknown) => value == null ? "" : String(value);
 const bool = (value: unknown) => value === true || value === 1 || value === "1";
@@ -34,6 +43,7 @@ function normalizeArea(row: Row): Area {
 
 export function AreasPanel({ canManage, createSignal }: { canManage: boolean; createSignal: number }) {
   const [areas, setAreas] = useState<Area[]>([]);
+  const [modules, setModules] = useState<ModuleOption[]>([]);
   const [workspaceMembers, setWorkspaceMembers] = useState<Member[]>([]);
   const [selected, setSelected] = useState<Area | "new" | null>(null);
   const [areaMembers, setAreaMembers] = useState<AreaMember[]>([]);
@@ -46,11 +56,11 @@ export function AreasPanel({ canManage, createSignal }: { canManage: boolean; cr
     setLoading(true);
     try {
       const [areaPayload, snapshot] = await Promise.all([
-        requestJson<{ areas?: Row[] }>("/api/areas"),
+        requestJson<{ areas?: Row[]; modules?: ModuleOption[] }>("/api/areas"),
         requestJson<{ members?: Array<{ userId: string; name: string; email: string; role: string }> }>("/api/workspace"),
       ]);
       const next = (areaPayload.areas ?? []).map(normalizeArea);
-      setAreas(next); setWorkspaceMembers(snapshot.members ?? []);
+      setAreas(next); setModules(areaPayload.modules ?? []); setWorkspaceMembers(snapshot.members ?? []);
       setSelected((current) => next.find((item) => item.id === (preferredId || (current === "new" ? "" : current?.id))) ?? next[0] ?? null);
       setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao carregar áreas."); }
@@ -96,7 +106,11 @@ export function AreasPanel({ canManage, createSignal }: { canManage: boolean; cr
       name: text(data.get("name")), code: text(data.get("code")), description: text(data.get("description")),
       managerUserId: text(data.get("managerUserId")) || null, color: text(data.get("color")),
       defaultSlaDays: Number(data.get("defaultSlaDays") || 3),
-      moduleKeys: [data.get("epiOwner") ? "epi.owner" : "", data.get("discountAnalysis") ? "epi.discount_analysis" : ""].filter(Boolean),
+      moduleKeys: [
+        ...data.getAll("departmentModules").map(String),
+        data.get("epiOwner") ? "epi.owner" : "",
+        data.get("discountAnalysis") ? "epi.discount_analysis" : "",
+      ].filter(Boolean),
     };
     setBusy(true); setError("");
     try {
@@ -142,7 +156,25 @@ export function AreasPanel({ canManage, createSignal }: { canManage: boolean; cr
         <label><span>COR</span><input name="color" type="color" defaultValue={active?.color ?? "#475569"} /></label>
         <label className={styles.formWide}><span>DESCRIÇÃO</span><textarea name="description" defaultValue={active?.description ?? ""} /></label>
       </div>
-      <section className={styles.areaSection}><h3>Roteamento do Controle de EPI</h3>
+      <section className={styles.areaSection} aria-labelledby="department-modules-title">
+        <header className={styles.areaSectionHeader}><div><h3 id="department-modules-title"><Blocks /> Módulos do departamento</h3>
+          <p>Organize os módulos do Workspace pela área que responde pela operação.</p></div>
+          <strong>{active?.moduleKeys.filter((key) => !routingModuleKeys.has(key)).length ?? 0} selecionado(s)</strong></header>
+        <div className={styles.areaModuleGrid}>{modules.map((module) => {
+          const checked = Boolean(active?.moduleKeys.includes(module.key));
+          const currentOwner = areas.find((area) => area.id !== active?.id && area.moduleKeys.includes(module.key));
+          const disabled = !module.available && !checked;
+          return <label key={module.key} data-disabled={disabled || undefined}>
+            <input type="checkbox" name="departmentModules" value={module.key} defaultChecked={checked} disabled={disabled} />
+            <span><strong>{module.name}</strong><small>{module.description}</small>
+              <em>{currentOwner ? `Vinculado a ${currentOwner.name}; ao salvar, será movido para esta área.`
+                : !module.available ? module.message || "Indisponível neste Workspace."
+                  : moduleCategoryLabels[module.category] ?? module.category}</em></span>
+          </label>;
+        })}</div>
+      </section>
+      <section className={styles.areaSection}><header className={styles.areaSectionHeader}><div><h3><Route /> Roteamento SESMT → DP</h3>
+        <p>Defina a origem e o destino das demandas de possível desconto de EPI.</p></div></header>
         <label><input type="checkbox" name="epiOwner" defaultChecked={active?.moduleKeys.includes("epi.owner")} /> Área solicitante / SESMT</label>
         <label><input type="checkbox" name="discountAnalysis" defaultChecked={active?.moduleKeys.includes("epi.discount_analysis")} /> Área responsável pela análise / DP</label>
       </section>

@@ -294,9 +294,9 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
           <button className={tab === "employees" ? styles.activeTab : ""} onClick={() => setTab("employees")}><UsersRound aria-hidden="true" /> Colaboradores</button>
           <button className={tab === "contractors" ? styles.activeTab : ""} onClick={() => setTab("contractors")}><Briefcase aria-hidden="true" /> Prestadores PJ</button>
           <button className={tab === "catalogs" ? styles.activeTab : ""} onClick={() => setTab("catalogs")}><SlidersHorizontal aria-hidden="true" /> Cadastros auxiliares</button>
-          <button className={tab === "areas" ? styles.activeTab : ""} onClick={() => setTab("areas")}><Building2 aria-hidden="true" /> Áreas operacionais</button>
+          <button className={tab === "areas" ? styles.activeTab : ""} onClick={() => setTab("areas")}><Building2 aria-hidden="true" /> Departamentos e módulos</button>
         </nav>
-        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : tab === "areas" ? "Nova área" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
+        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : tab === "areas" ? "Novo departamento" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
       </header>
 
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
