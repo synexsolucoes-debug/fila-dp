@@ -94,6 +94,8 @@ test("o menu mobile mantém todos os módulos alcançáveis", async () => {
   assert.match(source, /aria-label="Abrir todos os módulos"/u);
   assert.match(source, /mobileNavigationRef\.current\?\.removeAttribute\("open"\)/u);
   assert.match(css, /\.dashboard-sidebar nav \.mobile-secondary \{ display: none; \}/u);
+  assert.match(css, /\.sidebar-mobile-more:not\(\[open\]\) > \.sidebar-mobile-more-panel \{ display: none; \}/u,
+    "o menu completo fechado não pode deixar alvos invisíveis mensuráveis");
   assert.match(css, /min-height: 48px;/u, "os destinos do menu completo precisam de alvo de toque suficiente");
 });
 

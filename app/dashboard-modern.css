@@ -1113,6 +1113,11 @@
     box-shadow: var(--ui-shadow-modal);
   }
 
+  /* Chromium ainda calcula caixas de descendentes posicionados de um
+     <details> fechado. Além de confundir a auditoria de alvos de toque, isso
+     deixa controles invisíveis participarem da geometria da página. */
+  .sidebar-mobile-more:not([open]) > .sidebar-mobile-more-panel { display: none; }
+
   .sidebar-mobile-more-panel > section + section {
     margin-top: 13px;
     padding-top: 13px;
