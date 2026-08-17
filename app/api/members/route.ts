@@ -4,6 +4,7 @@ import { requireCapability } from "@/lib/authorization";
 import { createRecoveryToken } from "@/lib/fila-dp-recovery";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { ApiError } from "@/lib/api-errors";
+import { prepareMemberDepartmentAccess, resolveMemberDepartmentAccess } from "@/lib/member-departments";
 
 const memberRoles: WorkspaceRole[] = ["admin", "member", "observer", "guest"];
 
@@ -20,9 +21,12 @@ export async function POST(request: Request) {
     if (!/^\S+@\S+\.\S+$/.test(email)) return Response.json({ error: "Informe um e-mail válido." }, { status: 400 });
     if (!memberRoles.includes(role)) return Response.json({ error: "Papel de acesso inválido." }, { status: 400 });
 
-    const { d1, workspace } = await getWorkspaceContext(auth.user);
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
     requireCapability(workspace, "members.manage");
+    const departmentAccess = await resolveMemberDepartmentAccess(
+      d1, workspace.id, body.departmentId, body.moduleKeys,
+    );
 
     const currentMembership = await d1.prepare("SELECT 1 AS member FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = (SELECT id FROM fdp_users WHERE email = ?)")
       .bind(workspace.id, email).first<{ member: number }>();
@@ -81,6 +85,13 @@ export async function POST(request: Request) {
     await d1.batch([
       d1.prepare("DELETE FROM fdp_member_company_access WHERE workspace_id = ? AND user_id = ?").bind(workspace.id, invitedUser.id),
       ...companyIds.map((companyId) => d1.prepare("INSERT INTO fdp_member_company_access (workspace_id, user_id, company_id) VALUES (?, ?, ?)").bind(workspace.id, invitedUser!.id, companyId)),
+      ...prepareMemberDepartmentAccess(d1, {
+        workspaceId: workspace.id,
+        userId: invitedUser.id,
+        actorUserId: user.id,
+        workspaceRole: role,
+        access: departmentAccess,
+      }),
     ]);
 
     let activation: { url: string; expiresAt: string; name: string } | null = null;
@@ -97,7 +108,11 @@ export async function POST(request: Request) {
       activation = { url: url.toString(), expiresAt, name };
     }
 
-    await recordActivity(workspace.id, null, auth.user.email, "workspace.member_added", { email, role, companyIds, createdNow });
+    await recordActivity(workspace.id, null, auth.user.email, "workspace.member_added", {
+      email, role, companyIds, createdNow,
+      departmentId: departmentAccess.department.id,
+      moduleKeys: departmentAccess.selectedModuleKeys,
+    });
     return Response.json({ snapshot: await getWorkspaceSnapshot(auth.user), activation }, { status: 201 });
   } catch (error) {
     return apiError(error);

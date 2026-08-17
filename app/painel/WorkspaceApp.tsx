@@ -314,7 +314,13 @@ function normalizeWorkspaceSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnaps
     archivedCards: Array.isArray(snapshot.archivedCards) ? snapshot.archivedCards.map(normalizeCard) : [],
     inbox: Array.isArray(snapshot.inbox) ? snapshot.inbox : [],
     rules: Array.isArray(snapshot.rules) ? snapshot.rules : [],
-    members: Array.isArray(snapshot.members) ? snapshot.members.map((member) => ({ ...member, isActivated: member.isActivated !== false, companyIds: Array.isArray(member.companyIds) ? member.companyIds : [] })) : [],
+    members: Array.isArray(snapshot.members) ? snapshot.members.map((member) => ({
+      ...member,
+      isActivated: member.isActivated !== false,
+      companyIds: Array.isArray(member.companyIds) ? member.companyIds : [],
+      departmentId: member.departmentId ?? null,
+      departmentName: member.departmentName ?? "",
+    })) : [],
     boards: Array.isArray(snapshot.boards) ? snapshot.boards.map((board) => ({ ...board, stages: Array.isArray(board.stages) ? board.stages : [] })) : [],
     availableWorkspaces: Array.isArray(snapshot.availableWorkspaces) ? snapshot.availableWorkspaces : [],
     labels: Array.isArray(snapshot.labels) ? snapshot.labels : [],
@@ -533,6 +539,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [memberName, setMemberName] = useState("");
   const [memberRole, setMemberRole] = useState<WorkspaceRole>("member");
   const [memberCompanyIds, setMemberCompanyIds] = useState<string[]>([]);
+  const [memberDepartmentId, setMemberDepartmentId] = useState("");
+  const [memberModuleKeys, setMemberModuleKeys] = useState<string[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -778,6 +786,16 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const canEdit = snapshot ? ["admin", "member"].includes(snapshot.workspace.role) : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
+  const activeDepartments = useMemo(
+    () => (snapshot?.areas ?? []).filter((area) => area.status === "active"),
+    [snapshot?.areas],
+  );
+  const selectedDepartmentModules = useMemo(() => {
+    if (!snapshot || !memberDepartmentId) return [];
+    const department = snapshot.areas.find((area) => area.id === memberDepartmentId);
+    const catalog = new Map(snapshot.modules.map((module) => [module.key, module]));
+    return (department?.moduleKeys ?? []).map((key) => catalog.get(key)).filter((module) => module !== undefined);
+  }, [memberDepartmentId, snapshot]);
   // O menu reflete o plano contratado: um módulo fora do plano não vira botão.
   // A proteção real continua no servidor; isto evita oferecer o que não existe.
   const enabledModules = useMemo(
@@ -1100,11 +1118,22 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
   async function addMember(event: FormEvent) {
     event.preventDefault();
-    if (!memberEmail.trim()) return;
+    if (!memberEmail.trim() || !memberDepartmentId || memberModuleKeys.length === 0) return;
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: memberEmail, name: memberName, role: memberRole, companyIds: memberCompanyIds }) });
+      const response = await fetch("/api/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: memberEmail,
+          name: memberName,
+          role: memberRole,
+          companyIds: memberCompanyIds,
+          departmentId: memberDepartmentId,
+          moduleKeys: memberModuleKeys,
+        }),
+      });
       const payload = await response.json() as { error?: string; snapshot?: WorkspaceSnapshot; activation?: { url: string; expiresAt: string; name: string } | null };
       if (!response.ok || !payload.snapshot) throw new Error(payload.error || "Não foi possível criar o usuário.");
       applySnapshot(normalizeWorkspaceSnapshot(payload.snapshot), payload.activation ? "Usuário criado. Compartilhe o link de ativação somente com a pessoa indicada." : "Acesso da equipe atualizado.");
@@ -1113,6 +1142,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       setMemberName("");
       setMemberRole("member");
       setMemberCompanyIds([]);
+      setMemberDepartmentId("");
+      setMemberModuleKeys([]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível criar o usuário.");
     } finally { setBusy(false); }
@@ -1124,6 +1155,41 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
   async function updateMemberCompanies(userId: string, companyIds: string[]) {
     await mutate(`/api/members/${userId}`, { method: "PATCH", body: JSON.stringify({ companyIds }) }, "Empresas liberadas para a pessoa.");
+  }
+
+  function selectableDepartmentModuleKeys(departmentId: string) {
+    if (!snapshot) return [];
+    const department = snapshot.areas.find((area) => area.id === departmentId && area.status === "active");
+    if (!department) return [];
+    const hardBlocks = new Set(["module_inactive", "workspace_inactive", "subscription_inactive", "not_in_plan", "revoked_by_platform"]);
+    const catalog = new Map(snapshot.modules.map((module) => [module.key, module]));
+    return department.moduleKeys.filter((key) => {
+      const moduleEntry = catalog.get(key);
+      return Boolean(moduleEntry && !hardBlocks.has(moduleEntry.reason));
+    });
+  }
+
+  function selectMemberDepartment(departmentId: string) {
+    setMemberDepartmentId(departmentId);
+    setMemberModuleKeys(selectableDepartmentModuleKeys(departmentId));
+  }
+
+  function updateMemberDepartment(userId: string, memberName: string, departmentId: string) {
+    const department = snapshot?.areas.find((area) => area.id === departmentId);
+    const moduleKeys = selectableDepartmentModuleKeys(departmentId);
+    if (!department || moduleKeys.length === 0) {
+      setError("Este departamento precisa ter ao menos um módulo disponível antes de receber usuários.");
+      return;
+    }
+    requestConfirmation({
+      title: "Alterar departamento principal?",
+      description: `${memberName} passará a acessar somente os módulos de ${department.name}. As liberações anteriores serão substituídas.`,
+      confirmLabel: "Alterar departamento",
+      action: () => mutate(`/api/members/${userId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ departmentId, moduleKeys }),
+      }, "Departamento e módulos do usuário atualizados."),
+    });
   }
 
   async function generateRecoveryLink(userId: string, name: string) {
@@ -1716,11 +1782,75 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                 {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
                 {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
                 {settingsSection === "team" && <>
-                  <section className="access-admin-hero"><span><Users aria-hidden="true" /></span><div><strong>Controle de acesso do grupo</strong><p>Você define quem entra, qual papel cada pessoa terá e quais empresas poderá consultar ou operar.</p></div><b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b></section>
-                  <section className="workspace-team"><header><div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div><p>O proprietário e os administradores veem todas as empresas. Os demais acessam apenas os CNPJs liberados.</p></header>
-                    <div className="workspace-member-list">{snapshot.members.map((member) => <article key={member.userId}><i>{initials(member.name)}</i><div><strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong><small>{member.email}</small><span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span></div>{isAdmin && !member.isOwner ? <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}><option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option></select> : <b>{roleLabels[member.role]}</b>}{isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}{isAdmin && !member.isOwner && <details className="member-modules-details"><summary>Acesso por módulo</summary><MemberModules memberId={member.userId} memberName={member.name} canManage={isAdmin} /></details>}{isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}{isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}</article>)}</div>
+                  <section className="access-admin-hero">
+                    <span><Users aria-hidden="true" /></span>
+                    <div>
+                      <strong>Workspace → Departamento → Módulos</strong>
+                      <p>Todo usuário precisa de um departamento principal. Ele só pode receber módulos vinculados a esse departamento.</p>
+                    </div>
+                    <b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b>
                   </section>
-                  {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}><header><div><strong>Criar e liberar usuário</strong><span>O sistema gerará um link único para a pessoa definir a própria senha.</span></div><b>1. Cadastre · 2. Copie o link · 3. Libere</b></header><div><label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label><label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label><label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label><fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset><button className="primary-button" disabled={busy || !memberEmail.trim()}>Criar usuário e gerar link</button></div></form>}
+                  <section className="workspace-team">
+                    <header>
+                      <div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div>
+                      <p>O papel define as ações; o departamento limita os módulos; a empresa limita os CNPJs.</p>
+                    </header>
+                    <div className="workspace-member-list">{snapshot.members.map((member) => (
+                      <article key={member.userId}>
+                        <i>{initials(member.name)}</i>
+                        <div>
+                          <strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong>
+                          <small>{member.email}</small>
+                          <span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span>
+                          <span className={`member-department-status ${member.departmentId ? "assigned" : "missing"}`}>
+                            <Building2 aria-hidden="true" /> {member.departmentName || (member.isOwner ? "Proprietário do Workspace" : "Sem departamento")}
+                          </span>
+                        </div>
+                        {isAdmin && !member.isOwner ? (
+                          <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}>
+                            <option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option>
+                          </select>
+                        ) : <b>{roleLabels[member.role]}</b>}
+                        {isAdmin && !member.isOwner && (
+                          <select className="member-department-select" aria-label={`Departamento de ${member.name}`} value={member.departmentId ?? ""} disabled={busy}
+                            onChange={(event) => updateMemberDepartment(member.userId, member.name, event.target.value)}>
+                            {!member.departmentId && <option value="">Selecione o departamento</option>}
+                            {activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name}</option>)}
+                          </select>
+                        )}
+                        {isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}
+                        {isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}
+                        {isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}
+                        {isAdmin && !member.isOwner && <details className="member-modules-details"><summary>Módulos deste usuário</summary><MemberModules memberId={member.userId} key={`${member.userId}:${member.departmentId ?? "none"}`} memberName={member.name} canManage={isAdmin} /></details>}
+                      </article>
+                    ))}</div>
+                  </section>
+                  {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}>
+                    <header><div><strong>Criar e liberar usuário</strong><span>Defina a lotação e os módulos antes de gerar o acesso.</span></div><b>1. Identidade · 2. Departamento · 3. Módulos · 4. Ativação</b></header>
+                    <div>
+                      <label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label>
+                      <label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label>
+                      <label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label>
+                      <label>Departamento principal<select value={memberDepartmentId} required onChange={(event) => selectMemberDepartment(event.target.value)}>
+                        <option value="">Selecione…</option>{activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name} · {department.code}</option>)}
+                      </select></label>
+                      <fieldset className="invite-module-scope" disabled={busy || !memberDepartmentId}>
+                        <legend>Módulos liberados neste departamento</legend>
+                        {!memberDepartmentId && <p>Selecione o departamento para ver os módulos disponíveis.</p>}
+                        {memberDepartmentId && selectedDepartmentModules.length === 0 && <p>Este departamento ainda não possui módulos configurados.</p>}
+                        <div>{selectedDepartmentModules.map((module) => {
+                          const hardBlocked = ["module_inactive", "workspace_inactive", "subscription_inactive", "not_in_plan", "revoked_by_platform"].includes(module.reason);
+                          return <label key={module.key} data-disabled={hardBlocked || undefined}>
+                            <input type="checkbox" checked={memberModuleKeys.includes(module.key)} disabled={hardBlocked}
+                              onChange={(event) => setMemberModuleKeys((current) => event.target.checked ? [...current, module.key] : current.filter((key) => key !== module.key))} />
+                            <span><strong>{module.name}</strong><small>{hardBlocked ? module.message : module.description}</small></span>
+                          </label>;
+                        })}</div>
+                      </fieldset>
+                      <fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset>
+                      <button className="primary-button" disabled={busy || !memberEmail.trim() || !memberDepartmentId || memberModuleKeys.length === 0}>Criar usuário e gerar link</button>
+                    </div>
+                  </form>}
                 </>}
                 {settingsSection === "team" && recoveryLink && <section className="access-recovery-link"><header><div><span>LINK ÚNICO DE RECUPERAÇÃO</span><strong>{recoveryLink.name}</strong><small>Válido até {new Date(recoveryLink.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. O link deixa de funcionar após o primeiro uso.</small></div><button onClick={() => { void navigator.clipboard.writeText(recoveryLink.url).then(() => setToast("Link de recuperação copiado.")); }}>Copiar link</button></header><input value={recoveryLink.url} readOnly aria-label="Link de recuperação" /></section>}
                 {settingsSection === "security" && <section className="security-sessions">

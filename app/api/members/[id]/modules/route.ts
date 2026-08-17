@@ -79,15 +79,20 @@ export async function GET(_request: Request, { params }: Params) {
     // fato. A diferença entre as duas é exatamente o que a exceção fez — sem
     // isso a tela mostraria o resultado sem mostrar a causa.
     const byRole = resolveModules({
-      modules: catalog, ...plan, role: member.role, workspaceStatus,
+      modules: catalog, ...plan, departmentModules: grants.departmentModules, role: member.role, workspaceStatus,
     });
     const effective = resolveModules({
-      modules: catalog, ...plan, memberGrants: grants.byModule, role: member.role, workspaceStatus,
+      modules: catalog, ...plan, memberGrants: grants.byModule,
+      departmentModules: grants.departmentModules, role: member.role, workspaceStatus,
     });
     const roleByKey = new Map(byRole.map((item) => [item.key, item]));
 
     return Response.json({
-      member: { id: member.user_id, name: member.name, email: member.email, role: member.role },
+      member: {
+        id: member.user_id, name: member.name, email: member.email, role: member.role,
+        department: grants.department,
+        departmentRequired: !grants.isOwner && !grants.department,
+      },
       modules: effective.map((item) => {
         const base = roleByKey.get(item.key);
         const override = grants.byModule.get(item.key);
@@ -103,6 +108,8 @@ export async function GET(_request: Request, { params }: Params) {
           // `null` quando não há exceção: a tela distingue "segue o papel" de
           // "foi decidido individualmente".
           override: override === undefined ? null : override,
+          inDepartment: grants.isOwner || Boolean(grants.departmentModules?.has(item.key)),
+          lockedByDepartment: Boolean(grants.departmentModules && !grants.departmentModules.has(item.key)),
           // Fora do plano, nem o administrador do grupo pode liberar.
           lockedByPlan: base?.reason === "not_in_plan" || base?.reason === "revoked_by_platform",
         };
@@ -132,9 +139,24 @@ export async function PUT(request: Request, { params }: Params) {
     const definition = catalog.find((item) => item.key === moduleKey);
     if (!definition) throw ApiError.notFound("Módulo não encontrado.", "MODULE_NOT_FOUND");
 
+    const memberAccess = await loadMemberModuleGrants(d1, workspace.id, id);
+    if (!memberAccess.isOwner && !memberAccess.department) {
+      throw new ApiError(409, "MEMBER_DEPARTMENT_REQUIRED",
+        "Defina o departamento principal do usuário antes de alterar os módulos.");
+    }
+    if (memberAccess.departmentScoped && !memberAccess.departmentModules?.has(moduleKey)) {
+      throw new ApiError(409, "MODULE_OUTSIDE_DEPARTMENT",
+        `"${definition.name}" não pertence ao departamento ${memberAccess.department?.name}. Altere o departamento ou os módulos dele primeiro.`);
+    }
+
     // `null` remove a exceção e devolve a pessoa ao que o papel dela decide.
     const raw = body.granted;
     const granted = raw === null || raw === undefined || raw === "" ? null : raw === true || raw === "true";
+
+    if (granted === null && memberAccess.departmentScoped) {
+      throw new ApiError(409, "MODULE_DECISION_REQUIRED",
+        "Neste modelo de acesso, cada módulo do departamento precisa ficar explicitamente liberado ou bloqueado.");
+    }
 
     if (granted !== null) {
       const plan = await loadPlanContext(d1, workspace.id);

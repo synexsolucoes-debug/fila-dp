@@ -242,6 +242,9 @@ export type WorkspaceMember = {
   isOwner: boolean;
   isActivated: boolean;
   companyIds: string[];
+  /** Departamento principal no Workspace; ele limita os módulos disponíveis. */
+  departmentId: string | null;
+  departmentName: string;
 };
 
 export type AvailableWorkspace = {

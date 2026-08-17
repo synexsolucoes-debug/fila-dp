@@ -74,7 +74,8 @@ export async function POST(request: Request) {
     // exceções individuais já aplicadas, porque é isso que ela vê na tela.
     const modules = await getWorkspaceModules(d1, workspace.id, workspace.role,
       String((workspace as Record<string, unknown>).status ?? "active"),
-      (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants);
+      (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
+      (workspace as { departmentModules?: ReadonlySet<string> }).departmentModules);
 
     const system = buildSystemPrompt({
       workspaceName: workspace.name,

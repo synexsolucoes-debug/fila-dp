@@ -186,6 +186,8 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   const memberGrants = await loadMemberModuleGrants(scopedD1, workspace.id, userRow.id);
   const authorized = Object.assign(workspace, {
     memberGrants: memberGrants.byModule,
+    departmentModules: memberGrants.departmentModules,
+    primaryDepartment: memberGrants.department,
     extraCapabilities: memberGrants.extraCapabilities,
     deniedCapabilities: memberGrants.deniedCapabilities,
   });
@@ -205,6 +207,7 @@ export async function getWorkspaceModules(
   role: WorkspaceRole,
   workspaceStatus: string,
   memberGrants?: ReadonlyMap<string, boolean>,
+  departmentModules?: ReadonlySet<string>,
 ) {
   const [catalog, planModules, grants, subscription] = await Promise.all([
     d1.prepare(`SELECT key, name, description, category, route, required_capability, depends_on, status, position
@@ -230,6 +233,7 @@ export async function getWorkspaceModules(
     planModules: new Set(planModules.results.map((row) => String(row.module_key))),
     workspaceGrants: new Map(grants.results.map((row) => [String(row.module_key), Number(row.granted) === 1])),
     memberGrants,
+    departmentModules,
     role,
     workspaceStatus,
     subscriptionStatus: String(subscription?.status ?? "inactive"),
@@ -250,20 +254,65 @@ export async function getWorkspaceModules(
  * ajuste de visibilidade em promoção silenciosa.
  */
 export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, workspaceId: string, userId: string) {
-  const rows = await d1.prepare(`SELECT g.module_key, g.granted, m.required_capability
-    FROM fdp_member_module_grants g
-    JOIN fdp_modules m ON m.key = g.module_key
-    WHERE g.workspace_id = ? AND g.user_id = ?`)
-    .bind(workspaceId, userId)
-    .all<{ module_key: string; granted: boolean | number; required_capability: string }>();
+  const [catalog, rows, primary] = await Promise.all([
+    d1.prepare("SELECT key AS module_key, required_capability FROM fdp_modules WHERE status = 'active'")
+      .all<{ module_key: string; required_capability: string }>(),
+    d1.prepare(`SELECT g.module_key, g.granted
+      FROM fdp_member_module_grants g
+      WHERE g.workspace_id = ? AND g.user_id = ?`)
+      .bind(workspaceId, userId)
+      .all<{ module_key: string; granted: boolean | number }>(),
+    d1.prepare(`SELECT a.id AS area_id, a.name AS area_name, a.code AS area_code,
+        (w.owner_user_id = wm.user_id) AS is_owner
+      FROM fdp_workspace_members wm
+      JOIN fdp_workspaces w ON w.id = wm.workspace_id
+      LEFT JOIN fdp_area_members am ON am.workspace_id = wm.workspace_id
+        AND am.user_id = wm.user_id AND am.is_primary = 1
+      LEFT JOIN fdp_areas a ON a.workspace_id = am.workspace_id
+        AND a.id = am.area_id AND a.status = 'active'
+      WHERE wm.workspace_id = ? AND wm.user_id = ?`)
+      .bind(workspaceId, userId)
+      .first<{ area_id: string | null; area_name: string | null; area_code: string | null; is_owner: boolean | number }>(),
+  ]);
+
+  const department = primary?.area_id
+    ? { id: String(primary.area_id), name: String(primary.area_name), code: String(primary.area_code) }
+    : null;
+  const isOwner = primary?.is_owner === true || Number(primary?.is_owner) === 1;
+  const departmentRows = department && !isOwner
+    ? await d1.prepare(`SELECT assignment.module_key
+        FROM fdp_area_module_assignments assignment
+        JOIN fdp_modules module ON module.key = assignment.module_key AND module.status = 'active'
+        WHERE assignment.workspace_id = ? AND assignment.area_id = ?`)
+      .bind(workspaceId, department.id).all<{ module_key: string }>()
+    : null;
+  // O proprietário preserva o acesso de recuperação do Workspace. Para todos
+  // os demais, um departamento principal ativo vira o teto do acesso.
+  const departmentModules = departmentRows
+    ? new Set(departmentRows.results.map((row) => String(row.module_key)))
+    : undefined;
 
   const byModule = new Map<string, boolean>();
+  for (const row of rows.results) {
+    byModule.set(String(row.module_key), row.granted === true || Number(row.granted) === 1);
+  }
+
+  // A autorização recebe o mapa efetivo: bloqueios do departamento vencem
+  // liberações nominais antigas. O mapa individual separado continua sendo
+  // devolvido para a tela explicar o que foi decidido para a pessoa.
+  const effectiveByModule = new Map(byModule);
+  if (departmentModules) {
+    for (const moduleEntry of catalog.results) {
+      const key = String(moduleEntry.module_key);
+      if (!departmentModules.has(key)) effectiveByModule.set(key, false);
+    }
+  }
+
   const extraCapabilities = new Set<string>();
   const deniedCapabilities = new Set<string>();
-  for (const row of rows.results) {
-    const granted = row.granted === true || Number(row.granted) === 1;
-    byModule.set(String(row.module_key), granted);
-    const capability = String(row.required_capability ?? "");
+  const capabilityByModule = new Map(catalog.results.map((row) => [String(row.module_key), String(row.required_capability ?? "")]));
+  for (const [moduleKey, granted] of effectiveByModule) {
+    const capability = capabilityByModule.get(moduleKey) ?? "";
     if (!capability) continue;
     if (granted) extraCapabilities.add(capability);
     else deniedCapabilities.add(capability);
@@ -271,19 +320,23 @@ export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, works
   // Negar um módulo negava só a capacidade de leitura dele — a que decide se o
   // módulo aparece. As de escrita continuavam valendo pelo papel, e quem tinha
   // Demandas, Inbox e Planner negados criava demandas pela API sem ver o quadro.
-  for (const capability of deniedWriteCapabilities(byModule)) deniedCapabilities.add(capability);
-  return { byModule, extraCapabilities, deniedCapabilities };
+  for (const capability of deniedWriteCapabilities(effectiveByModule)) deniedCapabilities.add(capability);
+  return {
+    byModule, effectiveByModule, departmentModules, department, isOwner,
+    departmentScoped: Boolean(departmentModules), extraCapabilities, deniedCapabilities,
+  };
 }
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow, accessible, switchedFrom } = await getWorkspaceContext(user);
   const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
-  const canManageMembers = hasCapability(workspace.role, "members.manage");
-  const canReadHr = hasCapability(workspace.role, "hr.read");
-  const canManageIntegrations = hasCapability(workspace.role, "integrations.manage");
+  const canManageMembers = hasCapability(workspace, "members.manage");
+  const canReadHr = hasCapability(workspace, "hr.read");
+  const canManageIntegrations = hasCapability(workspace, "integrations.manage");
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
     String((workspace as Record<string, unknown>).status ?? "active"),
-    (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants);
+    (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
+    (workspace as { departmentModules?: ReadonlySet<string> }).departmentModules);
   const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
@@ -315,10 +368,19 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       ORDER BY ae.created_at DESC LIMIT 150`).bind(workspace.id).all(),
     d1.prepare(`SELECT u.id AS user_id, u.email, u.name, wm.role, wm.joined_at,
         CASE WHEN w.owner_user_id = u.id THEN 1 ELSE 0 END AS is_owner,
-        CASE WHEN u.password_hash IS NULL THEN 0 ELSE 1 END AS is_activated
+        CASE WHEN u.password_hash IS NULL THEN 0 ELSE 1 END AS is_activated,
+        primary_area.area_id AS department_id, primary_area.area_name AS department_name
       FROM fdp_workspace_members wm
       JOIN fdp_users u ON u.id = wm.user_id
       JOIN fdp_workspaces w ON w.id = wm.workspace_id
+      LEFT JOIN LATERAL (
+        SELECT am.area_id, a.name AS area_name
+        FROM fdp_area_members am
+        JOIN fdp_areas a ON a.workspace_id = am.workspace_id AND a.id = am.area_id
+        WHERE am.workspace_id = wm.workspace_id AND am.user_id = wm.user_id
+          AND am.is_primary = 1 AND a.status = 'active'
+        LIMIT 1
+      ) primary_area ON true
       WHERE wm.workspace_id = ?
       ORDER BY is_owner DESC, u.name`).bind(workspace.id).all(),
     d1.prepare("SELECT id, name, color, position FROM fdp_labels WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
@@ -546,6 +608,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       isOwner: Boolean(row.is_owner),
       isActivated: canManageMembers ? Boolean(row.is_activated) : false,
       companyIds: canManageMembers ? (memberCompanyIds.get(String(row.user_id)) ?? []) : [],
+      departmentId: row.department_id ? String(row.department_id) : null,
+      departmentName: row.department_name ? String(row.department_name) : "",
     })),
     // A lista vem do serviço central, não de uma consulta paralela: inclui o
     // status para o seletor poder dizer por que um grupo não está disponível.

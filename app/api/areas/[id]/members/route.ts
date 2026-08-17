@@ -30,6 +30,35 @@ export async function PUT(request: Request, context: RouteContext) {
         .bind(workspace.id, ...members.map((item) => item.userId)).all<{ user_id: string }>();
       if (found.results.length !== members.length) throw ApiError.badRequest("Todos os integrantes precisam pertencer ao grupo.", "AREA_MEMBER_NOT_IN_WORKSPACE");
     }
+    const [currentPrimaryInArea, primaryForSelected, owner, areaModules] = await Promise.all([
+      d1.prepare("SELECT user_id FROM fdp_area_members WHERE workspace_id = ? AND area_id = ? AND is_primary = 1")
+        .bind(workspace.id, id).all<{ user_id: string }>(),
+      members.length
+        ? d1.prepare(`SELECT user_id, area_id FROM fdp_area_members
+            WHERE workspace_id = ? AND is_primary = 1 AND user_id IN (${members.map(() => "?").join(",")})`)
+          .bind(workspace.id, ...members.map((item) => item.userId)).all<{ user_id: string; area_id: string }>()
+        : Promise.resolve({ results: [] as Array<{ user_id: string; area_id: string }> }),
+      d1.prepare("SELECT owner_user_id FROM fdp_workspaces WHERE id = ?").bind(workspace.id).first<{ owner_user_id: string }>(),
+      d1.prepare(`SELECT assignment.module_key FROM fdp_area_module_assignments assignment
+          JOIN fdp_modules module ON module.key = assignment.module_key AND module.status = 'active'
+          WHERE assignment.workspace_id = ? AND assignment.area_id = ? ORDER BY module.position`)
+        .bind(workspace.id, id).all<{ module_key: string }>(),
+    ]);
+    const nextPrimary = new Set(members.filter((item) => item.isPrimary).map((item) => item.userId));
+    const removedPrimary = currentPrimaryInArea.results.find((item) =>
+      item.user_id !== owner?.owner_user_id && !nextPrimary.has(String(item.user_id)));
+    if (removedPrimary) {
+      throw new ApiError(409, "MEMBER_PRIMARY_DEPARTMENT_REQUIRED",
+        "Um usuário não pode ficar sem departamento principal. Mova a pessoa para outro departamento pela tela de usuários antes de removê-la daqui.");
+    }
+    const currentPrimaryByUser = new Map(primaryForSelected.results.map((item) => [String(item.user_id), String(item.area_id)]));
+    const changedPrimaryUsers = members.filter((item) => item.isPrimary
+      && item.userId !== owner?.owner_user_id && currentPrimaryByUser.get(item.userId) !== id);
+    const realModuleKeys = areaModules.results.map((item) => String(item.module_key));
+    if (changedPrimaryUsers.length && realModuleKeys.length === 0) {
+      throw new ApiError(409, "DEPARTMENT_WITHOUT_MODULES",
+        "Configure pelo menos um módulo do departamento antes de defini-lo como lotação principal de um usuário.");
+    }
     await d1.batch([
       ...members.filter((item) => item.isPrimary).map((item) => d1.prepare("UPDATE fdp_area_members SET is_primary = 0, updated_at = now() WHERE workspace_id = ? AND user_id = ?")
         .bind(workspace.id, item.userId)),
@@ -37,6 +66,14 @@ export async function PUT(request: Request, context: RouteContext) {
       ...members.map((item) => d1.prepare(`INSERT INTO fdp_area_members
         (id, workspace_id, area_id, user_id, role, is_primary, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`)
         .bind(crypto.randomUUID(), workspace.id, id, item.userId, item.role, item.isPrimary ? 1 : 0, user.id)),
+      ...changedPrimaryUsers.flatMap((item) => [
+        d1.prepare("DELETE FROM fdp_member_module_grants WHERE workspace_id = ? AND user_id = ?")
+          .bind(workspace.id, item.userId),
+        ...realModuleKeys.map((moduleKey) => d1.prepare(`INSERT INTO fdp_member_module_grants
+            (workspace_id, user_id, module_key, granted, reason, granted_by)
+            VALUES (?, ?, ?, true, ?, ?)`)
+          .bind(workspace.id, item.userId, moduleKey, "Acesso definido pela lotação no departamento.", user.id)),
+      ]),
       prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
         action: "area.members_updated", entityType: "area", entityId: id,
         after: { members: members.map((item) => ({ userId: item.userId, role: item.role, isPrimary: item.isPrimary })) },
