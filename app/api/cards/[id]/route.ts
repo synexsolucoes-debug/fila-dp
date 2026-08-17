@@ -27,7 +27,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     let companyName = body.company === undefined ? String(current.company ?? "") : text(body.company, 160);
     if (companyId) {
       const company = await d1.prepare("SELECT legal_name, trade_name FROM fdp_companies WHERE id = ? AND workspace_id = ? AND status = 'active'").bind(companyId, workspace.id).first<{ legal_name: string; trade_name: string }>();
-      if (!company) return Response.json({ error: "Empresa selecionada nÃ£o encontrada." }, { status: 400 });
+      if (!company) return Response.json({ error: "Empresa selecionada não encontrada." }, { status: 400 });
       companyName = company.trade_name || company.legal_name;
     }
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);

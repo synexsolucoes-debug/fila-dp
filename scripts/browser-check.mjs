@@ -419,6 +419,103 @@ if (password) {
     auditoria.some((evento) => /card/u.test(evento)), auditoria.slice(0, 3).join(", ") || "sem eventos");
 }
 
+// 4g. O console não oferece a ação que o servidor vai recusar (§31).
+//
+//     O conector Sankhya é criado em todo workspace pela migration 0038, mas o
+//     módulo não entra em plano nenhum: a liberação é individual, feita pela
+//     plataforma. O console listava o cartão assim mesmo, com "Executar",
+//     "Retry" e "Configurar" — e o servidor recusava depois. Na configuração, a
+//     recusa chegava com o formulário já preenchido com endereço, usuário e
+//     senha do cliente.
+//
+//     Nenhuma conferência via, porque nenhuma abria a área de Integrações do
+//     console. A semente deixa o módulo fechado, que é justamente o estado
+//     normal de um workspace novo — então é este o estado que se mede aqui.
+if (password) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const sankhya = () => page.locator("article").filter({ hasText: /Sankhya Browser Connector/u });
+
+  // Estado liberado: o workspace da semente tem a concessão. Filtrar por ele em
+  // vez de contar com a ordenação — cada execução desta conferência cria um
+  // cliente novo, e depois de trinta a primeira página não teria mais a semente.
+  await page.goto(`${base}/plataforma?area=integrations&workspace=ws-ui`, { waitUntil: "domcontentloaded" });
+  const liberado = sankhya().first();
+  await liberado.waitFor({ timeout: 25000 }).catch(() => undefined);
+  const achouLiberado = await liberado.count();
+  record("o console lista o conector Sankhya do workspace liberado", achouLiberado > 0);
+  if (achouLiberado) {
+    const texto = await liberado.innerText().catch(() => "");
+    record("com o módulo liberado, o cartão oferece a execução",
+      !/não liberado/u.test(texto) && await liberado.getByRole("button", { name: /Executar/u }).count() > 0,
+      texto.replace(/\n/gu, " · ").slice(0, 90));
+
+    // E o formulário de configuração está lá — sem isto, o estado bloqueado
+    // medido logo abaixo passaria também num painel que nunca abre formulário.
+    await liberado.getByRole("button", { name: /Configurar/u }).first().click().catch(() => undefined);
+    await page.waitForSelector('[role="dialog"]', { timeout: 20000 }).catch(() => undefined);
+    const painelLiberado = page.locator('[role="dialog"]');
+    await painelLiberado.locator('input[type="url"]').first().waitFor({ timeout: 20000 }).catch(() => undefined);
+    record("o painel do módulo liberado abre o formulário de configuração",
+      await painelLiberado.locator('input[type="url"]').count() > 0
+      && await painelLiberado.locator('input[type="password"]').count() > 0);
+    await page.getByRole("button", { name: /^Fechar$/u }).first().click().catch(() => undefined);
+    await page.waitForSelector('[role="dialog"]', { state: "detached", timeout: 10000 }).catch(() => undefined);
+  }
+
+  // Estado bloqueado: qualquer workspace sem a concessão — inclusive o que a
+  // seção 3 acabou de criar, que é o caso real de um cliente recém-provisionado.
+  await page.goto(`${base}/plataforma?area=integrations`, { waitUntil: "domcontentloaded" });
+  await sankhya().first().waitFor({ timeout: 25000 }).catch(() => undefined);
+  const bloqueado = sankhya().filter({ hasText: /não liberado/u }).first();
+  const achouBloqueado = await bloqueado.count();
+  record("o cartão de um workspace sem liberação diz que o módulo está fechado",
+    achouBloqueado > 0, `${await sankhya().count()} cartão(ões) Sankhya na página`);
+
+  if (achouBloqueado) {
+    const oferecidas = await bloqueado.getByRole("button", { name: /Executar|Retry/u }).count();
+    record("e para de oferecer executar e testar enquanto está bloqueado",
+      oferecidas === 0, `${oferecidas} botão(ões) de execução`);
+
+    // O defeito relatado terminava aqui: o formulário abria inteiro, aceitava
+    // endereço, usuário e senha, e só ao salvar o servidor recusava.
+    await bloqueado.getByRole("button", { name: /Detalhes/u }).first().click().catch(() => undefined);
+    await page.waitForSelector('[role="dialog"]', { timeout: 20000 }).catch(() => undefined);
+    const painel = page.locator('[role="dialog"]');
+    await painel.getByRole("heading", { name: /Configuração Sankhya do workspace/u }).first()
+      .waitFor({ timeout: 20000 }).catch(() => undefined);
+    const textoPainel = await painel.innerText().catch(() => "");
+    record("o painel não abre o formulário que o servidor vai recusar",
+      await painel.locator('input[type="url"], input[type="password"]').count() === 0,
+      `${await painel.locator("input").count()} campo(s) no painel`);
+    record("e diz o que destrava, com a frase do próprio servidor",
+      /não faz parte de nenhum plano/u.test(textoPainel) && /Acessos e módulos/u.test(textoPainel),
+      textoPainel.replace(/\n/gu, " · ").slice(0, 120));
+    record("o painel bloqueado também leva até a liberação",
+      await painel.getByRole("button", { name: /Liberar módulo/u }).count() > 0);
+    await page.getByRole("button", { name: /^Fechar$/u }).first().click().catch(() => undefined);
+    await page.waitForSelector('[role="dialog"]', { state: "detached", timeout: 10000 }).catch(() => undefined);
+
+    const liberar = bloqueado.getByRole("button", { name: /Liberar módulo/u });
+    const temPorta = await liberar.count();
+    record("informar sem porta seria o mesmo beco: o cartão leva à liberação", temPorta > 0);
+
+    if (temPorta) {
+      await liberar.first().click();
+      await page.waitForFunction(() => new URLSearchParams(location.search).get("area") === "operations",
+        undefined, { timeout: 20000 }).catch(() => undefined);
+      const destino = new URL(page.url());
+      record("a porta abre a configuração do workspace certo",
+        destino.searchParams.get("area") === "operations" && Boolean(destino.searchParams.get("workspace")),
+        destino.search.slice(0, 100));
+
+      await page.waitForSelector('[role="tab"]', { timeout: 25000 }).catch(() => undefined);
+      const abas = await page.locator('[role="tab"]').allInnerTexts().catch(() => []);
+      record("e a aba citada na recusa existe mesmo",
+        abas.some((aba) => /Acessos e módulos/u.test(aba)), abas.join(" | ").slice(0, 100));
+    }
+  }
+}
+
 // 4e. O site é encontrável (§45).
 //
 //     Medido contra o site de pé: antes desta correção /planos, /faq,

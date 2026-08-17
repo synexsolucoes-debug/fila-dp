@@ -158,6 +158,18 @@ try {
     );
   }
 
+  /* O módulo `sankhya_browser` não entra em plano nenhum: a plataforma o libera
+     workspace a workspace. Sem esta linha, *todo* workspace da semente fica no
+     estado bloqueado — e uma conferência que só encontra um dos dois estados não
+     distingue "a tela lê a liberação" de "a tela diz bloqueado sempre". O
+     workspace criado durante a própria conferência continua sem liberação, então
+     os dois estados ficam na mesma tela. */
+  await client.query(
+    `INSERT INTO fdp_workspace_module_grants (workspace_id, module_key, granted, reason, granted_by)
+     VALUES ('ws-ui', 'sankhya_browser', 1, 'Semente de interface: exercitar o estado liberado do módulo.', 'u-ui')
+     ON CONFLICT (workspace_id, module_key) DO UPDATE SET granted = 1`,
+  );
+
   // Uma demanda por tipo de processo, e só.
   //
   // A semente era inteiramente vazia, para a auditoria passar pelos estados

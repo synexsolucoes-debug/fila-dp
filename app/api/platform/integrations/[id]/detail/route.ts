@@ -7,6 +7,7 @@ import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { cleanText } from "@/lib/registrations";
 import { parseSankhyaConfig } from "@/lib/sankhya/config";
+import { SANKHYA_MODULE_DISABLED_MESSAGE, isSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 
 type Params = { params: Promise<{ id: string }> };
 type Row = Record<string, unknown>;
@@ -25,7 +26,7 @@ export async function GET(request: Request, { params }: Params) {
       const workspace = await global.prepare("SELECT id, name, status FROM fdp_workspaces WHERE id = ?").bind(workspaceId).first<Row>();
       if (!workspace) throw ApiError.notFound("Workspace não encontrado.", "WORKSPACE_NOT_FOUND");
       const scoped = getPlatformScopedD1({ workspaceId, userId: platform.userId });
-      const [integration, credentials, mappings, runs, reconciliations, jobs, logs, diagnostics, companies] = await Promise.all([
+      const [integration, credentials, mappings, runs, reconciliations, jobs, logs, diagnostics, companies, sankhyaEnabled] = await Promise.all([
         scoped.prepare(`SELECT integration.id, integration.channel, integration.display_name, integration.status, integration.last_sync_at,
             integration.last_connection_at, integration.next_sync_at, integration.last_error, integration.created_at,
             integration.config_json, company.id AS company_id, company.legal_name AS company_name
@@ -57,6 +58,10 @@ export async function GET(request: Request, { params }: Params) {
           ORDER BY created_at DESC LIMIT 20`).bind(workspaceId, id).all<Row>(),
         scoped.prepare(`SELECT id, legal_name, trade_name FROM fdp_companies
           WHERE workspace_id = ? AND status = 'active' ORDER BY is_principal DESC, legal_name`).bind(workspaceId).all<Row>(),
+        // Mesma leitura que o servidor faz antes de aceitar `configure_sankhya`,
+        // `test_connection` e `rotate_credential`: a tela de configuração precisa
+        // saber disso para não oferecer o formulário que será recusado no fim.
+        isSankhyaWorkspaceEnabled(scoped, workspaceId),
       ]);
       if (!integration) throw ApiError.notFound("Integração não encontrada neste workspace.", "INTEGRATION_NOT_FOUND");
       const configuration = integration.channel === "sankhya_browser" ? parseSankhyaConfig(integration.config_json) : null;
@@ -72,6 +77,8 @@ export async function GET(request: Request, { params }: Params) {
         workspace,
         integration: { ...publicIntegration, last_error: safeError(integration.last_error) },
         configuration,
+        moduleEnabled: integration.channel !== "sankhya_browser" || sankhyaEnabled,
+        moduleDisabledMessage: SANKHYA_MODULE_DISABLED_MESSAGE,
         companies: companies.results,
         credentials: credentials.results.map((row) => ({ ...row, fingerprint: publicCredentialFingerprint(text(row.fingerprint)) })),
         mappings: mappings.results,
