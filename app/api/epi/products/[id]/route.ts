@@ -24,29 +24,26 @@ export async function GET(_request: Request, context: RouteContext) {
     requireNamedCapability(workspace, "epi.view", "consultar o Controle de EPI");
     const product = await productOf(d1, workspace.id, id);
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
-    if (!access.unrestricted && access.companyIds.size === 0) {
-      const movements = await d1.prepare(`SELECT * FROM fdp_epi_movements
-        WHERE workspace_id = ? AND product_id = ? AND company_id IS NULL
-        ORDER BY movement_date DESC, created_at DESC LIMIT 100`).bind(workspace.id, id).all<Record<string, unknown>>();
-      return Response.json({ product, movements: movements.results, deliveries: [] });
-    }
-    const companyIds = [...access.companyIds];
-    const movementCompanyClause = access.unrestricted
-      ? "" : ` AND (company_id IS NULL OR company_id IN (${companyIds.map(() => "?").join(",")}))`;
-    const deliveryCompanyClause = access.unrestricted
-      ? "" : ` AND d.company_id IN (${companyIds.map(() => "?").join(",")})`;
+    const unrestricted = access.unrestricted ? 1 : 0;
     const [movements, deliveries] = await Promise.all([
-      d1.prepare(`SELECT * FROM fdp_epi_movements WHERE workspace_id = ? AND product_id = ?
-        ${movementCompanyClause}
-        ORDER BY movement_date DESC, created_at DESC LIMIT 100`)
-        .bind(workspace.id, id, ...companyIds).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT m.* FROM fdp_epi_movements m
+        WHERE m.workspace_id = ? AND m.product_id = ?
+          AND (m.company_id IS NULL OR ?::int = 1 OR EXISTS (
+            SELECT 1 FROM fdp_member_company_access access
+            WHERE access.workspace_id = m.workspace_id AND access.user_id = ? AND access.company_id = m.company_id
+          ))
+        ORDER BY m.movement_date DESC, m.created_at DESC LIMIT 100`)
+        .bind(workspace.id, id, unrestricted, user.id).all<Record<string, unknown>>(),
       d1.prepare(`SELECT d.*, e.full_name AS employee_full_name, e.social_name AS employee_social_name
         FROM fdp_epi_deliveries d
         JOIN fdp_employees e ON e.workspace_id = d.workspace_id AND e.id = d.employee_id
         WHERE d.workspace_id = ? AND d.product_id = ?
-        ${deliveryCompanyClause}
+          AND (?::int = 1 OR EXISTS (
+            SELECT 1 FROM fdp_member_company_access access
+            WHERE access.workspace_id = d.workspace_id AND access.user_id = ? AND access.company_id = d.company_id
+          ))
         ORDER BY d.delivered_on DESC LIMIT 100`)
-        .bind(workspace.id, id, ...companyIds).all<Record<string, unknown>>(),
+        .bind(workspace.id, id, unrestricted, user.id).all<Record<string, unknown>>(),
     ]);
     return Response.json({ product, movements: movements.results, deliveries: deliveries.results });
   } catch (error) { return apiError(error); }

@@ -368,8 +368,8 @@ test("catálogo do grupo não recebe CNPJ e o uso continua recortado por empresa
   assert.match(products, /const assignedScope =/u);
   assert.match(products, /d\.company_id IN/u);
   assert.doesNotMatch(products, /p\.company_id|body\.companyId|loadCompany/u);
-  assert.match(detail, /company_id IS NULL OR company_id IN/u);
-  assert.match(detail, /d\.company_id IN/u);
+  assert.match(detail, /m\.company_id IS NULL/u);
+  assert.match(detail, /fdp_member_company_access/u);
   for (const source of [entry, transfer]) {
     assert.match(source, /companyId: null, cnpj: ""/u);
     assert.doesNotMatch(source, /body\.companyId|requireCompanyAccess|loadCompany/u);
