@@ -1,5 +1,5 @@
 import { ApiError } from "../api-errors.ts";
-import { validateIntegrationEndpoint } from "../integration-security.ts";
+import { IntegrationEndpointError, validateIntegrationEndpoint } from "../integration-security.ts";
 import type { SankhyaConfig } from "./types.ts";
 
 const frequencies = new Set(["hourly", "daily", "weekly"]);
@@ -35,6 +35,32 @@ export function parseSankhyaConfig(value: unknown): SankhyaConfig {
   };
 }
 
+/**
+ * O que fazer, por motivo de recusa.
+ *
+ * A primeira versão disto tinha uma dica só, sobre a lista de hosts, colada em
+ * qualquer recusa de endpoint. Conferindo contra um endereço real de cliente —
+ * `http://143.208.246.6:8280` — a dica mandava liberar o host, e liberar o host
+ * não resolveria nada: o bloqueio era o protocolo. Apontar o remédio errado é
+ * pior do que não apontar nenhum, porque manda a pessoa tentar de novo o que já
+ * não funcionou. Cada motivo tem o seu.
+ */
+export const SANKHYA_HOST_HINT = "Por padrão só endereços em *.sankhya.com.br são aceitos: "
+  + "um ambiente hospedado em domínio ou IP próprio precisa ser incluído em FDP_SANKHYA_BROWSER_ALLOWED_HOSTS "
+  + "pelo operador da plataforma antes de a configuração poder ser gravada.";
+
+/**
+ * O HTTPS não é preferência de estilo: o robô faz login no Sankhya com o usuário
+ * e a senha dedicados do cliente. Em HTTP eles atravessam a internet em texto
+ * claro, legíveis por qualquer ponto no caminho. Por isso a recusa é definitiva
+ * e não tem variável de ambiente que a contorne — o remédio está do lado do
+ * ambiente Sankhya.
+ */
+export const SANKHYA_HTTPS_HINT = "O endereço precisa começar com https:// — o robô faz login com o usuário e a "
+  + "senha dedicados, que em HTTP trafegariam em texto claro. Publique o Sankhya com certificado "
+  + "(ou atrás de um túnel HTTPS) e informe o endereço seguro; endereços de rede interna também são recusados, "
+  + "porque o robô roda fora da rede do cliente.";
+
 export function sanitizeSankhyaConfig(value: unknown) {
   const config = parseSankhyaConfig(value);
   if (!config.endpoint) throw ApiError.badRequest("Informe a URL HTTPS do ambiente Sankhya.", "SANKHYA_URL_REQUIRED");
@@ -46,15 +72,36 @@ export function sanitizeSankhyaConfig(value: unknown) {
       process.env.FDP_SANKHYA_BROWSER_ALLOWED_HOSTS ?? "",
     );
   } catch (error) {
-    throw ApiError.badRequest(error instanceof Error ? error.message : "URL Sankhya inválida.", "SANKHYA_URL_UNSAFE");
+    const motivo = error instanceof Error ? error.message : "URL Sankhya inválida.";
+    const razao = error instanceof IntegrationEndpointError ? error.reason : "";
+    const saida = razao === "insecure" ? SANKHYA_HTTPS_HINT
+      : razao === "host_not_allowed" ? SANKHYA_HOST_HINT
+        : razao === "unparseable" ? "Informe o endereço completo, como https://cliente.sankhya.com.br/mge/." : "";
+    throw ApiError.badRequest(saida ? `${motivo} ${saida}` : motivo, "SANKHYA_URL_UNSAFE");
   }
   return config;
 }
 
+/** O que falta na configuração gravada; vazio quando ela permite executar. */
+export function missingSankhyaConfig(config: SankhyaConfig) {
+  return [
+    config.endpoint ? "" : "a URL HTTPS do ambiente Sankhya",
+    config.companyId ? "" : "a empresa Vinculato de destino",
+  ].filter(Boolean);
+}
+
 export function assertRunnableSankhyaConfig(config: SankhyaConfig) {
-  if (!config.endpoint || !config.companyId) {
-    throw new ApiError(409, "SANKHYA_CONFIG_INCOMPLETE", "Configure a URL e a empresa de destino antes de executar o Sankhya.");
-  }
+  const faltando = missingSankhyaConfig(config);
+  if (!faltando.length) return;
+  // A frase anterior era "Configure a URL e a empresa de destino antes de
+  // executar o Sankhya." — lida logo depois de preencher o formulário, ela
+  // parece dizer que o formulário não foi preenchido. Não foi isso: ou nada
+  // chegou a ser gravado, ou a gravação foi recusada e a recusa ficou no topo
+  // do painel, longe do botão. A frase precisa distinguir as duas coisas.
+  throw new ApiError(409, "SANKHYA_CONFIG_INCOMPLETE",
+    `A configuração gravada deste conector não tem ${faltando.join(" nem ")}. `
+    + "Preencha em Integrações › Configurar; se você acabou de preencher, a gravação foi recusada "
+    + "e o motivo aparece no topo do painel de configuração.");
 }
 
 export function nextSankhyaRunAt(config: SankhyaConfig, from = new Date()) {

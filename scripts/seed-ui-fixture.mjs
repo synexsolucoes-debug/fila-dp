@@ -144,6 +144,16 @@ try {
   /* Conectores em quatro estados. Um conector só, ou todos iguais, deixaria o
      diagrama de conexões com um traço só de tom — e a conferência de contraste
      mediria um estado dos quatro. É a mesma armadilha da competência acima. */
+  /* O Sankhya da semente estava "connected" com `config_json` vazio — estado que
+     não existe no produto: sem URL e sem empresa de destino o servidor recusa a
+     execução. Fixture incoerente esconde defeito de dois lados, porque a tela
+     que lê o estado nunca vê o estado real. */
+  const configSankhya = JSON.stringify({
+    endpoint: "https://piloto.sankhya.com.br/mge/", companyId: "co-ui", companyContext: "01",
+    routine: "employees", routineName: "DP Explorer", automaticEnabled: false,
+    frequency: "daily", scheduleTime: "02:00", scheduleWeekday: 1, timezone: "America/Sao_Paulo",
+    timeoutMs: 300_000, maxAttempts: 3, downloadLimitBytes: 25 * 1024 * 1024, diagnosticRetentionHours: 24,
+  });
   for (const [id, canal, nome, status, sync] of [
     ["int-ui-1", "sankhya_browser", "Sankhya Browser Connector", "connected", "now() - interval '8 minutes'"],
     ["int-ui-2", "solides", "Sólides", "connected", "now() - interval '3 hours'"],
@@ -151,10 +161,10 @@ try {
     ["int-ui-4", "tangerino", "Sólides DP (Tangerino)", "error", "now() - interval '2 days'"],
   ]) {
     await client.query(
-      `INSERT INTO fdp_integrations (id, workspace_id, channel, display_name, status, last_sync_at)
-       VALUES ($1, 'ws-ui', $2, $3, $4, ${sync}) ON CONFLICT (id) DO UPDATE
-       SET status = EXCLUDED.status, last_sync_at = EXCLUDED.last_sync_at`,
-      [id, canal, nome, status],
+      `INSERT INTO fdp_integrations (id, workspace_id, channel, display_name, status, last_sync_at, config_json)
+       VALUES ($1, 'ws-ui', $2, $3, $4, ${sync}, $5) ON CONFLICT (id) DO UPDATE
+       SET status = EXCLUDED.status, last_sync_at = EXCLUDED.last_sync_at, config_json = EXCLUDED.config_json`,
+      [id, canal, nome, status, canal === "sankhya_browser" ? configSankhya : "{}"],
     );
   }
 

@@ -104,7 +104,11 @@ export function SankhyaConnectorPanel({ connector, runs, companies, permissions,
         </dl>
         <footer>
           <span className={styles.managedBadge}><KeyRound />Gerenciada pela Plataforma Global</span>
-          <button className={styles.primaryButton} disabled={!permissions.execute || !connector.hasCredentials || Boolean(activeRun) || Boolean(pending)} onClick={testConnection}>{pending === "test" ? <LoaderCircle className={styles.spin} /> : <RefreshCw />}Testar conexão</button>
+          {/* Credencial e configuração são gravadas por caminhos separados no
+              console: dá para ter senha salva e configuração ainda recusada. Sem
+              esta condição o botão ficava ativo e o servidor recusava por falta
+              de URL — o "Não configurada" logo acima é a explicação. */}
+          <button className={styles.primaryButton} disabled={!permissions.execute || !connector.hasCredentials || !config.endpoint || !config.companyId || Boolean(activeRun) || Boolean(pending)} onClick={testConnection}>{pending === "test" ? <LoaderCircle className={styles.spin} /> : <RefreshCw />}Testar conexão</button>
         </footer>
       </article>
 
