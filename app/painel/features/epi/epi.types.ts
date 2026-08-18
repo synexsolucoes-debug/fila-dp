@@ -3,8 +3,9 @@ import type {
   EpiDiscountTrigger, EpiDisposalReason, EpiDisposalStatus, EpiProductStatus, EpiRegistrationReason,
   EpiReturnCondition, EpiType,
 } from "@/lib/epi";
+import type { EpiComplianceStatus, EpiEmployeeCompliance } from "@/lib/epi-compliance";
 
-export type EpiTab = "stock" | "deliveries" | "damages" | "returns" | "disposals" | "discounts" | "reports";
+export type EpiTab = "dashboard" | "people" | "requirements" | "stock" | "deliveries" | "damages" | "returns" | "disposals" | "discounts" | "reports";
 
 export type EpiPermissions = {
   view: boolean;
@@ -45,6 +46,53 @@ export type EpiOverview = {
   summary: EpiSummary;
   caWindowDays: number;
 };
+
+export type EpiRequirement = {
+  id: string;
+  companyId: string;
+  departmentId: string;
+  departmentName: string;
+  positionId: string;
+  positionName: string;
+  productId: string;
+  productName: string;
+  caNumber: string;
+  quantity: number;
+  replacementDays: number;
+  warningDays: number;
+  active: boolean;
+  notes: string;
+};
+
+export type EpiCatalogOption = { id: string; name: string; code: string; status: string };
+
+export type EpiDashboard = {
+  month: string;
+  canManageRequirements: boolean;
+  summary: {
+    activeEmployees: number;
+    employeesWithRequiredEpi: number;
+    compliantEmployees: number;
+    missingEmployees: number;
+    expiredEmployees: number;
+    overdueEmployees: number;
+    dueSoonEmployees: number;
+    unconfiguredEmployees: number;
+    stockShortages: number;
+    monthlyDeliveries: number;
+    monthlyEmployeesServed: number;
+    monthlyDeliveredValue: number;
+    monthlyPendingSignatures: number;
+  };
+  employees: EpiEmployeeCompliance[];
+  utilization: Array<{
+    productId: string; productName: string; delivered: number; returned: number;
+    damaged: number; disposed: number; deliveredValue: number; availableQuantity: number;
+  }>;
+  shortages: Array<{ productId: string; productName: string; missing: number; available: number; shortage: number }>;
+};
+
+export type { EpiComplianceStatus, EpiEmployeeCompliance };
 
 export type EpiProduct = {
   id: string;
@@ -246,6 +294,7 @@ export type EmployeeOption = {
 export type EmployeeEpiDossier = {
   employeeName: string;
   companyName: string;
+  compliance: EpiEmployeeCompliance | null;
   permissions: Pick<EpiPermissions, "deliver" | "receiveReturn" | "damage" | "analyzeDiscount">;
   deliveries: EpiDelivery[];
   activeDeliveries: EpiDelivery[];
@@ -276,7 +325,7 @@ export type ReportResult = {
 /** Estado do diálogo aberto. `null` significa nenhum. */
 export type EpiEditor =
   | { kind: "product"; product?: EpiProduct }
-  | { kind: "delivery"; product?: EpiProduct }
+  | { kind: "delivery"; product?: EpiProduct; employee?: EmployeeOption }
   | { kind: "return"; delivery: EpiDelivery }
   | { kind: "damage"; delivery?: EpiDelivery }
   | { kind: "disposal"; product?: DisposableProduct }

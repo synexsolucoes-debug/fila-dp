@@ -75,7 +75,8 @@ export function EpiDialog({ editor, products, employees, deliveries, companyId, 
 
           {editor.kind === "product" && <ProductForm product={editor.product} />}
 
-          {editor.kind === "delivery" && <DeliveryForm products={products} employees={employees} preselected={editor.product} companyId={companyId} />}
+          {editor.kind === "delivery" && <DeliveryForm products={products} employees={employees} preselected={editor.product}
+            preselectedEmployee={editor.employee} companyId={companyId} />}
 
           {editor.kind === "return" && <ReturnForm
             delivery={editor.delivery} condition={condition} onCondition={setCondition} preview={returnPreview} />}
@@ -224,12 +225,14 @@ function ProductForm({ product }: { product?: EpiProduct }) {
   </>;
 }
 
-function DeliveryForm({ products, employees, preselected, companyId }: { products: EpiProduct[]; employees: EmployeeOption[]; preselected?: EpiProduct; companyId: string }) {
+function DeliveryForm({ products, employees, preselected, preselectedEmployee, companyId }: {
+  products: EpiProduct[]; employees: EmployeeOption[]; preselected?: EpiProduct; preselectedEmployee?: EmployeeOption; companyId: string;
+}) {
   const available = products.filter((item) => !["discarded", "lost", "inactive"].includes(item.status));
   const [productId, setProductId] = useState(preselected?.id ?? available[0]?.id ?? "");
   const product = available.find((item) => item.id === productId) ?? preselected;
-  const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
-  const employee = employees.find((item) => item.id === employeeId);
+  const [employeeId, setEmployeeId] = useState(preselectedEmployee?.id ?? employees[0]?.id ?? "");
+  const employee = employees.find((item) => item.id === employeeId) ?? preselectedEmployee;
 
   if (!available.length) {
     return <div className={styles.noticeBar}><Info aria-hidden="true" />
@@ -247,6 +250,8 @@ function DeliveryForm({ products, employees, preselected, companyId }: { product
       </label>
       <label className={styles.formWide}><span>COLABORADOR<Required /></span>
         <select name="employeeId" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} required>
+          {preselectedEmployee && !employees.some((item) => item.id === preselectedEmployee.id)
+            && <option value={preselectedEmployee.id}>{preselectedEmployee.name} · {preselectedEmployee.registrationNumber}</option>}
           {employees.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.registrationNumber}</option>)}
         </select>
       </label>

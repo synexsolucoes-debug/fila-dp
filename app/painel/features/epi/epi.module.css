@@ -251,3 +251,74 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
 .sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sectionTitle h3 { margin: 0; font-size: .84rem; }
 .sectionTitle span { color: var(--epi-soft); font-size: .7rem; }
+
+.dashboardStack, .requirementsStack { display: grid; gap: 14px; }
+.monthActions { display: flex; align-items: flex-end; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.monthActions label { display: grid; gap: 4px; }
+.monthActions label span { color: var(--epi-soft); font-size: .58rem; font-weight: 800; letter-spacing: .08em; }
+.monthActions input { min-height: 38px; padding: 0 10px; border: 1px solid var(--epi-border); border-radius: 7px; background: var(--epi-surface); color: inherit; }
+
+.coveragePanel, .chartPanel, .requirementEditor {
+  border: 1px solid var(--epi-border); border-radius: 12px; background: var(--epi-surface); padding: 14px;
+}
+.coverageHeader, .chartPanel > header, .requirementEditor > header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px;
+}
+.coverageHeader > div, .chartPanel > header > div, .requirementEditor > header > div { display: grid; gap: 2px; }
+.coverageHeader span, .chartPanel > header span, .requirementEditor > header span {
+  color: var(--epi-soft); font-size: .58rem; font-weight: 800; letter-spacing: .09em;
+}
+.coverageHeader strong { font-size: .9rem; }
+.chartPanel h3, .requirementEditor h3 { margin: 0; font-size: .86rem; }
+.chartPanel > header > svg { color: var(--epi-accent-text); }
+.coverageBar { display: flex; width: 100%; height: 9px; overflow: hidden; border-radius: 99px; background: var(--epi-muted); }
+.coverageBar span { min-width: 0; }
+.coverageBar [data-tone="safe"], .coverageLegend i[data-tone="safe"] { background: var(--epi-success); }
+.coverageBar [data-tone="warning"], .coverageLegend i[data-tone="warning"] { background: var(--epi-warning); }
+.coverageBar [data-tone="danger"], .coverageLegend i[data-tone="danger"] { background: var(--epi-danger); }
+.coverageBar [data-tone="neutral"] { background: var(--epi-soft); }
+.coverageLegend i[data-tone="neutral"] { background: var(--epi-soft); }
+.coverageLegend { display: flex; gap: 8px 18px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.coverageLegend button { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 3px 0; background: transparent; color: var(--epi-soft); font-size: .69rem; cursor: pointer; }
+.coverageLegend button:hover { color: var(--epi-text); }
+.coverageLegend i { width: 7px; height: 7px; border-radius: 99px; }
+.coverageLegend b { color: var(--epi-text); }
+
+.dashboardColumns { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 14px; align-items: start; }
+.usageList, .shortageList { display: grid; gap: 8px; }
+.usageRow { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(100px, .75fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--epi-border); }
+.usageRow:first-child { border-top: 0; padding-top: 0; }
+.usageRow > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.usageRow strong, .shortageList strong { font-size: .74rem; }
+.usageRow small, .shortageList small, .allGood small { color: var(--epi-soft); font-size: .66rem; }
+.usageRow > b { font-size: .7rem; font-variant-numeric: tabular-nums; }
+.usageBar { height: 6px; border-radius: 99px; overflow: hidden; background: var(--epi-muted); }
+.usageBar span { display: block; height: 100%; border-radius: inherit; background: var(--epi-accent); }
+.shortageList > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--epi-border); }
+.shortageList > div:first-child { border-top: 0; padding-top: 0; }
+.shortageList > div > span { display: grid; gap: 2px; }
+.allGood { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 9px; background: color-mix(in srgb, var(--epi-success) 8%, transparent); color: var(--epi-success); }
+.allGood > span { display: grid; gap: 2px; }
+
+.compactList { display: grid; gap: 4px; min-width: 170px; }
+.compactList span { width: fit-content; max-width: 300px; padding: 3px 7px; border-radius: 6px; background: var(--epi-muted); color: var(--epi-soft); font-size: .66rem; }
+.compactList span[data-tone="missing"], .compactList span[data-tone="expired"] { background: color-mix(in srgb, var(--epi-danger) 9%, transparent); color: var(--epi-danger); }
+.compactList span[data-tone="overdue"], .compactList span[data-tone="due_soon"] { background: color-mix(in srgb, var(--epi-warning) 10%, transparent); color: var(--epi-warning); }
+.rowActionPrimary { display: inline-flex; align-items: center; gap: 5px; min-height: 31px; padding: 0 9px; border: 1px solid var(--epi-accent); border-radius: 7px; background: var(--epi-accent-soft); color: var(--epi-accent-text) !important; font-size: .68rem; font-weight: 730; cursor: pointer; }
+.rowActionPrimary:hover { background: color-mix(in srgb, var(--epi-accent) 15%, transparent); }
+
+.requirementEditor { background: var(--epi-muted); }
+.requirementEditor .stockOperationForm { padding: 0; border: 0; background: transparent; }
+.requirementEditor .commandActions { align-self: end; }
+
+@media (max-width: 900px) {
+  .dashboardColumns { grid-template-columns: 1fr; }
+  .usageRow { grid-template-columns: minmax(150px, 1fr) minmax(90px, .65fr) auto; }
+}
+@media (max-width: 620px) {
+  .monthActions { width: 100%; justify-content: stretch; }
+  .monthActions label, .monthActions input, .monthActions button { width: 100%; }
+  .coverageHeader { align-items: stretch; flex-direction: column; }
+  .usageRow { grid-template-columns: 1fr auto; }
+  .usageBar { grid-column: 1 / -1; grid-row: 2; }
+}

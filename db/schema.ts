@@ -2374,6 +2374,39 @@ export const stockBalances = pgTable("fdp_stock_balances", {
   check("fdp_stock_balances_quantity_check", sql`${table.quantity} >= 0`),
 ]);
 
+export const epiRequirements = pgTable("fdp_epi_requirements", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  departmentId: text("department_id"),
+  positionId: text("position_id"),
+  productId: text("product_id").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  replacementDays: integer("replacement_days").notNull().default(0),
+  warningDays: integer("warning_days").notNull().default(30),
+  active: integer("active").notNull().default(1),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_epi_requirements_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_epi_requirements_scope_product_uq").using("btree",
+    table.workspaceId, table.companyId, sql`COALESCE(${table.departmentId}, '')`,
+    sql`COALESCE(${table.positionId}, '')`, table.productId),
+  index("fdp_epi_requirements_workspace_company_active_idx").on(table.workspaceId, table.companyId, table.active),
+  index("fdp_epi_requirements_workspace_product_idx").on(table.workspaceId, table.productId),
+  foreignKey({ name: "fdp_epi_requirements_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_epi_requirements_department_fk", columns: [table.workspaceId, table.companyId, table.departmentId], foreignColumns: [departments.workspaceId, departments.companyId, departments.id] }),
+  foreignKey({ name: "fdp_epi_requirements_position_fk", columns: [table.workspaceId, table.companyId, table.positionId], foreignColumns: [positions.workspaceId, positions.companyId, positions.id] }),
+  foreignKey({ name: "fdp_epi_requirements_product_fk", columns: [table.workspaceId, table.productId], foreignColumns: [epiProducts.workspaceId, epiProducts.id] }),
+  check("fdp_epi_requirements_quantity_check", sql`${table.quantity} BETWEEN 1 AND 100`),
+  check("fdp_epi_requirements_replacement_check", sql`${table.replacementDays} BETWEEN 0 AND 3650`),
+  check("fdp_epi_requirements_warning_check", sql`${table.warningDays} BETWEEN 0 AND 365`),
+  check("fdp_epi_requirements_active_check", sql`${table.active} IN (0, 1)`),
+]);
+
 export const epiDeliveries = pgTable("fdp_epi_deliveries", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),

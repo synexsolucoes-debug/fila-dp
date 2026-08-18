@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowLeftRight, BadgeCheck, Boxes, Building2, Check, ClipboardList, Download,
-  FileSignature, HardHat, Info, PackageCheck, RefreshCw, Scale, ShieldAlert, Sparkles, Trash2, Undo2,
+  FileSignature, HardHat, Info, LayoutDashboard, PackageCheck, RefreshCw, Scale, ShieldAlert,
+  ShieldCheck, Sparkles, Trash2, Undo2, Users,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import {
@@ -12,16 +13,20 @@ import {
   epiDiscountTriggerLabels, epiProductStatusLabels, epiProductStatuses, epiRegistrationReasonLabels,
   epiReturnConditionLabels, epiTypeLabels, epiTypes,
 } from "@/lib/epi";
+import { epiComplianceStatusLabels } from "@/lib/epi-compliance";
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
 import { EpiDialog } from "./EpiDialogs";
+import { EpiDashboardPanel, EpiPeoplePanel, EpiRequirementsPanel } from "./EpiCompliancePanels";
 import {
-  currency, dateLabel, normalizeDamage, normalizeDelivery, normalizeDisposable, normalizeDiscount,
-  normalizeDisposal, normalizeEmployeeOption, normalizeOverview, normalizeProduct, normalizeReturn,
+  currency, dateLabel, normalizeCatalogOption, normalizeDamage, normalizeDashboard, normalizeDelivery,
+  normalizeDisposable, normalizeDiscount, normalizeDisposal, normalizeEmployeeOption, normalizeOverview,
+  normalizeProduct, normalizeRequirement, normalizeReturn,
   requestJson, type Row,
 } from "./epi.api";
 import type {
-  DisposableProduct, EmployeeOption, EpiDamage, EpiDelivery, EpiDiscount, EpiDisposal, EpiEditor,
-  EpiOverview, EpiProduct, EpiReturn, EpiTab, ReportDefinition, ReportResult,
+  DisposableProduct, EmployeeOption, EpiCatalogOption, EpiDamage, EpiDashboard, EpiDelivery,
+  EpiDiscount, EpiDisposal, EpiEditor, EpiOverview, EpiProduct, EpiRequirement, EpiReturn,
+  EpiTab, ReportDefinition, ReportResult,
 } from "./epi.types";
 import styles from "./epi.module.css";
 
@@ -38,6 +43,9 @@ import styles from "./epi.module.css";
  * quem de fato as aplica.
  */
 const tabs: Array<{ id: EpiTab; label: string; icon: typeof Boxes }> = [
+  { id: "dashboard", label: "Visão geral", icon: LayoutDashboard },
+  { id: "people", label: "Colaboradores", icon: Users },
+  { id: "requirements", label: "Obrigatoriedade", icon: ShieldCheck },
   { id: "stock", label: "Estoque", icon: Boxes },
   { id: "deliveries", label: "Entregas", icon: PackageCheck },
   { id: "damages", label: "Trocas e danos", icon: ArrowLeftRight },
@@ -52,7 +60,13 @@ const PAGE = 50;
 export function EpiControlView({ role }: { role: WorkspaceRole }) {
   const [overview, setOverview] = useState<EpiOverview | null>(null);
   const [companyId, setCompanyId] = useState("");
-  const [tab, setTab] = useState<EpiTab>("stock");
+  const [tab, setTab] = useState<EpiTab>("dashboard");
+  const [dashboard, setDashboard] = useState<EpiDashboard | null>(null);
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [peopleStatus, setPeopleStatus] = useState("");
+  const [requirements, setRequirements] = useState<EpiRequirement[]>([]);
+  const [departments, setDepartments] = useState<EpiCatalogOption[]>([]);
+  const [positions, setPositions] = useState<EpiCatalogOption[]>([]);
   const [products, setProducts] = useState<EpiProduct[]>([]);
   const [deliveries, setDeliveries] = useState<EpiDelivery[]>([]);
   const [returns, setReturns] = useState<EpiReturn[]>([]);
@@ -113,7 +127,17 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     if (!companyId && target !== "stock" && target !== "reports") return;
     setTabLoading(true);
     try {
-      if (target === "stock") {
+      if (target === "dashboard" || target === "people") {
+        const params = new URLSearchParams({ companyId, month });
+        setDashboard(normalizeDashboard(await requestJson<Row>(`/api/epi/dashboard?${params}`)));
+      } else if (target === "requirements") {
+        const payload = await requestJson<{ requirements?: Row[]; departments?: Row[]; positions?: Row[] }>(
+          `/api/epi/requirements?companyId=${encodeURIComponent(companyId)}`,
+        );
+        setRequirements((payload.requirements ?? []).map(normalizeRequirement));
+        setDepartments((payload.departments ?? []).map(normalizeCatalogOption));
+        setPositions((payload.positions ?? []).map(normalizeCatalogOption));
+      } else if (target === "stock") {
         const params = query(); params.delete("companyId");
         const payload = await requestJson<{ products?: Row[] }>(`/api/epi/products?${params}`);
         setProducts((payload.products ?? []).map(normalizeProduct));
@@ -148,7 +172,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     } finally {
       setTabLoading(false);
     }
-  }, [companyId, filters, query, reportKey]);
+  }, [companyId, filters, month, query, reportKey]);
 
   // As opções de EPI e de colaborador alimentam os formulários. Carregá-las
   // junto com a aba deixaria a gaveta abrir com listas vazias no primeiro
@@ -239,6 +263,30 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     } finally { setTabLoading(false); }
   }
 
+  async function saveRequirement(id: string | null, payload: Record<string, unknown>) {
+    setBusy(true); setError("");
+    try {
+      await requestJson(id ? `/api/epi/requirements/${id}` : "/api/epi/requirements", {
+        method: id ? "PATCH" : "POST", body: JSON.stringify(payload),
+      });
+      setToast(id ? "Regra obrigatória atualizada." : "EPI obrigatório adicionado à lotação.");
+      await loadTab("requirements");
+      const params = new URLSearchParams({ companyId, month });
+      setDashboard(normalizeDashboard(await requestJson<Row>(`/api/epi/dashboard?${params}`)));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar a regra obrigatória.");
+      throw cause;
+    } finally { setBusy(false); }
+  }
+
+  function openMonthlyReport() {
+    const [year, selectedMonth] = month.split("-").map(Number);
+    const lastDay = new Date(Date.UTC(year, selectedMonth, 0)).toISOString().slice(0, 10);
+    setFilters({ from: `${month}-01`, to: lastDay });
+    setReportKey("monthly_usage");
+    setTab("reports");
+  }
+
   function exportReport() {
     const params = new URLSearchParams({ report: reportKey, format: "csv", limit: "5000" });
     if (companyId) params.set("companyId", companyId);
@@ -304,7 +352,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
 
     {error && <ErrorBanner title="Algo exige atenção" message={error} onDismiss={() => setError("")} />}
 
-    <div className={styles.summaryGrid}>
+    {tab !== "dashboard" && <div className={styles.summaryGrid}>
       <SummaryCard icon={Boxes} label="EPIs em estoque" value={summary.stock} note="Unidades disponíveis" onClick={() => setTab("stock")} />
       <SummaryCard icon={PackageCheck} label="EPIs entregues" value={summary.delivered} note="Em poder de colaboradores" onClick={() => setTab("deliveries")} />
       <SummaryCard icon={FileSignature} label="Pendentes de assinatura" value={summary.pendingSignature} note="Termos sem assinatura"
@@ -318,14 +366,17 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
       <SummaryCard icon={AlertTriangle} label="CA vencido ou vencendo" value={summary.caExpired + summary.caExpiring}
         note={`${summary.caExpired} vencido(s) · ${summary.caExpiring} em ${overview.caWindowDays} dias`}
         tone={summary.caExpired ? "danger" : summary.caExpiring ? "warning" : "safe"} onClick={() => setTab("stock")} />
-    </div>
+    </div>}
 
     <div className={styles.tabs} role="tablist" aria-label="Áreas do Controle de EPI">
       {tabs.map((item) => {
         const Icon = item.icon;
-        const count = item.id === "stock" ? products.length : item.id === "deliveries" ? deliveries.length
-          : item.id === "returns" ? returns.length : item.id === "damages" ? damages.length
-            : item.id === "disposals" ? disposals.length : item.id === "discounts" ? discounts.length : reportCatalog.length;
+        const count = item.id === "dashboard" ? dashboard?.summary.activeEmployees ?? 0
+          : item.id === "people" ? dashboard?.employees.length ?? 0
+            : item.id === "requirements" ? requirements.length
+              : item.id === "stock" ? products.length : item.id === "deliveries" ? deliveries.length
+                : item.id === "returns" ? returns.length : item.id === "damages" ? damages.length
+                  : item.id === "disposals" ? disposals.length : item.id === "discounts" ? discounts.length : reportCatalog.length;
         return <button key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? styles.activeTab : ""}
           onClick={() => { setTab(item.id); setFilters({}); }}>
           <Icon aria-hidden="true" />{item.label}<b>{count}</b>
@@ -334,6 +385,20 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     </div>
 
     {tabLoading && <LoadingState size="compact" title="Carregando" text="Buscando os registros desta aba…" />}
+
+    {!tabLoading && tab === "dashboard" && <EpiDashboardPanel dashboard={dashboard} month={month}
+      onMonth={setMonth} onPeople={(status) => { setPeopleStatus(status ?? ""); setTab("people"); }}
+      onRequirements={() => setTab("requirements")} onReport={openMonthlyReport} />}
+
+    {!tabLoading && tab === "people" && <EpiPeoplePanel key={peopleStatus || "all"}
+      employees={dashboard?.employees ?? []} initialStatus={peopleStatus} products={products}
+      onDeliver={(employee, product) => { setDialogError(""); setEditor({ kind: "delivery", product, employee }); }} />}
+
+    {!tabLoading && tab === "requirements" && <EpiRequirementsPanel companyId={companyId}
+      requirements={requirements} departments={departments} positions={positions} products={products}
+      canManage={Boolean(dashboard?.canManageRequirements ?? permissions?.edit)} busy={busy}
+      onCreate={(payload) => saveRequirement(null, payload)} onUpdate={(id, payload) => saveRequirement(id, payload)}
+      onReload={() => void loadTab("requirements")} />}
 
     {!tabLoading && tab === "stock" && <StockPanel
       products={products} filters={filters} onFilters={setFilters} permissions={permissions}
@@ -806,7 +871,7 @@ function formatCell(value: unknown) {
     ...epiProductStatusLabels, ...epiRegistrationReasonLabels, ...epiDeliveryStatusLabels,
     ...epiReturnConditionLabels, ...epiDamageReasonLabels, ...epiDamageDecisionLabels,
     ...epiDisposalReasonLabels, ...epiDisposalStatusLabels, ...epiDiscountStatusLabels,
-    ...epiDiscountDecisionLabels, ...epiDiscountTriggerLabels, ...epiTypeLabels,
+    ...epiDiscountDecisionLabels, ...epiDiscountTriggerLabels, ...epiTypeLabels, ...epiComplianceStatusLabels,
   };
   return labels[text] ?? text;
 }
