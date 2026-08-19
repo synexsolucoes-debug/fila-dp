@@ -5,24 +5,34 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { positiveMoney, requiredReason } from "@/lib/payments";
+import { requireContractorProfile, requireCycle, upsertContractorClosing } from "@/lib/payment-service";
 
 type Params = { params: Promise<{ id: string }> };
 type Database = ReturnType<typeof getD1>;
 
 async function loadComponent(d1: Database, workspaceId: string, id: string) {
   const component = await d1.prepare(`SELECT c.id, c.company_id, c.provider_id, c.payroll_cycle_id, c.closing_id, c.direction,
-      c.component_type, c.amount, c.status, k.status AS closing_status
+      c.component_type, c.amount, c.origin, c.status, k.status AS closing_status, k.excluded_at AS closing_excluded_at
     FROM fdp_contractor_components c
     LEFT JOIN fdp_contractor_closings k ON k.workspace_id = c.workspace_id AND k.id = c.closing_id
     WHERE c.workspace_id = ? AND c.id = ?`)
     .bind(workspaceId, id)
     .first<{
       id: string; company_id: string; provider_id: string; payroll_cycle_id: string; closing_id: string | null;
-      direction: string; component_type: string; amount: string | number; status: string; closing_status: string | null;
+      direction: string; component_type: string; amount: string | number; origin: string; status: string; closing_status: string | null; closing_excluded_at: string | null;
     }>();
   if (!component) throw ApiError.notFound("Componente não encontrado.", "CONTRACTOR_COMPONENT_NOT_FOUND");
   if (component.closing_status === "closed" || component.closing_status === "paid") {
     throw ApiError.badRequest("O fechamento desta competência está concluído. Reabra com justificativa para alterar componentes.", "PAYMENT_CLOSING_LOCKED");
+  }
+  if (component.closing_excluded_at) {
+    throw ApiError.notFound("Este pagamento foi excluído da competência.", "CONTRACTOR_CLOSING_NOT_FOUND");
+  }
+  if (component.origin === "fixed_item") {
+    throw ApiError.badRequest(
+      "Este lançamento vem de um valor fixo recorrente. Altere o lançamento fixo de origem para não perder a mudança na próxima reapuração.",
+      "FIXED_COMPONENT_EDIT_REQUIRES_SOURCE",
+    );
   }
   return component;
 }
@@ -55,7 +65,16 @@ export async function PATCH(request: Request, { params }: Params) {
         requestId: request.headers.get("x-fila-dp-request-id"),
       }),
     ]);
-    return Response.json({ component: { id, amount } });
+    let recalculated = null;
+    if (component.closing_id) {
+      const profile = await requireContractorProfile(d1, workspace.id, component.provider_id);
+      const cycle = await requireCycle(d1, workspace.id, component.company_id, component.payroll_cycle_id);
+      recalculated = await upsertContractorClosing(d1, { workspaceId: workspace.id, profile, cycle, userId: user.id });
+    }
+    return Response.json({
+      component: { id, amount },
+      closing: recalculated ? { id: recalculated.closingId, ...recalculated.calculation } : null,
+    });
   } catch (error) {
     return apiError(error);
   }
@@ -86,7 +105,16 @@ export async function DELETE(request: Request, { params }: Params) {
         requestId: request.headers.get("x-fila-dp-request-id"),
       }),
     ]);
-    return Response.json({ component: { id, status: "canceled" } });
+    let recalculated = null;
+    if (component.closing_id) {
+      const profile = await requireContractorProfile(d1, workspace.id, component.provider_id);
+      const cycle = await requireCycle(d1, workspace.id, component.company_id, component.payroll_cycle_id);
+      recalculated = await upsertContractorClosing(d1, { workspaceId: workspace.id, profile, cycle, userId: user.id });
+    }
+    return Response.json({
+      component: { id, status: "canceled" },
+      closing: recalculated ? { id: recalculated.closingId, ...recalculated.calculation } : null,
+    });
   } catch (error) {
     return apiError(error);
   }

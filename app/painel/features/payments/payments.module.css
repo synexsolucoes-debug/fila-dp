@@ -206,6 +206,46 @@
 .resultGrid article[data-emphasis="true"] strong { color: var(--pay-success); }
 .paymentResult > p { margin: 0; color: var(--pay-soft); font-size: .68rem; line-height: 1.45; }
 
+.detailLockedNote {
+  margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--pay-warning) 45%, transparent);
+  border-radius: 9px; color: var(--pay-warning); background: color-mix(in srgb, var(--pay-warning) 8%, transparent); font-size: .7rem;
+}
+.detailActions { min-width: 165px; }
+.detailActions > form, .detailActions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.detailActions button, .inlineActionRow button {
+  min-height: 28px; padding: 0 8px; border: 1px solid var(--pay-border); border-radius: 6px;
+  background: var(--pay-surface); font-size: .64rem; font-weight: 720; cursor: pointer;
+}
+.detailActions button:hover:not(:disabled), .inlineActionRow button:hover:not(:disabled) { border-color: var(--pay-accent); color: var(--pay-accent); }
+.detailActions button:disabled, .inlineActionRow button:disabled { opacity: .5; cursor: not-allowed; }
+.detailActionHint { color: var(--pay-soft); font-size: .62rem; text-decoration: none; }
+.inlineInput, .inlineMoney, .inlineActionRow input, .deletePaymentPanel input {
+  min-height: 32px; padding: 6px 8px; border: 1px solid var(--pay-border); border-radius: 6px;
+  background: var(--pay-surface); color: var(--pay-text);
+}
+.inlineInput { width: min(240px, 100%); }
+.inlineMoney { width: 110px; text-align: right; }
+.inlineActionRow td { background: color-mix(in srgb, var(--pay-warning) 5%, var(--pay-surface)); text-decoration: none !important; }
+.inlineActionRow form { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+.inlineActionRow label { display: grid; gap: 4px; min-width: min(360px, 100%); color: var(--pay-soft); font-size: .65rem; font-weight: 700; }
+
+.dangerButton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 12px;
+  border: 1px solid var(--pay-danger); border-radius: 7px; background: transparent; color: var(--pay-danger) !important;
+  font-size: .7rem; font-weight: 760; cursor: pointer;
+}
+.dangerButton:hover:not(:disabled) { background: color-mix(in srgb, var(--pay-danger) 9%, transparent); }
+.dangerButton:disabled { opacity: .45; cursor: not-allowed; }
+.deletePaymentPanel {
+  display: grid; gap: 10px; padding: 12px; border: 1px solid color-mix(in srgb, var(--pay-danger) 45%, transparent);
+  border-radius: 10px; background: color-mix(in srgb, var(--pay-danger) 5%, var(--pay-surface));
+}
+.deletePaymentPanel > div { display: flex; align-items: flex-start; gap: 9px; color: var(--pay-danger); }
+.deletePaymentPanel strong { font-size: .76rem; }
+.deletePaymentPanel p { margin: 3px 0 0; color: var(--pay-soft); font-size: .67rem; line-height: 1.45; }
+.deletePaymentPanel form { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+.deletePaymentPanel label { display: grid; gap: 4px; flex: 1 1 320px; color: var(--pay-soft); font-size: .66rem; font-weight: 700; }
+
 @media (max-width: 860px) {
   .commandBar { flex-direction: column; align-items: stretch; }
   .commandSelectors { flex-wrap: wrap; }

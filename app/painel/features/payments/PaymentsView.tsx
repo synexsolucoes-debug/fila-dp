@@ -189,6 +189,37 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
     }
   }
 
+  async function updateContractorComponent(componentId: string, closingId: string, input: { amount: string; description: string }) {
+    const result = await mutate<{ component: Row }>(`/api/payments/contractors/components/${componentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }, "Lançamento atualizado e pagamento reapurado.");
+    if (!result) return false;
+    await openContractorDetail(closingId);
+    return true;
+  }
+
+  async function cancelContractorComponent(componentId: string, closingId: string, reason: string) {
+    const result = await mutate<{ component: Row }>(`/api/payments/contractors/components/${componentId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason }),
+    }, "Lançamento cancelado e pagamento reapurado.");
+    if (!result) return false;
+    await openContractorDetail(closingId);
+    return true;
+  }
+
+  async function deleteContractorClosing(closingId: string, reason: string) {
+    const result = await mutate<{ closing: { id: string; excluded: boolean } }>(
+      `/api/payments/contractors/closings/${closingId}`,
+      { method: "DELETE", body: JSON.stringify({ reason }) },
+      "Pagamento excluído da competência.",
+    );
+    if (!result) return false;
+    setPaymentDetail(null);
+    return true;
+  }
+
   async function transition(closingId: string, status: string, reason?: string) {
     const path = module === "psychology"
       ? `/api/payments/psychology/closings/${closingId}/transition`
@@ -683,7 +714,16 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
       )}
 
       {toast && <p className={styles.toast} role="status">{toast}</p>}
-      {paymentDetail ? <ContractorPaymentDetail detail={paymentDetail} onClose={() => setPaymentDetail(null)} /> : null}
+      {paymentDetail ? (
+        <ContractorPaymentDetail
+          detail={paymentDetail}
+          busy={busy}
+          onClose={() => setPaymentDetail(null)}
+          onUpdateComponent={(componentId, input) => updateContractorComponent(componentId, paymentDetail.closing.id, input)}
+          onCancelComponent={(componentId, reason) => cancelContractorComponent(componentId, paymentDetail.closing.id, reason)}
+          onDeleteClosing={(reason) => deleteContractorClosing(paymentDetail.closing.id, reason)}
+        />
+      ) : null}
       {dialog && <PaymentDialogView dialog={dialog} busy={busy} onClose={() => setDialog(null)} onSubmit={submitDialog} />}
     </section>
   );

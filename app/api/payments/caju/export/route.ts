@@ -89,7 +89,7 @@ async function loadContext(user: NonNullable<Awaited<ReturnType<typeof getApiUse
       p.id AS provider_id, p.legal_name, p.trade_name, p.tax_id
     FROM fdp_contractor_closings c
     JOIN fdp_auxiliary_providers p ON p.workspace_id = c.workspace_id AND p.id = c.provider_id
-    WHERE c.workspace_id = ? AND c.payroll_cycle_id = ?
+    WHERE c.workspace_id = ? AND c.payroll_cycle_id = ? AND c.excluded_at IS NULL
     ORDER BY p.legal_name`).bind(workspace.id, cycleId).all<CandidateRow>();
 
   const candidates: CajuCandidate[] = rows.results.map((row) => ({

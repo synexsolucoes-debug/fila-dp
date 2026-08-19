@@ -78,6 +78,7 @@ export type ContractorPaymentDetail = {
     contractReference: string; roleTitle: string;
   };
   components: ContractorComponent[];
+  permissions: { manage: boolean; reopen: boolean };
 };
 
 export type ContractorOverview = {

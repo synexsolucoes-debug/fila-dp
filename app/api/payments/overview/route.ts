@@ -87,17 +87,18 @@ export async function GET(request: Request) {
           FROM fdp_contractor_closings c
           JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
           LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = c.workspace_id AND p.provider_id = c.provider_id
-          WHERE c.workspace_id = ? AND c.company_id = ? AND c.payroll_cycle_id = ?
+          WHERE c.workspace_id = ? AND c.company_id = ? AND c.payroll_cycle_id = ? AND c.excluded_at IS NULL
           ORDER BY a.legal_name`).bind(workspace.id, companyId, cycleId).all()
         : Promise.resolve({ results: [] }),
       d1.prepare(`SELECT a.id, a.code, a.legal_name, p.base_amount, p.invoice_limit_override, p.complement_method, p.contract_reference, p.status
         FROM fdp_contractor_profiles p JOIN fdp_auxiliary_providers a ON a.workspace_id = p.workspace_id AND a.id = p.provider_id
-        WHERE p.workspace_id = ? AND p.company_id = ? ORDER BY p.status, a.legal_name`).bind(workspace.id, companyId).all(),
+        WHERE p.workspace_id = ? AND p.company_id = ? AND p.status = 'active' ORDER BY a.legal_name`).bind(workspace.id, companyId).all(),
       d1.prepare(`SELECT f.id, f.provider_id, f.direction, f.component_type, f.description, f.amount,
           f.effective_from, f.effective_to, f.status, f.note, a.legal_name AS contractor_name
         FROM fdp_contractor_fixed_items f
         JOIN fdp_auxiliary_providers a ON a.workspace_id = f.workspace_id AND a.id = f.provider_id
-        WHERE f.workspace_id = ? AND f.company_id = ?
+        JOIN fdp_contractor_profiles p ON p.workspace_id = f.workspace_id AND p.provider_id = f.provider_id
+        WHERE f.workspace_id = ? AND f.company_id = ? AND p.status = 'active'
         ORDER BY f.status, a.legal_name, f.effective_from DESC, f.created_at DESC`)
         .bind(workspace.id, companyId).all(),
       d1.prepare(`SELECT id, scope, company_id, provider_id, contract_reference, amount, effective_from

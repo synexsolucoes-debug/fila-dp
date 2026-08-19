@@ -199,7 +199,7 @@ export async function findContractorClosing(d1: Database, workspaceId: string, c
   const closing = await d1.prepare(`SELECT id, company_id, provider_id, payroll_cycle_id, competence, status, net_amount,
       invoice_expected_amount, complement_amount, invoice_received_amount, complement_paid_amount, caju_amount,
       complement_method, invoice_status, caju_status
-    FROM fdp_contractor_closings WHERE workspace_id = ? AND id = ?`)
+    FROM fdp_contractor_closings WHERE workspace_id = ? AND id = ? AND excluded_at IS NULL`)
     .bind(workspaceId, closingId).first<ContractorClosingRow>();
   if (!closing) throw ApiError.notFound("Fechamento PJ não encontrado.", "CONTRACTOR_CLOSING_NOT_FOUND");
   return closing;
@@ -220,6 +220,7 @@ function contractorLabel(profile: ContractorProfileRow) {
 export async function contractorConsumedCents(d1: Database, workspaceId: string, providerId: string, excludeCycleId?: string) {
   const row = await d1.prepare(`SELECT COALESCE(SUM(net_amount), 0) AS consumed FROM fdp_contractor_closings
     WHERE workspace_id = ? AND provider_id = ?
+      AND excluded_at IS NULL
       AND status IN ('approved', 'invoice_pending', 'ready_to_pay', 'paid', 'closed')
       AND (? = '' OR payroll_cycle_id <> ?)`)
     .bind(workspaceId, providerId, excludeCycleId ?? "", excludeCycleId ?? "")
