@@ -58,6 +58,7 @@ export const expectedMigrations = [
   "0048_epi_compliance.sql",
   "0049_contractors_fixed_caju_and_termination.sql",
   "0050_contractor_payment_exclusions.sql",
+  "0051_process_management.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

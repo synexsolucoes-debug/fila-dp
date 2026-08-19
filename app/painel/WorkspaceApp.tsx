@@ -46,6 +46,7 @@ import {
   Trash2,
   Users,
   WalletCards,
+  Workflow,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -58,6 +59,7 @@ import { RequestError, requestErrorFrom, supportReference } from "./request-erro
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
 import { OperationsView } from "./features/operations";
+import { ProcessManagementView } from "./features/processes";
 import { AuxiliaryModulesView } from "./features/auxiliary";
 import { IntegrationsView } from "./features/integrations";
 import { PaymentsView } from "./features/payments";
@@ -65,7 +67,7 @@ import { TimeTrackingView } from "./features/time";
 import { EpiControlView } from "./features/epi";
 import { ActionCenter } from "./features/action-center";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "epi" | "integrations" | "registrations" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "epi" | "integrations" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -198,6 +200,11 @@ const viewCatalog: Record<View, ViewEntry> = {
     eyebrow: "AGENDA DO ANALISTA", title: "Meu planner",
     description: "Organize sua execução a partir dos prazos da operação.",
     primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  processManagement: {
+    label: "Processos", icon: Workflow, section: "operacao", module: "processes", hiddenFor: ["guest"],
+    eyebrow: "GESTÃO E MODELAGEM", title: "Processos",
+    description: "Desenhe, documente, versione e publique processos BPMN ligados às áreas, empresas e responsabilidades do grupo.",
   },
   processes: {
     label: "Operação DP", icon: ClipboardCheck, section: "operacao", module: "processes",
@@ -1522,6 +1529,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           </div>
 
           {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations} onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
+
+          {view === "processManagement" && <ProcessManagementView role={snapshot.workspace.role} />}
 
           {view === "processes" && <OperationsView role={snapshot.workspace.role} />}
 
