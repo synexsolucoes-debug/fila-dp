@@ -114,6 +114,16 @@ const capabilityAliases = {
   "workspace.update": "workspace.manage",
   "workspace.members.manage": "members.manage",
   "workspace.integrations.manage": "integrations.manage",
+  "process.view": "processes.read",
+  "process.create": "processes.manage",
+  "process.edit": "processes.manage",
+  "process.delete": "processes.manage",
+  "process.publish": "processes.publish",
+  "process.archive": "processes.manage",
+  "process.version.view": "processes.read",
+  "process.version.create": "processes.manage",
+  "process.version.publish": "processes.publish",
+  "process.admin": "processes.manage",
 } as const satisfies Record<string, Capability>;
 
 export type CapabilityAlias = keyof typeof capabilityAliases;
