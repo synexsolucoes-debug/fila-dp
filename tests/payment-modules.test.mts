@@ -41,6 +41,33 @@ test("exemplo 1 da especificação: crédito e descontos antes do limite da nota
   assert.equal(result.calcVersion, CONTRACTOR_CALC_VERSION);
 });
 
+test("diferença fixa do PJ vai para Caju sem aumentar a nota fiscal", () => {
+  const transferencia = calculateContractorClosing({
+    baseAmount: 6500,
+    components: [],
+    invoiceLimit: limit(6000),
+    complementMethod: "manual_transfer",
+    fixedCajuAmount: 750,
+  });
+  assert.equal(transferencia.invoiceExpectedAmount, 6000);
+  assert.equal(transferencia.fixedCajuAmount, 750);
+  assert.equal(transferencia.complementAmount, 1250);
+  assert.equal(transferencia.cajuAmount, 750);
+  assert.equal(transferencia.netAmount, 7250);
+  assert.equal(transferencia.invoiceExpectedAmount + transferencia.complementAmount, transferencia.netAmount);
+
+  const caju = calculateContractorClosing({
+    baseAmount: 6500,
+    components: [],
+    invoiceLimit: limit(6000),
+    complementMethod: "caju_saldo_livre",
+    fixedCajuAmount: 750,
+  });
+  assert.equal(caju.invoiceExpectedAmount, 6000);
+  assert.equal(caju.complementAmount, 1250);
+  assert.equal(caju.cajuAmount, 1250, "diferença fixa e excedente regular seguem juntos para o Caju");
+});
+
 test("exemplo 2 da especificação: líquido abaixo do limite não gera complemento", () => {
   const result = calculateContractorClosing({
     baseAmount: 5000,

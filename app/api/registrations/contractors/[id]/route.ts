@@ -45,7 +45,7 @@ export async function GET(request: Request, { params }: Params) {
           requested_by, decided_at, applied_at, decision_comment, created_at
         FROM fdp_contractor_movements WHERE workspace_id = ? AND provider_id = ?
         ORDER BY effective_date DESC, created_at DESC LIMIT 50`).bind(workspace.id, id).all<Record<string, unknown>>(),
-      d1.prepare(`SELECT competence, status, net_amount, invoice_expected_amount, complement_amount, caju_amount
+      d1.prepare(`SELECT competence, status, net_amount, invoice_expected_amount, complement_amount, fixed_caju_amount, caju_amount
         FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ?
         ORDER BY competence DESC LIMIT 24`).bind(workspace.id, id).all<Record<string, unknown>>(),
     ]);
@@ -74,6 +74,7 @@ export async function GET(request: Request, { params }: Params) {
         contractSignedAt: dateFromDatabase(detail?.contract_signed_at, "Assinatura do contrato"),
         paymentDay: detail?.payment_day ?? null,
         baseAmountCents: centsFromDatabase(profile.base_amount, "Valor fixo"),
+        fixedCajuDifferenceCents: centsFromDatabase(profile.fixed_caju_difference, "Diferença fixa no Caju"),
         invoiceLimitCents: detail?.invoice_limit_override === null || detail?.invoice_limit_override === undefined
           ? null
           : centsFromDatabase(detail.invoice_limit_override, "Limite da nota"),
@@ -114,6 +115,7 @@ export async function GET(request: Request, { params }: Params) {
         netCents: centsFromDatabase(row.net_amount, "Líquido"),
         invoiceCents: centsFromDatabase(row.invoice_expected_amount, "Nota esperada"),
         complementCents: centsFromDatabase(row.complement_amount, "Complemento"),
+        fixedCajuCents: centsFromDatabase(row.fixed_caju_amount, "Diferença fixa no Caju"),
         cajuCents: centsFromDatabase(row.caju_amount, "Caju"),
       })),
       permissions: { manage: hasCapability(workspace, "contractors.manage") },
@@ -152,6 +154,7 @@ export async function PATCH(request: Request, { params }: Params) {
       contractType: profile.contract_type,
       contractEnd: profile.contract_end,
       baseAmountCents: centsFromDatabase(profile.base_amount, "Valor fixo"),
+      fixedCajuDifferenceCents: centsFromDatabase(profile.fixed_caju_difference, "Diferença fixa no Caju"),
       status: profile.status,
     };
 
@@ -162,13 +165,13 @@ export async function PATCH(request: Request, { params }: Params) {
           input.status === "inactive" ? "inactive" : "active", workspace.id, id),
       d1.prepare(`UPDATE fdp_contractor_profiles SET company_id = ?, contract_reference = ?, role_title = ?,
           contract_type = ?, contract_start = ?, contract_end = ?, contract_total_amount = ?, contract_signed_at = ?,
-          base_amount = ?, invoice_limit_override = ?, complement_method = ?, payment_day = ?, status = ?, notes = ?,
+          base_amount = ?, fixed_caju_difference = ?, invoice_limit_override = ?, complement_method = ?, payment_day = ?, status = ?, notes = ?,
           updated_by = ?, updated_at = now()
         WHERE workspace_id = ? AND provider_id = ?`)
         .bind(input.companyId || profile.company_id, input.contractReference, input.roleTitle,
           input.contractType, input.contractStart, input.contractEnd,
           input.contractTotalCents === null ? null : fromCents(input.contractTotalCents),
-          input.contractSignedAt, fromCents(input.baseAmountCents),
+          input.contractSignedAt, fromCents(input.baseAmountCents), fromCents(input.fixedCajuDifferenceCents),
           input.invoiceLimitCents === null ? null : fromCents(input.invoiceLimitCents),
           input.complementMethod, input.paymentDay, input.status, input.notes, user.id, workspace.id, id),
       prepareAuditEvent({
@@ -177,8 +180,8 @@ export async function PATCH(request: Request, { params }: Params) {
         before,
         after: {
           contractType: input.contractType, contractEnd: input.contractEnd,
-          baseAmountCents: input.baseAmountCents, status: input.status,
-          contractTotalCents: input.contractTotalCents,
+          baseAmountCents: input.baseAmountCents, fixedCajuDifferenceCents: input.fixedCajuDifferenceCents,
+          status: input.status, contractTotalCents: input.contractTotalCents,
         },
         metadata: { consumedCents: balance.consumedCents },
         requestId: request.headers.get("x-fila-dp-request-id"),

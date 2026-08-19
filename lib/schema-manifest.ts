@@ -56,6 +56,7 @@ export const expectedMigrations = [
   "0046_department_module_backfill.sql",
   "0047_group_owned_epi_products.sql",
   "0048_epi_compliance.sql",
+  "0049_contractors_fixed_caju_and_termination.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
