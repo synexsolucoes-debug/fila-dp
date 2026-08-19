@@ -136,6 +136,7 @@ export async function upsertPsychologyClosing(d1: Database, input: {
 
 export type ContractorProfileRow = {
   provider_id: string; company_id: string; contract_reference: string; base_amount: string | number;
+  fixed_caju_difference?: string | number;
   invoice_limit_override: string | number | null; complement_method: string; status: string;
   contract_type: string; contract_start: string | null; contract_end: string | null;
   contract_total_amount: string | number | null;
@@ -143,8 +144,8 @@ export type ContractorProfileRow = {
 };
 
 export async function requireContractorProfile(d1: Database, workspaceId: string, providerId: string) {
-  const profile = await d1.prepare(`SELECT p.provider_id, p.company_id, p.contract_reference, p.base_amount, p.invoice_limit_override,
-      p.complement_method, p.status, p.contract_type, p.contract_start, p.contract_end, p.contract_total_amount,
+  const profile = await d1.prepare(`SELECT p.provider_id, p.company_id, p.contract_reference, p.base_amount, p.fixed_caju_difference,
+      p.invoice_limit_override, p.complement_method, p.status, p.contract_type, p.contract_start, p.contract_end, p.contract_total_amount,
       a.legal_name, a.trade_name
     FROM fdp_contractor_profiles p JOIN fdp_auxiliary_providers a ON a.workspace_id = p.workspace_id AND a.id = p.provider_id
     WHERE p.workspace_id = ? AND p.provider_id = ?`)
@@ -328,6 +329,7 @@ export async function computeContractorClosing(d1: Database, workspaceId: string
     })),
     invoiceLimit: limit,
     complementMethod: profile.complement_method as ComplementMethod,
+    fixedCajuAmount: Number(profile.fixed_caju_difference ?? 0),
   });
   return {
     calculation,
@@ -378,24 +380,24 @@ export async function upsertContractorClosing(d1: Database, input: {
   if (existing) {
     await d1.prepare(`UPDATE fdp_contractor_closings SET base_amount = ?, credits_amount = ?, debits_amount = ?, net_amount = ?,
         invoice_limit_amount = ?, invoice_limit_source = ?, invoice_limit_policy_id = ?, invoice_expected_amount = ?,
-        complement_amount = ?, complement_method = ?, caju_amount = ?, calc_version = ?,
+        complement_amount = ?, complement_method = ?, fixed_caju_amount = ?, caju_amount = ?, calc_version = ?,
         invoice_status = CASE WHEN invoice_number = '' THEN ? ELSE invoice_status END,
         caju_status = CASE WHEN caju_status IN ('sent', 'processed') THEN caju_status ELSE ? END,
         updated_at = now()
       WHERE workspace_id = ? AND id = ?`)
       .bind(calculation.baseAmount, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
         calculation.invoiceLimitAmount, calculation.invoiceLimitSource, limitPolicyId, calculation.invoiceExpectedAmount,
-        calculation.complementAmount, calculation.complementMethod, calculation.cajuAmount, calculation.calcVersion,
+        calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, calculation.calcVersion,
         invoiceStatus, cajuStatus, input.workspaceId, closingId).run();
   } else {
     await d1.prepare(`INSERT INTO fdp_contractor_closings (id, workspace_id, company_id, provider_id, payroll_cycle_id, competence,
         base_amount, credits_amount, debits_amount, net_amount, invoice_limit_amount, invoice_limit_source, invoice_limit_policy_id,
-        invoice_expected_amount, complement_amount, complement_method, caju_amount, status, invoice_status, caju_status, calc_version, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`)
+        invoice_expected_amount, complement_amount, complement_method, fixed_caju_amount, caju_amount, status, invoice_status, caju_status, calc_version, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`)
       .bind(closingId, input.workspaceId, input.profile.company_id, input.profile.provider_id, input.cycle.id, input.cycle.competence,
         calculation.baseAmount, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
         calculation.invoiceLimitAmount, calculation.invoiceLimitSource, limitPolicyId, calculation.invoiceExpectedAmount,
-        calculation.complementAmount, calculation.complementMethod, calculation.cajuAmount, invoiceStatus, cajuStatus,
+        calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, invoiceStatus, cajuStatus,
         calculation.calcVersion, input.userId).run();
   }
   await d1.prepare(`UPDATE fdp_contractor_components SET closing_id = ?
@@ -494,7 +496,8 @@ export async function contractorClosingSnapshot(d1: Database, workspaceId: strin
         baseAmount: Number(closing.base_amount), creditsAmount: Number(closing.credits_amount), debitsAmount: Number(closing.debits_amount),
         netAmount: Number(closing.net_amount), invoiceLimitAmount: closing.invoice_limit_amount === null ? null : Number(closing.invoice_limit_amount),
         invoiceLimitSource: String(closing.invoice_limit_source), invoiceExpectedAmount: Number(closing.invoice_expected_amount),
-        complementAmount: Number(closing.complement_amount), complementMethod: String(closing.complement_method), cajuAmount: Number(closing.caju_amount),
+        complementAmount: Number(closing.complement_amount), complementMethod: String(closing.complement_method),
+        fixedCajuAmount: Number(closing.fixed_caju_amount ?? 0), cajuAmount: Number(closing.caju_amount),
       }
       : {},
     components: components.results,

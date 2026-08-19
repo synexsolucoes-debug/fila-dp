@@ -55,6 +55,7 @@ export type ContractorInput = {
   contractTotalCents: number | null;
   contractSignedAt: string | null;
   baseAmountCents: number;
+  fixedCajuDifferenceCents: number;
   invoiceLimitCents: number | null;
   complementMethod: string;
   paymentDay: number | null;
@@ -108,6 +109,7 @@ export function readContractorInput(body: Record<string, unknown>, options: { re
     contractTotalCents,
     contractSignedAt: optionalDate(body.contractSignedAt),
     baseAmountCents: optionalCents(body.baseAmount, "Valor fixo mensal") ?? 0,
+    fixedCajuDifferenceCents: optionalCents(body.fixedCajuDifference, "Diferença fixa paga no Caju") ?? 0,
     invoiceLimitCents: optionalCents(body.invoiceLimitOverride, "Limite da nota"),
     complementMethod: pickEnum(body.complementMethod ?? "none", COMPLEMENT_METHODS, "Forma de complemento"),
     paymentDay,
@@ -188,7 +190,17 @@ export function readMovementInput(body: Record<string, unknown>): MovementInput 
   // repita seria só uma chance a mais de divergir do que o nome diz.
   if (movementType === "suspension") effect.status = "suspended";
   if (movementType === "reactivation") effect.status = "active";
-  if (movementType === "termination") effect.status = "inactive";
 
-  return { movementType, effectiveDate, title, reason: cleanText(body.reason, 400), effect };
+  const reason = cleanText(body.reason, 400);
+  if (movementType === "termination") {
+    effect.status = "inactive";
+    // Encerramento e data de término são o mesmo fato de negócio. Gravar só o
+    // status impediria distinguir competência histórica de competência futura.
+    effect.contractEnd = effectiveDate;
+    if (!reason) {
+      throw ApiError.badRequest("Informe o motivo do encerramento.", "TERMINATION_REASON_REQUIRED");
+    }
+  }
+
+  return { movementType, effectiveDate, title, reason, effect };
 }

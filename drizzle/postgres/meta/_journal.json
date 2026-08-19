@@ -358,6 +358,13 @@
       "when": 1787299207000,
       "tag": "0048_epi_compliance",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1787299208000,
+      "tag": "0049_contractors_fixed_caju_and_termination",
+      "breakpoints": true
     }
   ]
 }

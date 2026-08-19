@@ -317,6 +317,9 @@ export function assertMovementEffect(type: MovementType, effect: MovementEffect)
   if (type === "termination" && effect.status !== "inactive") {
     throw ApiError.badRequest("O encerramento precisa inativar o prestador.", "MOVEMENT_EFFECT_INVALID");
   }
+  if (type === "termination" && effect.contractEnd === undefined) {
+    throw ApiError.badRequest("O encerramento precisa informar a data de término do contrato.", "MOVEMENT_EFFECT_REQUIRED");
+  }
   if (effect.baseAmountCents !== undefined && effect.baseAmountCents < 0) {
     throw ApiError.badRequest("Valor fixo não pode ser negativo.", "NEGATIVE_MONEY");
   }
@@ -342,7 +345,12 @@ export function assertContractValueNotBelowConsumed(newTotalCents: number | null
 /** Prestador que não entra em apuração, e o motivo em linguagem de quem opera. */
 export function apurationBlock(status: ContractorStatus, competence: string,
   contractStart: string | Date | null, contractEnd: string | Date | null): string | null {
-  if (status === "inactive") return "contrato encerrado";
+  if (status === "inactive") {
+    const endCompetence = competenceOf(contractEnd);
+    // Encerrado com data ainda pode ser reapurado historicamente até o mês do
+    // término. Sem data, não há fronteira segura e o bloqueio continua total.
+    if (!endCompetence || competence > endCompetence) return "contrato encerrado";
+  }
   if (status === "suspended") return "contrato suspenso";
   if (!contractCoversCompetence(competence, contractStart, contractEnd)) {
     return "competência fora da vigência do contrato";
