@@ -201,6 +201,10 @@ export function normalizeContractorPaymentDetail(payload: Row): ContractorPaymen
       roleTitle: text(pick(provider, "roleTitle", "role_title")),
     },
     components: ((payload.components ?? []) as Row[]).map(normalizeComponent),
+    permissions: {
+      manage: (payload.permissions as Row | undefined)?.manage === true,
+      reopen: (payload.permissions as Row | undefined)?.reopen === true,
+    },
   };
 }
 

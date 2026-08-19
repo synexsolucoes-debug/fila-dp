@@ -417,3 +417,39 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   assert.match(contractorDetail, /aria-modal="true"/);
   assert.match(view, /openContractorDetail\(row\.id\)/);
 });
+
+test("exclusão lógica do pagamento PJ preserva auditoria e some da operação", async () => {
+  const [migration, detailRoute, closingRoute, componentRoute, overview, cajuExport, reports, publicApi, detail] = await Promise.all([
+    readFile(new URL("../drizzle/postgres/0050_contractor_payment_exclusions.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/closings/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/closings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/components/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/overview/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/reports/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/v1/contractor-closings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorPaymentDetail.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(migration, /excluded_at/);
+  assert.match(migration, /exclusion_reason/);
+  assert.doesNotMatch(migration, /DROP TABLE/i);
+  assert.match(detailRoute, /export async function DELETE/);
+  assert.match(detailRoute, /contractor_closing\.excluded/);
+  assert.match(detailRoute, /payments\.reopen/);
+  assert.doesNotMatch(detailRoute, /DELETE FROM fdp_contractor_closings/i);
+  assert.match(closingRoute, /excluded_by_recalculation/);
+  assert.match(closingRoute, /apurationBlock/);
+  assert.match(closingRoute, /competence >= endCompetence/);
+  assert.match(closingRoute, /removedCount/);
+  assert.match(componentRoute, /upsertContractorClosing/);
+  assert.match(componentRoute, /FIXED_COMPONENT_EDIT_REQUIRES_SOURCE/);
+  assert.match(overview, /c\.excluded_at IS NULL/);
+  assert.match(overview, /p\.status = 'active'/);
+  assert.match(cajuExport, /c\.excluded_at IS NULL/);
+  assert.match(reports, /c\.excluded_at IS NULL/);
+  assert.match(publicApi, /k\.excluded_at IS NULL/);
+  assert.match(detail, /Excluir pagamento/);
+  assert.match(detail, /Editar/);
+  assert.match(detail, /Cancelar lançamento/);
+});

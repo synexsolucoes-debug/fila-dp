@@ -365,6 +365,13 @@
       "when": 1787299208000,
       "tag": "0049_contractors_fixed_caju_and_termination",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1787299209000,
+      "tag": "0050_contractor_payment_exclusions",
+      "breakpoints": true
     }
   ]
 }

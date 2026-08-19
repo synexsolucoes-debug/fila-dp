@@ -40,7 +40,7 @@ const reports = {
         c.caju_status AS status_caju, c.reconciliation_status AS conciliacao, c.reconciliation_difference AS diferenca, c.status
       FROM fdp_contractor_closings c
       JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
-      WHERE c.workspace_id = ? AND c.competence = ?`,
+      WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL`,
     companyColumn: "c.company_id",
     order: "ORDER BY a.legal_name",
   },
@@ -52,7 +52,8 @@ const reports = {
         c.reconciliation_difference AS diferenca, c.reconciliation_status AS conciliacao
       FROM fdp_contractor_closings c
       JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
-      WHERE c.workspace_id = ? AND c.competence = ? AND (c.reconciliation_status = 'divergent' OR c.invoice_status = 'divergent')`,
+      WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL
+        AND (c.reconciliation_status = 'divergent' OR c.invoice_status = 'divergent')`,
     companyColumn: "c.company_id",
     order: "ORDER BY a.legal_name",
   },
