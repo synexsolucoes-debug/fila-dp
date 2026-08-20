@@ -188,6 +188,23 @@ type ViewEntry = {
   module?: string;
   /** Papéis que não veem a tela. A regra ficava repetida em sete botões. */
   hiddenFor?: WorkspaceRole[];
+  /**
+   * A tela desenha o próprio cabeçalho de página — e por isso a casca não
+   * desenha o dela (§41).
+   *
+   * Sem esta marca, Pagamentos PJ abria com o título três vezes: uma na aba do
+   * processo, uma no cabeçalho da casca ("CONTROLE DE PAGAMENTO / Pagamentos
+   * PJ / Apure o líquido devido…") e uma no cabeçalho do próprio módulo
+   * ("CONTROLE DE PAGAMENTO / Pagamentos PJ / Quanto o prestador tem a
+   * receber…") — dois textos diferentes para a mesma tela, um embaixo do
+   * outro. É o sintoma exato da §2: partes construídas separadamente, cada uma
+   * assumindo que era a dona do topo.
+   *
+   * A marca fica aqui e não no componente porque quem decide se a casca
+   * desenha é a casca. Um módulo não tem como suprimir o cabeçalho de fora
+   * dele sem que os dois passem a conhecer um ao outro.
+   */
+  ownHeader?: boolean;
   /** Ação primária da barra superior. Ausente = a barra não oferece nenhuma:
    *  a tela tem os próprios comandos e um botão genérico ali criaria dois
    *  caminhos para a mesma coisa, ou um caminho para coisa nenhuma. */
@@ -220,7 +237,7 @@ const viewCatalog: Record<View, ViewEntry> = {
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
   processManagement: {
-    label: "Processos", icon: Workflow, module: "processes", hiddenFor: ["guest"],
+    label: "Processos", icon: Workflow, module: "processes", hiddenFor: ["guest"], ownHeader: true,
     eyebrow: "GESTÃO E MODELAGEM", title: "Processos",
     description: "Desenhe, documente, versione e publique processos BPMN ligados às áreas, empresas e responsabilidades do grupo.",
   },
@@ -257,12 +274,12 @@ const viewCatalog: Record<View, ViewEntry> = {
   },
   psychologistPayments: {
     label: "Pagamento de Psicólogos", icon: Stethoscope,
-    module: "psychologistPayments", hiddenFor: ["guest", "observer"],
+    module: "psychologistPayments", hiddenFor: ["guest", "observer"], ownHeader: true,
     eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos",
     description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro.",
   },
   contractorPayments: {
-    label: "Pagamentos PJ", icon: Receipt, module: "contractorPayments", hiddenFor: ["guest"],
+    label: "Pagamentos PJ", icon: Receipt, module: "contractorPayments", hiddenFor: ["guest"], ownHeader: true,
     eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ",
     description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado.",
   },
@@ -1647,10 +1664,11 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               reinicia a animação de entrada. Sem a chave, a transição só
               rodaria na primeira vez. */}
           <PageTransition transitionKey={view} className="view-transition">
-          <div className="dashboard-heading">
+          {/* A tela que desenha o próprio cabeçalho não recebe este (§41). */}
+          {!header.ownHeader && <div className="dashboard-heading">
             <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{view === "overview" ? `Olá, ${user.displayName.split(" ")[0] || "equipe"}.` : header.title}</h1><p>{view === "overview" ? "Veja as prioridades da operação e avance com segurança." : header.description}</p><div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div></div>
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
-          </div>
+          </div>}
 
           {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations}
             processes={navGroups} processBadges={navBadges} onOpenProcess={(target) => setView(target as View)}

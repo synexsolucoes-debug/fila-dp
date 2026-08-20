@@ -256,13 +256,22 @@
  * fluxo: recalcular a largura dele não move nenhum irmão. */
 .tabs {
   position: relative;
+  max-width: 100%;
   display: flex;
   gap: 2px;
   padding: 4px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface-muted);
+  /* Rola em vez de vazar. A gestão de processos tem nove seções e, em 1366px,
+     a última saía para fora do cartão — cortada, sem barra de rolagem e sem
+     nada indicando que existia mais. O indicador é `position: absolute` dentro
+     deste contêiner, então ele rola junto e continua marcando a aba certa. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+
+.tabs::-webkit-scrollbar { display: none; }
 
 .tabsIndicator {
   position: absolute;

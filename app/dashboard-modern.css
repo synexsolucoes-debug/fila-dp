@@ -4366,3 +4366,59 @@
 .member-modules-details { grid-column: 1 / -1; margin-top: 8px; }
 .member-modules-details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--ui-primary); font-size: 11.5px; font-weight: 650; cursor: pointer; }
 .member-modules-details > summary:hover { text-decoration: underline; }
+
+/* ==========================================================================
+   Diagrama BPMN no tema escuro (§83)
+   ==========================================================================
+   O bpmn-js desenha com traço preto e preenchimento branco, fixos na folha de
+   estilo dele. No tema claro isso convive com a superfície; no escuro o
+   diagrama vira preto sobre azul-marinho — presente no DOM, ilegível na tela.
+   Foi o caso mais literal do que a §83 descreve.
+
+   Os seletores são do próprio bpmn-js e por isso vivem aqui, no CSS global:
+   um CSS Module transformaria `.djs-visual` num nome com hash e não casaria
+   com nada. O `!important` é a contrapartida de a biblioteca declarar as cores
+   como atributo de apresentação no SVG.
+
+   Só o traço, o preenchimento e o texto mudam. Forma, espessura e marcador
+   continuam vindo da biblioteca: reescrevê-los aqui criaria uma segunda
+   definição do BPMN, que sairia de sincronia na primeira atualização. */
+.theme-dark .djs-container {
+  --canvas-fill-color: var(--ui-surface);
+  background: var(--ui-surface);
+}
+
+.theme-dark .djs-visual > :is(path, polyline, polygon, rect, circle) {
+  stroke: var(--ui-text-soft) !important;
+}
+
+.theme-dark .djs-visual > :is(rect, circle, polygon) {
+  fill: var(--ui-surface-elevated) !important;
+}
+
+/* A seta da ligação é preenchida, não traçada: sem esta linha ela some. */
+.theme-dark .djs-connection .djs-visual > :is(path, polyline)[fill]:not([fill="none"]) {
+  fill: var(--ui-text-soft) !important;
+}
+
+.theme-dark .djs-visual > text,
+.theme-dark .djs-visual > text > tspan {
+  fill: var(--ui-text) !important;
+}
+
+/* Seleção e realce continuam sendo a cor de destaque do tema, e não o azul
+   fixo da biblioteca — que sobre o navy escuro fica quase invisível. */
+.theme-dark .djs-element.selected .djs-outline,
+.theme-dark .djs-shape.selected .djs-outline {
+  stroke: var(--ui-accent-text) !important;
+}
+
+/* Paleta, régua de contexto e menus flutuantes do editor. */
+.theme-dark :is(.djs-palette, .djs-context-pad, .djs-popup, .bjs-breadcrumbs) {
+  border-color: var(--ui-border) !important;
+  background: var(--ui-surface-elevated) !important;
+  color: var(--ui-text) !important;
+}
+
+.theme-dark :is(.djs-palette, .djs-context-pad) .entry { color: var(--ui-text-soft) !important; }
+.theme-dark :is(.djs-palette, .djs-context-pad) .entry:hover { background: var(--ui-surface-muted) !important; }

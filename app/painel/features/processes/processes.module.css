@@ -91,7 +91,11 @@
   min-height: 0;
 }
 
+/* `min-width: 0` porque este é um item de grade: o valor inicial `auto` impede
+   que ele encolha abaixo do conteúdo, e a barra de nove abas empurrava a
+   página inteira para além da janela em vez de rolar dentro de si mesma. */
 .sectionTabsRow {
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -360,11 +364,29 @@
 .modelerGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
-  height: clamp(420px, 64vh, 760px);
+  height: clamp(380px, 56dvh, 680px);
 }
 
 .canvasPanel { min-width: 0; border-right: 1px solid var(--b); background: var(--s); }
 .bpmnCanvas { width: 100%; height: 100%; }
+
+/* O modelador estava desenhando num selo de 17 pixels.
+ *
+ * `.workspace svg { width: 17px; height: 17px }`, no topo deste arquivo, dá a
+ * medida dos ícones do módulo — e alcançava também o `<svg>` raiz que o
+ * bpmn-js cria para o canvas. O diagrama era importado inteiro (25 elementos,
+ * conferido no navegador), enquadrado corretamente pelo `fit-viewport` e então
+ * recortado a um quadrado de 17px no canto superior esquerdo. Na tela sobrava
+ * um fragmento de rótulo, e a impressão era de um modelador que "não abre".
+ *
+ * Nenhum teste veria isto: o DOM está completo, a importação não falha e não
+ * há erro no console. Só a medição no navegador acusa.
+ *
+ * O seletor precisa de `:global` porque `.djs-container` é uma classe da
+ * biblioteca — dentro de um CSS Module ela viraria um nome com hash e não
+ * casaria com nada. E mira o filho direto de propósito: os ícones da paleta
+ * também são `<svg>` e continuam com a medida que a biblioteca lhes dá. */
+.bpmnCanvas :global(.djs-container) > svg { width: 100%; height: 100%; }
 
 .propertiesPanel { overflow-y: auto; background: var(--m); }
 .propertiesEmpty { min-height: 250px; padding: 24px; display: grid; place-items: center; text-align: center; }
