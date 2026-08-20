@@ -33,26 +33,89 @@ test("toda tela do painel está no catálogo, com seção declarada", () => {
   assert.equal(declaradas.length, views.length, "toda tela precisa de uma seção");
 });
 
-test("as seções do menu têm rótulo honesto e nenhuma fica vazia por construção", () => {
-  const sections = source.slice(source.indexOf("const navSections"), source.indexOf("type ViewEntry"));
-  for (const [id, label] of [["operacao", "OPERAÇÃO"], ["pessoas", "PESSOAS E CADASTROS"],
-    ["financeiro", "FINANCEIRO"], ["dados", "DADOS E ANÁLISE"]]) {
-    assert.match(sections, new RegExp(`id: "${id}", label: "${label}"`, "u"));
-    assert.match(catalog, new RegExp(`section: "${id}"`, "u"), `a seção ${id} não tem nenhuma tela`);
+test("a navegação principal é organizada por processos de trabalho", () => {
+  const groups = source.slice(
+    source.indexOf("const processNavigationGroups"),
+    source.indexOf("type ViewEntry"),
+  );
+
+  for (const label of [
+    "INÍCIO",
+    "DEMANDAS",
+    "PROCESSOS",
+    "OPERAÇÃO DP",
+    "CADASTROS",
+    "PONTO",
+    "GESTÃO DE EPI",
+    "FOLHA",
+    "PAGAMENTOS",
+    "DADOS E INTEGRAÇÕES",
+  ]) {
+    assert.match(
+      groups,
+      new RegExp(`label: "${label}"`, "u"),
+      `grupo ${label} ausente da navegação`,
+    );
   }
-  // Uma seção pode ficar vazia em tempo de execução — plano sem o módulo,
-  // papel sem acesso — e nesse caso ela não é desenhada.
+
+  assert.match(
+    groups,
+    /views: \["board", "inbox", "planner"\]/u,
+    "Demandas deve agrupar Demandas, Inbox e Planner",
+  );
+
+  assert.match(source, /processNavigationGroups\.map/u);
   assert.match(source, /if \(!items\.length\) return null;/u);
 });
 
-test("Cadastros e Relatórios deixaram de ser anunciados como operação", () => {
-  // O defeito concreto que a §17 aponta.
-  const registrations = catalog.slice(catalog.indexOf("  registrations: {"));
-  assert.match(registrations.slice(0, 240), /section: "pessoas"/u);
-  const indicators = catalog.slice(catalog.indexOf("  indicators: {"));
-  assert.match(indicators.slice(0, 240), /section: "dados"/u);
+test("Demandas, Inbox e Planner pertencem ao mesmo fluxo de navegação", () => {
+  const groups = source.slice(
+    source.indexOf("const processNavigationGroups"),
+    source.indexOf("type ViewEntry"),
+  );
+
+  const demands = groups.slice(
+    groups.indexOf('id: "demandas"'),
+    groups.indexOf('id: "processos"'),
+  );
+
+  assert.match(demands, /"board"/u);
+  assert.match(demands, /"inbox"/u);
+  assert.match(demands, /"planner"/u);
 });
 
+test("registry prepara o vínculo futuro entre processo e janela sem executar processo", async () => {
+  const registry = await readFile(
+    new URL(
+      "../app/painel/features/shared/module-window-registry.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    registry,
+    /moduleKey: "demands",[\s\S]*?viewKey: "board"/u,
+  );
+
+  assert.match(
+    registry,
+    /moduleKey: "demands",[\s\S]*?viewKey: "inbox"/u,
+  );
+
+  assert.match(
+    registry,
+    /moduleKey: "demands",[\s\S]*?viewKey: "planner"/u,
+  );
+
+  assert.match(registry, /capability: "processes\.read"/u);
+
+  assert.doesNotMatch(
+    registry,
+    /fetch\(|\/api\//u,
+    "registry não deve chamar API nem executar módulos",
+  );
+});
 test("a ação primária da barra é declarada, nunca deduzida por exclusão", () => {
   // Comentários fora antes de procurar: o texto que explica a decisão cita a
   // cadeia antiga, e casar com ele acusaria o contrário do que se quer.

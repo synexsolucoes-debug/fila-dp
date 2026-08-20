@@ -151,11 +151,63 @@ const processColors: Record<string, string> = {
  */
 type NavSection = "operacao" | "pessoas" | "financeiro" | "dados";
 
-const navSections: Array<{ id: NavSection; label: string }> = [
-  { id: "operacao", label: "OPERAÇÃO" },
-  { id: "pessoas", label: "PESSOAS E CADASTROS" },
-  { id: "financeiro", label: "FINANCEIRO" },
-  { id: "dados", label: "DADOS E ANÁLISE" },
+type ProcessNavigationGroup = {
+  id: string;
+  label: string;
+  views: readonly View[];
+};
+
+const processNavigationGroups: readonly ProcessNavigationGroup[] = [
+  {
+    id: "inicio",
+    label: "INÍCIO",
+    views: ["overview"],
+  },
+  {
+    id: "demandas",
+    label: "DEMANDAS",
+    views: ["board", "inbox", "planner"],
+  },
+  {
+    id: "processos",
+    label: "PROCESSOS",
+    views: ["processManagement"],
+  },
+  {
+    id: "operacao-dp",
+    label: "OPERAÇÃO DP",
+    views: ["processes", "auxiliary"],
+  },
+  {
+    id: "cadastros",
+    label: "CADASTROS",
+    views: ["registrations"],
+  },
+  {
+    id: "ponto",
+    label: "PONTO",
+    views: ["timeTracking"],
+  },
+  {
+    id: "epi",
+    label: "GESTÃO DE EPI",
+    views: ["epi"],
+  },
+  {
+    id: "folha",
+    label: "FOLHA",
+    views: ["payroll"],
+  },
+  {
+    id: "pagamentos",
+    label: "PAGAMENTOS",
+    views: ["contractorPayments", "psychologistPayments"],
+  },
+  {
+    id: "dados",
+    label: "DADOS E INTEGRAÇÕES",
+    views: ["indicators", "integrations"],
+  },
 ];
 
 type ViewEntry = {
@@ -1380,8 +1432,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <nav aria-label="Navegação do painel">
           {/* Seção sem item visível não é renderizada: um rótulo sozinho diz
               que existe algo ali e não há. */}
-          {navSections.map((section) => {
-            const items = visibleViews.filter((id) => viewCatalog[id].section === section.id);
+          {processNavigationGroups.map((section) => {
+            const items = section.views.filter((id) => visibleViews.includes(id));
             if (!items.length) return null;
             return <div key={section.id} className="sidebar-nav-group">
               <span className="sidebar-nav-section">{section.label}</span>
@@ -1403,8 +1455,10 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               <span aria-hidden="true"><MoreHorizontal /></span><span>Mais</span>
             </summary>
             <div className="sidebar-mobile-more-panel">
-              {navSections.map((section) => {
-                const items = visibleViews.filter((id) => !mobilePrimaryViews.has(id) && viewCatalog[id].section === section.id);
+              {processNavigationGroups.map((section) => {
+                const items = section.views.filter(
+                  (id) => !mobilePrimaryViews.has(id) && visibleViews.includes(id)
+                );
                 if (!items.length) return null;
                 return <section key={section.id} aria-labelledby={`mobile-nav-${section.id}`}>
                   <span id={`mobile-nav-${section.id}`}>{section.label}</span>
