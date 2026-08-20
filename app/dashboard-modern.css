@@ -3303,7 +3303,7 @@
   /* A cascata usa o índice que o React escreve em `--stagger-index`: os
      submódulos aparecem em sequência quando o processo abre, o que mostra que
      eles pertencem a ele em vez de surgirem do nada. */
-  animation: subNavEnter var(--motion-micro) var(--ease-enter) both;
+  animation: subNavEnter var(--motion-micro) var(--ease-enter) backwards;
   animation-delay: calc(var(--stagger-index, 0) * 30ms);
 }
 
@@ -3355,7 +3355,7 @@
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow-card);
-  animation: fadeInSoft var(--motion-base) var(--ease-enter) both;
+  animation: fadeInSoft var(--motion-base) var(--ease-enter) backwards;
 }
 
 .process-context-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -4184,7 +4184,11 @@
 }
 
 /* --- Troca de módulo ------------------------------------------------------ */
-.view-transition { animation: viewEnter var(--motion-slow) var(--motion-ease) both; }
+/* `backwards`, não `both`: o último quadro é `transform: none`, e mantê-lo
+   como valor animado deixa uma matriz identidade que faz deste elemento o
+   bloco de contenção de todo descendente `position: fixed`. Ver a explicação
+   longa em `features/shared/motion.module.css`. */
+.view-transition { animation: viewEnter var(--motion-slow) var(--motion-ease) backwards; }
 
 @keyframes viewEnter {
   from { opacity: 0; transform: translateY(8px); }

@@ -2,7 +2,7 @@
 
 import { AlertOctagon, LoaderCircle, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { useDialogFocus, useExitTransition } from "./motion";
+import { DialogPortal, useDialogFocus, useExitTransition } from "./motion";
 import { statusTone, type PanelTone } from "./status-tone";
 import motion from "./motion.module.css";
 import styles from "./panel-ui.module.css";
@@ -140,6 +140,7 @@ export function ConfirmDialog({ open, title, consequence, confirmLabel, busy, on
   const ref = useDialogFocus(mounted && state === "open", onCancel, busy);
   if (!mounted) return null;
   return (
+    <DialogPortal>
     <div className={motion.backdrop} data-state={state} onMouseDown={busy ? undefined : onCancel}>
       <div ref={ref} className={styles.confirmDialog} data-state={state}
         role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-consequence"
@@ -157,6 +158,7 @@ export function ConfirmDialog({ open, title, consequence, confirmLabel, busy, on
         </footer>
       </div>
     </div>
+    </DialogPortal>
   );
 }
 

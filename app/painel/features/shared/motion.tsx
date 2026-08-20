@@ -4,6 +4,7 @@ import {
   useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
   type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, type LucideIcon } from "lucide-react";
 import styles from "./motion.module.css";
 
@@ -224,7 +225,11 @@ export function useDialogFocus(active: boolean, onClose: () => void, busy = fals
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ) ?? [])].filter((node) => node.offsetParent !== null || node === document.activeElement);
 
-    focusables()[0]?.focus();
+    // `preventScroll` porque o diálogo acabou de abrir centralizado: dar foco
+    // ao primeiro controle fazia o navegador rolar o conteúdo do diálogo para
+    // trazê-lo à vista, e numa tela de 768px isso abria a janela já com o
+    // próprio título cortado no topo.
+    focusables()[0]?.focus({ preventScroll: true });
 
     const onKeyDown = (event: KeyboardEvent) => {
       // Esc não escapa no meio de uma ação já enviada: fechar aqui deixaria a
@@ -249,6 +254,45 @@ export function useDialogFocus(active: boolean, onClose: () => void, busy = fals
   return ref;
 }
 
+/**
+ * Leva o diálogo para fora da árvore da tela, direto no `<body>`.
+ *
+ * `position: fixed` é relativo à viewport — exceto quando algum ancestral tem
+ * `transform`, `filter` ou `perspective`, e aí passa a ser relativo a ele. A
+ * transição de módulo anima `transform`, e um ancestral animado é suficiente:
+ * a janela abria deslocada e o cabeçalho do painel passava por cima dela.
+ *
+ * Trocar o `fill-mode` para `backwards` resolveu aquele caso específico, mas
+ * a regra continua valendo para qualquer `transform` que apareça depois — um
+ * cartão com `hover` elevado no caminho, um `will-change` novo. O portal tira
+ * a classe inteira de defeito do caminho em vez de consertar a instância.
+ *
+ * `null` até montar: no servidor não há `document`, e um portal renderizado na
+ * primeira passagem quebraria a hidratação.
+ */
+/** Nunca notifica: o que muda entre servidor e cliente é o instantâneo, não o
+ *  valor ao longo do tempo. É o padrão do React para "já hidratei". */
+const neverChanges = () => () => {};
+
+export function DialogPortal({ children }: { children: ReactNode }) {
+  const hydrated = useSyncExternalStore(neverChanges, () => true, () => false);
+  if (!hydrated) return null;
+  /* A casca, e não o `<body>`.
+   *
+   * Levar para o `<body>` resolveria o bloco de contenção, mas custaria o
+   * tema: os tokens `--ui-*` são declarados em `.dashboard-shell`, e fora dela
+   * `background: var(--ui-surface-elevated)` fica inválido no valor computado.
+   * O diálogo abria sem fundo e sem véu, com a tela aparecendo através dele —
+   * medido, não suposto.
+   *
+   * A casca serve porque ela não tem `transform`, `filter` nem `perspective`:
+   * o `position: fixed` volta a ser relativo à viewport, que era o problema
+   * original. E o `overflow: hidden` dela não recorta o diálogo justamente
+   * porque ela não é o bloco de contenção dele. */
+  const alvo = document.querySelector("main.dashboard-shell") ?? document.body;
+  return createPortal(children, alvo);
+}
+
 export function AnimatedModal({ open, onClose, label, width, children, className }: {
   open: boolean;
   onClose: () => void;
@@ -262,14 +306,16 @@ export function AnimatedModal({ open, onClose, label, width, children, className
   const ref = useDialogFocus(mounted && state === "open", onClose);
   if (!mounted) return null;
   return (
-    <div className={styles.backdrop} data-state={state} onMouseDown={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={label} data-state={state}
-        className={`${styles.modal}${className ? ` ${className}` : ""}`}
-        style={width ? { "--modal-width": `${width}px` } as CSSProperties : undefined}
-        onMouseDown={(event) => event.stopPropagation()}>
-        {children}
+    <DialogPortal>
+      <div className={styles.backdrop} data-state={state} onMouseDown={onClose}>
+        <div ref={ref} role="dialog" aria-modal="true" aria-label={label} data-state={state}
+          className={`${styles.modal}${className ? ` ${className}` : ""}`}
+          style={width ? { "--modal-width": `${width}px` } as CSSProperties : undefined}
+          onMouseDown={(event) => event.stopPropagation()}>
+          {children}
+        </div>
       </div>
-    </div>
+    </DialogPortal>
   );
 }
 
@@ -286,14 +332,16 @@ export function AnimatedDrawer({ open, onClose, label, side = "right", width, ch
   const ref = useDialogFocus(mounted && state === "open", onClose);
   if (!mounted) return null;
   return (
-    <div className={styles.drawerBackdrop} data-side={side} data-state={state} onMouseDown={onClose}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={label} data-state={state}
-        className={`${styles.drawer}${className ? ` ${className}` : ""}`}
-        style={width ? { "--drawer-width": `${width}px` } as CSSProperties : undefined}
-        onMouseDown={(event) => event.stopPropagation()}>
-        {children}
+    <DialogPortal>
+      <div className={styles.drawerBackdrop} data-side={side} data-state={state} onMouseDown={onClose}>
+        <div ref={ref} role="dialog" aria-modal="true" aria-label={label} data-state={state}
+          className={`${styles.drawer}${className ? ` ${className}` : ""}`}
+          style={width ? { "--drawer-width": `${width}px` } as CSSProperties : undefined}
+          onMouseDown={(event) => event.stopPropagation()}>
+          {children}
+        </div>
       </div>
-    </div>
+    </DialogPortal>
   );
 }
 

@@ -17,14 +17,29 @@
 /* -------------------------------------------------------------------------- */
 /* Entrada                                                                     */
 /* -------------------------------------------------------------------------- */
-
+/* `backwards` e não `both`, e a diferença não é de acabamento.
+ *
+ * `both` = `backwards` + `forwards`, e `forwards` mantém o valor do último
+ * quadro depois que a animação termina. O último quadro destas entradas é
+ * `transform: none` — que, mantido como valor animado, o navegador computa
+ * como `matrix(1, 0, 0, 1, 0, 0)`. Uma matriz identidade ainda é um
+ * `transform`, e um `transform` faz do elemento o bloco de contenção de todo
+ * descendente `position: fixed`, além de abrir um contexto de empilhamento.
+ *
+ * O efeito medido: a janela de modelagens iniciais abria deslocada 106px e o
+ * cabeçalho do painel passava por cima dela. O diálogo estava correto; o
+ * ancestral é que tinha deixado de ser a viewport.
+ *
+ * `backwards` dá o que estas animações realmente precisam — segurar o estado
+ * inicial durante o atraso, para não piscar antes de começar — e devolve a
+ * propriedade ao valor da folha de estilo quando termina. */
 .fadeIn {
-  animation: fadeIn var(--motion-base) var(--ease-enter) both;
+  animation: fadeIn var(--motion-base) var(--ease-enter) backwards;
   animation-delay: var(--motion-delay, 0ms);
 }
 
 .fadeInUp {
-  animation: fadeInUp var(--motion-base) var(--ease-enter) both;
+  animation: fadeInUp var(--motion-base) var(--ease-enter) backwards;
   animation-delay: var(--motion-delay, 0ms);
 }
 
@@ -47,7 +62,7 @@
  * degraus existe porque uma tabela com quarenta linhas em cascata vira espera:
  * a partir do nono item todos entram juntos. */
 .staggerItem {
-  animation: fadeInUp var(--motion-base) var(--ease-enter) both;
+  animation: fadeInUp var(--motion-base) var(--ease-enter) backwards;
   animation-delay: calc(min(var(--stagger-index, 0), 8) * var(--stagger-step, 45ms) + var(--motion-delay, 0ms));
 }
 
@@ -57,7 +72,7 @@
 /* Deslocamento mínimo e 300ms: dentro da faixa de 180–400ms que a §11 pede, e
  * do lado curto dela, porque isto roda a cada clique no menu. */
 .pageTransition {
-  animation: pageEnter var(--motion-page) var(--ease-enter) both;
+  animation: pageEnter var(--motion-page) var(--ease-enter) backwards;
 }
 
 @keyframes pageEnter {
