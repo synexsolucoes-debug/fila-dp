@@ -1652,7 +1652,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
 
-          {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations} onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
+          {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations}
+            processes={navGroups} processBadges={navBadges} onOpenProcess={(target) => setView(target as View)}
+            onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processManagement" && <ProcessManagementView role={snapshot.workspace.role} />}
 
@@ -2139,8 +2141,13 @@ function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
   </section>;
 }
 
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations }: {
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations, processes, processBadges, onOpenProcess }: {
   onNavigate: (target: ActionTarget) => void;
+  /** Processos que esta pessoa alcança, no mesmo recorte do menu (§30). */
+  processes: ReadonlyArray<{ id: string; label: string; description: string; views: readonly string[] }>;
+  /** Contagens já apuradas pelo painel — o cartão do processo não consulta nada. */
+  processBadges: Partial<Record<string, number>>;
+  onOpenProcess: (view: string) => void;
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
@@ -2175,6 +2182,43 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
       <ActionCenter onNavigate={onNavigate} companyId={companyId} />
       <ConnectionMap integrations={integrations} onNavigate={onNavigate} />
     </div>
+
+    {/* "Meus processos" (§29).
+        A §28 lista quatro perguntas que a home precisa responder, e esta é a
+        terceira: quais processos eu posso acessar. Antes não havia resposta —
+        para descobrir o que existia, a pessoa percorria o menu item a item.
+
+        A lista vem recortada de `visibleProcessGroups`, o mesmo caminho do
+        menu, então processo sem tela alcançável não aparece aqui tampouco
+        (§30). Nenhum número inventado: o rodapé de cada cartão conta os
+        módulos que a pessoa realmente abre, e nada além disso. */}
+    {processes.length > 0 && <section className="workspace-processes" aria-labelledby="workspace-processes-title">
+      <header>
+        <div>
+          <span>MEUS PROCESSOS</span>
+          <h2 id="workspace-processes-title">Onde a operação acontece</h2>
+        </div>
+        <p>{plural(processes.length, "processo disponível para o seu acesso", "processos disponíveis para o seu acesso")}</p>
+      </header>
+      <StaggerContainer className="workspace-process-grid">
+        {processes.map((group, index) => {
+          const GroupIcon = processGroupIcons[group.id] ?? Blocks;
+          const pending = group.views.reduce((total, id) => total + (processBadges[id] ?? 0), 0);
+          return <StaggerItem key={group.id} index={index}>
+            <MotionCard
+              icon={GroupIcon}
+              title={group.label}
+              description={group.description}
+              onClick={() => onOpenProcess(group.views[0])}
+              meta={<>
+                <span>{plural(group.views.length, "módulo", "módulos")}</span>
+                {pending ? <b className="workspace-process-pending">{pending} na triagem</b> : null}
+              </>}
+            />
+          </StaggerItem>;
+        })}
+      </StaggerContainer>
+    </section>}
 
     <section className="overview-metrics" aria-label="Indicadores principais">
       <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída no quadro", "concluídas no quadro")}</small></article>

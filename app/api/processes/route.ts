@@ -4,6 +4,7 @@ import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { cleanProcessCode, defaultBpmnXml, parseJsonArray, processCriticalities, processPriorities, processSlaUnits, sanitizeIdList, sanitizeProcessTags } from "@/lib/process-management";
+import { findProcessTemplate, templateBpmnXml, templateStepConfigs } from "@/lib/process-templates";
 
 type Row = Record<string, unknown>;
 type WorkspaceD1 = Awaited<ReturnType<typeof getWorkspaceContext>>["d1"];
@@ -104,15 +105,31 @@ export async function POST(request: Request) {
     const globalSlaUnit = processSlaUnits.includes(String(body.globalSlaUnit) as (typeof processSlaUnits)[number]) ? String(body.globalSlaUnit) : "hours";
     const criticality = processCriticalities.includes(String(body.criticality) as (typeof processCriticalities)[number]) ? String(body.criticality) : "medium";
     const defaultPriority = processPriorities.includes(String(body.defaultPriority) as (typeof processPriorities)[number]) ? String(body.defaultPriority) : "normal";
-    const notes = cleanText(body.notes, 4000); const processId = crypto.randomUUID(); const versionId = crypto.randomUUID(); const bpmnXml = defaultBpmnXml(name, code || processId);
+    const notes = cleanText(body.notes, 4000); const processId = crypto.randomUUID(); const versionId = crypto.randomUUID();
+    /* Modelagem inicial (§37).
+       Sem `templateKey` nada muda: o processo nasce com o diagrama mínimo de
+       sempre. Com ele, o rascunho já chega com o fluxo desenhado e com o tipo
+       e a descrição de cada etapa preenchidos.
+
+       O que o template NÃO traz é responsável, área, SLA ou aprovador — eles
+       dependem do organograma de cada cliente. Preenchê-los com um palpite
+       plausível seria a pior espécie de dado falso: o que parece configurado e
+       não está. É também onde a §38 traça a linha entre template e instância:
+       isto escreve uma versão em rascunho, e nada mais. */
+    const template = findProcessTemplate(body.templateKey);
+    const bpmnXml = template ? templateBpmnXml(template) : defaultBpmnXml(name, code || processId);
+    const stepConfigs = template ? templateStepConfigs(template) : [];
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_process_definitions (id,workspace_id,code,name,description,objective,category,status,lifecycle_status,owner_department_id,owner_user_id,is_corporate,allow_manual_start,allow_automatic_start,require_publication_approval,global_sla_value,global_sla_unit,criticality,default_priority,tags_json,notes,created_by,updated_by)
         VALUES (?,?,?,?,?,?,?,?,'draft',?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?)`).bind(processId, workspace.id, code, name, description, objective, category, active ? "active" : "inactive", ownerDepartmentId || null, ownerUserId, isCorporate ? 1 : 0, allowManualStart ? 1 : 0, allowAutomaticStart ? 1 : 0, requirePublicationApproval ? 1 : 0, globalSlaValue, globalSlaUnit, criticality, defaultPriority, JSON.stringify(tags), notes, user.id, user.id),
       d1.prepare(`INSERT INTO fdp_process_versions (id,workspace_id,definition_id,version,version_major,version_minor,status,configuration_json,bpmn_xml,svg_preview,revision,change_summary,created_by,updated_by)
         VALUES (?,?,?,1,1,0,'draft','{\"schemaVersion\":1,\"automationReady\":true}'::jsonb,?,'',0,'Versão inicial do processo.',?,?)`).bind(versionId, workspace.id, processId, bpmnXml, user.id, user.id),
       ...companyIds.map((companyId) => d1.prepare("INSERT INTO fdp_process_companies (workspace_id,process_id,company_id,created_by) VALUES (?,?,?,?)").bind(workspace.id, processId, companyId, user.id)),
+      ...stepConfigs.map((step) => d1.prepare(
+        "INSERT INTO fdp_process_step_configs (id,workspace_id,process_version_id,bpmn_element_id,step_type,settings_json) VALUES (?,?,?,?,?,?::jsonb)",
+      ).bind(crypto.randomUUID(), workspace.id, versionId, step.bpmnElementId, step.stepType, JSON.stringify(step.settings))),
       d1.prepare("UPDATE fdp_process_definitions SET current_version_id=?, updated_at=now() WHERE workspace_id=? AND id=?").bind(versionId, workspace.id, processId),
-      prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "process.created", entityType: "process_definition", entityId: processId, after: { code, name, category, ownerDepartmentId, ownerUserId, isCorporate, companyIds }, metadata: { versionId, version: "1.0" }, requestId: request.headers.get("x-fila-dp-request-id") }),
+      prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "process.created", entityType: "process_definition", entityId: processId, after: { code, name, category, ownerDepartmentId, ownerUserId, isCorporate, companyIds }, metadata: { versionId, version: "1.0", templateKey: template?.key ?? "" }, requestId: request.headers.get("x-fila-dp-request-id") }),
     ]);
     return Response.json({ process: { id: processId, code, name, lifecycleStatus: active ? "draft" : "inactive", currentVersionId: versionId }, version: { id: versionId, processId, version: 1, versionMajor: 1, versionMinor: 0, status: "draft", revision: 0, bpmnXml, svgPreview: "" } }, { status: 201 });
   } catch (error) { return apiError(error); }

@@ -2976,6 +2976,37 @@
 .overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
 .overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-mint-text); }
 
+/* ==========================================================================
+   Meus processos (§29)
+   ==========================================================================
+   O cartão vem de `MotionCard`, que já traz borda em repouso, elevação no
+   hover e a seta andando 3px (§9). O que esta seção acrescenta é só a grade e
+   o cabeçalho — repetir o desenho do cartão aqui seria criar a segunda
+   definição dele.
+
+   `auto-fill` com mínimo de 250px em vez de um número fixo de colunas: a
+   quantidade de processos varia com a permissão de cada pessoa, e três colunas
+   fixas deixariam um buraco para quem alcança dois. */
+.workspace-processes { display: grid; gap: 13px; }
+.workspace-processes > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.workspace-processes > header span { display: block; color: var(--ui-mint-text); font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+.workspace-processes > header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 17px; letter-spacing: -.03em; }
+.workspace-processes > header p { margin: 0; color: var(--ui-text-soft); font-size: 12px; }
+.workspace-process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 13px; }
+/* O item da cascata precisa esticar: sem isto os cartões de uma linha ficam
+   com alturas diferentes conforme o tamanho da descrição. */
+.workspace-process-grid > * { display: flex; }
+.workspace-process-grid > * > * { flex: 1 1 auto; min-height: 158px; }
+.workspace-process-pending {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ui-state-warn-bg);
+  color: var(--ui-state-warn-text);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .overview-metrics article { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 .overview-metrics span { color: var(--ui-text-soft); font-size: 11px; font-weight: 700; }
@@ -3943,7 +3974,14 @@
   --ui-accent: var(--vin-blue, #0857b2);
   --ui-accent-text: var(--vin-blue, #0857b2);
   --ui-on-accent: #ffffff;
-  --ui-accent-soft: #e7f0fe;
+  --ui-accent-soft: #e2ecfb;
+  /* O que se lê EM CIMA do preenchimento vermelho, pelo mesmo motivo que
+     `--ui-on-accent` existe. O módulo de Processos já consumia este token —
+     `color: var(--ui-on-danger)` no botão de arquivar — e ele nunca foi
+     declarado em lugar nenhum: a declaração ficava inválida no valor
+     computado, e o texto do botão herdava a cor do pai. No tema escuro isso
+     era vermelho claro sobre vermelho claro. */
+  --ui-on-danger: #ffffff;
 }
 
 .dashboard-shell.theme-dark {
@@ -3955,6 +3993,9 @@
   --ui-accent-text: #7cc0ff;
   --ui-on-accent: #04121f;
   --ui-accent-soft: #14304f;
+  /* No escuro o vermelho clareia para ser legível como texto, e branco em cima
+     dele dá 2,3:1. O que se lê sobre o preenchimento escurece junto. */
+  --ui-on-danger: #2b0906;
 }
 
 

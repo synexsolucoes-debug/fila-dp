@@ -1,2 +1,511 @@
-.workspace{--p:var(--ui-primary);--ps:var(--ui-primary-soft);--s:var(--ui-surface);--m:var(--ui-surface-muted);--b:var(--ui-border);--t:var(--ui-text);--soft:var(--ui-text-soft);--danger:var(--ui-danger);min-width:0;color:var(--t)}.workspace button,.workspace input,.workspace select,.workspace textarea{font:inherit}.workspace svg{width:17px;height:17px}.eyebrow{color:var(--p);font-size:.6rem;font-weight:800;letter-spacing:.1em}.pageHeader{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:14px}.pageHeader h2{margin:3px 0;font-size:1.45rem}.pageHeader p{margin:0;color:var(--soft);font-size:.72rem}.primaryButton,.secondaryButton,.dangerButton{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:0 13px;border-radius:8px;font-size:.68rem;font-weight:740;cursor:pointer}.primaryButton{border:1px solid var(--p);background:var(--p);color:var(--ui-on-accent)!important}.secondaryButton{border:1px solid var(--b);background:var(--s)}.dangerButton{border:1px solid var(--danger);background:var(--danger);color:var(--ui-on-danger)!important}.processLayout{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:650px;overflow:hidden;border:1px solid var(--b);border-radius:12px;background:var(--s);box-shadow:var(--ui-shadow-card)}.moduleNav{border-right:1px solid var(--b);background:var(--m)}.moduleMark{display:flex;align-items:center;gap:9px;padding:16px;border-bottom:1px solid var(--b);font-size:.8rem}.moduleMark svg{color:var(--p)}.moduleNav nav{display:grid;gap:3px;padding:9px}.moduleNav nav button{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 9px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--soft);font-size:.64rem;text-align:left;cursor:pointer}.moduleNav nav .activeNav{border-color:var(--b);background:var(--s);color:var(--p);font-weight:750}.moduleContent{min-width:0;padding:13px}.filters{display:grid;grid-template-columns:minmax(220px,1.5fr) repeat(5,minmax(120px,.7fr));gap:7px;margin-bottom:10px;padding:9px;border:1px solid var(--b);border-radius:8px;background:var(--m)}.filters input,.filters select,.formGrid input,.formGrid select,.formGrid textarea,.propertySections input,.propertySections select,.propertySections textarea{width:100%;min-width:0;border:1px solid var(--b);border-radius:7px;background:var(--s);color:var(--t);font-size:.65rem}.filters input,.filters select,.formGrid input,.formGrid select,.propertySections input,.propertySections select{min-height:34px;padding:0 8px}.formGrid textarea,.propertySections textarea{padding:7px 8px;resize:vertical}.searchField{display:flex;align-items:center;gap:7px;padding:0 8px;border:1px solid var(--b);border-radius:7px;background:var(--s)}.searchField input{border:0;outline:0}.processTableWrap{overflow:auto;border:1px solid var(--b);border-radius:8px}.processTable,.historyPanel table{width:100%;border-collapse:collapse}.processTable th,.historyPanel th{padding:8px 9px;border-bottom:1px solid var(--b);background:var(--m);color:var(--soft);font-size:.52rem;text-align:left;text-transform:uppercase;white-space:nowrap}.processTable td,.historyPanel td{padding:9px;border-bottom:1px solid var(--b);font-size:.63rem;vertical-align:top}.processTable td strong,.processTable td small{display:block}.processTable td small,.processTable td p{color:var(--soft);font-size:.55rem}.processTable td p{max-width:300px;margin:4px 0 0}.rowActions{display:flex;flex-wrap:wrap;gap:5px}.rowActions button,.historyPanel td button{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 7px;border:1px solid var(--b);border-radius:6px;background:var(--s);font-size:.55rem;cursor:pointer}.dangerText{color:var(--danger)!important}.toast{position:fixed;right:20px;bottom:20px;z-index:180;padding:11px 14px;border:1px solid var(--ui-done);border-radius:8px;background:var(--s);box-shadow:var(--ui-shadow-card);font-size:.65rem}.modelerCommand{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.modelerCommand>div{display:flex;gap:7px}.modelerShell{overflow:hidden;border:1px solid var(--b);border-radius:9px;background:var(--s)}.modelerToolbar{display:grid;grid-template-columns:minmax(180px,1fr) auto auto;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--b);background:var(--m)}.modelerToolbar>div:first-child{display:grid}.modelerToolbar span{color:var(--soft);font-size:.55rem}.toolActions{display:flex;flex-wrap:wrap;gap:5px}.toolActions button{display:inline-flex;align-items:center;gap:4px;min-height:31px;padding:0 7px;border:1px solid var(--b);border-radius:6px;background:var(--s);font-size:.55rem;cursor:pointer}.saveIndicator{color:var(--soft);font-size:.55rem}.saveIndicator[data-state=dirty],.saveIndicator[data-state=error]{color:var(--ui-warning)}.saveIndicator[data-state=saved]{color:var(--ui-done)}.modelerGrid{display:grid;grid-template-columns:minmax(0,1fr)330px;height:min(70vh,760px);min-height:560px}.canvasPanel{min-width:0;border-right:1px solid var(--b)}.bpmnCanvas{width:100%;height:100%}.propertiesPanel{overflow-y:auto;background:var(--m)}.propertiesEmpty{display:grid;place-items:center;min-height:250px;padding:20px;text-align:center}.propertiesEmpty p{color:var(--soft);font-size:.62rem;line-height:1.5}.propertiesHeader{display:grid;gap:2px;padding:11px;border-bottom:1px solid var(--b);background:var(--s)}.propertiesHeader span{color:var(--p);font-size:.5rem;text-transform:uppercase}.propertiesHeader small{color:var(--soft);font-size:.52rem}.propertySections{padding:8px}.propertySections fieldset{display:grid;gap:7px;margin:0 0 8px;padding:9px;border:1px solid var(--b);border-radius:7px;background:var(--s)}.propertySections legend{color:var(--p);font-size:.53rem;font-weight:800;text-transform:uppercase}.propertySections label,.formGrid label{display:grid;gap:3px;color:var(--soft);font-size:.56rem}.checkLabel{display:flex!important;align-items:center;gap:6px!important}.checkLabel input{width:15px!important;min-height:15px!important}.inlineFields{display:grid;grid-template-columns:1fr 1fr;gap:6px}.settingsPanel{padding:20px;border:1px solid var(--b);border-radius:8px}.settingsPanel svg{color:var(--p)}.settingsPanel p,.settingsPanel small{color:var(--soft);font-size:.65rem}.historyPanel h3{margin:0 0 10px}.modalBackdrop{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:20px;background:var(--ui-backdrop)}.processModal,.previewModal,.confirmModal{width:min(850px,96vw);max-height:90vh;overflow:auto;border:1px solid var(--b);border-radius:11px;background:var(--s);box-shadow:var(--ui-shadow-modal)}.processModal>header,.previewModal>header{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid var(--b)}.processModal form{padding:12px}.formGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.wideField{grid-column:1/-1}.toggleGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin:12px 0}.toggleGrid label,.companyPicker label{display:flex;align-items:center;gap:6px;font-size:.61rem}.companyPicker{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:9px;border:1px solid var(--b);border-radius:7px;background:var(--m)}.processModal footer,.confirmModal>div{display:flex;justify-content:flex-end;gap:7px;margin-top:12px}.processModal footer button,.confirmModal button,.processModal>header button,.previewModal button{min-height:34px;padding:0 10px;border:1px solid var(--b);border-radius:6px;background:var(--s);font-size:.62rem}.confirmModal{width:min(440px,94vw);padding:20px;text-align:center}.confirmModal svg{width:34px;height:34px;color:var(--danger)}.confirmModal p{color:var(--soft);font-size:.64rem}.previewModal img{display:block;width:100%;min-height:400px;max-height:75vh;padding:15px;object-fit:contain}.previewModal p{padding:30px;text-align:center;color:var(--soft)}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:1100px){.filters{grid-template-columns:repeat(3,1fr)}.modelerGrid{grid-template-columns:minmax(0,1fr)300px}}@media(max-width:850px){.pageHeader{align-items:stretch;flex-direction:column}.processLayout{display:block}.moduleNav{border-right:0;border-bottom:1px solid var(--b)}.moduleMark{display:none}.moduleNav nav{display:flex;overflow-x:auto}.moduleNav nav button{flex:0 0 auto}.filters{grid-template-columns:1fr 1fr}.searchField{grid-column:1/-1}.modelerGrid{display:block;height:auto;min-height:0}.canvasPanel{height:58vh;border-right:0;border-bottom:1px solid var(--b)}.propertiesPanel{max-height:60vh}.modelerToolbar{grid-template-columns:1fr}.formGrid,.toggleGrid,.companyPicker{grid-template-columns:1fr}.wideField{grid-column:auto}}@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+/*
+ * Gestão e modelagem de processos (§36, §39, §73).
+ *
+ * O arquivo anterior tinha 8,8 kB em duas linhas e três defeitos de fundo que
+ * a §73 descreve como "visualmente estranho":
+ *
+ *  1. consumia `--ui-backdrop` e `--ui-on-danger`, que não existem em lugar
+ *     nenhum do projeto. O fundo do diálogo ficava transparente e o texto do
+ *     botão de arquivar herdava a cor do pai — vermelho sobre vermelho no tema
+ *     escuro. Uma variável indefinida não avisa: a declaração cai no valor
+ *     computado e a regra some;
+ *  2. tipografia entre `.5rem` e `.68rem` — 8 a 11px. A §55 pede hierarquia, e
+ *     ali tudo era pequeno demais para ter hierarquia alguma;
+ *  3. uma barra de navegação de 220px *dentro* da página, criando um terceiro
+ *     nível de menu que nenhuma outra tela tem. A §41 pede o contrário: todo o
+ *     Vinculato obedecendo ao mesmo shell.
+ *
+ * Recuo, raio e intervalo agora vêm dos tokens de layout (§42), e o alias local
+ * deriva do acento semântico como o resto do painel.
+ */
+
+.workspace {
+  --p: var(--ui-accent);
+  --p-text: var(--ui-accent-text);
+  --s: var(--ui-surface);
+  --elevated: var(--ui-surface-elevated);
+  --m: var(--ui-surface-muted);
+  --b: var(--ui-border);
+  --b-strong: var(--ui-border-strong);
+  --t: var(--ui-text);
+  --soft: var(--ui-text-soft);
+  --muted: var(--ui-text-muted);
+  --danger: var(--ui-danger);
+  min-width: 0;
+  color: var(--t);
+}
+
+.workspace button,
+.workspace input,
+.workspace select,
+.workspace textarea { font: inherit; }
+.workspace svg { width: 17px; height: 17px; }
+
+/* -------------------------------------------------------------------------- */
+/* Cabeçalho e comandos                                                        */
+/* -------------------------------------------------------------------------- */
+
+.pageHeader {
+  margin-bottom: var(--layout-section-gap);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow { color: var(--p-text); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+.pageHeader h2 { margin: 4px 0 0; color: var(--t); font-size: 22px; letter-spacing: -.03em; }
+.pageHeader p { max-width: 680px; margin: 6px 0 0; color: var(--soft); font-size: 13px; line-height: 1.5; }
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--ui-radius-sm);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton { border: 1px solid var(--p); background: var(--p); color: var(--ui-on-accent); }
+.secondaryButton { border: 1px solid var(--b); background: var(--s); color: var(--t); }
+.secondaryButton:hover { border-color: var(--b-strong); background: var(--m); }
+.dangerButton { border: 1px solid var(--danger); background: var(--danger); color: var(--ui-on-danger); }
+.dangerText { color: var(--danger); }
+
+/* -------------------------------------------------------------------------- */
+/* Corpo do módulo                                                             */
+/* -------------------------------------------------------------------------- */
+/* Sem a barra lateral de 220px: as seções viram abas horizontais, iguais às do
+   cabeçalho de processo, e a tabela recupera a largura que a barra comia. */
+
+.moduleBody {
+  display: grid;
+  gap: var(--layout-section-gap);
+  min-height: 0;
+}
+
+.sectionTabsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.moduleContent {
+  min-width: 0;
+  padding: var(--layout-card-padding);
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-lg);
+  background: var(--s);
+  box-shadow: var(--ui-shadow-card);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Barra de filtros (§45, §46)                                                 */
+/* -------------------------------------------------------------------------- */
+/* Busca e os dois recortes mais usados ficam na tela; o resto abre em gaveta,
+   que é o que a §46 pede para reduzir a poluição. Antes eram seis controles
+   lado a lado, cada um com 120px, e nenhum cabia no rótulo. */
+
+.filterBar {
+  margin-bottom: var(--layout-section-gap);
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-md);
+  background: var(--m);
+}
+
+.searchField {
+  flex: 1 1 240px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+  color: var(--muted);
+}
+
+.searchField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--t);
+  outline: 0;
+  font-size: 13px;
+}
+
+.filterBar select,
+.formGrid input,
+.formGrid select,
+.formGrid textarea,
+.filterDrawer input,
+.filterDrawer select,
+.propertySections input,
+.propertySections select,
+.propertySections textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+  color: var(--t);
+  font-size: 13px;
+}
+
+.filterBar select { flex: 0 1 170px; min-height: 36px; padding: 0 8px; }
+.formGrid input, .formGrid select,
+.filterDrawer input, .filterDrawer select,
+.propertySections input, .propertySections select { min-height: 36px; padding: 0 9px; }
+.formGrid textarea, .propertySections textarea { padding: 8px 9px; resize: vertical; }
+
+.filterButton {
+  min-height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.filterButton:hover { border-color: var(--b-strong); }
+.filterButton b {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--p);
+  color: var(--ui-on-accent);
+  font-size: 10px;
+}
+
+.filterDrawer { padding: var(--layout-card-padding); display: grid; gap: 14px; }
+.filterDrawer > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.filterDrawer > header strong { color: var(--t); font-size: 15px; }
+.filterDrawer label { display: grid; gap: 5px; color: var(--soft); font-size: 12px; font-weight: 650; }
+.filterDrawer footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* -------------------------------------------------------------------------- */
+/* Tabela (§44)                                                                */
+/* -------------------------------------------------------------------------- */
+
+.processTableWrap { overflow: auto; border: 1px solid var(--b); border-radius: var(--ui-radius-md); }
+
+.processTable,
+.historyPanel table { width: 100%; border-collapse: collapse; }
+
+.processTable th,
+.historyPanel th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--b);
+  background: var(--m);
+  color: var(--soft);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.processTable td,
+.historyPanel td {
+  padding: 12px;
+  border-bottom: 1px solid var(--b);
+  font-size: 12.5px;
+  vertical-align: top;
+}
+
+.processTable tbody tr { transition: background-color var(--motion-hover) var(--ease-standard); }
+.processTable tbody tr:hover { background: var(--m); }
+.processTable tbody tr:last-child td, .historyPanel tbody tr:last-child td { border-bottom: 0; }
+.processTable td strong { display: block; color: var(--t); font-size: 13px; }
+.processTable td small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.processTable td p { max-width: 340px; margin: 5px 0 0; color: var(--soft); font-size: 11.5px; line-height: 1.45; }
+
+.rowActions { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.rowActions button,
+.historyPanel td button {
+  min-height: 30px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.rowActions button:hover, .historyPanel td button:hover { border-color: var(--b-strong); background: var(--m); }
+.rowActions svg, .historyPanel td svg { width: 13px; height: 13px; }
+
+.historyPanel { display: grid; gap: 12px; }
+.historyPanel h3 { margin: 0; color: var(--t); font-size: 16px; letter-spacing: -.02em; }
+.historyPanel > div { overflow: auto; border: 1px solid var(--b); border-radius: var(--ui-radius-md); }
+
+/* -------------------------------------------------------------------------- */
+/* Galeria de modelagens iniciais (§37)                                        */
+/* -------------------------------------------------------------------------- */
+
+.templateGallery { display: grid; gap: 12px; }
+.templateGallery > p { margin: 0; color: var(--soft); font-size: 13px; line-height: 1.55; }
+.templateGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 11px; }
+.templateGrid > * { display: flex; }
+.templateGrid > * > * { flex: 1 1 auto; }
+.templateShape { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.templateShape span {
+  padding: 2px 8px;
+  border: 1px solid var(--b);
+  border-radius: 999px;
+  background: var(--m);
+  color: var(--soft);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modelador (§36, §39, §40)                                                   */
+/* -------------------------------------------------------------------------- */
+
+.modelerCommand {
+  margin-bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.modelerCommand > div { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.modelerShell {
+  overflow: hidden;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-md);
+  background: var(--s);
+}
+
+.modelerToolbar {
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--b);
+  background: var(--m);
+}
+
+.modelerToolbar > div:first-child { display: grid; min-width: 0; }
+.modelerToolbar strong { color: var(--t); font-size: 13.5px; }
+.modelerToolbar span { color: var(--soft); font-size: 11px; }
+.toolActions { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.toolActions button {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.toolActions button:hover { border-color: var(--b-strong); background: var(--m); }
+.toolActions svg { width: 14px; height: 14px; }
+
+.saveIndicator { color: var(--muted); font-size: 11.5px; font-weight: 650; }
+.saveIndicator[data-state="dirty"], .saveIndicator[data-state="error"] { color: var(--ui-warning); }
+.saveIndicator[data-state="saved"] { color: var(--ui-done); }
+
+/* O canvas ocupa a altura útil e o painel de propriedades acompanha. Antes o
+   `min-height: 560px` fixo empurrava a página para fora da dobra em 1366×768,
+   que é a menor resolução alvo da §43. */
+.modelerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  height: clamp(420px, 64vh, 760px);
+}
+
+.canvasPanel { min-width: 0; border-right: 1px solid var(--b); background: var(--s); }
+.bpmnCanvas { width: 100%; height: 100%; }
+
+.propertiesPanel { overflow-y: auto; background: var(--m); }
+.propertiesEmpty { min-height: 250px; padding: 24px; display: grid; place-items: center; text-align: center; }
+.propertiesEmpty strong { color: var(--t); font-size: 13.5px; }
+.propertiesEmpty p { margin: 8px 0 0; color: var(--soft); font-size: 12px; line-height: 1.5; }
+
+.propertiesHeader {
+  padding: 13px;
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid var(--b);
+  background: var(--s);
+}
+
+.propertiesHeader span { color: var(--p-text); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+.propertiesHeader strong { color: var(--t); font-size: 14px; }
+.propertiesHeader small { color: var(--muted); font-size: 11px; }
+
+.propertySections { padding: 10px; }
+
+.propertySections fieldset {
+  margin: 0 0 10px;
+  padding: 11px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+}
+
+.propertySections legend { color: var(--p-text); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.propertySections label, .formGrid label { display: grid; gap: 4px; color: var(--soft); font-size: 12px; font-weight: 650; }
+.checkLabel { display: flex; align-items: center; gap: 7px; }
+.checkLabel input { width: 16px; min-height: 16px; }
+.inlineFields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+.settingsPanel { padding: 24px; display: grid; gap: 10px; justify-items: start; border: 1px solid var(--b); border-radius: var(--ui-radius-md); background: var(--m); }
+.settingsPanel svg { width: 26px; height: 26px; color: var(--p-text); }
+.settingsPanel h3 { margin: 0; color: var(--t); font-size: 16px; }
+.settingsPanel p { max-width: 620px; margin: 0; color: var(--soft); font-size: 13px; line-height: 1.55; }
+.settingsPanel small { color: var(--muted); font-size: 11.5px; }
+
+/* -------------------------------------------------------------------------- */
+/* Diálogos                                                                    */
+/* -------------------------------------------------------------------------- */
+/* O fundo e a animação vêm de `AnimatedModal`/`AnimatedDrawer` (§15, §16). O
+   que sobra aqui é só o conteúdo — antes cada diálogo trazia o próprio
+   `position: fixed` com um `--ui-backdrop` que não existia. */
+
+.dialogHeader {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--b);
+}
+
+.dialogHeader strong, .dialogHeader h3 { margin: 0; color: var(--t); font-size: 16px; letter-spacing: -.02em; }
+
+.dialogHeader button,
+.processForm footer button,
+.confirmBody button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.processForm { padding: 16px; }
+.formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wideField { grid-column: 1 / -1; }
+.toggleGrid { margin: 14px 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.toggleGrid label, .companyPicker label { display: flex; align-items: center; gap: 7px; color: var(--t); font-size: 12.5px; }
+
+.companyPicker {
+  padding: 11px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--m);
+}
+
+.processForm footer { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; }
+
+.confirmBody { padding: 24px; display: grid; gap: 10px; justify-items: center; text-align: center; }
+.confirmBody svg { width: 32px; height: 32px; color: var(--danger); }
+.confirmBody h3 { margin: 0; color: var(--t); font-size: 16px; }
+.confirmBody p { margin: 0; color: var(--soft); font-size: 13px; line-height: 1.5; }
+.confirmBody > div { margin-top: 6px; display: flex; gap: 8px; }
+
+.previewBody { padding: 16px; }
+.previewBody img { display: block; width: 100%; min-height: 320px; max-height: 66dvh; object-fit: contain; }
+.previewBody p { padding: 32px; color: var(--soft); text-align: center; }
+
+.toast {
+  position: fixed;
+  z-index: 180;
+  right: 20px;
+  bottom: 20px;
+  padding: 12px 15px;
+  border: 1px solid var(--ui-done);
+  border-radius: var(--ui-radius-sm);
+  background: var(--elevated);
+  box-shadow: var(--ui-shadow-card);
+  color: var(--t);
+  font-size: 12.5px;
+  animation: toastIn var(--motion-base) var(--ease-enter) both;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Larguras menores (§43)                                                      */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .modelerGrid { grid-template-columns: minmax(0, 1fr) 300px; }
+}
+
+@media (max-width: 850px) {
+  .pageHeader { align-items: stretch; flex-direction: column; }
+  .filterBar select { flex: 1 1 140px; }
+  .modelerGrid { display: block; height: auto; }
+  .canvasPanel { height: 56dvh; border-right: 0; border-bottom: 1px solid var(--b); }
+  .propertiesPanel { max-height: 60dvh; }
+  .formGrid, .toggleGrid, .companyPicker { grid-template-columns: 1fr; }
+  .wideField { grid-column: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+  .processTable tbody tr { transition: none; }
+}
