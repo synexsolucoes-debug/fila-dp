@@ -11,6 +11,7 @@ import {
   Building2,
   Cable,
   HardHat,
+  History,
   Check,
   CalendarClock,
   CalendarDays,
@@ -39,6 +40,7 @@ import {
   AlertTriangle,
   UserRoundCog,
   Smartphone,
+  Star,
   Stethoscope,
 
   Timer,
@@ -54,7 +56,7 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, Wor
 import type { ActionTarget } from "@/lib/action-center";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
-import { AnimatedTabs, competenceLabel, ProcessTabsProvider, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
+import { AnimatedTabs, competenceLabel, ProcessTabsProvider, useShortcuts, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -890,6 +892,31 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     [navGroups, view],
   );
 
+  /* Atalhos de quem está usando o painel (§67).
+     A lista vem do servidor sem recorte de acesso — a decisão de quem vê o quê
+     é uma só e mora acima, em `visibleViews`. Aqui ela é aplicada: um destino
+     favoritado antes de o plano mudar não pode continuar aparecendo. */
+  const shortcuts = useShortcuts(view, Boolean(snapshot));
+  const shortcutViews = useMemo(() => {
+    const visible = new Set(visibleViews);
+    const favorites = shortcuts.favorites.filter((id): id is View => visible.has(id as View));
+    // O recente não repete o que já está fixado: o atalho apareceria duas vezes
+    // na mesma coluna, e a segunda não acrescenta nada.
+    const fixed = new Set<string>([...favorites, "overview"]);
+    const recents = shortcuts.recents
+      .filter((id): id is View => visible.has(id as View) && !fixed.has(id))
+      .slice(0, 3);
+    return { favorites, recents };
+  }, [shortcuts.favorites, shortcuts.recents, visibleViews]);
+
+  /* Os mesmos atalhos, prontos para a home. O rótulo e o ícone vêm do catálogo
+     de telas, que é da casca — a home recebe a lista montada em vez de uma
+     cópia do catálogo. */
+  const homeShortcuts = useMemo(() => [
+    ...shortcutViews.favorites.map((id) => ({ id, label: viewCatalog[id].label, icon: viewCatalog[id].icon, fixed: true })),
+    ...shortcutViews.recents.map((id) => ({ id, label: viewCatalog[id].label, icon: viewCatalog[id].icon, fixed: false })),
+  ], [shortcutViews]);
+
   const stats = useMemo(() => {
     const active = scopedCards.filter((card) => card.slaStatus !== "completed");
     const waitingListIds = new Set(snapshot?.lists.filter((list) => list.slaBehavior === "paused").map((list) => list.id) ?? []);
@@ -1469,6 +1496,42 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <span aria-hidden="true"><LayoutDashboard /></span> Início
           </button>
 
+          {/* Atalhos (§67): o caminho curto para quem já sabe onde vai.
+              Organizar por processo tornou o menu compreensível e fundo ao
+              mesmo tempo — alcançar um destino custa dois níveis. Quem trabalha
+              em três destinos o dia inteiro paga esse preço dezenas de vezes
+              por dia, e é para essa pessoa que este bloco existe.
+              Ele não aparece vazio: um rótulo "ATALHOS" sobre nada anuncia uma
+              seção que não existe, e no primeiro dia de uso é exatamente isso
+              que haveria. */}
+          {(shortcutViews.favorites.length > 0 || shortcutViews.recents.length > 0) && (
+            <div className="sidebar-nav-group sidebar-shortcuts">
+              <span className="sidebar-nav-section">ATALHOS</span>
+              {shortcutViews.favorites.map((id, index) => {
+                const entry = viewCatalog[id];
+                const ItemIcon = entry.icon;
+                return <button key={`fav-${id}`} type="button" title={entry.label}
+                  style={{ "--stagger-index": index } as CSSProperties}
+                  className={`${view === id ? "active " : ""}sidebar-nav-item sidebar-shortcut mobile-secondary`}
+                  onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}>
+                  <span aria-hidden="true"><ItemIcon /></span> {entry.label}
+                  <Star aria-hidden="true" className="sidebar-shortcut-mark" />
+                </button>;
+              })}
+              {shortcutViews.recents.map((id, index) => {
+                const entry = viewCatalog[id];
+                const ItemIcon = entry.icon;
+                return <button key={`recent-${id}`} type="button" title={`${entry.label} — visitado recentemente`}
+                  style={{ "--stagger-index": shortcutViews.favorites.length + index } as CSSProperties}
+                  className={`${view === id ? "active " : ""}sidebar-nav-item sidebar-shortcut sidebar-shortcut-recent mobile-secondary`}
+                  onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}>
+                  <span aria-hidden="true"><ItemIcon /></span> {entry.label}
+                  <History aria-hidden="true" className="sidebar-shortcut-mark" />
+                </button>;
+              })}
+            </div>
+          )}
+
           {/* Duas famílias, cada uma com o próprio rótulo, e nenhuma desenhada
               quando fica vazia — um rótulo sozinho anuncia algo que não existe.
               O menu mostra o *processo*; os módulos dele só aparecem quando ele
@@ -1645,6 +1708,20 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                   <strong>{activeGroup.label}</strong>
                   <p>{activeGroup.description}</p>
                 </div>
+                {/* Onde se fixa um atalho (§67). Fica aqui, e não no menu,
+                    porque é aqui que a pessoa está quando descobre que volta
+                    sempre a esta tela — a decisão nasce do uso, não da lista. */}
+                <button type="button" className="process-context-pin"
+                  onClick={() => shortcuts.toggleFavorite(view)}
+                  aria-pressed={shortcuts.isFavorite(view)}
+                  title={shortcuts.isFavorite(view) ? "Remover dos atalhos" : "Fixar nos atalhos"}>
+                  <Star aria-hidden="true" />
+                  <span className="sr-only">
+                    {shortcuts.isFavorite(view)
+                      ? `Remover ${header.title} dos atalhos`
+                      : `Fixar ${header.title} nos atalhos`}
+                  </span>
+                </button>
               </div>
               {hasSubNavigation(activeGroup) ? (
                 <AnimatedTabs
@@ -1678,6 +1755,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
           {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations}
             processes={navGroups} processBadges={navBadges} onOpenProcess={(target) => setView(target as View)}
+            shortcuts={homeShortcuts}
             onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processManagement" && <ProcessManagementView role={snapshot.workspace.role} />}
@@ -1806,6 +1884,13 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
       {error && <div className="workspace-toast error" role="alert"><span>!</span>{error}<button onClick={() => setError("")}>×</button></div>}
       {toast && <div className="workspace-toast" role="status"><span>✓</span>{toast}</div>}
+      {/* O teto de favoritos precisa ser dito: sem o recado, marcar o nono
+          simplesmente não faria nada, e a pessoa concluiria que o botão está
+          quebrado. */}
+      {shortcuts.notice && <div className="workspace-toast error" role="alert">
+        <span>!</span>{shortcuts.notice}
+        <button type="button" onClick={shortcuts.dismissNotice} aria-label="Fechar aviso">×</button>
+      </div>}
       {busy && <div className="workspace-busy" aria-label="Salvando"><i /></div>}
 
       {searchOpen && (
@@ -2166,13 +2251,16 @@ function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
   </section>;
 }
 
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations, processes, processBadges, onOpenProcess }: {
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations, processes, processBadges, onOpenProcess, shortcuts }: {
   onNavigate: (target: ActionTarget) => void;
   /** Processos que esta pessoa alcança, no mesmo recorte do menu (§30). */
   processes: ReadonlyArray<{ id: string; label: string; description: string; views: readonly string[] }>;
   /** Contagens já apuradas pelo painel — o cartão do processo não consulta nada. */
   processBadges: Partial<Record<string, number>>;
   onOpenProcess: (view: string) => void;
+  /** Atalhos já montados pela casca: rótulo e ícone vêm do catálogo de telas,
+   *  que é dela. `fixed` separa o que a pessoa fixou do que ela só visitou. */
+  shortcuts: ReadonlyArray<{ id: string; label: string; icon: LucideIcon; fixed: boolean }>;
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
@@ -2207,6 +2295,36 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
       <ActionCenter onNavigate={onNavigate} companyId={companyId} />
       <ConnectionMap integrations={integrations} onNavigate={onNavigate} />
     </div>
+
+    {/* Retomar de onde parou (§67).
+        Fica acima de "Meus processos" de propósito: quem abre a home no meio
+        do expediente quase sempre está voltando a algo, não escolhendo um
+        processo do zero. E não aparece no primeiro dia de uso, quando ainda
+        não há nada a retomar — uma faixa vazia prometendo atalhos é pior que
+        faixa nenhuma. */}
+    {shortcuts.length > 0 && (
+      <section className="workspace-shortcuts" aria-labelledby="workspace-shortcuts-title">
+        <header>
+          <div>
+            <span>ATALHOS</span>
+            <h2 id="workspace-shortcuts-title">Continue de onde parou</h2>
+          </div>
+        </header>
+        <StaggerContainer className="workspace-shortcut-row">
+          {shortcuts.map((item, index) => {
+            const ItemIcon = item.icon;
+            return <StaggerItem key={`${item.fixed ? "fav" : "recent"}-${item.id}`} index={index}>
+              <button type="button" className="workspace-shortcut" data-fixed={item.fixed ? "true" : "false"}
+                onClick={() => onOpenProcess(item.id)}>
+                <span aria-hidden="true"><ItemIcon /></span>
+                <strong>{item.label}</strong>
+                <small>{item.fixed ? "Fixado" : "Recente"}</small>
+              </button>
+            </StaggerItem>;
+          })}
+        </StaggerContainer>
+      </section>
+    )}
 
     {/* "Meus processos" (§29).
         A §28 lista quatro perguntas que a home precisa responder, e esta é a

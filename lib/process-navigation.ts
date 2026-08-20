@@ -166,3 +166,21 @@ export function unknownProcessViews(allViews: readonly ProcessNavView[]) {
   const known = new Set(allViews);
   return processGroups.flatMap((group) => group.views).filter((view) => !known.has(view));
 }
+
+/**
+ * Toda tela que o menu conhece, incluindo a home.
+ *
+ * O servidor precisa desta lista para recusar chave inventada quando alguém
+ * marca um favorito (§67): sem ela, a rota gravaria qualquer texto e o menu
+ * mostraria um atalho para lugar nenhum. O catálogo de telas mora no
+ * componente do painel — que puxa React e não pode ser importado por uma rota
+ * — mas a estrutura mora aqui, e é ela que define o que existe.
+ */
+export function allProcessViews(): readonly ProcessNavView[] {
+  return [workspaceHomeView, ...processGroups.flatMap((group) => group.views)];
+}
+
+/** Se uma chave vinda do cliente nomeia uma tela que existe. */
+export function isKnownView(view: unknown): view is ProcessNavView {
+  return typeof view === "string" && allProcessViews().includes(view);
+}

@@ -15,3 +15,4 @@ export {
   type ModuleWindowRegistryItem,
   type ModuleWindowViewKey,
 } from "./module-window-registry";
+export { useShortcuts, type Shortcuts } from "./use-shortcuts";

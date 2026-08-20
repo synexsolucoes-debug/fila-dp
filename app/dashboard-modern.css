@@ -3384,6 +3384,129 @@
 
    `:empty` cobre o primeiro render, antes de o módulo montar o portal: sem
    isso o cabeçalho abriria com uma faixa vazia de 13px e uma borda solta. */
+/* ==========================================================================
+   Atalhos: favoritos e recentes (§67)
+   ==========================================================================
+   O caminho curto para quem já sabe onde vai. Organizar por processo tornou o
+   menu compreensível e fundo ao mesmo tempo — alcançar um destino custa dois
+   níveis, e quem trabalha em três destinos paga esse preço dezenas de vezes
+   por dia.
+
+   O bloco fica no topo da barra, acima de PROCESSOS, e é deliberadamente mais
+   discreto que eles: o atalho é conveniência, o processo é a estrutura. Se os
+   dois pesassem igual, a barra passaria a ter duas listas concorrendo pelo
+   mesmo olhar. */
+.sidebar-shortcuts { margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--ui-border); }
+
+.sidebar-shortcut { position: relative; font-size: 12.5px; }
+
+/* A marca diz de onde o atalho veio — fixado por escolha ou visitado há pouco.
+   Sem ela, os dois viram a mesma lista e a ordem parece arbitrária. */
+.sidebar-shortcut-mark {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--ui-accent-text);
+  opacity: .72;
+}
+
+.sidebar-shortcut-recent .sidebar-shortcut-mark { color: var(--ui-text-muted); opacity: .6; }
+
+/* O botão que fixa, no cabeçalho do processo: é ali que a pessoa está quando
+   descobre que volta sempre à mesma tela. */
+.process-context-pin {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
+  cursor: pointer;
+  transition: color var(--motion-hover) var(--ease-standard),
+    border-color var(--motion-hover) var(--ease-standard),
+    background var(--motion-hover) var(--ease-standard);
+}
+
+.process-context-pin:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
+.process-context-pin svg { width: 16px; height: 16px; }
+
+/* Marcado é preenchido, não só colorido: cor sozinha não distingue os dois
+   estados para quem não separa bem os tons (§85). */
+.process-context-pin[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, var(--ui-border));
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.process-context-pin[aria-pressed="true"] svg { fill: currentColor; }
+
+/* A faixa da home. Cartões pequenos, em linha, que rolam quando não cabem —
+   é um atalho, não uma seção que merece empurrar o resto da página. */
+.workspace-shortcuts { margin-bottom: var(--layout-section-gap); }
+
+.workspace-shortcuts > header { margin-bottom: 10px; }
+.workspace-shortcuts > header span {
+  display: block;
+  color: var(--ui-accent-text);
+  font-size: 10.5px;
+  font-weight: 820;
+  letter-spacing: .11em;
+}
+.workspace-shortcuts > header h2 { margin: 3px 0 0; font-size: 17px; letter-spacing: -.02em; }
+
+.workspace-shortcut-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace-shortcut {
+  min-width: 168px;
+  min-height: 58px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--motion-hover) var(--ease-standard),
+    border-color var(--motion-hover) var(--ease-standard),
+    background var(--motion-hover) var(--ease-standard);
+}
+
+.workspace-shortcut:hover { transform: translateY(-1px); border-color: var(--ui-border-strong); background: var(--ui-surface-elevated); }
+.workspace-shortcut:active { transform: scale(.985); }
+
+.workspace-shortcut > span {
+  grid-row: 1 / span 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-muted);
+  color: var(--ui-accent-text);
+}
+
+.workspace-shortcut > span svg { width: 16px; height: 16px; }
+.workspace-shortcut strong { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.workspace-shortcut small { color: var(--ui-text-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; }
+.workspace-shortcut[data-fixed="true"] > span { background: var(--ui-accent-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shortcut:hover, .workspace-shortcut:active { transform: none; }
+}
+
 .process-context-slot { flex: 1 1 100%; min-width: 0; padding-top: 12px; border-top: 1px solid var(--ui-border); }
 .process-context-slot:empty { display: none; }
 
