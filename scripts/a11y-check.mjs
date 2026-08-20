@@ -248,14 +248,7 @@ async function audit(label, path, setup) {
 }
 
 /**
- * Sub-abas de uma tela do painel.
- *
- * Auditar a visão de Cadastros cobria só a primeira aba. Prestadores PJ,
- * Colaboradores e Cadastros auxiliares são telas diferentes com formulários
- * diferentes — cada uma precisa passar por si.
- */
-/**
- * As abas de dentro do módulo — as que a barra lateral não alcança.
+ * As abas do módulo — os destinos que a barra lateral não alcança.
  *
  * Controle de EPI tem dez destinos próprios, a gestão de Processos tem nove, e
  * até aqui **nenhum deles era medido**: a varredura visitava o módulo, auditava
@@ -264,18 +257,26 @@ async function audit(label, path, setup) {
  * olhado — a mesma classe de ponto cego que o piso de cobertura existe para
  * acusar.
  *
- * O cabeçalho de processo fica de fora de propósito: as abas dele levam às
- * mesmas telas que o segundo nível do menu, que a varredura já percorreu.
- * Medir de novo infla o número sem medir nada novo, e um piso inflado é pior
- * que um piso baixo.
+ * O que fica de fora não é um lugar da tela, é uma repetição: as abas que
+ * levam ao mesmo destino que o segundo nível do menu, já percorrido. Medir de
+ * novo infla o número sem medir nada novo, e um piso inflado é pior que um
+ * piso baixo.
+ *
+ * Antes o filtro era por contêiner — tudo que estivesse no cabeçalho do
+ * processo era descartado. Isso valia enquanto o cabeçalho só mostrava módulos.
+ * Desde que ele passou a emprestar o lugar ao módulo (§70), o Controle de EPI
+ * entrega os seus dez destinos ali, e o filtro por contêiner os apagava da
+ * varredura: dez telas reais somem do relatório por estarem no lugar certo.
+ * Por isso a comparação agora é com os rótulos do menu, que é o que de fato
+ * define a duplicata.
  */
 async function auditModuleTabs(prefix) {
-  const dentro = '.dashboard-content [role="tab"], .dashboard-content [class*="tabs"] > button';
-  const fora = page.locator('.process-context [role="tab"]');
-  const foraLabels = new Set((await fora.allInnerTexts()).map((text) => text.trim().split("\n")[0]));
+  const dentro = '.process-context [role="tab"], .dashboard-content [role="tab"], .dashboard-content [class*="tabs"] > button';
+  const menu = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process-view');
+  const menuLabels = new Set((await menu.allInnerTexts()).map((text) => text.trim().split("\n")[0]));
   const tabs = page.locator(dentro);
   const labels = [...new Set((await tabs.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean))]
-    .filter((label) => !foraLabels.has(label));
+    .filter((label) => !menuLabels.has(label));
   // A primeira já foi auditada com o módulo: ela é o destino de entrada.
   for (const label of labels.slice(1)) {
     await tabs.filter({ hasText: label }).first().click().catch(() => undefined);

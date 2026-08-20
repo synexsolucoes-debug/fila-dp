@@ -83,18 +83,10 @@
 button.summaryCard { cursor: pointer; transition: border-color .14s ease, transform .14s ease; }
 button.summaryCard:hover { border-color: var(--epi-accent); transform: translateY(-1px); }
 
-.tabs { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--epi-border); margin-bottom: 12px; }
-.tabs button {
-  display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 12px; border: 0;
-  border-bottom: 2px solid transparent; background: transparent; color: var(--epi-soft);
-  font-size: .74rem; font-weight: 720; cursor: pointer;
-}
-.tabs button:hover { color: var(--epi-text); }
-.activeTab { border-bottom-color: var(--epi-accent) !important; color: var(--epi-accent-text) !important; }
-.tabs b {
-  min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--epi-muted);
-  font-size: .64rem; font-weight: 780;
-}
+/* A barra de abas do módulo saiu daqui: agora ela é a `AnimatedTabs` comum,
+   desenhada no cabeçalho do processo (§70). Este arquivo desenhava um terceiro
+   estilo de aba — sublinhado, sem indicador deslizante — para o mesmo gesto que
+   o resto do produto já tinha. */
 
 .filterBar { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
 .filterBar label { display: grid; gap: 4px; }

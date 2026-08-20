@@ -370,14 +370,20 @@ export function AnimatedTabs<T extends string>({ tabs, active, onChange, label, 
   className?: string;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const [indicator, setIndicator] = useState<{ offset: number; width: number } | null>(null);
+  const [indicator, setIndicator] = useState<{ offset: number; top: number; width: number; height: number } | null>(null);
   const id = useId();
 
+  // A linha também é medida: a barra quebra quando os destinos não cabem numa
+  // linha só, e um indicador que só soubesse a coluna marcaria o vazio acima
+  // da aba escolhida.
   const measure = useCallback(() => {
     const list = listRef.current;
     const current = list?.querySelector<HTMLElement>('[aria-selected="true"]');
     if (!list || !current) return;
-    setIndicator({ offset: current.offsetLeft, width: current.offsetWidth });
+    setIndicator({
+      offset: current.offsetLeft, top: current.offsetTop,
+      width: current.offsetWidth, height: current.offsetHeight,
+    });
   }, []);
 
   useLayoutEffect(() => { measure(); }, [measure, active, tabs]);
@@ -392,7 +398,9 @@ export function AnimatedTabs<T extends string>({ tabs, active, onChange, label, 
 
   const style = useMemo(() => ({
     "--tab-offset": `${indicator?.offset ?? 0}px`,
+    "--tab-top": `${indicator?.top ?? 0}px`,
     "--tab-width": `${indicator?.width ?? 0}px`,
+    "--tab-height": `${indicator?.height ?? 0}px`,
   } as CSSProperties), [indicator]);
 
   function onKeyDown(event: ReactKeyboardEvent) {

@@ -434,6 +434,32 @@ test("a interface explica o estoque do grupo e nunca envia CNPJ ao cadastro ou �
   assert.doesNotMatch(stockOperations, /companyId/u);
 });
 
+test("os dez destinos do módulo aparecem no cabeçalho do processo, com o mesmo desenho do resto (§70)", async () => {
+  /* O módulo tinha uma barra de abas própria — sublinhado, sem indicador
+     deslizante, 200px abaixo do topo — enquanto Pagamentos mostrava os seus
+     destinos no cabeçalho do processo. Duas gramáticas para o mesmo gesto.
+     Agora a barra é a `AnimatedTabs` comum e é desenhada por portal no lugar
+     que o cabeçalho reserva.
+
+     O módulo continua dono das abas: os contadores que elas exibem ("Entregas
+     12") vivem no estado dele, e levá-los para a casca faria a casca dona de
+     dados que não são dela. */
+  const view = await readFile(new URL("../app/painel/features/epi/EpiControlView.tsx", import.meta.url), "utf8");
+  assert.match(view, /<ProcessTabsSlot>\{bar\}<\/ProcessTabsSlot>/u);
+  assert.match(view, /<AnimatedTabs label="Áreas do Controle de EPI"/u);
+  // Fora de um processo não há destino para o portal — e as abas continuam
+  // aparecendo, no fluxo da página, em vez de sumirem.
+  assert.match(view, /return hasHeader \? <ProcessTabsSlot>\{bar\}<\/ProcessTabsSlot> : bar;/u);
+  // E a barra antiga não sobrou em lugar nenhum: dois desenhos de aba no mesmo
+  // módulo seria voltar ao ponto de partida.
+  assert.doesNotMatch(view, /className=\{styles\.tabs\}/u);
+  const css = await readFile(new URL("../app/painel/features/epi/epi.module.css", import.meta.url), "utf8");
+  assert.doesNotMatch(css, /^\.tabs\s/mu);
+  // Os dez destinos continuam existindo — a mudança é de lugar, não de escopo.
+  const catalogo = view.match(/const tabs: Array<\{[\s\S]*?\n\];/u)?.[0] ?? "";
+  assert.equal((catalogo.match(/\{ id: "/gu) ?? []).length, 10, "o módulo perdeu ou ganhou destinos");
+});
+
 test("áreas operacionais são N:N e governam a origem e o destino das demandas", async () => {
   assert.match(evolutionMigration, /CREATE TABLE "fdp_areas"/u);
   assert.match(evolutionMigration, /CREATE TABLE "fdp_area_members"/u);

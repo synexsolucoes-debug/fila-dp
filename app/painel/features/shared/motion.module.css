@@ -278,30 +278,34 @@
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface-muted);
-  /* Rola em vez de vazar. A gestão de processos tem nove seções e, em 1366px,
-     a última saía para fora do cartão — cortada, sem barra de rolagem e sem
-     nada indicando que existia mais. O indicador é `position: absolute` dentro
-     deste contêiner, então ele rola junto e continua marcando a aba certa. */
-  overflow-x: auto;
-  scrollbar-width: none;
+  /* Quebra em vez de vazar — e em vez de rolar.
+     A primeira versão deixava a barra vazar: a gestão de processos tem nove
+     seções e, em 1366px, a última saía do cartão, cortada. A segunda pôs
+     `overflow-x: auto` com a barra de rolagem escondida, o que trocou o corte
+     por um esconderijo: o Controle de EPI entrega dez destinos, dos quais dois
+     ficavam fora da vista em 1280px sem nada dizendo que existiam, e num
+     mouse sem roda horizontal não havia como chegar lá.
+     Quebrando, todos os destinos ficam visíveis o tempo todo. O preço é a
+     barra ocupar duas linhas nas telas estreitas — o que é o tamanho honesto
+     de dez destinos, e o indicador acompanha porque também mede a linha. */
+  flex-wrap: wrap;
 }
-
-.tabs::-webkit-scrollbar { display: none; }
 
 .tabsIndicator {
   position: absolute;
   z-index: 0;
-  top: 4px;
+  top: 0;
   left: 0;
-  height: calc(100% - 8px);
+  height: var(--tab-height, 0px);
   width: var(--tab-width, 0px);
   border-radius: calc(var(--ui-radius-md) - 3px);
   background: var(--ui-surface-elevated);
   box-shadow: var(--ui-shadow-card);
-  transform: translateX(var(--tab-offset, 0px));
+  transform: translate(var(--tab-offset, 0px), var(--tab-top, 0px));
   transition:
     transform var(--motion-dropdown) var(--ease-standard),
-    width var(--motion-dropdown) var(--ease-standard);
+    width var(--motion-dropdown) var(--ease-standard),
+    height var(--motion-dropdown) var(--ease-standard);
 }
 
 /* Antes da primeira medição não há posição para deslizar até: aparecer pronto

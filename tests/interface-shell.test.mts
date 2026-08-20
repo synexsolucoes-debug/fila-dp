@@ -273,6 +273,39 @@ test("todo preenchimento colorido declara o que se lê em cima dele", async () =
   assert.deepEqual([...orfaos], [], "token consumido e nunca declarado — a regra some sem avisar");
 });
 
+test("o token de preenchimento não é usado como cor de texto", async () => {
+  /* Um acento tem dois papéis e duas cores. `--pay-accent` é o que pinta o
+     fundo do botão primário; `--pay-accent-text` é a mesma família em um tom
+     que se lê sobre a página. Trocar um pelo outro não quebra nada visível no
+     tema claro, onde os dois quase coincidem — e some no escuro.
+     Foi o que aconteceu: `.secondaryButton:hover` em Pagamentos pintava o
+     texto com o preenchimento, e no tema escuro, dentro de Prestadores PJ, o
+     âmbar #9a5c20 sobre o navy #12203a dava 3.04:1. O botão ficava ilegível
+     exatamente quando o ponteiro estava em cima dele.
+     A varredura de acessibilidade só pegou isso por acaso, porque o ponteiro
+     parou ali depois de um clique. Este teste não depende de sorte. */
+  const raiz = new URL("../app/painel/features/", import.meta.url);
+  const infracoes: string[] = [];
+  for (const modulo of await readdir(raiz)) {
+    const dir = new URL(`${modulo}/`, raiz);
+    const arquivos = await readdir(dir).catch(() => [] as string[]);
+    for (const nome of arquivos.filter((arquivo) => arquivo.endsWith(".module.css"))) {
+      const conteudo = await readFile(new URL(nome, dir), "utf8");
+      conteudo.split("\n").forEach((linha, indice) => {
+        // `color:` — não `border-color:`, `background-color:` nem `caret-color:`,
+        // onde o preenchimento é justamente o token certo.
+        for (const uso of linha.matchAll(/(^|[^-\w])color:\s*var\(\s*(--[\w-]*-accent)\s*[,)]/gu)) {
+          // `--*-on-accent` é o par legítimo: o que se lê EM CIMA do
+          // preenchimento, dentro do botão que ele pinta.
+          if (uso[2].endsWith("-on-accent")) continue;
+          infracoes.push(`${modulo}/${nome}:${indice + 1} usa ${uso[2]} como cor de texto`);
+        }
+      });
+    }
+  }
+  assert.deepEqual(infracoes, [], "cor de texto precisa vir do token de texto, não do de preenchimento");
+});
+
 /* -------------------------------------------------------------------------- */
 /* Tokens de layout e de movimento (§42, §78)                                 */
 /* -------------------------------------------------------------------------- */

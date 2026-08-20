@@ -179,9 +179,20 @@ test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §
     "o cabeçalho do processo precisa vir antes da transição, e fora dela");
   // Abas com indicador deslizante (§17), não troca instantânea de cor.
   assert.match(source, /<AnimatedTabs\n\s+label=\{`Módulos de \$\{activeGroup\.label\}`\}/u);
-  // Um processo de um módulo só não ganha cabeçalho contextual: seria um
-  // título repetindo o título da tela logo abaixo.
-  assert.match(source, /\{activeGroup && hasSubNavigation\(activeGroup\) && \(/u);
+  // Todo processo ganha cabeçalho, inclusive o de um módulo só (§70).
+  //
+  // A regra anterior era o contrário — um processo de um módulo não tinha
+  // cabeçalho, para não repetir o título da tela logo abaixo. O que isso
+  // produzia era pior que a repetição: Pagamentos mostrava os seus destinos no
+  // topo, e a Gestão de EPI escondia os dez dela numa barra 200px abaixo, com
+  // outro desenho. Duas gramáticas para o mesmo gesto.
+  //
+  // Agora o cabeçalho é um só: mostra os módulos quando há mais de um, e
+  // empresta o lugar ao módulo quando há um — o módulo é quem tem os
+  // contadores das próprias abas.
+  assert.match(source, /\{activeGroup && \(/u);
+  assert.match(source, /hasSubNavigation\(activeGroup\) \? \(/u);
+  assert.match(source, /<div className="process-context-slot" ref=\{tabsTarget\} \/>/u);
 });
 
 test("a visibilidade é decidida num lugar só", () => {

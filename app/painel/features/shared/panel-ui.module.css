@@ -65,7 +65,7 @@
   border: 1px solid color-mix(in srgb, var(--ui-accent, var(--brand)) 25%, var(--ui-border));
   border-radius: 12px;
   background: var(--ui-accent-soft, var(--brand-soft));
-  color: var(--ui-accent, var(--brand));
+  color: var(--ui-accent-text, var(--brand));
 }
 .emptyState > span svg { width: 22px; height: 22px; }
 .emptyState > strong,
@@ -73,7 +73,7 @@
 .emptyState > p,
 .loadingState > span { max-width: 390px; margin: 0; color: var(--ui-text-soft); font-size: .67rem; line-height: 1.5; }
 .emptyState > .action { margin-top: 7px; }
-.loadingState > svg { width: 28px; height: 28px; color: var(--ui-accent, var(--brand)); }
+.loadingState > svg { width: 28px; height: 28px; color: var(--ui-accent-text, var(--brand)); }
 
 .statusPill {
   display: inline-flex;

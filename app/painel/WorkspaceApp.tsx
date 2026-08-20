@@ -55,7 +55,7 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, Wor
 import type { ActionTarget } from "@/lib/action-center";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
-import { AnimatedTabs, competenceLabel, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
+import { AnimatedTabs, competenceLabel, ProcessTabsProvider, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -1587,6 +1587,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         </header>
 
         <div className="dashboard-content">
+          <ProcessTabsProvider>{(tabsTarget) => <>
           {/* O contexto pode ter mudado sozinho porque o grupo anterior saiu do
               ar. Trocar em silêncio faria a pessoa achar que perdeu dados. */}
           {snapshot.switchedFrom && (
@@ -1603,7 +1604,14 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               dentro do mesmo processo não pode fazer o cabeçalho dele piscar,
               senão a troca de contexto — que é o que a §69 quer comunicar —
               deixa de se distinguir da troca de tela dentro do contexto. */}
-          {activeGroup && hasSubNavigation(activeGroup) && (
+          {/* Cabeçalho do processo (§69, §70), agora para todo processo.
+              Antes ele só aparecia quando o processo tinha mais de um módulo,
+              e o de um módulo só — Controle de EPI, com dez destinos próprios —
+              escondia os seus numa barra dentro do módulo, 200px abaixo e com
+              outro desenho. Eram duas gramáticas para "trocar de assunto dentro
+              do processo". Agora o cabeçalho é um só: ele mostra os módulos
+              quando há mais de um, e empresta o lugar ao módulo quando há um. */}
+          {activeGroup && (
             <section className="process-context" aria-label={`Processo ${activeGroup.label}`}>
               <div className="process-context-identity">
                 <span aria-hidden="true">{(() => {
@@ -1615,17 +1623,23 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
                   <p>{activeGroup.description}</p>
                 </div>
               </div>
-              <AnimatedTabs
-                label={`Módulos de ${activeGroup.label}`}
-                tabs={activeGroup.views.map((id) => ({
-                  id: id as View,
-                  label: viewCatalog[id as View].label,
-                  icon: viewCatalog[id as View].icon,
-                  badge: navBadges[id as View],
-                }))}
-                active={view}
-                onChange={setView}
-              />
+              {hasSubNavigation(activeGroup) ? (
+                <AnimatedTabs
+                  label={`Módulos de ${activeGroup.label}`}
+                  tabs={activeGroup.views.map((id) => ({
+                    id: id as View,
+                    label: viewCatalog[id as View].label,
+                    icon: viewCatalog[id as View].icon,
+                    badge: navBadges[id as View],
+                  }))}
+                  active={view}
+                  onChange={setView}
+                />
+              ) : (
+                /* Processo de um módulo só: o lugar das abas fica reservado e
+                   quem o preenche é o módulo, que é dono dos contadores. */
+                <div className="process-context-slot" ref={tabsTarget} />
+              )}
             </section>
           )}
 
@@ -1763,6 +1777,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} />}
           {view === "indicators" && <IndicatorsView canExportWorkspace={isAdmin} cards={scopedCards} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((item) => item.id === companyFilter)?.tradeName || snapshot.companies.find((item) => item.id === companyFilter)?.legalName || "Empresa selecionada")} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
           </PageTransition>
+          </>}</ProcessTabsProvider>
         </div>
       </section>
 

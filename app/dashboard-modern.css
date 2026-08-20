@@ -3376,13 +3376,21 @@
 .process-context-identity strong { display: block; color: var(--ui-text); font-size: 16px; letter-spacing: -.02em; }
 .process-context-identity p { margin: 3px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.45; }
 
+/* O lugar que o cabeçalho empresta ao módulo quando o processo tem um módulo
+   só (§70). Ele toma a linha inteira em vez de disputar espaço com o nome do
+   processo: o Controle de EPI entrega dez abas, que em 1366px não caberiam ao
+   lado da identidade sem virar o corte que a §94 proíbe. A barra em si já rola
+   quando precisa, então o que falta aqui é só a linha e a separação.
+
+   `:empty` cobre o primeiro render, antes de o módulo montar o portal: sem
+   isso o cabeçalho abriria com uma faixa vazia de 13px e uma borda solta. */
+.process-context-slot { flex: 1 1 100%; min-width: 0; padding-top: 12px; border-top: 1px solid var(--ui-border); }
+.process-context-slot:empty { display: none; }
+
 @keyframes fadeInSoft { from { opacity: 0; } to { opacity: 1; } }
 
 @media (max-width: 760px) {
   .process-context { padding: var(--layout-card-padding-compact); }
-  /* A barra de abas rola em vez de quebrar: um processo com quatro módulos
-     empilharia em quatro linhas e empurraria o conteúdo para fora da dobra. */
-  .process-context > [role="tablist"] { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 }
 
 .companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
@@ -3883,9 +3891,19 @@
 
 /* Alvos interativos: mínimo de 24px (WCAG 2.2 AA — 2.5.8). Vários selects e
    botões de apoio do painel mediam 15px de altura, o que é difícil de acertar
-   no toque e reprova na auditoria. */
-.dashboard-shell :is(select, button):not(.dashboard-sidebar button) { min-height: 24px; }
-.dashboard-shell :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
+   no toque e reprova na auditoria.
+
+   O `:where()` é o detalhe que faz isto ser um piso em vez de um teto. Escrita
+   com `.dashboard-shell` valendo especificidade, esta regra ganhava de toda
+   classe de módulo: "Cadastrar EPI" pede 38px de altura no CSS do próprio
+   módulo e era servido com 26px, junto com praticamente todo botão do painel.
+   O resultado era o tamanho irregular que se via na tela — botão grande no
+   desenho, botão apertado no produto — e a causa não estava em nenhum dos
+   módulos, estava aqui. Com `:where()` a regra passa a valer zero de
+   especificidade: quem não pede altura recebe os 24px, quem pede fica com a
+   sua. */
+:where(.dashboard-shell) :is(select, button):not(:where(.dashboard-sidebar button)) { min-height: 24px; }
+:where(.dashboard-shell) :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
 
 
 /* ==========================================================================
