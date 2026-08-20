@@ -411,9 +411,45 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   assert.match(dialogs, /Lançamento fixo do prestador/);
   assert.match(dialogs, /Sem término/);
   assert.match(dialogs, /Com término determinado/);
-  for (const section of ["Proventos", "Descontos", "Resultado final", "Nota a emitir", "Caju Saldo Livre"]) {
+  for (const section of ["Proventos", "Descontos"]) {
     assert.ok(contractorDetail.includes(section), `detalhamento PJ sem a seção ${section}`);
   }
+
+  assert.match(
+    contractorDetail,
+    /ContractorAnalyticalStatement/,
+    "detalhamento PJ deve integrar o extrato analítico",
+  );
+
+  const analyticalStatement = await readFile(
+    new URL(
+      "../app/painel/features/payments/ContractorAnalyticalStatement.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  for (const section of [
+    "Resumo da conferência",
+    "Total de proventos",
+    "Total de descontos",
+    "Líquido devido",
+    "Complemento Caju",
+    "Valor em Nota Fiscal",
+    "Valor da NF recebida",
+    "Diferença da NF",
+  ]) {
+    assert.ok(
+      analyticalStatement.includes(section),
+      `extrato analítico PJ sem a seção ${section}`,
+    );
+  }
+
+  assert.doesNotMatch(
+    analyticalStatement,
+    /Caju previsto|Caju realizado|Diferença Caju/i,
+    "extrato deve apresentar somente o Complemento Caju",
+  );
   assert.match(contractorDetail, /aria-modal="true"/);
   assert.match(view, /openContractorDetail\(row\.id\)/);
 });
