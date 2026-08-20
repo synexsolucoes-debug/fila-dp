@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FormEvent, useState } from "react";
 import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
@@ -23,7 +23,7 @@ export function LoginForm() {
         body: JSON.stringify({ email, password, returnTo }),
       });
       const payload = await response.json() as { error?: string; redirectTo?: string };
-      if (!response.ok) throw new Error(payload.error || "NÃ£o foi possÃ­vel concluir o acesso.");
+      if (!response.ok) throw new Error(payload.error || "Não foi possível concluir o acesso.");
       const destination = payload.redirectTo || "/painel";
 
       const reducedMotion = window.matchMedia(
@@ -37,7 +37,7 @@ export function LoginForm() {
 
       setLoginDestination(destination);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "NÃ£o foi possÃ­vel concluir o acesso.");
+      setError(cause instanceof Error ? cause.message : "Não foi possível concluir o acesso.");
       setBusy(false);
     }
   }
@@ -45,6 +45,7 @@ export function LoginForm() {
   if (loginDestination) {
     return <LoginIntroMotion destination={loginDestination} />;
   }
+
   return (
     <>
       <span className="auth-status neutral"><ShieldCheck aria-hidden="true" /> Acesso administrado</span>
@@ -52,13 +53,12 @@ export function LoginForm() {
       <p>Use o e-mail e a senha liberados pelo administrador do seu grupo.</p>
       <form className="auth-login-form" onSubmit={submit}>
         <label>E-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
-        <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} autoComplete="current-password" required /><small>MÃ­nimo de 8 caracteres.</small></label>
+        <label>Senha<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} autoComplete="current-password" required /><small>Mínimo de 8 caracteres.</small></label>
         {error && <p className="auth-login-error" role="alert">{error}</p>}
-        <button className="button auth-primary" disabled={busy}>{busy ? "Aguardeâ€¦" : "Entrar"}<ArrowRight aria-hidden="true" /></button>
+        <button className="button auth-primary" disabled={busy}>{busy ? "Aguarde…" : "Entrar"}<ArrowRight aria-hidden="true" /></button>
       </form>
-      <p className="auth-recovery-hint">Primeiro acesso ou senha esquecida? PeÃ§a ao administrador do grupo um novo link de ativaÃ§Ã£o.</p>
+      <p className="auth-recovery-hint">Primeiro acesso ou senha esquecida? Peça ao administrador do grupo um novo link de ativação.</p>
       <div className="auth-security-note"><CheckCircle2 aria-hidden="true" /><p>O administrador define o papel, as empresas permitidas e pode revogar o acesso a qualquer momento.</p></div>
     </>
   );
 }
-
