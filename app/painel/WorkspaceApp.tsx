@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Archive,
   ArrowRight,
@@ -30,6 +30,8 @@ import {
   MessageSquareMore,
 
   MoreHorizontal,
+  Moon,
+  Sun,
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
@@ -53,8 +55,9 @@ import {
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
+import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
-import { competenceLabel, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules } from "./features/shared";
+import { AnimatedTabs, competenceLabel, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -149,14 +152,30 @@ const processColors: Record<string, string> = {
  * treze itens — e Cadastros, Relatórios e Estado das integrações não são
  * operação. Rótulo que não descreve o que está embaixo é pior que nenhum.
  */
-type NavSection = "operacao" | "pessoas" | "financeiro" | "dados";
+/**
+ * Ícone de cada processo (§25, §70).
+ *
+ * A estrutura — quais processos existem e que módulos moram em cada um — vive
+ * em `lib/process-navigation.ts`, que é puro e testável. O que fica aqui é só
+ * o desenho: o ícone que representa o processo no menu e no cabeçalho
+ * contextual. Separar os dois evita que um módulo puro precise importar React.
+ */
+const processGroupIcons: Record<string, LucideIcon> = {
+  "operacao-dp": ClipboardCheck,
+  pagamentos: WalletCards,
+  epi: HardHat,
+  jornada: Timer,
+  desenho: Workflow,
+  cadastros: Users,
+  analise: BarChart3,
+};
 
-const navSections: Array<{ id: NavSection; label: string }> = [
-  { id: "operacao", label: "OPERAÇÃO" },
-  { id: "pessoas", label: "PESSOAS E CADASTROS" },
-  { id: "financeiro", label: "FINANCEIRO" },
-  { id: "dados", label: "DADOS E ANÁLISE" },
-];
+/** Rótulo das duas famílias do menu. "Processos" é o que a operação executa;
+ *  "Apoio" é a base e a leitura sobre as quais eles rodam (§27). */
+const processKindLabels: Record<string, string> = {
+  process: "PROCESSOS",
+  support: "APOIO E GOVERNANÇA",
+};
 
 type ViewEntry = {
   /** Título curto: menu lateral e contexto do assistente. */
@@ -165,7 +184,6 @@ type ViewEntry = {
   title: string;
   description: string;
   icon: LucideIcon;
-  section: NavSection;
   /** Rota do catálogo de módulos. Ausente = sempre disponível. */
   module?: string;
   /** Papéis que não veem a tela. A regra ficava repetida em sete botões. */
@@ -178,83 +196,83 @@ type ViewEntry = {
 
 const viewCatalog: Record<View, ViewEntry> = {
   overview: {
-    label: "Visão geral", icon: LayoutDashboard, section: "operacao",
+    label: "Visão geral", icon: LayoutDashboard,
     eyebrow: "VISÃO GERAL", title: "Visão geral",
     description: "Acompanhe o que exige ação e mantenha a operação sob controle.",
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
   board: {
-    label: "Demandas", icon: ListChecks, section: "operacao",
+    label: "Demandas", icon: ListChecks,
     eyebrow: "DEMANDAS", title: "Quadro de demandas",
     description: "Acompanhe prioridades, responsáveis e próximos passos.",
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
   inbox: {
-    label: "Inbox", icon: Inbox, section: "operacao", module: "inbox",
+    label: "Inbox", icon: Inbox, module: "inbox",
     eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada",
     description: "Transforme solicitações recebidas em demandas rastreáveis.",
     primaryAction: { label: "Nova solicitação", kind: "inbox" },
   },
   planner: {
-    label: "Planner", icon: CalendarDays, section: "operacao", module: "planner",
+    label: "Planner", icon: CalendarDays, module: "planner",
     eyebrow: "AGENDA DO ANALISTA", title: "Meu planner",
     description: "Organize sua execução a partir dos prazos da operação.",
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
   processManagement: {
-    label: "Processos", icon: Workflow, section: "operacao", module: "processes", hiddenFor: ["guest"],
+    label: "Processos", icon: Workflow, module: "processes", hiddenFor: ["guest"],
     eyebrow: "GESTÃO E MODELAGEM", title: "Processos",
     description: "Desenhe, documente, versione e publique processos BPMN ligados às áreas, empresas e responsabilidades do grupo.",
   },
   processes: {
-    label: "Operação DP", icon: ClipboardCheck, section: "operacao", module: "processes",
+    label: "Operação DP", icon: ClipboardCheck, module: "processes",
     eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento",
     description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides.",
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
   auxiliary: {
-    label: "Módulos auxiliares", icon: Blocks, section: "operacao", module: "auxiliary", hiddenFor: ["guest"],
+    label: "Módulos auxiliares", icon: Blocks, module: "auxiliary", hiddenFor: ["guest"],
     eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares",
     description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ.",
   },
   registrations: {
-    label: "Cadastros", icon: Users, section: "pessoas", module: "registrations", hiddenFor: ["guest"],
+    label: "Cadastros", icon: Users, module: "registrations", hiddenFor: ["guest"],
     eyebrow: "BASE OPERACIONAL", title: "Cadastros",
     description: "Administre empresas, colaboradores e estruturas auxiliares em um só lugar.",
   },
   timeTracking: {
-    label: "Ponto", icon: Timer, section: "pessoas", module: "timeTracking", hiddenFor: ["guest"],
+    label: "Ponto", icon: Timer, module: "timeTracking", hiddenFor: ["guest"],
     eyebrow: "CONFERÊNCIA OPERACIONAL", title: "Ponto",
     description: "Confira marcações, trate inconsistências e envie os eventos de hora para a folha com a rubrica configurada.",
   },
   epi: {
-    label: "Controle de EPI", icon: HardHat, section: "pessoas", module: "epi", hiddenFor: ["guest"],
+    label: "Controle de EPI", icon: HardHat, module: "epi", hiddenFor: ["guest"],
     eyebrow: "SEGURANÇA DO TRABALHO", title: "Controle de EPI",
     description: "Cadastro, entrega, devolução, troca, descarte e análise de desconto de equipamentos de proteção.",
   },
   payroll: {
-    label: "Folha", icon: WalletCards, section: "financeiro", module: "payroll",
+    label: "Folha", icon: WalletCards, module: "payroll",
     eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento",
     description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente.",
   },
   psychologistPayments: {
-    label: "Pagamento de Psicólogos", icon: Stethoscope, section: "financeiro",
+    label: "Pagamento de Psicólogos", icon: Stethoscope,
     module: "psychologistPayments", hiddenFor: ["guest", "observer"],
     eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos",
     description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro.",
   },
   contractorPayments: {
-    label: "Pagamentos PJ", icon: Receipt, section: "financeiro", module: "contractorPayments", hiddenFor: ["guest"],
+    label: "Pagamentos PJ", icon: Receipt, module: "contractorPayments", hiddenFor: ["guest"],
     eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ",
     description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado.",
   },
   indicators: {
-    label: "Relatórios", icon: BarChart3, section: "dados", module: "indicators",
+    label: "Relatórios", icon: BarChart3, module: "indicators",
     eyebrow: "RELATÓRIOS", title: "Relatórios da operação",
     description: "Monitore SLAs, volume, produtividade e regras ativas do workspace.",
   },
   integrations: {
-    label: "Estado das integrações", icon: Cable, section: "dados", module: "integrations", hiddenFor: ["guest"],
+    label: "Estado das integrações", icon: Cable, module: "integrations", hiddenFor: ["guest"],
     eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Estado das integrações",
     description: "Acompanhe conexões e últimas execuções deste workspace. A administração fica na console global.",
   },
@@ -285,6 +303,12 @@ const searchRecordColors: Record<string, string> = {
   company: "blue", employee: "green", psychologist: "purple",
   contractor: "orange", competence: "blue", integration: "gray",
 };
+
+/** Onde a escolha de tema fica guardada. Chave nova: a antiga era apagada a
+ *  cada carregamento pela versão que fixava o escuro, e reaproveitá-la faria
+ *  o painel abrir com o valor que aquele código deixou para trás. */
+const themeStorageKey = "vinculato-theme";
+type ThemeChoice = "light" | "dark";
 
 const roleLabels: Record<WorkspaceRole, string> = {
   admin: "Administrador",
@@ -556,19 +580,49 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [newBoardDescription, setNewBoardDescription] = useState("");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // O escuro continua sendo o padrão do produto; a preferência guardada e a do
+  // sistema operacional entram no primeiro quadro, já no cliente.
+  const [theme, setTheme] = useState<ThemeChoice>("dark");
   const [assistantSignal, setAssistantSignal] = useState(0);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("syncing");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const sidebarPreferenceLoaded = useRef(false);
+  const themePreferenceLoaded = useRef(false);
   const mobileNavigationRef = useRef<HTMLDetailsElement>(null);
   const realtimeCursorRef = useRef("");
   const touchCardMoveRef = useRef<{ cardId: string; x: number; y: number } | null>(null);
   const suppressCardOpenRef = useRef<string | null>(null);
 
+  /**
+   * Tema (§5, §6, §7, §12).
+   *
+   * A versão anterior apagava a preferência a cada carregamento e fixava o
+   * escuro. O motivo original era bom — o claro de então era `#ffffff` de
+   * cartão sobre `#f5f7f9` de fundo, 1,03:1, e não dava para ver onde um
+   * cartão começava. A resposta certa era consertar o claro, não retirá-lo:
+   * quem opera sob luz de escritório o dia inteiro tem motivo para querê-lo,
+   * e as duas escalas agora têm os mesmos quatro degraus tonalizados.
+   *
+   * Sem preferência guardada, o sistema operacional decide. Só depois de um
+   * clique explícito a escolha passa a valer sobre ele.
+   */
   useEffect(() => {
-    document.documentElement.style.colorScheme = "dark";
-    window.localStorage.removeItem("fila-dp-theme");
+    const frame = window.requestAnimationFrame(() => {
+      const stored = window.localStorage.getItem(themeStorageKey);
+      if (stored === "light" || stored === "dark") setTheme(stored);
+      else if (window.matchMedia?.("(prefers-color-scheme: light)").matches) setTheme("light");
+      themePreferenceLoaded.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    // `color-scheme` é o que faz a barra de rolagem, o seletor de data e os
+    // controles nativos do navegador acompanharem o tema. Sem ele o painel
+    // escuro abre um calendário branco.
+    document.documentElement.style.colorScheme = theme;
+    if (themePreferenceLoaded.current) window.localStorage.setItem(themeStorageKey, theme);
+  }, [theme]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -805,6 +859,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const navBadges = useMemo<Partial<Record<View, number>>>(() => ({
     inbox: snapshot?.inbox.filter((item) => item.status === "new").length || undefined,
   }), [snapshot]);
+
+  /* Os processos que esta pessoa alcança, e em qual deles ela está.
+     `visibleProcessGroups` recebe o recorte já pronto — plano e papel — e é o
+     único caminho para o menu, para a subnavegação e para os cartões da home.
+     Um processo cujas telas estejam todas fora do alcance não aparece em lugar
+     nenhum, que é o que a §30 exige. */
+  const navGroups = useMemo(() => visibleProcessGroups(visibleViews), [visibleViews]);
+  const activeGroup = useMemo(
+    () => navGroups.find((group) => group.views.includes(view)) ?? null,
+    [navGroups, view],
+  );
 
   const stats = useMemo(() => {
     const active = scopedCards.filter((card) => card.slaStatus !== "completed");
@@ -1362,15 +1427,16 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
 
   return (
-    <main className={`dashboard-shell theme-dark${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <main className={`dashboard-shell theme-${theme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
-          {/* A barra lateral virou clara: o logotipo branco sumiria nela. A
-              variante segue o tema, em vez de assumir fundo escuro. */}
-          <VinculatoLogo size={28} tone="light" />
+          {/* A barra lateral é superfície nos dois temas: no claro o logotipo
+              branco sumiria nela. A variante segue o tema, em vez de assumir
+              fundo escuro. */}
+          <VinculatoLogo size={28} tone={theme === "dark" ? "light" : "color"} />
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>
@@ -1378,23 +1444,55 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <small>{principalCompany ? `Principal: ${principalCompany.tradeName || principalCompany.legalName}` : "Defina a empresa principal"}</small>
         </div>
         <nav aria-label="Navegação do painel">
-          {/* Seção sem item visível não é renderizada: um rótulo sozinho diz
-              que existe algo ali e não há. */}
-          {navSections.map((section) => {
-            const items = visibleViews.filter((id) => viewCatalog[id].section === section.id);
-            if (!items.length) return null;
-            return <div key={section.id} className="sidebar-nav-group">
-              <span className="sidebar-nav-section">{section.label}</span>
-              {items.map((id) => {
-                const entry = viewCatalog[id];
-                const Icon = entry.icon;
-                const badge = navBadges[id];
-                const mobilePosition = mobilePrimaryViews.has(id) ? "mobile-primary" : "mobile-secondary";
-                return <button key={id} type="button" title={entry.label} className={`${view === id ? "active " : ""}sidebar-nav-item ${mobilePosition}`}
-                  onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}>
-                  <span aria-hidden="true"><Icon /></span> {entry.label}
-                  {badge ? <b>{badge}</b> : null}
-                </button>;
+          {/* A home fica fora de qualquer processo: ela é a porta para todos.
+              Pô-la dentro de um deles diria que a visão da operação pertence a
+              um processo específico, e ela é justamente o contrário. */}
+          <button type="button" title="Início" className={`${view === "overview" ? "active " : ""}sidebar-nav-item sidebar-nav-home mobile-primary`}
+            onClick={() => setView("overview")} aria-current={view === "overview" ? "page" : undefined}>
+            <span aria-hidden="true"><LayoutDashboard /></span> Início
+          </button>
+
+          {/* Duas famílias, cada uma com o próprio rótulo, e nenhuma desenhada
+              quando fica vazia — um rótulo sozinho anuncia algo que não existe.
+              O menu mostra o *processo*; os módulos dele só aparecem quando ele
+              é o processo aberto (§66). Sem isso a barra volta a ter quinze
+              itens simultâneos, que é o que a §64 pede para acabar. */}
+          {(["process", "support"] as const).map((kind) => {
+            const groups = navGroups.filter((group) => group.kind === kind);
+            if (!groups.length) return null;
+            return <div key={kind} className="sidebar-nav-group">
+              <span className="sidebar-nav-section">{processKindLabels[kind]}</span>
+              {groups.map((group) => {
+                const GroupIcon = processGroupIcons[group.id] ?? Blocks;
+                const open = activeGroup?.id === group.id;
+                const entrance = group.views[0];
+                const groupBadge = group.views.reduce((total, id) => total + (navBadges[id as View] ?? 0), 0);
+                const sub = hasSubNavigation(group);
+                return <div key={group.id} className="sidebar-process">
+                  <button type="button" title={group.label}
+                    className={`${open && (!sub || view === entrance) ? "active " : ""}${open ? "open " : ""}sidebar-nav-item sidebar-process-item ${mobilePrimaryViews.has(entrance as View) ? "mobile-primary" : "mobile-secondary"}`}
+                    onClick={() => setView(entrance as View)}
+                    aria-current={open && !sub ? "page" : undefined}
+                    aria-expanded={sub ? open : undefined}>
+                    <span aria-hidden="true"><GroupIcon /></span> {group.label}
+                    {groupBadge ? <b>{groupBadge}</b> : null}
+                  </button>
+                  {/* Os módulos do processo aberto. `hidden` em vez de não
+                      renderizar: o `details` da navegação compacta já
+                      alcança todos, e remontar a lista a cada troca perderia
+                      a animação de entrada dela. */}
+                  {sub && open && <div className="sidebar-process-views" role="group" aria-label={`Módulos de ${group.label}`}>
+                    {group.views.map((id, index) => {
+                      const entry = viewCatalog[id as View];
+                      const badge = navBadges[id as View];
+                      return <button key={id} type="button" style={{ "--stagger-index": index } as CSSProperties}
+                        className={`${view === id ? "active " : ""}sidebar-process-view`}
+                        onClick={() => setView(id as View)} aria-current={view === id ? "page" : undefined}>
+                        {entry.label}{badge ? <b>{badge}</b> : null}
+                      </button>;
+                    })}
+                  </div>}
+                </div>;
               })}
             </div>;
           })}
@@ -1403,17 +1501,17 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               <span aria-hidden="true"><MoreHorizontal /></span><span>Mais</span>
             </summary>
             <div className="sidebar-mobile-more-panel">
-              {navSections.map((section) => {
-                const items = visibleViews.filter((id) => !mobilePrimaryViews.has(id) && viewCatalog[id].section === section.id);
+              {navGroups.map((group) => {
+                const items = group.views.filter((id) => !mobilePrimaryViews.has(id as View));
                 if (!items.length) return null;
-                return <section key={section.id} aria-labelledby={`mobile-nav-${section.id}`}>
-                  <span id={`mobile-nav-${section.id}`}>{section.label}</span>
+                return <section key={group.id} aria-labelledby={`mobile-nav-${group.id}`}>
+                  <span id={`mobile-nav-${group.id}`}>{group.label.toUpperCase()}</span>
                   <div>{items.map((id) => {
-                    const entry = viewCatalog[id];
+                    const entry = viewCatalog[id as View];
                     const Icon = entry.icon;
-                    const badge = navBadges[id];
+                    const badge = navBadges[id as View];
                     return <button key={id} type="button" className={view === id ? "active" : ""}
-                      onClick={() => { setView(id); mobileNavigationRef.current?.removeAttribute("open"); }}
+                      onClick={() => { setView(id as View); mobileNavigationRef.current?.removeAttribute("open"); }}
                       aria-current={view === id ? "page" : undefined}>
                       <span aria-hidden="true"><Icon /></span><span>{entry.label}</span>{badge ? <b>{badge}</b> : null}
                     </button>;
@@ -1482,7 +1580,14 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
-            
+            {/* `aria-pressed` em vez de dois botões: é um estado do mesmo
+                comando, e o leitor de tela anuncia qual está valendo. */}
+            <button className="theme-toggle" aria-label={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
+              aria-pressed={theme === "dark"} title={theme === "dark" ? "Tema claro" : "Tema escuro"}
+              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}>
+              {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+            </button>
+
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
             {/* A ação primária vem do catálogo, não de uma lista de exceções.
                 A versão anterior aparecia por negação — seis `view !== "…"` —,
@@ -1507,10 +1612,41 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
               </span>
             </p>
           )}
-          {/* `key={view}` faz o React remontar este bloco a cada troca de
-              módulo, o que reinicia a animação de entrada. Sem a chave, a
-              transição só rodaria na primeira vez. */}
-          <div className="view-transition" key={view}>
+          {/* Cabeçalho do processo (§69, §70).
+              Fica FORA da transição de módulo de propósito: trocar de aba
+              dentro do mesmo processo não pode fazer o cabeçalho dele piscar,
+              senão a troca de contexto — que é o que a §69 quer comunicar —
+              deixa de se distinguir da troca de tela dentro do contexto. */}
+          {activeGroup && hasSubNavigation(activeGroup) && (
+            <section className="process-context" aria-label={`Processo ${activeGroup.label}`}>
+              <div className="process-context-identity">
+                <span aria-hidden="true">{(() => {
+                  const GroupIcon = processGroupIcons[activeGroup.id] ?? Blocks;
+                  return <GroupIcon />;
+                })()}</span>
+                <div>
+                  <strong>{activeGroup.label}</strong>
+                  <p>{activeGroup.description}</p>
+                </div>
+              </div>
+              <AnimatedTabs
+                label={`Módulos de ${activeGroup.label}`}
+                tabs={activeGroup.views.map((id) => ({
+                  id: id as View,
+                  label: viewCatalog[id as View].label,
+                  icon: viewCatalog[id as View].icon,
+                  badge: navBadges[id as View],
+                }))}
+                active={view}
+                onChange={setView}
+              />
+            </section>
+          )}
+
+          {/* `transitionKey` remonta este bloco a cada troca de módulo, o que
+              reinicia a animação de entrada. Sem a chave, a transição só
+              rodaria na primeira vez. */}
+          <PageTransition transitionKey={view} className="view-transition">
           <div className="dashboard-heading">
             <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{view === "overview" ? `Olá, ${user.displayName.split(" ")[0] || "equipe"}.` : header.title}</h1><p>{view === "overview" ? "Veja as prioridades da operação e avance com segurança." : header.description}</p><div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div></div>
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
@@ -1637,7 +1773,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} />}
           {view === "indicators" && <IndicatorsView canExportWorkspace={isAdmin} cards={scopedCards} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((item) => item.id === companyFilter)?.tradeName || snapshot.companies.find((item) => item.id === companyFilter)?.legalName || "Empresa selecionada")} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
-          </div>
+          </PageTransition>
         </div>
       </section>
 

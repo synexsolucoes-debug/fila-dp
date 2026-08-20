@@ -69,7 +69,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  colorScheme: "dark",
+  // Os dois, com o escuro primeiro: é o padrão do painel, mas o claro voltou a
+  // existir (§6) e o navegador precisa saber que a página o suporta antes de
+  // decidir a cor dos controles nativos.
+  colorScheme: "dark light",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

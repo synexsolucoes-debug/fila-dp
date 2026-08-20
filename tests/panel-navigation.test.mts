@@ -22,35 +22,85 @@ const catalog = source.slice(source.indexOf("const viewCatalog: Record<View, Vie
 const views = (source.match(/^type View = (.+);$/mu)?.[1] ?? "")
   .split("|").map((part) => part.trim().replace(/"/gu, "")).filter(Boolean);
 
-test("toda tela do painel está no catálogo, com seção declarada", () => {
+test("toda tela do painel está no catálogo", () => {
   assert.ok(views.length >= 13, "o tipo View não foi lido");
   for (const view of views) {
     assert.match(catalog, new RegExp(`\\n  ${view}: \\{`, "u"), `${view} fora do catálogo`);
   }
-  // `Record<View, ViewEntry>` já obriga a completude no compilador; esta
-  // conferência existe para o caso de o tipo afrouxar.
-  const declaradas = catalog.match(/section: "(\w+)"/gu) ?? [];
-  assert.equal(declaradas.length, views.length, "toda tela precisa de uma seção");
 });
 
-test("as seções do menu têm rótulo honesto e nenhuma fica vazia por construção", () => {
-  const sections = source.slice(source.indexOf("const navSections"), source.indexOf("type ViewEntry"));
-  for (const [id, label] of [["operacao", "OPERAÇÃO"], ["pessoas", "PESSOAS E CADASTROS"],
-    ["financeiro", "FINANCEIRO"], ["dados", "DADOS E ANÁLISE"]]) {
-    assert.match(sections, new RegExp(`id: "${id}", label: "${label}"`, "u"));
-    assert.match(catalog, new RegExp(`section: "${id}"`, "u"), `a seção ${id} não tem nenhuma tela`);
+/**
+ * §25 e §64: o menu deixou de agrupar por departamento e passou a agrupar por
+ * processo.
+ *
+ * Os quatro rótulos anteriores — OPERAÇÃO, PESSOAS E CADASTROS, FINANCEIRO,
+ * DADOS E ANÁLISE — respondiam "de quem é esta tela". Quem apura uma
+ * competência de PJ atravessava três deles para um processo só. A estrutura
+ * agora mora num módulo puro, e é lá que estes testes a cobram: o componente
+ * só desenha o que ele decide.
+ */
+test("a estrutura por processo é decidida num módulo puro, não no componente", async () => {
+  const nav = await readFile(new URL("../lib/process-navigation.ts", import.meta.url), "utf8");
+  // Sem React nem ícone: um módulo puro é o que permite testar a estrutura sem
+  // montar a árvore, e o que impede o menu de virar a quinta lista paralela.
+  assert.doesNotMatch(nav, /from "react"|lucide-react/u);
+  assert.match(source, /import \{ hasSubNavigation, visibleProcessGroups \} from "@\/lib\/process-navigation"/u);
+  // O componente não pode ter uma segunda cópia da estrutura.
+  assert.doesNotMatch(source, /const navSections/u, "a lista por departamento não pode voltar");
+  assert.doesNotMatch(catalog, /section: "/u, "a seção por departamento saiu do catálogo");
+});
+
+test("todo processo tem nome, descrição e ao menos um módulo", async () => {
+  const { processGroups } = await import("../lib/process-navigation.ts");
+  assert.ok(processGroups.length >= 5, "a estrutura por processo não foi lida");
+  for (const group of processGroups) {
+    assert.ok(group.label.length > 2, `${group.id} sem nome`);
+    // A descrição vira o subtítulo do cabeçalho contextual da §70. Um grupo
+    // sem ela é pasta sem explicação.
+    assert.ok(group.description.length > 30, `${group.id} precisa de uma linha do que o processo faz`);
+    assert.ok(group.views.length >= 1, `${group.id} sem módulo nenhum`);
   }
-  // Uma seção pode ficar vazia em tempo de execução — plano sem o módulo,
-  // papel sem acesso — e nesse caso ela não é desenhada.
-  assert.match(source, /if \(!items\.length\) return null;/u);
 });
 
-test("Cadastros e Relatórios deixaram de ser anunciados como operação", () => {
-  // O defeito concreto que a §17 aponta.
-  const registrations = catalog.slice(catalog.indexOf("  registrations: {"));
-  assert.match(registrations.slice(0, 240), /section: "pessoas"/u);
-  const indicators = catalog.slice(catalog.indexOf("  indicators: {"));
-  assert.match(indicators.slice(0, 240), /section: "dados"/u);
+test("toda tela pertence a exatamente um processo, e todo processo aponta para tela que existe", async () => {
+  // O modo de falhar aqui é silencioso: uma tela nova fora de qualquer grupo
+  // some do menu sem erro de compilação e sem tela em branco.
+  const { viewsWithoutProcess, unknownProcessViews, processGroups } = await import("../lib/process-navigation.ts");
+  assert.deepEqual(viewsWithoutProcess(views), [], "tela sem processo: ela não tem porta no menu");
+  assert.deepEqual(unknownProcessViews(views), [], "processo apontando para tela que não existe");
+
+  const vistas = processGroups.flatMap((group) => group.views);
+  assert.equal(new Set(vistas).size, vistas.length, "uma tela em dois processos: o menu a mostraria duas vezes");
+});
+
+test("a Operação DP e os Pagamentos agrupam o que a §26 pede junto", async () => {
+  const { groupOfView } = await import("../lib/process-navigation.ts");
+  // O exemplo literal da §26: demandas, inbox e planner sob a operação.
+  for (const view of ["board", "inbox", "planner", "processes"]) {
+    assert.equal(groupOfView(view)?.id, "operacao-dp", `${view} deveria estar na Operação DP`);
+  }
+  // E a competência de PJ deixa de atravessar três seções.
+  for (const view of ["contractorPayments", "psychologistPayments", "auxiliary", "payroll"]) {
+    assert.equal(groupOfView(view)?.id, "pagamentos", `${view} deveria estar em Pagamentos`);
+  }
+  assert.equal(groupOfView("epi")?.id, "epi");
+  // A home não mora em processo nenhum: ela é a porta para todos.
+  assert.equal(groupOfView("overview"), null);
+});
+
+test("um processo sem tela alcançável não vira item de menu (§30)", async () => {
+  const { visibleProcessGroups, hasSubNavigation } = await import("../lib/process-navigation.ts");
+  // Papel sem acesso a EPI, plano sem os módulos de pagamento: os processos
+  // somem inteiros em vez de virarem pastas vazias.
+  const grupos = visibleProcessGroups(["overview", "board", "inbox"]);
+  assert.deepEqual(grupos.map((group) => group.id), ["operacao-dp"]);
+  assert.deepEqual(grupos[0].views, ["board", "inbox"], "o recorte precisa alcançar os módulos, não só o grupo");
+  assert.deepEqual(visibleProcessGroups(["overview"]), [], "sem módulo nenhum, não há processo a mostrar");
+
+  // Subnavegação com uma aba só é ruído: um processo recortado a um módulo
+  // deixa de tê-la, mesmo que o catálogo declare quatro.
+  assert.equal(hasSubNavigation({ views: ["board"] }), false);
+  assert.equal(hasSubNavigation({ views: ["board", "inbox"] }), true);
 });
 
 test("a ação primária da barra é declarada, nunca deduzida por exclusão", () => {
@@ -73,6 +123,35 @@ test("a ação primária da barra é declarada, nunca deduzida por exclusão", (
   assert.match(catalog, /primaryAction: \{ label: "Nova solicitação", kind: "inbox" \}/u);
 });
 
+test("o segundo nível só aparece para o processo aberto (§66)", () => {
+  // A barra não pode voltar a listar cada página do sistema ao mesmo tempo.
+  assert.match(source, /\{sub && open && <div className="sidebar-process-views"/u);
+  // E o processo aberto continua marcado mesmo quando o destino ativo é um
+  // submódulo: sem isso, entrar em "Pagamentos → Psicólogos" apagaria a marca
+  // do processo e a pessoa perderia de vista em que contexto está.
+  assert.match(source, /const open = activeGroup\?\.id === group\.id;/u);
+  assert.match(source, /\$\{open \? "open " : ""\}/u);
+  // Entrar num processo abre o primeiro módulo dele, não uma tela intermediária
+  // que só repetiria a lista que o menu já mostra.
+  assert.match(source, /const entrance = group\.views\[0\];/u);
+});
+
+test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §70)", () => {
+  // Ele fica FORA do bloco que a transição de módulo remonta. Dentro, trocar de
+  // aba faria o cabeçalho do processo reanimar — e a troca de contexto, que é o
+  // que a §69 quer comunicar, deixaria de se distinguir da troca de tela dentro
+  // do contexto.
+  const contexto = source.indexOf('<section className="process-context"');
+  const transicao = source.indexOf("<PageTransition transitionKey={view}");
+  assert.ok(contexto > 0 && transicao > contexto,
+    "o cabeçalho do processo precisa vir antes da transição, e fora dela");
+  // Abas com indicador deslizante (§17), não troca instantânea de cor.
+  assert.match(source, /<AnimatedTabs\n\s+label=\{`Módulos de \$\{activeGroup\.label\}`\}/u);
+  // Um processo de um módulo só não ganha cabeçalho contextual: seria um
+  // título repetindo o título da tela logo abaixo.
+  assert.match(source, /\{activeGroup && hasSubNavigation\(activeGroup\) && \(/u);
+});
+
 test("a visibilidade é decidida num lugar só", () => {
   assert.match(source, /if \(entry\.module && !hasModule\(entry\.module\)\) return false;/u);
   assert.match(source, /return !\(role && entry\.hiddenFor\?\.includes\(role\)\);/u);
@@ -85,9 +164,13 @@ test("a visibilidade é decidida num lugar só", () => {
 test("o menu mobile mantém todos os módulos alcançáveis", async () => {
   // `display: contents` devolve os botões à grade da barra. Sem isso ela
   // posicionaria os quatro grupos e mostraria quatro colunas com os itens
-  // empilhados dentro — regressão que nenhum teste de unidade veria.
+  // empilhados dentro — regressão que nenhum teste de unidade veria. O
+  // invólucro do segundo nível precisa do mesmo tratamento, senão ele
+  // reintroduz a coluna que o `contents` do grupo acabou de dissolver.
   const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
-  assert.match(css, /\.sidebar-nav-group \{ display: contents; \}/u);
+  assert.match(css, /\.sidebar-nav-group, \.sidebar-process \{ display: contents; \}/u);
+  assert.match(css, /\.sidebar-process-views \{ display: none; \}/u,
+    "o segundo nível não cabe na barra inferior de cinco alvos");
   assert.match(css, /\.sidebar-nav-group \{ display: flex; flex-direction: column; gap: 4px; \}/u);
   assert.match(source, /const mobilePrimaryViews = new Set<View>/u);
   assert.match(source, /className="sidebar-mobile-more-panel"/u);

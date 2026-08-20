@@ -3,32 +3,59 @@
  * Isolated from the legacy marketing/auth styles so the operational UI can
  * evolve without introducing another set of conflicting global overrides.
  */
+/* ==========================================================================
+   Escala de superfície do tema claro (§5, §6)
+   ==========================================================================
+   O tema claro anterior era `#ffffff` de superfície sobre `#f5f7f9` de fundo:
+   1,03:1 entre os dois. Numa tela cheia de cartões isso não é hierarquia, é
+   uma folha de papel com texto — não dá para ver onde um cartão começa nem
+   onde uma área termina, que é exatamente a queixa da §6.
+
+   A escala agora tem quatro degraus e todos derivam do matiz da marca (o navy
+   #062B60, ~215°), não de cinza neutro. O fundo é o degrau mais escuro e a
+   superfície flutua acima dele; a superfície elevada — modal, popover, menu —
+   sobe mais um. Nenhum deles é `#ffffff`: o branco puro sobrou apenas como
+   texto sobre preenchimento escuro.
+
+     --ui-bg               #edf1f7   fundo da página
+     --ui-surface          #f7f9fc   cartão, painel, tabela
+     --ui-surface-elevated #fcfdff   modal, gaveta, menu suspenso
+     --ui-surface-muted    #e7ecf4   recuo: cabeçalho de tabela, campo, faixa
+
+   Os pares de texto foram medidos contra os quatro degraus, não só contra a
+   superfície: `--ui-text-muted` sobre `--ui-surface-muted` é o pior par do
+   conjunto e rende 4,85:1. */
 .dashboard-shell {
   /* A identidade vem dos tokens da marca definidos em globals.css: o painel não
      mantém uma paleta própria concorrente. */
   --ui-brand: var(--vin-navy-deep);
   --ui-brand-soft: var(--vin-navy);
   --ui-primary: var(--vin-blue);
-  --ui-primary-hover: var(--vin-navy);
-  --ui-primary-soft: #e7f0fe;
-  --ui-bg: #f5f7f9;
-  --ui-surface: #ffffff;
-  --ui-surface-muted: #f0f4f6;
-  --ui-border: #d8e0e7;
-  --ui-border-strong: #bac7d2;
-  --ui-text: #172235;
-  --ui-text-soft: #5e6d7f;
-  --ui-info: #175cd3;
-  --ui-success: #137a4f;
-  --ui-warning: #a15c07;
-  --ui-danger: #b42318;
+  --ui-primary-hover: #0a4a94;
+  --ui-primary-active: var(--vin-navy);
+  --ui-primary-soft: #e2ecfb;
+  --ui-bg: #edf1f7;
+  --ui-surface: #f7f9fc;
+  --ui-surface-elevated: #fcfdff;
+  --ui-surface-muted: #e7ecf4;
+  --ui-border: #cbd6e6;
+  --ui-border-strong: #a9bad1;
+  --ui-text: #131c2e;
+  --ui-text-soft: #4e5c72;
+  --ui-text-muted: #5a6779;
+  --ui-info: #0f52c4;
+  --ui-success: #0b6b45;
+  --ui-warning: #8a4e06;
+  --ui-danger: #b0201a;
   /* Casca clara — Modelo 2 "Flow".
      A barra lateral deixa de ser um bloco escuro e passa a ser superfície,
      separada do conteúdo por um fio. Antes disso, ~20 cores fixas espalhadas
      pelo arquivo assumiam fundo escuro — inclusive um verde da marca antiga,
      `rgba(98,213,178,.16)`, ainda vivo no hover. Agora a barra tem tokens
      próprios e a mesma regra vale nos dois temas. */
-  --ui-rail: #ffffff;
+  /* A barra lateral é superfície, não bloco escuro: ela usa o degrau elevado
+     para se separar do fundo da página sem virar uma parede branca. */
+  --ui-rail: var(--ui-surface-elevated);
   /* Avatar: texto sobre fundo suave. Par com dono porque já regrediu duas
      vezes — a segunda quando esta casca clara chegou. No claro rende 6,06:1;
      no escuro, o azul vivo sobre o suave rendia 4,30:1 e precisa do tom
@@ -36,61 +63,96 @@
   --ui-avatar-bg: var(--ui-primary-soft);
   --ui-avatar-text: var(--ui-primary);
   --ui-rail-border: var(--ui-border);
-  --ui-rail-text: #55627a;
-  --ui-rail-icon: #8b97a8;
-  --ui-rail-hover: #f1f5fb;
-  --ui-rail-active: #e9f2fe;
+  --ui-rail-text: #4e5c72;
+  --ui-rail-icon: #7a879a;
+  --ui-rail-hover: #e9eff8;
+  --ui-rail-active: #e0eafb;
   --ui-rail-active-text: var(--vin-blue);
-  --ui-rail-section: #5f6b7d;
-  --ui-rail-context: #f7f9fc;
+  --ui-rail-section: #5a6779;
+  --ui-rail-context: #e7ecf4;
   /* Concluído/conectado. No Modelo 2 o verde é estado, nunca marca. */
   --ui-done: var(--ui-success);
-  --ui-done-soft: #e3f5ec;
+  --ui-done-soft: #dcf2e7;
   --ui-on-done: #ffffff;
   --ui-radius-sm: 7px;
   --ui-radius-md: 10px;
   --ui-radius-lg: 14px;
   --ui-shadow-card: 0 1px 2px rgba(11, 31, 51, .05), 0 5px 16px rgba(11, 31, 51, .035);
   --ui-shadow-modal: 0 22px 70px rgba(5, 18, 33, .25);
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: var(--layout-sidebar-width) minmax(0, 1fr);
   background: var(--ui-bg);
   color: var(--ui-text);
 }
 
+/* ==========================================================================
+   Tema escuro (§7)
+   ==========================================================================
+   O escuro tinha o mesmo defeito do claro pelo avesso: `#09131f` de fundo e
+   `#111e2c` de superfície separados por 1,10:1, e nada acima disso — modal e
+   menu suspenso caíam na mesma superfície do cartão que os abriu. Aqui a
+   escala tem os mesmos quatro degraus do claro, todos derivados do navy da
+   marca em vez de cinza-carvão, e a superfície elevada existe para o que
+   flutua. */
 .dashboard-shell.theme-dark {
   --ui-brand: #03122c;
   --ui-brand-soft: var(--vin-navy);
   --ui-primary: var(--vin-blue-vivid);
   --ui-primary-hover: #57adff;
+  --ui-primary-active: #8cc6ff;
   --ui-primary-soft: #12294a;
-  --ui-bg: #09131f;
-  --ui-surface: #111e2c;
-  --ui-surface-muted: #182838;
-  --ui-border: #2b3e51;
-  --ui-border-strong: #41576c;
-  --ui-text: #eef5f7;
-  --ui-text-soft: #a7b5c4;
-  --ui-info: #84adff;
-  --ui-success: #70e1b9;
-  --ui-warning: #ffd089;
-  --ui-danger: #ff9c96;
-  --ui-rail: #0d1826;
+  --ui-bg: #071527;
+  --ui-surface: #0e1f33;
+  --ui-surface-elevated: #16293f;
+  --ui-surface-muted: #132539;
+  --ui-border: #263b52;
+  --ui-border-strong: #3d566f;
+  --ui-text: #eaf1f8;
+  --ui-text-soft: #a6b7c9;
+  --ui-text-muted: #8496a9;
+  --ui-info: #7cc0ff;
+  --ui-success: #5fd9ac;
+  --ui-warning: #f5c069;
+  --ui-danger: #ff9089;
+  --ui-rail: #0a1a2c;
   --ui-avatar-bg: #12294a;
   --ui-avatar-text: var(--brand-accent-on-dark);
   --ui-rail-border: var(--ui-border);
-  --ui-rail-text: #a7b5c4;
+  --ui-rail-text: #a6b7c9;
   --ui-rail-icon: #7d8fa3;
-  --ui-rail-hover: #16273a;
-  --ui-rail-active: #12294a;
+  --ui-rail-hover: #142740;
+  --ui-rail-active: #143154;
   --ui-rail-active-text: var(--brand-accent-on-dark);
-  --ui-rail-section: #8095aa;
-  --ui-rail-context: #14202f;
+  --ui-rail-section: #8496a9;
+  --ui-rail-context: #112132;
   --ui-done: var(--ui-success);
   --ui-done-soft: #0f2f20;
   /* No escuro o verde clareia; branco em cima dele reprova. */
   --ui-on-done: #06251a;
   --ui-shadow-card: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px rgba(0, 0, 0, .14);
   --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .48);
+}
+
+/* ==========================================================================
+   Tokens de layout (§41, §42)
+   ==========================================================================
+   Cada módulo escolhia o próprio recuo, o próprio intervalo entre seções e a
+   própria largura máxima de conteúdo — daí a sensação da §2 de que as telas
+   foram construídas separadamente. Os valores abaixo são a medida única; um
+   módulo que precise de outra tem que dizer por quê no diff.
+
+   O recuo da página acompanha a largura da janela pelo `clamp`: 1366×768 é a
+   menor resolução alvo da §43 e ali 20px de recuo devolvem a coluna útil que
+   os 32px do desktop grande comiam. */
+.dashboard-shell {
+  --layout-sidebar-width: 268px;
+  --layout-sidebar-collapsed: 76px;
+  --layout-header-height: 64px;
+  --layout-page-padding: clamp(20px, 2.1vw, 32px);
+  --layout-page-gap: 20px;
+  --layout-section-gap: 16px;
+  --layout-card-padding: 20px;
+  --layout-card-padding-compact: 14px;
+  --layout-content-max: 1560px;
 }
 
 .dashboard-shell,
@@ -102,7 +164,16 @@
 }
 
 .dashboard-shell.sidebar-collapsed {
-  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-columns: var(--layout-sidebar-collapsed) minmax(0, 1fr);
+}
+
+/* A largura da coluna anima em vez de saltar (§18). É a única exceção à regra
+   de animar só `transform` e `opacity`: a coluna do grid não tem como encolher
+   por transform sem arrastar o conteúdo junto, e a alternativa — largura fixa
+   com o conteúdo deslizando para fora — reintroduz o "pulo" que a §18 proíbe.
+   O custo é um relayout por quadro durante 260ms, uma vez por clique. */
+.dashboard-shell {
+  transition: grid-template-columns var(--motion-slow) var(--ease-standard);
 }
 
 .dashboard-sidebar {
@@ -3149,6 +3220,140 @@
 .sidebar-workspace button > span small { color: var(--ui-text-soft); font-size: 8px; }
 .sidebar-collapsed .sidebar-group-context, .sidebar-collapsed .sidebar-nav-section { display: none; }
 
+/* ==========================================================================
+   Navegação em dois níveis (§25, §64, §65, §66)
+   ==========================================================================
+   O primeiro nível é o processo; o segundo, os módulos dele — e o segundo só
+   existe para o processo aberto. A §66 é o motivo: a barra não precisa conter
+   cada página do sistema, e quinze itens simultâneos sob quatro rótulos de
+   departamento era exatamente isso.
+
+   O item do processo aberto ganha borda e superfície próprias mesmo quando o
+   destino ativo é um submódulo. Sem isso, entrar em "Pagamentos → Psicólogos"
+   apagava a marca do processo e a pessoa perdia de vista em que contexto
+   estava — que é o oposto do que a §69 pede. */
+.sidebar-process { display: flex; flex-direction: column; gap: 2px; }
+
+.sidebar-process-item.open {
+  border: 1px solid var(--ui-rail-border);
+  background: var(--ui-rail-context);
+  color: var(--ui-text);
+}
+
+.sidebar-process-item.open > span { color: var(--ui-rail-active-text); }
+
+/* Os submódulos recuam e ganham um fio à esquerda: o fio é o que os liga
+   visualmente ao processo dono, e o recuo é o que os põe num segundo nível
+   sem precisar de outro ícone. */
+.sidebar-process-views {
+  margin: 2px 0 4px 21px;
+  padding-left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-left: 1px solid var(--ui-rail-border);
+}
+
+.sidebar-process-view {
+  min-height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-rail-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  /* A cascata usa o índice que o React escreve em `--stagger-index`: os
+     submódulos aparecem em sequência quando o processo abre, o que mostra que
+     eles pertencem a ele em vez de surgirem do nada. */
+  animation: subNavEnter var(--motion-micro) var(--ease-enter) both;
+  animation-delay: calc(var(--stagger-index, 0) * 30ms);
+}
+
+.sidebar-process-view:hover { background: var(--ui-rail-hover); color: var(--ui-text); }
+
+.sidebar-process-view.active {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+  font-weight: 700;
+}
+
+.sidebar-process-view b {
+  min-width: 19px;
+  height: 19px;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ui-danger);
+  color: var(--ui-on-accent);
+  font-size: 9px;
+}
+
+@keyframes subNavEnter {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Recolhida, a barra mostra só os ícones dos processos: o segundo nível não
+   cabe em 76px e continua alcançável abrindo a barra ou pelo processo. */
+.sidebar-collapsed .sidebar-process-views { display: none; }
+.sidebar-collapsed .sidebar-process-item.open { border-color: transparent; }
+
+/* ==========================================================================
+   Cabeçalho contextual do processo (§70)
+   ==========================================================================
+   Ícone, nome, uma linha do que o processo faz e as abas dos módulos. É o que
+   diz "você está no Pagamento PJ" sem depender de a pessoa reparar em qual
+   item do menu está aceso. */
+.process-context {
+  margin-bottom: var(--layout-page-gap);
+  padding: var(--layout-card-padding);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-card);
+  animation: fadeInSoft var(--motion-base) var(--ease-enter) both;
+}
+
+.process-context-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.process-context-identity > span {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.process-context-identity > span svg { width: 19px; height: 19px; }
+.process-context-identity strong { display: block; color: var(--ui-text); font-size: 16px; letter-spacing: -.02em; }
+.process-context-identity p { margin: 3px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.45; }
+
+@keyframes fadeInSoft { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 760px) {
+  .process-context { padding: var(--layout-card-padding-compact); }
+  /* A barra de abas rola em vez de quebrar: um processo com quatro módulos
+     empilharia em quatro linhas e empurraria o conteúdo para fora da dobra. */
+  .process-context > [role="tablist"] { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+}
+
 .companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
 .companies-list article > i { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 10px; font-style: normal; font-weight: 850; }
 .companies-list article.principal { border-left: 3px solid var(--ui-mint); }
@@ -3181,8 +3386,13 @@
   .sidebar-nav-section { display: none; }
   /* Nesta largura o menu vira barra inferior em `grid`. `display: contents`
      devolve os botões à grade: sem isso a grade posicionaria os quatro grupos,
-     e a barra mostraria quatro colunas com os itens empilhados dentro. */
-  .sidebar-nav-group { display: contents; }
+     e a barra mostraria quatro colunas com os itens empilhados dentro.
+     O invólucro de processo precisa do mesmo tratamento, senão o segundo nível
+     reintroduz a coluna que o `contents` do grupo acabou de dissolver. */
+  .sidebar-nav-group, .sidebar-process { display: contents; }
+  /* O segundo nível não existe na barra inferior: ela cabe em cinco alvos de
+     toque, e todos os módulos continuam alcançáveis pelo botão "Mais". */
+  .sidebar-process-views { display: none; }
   .companies-list article { grid-template-columns: 24px minmax(0, 1fr) auto; }
   .companies-list article > i { width: 21px; height: 21px; }
   .invite-company-scope { min-width: 100%; }
@@ -3882,11 +4092,35 @@
    (o bloco global do globals.css só zerava transições). */
 
 .dashboard-shell {
-  --motion-fast: 140ms;
+  --motion-fast: 150ms;
   --motion-base: 200ms;
   --motion-slow: 260ms;
   /* Desacelera no fim: o começo rápido dá a sensação de resposta imediata. */
   --motion-ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* Escala por papel (§78, §79). Os nomes dizem o que a duração serve, não
+     quanto ela mede: quem escreve um menu suspenso novo pega
+     `--motion-dropdown` e não precisa lembrar se o número era 180 ou 220. Os
+     valores vieram da tabela da §79 e todos ficam dentro dos 180–400ms que a
+     §11 pede para a troca de módulo. */
+  --motion-hover: 150ms;
+  --motion-micro: 180ms;
+  --motion-dropdown: 200ms;
+  --motion-modal: 250ms;
+  --motion-drawer: 300ms;
+  --motion-page: 300ms;
+
+  /* Três curvas, três papéis. `standard` é o que muda de estado sem entrar nem
+     sair; `enter` desacelera no fim porque o elemento está chegando e precisa
+     assentar; `exit` acelera porque o que sai não merece a atenção de quem
+     ficou. */
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-enter: cubic-bezier(.22, 1, .36, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+
+  /* Deslocamento de entrada. Mais que isto e a animação vira espera. */
+  --motion-distance-sm: 6px;
+  --motion-distance-md: 12px;
 }
 
 /* --- Troca de módulo ------------------------------------------------------ */

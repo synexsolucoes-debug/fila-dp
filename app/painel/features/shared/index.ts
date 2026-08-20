@@ -3,3 +3,8 @@ export { statusTone, type PanelTone } from "./status-tone";
 export { competenceLabel, cycleProgress, cycleStages, stageIndex, type CycleStatus } from "./competence-cycle";
 export { connectionStatusLabel, connectionStatusLabels, connectionTone, lastSyncLabel } from "./connection-status";
 export { MemberModules } from "./MemberModules";
+export {
+  AnimatedDrawer, AnimatedModal, AnimatedTabs, FadeIn, MotionCard, PageTransition,
+  StaggerContainer, StaggerItem, useExitTransition, usePrefersReducedMotion,
+  type AnimatedTab,
+} from "./motion";
