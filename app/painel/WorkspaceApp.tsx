@@ -28,7 +28,7 @@ import {
   Mail,
   MessageCircle,
   MessageSquareMore,
-  Moon,
+
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -41,7 +41,7 @@ import {
   UserRoundCog,
   Smartphone,
   Stethoscope,
-  Sun,
+
   Timer,
   Trash2,
   Users,
@@ -69,7 +69,7 @@ import { ActionCenter } from "./features/action-center";
 
 type View = "overview" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "epi" | "integrations" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
-type Theme = "light" | "dark";
+
 type CardTab = "details" | "checklist" | "attachments" | "activity";
 type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
 type RealtimeStatus = "syncing" | "current" | "delayed";
@@ -554,7 +554,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
   const [newBoardDescription, setNewBoardDescription] = useState("");
-  const [theme, setTheme] = useState<Theme>("light");
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [assistantSignal, setAssistantSignal] = useState(0);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("syncing");
@@ -566,21 +566,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const suppressCardOpenRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const storedTheme = window.localStorage.getItem("fila-dp-theme");
-      if (storedTheme === "dark" || storedTheme === "light") {
-        setTheme(storedTheme);
-        return;
-      }
-      if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) setTheme("dark");
-    });
-    return () => window.cancelAnimationFrame(frame);
+    document.documentElement.style.colorScheme = "dark";
+    window.localStorage.removeItem("fila-dp-theme");
   }, []);
-
-  useEffect(() => {
-    document.documentElement.style.colorScheme = theme;
-    window.localStorage.setItem("fila-dp-theme", theme);
-  }, [theme]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -1374,7 +1362,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
 
   return (
-    <main className={`dashboard-shell theme-${theme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <main className={`dashboard-shell theme-dark${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -1382,7 +1370,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
           {/* A barra lateral virou clara: o logotipo branco sumiria nela. A
               variante segue o tema, em vez de assumir fundo escuro. */}
-          <VinculatoLogo size={28} tone={theme === "dark" ? "light" : "color"} />
+          <VinculatoLogo size={28} tone="light" />
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>
@@ -1494,7 +1482,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
-            <button className="theme-toggle" aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"} aria-pressed={theme === "dark"} title={theme === "dark" ? "Modo claro" : "Modo noturno"} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
+            
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
             {/* A ação primária vem do catálogo, não de uma lista de exceções.
                 A versão anterior aparecia por negação — seis `view !== "…"` —,

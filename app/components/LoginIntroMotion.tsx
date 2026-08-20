@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef } from "react";
 
@@ -6,44 +6,7 @@ type LoginIntroMotionProps = {
   destination: string;
 };
 
-const LIGHT_VIDEO = "/brand/vinculato-intro-light.mp4";
-const DARK_VIDEO = "/brand/vinculato-intro-dark.mp4";
-
-function resolveIntroVideo() {
-  if (typeof window === "undefined") {
-    return LIGHT_VIDEO;
-  }
-
-  try {
-    const storedTheme =
-      window.localStorage.getItem("vinculato-theme") ??
-      window.localStorage.getItem("theme");
-
-    if (storedTheme === "dark") return DARK_VIDEO;
-    if (storedTheme === "light") return LIGHT_VIDEO;
-  } catch {
-    // localStorage pode estar indisponivel.
-  }
-
-  const html = document.documentElement;
-  const body = document.body;
-
-  const explicitTheme = html.dataset.theme ?? body.dataset.theme;
-
-  if (explicitTheme === "dark") return DARK_VIDEO;
-  if (explicitTheme === "light") return LIGHT_VIDEO;
-
-  if (
-    html.classList.contains("dark") ||
-    body.classList.contains("dark")
-  ) {
-    return DARK_VIDEO;
-  }
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? DARK_VIDEO
-    : LIGHT_VIDEO;
-}
+const INTRO_VIDEO = "/brand/vinculato-intro-dark.mp4";
 
 export function LoginIntroMotion({
   destination,
@@ -58,11 +21,7 @@ export function LoginIntroMotion({
       return;
     }
 
-    const selectedSource = resolveIntroVideo();
-
-    // O video e um sistema externo ao React. Sincronizamos o src diretamente
-    // no elemento, evitando setState dentro do effect e uma renderizacao extra.
-    video.src = selectedSource;
+    video.src = INTRO_VIDEO;
     video.load();
 
     void video.play().catch(() => {
@@ -93,7 +52,7 @@ export function LoginIntroMotion({
         width: "100vw",
         height: "100dvh",
         overflow: "hidden",
-        background: "var(--ui-bg, #f7f9fd)",
+        background: "#09131f",
       }}
     >
       <video
@@ -127,7 +86,7 @@ export function LoginIntroMotion({
           border: 0,
         }}
       >
-        Abrindo o Vinculato…
+        Abrindo o Vinculato?
       </span>
     </div>
   );
