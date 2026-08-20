@@ -11,3 +11,37 @@ test("configuração da etapa é allowlisted",()=>{const [step]=sanitizeProcessS
 test("aliases da especificação usam o RBAC canônico",()=>{assert.equal(hasCapability("admin","process.view"),true);assert.equal(hasCapability("observer","process.view"),true);assert.equal(hasCapability("admin","process.create"),true);assert.equal(hasCapability("member","process.create"),false);assert.equal(hasCapability("admin","process.publish"),true);});
 test("APIs validam capability, workspace e auditoria",async()=>{const [list,version,publish]=await Promise.all([readFile(new URL("../app/api/processes/route.ts",import.meta.url),"utf8"),readFile(new URL("../app/api/processes/versions/[id]/route.ts",import.meta.url),"utf8"),readFile(new URL("../app/api/processes/versions/[id]/publish/route.ts",import.meta.url),"utf8")]);assert.match(list,/processes\.read/u);assert.match(list,/workspace\.id/u);assert.match(version,/process\.version_saved/u);assert.match(publish,/process\.version_published/u);});
 test("interface entrega os nove submenus, BPMN, autosave, exportação e propriedades",async()=>{const [view,modeler,app]=await Promise.all([readFile(new URL("../app/painel/features/processes/ProcessManagementView.tsx",import.meta.url),"utf8"),readFile(new URL("../app/painel/features/processes/ProcessModeler.tsx",import.meta.url),"utf8"),readFile(new URL("../app/painel/WorkspaceApp.tsx",import.meta.url),"utf8")]);for(const label of ["Biblioteca de Processos","Modelador de Processos","Meus Processos","Rascunhos","Em Revisão","Publicados","Arquivados","Histórico de Versões","Configurações"])assert.match(view,new RegExp(label,"u"));assert.match(modeler,/bpmn-js\/lib\/Modeler/u);assert.match(modeler,/commandStack\.changed/u);assert.match(modeler,/saveXML/u);assert.match(modeler,/Criar demanda automaticamente/u);assert.match(view,/setTimeout\(\(\)=>\{void save\(\);\},1200\)/u);assert.match(app,/processManagement/u);assert.match(app,/ProcessManagementView/u);});
+
+test("modelador mantém instância durante autosave e responde ao viewport",async()=>{
+  const [modeler,css]=await Promise.all([
+    readFile(
+      new URL("../app/painel/features/processes/ProcessModeler.tsx",import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/painel/features/processes/processes.module.css",import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(modeler,/bpmn-js\/dist\/assets\/bpmn-js\.css/u);
+  assert.match(modeler,/sourceXmlRef/u);
+  assert.match(modeler,/fullscreenchange/u);
+  assert.match(modeler,/resized/u);
+  assert.match(modeler,/toggleFullscreen/u);
+
+  assert.doesNotMatch(
+    modeler,
+    /\[readOnly,version\.id,version\.bpmnXml\]/u,
+    "autosave não pode destruir e recriar o modelador a cada alteração do XML",
+  );
+
+  assert.doesNotMatch(
+    css,
+    /\.workspace svg\{/u,
+    "regra genérica de SVG não pode alterar os desenhos internos do bpmn-js",
+  );
+
+  assert.match(css,/\.modelerShell:fullscreen/u);
+  assert.match(css,/\.bpmnCanvas :global\(\.djs-container\)/u);
+});

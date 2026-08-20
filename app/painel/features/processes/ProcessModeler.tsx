@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- o preview BPMN é um SVG em memória gerado pelo bpmn-js. */
 
+import "bpmn-js/dist/assets/bpmn-js.css";
 import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -37,10 +38,32 @@ function defaultConfig(element:ElementInfo):ProcessStepConfig {
 const csv=(value:string)=>value.split(",").map((item)=>item.trim()).filter(Boolean).slice(0,50);
 
 export function ProcessModeler({version,stepConfigs,areas,members,processes,readOnly,saveState,onDiagramChange,onStepConfigsChange,onSaveNow}:{version:ProcessVersionDetail;stepConfigs:ProcessStepConfig[];areas:ProcessArea[];members:ProcessMember[];processes:ProcessDefinition[];readOnly:boolean;saveState:"idle"|"dirty"|"saving"|"saved"|"error";onDiagramChange:(xml:string,svg:string)=>void;onStepConfigsChange:(next:ProcessStepConfig[])=>void;onSaveNow:()=>void}) {
-  const canvasRef=useRef<HTMLDivElement>(null); const shellRef=useRef<HTMLDivElement>(null); const instanceRef=useRef<ModelerLike|null>(null); const changeRef=useRef(onDiagramChange);
+  const canvasRef=useRef<HTMLDivElement>(null); const shellRef=useRef<HTMLDivElement>(null); const instanceRef=useRef<ModelerLike|null>(null); const changeRef=useRef(onDiagramChange); const sourceXmlRef=useRef(version.bpmnXml);
   const [selected,setSelected]=useState<ElementInfo|null>(null); const [loadError,setLoadError]=useState(""); const [preview,setPreview]=useState<string|null>(null);
   useEffect(()=>{changeRef.current=onDiagramChange;},[onDiagramChange]);
-  useEffect(()=>{let disposed=false;let timer:ReturnType<typeof setTimeout>|null=null;const container=canvasRef.current;if(!container)return;container.innerHTML="";setSelected(null);setLoadError("");(async()=>{try{const bpmnModule=readOnly?await import("bpmn-js/lib/NavigatedViewer"):await import("bpmn-js/lib/Modeler");if(disposed)return;const Bpmn=bpmnModule.default as new(options:Record<string,unknown>)=>ModelerLike;const instance=new Bpmn(readOnly?{container}:{container,keyboard:{bindTo:document}});instanceRef.current=instance;await instance.importXML(version.bpmnXml);if(disposed)return;instance.get("canvas").zoom("fit-viewport");const eventBus=instance.get("eventBus");eventBus.on("element.click",(event:BpmnEvent)=>{const element=event.element;if(!element?.id||element.type==="label")return;setSelected({id:String(element.id),type:String(element.type||""),name:String(element.businessObject?.name||"")});});if(!readOnly)eventBus.on("commandStack.changed",()=>{if(timer)clearTimeout(timer);timer=setTimeout(async()=>{try{const [{xml},{svg}]=await Promise.all([instance.saveXML?.({format:true})??Promise.resolve({xml:""}),instance.saveSVG?.()??Promise.resolve({svg:""})]);if(!disposed&&xml)changeRef.current(xml,svg||"");}catch{if(!disposed)setLoadError("Não foi possível serializar o diagrama.");}},220);});}catch(error){if(!disposed)setLoadError(error instanceof Error?error.message:"Não foi possível carregar o BPMN.");}})();return()=>{disposed=true;if(timer)clearTimeout(timer);instanceRef.current?.destroy();instanceRef.current=null;};},[readOnly,version.id,version.bpmnXml]);
+  useEffect(()=>{sourceXmlRef.current=version.bpmnXml;},[version.id,version.bpmnXml]);
+
+  useEffect(()=>{
+    const resizeCanvas=()=>{
+      window.requestAnimationFrame(()=>{
+        const canvas=instanceRef.current?.get("canvas");
+        const resized=canvas?.resized;
+
+        if(typeof resized==="function"){
+          resized.call(canvas);
+        }
+      });
+    };
+
+    document.addEventListener("fullscreenchange",resizeCanvas);
+    window.addEventListener("resize",resizeCanvas);
+
+    return()=>{
+      document.removeEventListener("fullscreenchange",resizeCanvas);
+      window.removeEventListener("resize",resizeCanvas);
+    };
+  },[]);
+  useEffect(()=>{let disposed=false;let timer:ReturnType<typeof setTimeout>|null=null;const container=canvasRef.current;if(!container)return;container.innerHTML="";setSelected(null);setLoadError("");(async()=>{try{const bpmnModule=readOnly?await import("bpmn-js/lib/NavigatedViewer"):await import("bpmn-js/lib/Modeler");if(disposed)return;const Bpmn=bpmnModule.default as new(options:Record<string,unknown>)=>ModelerLike;const instance=new Bpmn(readOnly?{container}:{container,keyboard:{bindTo:document}});instanceRef.current=instance;await instance.importXML(sourceXmlRef.current);if(disposed)return;instance.get("canvas").zoom("fit-viewport");const eventBus=instance.get("eventBus");eventBus.on("element.click",(event:BpmnEvent)=>{const element=event.element;if(!element?.id||element.type==="label")return;setSelected({id:String(element.id),type:String(element.type||""),name:String(element.businessObject?.name||"")});});if(!readOnly)eventBus.on("commandStack.changed",()=>{if(timer)clearTimeout(timer);timer=setTimeout(async()=>{try{const [{xml},{svg}]=await Promise.all([instance.saveXML?.({format:true})??Promise.resolve({xml:""}),instance.saveSVG?.()??Promise.resolve({svg:""})]);if(!disposed&&xml)changeRef.current(xml,svg||"");}catch{if(!disposed)setLoadError("Não foi possível serializar o diagrama.");}},220);});}catch(error){if(!disposed)setLoadError(error instanceof Error?error.message:"Não foi possível carregar o BPMN.");}})();return()=>{disposed=true;if(timer)clearTimeout(timer);instanceRef.current?.destroy();instanceRef.current=null;};},[readOnly,version.id]);
   const config=useMemo(()=>selected?stepConfigs.find((item)=>item.bpmnElementId===selected.id)??null:null,[selected,stepConfigs]);
   function patch(patchValue:Partial<ProcessStepConfig>){if(!selected||readOnly)return;const current=config??defaultConfig(selected);const next={...current,...patchValue};onStepConfigsChange(config?stepConfigs.map((item)=>item.id===config.id?next:item):[...stepConfigs,next]);}
   function patchSettings(value:Partial<ProcessStepConfig["settings"]>){if(!selected||readOnly)return;const current=config??defaultConfig(selected);patch({settings:{...current.settings,...value}});}
@@ -48,10 +71,21 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
   function invoke(service:string,method:string,...args:unknown[]){const target=instanceRef.current?.get(service);if(typeof target?.[method]==="function")target[method](...args);}
   async function exportBpmn(){const result=await instanceRef.current?.saveXML?.({format:true});const blob=new Blob([result?.xml||version.bpmnXml],{type:"application/xml;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${version.processCode||"processo"}-v${version.versionMajor}.${version.versionMinor}.bpmn`;a.click();URL.revokeObjectURL(url);}
   async function openPreview(){const result=await instanceRef.current?.saveSVG?.();setPreview(result?.svg||version.svgPreview||"");}
+  async function toggleFullscreen(){
+    const shell=shellRef.current;
+    if(!shell)return;
+
+    if(document.fullscreenElement===shell){
+      await document.exitFullscreen();
+      return;
+    }
+
+    await shell.requestFullscreen?.();
+  }
   const saveLabel=saveState==="saving"?"Salvando...":saveState==="dirty"?"Alterações não salvas":saveState==="saved"?"Salvo":saveState==="error"?"Falha ao salvar":"Sem alterações";
   return <div className={styles.modelerShell} ref={shellRef}>
     <div className={styles.modelerToolbar}><div><strong>{version.processName}</strong><span>v{version.versionMajor}.{version.versionMinor} · {readOnly?"somente leitura":"rascunho editável"}</span></div><div className={styles.toolActions}>
-      {!readOnly&&<button onClick={()=>invoke("commandStack","undo")}><Undo2/>Desfazer</button>}{!readOnly&&<button onClick={()=>invoke("commandStack","redo")}><Redo2/>Refazer</button>}<button onClick={()=>invoke("canvas","zoom","fit-viewport")}><Focus/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.min(4,Number(c?.zoom?.()??1)+.15));}}><ZoomIn/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.max(.2,Number(c?.zoom?.()??1)-.15));}}><ZoomOut/></button><button onClick={()=>void openPreview()}><Eye/>Preview</button><button onClick={()=>void exportBpmn()}><Download/>BPMN</button><button onClick={()=>void shellRef.current?.requestFullscreen?.()}><Maximize2/></button>{!readOnly&&<button className={styles.primaryButton} onClick={onSaveNow}><Save/>Salvar</button>}
+      {!readOnly&&<button onClick={()=>invoke("commandStack","undo")}><Undo2/>Desfazer</button>}{!readOnly&&<button onClick={()=>invoke("commandStack","redo")}><Redo2/>Refazer</button>}<button onClick={()=>invoke("canvas","zoom","fit-viewport")}><Focus/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.min(4,Number(c?.zoom?.()??1)+.15));}}><ZoomIn/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.max(.2,Number(c?.zoom?.()??1)-.15));}}><ZoomOut/></button><button onClick={()=>void openPreview()}><Eye/>Preview</button><button onClick={()=>void exportBpmn()}><Download/>BPMN</button><button onClick={()=>void toggleFullscreen()} aria-label="Alternar tela cheia"><Maximize2/></button>{!readOnly&&<button className={styles.primaryButton} onClick={onSaveNow}><Save/>Salvar</button>}
     </div><span className={styles.saveIndicator} data-state={saveState}>{saveLabel}</span></div>
     {loadError&&<ErrorBanner message={loadError}/>}
     <div className={styles.modelerGrid}><section className={styles.canvasPanel}><div ref={canvasRef} className={styles.bpmnCanvas} tabIndex={0}/></section><aside className={styles.propertiesPanel}>
