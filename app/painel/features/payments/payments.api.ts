@@ -197,6 +197,7 @@ export function normalizeContractorPaymentDetail(payload: Row): ContractorPaymen
       id: text(provider.id), code: text(provider.code),
       legalName: text(pick(provider, "legalName", "legal_name")),
       tradeName: text(pick(provider, "tradeName", "trade_name")),
+      taxId: text(pick(provider, "taxId", "tax_id")),
       contractReference: text(pick(provider, "contractReference", "contract_reference")),
       roleTitle: text(pick(provider, "roleTitle", "role_title")),
     },

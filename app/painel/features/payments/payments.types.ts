@@ -74,7 +74,7 @@ export type ContractorFixedItem = {
 export type ContractorPaymentDetail = {
   closing: ContractorClosing;
   provider: {
-    id: string; code: string; legalName: string; tradeName: string;
+    id: string; code: string; legalName: string; tradeName: string; taxId: string;
     contractReference: string; roleTitle: string;
   };
   components: ContractorComponent[];
