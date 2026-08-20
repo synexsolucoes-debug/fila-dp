@@ -39,7 +39,15 @@
 .workspace input,
 .workspace select,
 .workspace textarea { font: inherit; }
-.workspace svg { width: 17px; height: 17px; }
+/* Mira os ícones, não todo `<svg>`.
+ *
+ * `.workspace svg` alcançava também o `<svg>` raiz que o bpmn-js cria para o
+ * canvas, e o modelador desenhava dentro de um selo de 17px — 25 elementos
+ * importados, um fragmento de rótulo na tela. Duas correções chegaram a este
+ * arquivo pelo mesmo defeito, uma em cada ramo; esta é a de origem, porque a
+ * exceção deixa de precisar existir. Todos os ícones do painel vêm do
+ * lucide-react, que marca cada um com a classe `lucide`. */
+.workspace :global(.lucide) { width: 17px; height: 17px; }
 
 /* -------------------------------------------------------------------------- */
 /* Cabeçalho e comandos                                                        */
@@ -368,11 +376,14 @@
 .modelerGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
-  height: clamp(380px, 56dvh, 680px);
+  /* Acompanha a janela, com piso e teto. A versão do outro ramo fixava
+     `min-height: 600px`, o que em 1280×720 punha o rodapé do canvas 250px
+     abaixo da dobra — e 1280×720 é resolução alvo da §43. */
+  height: clamp(380px, calc(100dvh - 320px), 720px);
 }
 
-.canvasPanel { min-width: 0; border-right: 1px solid var(--b); background: var(--s); }
-.bpmnCanvas { width: 100%; height: 100%; }
+.canvasPanel { min-width: 0; min-height: 0; border-right: 1px solid var(--b); background: var(--s); }
+.bpmnCanvas { width: 100%; height: 100%; min-height: 0; }
 
 /* O modelador estava desenhando num selo de 17 pixels.
  *
@@ -389,10 +400,33 @@
  * O seletor precisa de `:global` porque `.djs-container` é uma classe da
  * biblioteca — dentro de um CSS Module ela viraria um nome com hash e não
  * casaria com nada. E mira o filho direto de propósito: os ícones da paleta
- * também são `<svg>` e continuam com a medida que a biblioteca lhes dá. */
+ * também são `<svg>` e continuam com a medida que a biblioteca lhes dá.
+ *
+ * Com a regra dos ícones mirando `.lucide`, esta virou cinto e suspensório —
+ * e fica: é ela que segura o canvas se alguém trocar a biblioteca de ícones
+ * por uma que não marque as suas. */
 .bpmnCanvas :global(.djs-container) > svg { width: 100%; height: 100%; }
 
 .propertiesPanel { overflow-y: auto; background: var(--m); }
+
+/* Tela cheia. Sem isto o botão abre o modo, e o canvas continua do tamanho do
+   cartão no meio de uma tela preta. */
+.modelerShell:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 0;
+}
+
+.modelerShell:fullscreen .modelerGrid { flex: 1 1 auto; height: auto; min-height: 0; }
+
+.modelerShell:fullscreen :is(.canvasPanel, .bpmnCanvas, .propertiesPanel) {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
 .propertiesEmpty { min-height: 250px; padding: 24px; display: grid; place-items: center; text-align: center; }
 .propertiesEmpty strong { color: var(--t); font-size: 13.5px; }
 .propertiesEmpty p { margin: 8px 0 0; color: var(--soft); font-size: 12px; line-height: 1.5; }

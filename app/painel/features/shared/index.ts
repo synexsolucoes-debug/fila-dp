@@ -8,3 +8,9 @@ export {
   StaggerContainer, StaggerItem, useDialogFocus, useExitTransition, usePrefersReducedMotion,
   type AnimatedTab,
 } from "./motion";
+export {
+  findModuleWindow,
+  moduleWindowRegistry,
+  type ModuleWindowRegistryItem,
+  type ModuleWindowViewKey,
+} from "./module-window-registry";

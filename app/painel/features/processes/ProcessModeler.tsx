@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- o preview BPMN é um SVG em memória gerado pelo bpmn-js. */
 
+import "bpmn-js/dist/assets/bpmn-js.css";
 import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -37,9 +38,35 @@ function defaultConfig(element:ElementInfo):ProcessStepConfig {
 const csv=(value:string)=>value.split(",").map((item)=>item.trim()).filter(Boolean).slice(0,50);
 
 export function ProcessModeler({version,stepConfigs,areas,members,processes,readOnly,saveState,onDiagramChange,onStepConfigsChange,onSaveNow}:{version:ProcessVersionDetail;stepConfigs:ProcessStepConfig[];areas:ProcessArea[];members:ProcessMember[];processes:ProcessDefinition[];readOnly:boolean;saveState:"idle"|"dirty"|"saving"|"saved"|"error";onDiagramChange:(xml:string,svg:string)=>void;onStepConfigsChange:(next:ProcessStepConfig[])=>void;onSaveNow:()=>void}) {
-  const canvasRef=useRef<HTMLDivElement>(null); const shellRef=useRef<HTMLDivElement>(null); const instanceRef=useRef<ModelerLike|null>(null); const changeRef=useRef(onDiagramChange);
+  const canvasRef=useRef<HTMLDivElement>(null); const shellRef=useRef<HTMLDivElement>(null); const instanceRef=useRef<ModelerLike|null>(null); const changeRef=useRef(onDiagramChange); const sourceXmlRef=useRef(version.bpmnXml);
   const [selected,setSelected]=useState<ElementInfo|null>(null); const [loadError,setLoadError]=useState(""); const [preview,setPreview]=useState<string|null>(null);
   useEffect(()=>{changeRef.current=onDiagramChange;},[onDiagramChange]);
+  /* O XML de origem fica numa referência, e não nas dependências do efeito que
+     monta o modelador.
+     Cada gravação do autosave devolve o XML serializado para o estado, e um
+     efeito que dependesse dele remontaria o bpmn-js no meio da edição —
+     perdendo a seleção, o histórico de desfazer e a posição do canvas a cada
+     1,2 segundo de digitação. A remontagem tem que acontecer quando muda a
+     *versão*, não quando muda o conteúdo que nós mesmos acabamos de gravar. */
+  useEffect(()=>{sourceXmlRef.current=version.bpmnXml;},[version.id,version.bpmnXml]);
+
+  /* Entrar e sair da tela cheia, além do observador de tamanho.
+     O `ResizeObserver` mais abaixo cobre a maior parte das mudanças de área,
+     mas a transição de tela cheia é a que ele pega pior: o navegador troca a
+     caixa e pinta antes de o observador entregar a medida nova, e o diagrama
+     fica enquadrado para o tamanho anterior por um quadro. O evento avisa na
+     hora certa. */
+  useEffect(()=>{
+    const resizeCanvas=()=>{
+      window.requestAnimationFrame(()=>{
+        const canvas=instanceRef.current?.get("canvas") as (BpmnService & { resized?: () => void }) | undefined;
+        canvas?.resized?.();
+        try { canvas?.zoom("fit-viewport"); } catch { /* instância já destruída */ }
+      });
+    };
+    document.addEventListener("fullscreenchange",resizeCanvas);
+    return()=>document.removeEventListener("fullscreenchange",resizeCanvas);
+  },[]);
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -68,7 +95,13 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
     const fit = (instance: ModelerLike) => {
       if (disposed) return;
       try {
-        const canvas = instance.get("canvas") as BpmnService & { scroll?: (delta: { dx: number; dy: number }) => void };
+        const canvas = instance.get("canvas") as BpmnService & {
+          scroll?: (delta: { dx: number; dy: number }) => void;
+          resized?: () => void;
+        };
+        // `resized()` primeiro: o `fit-viewport` calcula contra a medida que o
+        // canvas acredita ter, e sem o aviso ele reenquadra para a anterior.
+        canvas.resized?.();
         canvas.zoom("fit-viewport");
         // A paleta flutua sobre a borda esquerda do canvas e cobria o início do
         // fluxo — que é justamente o elemento por onde se lê um BPMN. O
@@ -89,7 +122,7 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
         // abertura do modelador, escondendo os que importam.
         const instance = new Bpmn({ container });
         instanceRef.current = instance;
-        await instance.importXML(version.bpmnXml);
+        await instance.importXML(sourceXmlRef.current);
         if (disposed) return;
 
         fit(instance);
@@ -136,7 +169,7 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };
-  }, [readOnly, version.id, version.bpmnXml]);
+  }, [readOnly, version.id]);
   const config=useMemo(()=>selected?stepConfigs.find((item)=>item.bpmnElementId===selected.id)??null:null,[selected,stepConfigs]);
   function patch(patchValue:Partial<ProcessStepConfig>){if(!selected||readOnly)return;const current=config??defaultConfig(selected);const next={...current,...patchValue};onStepConfigsChange(config?stepConfigs.map((item)=>item.id===config.id?next:item):[...stepConfigs,next]);}
   function patchSettings(value:Partial<ProcessStepConfig["settings"]>){if(!selected||readOnly)return;const current=config??defaultConfig(selected);patch({settings:{...current.settings,...value}});}
@@ -144,10 +177,18 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
   function invoke(service:string,method:string,...args:unknown[]){const target=instanceRef.current?.get(service);if(typeof target?.[method]==="function")target[method](...args);}
   async function exportBpmn(){const result=await instanceRef.current?.saveXML?.({format:true});const blob=new Blob([result?.xml||version.bpmnXml],{type:"application/xml;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${version.processCode||"processo"}-v${version.versionMajor}.${version.versionMinor}.bpmn`;a.click();URL.revokeObjectURL(url);}
   async function openPreview(){const result=await instanceRef.current?.saveSVG?.();setPreview(result?.svg||version.svgPreview||"");}
+  /* Alternar, não só entrar: `requestFullscreen` sozinho deixava o único jeito
+     de voltar ser a tecla Esc, que ninguém anuncia. */
+  async function toggleFullscreen(){
+    const shell=shellRef.current;
+    if(!shell)return;
+    if(document.fullscreenElement===shell){await document.exitFullscreen();return;}
+    await shell.requestFullscreen?.();
+  }
   const saveLabel=saveState==="saving"?"Salvando...":saveState==="dirty"?"Alterações não salvas":saveState==="saved"?"Salvo":saveState==="error"?"Falha ao salvar":"Sem alterações";
   return <div className={styles.modelerShell} ref={shellRef}>
     <div className={styles.modelerToolbar}><div><strong>{version.processName}</strong><span>v{version.versionMajor}.{version.versionMinor} · {readOnly?"somente leitura":"rascunho editável"}</span></div><div className={styles.toolActions}>
-      {!readOnly&&<button onClick={()=>invoke("commandStack","undo")}><Undo2/>Desfazer</button>}{!readOnly&&<button onClick={()=>invoke("commandStack","redo")}><Redo2/>Refazer</button>}<button onClick={()=>invoke("canvas","zoom","fit-viewport")}><Focus/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.min(4,Number(c?.zoom?.()??1)+.15));}}><ZoomIn/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.max(.2,Number(c?.zoom?.()??1)-.15));}}><ZoomOut/></button><button onClick={()=>void openPreview()}><Eye/>Preview</button><button onClick={()=>void exportBpmn()}><Download/>BPMN</button><button onClick={()=>void shellRef.current?.requestFullscreen?.()}><Maximize2/></button>{!readOnly&&<button className={styles.primaryButton} onClick={onSaveNow}><Save/>Salvar</button>}
+      {!readOnly&&<button onClick={()=>invoke("commandStack","undo")}><Undo2/>Desfazer</button>}{!readOnly&&<button onClick={()=>invoke("commandStack","redo")}><Redo2/>Refazer</button>}<button onClick={()=>invoke("canvas","zoom","fit-viewport")}><Focus/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.min(4,Number(c?.zoom?.()??1)+.15));}}><ZoomIn/></button><button onClick={()=>{const c=instanceRef.current?.get("canvas");c?.zoom(Math.max(.2,Number(c?.zoom?.()??1)-.15));}}><ZoomOut/></button><button onClick={()=>void openPreview()}><Eye/>Preview</button><button onClick={()=>void exportBpmn()}><Download/>BPMN</button><button onClick={()=>void toggleFullscreen()} aria-label="Alternar tela cheia"><Maximize2/></button>{!readOnly&&<button className={styles.primaryButton} onClick={onSaveNow}><Save/>Salvar</button>}
     </div><span className={styles.saveIndicator} data-state={saveState}>{saveLabel}</span></div>
     {loadError&&<ErrorBanner message={loadError}/>}
     <div className={styles.modelerGrid}><section className={styles.canvasPanel}><div ref={canvasRef} className={styles.bpmnCanvas} tabIndex={0}/></section><aside className={styles.propertiesPanel}>

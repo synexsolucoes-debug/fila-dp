@@ -103,6 +103,38 @@ test("um processo sem tela alcançável não vira item de menu (§30)", async ()
   assert.equal(hasSubNavigation({ views: ["board", "inbox"] }), true);
 });
 
+test("registry prepara o vínculo futuro entre processo e janela sem executar processo", async () => {
+  const registry = await readFile(
+    new URL(
+      "../app/painel/features/shared/module-window-registry.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(
+    registry,
+    /moduleKey: "demands",[\s\S]*?viewKey: "board"/u,
+  );
+
+  assert.match(
+    registry,
+    /moduleKey: "demands",[\s\S]*?viewKey: "inbox"/u,
+  );
+
+  assert.match(
+    registry,
+    /moduleKey: "demands",[\s\S]*?viewKey: "planner"/u,
+  );
+
+  assert.match(registry, /capability: "processes\.read"/u);
+
+  assert.doesNotMatch(
+    registry,
+    /fetch\(|\/api\//u,
+    "registry não deve chamar API nem executar módulos",
+  );
+});
 test("a ação primária da barra é declarada, nunca deduzida por exclusão", () => {
   // Comentários fora antes de procurar: o texto que explica a decisão cita a
   // cadeia antiga, e casar com ele acusaria o contrário do que se quer.

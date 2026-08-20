@@ -70,3 +70,37 @@ test("criar processo começa pelas modelagens iniciais, e a chave só vale na cr
   assert.match(view, /processTemplates\.map\(\(template, index\)/u);
   assert.match(view, /onClick=\{\(\) => startFromTemplate\(""\)\}/u, "faltou a opção de começar em branco");
 });
+
+test("modelador mantém instância durante autosave e responde ao viewport",async()=>{
+  const [modeler,css]=await Promise.all([
+    readFile(
+      new URL("../app/painel/features/processes/ProcessModeler.tsx",import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/painel/features/processes/processes.module.css",import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(modeler,/bpmn-js\/dist\/assets\/bpmn-js\.css/u);
+  assert.match(modeler,/sourceXmlRef/u);
+  assert.match(modeler,/fullscreenchange/u);
+  assert.match(modeler,/resized/u);
+  assert.match(modeler,/toggleFullscreen/u);
+
+  assert.doesNotMatch(
+    modeler,
+    /\[readOnly,version\.id,version\.bpmnXml\]/u,
+    "autosave não pode destruir e recriar o modelador a cada alteração do XML",
+  );
+
+  assert.doesNotMatch(
+    css,
+    /\.workspace svg\{/u,
+    "regra genérica de SVG não pode alterar os desenhos internos do bpmn-js",
+  );
+
+  assert.match(css,/\.modelerShell:fullscreen/u);
+  assert.match(css,/\.bpmnCanvas :global\(\.djs-container\)/u);
+});
