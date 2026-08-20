@@ -183,6 +183,15 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.doesNotMatch(script, /Navegação do painel"\] > button/u);
   // Console sem áreas visíveis passou a ser falha, não aviso.
   assert.match(script, /nenhuma área visível; a varredura não rodou/u);
+
+  // A interface tem um tema só desde que virou exclusivamente escura, e a
+  // varredura parou de clicar num alternador que não existe mais — era isso que
+  // a reprovava. A troca some, mas a regra que ela protegia não: se o segundo
+  // tema voltar, a varredura precisa acusar em vez de medir metade em silêncio.
+  assert.doesNotMatch(script, /async function switchTheme/u);
+  assert.match(script, /async function themeToggleExists/u);
+  assert.match(script, /um alternador de tema voltou à interface/u);
+  assert.match(script, /await auditEverything\(\);/u);
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts["a11y-check"], "node scripts/a11y-check.mjs");
 });

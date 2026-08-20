@@ -26,7 +26,17 @@ export const VINCULATO_BRAND = {
   logoRatio: 960 / 178,
 } as const;
 
-type MarkProps = { size?: number; title?: string; className?: string; priority?: boolean };
+/**
+ * A marca é servida sem a perda padrão do otimizador.
+ *
+ * `next/image` reencoda para WebP/AVIF com qualidade 75. Numa fotografia isso é
+ * invisível; num logotipo de traço chapado sobre fundo escuro é o pior caso da
+ * compressão com perdas, e o resultado é o halo claro contornando o símbolo. O
+ * valor precisa constar de `images.qualities` em `next.config.ts`.
+ */
+const BRAND_IMAGE_QUALITY = 100;
+
+type MarkProps ={ size?: number; title?: string; className?: string; priority?: boolean };
 
 export function VinculatoMark({ size = 32, title = "Vinculato", className, priority }: MarkProps) {
   return (
@@ -37,6 +47,7 @@ export function VinculatoMark({ size = 32, title = "Vinculato", className, prior
       width={Math.round(size * VINCULATO_BRAND.markRatio)}
       height={size}
       priority={priority}
+      quality={BRAND_IMAGE_QUALITY}
       style={{ width: "auto", height: size }}
     />
   );
@@ -59,6 +70,7 @@ export function VinculatoLogo({ size = 34, compact = false, className, title = "
       width={Math.round(size * VINCULATO_BRAND.logoRatio)}
       height={size}
       priority={priority}
+      quality={BRAND_IMAGE_QUALITY}
       style={{ width: "auto", height: size }}
     />
   );

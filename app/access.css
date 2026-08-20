@@ -1485,3 +1485,106 @@ html, body { max-width: 100%; overflow-x: hidden; }
 @media (min-width: 1500px) {
   .sidebar-workspace-switcher summary > span, .sidebar-workspace-switcher summary > svg { display: initial; }
 }
+
+/* ============================================================
+   Abertura do sistema (pós-login)
+   ============================================================
+   A geometria abaixo não é estimada: foi medida no canal alfa de
+   `public/brand/vinculato-logo-light.png` (960x178). O símbolo ocupa as colunas
+   0–222, o vão vazio vai de 223 a 275 e o logotipo começa em 276. Daí saem os
+   dois números que a animação usa:
+
+   - corte do primeiro momento: 249,5 / 960 = 25,99% da largura (meio do vão),
+     que deixa o símbolo inteiro visível sem encostar na primeira letra;
+   - deslocamento que centraliza o símbolo: o centro dele está a 11,5625% da
+     largura, então 50% − 11,5625% = 38,4375%.
+
+   Com isso a peça inteira é o arquivo oficial recortado e reposicionado — os
+   dois quadros do vídeo antigo, sem quadro comprimido nenhum. */
+.vin-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #09131f;
+}
+
+.vin-intro-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--brand-accent, #168CFD) 13%, transparent), transparent 46%),
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--brand-accent, #168CFD) 7%, transparent), transparent 68%);
+  opacity: 0;
+  animation: vin-intro-glow 2400ms ease-out both;
+}
+
+.vin-intro-lockup {
+  /* Teto de ampliação. O arquivo tem 960px de largura, e a regra é não pedir a
+     ele mais pixel do que ele tem: 520px de exibição consomem pouco mais da
+     metade da origem. Era justamente o oposto do que o vídeo fazia — ele
+     esticava a mesma arte para perto de 1570px num ecrã de 1920 e ainda a
+     entregava comprimida. */
+  position: relative;
+  width: min(70vw, 520px);
+  opacity: 0;
+  /* A origem fica no centro do símbolo (11,5625% da largura do arquivo), então
+     a ampliação do primeiro momento acontece em torno dele e não desloca nada. */
+  transform-origin: 11.5625% 50%;
+}
+
+.vin-intro-lockup.is-playing {
+  animation: vin-intro-reveal 2400ms cubic-bezier(.22, .61, .36, 1) both;
+}
+
+.vin-intro-art {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.vin-intro-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* O símbolo abre ampliado em 1,55 e assenta em 1 enquanto o logotipo é
+   revelado — o mesmo encadeamento do vídeo antigo, agora sem quadro
+   comprimido. A ampliação tem teto próprio: 1,55 põe o símbolo em cerca de
+   188px de tela contra 223px de origem, ou seja, ele nunca é esticado além do
+   que o arquivo tem para dar. */
+@keyframes vin-intro-reveal {
+  0% { opacity: 0; transform: translate3d(38.4375%, 0, 0) scale(1.43); clip-path: inset(0 74.01% 0 0); }
+  16% { opacity: 1; transform: translate3d(38.4375%, 0, 0) scale(1.55); clip-path: inset(0 74.01% 0 0); }
+  34% { opacity: 1; transform: translate3d(38.4375%, 0, 0) scale(1.55); clip-path: inset(0 74.01% 0 0); }
+  76% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); clip-path: inset(0 0 0 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); clip-path: inset(0 0 0 0); }
+}
+
+@keyframes vin-intro-glow {
+  0% { opacity: 0; transform: scale(.82); }
+  40% { opacity: 1; transform: scale(1); }
+  100% { opacity: .72; transform: scale(1.06); }
+}
+
+/* Quem pediu menos movimento não passa pela abertura — `LoginForm` navega
+   direto. A regra abaixo cobre o caso de a preferência mudar com a tela já
+   montada: o logotipo aparece inteiro e parado, e o encerramento fica por conta
+   do temporizador do componente. */
+@media (prefers-reduced-motion: reduce) {
+  .vin-intro-glow,
+  .vin-intro-lockup.is-playing {
+    animation: none;
+  }
+  .vin-intro-glow { opacity: .72; }
+  .vin-intro-lockup { opacity: 1; transform: none; clip-path: none; }
+}
