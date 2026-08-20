@@ -188,12 +188,15 @@ let screensAudited = 0;
 /**
  * Piso de cobertura.
  *
- * A varredura completa mede 59 telas — dois temas do painel, do console e das
- * subabas. O piso existe porque este script já falhou do jeito mais perigoso
- * que um verificador pode falhar: passar. Um seletor de navegação que deixou de
- * casar tirou 32 telas da varredura, e a conclusão impressa continuou sendo
- * "OK: 0 violações" — 0 violações em nada. O número é folgado de propósito:
- * acusa um colapso de cobertura sem quebrar quando um módulo sai do plano.
+ * A varredura completa mede 47 telas — o painel, o console e as subabas. Eram
+ * 59 quando a interface tinha dois temas e cada tela era medida duas vezes; com
+ * um tema só, o mesmo alcance custa uma passagem.
+ *
+ * O piso existe porque este script já falhou do jeito mais perigoso que um
+ * verificador pode falhar: passando. Um seletor de navegação que deixou de casar
+ * tirou 32 telas da varredura, e a conclusão impressa continuou sendo "OK: 0
+ * violações" — 0 violações em nada. O número é folgado de propósito: acusa um
+ * colapso de cobertura sem quebrar quando um módulo sai do plano.
  */
 const MINIMO_DE_TELAS = 40;
 
@@ -257,7 +260,7 @@ async function auditSubTabs(prefix, selector) {
  * junto com a tela que o hospeda. Aqui ele é aberto de propósito: um painel que
  * só aparece quando chamado ainda precisa ser legível quando aparece.
  */
-async function auditAssistant(theme = "") {
+async function auditAssistant() {
   const launcher = page.locator('button[class*="launcher"]').filter({ hasText: /Assistente/u }).first();
   if (await launcher.count() === 0) {
     console.log("\n### Assistente — lançador não encontrado");
@@ -267,7 +270,7 @@ async function auditAssistant(theme = "") {
   await launcher.click();
   await page.locator('aside[aria-label="Assistente do Vinculato"]').waitFor({ state: "visible", timeout: 10000 });
   await page.waitForTimeout(1200);
-  await audit(`Painel › Assistente${theme ? ` [${theme}]` : ""}`, null);
+  await audit("Painel › Assistente", null);
   await page.keyboard.press("Escape").catch(() => undefined);
   await page.waitForTimeout(300);
 }
@@ -286,7 +289,7 @@ async function signIn() {
  * O painel troca de tela por estado, não por rota: auditar só `/painel` cobriria
  * a visão geral e mais nada. Aqui a navegação lateral é percorrida de verdade.
  */
-async function auditPanelViews(theme = "") {
+async function auditPanelViews() {
   // Descendente, não filho direto. O menu agrupou os itens por contexto e o
   // seletor `> button` deixou de casar — sem erro nenhum: a varredura passou a
   // visitar zero telas do painel e a imprimir "0 violações".
@@ -302,44 +305,47 @@ async function auditPanelViews(theme = "") {
     const button = nav.filter({ hasText: label }).first();
     await button.click().catch(() => undefined);
     await page.waitForTimeout(900);
-    await audit(`Painel › ${label}${theme ? ` [${theme}]` : ""}`, null);
+    await audit(`Painel › ${label}`, null);
     if (/Cadastros/u.test(label)) {
-      await auditSubTabs(`Painel › ${label}${theme ? ` [${theme}]` : ""}`, 'main [class*="tabs"] > button, [class*="__tabs"] > button');
+      await auditSubTabs(`Painel › ${label}`, 'main [class*="tabs"] > button, [class*="__tabs"] > button');
     }
     await page.keyboard.press("Escape").catch(() => undefined);
   }
 }
 
 /**
- * Troca o tema pelo botão do cabeçalho — o mesmo caminho da pessoa.
+ * A interface passou a ter um tema só.
  *
- * Sem isto a varredura media só o tema padrão, e um tema inteiro ficava sem
- * auditoria nenhuma: "zero violações" queria dizer "zero violações na metade
- * que eu olhei".
+ * A varredura auditava dois temas e trocava entre eles pelo botão do cabeçalho.
+ * Esse botão saiu quando a interface virou exclusivamente escura, e a troca
+ * passou a falhar — corretamente: a regra que ela protegia era "nunca audite
+ * metade". Mas o produto não tem mais metade, e a passagem que sobrou já mede a
+ * interface escura, que é a única que existe.
+ *
+ * A regra continua valendo, agora do outro lado. Se um alternador de tema
+ * voltar à interface, a varredura precisa voltar a cobrir os dois — então a
+ * busca pelo botão não foi apagada junto com a troca. Ela virou sentinela:
+ * acusa a volta do segundo tema em vez de deixá-lo sem auditoria em silêncio,
+ * que é a falha que este script já cometeu antes.
  */
-async function switchTheme(target) {
-  const label = target === "dark" ? /Ativar modo noturno/u : /Ativar modo claro/u;
-  const toggle = page.getByRole("button", { name: label });
-  if (await toggle.count() === 0) return false;
-  await toggle.first().click();
-  await page.waitForTimeout(700);
-  return true;
+async function themeToggleExists() {
+  return await page.getByRole("button", { name: /Ativar modo (noturno|claro)/u }).count() > 0;
 }
 
-async function auditEverything(theme) {
-  console.log(`\n\n═══════════ TEMA ${theme.toUpperCase()} ═══════════`);
+async function auditEverything() {
+  console.log("\n\n═══════════ INTERFACE ═══════════");
   await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
-  if (theme === "dark" && !await switchTheme("dark")) {
-    console.log("não foi possível ativar o tema escuro");
+  if (await themeToggleExists()) {
+    console.log("um alternador de tema voltou à interface: a varredura precisa cobrir os dois temas de novo");
     failures += 1;
     return;
   }
-  await audit(`Painel [${theme}]`, null);
-  await auditPanelViews(theme);
-  await auditAssistant(theme);
-  await audit(`Console da plataforma [${theme}]`, "/plataforma");
-  await auditPlatformAreas(theme);
+  await audit("Painel", null);
+  await auditPanelViews();
+  await auditAssistant();
+  await audit("Console da plataforma", "/plataforma");
+  await auditPlatformAreas();
 }
 
 /**
@@ -350,7 +356,7 @@ async function auditEverything(theme) {
  * que fez a varredura anterior declarar "zero violações" enquanto oito módulos
  * do painel nunca haviam sido visitados.
  */
-async function auditPlatformAreas(theme = "") {
+async function auditPlatformAreas() {
   const nav = page.locator('aside[aria-label="Áreas da administração global"] nav button');
   const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
   if (labels.length === 0) {
@@ -363,7 +369,7 @@ async function auditPlatformAreas(theme = "") {
   for (const label of labels) {
     await nav.filter({ hasText: label }).first().click().catch(() => undefined);
     await page.waitForTimeout(1100);
-    await audit(`Plataforma › ${label}${theme ? ` [${theme}]` : ""}`, null);
+    await audit(`Plataforma › ${label}`, null);
   }
 }
 
@@ -374,10 +380,7 @@ try {
     await signIn();
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   });
-  // O tema fica no localStorage, então a escolha atravessa as navegações.
-  await auditEverything("light");
-  await auditEverything("dark");
-  await switchTheme("light");
+  await auditEverything();
 } finally {
   await browser.close();
 }

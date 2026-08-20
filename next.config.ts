@@ -12,6 +12,14 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  images: {
+    // O otimizador entrega WebP/AVIF com qualidade 75 por padrão, e 75 num
+    // logotipo — borda dura de cor chapada sobre fundo escuro — é exatamente o
+    // caso em que a compressão com perdas devolve halo em volta do traço. A
+    // marca passa a pedir 100; o resto das imagens continua em 75. Sem esta
+    // lista o Next recusa qualquer valor fora do padrão.
+    qualities: [75, 100],
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
