@@ -14,7 +14,7 @@ import {
   epiReturnConditionLabels, epiTypeLabels, epiTypes,
 } from "@/lib/epi";
 import { epiComplianceStatusLabels } from "@/lib/epi-compliance";
-import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, LoadingState, PageSkeleton, PanelHeader, StatusPill } from "../shared";
 import { EpiDialog } from "./EpiDialogs";
 import { EpiDashboardPanel, EpiPeoplePanel, EpiRequirementsPanel } from "./EpiCompliancePanels";
 import {
@@ -303,7 +303,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   }
   if (loading) {
     return <section className={styles.workspace}>
-      <LoadingState size="page" title="Abrindo o Controle de EPI" text="Carregando estoque, entregas e casos em análise…" />
+      <PageSkeleton label="Abrindo o Controle de EPI" rows={5} />
     </section>;
   }
   if (error && !overview) {
@@ -315,7 +315,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   }
   if (!overview) {
     return <section className={styles.workspace}>
-      <LoadingState size="page" title="Abrindo o Controle de EPI" text="Preparando o estoque compartilhado do grupo…" />
+      <PageSkeleton label="Preparando o estoque compartilhado do grupo" rows={5} />
     </section>;
   }
   const summary = overview.summary;

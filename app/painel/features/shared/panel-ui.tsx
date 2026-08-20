@@ -1,8 +1,10 @@
 "use client";
 
-import { AlertOctagon, LoaderCircle, X, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { AlertOctagon, LoaderCircle, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
+import { useDialogFocus, useExitTransition } from "./motion";
 import { statusTone, type PanelTone } from "./status-tone";
+import motion from "./motion.module.css";
 import styles from "./panel-ui.module.css";
 
 /**
@@ -69,6 +71,93 @@ export function ErrorBanner({ title, message, onDismiss }: {
     <span>{title ? <strong>{title}</strong> : null}{message}</span>
     {onDismiss ? <button type="button" onClick={onDismiss} aria-label="Fechar aviso"><X aria-hidden="true" /></button> : null}
   </div>;
+}
+
+/**
+ * Esqueleto de página (§51).
+ *
+ * `LoadingState` continua valendo para uma faixa dentro de uma tela já
+ * desenhada — uma aba que recarrega, um painel lateral. Para a tela inteira
+ * ele diz apenas "algo está acontecendo": o rodopio não tem forma, e a chegada
+ * do dado salta o layout inteiro de uma vez.
+ *
+ * O esqueleto diz a forma do que vem. Quem já conhece a tela reconhece o
+ * destino antes de o dado chegar, e o espaço já está reservado quando ele
+ * chega. `role="status"` com `aria-busy` porque a espera precisa ser anunciada
+ * — sem isso, quem usa leitor de tela ouve silêncio entre o clique e os dados.
+ */
+export function PageSkeleton({ label, rows = 3, metrics = 4 }: {
+  /** O que está sendo carregado. Anunciado ao leitor de tela. */
+  label: string;
+  /** Linhas da lista/tabela esperada. */
+  rows?: number;
+  /** Indicadores da fila superior; `0` para telas que não têm. */
+  metrics?: number;
+}) {
+  const bar = (size: string, index: number) =>
+    <span key={`${size}-${index}`} className={styles.skeletonBar} data-size={size}
+      style={{ "--skeleton-index": index } as CSSProperties} />;
+
+  return <div className={styles.pageSkeleton} role="status" aria-busy="true" aria-live="polite">
+    <span className={styles.srOnly}>{label}</span>
+    <div className={styles.skeletonBlock} aria-hidden="true">
+      {bar("title", 0)}
+      {bar("line", 1)}
+    </div>
+    {metrics > 0 && <div className={styles.skeletonRow} aria-hidden="true">
+      {Array.from({ length: metrics }, (_, index) =>
+        <div key={index} className={styles.skeletonBlock}>{bar("tall", index)}</div>)}
+    </div>}
+    <div className={styles.skeletonBlock} aria-hidden="true">
+      {Array.from({ length: rows }, (_, index) => bar("row", index))}
+    </div>
+  </div>;
+}
+
+/**
+ * Confirmação de ação destrutiva (§53).
+ *
+ * O que o diálogo precisa dizer não é "tem certeza?" — é o que vai acontecer:
+ * "esta operação irá retirar 2 unidades do estoque disponível". A `consequence`
+ * é obrigatória por isso; um diálogo sem ela devolve a pergunta a quem já
+ * clicou e não acrescenta informação nenhuma para decidir.
+ *
+ * `role="alertdialog"` e não `dialog`: é a função que o ARIA reserva para uma
+ * interrupção que exige resposta, e o leitor de tela anuncia a descrição
+ * sozinho ao receber o foco.
+ */
+export function ConfirmDialog({ open, title, consequence, confirmLabel, busy, onCancel, onConfirm, eyebrow = "CONFIRMAÇÃO NECESSÁRIA" }: {
+  open: boolean;
+  title: string;
+  consequence: string;
+  confirmLabel: string;
+  busy?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  eyebrow?: string;
+}) {
+  const { mounted, state } = useExitTransition(open, 250);
+  const ref = useDialogFocus(mounted && state === "open", onCancel, busy);
+  if (!mounted) return null;
+  return (
+    <div className={motion.backdrop} data-state={state} onMouseDown={busy ? undefined : onCancel}>
+      <div ref={ref} className={styles.confirmDialog} data-state={state}
+        role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-consequence"
+        onMouseDown={(event) => event.stopPropagation()}>
+        <header><span>{eyebrow}</span><h2 id="confirm-title">{title}</h2></header>
+        <div className={styles.confirmBody}>
+          <TriangleAlert aria-hidden="true" />
+          <p id="confirm-consequence">{consequence}</p>
+        </div>
+        <footer>
+          <button type="button" className={styles.confirmCancel} onClick={onCancel} disabled={busy}>Cancelar</button>
+          <button type="button" className={styles.confirmAction} onClick={onConfirm} disabled={busy}>
+            {busy ? "Confirmando…" : confirmLabel}
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
 }
 
 export function StatusPill({ status, label, tone }: { status: string; label: string; tone?: PanelTone }) {

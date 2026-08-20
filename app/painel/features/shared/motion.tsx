@@ -213,7 +213,7 @@ export function MotionCard({ icon: Icon, title, description, meta, onClick, disa
  * teclado recomeça a tela do zero. Sem a prisão, o Tab passeia pela página
  * atrás da janela, que é a mesma falha por outro caminho.
  */
-function useDialogFocus(active: boolean, onClose: () => void) {
+export function useDialogFocus(active: boolean, onClose: () => void, busy = false) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -227,7 +227,9 @@ function useDialogFocus(active: boolean, onClose: () => void) {
     focusables()[0]?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.stopPropagation(); onClose(); return; }
+      // Esc não escapa no meio de uma ação já enviada: fechar aqui deixaria a
+      // pessoa sem saber se a exclusão que ela pediu chegou a acontecer.
+      if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); return; }
       if (event.key !== "Tab") return;
       const nodes = focusables();
       if (nodes.length === 0) return;
@@ -242,7 +244,7 @@ function useDialogFocus(active: boolean, onClose: () => void) {
       document.removeEventListener("keydown", onKeyDown, true);
       previous?.focus?.();
     };
-  }, [active, onClose]);
+  }, [active, busy, onClose]);
 
   return ref;
 }

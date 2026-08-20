@@ -164,3 +164,113 @@
   .headerAction { flex-wrap: wrap; }
   .headerAction > * { flex: 1; }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Esqueleto de carregamento (§51)                                             */
+/* -------------------------------------------------------------------------- */
+/* "Carregando…" com um rodopio diz que algo está acontecendo e nada sobre o
+ * quê. O esqueleto diz a forma do que vem: um cabeçalho, uma fila de
+ * indicadores, uma tabela. Quem já conhece a tela reconhece o destino antes de
+ * o dado chegar, e o salto de layout na chegada é menor porque o espaço já
+ * estava reservado.
+ *
+ * O pulso anima só `opacity` — a §21 pede isso, e um esqueleto que recalcula
+ * layout a cada quadro custaria mais que a espera que ele disfarça. */
+.pageSkeleton {
+  display: grid;
+  gap: var(--layout-page-gap, 20px);
+}
+
+/* O que o esqueleto diz a quem não o vê. `clip-path` além de `clip` porque o
+   segundo está obsoleto e alguns navegadores já o ignoram. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skeletonBlock {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg, 14px);
+  background: var(--ui-surface);
+  padding: var(--layout-card-padding, 20px);
+  display: grid;
+  gap: 12px;
+}
+
+.skeletonRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+
+.skeletonBar {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--ui-surface-muted);
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+  animation-delay: calc(var(--skeleton-index, 0) * 90ms);
+}
+
+.skeletonBar[data-size="title"] { height: 22px; max-width: 280px; }
+.skeletonBar[data-size="line"] { max-width: 460px; }
+.skeletonBar[data-size="tall"] { height: 58px; border-radius: var(--ui-radius-md, 10px); }
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .48; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Confirmação de ação destrutiva (§53)                                        */
+/* -------------------------------------------------------------------------- */
+
+.confirmDialog {
+  width: min(100%, 460px);
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg, 14px);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-modal);
+  animation: confirmEnter var(--motion-modal, 250ms) var(--ease-enter) both;
+}
+
+.confirmDialog[data-state="closing"] {
+  animation: confirmEnter var(--motion-modal, 250ms) var(--ease-exit) reverse both;
+}
+
+@keyframes confirmEnter {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.confirmDialog > header { padding: 18px 20px 0; display: grid; gap: 4px; }
+.confirmDialog > header span { color: var(--ui-state-warn-text); font-size: .59rem; font-weight: 820; letter-spacing: .11em; }
+.confirmDialog h2 { margin: 0; color: var(--ui-text); font-size: 1.05rem; letter-spacing: -.02em; }
+
+/* O ícone fica ao lado do texto, não acima: a §53 mostra a consequência como
+   frase, e um símbolo grande centralizado transforma um aviso operacional em
+   alarme. */
+.confirmBody { padding: 14px 20px 4px; display: flex; align-items: flex-start; gap: 12px; }
+.confirmBody > svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--ui-danger); }
+.confirmBody p { margin: 0; color: var(--ui-text-soft); font-size: .78rem; line-height: 1.55; }
+
+.confirmDialog > footer { padding: 18px 20px 20px; display: flex; justify-content: flex-end; gap: 8px; }
+
+.confirmDialog > footer button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: var(--ui-radius-sm, 7px);
+  cursor: pointer;
+  font: inherit;
+  font-size: .74rem;
+  font-weight: 700;
+}
+
+.confirmCancel { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text); }
+.confirmCancel:hover { border-color: var(--ui-border-strong); background: var(--ui-surface-muted); }
+.confirmAction { border: 1px solid var(--ui-danger); background: var(--ui-danger); color: var(--ui-on-danger); }
+.confirmAction:disabled { opacity: .6; cursor: wait; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonBar, .confirmDialog { animation: none; }
+}

@@ -7,7 +7,7 @@ import {
   Stethoscope, UserCheck, UsersRound, WalletCards,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
 import { AuxiliaryDialog } from "./AuxiliaryDialogs";
 import { normalizeCompany, normalizeDetail, normalizeOverview, requestJson, type Row } from "./auxiliary.api";
 import type {
@@ -285,4 +285,4 @@ function buildModulePayload(module: AuxiliaryModule, form: FormData) {
   return { input: { serviceDescription: field(form, "serviceDescription"), invoiceNumber: field(form, "invoiceNumber"), servicePeriod: field(form, "servicePeriod"), grossAmount: Number(field(form, "grossAmount") || 0) }, output: { approvedAmount: Number(field(form, "approvedAmount") || 0), paymentDueDate: field(form, "paymentDueDate"), paymentReference: field(form, "paymentReference") } };
 }
 
-function LedgerLoading() { return <section className={styles.workspace}><LoadingState size="page" title="Abrindo o ledger de serviços" text="Carregando entregas, aprovações e fornecedores…" /></section>; }
+function LedgerLoading() { return <section className={styles.workspace}><PageSkeleton label="Abrindo o ledger de serviços" metrics={3} rows={5} /></section>; }

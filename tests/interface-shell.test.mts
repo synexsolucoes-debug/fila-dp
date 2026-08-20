@@ -203,3 +203,176 @@ test("a confirmação só libera quando todas as travas passam", async () => {
   assert.match(core, /reason\.trim\(\)\.length >= reasonMinLength/u);
   assert.match(core, /confirmation === action\.typedConfirmation/u);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Escala de superfície (§5, §6, §7)                                          */
+/* -------------------------------------------------------------------------- */
+
+test("os dois temas têm quatro degraus de superfície, e nenhum é branco puro", async () => {
+  /* A queixa da §5 é literal: "não quero o sistema branco". O tema claro
+     anterior era `#ffffff` de cartão sobre `#f5f7f9` de fundo — 1,03:1 entre os
+     dois, o que não é hierarquia, é uma folha de papel com texto. O escuro
+     tinha o mesmo defeito pelo avesso, e nenhum degrau acima da superfície:
+     modal e menu suspenso caíam no mesmo tom do cartão que os abriu. */
+  const css = await lerCss("app/dashboard-modern.css");
+  const bloco = (seletor: string) => {
+    const inicio = css.indexOf(seletor);
+    return css.slice(inicio, css.indexOf("\n}", inicio));
+  };
+  const claro = bloco(".dashboard-shell {\n  /* A identidade vem dos tokens");
+  const escuro = bloco(".dashboard-shell.theme-dark {");
+
+  for (const [nome, tema] of [["claro", claro], ["escuro", escuro]] as const) {
+    for (const token of ["--ui-bg", "--ui-surface", "--ui-surface-elevated", "--ui-surface-muted"]) {
+      const valor = tema.match(new RegExp(`${token}:\\s*(#[0-9a-f]{3,8})`, "u"))?.[1];
+      assert.ok(valor, `o tema ${nome} não declara ${token}`);
+      assert.notEqual(valor!.toLowerCase(), "#ffffff", `${token} no tema ${nome} é branco puro`);
+      assert.notEqual(valor!.toLowerCase(), "#fff", `${token} no tema ${nome} é branco puro`);
+    }
+    // Quatro valores distintos: dois degraus iguais são um degrau.
+    const degraus = ["--ui-bg", "--ui-surface", "--ui-surface-elevated", "--ui-surface-muted"]
+      .map((token) => tema.match(new RegExp(`${token}:\\s*(#[0-9a-f]{3,8})`, "u"))?.[1]?.toLowerCase());
+    assert.equal(new Set(degraus).size, 4, `o tema ${nome} repete um degrau da escala`);
+  }
+});
+
+test("todo preenchimento colorido declara o que se lê em cima dele", async () => {
+  /* `--ui-on-danger` era consumido pelo módulo de Processos — `color:
+     var(--ui-on-danger)` no botão de arquivar — e não existia em lugar nenhum
+     do projeto. Uma variável indefinida não avisa: a declaração cai no valor
+     computado e o texto herda a cor do pai. No tema escuro isso era vermelho
+     claro sobre vermelho claro. */
+  const css = await lerCss("app/dashboard-modern.css");
+  for (const token of ["--ui-on-accent", "--ui-on-danger", "--ui-on-done"]) {
+    assert.ok((css.split(`${token}:`).length - 1) >= 2,
+      `${token} precisa de valor no claro e no escuro`);
+  }
+  // E nenhum token consumido pelo painel pode ficar sem dono. A varredura é
+  // sobre os CSS de módulo, que foi onde o defeito nasceu.
+  const definidos = new Set([...css.matchAll(/(--ui-[\w-]+):/gu)].map((match) => match[1]));
+  const globais = await lerCss("app/globals.css");
+  for (const match of globais.matchAll(/(--ui-[\w-]+):/gu)) definidos.add(match[1]);
+
+  const orfaos = new Set<string>();
+  for (const modulo of await readdir(new URL("../app/painel/features/", import.meta.url))) {
+    const dir = new URL(`${modulo}/`, new URL("../app/painel/features/", import.meta.url));
+    const arquivos = await readdir(dir).catch(() => [] as string[]);
+    for (const nome of arquivos.filter((arquivo) => arquivo.endsWith(".module.css"))) {
+      const conteudo = await readFile(new URL(nome, dir), "utf8");
+      for (const uso of conteudo.matchAll(/var\(\s*(--ui-[\w-]+)\s*[,)]/gu)) {
+        if (!definidos.has(uso[1])) orfaos.add(`${modulo}/${nome}: ${uso[1]}`);
+      }
+    }
+  }
+  assert.deepEqual([...orfaos], [], "token consumido e nunca declarado — a regra some sem avisar");
+});
+
+/* -------------------------------------------------------------------------- */
+/* Tokens de layout e de movimento (§42, §78)                                 */
+/* -------------------------------------------------------------------------- */
+
+test("recuo, intervalo e largura são medida única, não escolha de cada módulo", async () => {
+  const css = await lerCss("app/dashboard-modern.css");
+  for (const token of ["--layout-sidebar-width", "--layout-sidebar-collapsed", "--layout-header-height",
+    "--layout-page-padding", "--layout-page-gap", "--layout-section-gap", "--layout-card-padding",
+    "--layout-content-max"]) {
+    assert.ok(css.includes(`${token}:`), `falta ${token}`);
+  }
+  // E a casca consome os seus, em vez de repetir o número.
+  assert.match(css, /grid-template-columns: var\(--layout-sidebar-width\)/u);
+  assert.match(css, /grid-template-columns: var\(--layout-sidebar-collapsed\)/u);
+});
+
+test("as durações têm nome por papel, e as curvas separam entrar de sair", async () => {
+  // A §78 pede que a interface inteira fale a mesma língua de movimento. Nome
+  // por papel é o que permite isso: quem escreve um menu suspenso novo pega
+  // `--motion-dropdown` sem precisar lembrar se o número era 180 ou 220.
+  const css = await lerCss("app/dashboard-modern.css");
+  for (const token of ["--motion-hover", "--motion-micro", "--motion-dropdown", "--motion-modal",
+    "--motion-drawer", "--motion-page", "--ease-standard", "--ease-enter", "--ease-exit",
+    "--motion-distance-sm", "--motion-distance-md"]) {
+    assert.ok(css.includes(`${token}:`), `falta ${token}`);
+  }
+  // Nenhuma duração acima de 400ms: a §11 é explícita sobre não prejudicar a
+  // produtividade, e acima disso o movimento deixa de parecer resposta.
+  for (const [, valor] of css.matchAll(/--motion-(?:hover|micro|dropdown|modal|drawer|page):\s*(\d+)ms/gu)) {
+    assert.ok(Number(valor) <= 400, `duração de ${valor}ms passa do teto da §11`);
+  }
+});
+
+test("a biblioteca de movimento só anima transform e opacity", async () => {
+  const css = await lerCss("app/painel/features/shared/motion.module.css");
+  for (const [, nome] of css.matchAll(/@keyframes (\w+)/gu)) {
+    const inicio = css.indexOf(`@keyframes ${nome}`);
+    const corpo = css.slice(inicio, css.indexOf("\n}", inicio));
+    for (const [, prop] of corpo.matchAll(/^\s*([a-z-]+):/gmu)) {
+      assert.ok(["transform", "opacity"].includes(prop),
+        `${nome} anima "${prop}", que custa layout a cada quadro`);
+    }
+  }
+  /* E os componentes não escrevem milissegundo próprio: tudo vem de token.
+     O valor de reserva dentro de `var(--token, 0ms)` não conta — ele espelha o
+     token e existe para o caso de ele não ter sido definido, que é o mesmo
+     critério que `tests/design-tokens.test.mts` usa para cor. */
+  const semComentario = css.replace(/\/\*[\s\S]*?\*\//gu, "");
+  const semReserva = semComentario.replace(/var\(\s*--[\w-]+\s*,\s*[^)]*\)/gu, "VAR");
+  const duracoesCruas = [...semReserva.matchAll(/(?:animation|transition)[^;]*?\b(\d+)ms/gu)]
+    .map((match) => match[1]);
+  assert.deepEqual(duracoesCruas, [], "duração escrita à mão; use os tokens --motion-*");
+});
+
+test("quem pede menos movimento recebe menos movimento também na biblioteca", async () => {
+  const css = await lerCss("app/painel/features/shared/motion.module.css");
+  const bloco = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+  assert.match(bloco, /animation: none !important;/u);
+  for (const alvo of ["pageTransition", "backdrop", "modal", "drawer", "staggerItem"]) {
+    assert.ok(bloco.includes(alvo), `falta desligar a animação de ${alvo}`);
+  }
+  // A versão reduzida não é "sem transição nenhuma": a mudança de cor continua
+  // explicando o que aconteceu. O que sai é o deslocamento.
+  assert.match(bloco, /transition-property: background-color, border-color, color;/u);
+  assert.match(bloco, /transform: none;/u);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Componentes compartilhados (§51, §53)                                      */
+/* -------------------------------------------------------------------------- */
+
+test("a página inteira carrega com esqueleto, não com um rodopio sem forma", async () => {
+  // §51: "Não mostrar Loading... em uma página corporativa sem necessidade."
+  // `LoadingState` continua valendo para uma faixa dentro de uma tela já
+  // desenhada; para a tela inteira o esqueleto diz a forma do que vem.
+  const shared = await readFile(new URL("../app/painel/features/shared/panel-ui.tsx", import.meta.url), "utf8");
+  assert.match(shared, /export function PageSkeleton/u);
+  assert.match(shared, /role="status" aria-busy="true" aria-live="polite"/u);
+
+  const semEsqueleto: string[] = [];
+  const raiz = new URL("../app/painel/features/", import.meta.url);
+  for (const modulo of await readdir(raiz)) {
+    const dir = new URL(`${modulo}/`, raiz);
+    for (const nome of (await readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith(".tsx"))) {
+      const fonte = await readFile(new URL(nome, dir), "utf8");
+      if (/<LoadingState size="page"/u.test(fonte)) semEsqueleto.push(`${modulo}/${nome}`);
+    }
+  }
+  assert.deepEqual(semEsqueleto, [], "carregamento de página inteira ainda usa o rodopio");
+});
+
+test("a confirmação destrutiva exige dizer o que vai acontecer", async () => {
+  /* §53: o diálogo não pergunta "tem certeza?" — ele diz a consequência
+     ("irá retirar 2 unidades do estoque disponível"). Por isso `consequence` é
+     obrigatória no tipo: um diálogo sem ela devolve a pergunta a quem já
+     clicou e não acrescenta nada para decidir. */
+  const shared = await readFile(new URL("../app/painel/features/shared/panel-ui.tsx", import.meta.url), "utf8");
+  const assinatura = shared.slice(shared.indexOf("export function ConfirmDialog"));
+  assert.match(assinatura.slice(0, 400), /consequence: string;/u,
+    "a consequência não pode ser opcional");
+  // `alertdialog` e não `dialog`: é a função que o ARIA reserva para uma
+  // interrupção que exige resposta.
+  assert.match(assinatura, /role="alertdialog" aria-modal="true"/u);
+  assert.match(assinatura, /aria-describedby="confirm-consequence"/u);
+  // Esc não escapa no meio de uma ação já enviada.
+  const motion = await readFile(new URL("../app/painel/features/shared/motion.tsx", import.meta.url), "utf8");
+  assert.match(motion, /event\.key === "Escape" && !busy/u);
+  assert.match(motion, /previous\?\.focus\?\.\(\)/u, "o foco volta para onde estava");
+});

@@ -8,8 +8,8 @@ import {
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { processTemplates, templateShape } from "@/lib/process-templates";
 import {
-  AnimatedDrawer, AnimatedModal, AnimatedTabs, EmptyState, ErrorBanner, FadeIn, LoadingState,
-  MotionCard, StaggerContainer, StaggerItem, StatusPill, type AnimatedTab,
+  AnimatedDrawer, AnimatedModal, AnimatedTabs, ConfirmDialog, EmptyState, ErrorBanner, FadeIn,
+  MotionCard, PageSkeleton, StaggerContainer, StaggerItem, StatusPill, type AnimatedTab,
 } from "../shared";
 import { ProcessModeler } from "./ProcessModeler";
 import { processRequest, processStatusLabel, processVersionLabel } from "./processes.api";
@@ -333,7 +333,9 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
     setStatus(""); setArea(""); setCompany(""); setOwner(""); setCategory("");
   }
 
-  if (loading) return <LoadingState title="Carregando processos..." text="Preparando biblioteca, versões e responsáveis." />;
+  // Esqueleto e não rodopio (§51): a tela é uma biblioteca com filtros e
+  // tabela, e o esqueleto já diz essa forma antes de o dado chegar.
+  if (loading) return <PageSkeleton label="Carregando a biblioteca de processos" metrics={0} rows={5} />;
 
   const selectedTemplate = processTemplates.find((template) => template.key === templateKey) ?? null;
 
@@ -518,18 +520,18 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
         close={() => setDialog(undefined)} submit={submit} busy={busy} template={selectedTemplate} />
     </AnimatedModal>
 
-    <AnimatedModal open={archiveTarget !== null} onClose={() => setArchiveTarget(null)} label="Arquivar processo" width={440}>
-      <div className={styles.confirmBody}>
-        <FolderArchive aria-hidden="true" />
-        <h3>Arquivar {archiveTarget?.name}?</h3>
-        <p>O histórico e as versões permanecem preservados. O processo sai da biblioteca e passa a aparecer apenas em Arquivados.</p>
-        <div>
-          <button type="button" onClick={() => setArchiveTarget(null)}>Cancelar</button>
-          <button type="button" className={styles.dangerButton} disabled={busy}
-            onClick={() => archiveTarget && void archiveProcess(archiveTarget)}>Arquivar</button>
-        </div>
-      </div>
-    </AnimatedModal>
+    {/* A confirmação vem do componente compartilhado (§53): ele exige a
+        consequência por escrito, prende o foco e não deixa o Esc escapar no
+        meio de uma ação já enviada. */}
+    <ConfirmDialog
+      open={archiveTarget !== null}
+      title={`Arquivar ${archiveTarget?.name ?? "processo"}?`}
+      consequence="O processo sai da biblioteca e passa a aparecer apenas em Arquivados. O histórico e as versões publicadas permanecem preservados, e nada que já foi executado é alterado."
+      confirmLabel="Arquivar processo"
+      busy={busy}
+      onCancel={() => setArchiveTarget(null)}
+      onConfirm={() => archiveTarget && void archiveProcess(archiveTarget)}
+    />
   </div>;
 }
 
