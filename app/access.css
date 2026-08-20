@@ -1097,14 +1097,15 @@ html, body { max-width: 100%; overflow-x: hidden; }
   color-scheme: light;
 }
 
+/* Terceira paleta, agora removida.
+ *
+ * Este bloco redeclarava `--ui-bg`, `--ui-surface`, `--ui-border` e os tons de
+ * texto com valores *diferentes* dos de `dashboard-modern.css` — que já
+ * ganhava por vir depois no `layout.tsx`. O efeito prático era que estas sete
+ * linhas nunca pintaram nada, mas apareciam em toda busca por "onde está a cor
+ * do tema escuro" e mandavam quem procurava para o lugar errado. A escala do
+ * tema mora num arquivo só; aqui fica apenas o que não é cor. */
 .dashboard-shell.theme-dark {
-  --ui-bg: #0c1521;
-  --ui-surface: #111d2b;
-  --ui-surface-muted: #162536;
-  --ui-border: #2b3c50;
-  --ui-border-strong: #3a4e64;
-  --ui-text: #eef5f4;
-  --ui-text-soft: #9aabbc;
   color-scheme: dark;
   background: var(--ui-bg);
 }

@@ -1,0 +1,368 @@
+/*
+ * Movimento reutilizável (§10, §22).
+ *
+ * Toda animação daqui obedece às mesmas três regras do bloco de movimento de
+ * `app/dashboard-modern.css`:
+ *
+ *   1. só `transform` e `opacity`, que rodam no compositor e não custam
+ *      layout — a §21 pede isso por escrito;
+ *   2. duração e curva vêm dos tokens (`--motion-*`, `--ease-*`), nunca de um
+ *      número escrito aqui, senão a §78 vira documento em vez de restrição;
+ *   3. quem pede menos movimento recebe menos movimento, no fim do arquivo.
+ *
+ * Não há cor neste arquivo de propósito: o teto de cor crua do módulo
+ * `shared` é zero (tests/design-tokens.test.mts) e movimento não é cor.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* Entrada                                                                     */
+/* -------------------------------------------------------------------------- */
+/* `backwards` e não `both`, e a diferença não é de acabamento.
+ *
+ * `both` = `backwards` + `forwards`, e `forwards` mantém o valor do último
+ * quadro depois que a animação termina. O último quadro destas entradas é
+ * `transform: none` — que, mantido como valor animado, o navegador computa
+ * como `matrix(1, 0, 0, 1, 0, 0)`. Uma matriz identidade ainda é um
+ * `transform`, e um `transform` faz do elemento o bloco de contenção de todo
+ * descendente `position: fixed`, além de abrir um contexto de empilhamento.
+ *
+ * O efeito medido: a janela de modelagens iniciais abria deslocada 106px e o
+ * cabeçalho do painel passava por cima dela. O diálogo estava correto; o
+ * ancestral é que tinha deixado de ser a viewport.
+ *
+ * `backwards` dá o que estas animações realmente precisam — segurar o estado
+ * inicial durante o atraso, para não piscar antes de começar — e devolve a
+ * propriedade ao valor da folha de estilo quando termina. */
+.fadeIn {
+  animation: fadeIn var(--motion-base) var(--ease-enter) backwards;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+.fadeInUp {
+  animation: fadeInUp var(--motion-base) var(--ease-enter) backwards;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(var(--motion-offset, 6px)); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Entrada em cascata (§12)                                                    */
+/* -------------------------------------------------------------------------- */
+/* O atraso é calculado a partir do índice que o React escreve em
+ * `--stagger-index`. Fazer isso no CSS em vez de um `setTimeout` por item
+ * mantém tudo no compositor e evita um re-render por degrau. O teto de 8
+ * degraus existe porque uma tabela com quarenta linhas em cascata vira espera:
+ * a partir do nono item todos entram juntos. */
+.staggerItem {
+  animation: fadeInUp var(--motion-base) var(--ease-enter) backwards;
+  animation-delay: calc(min(var(--stagger-index, 0), 8) * var(--stagger-step, 45ms) + var(--motion-delay, 0ms));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Troca de página e de módulo (§11)                                           */
+/* -------------------------------------------------------------------------- */
+/* Deslocamento mínimo e 300ms: dentro da faixa de 180–400ms que a §11 pede, e
+ * do lado curto dela, porque isto roda a cada clique no menu. */
+.pageTransition {
+  animation: pageEnter var(--motion-page) var(--ease-enter) backwards;
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(var(--motion-distance-sm, 6px)); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cartão (§9)                                                                 */
+/* -------------------------------------------------------------------------- */
+/* O estado de repouso já tem borda visível — a §8 é explícita quanto a isso —
+ * e o hover apenas a reforça. Elevação de 2px, sombra curta, borda mais forte
+ * e a seta andando 3px. Nada aqui muda tamanho: `scale` num cartão de texto
+ * borra a fonte durante a transição. */
+.motionCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--layout-card-padding);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  color: inherit;
+  text-align: left;
+  transition:
+    transform var(--motion-hover) var(--ease-standard),
+    border-color var(--motion-hover) var(--ease-standard),
+    box-shadow var(--motion-hover) var(--ease-standard),
+    background-color var(--motion-hover) var(--ease-standard);
+}
+
+.motionCard[data-interactive="true"] { cursor: pointer; }
+
+.motionCard > strong {
+  color: var(--ui-text);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+.motionCard > p {
+  margin: 0;
+  color: var(--ui-text-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* O ícone tem superfície própria — quadrado suave com a cor de destaque — em
+ * vez de flutuar sobre o cartão: é o que dá ao bloco um ponto de entrada
+ * visual sem precisar de ilustração. */
+.motionCardIcon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+  transition: border-color var(--motion-hover) var(--ease-standard);
+}
+
+.motionCard[data-interactive="true"]:hover .motionCardIcon { border-color: var(--ui-border-strong); }
+.motionCardIcon svg { width: 17px; height: 17px; }
+
+.motionCardFoot {
+  margin-top: auto;
+  padding-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ui-text-muted);
+  font-size: 11.5px;
+}
+
+.motionCardFoot svg { width: 16px; height: 16px; }
+
+.motionCard[data-interactive="true"]:hover {
+  transform: translateY(-2px);
+  border-color: var(--ui-border-strong);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-card);
+}
+
+.motionCard[data-interactive="true"]:active:not(:disabled) { transform: translateY(-1px); }
+
+/* A seta é o único elemento que se move dentro do cartão, e move 3px: a §9
+ * pede que ela "movimente levemente", não que voe. */
+.motionCardArrow {
+  margin-left: auto;
+  transition: transform var(--motion-hover) var(--ease-standard);
+}
+
+.motionCard[data-interactive="true"]:hover .motionCardArrow { transform: translateX(3px); }
+
+/* -------------------------------------------------------------------------- */
+/* Janela modal (§15)                                                          */
+/* -------------------------------------------------------------------------- */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--ink-scrim);
+  animation: fadeIn var(--motion-fast) var(--ease-enter) both;
+}
+
+.backdrop[data-state="closing"] {
+  animation: fadeIn var(--motion-fast) var(--ease-exit) reverse both;
+}
+
+.modal {
+  width: min(100%, var(--modal-width, 560px));
+  max-height: min(86dvh, 900px);
+  overflow: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-modal);
+  animation: modalEnter var(--motion-modal) var(--ease-enter) both;
+}
+
+.modal[data-state="closing"] {
+  animation: modalEnter var(--motion-modal) var(--ease-exit) reverse both;
+}
+
+@keyframes modalEnter {
+  from { opacity: 0; transform: translateY(var(--motion-distance-md, 12px)) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Gaveta (§16)                                                                */
+/* -------------------------------------------------------------------------- */
+
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  background: var(--ink-scrim);
+  animation: fadeIn var(--motion-fast) var(--ease-enter) both;
+}
+
+.drawerBackdrop[data-side="right"] { justify-content: flex-end; }
+
+.drawerBackdrop[data-state="closing"] {
+  animation: fadeIn var(--motion-fast) var(--ease-exit) reverse both;
+}
+
+.drawer {
+  width: min(100%, var(--drawer-width, 460px));
+  height: 100%;
+  overflow: auto;
+  border-left: 1px solid var(--ui-border);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-modal);
+  animation: drawerEnterRight var(--motion-drawer) var(--ease-enter) both;
+}
+
+.drawerBackdrop[data-side="left"] > .drawer {
+  border-right: 1px solid var(--ui-border);
+  border-left: 0;
+  animation-name: drawerEnterLeft;
+}
+
+.drawer[data-state="closing"] { animation-direction: reverse; animation-timing-function: var(--ease-exit); }
+
+@keyframes drawerEnterRight {
+  from { opacity: .4; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes drawerEnterLeft {
+  from { opacity: .4; transform: translateX(-24px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Abas com indicador deslizante (§17)                                         */
+/* -------------------------------------------------------------------------- */
+/* O indicador é um único elemento posicionado por `transform`, não uma borda
+ * que aparece e some em cada aba: é isso que faz a marca *deslizar* entre as
+ * opções em vez de piscar de lugar. Largura e deslocamento chegam por
+ * variável, medidos pelo componente.
+ *
+ * A largura é a única propriedade animada em todo este arquivo que não é
+ * `transform` ou `opacity`, e a §21 admite a exceção — "quando houver
+ * alternativa". Aqui não há uma boa: as abas têm rótulos de larguras
+ * diferentes, e a alternativa em `scaleX` distorce o raio da borda a cada
+ * quadro. O custo é contido porque o elemento é `position: absolute`, fora do
+ * fluxo: recalcular a largura dele não move nenhum irmão. */
+.tabs {
+  position: relative;
+  max-width: 100%;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted);
+  /* Quebra em vez de vazar — e em vez de rolar.
+     A primeira versão deixava a barra vazar: a gestão de processos tem nove
+     seções e, em 1366px, a última saía do cartão, cortada. A segunda pôs
+     `overflow-x: auto` com a barra de rolagem escondida, o que trocou o corte
+     por um esconderijo: o Controle de EPI entrega dez destinos, dos quais dois
+     ficavam fora da vista em 1280px sem nada dizendo que existiam, e num
+     mouse sem roda horizontal não havia como chegar lá.
+     Quebrando, todos os destinos ficam visíveis o tempo todo. O preço é a
+     barra ocupar duas linhas nas telas estreitas — o que é o tamanho honesto
+     de dez destinos, e o indicador acompanha porque também mede a linha. */
+  flex-wrap: wrap;
+}
+
+.tabsIndicator {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  height: var(--tab-height, 0px);
+  width: var(--tab-width, 0px);
+  border-radius: calc(var(--ui-radius-md) - 3px);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-card);
+  transform: translate(var(--tab-offset, 0px), var(--tab-top, 0px));
+  transition:
+    transform var(--motion-dropdown) var(--ease-standard),
+    width var(--motion-dropdown) var(--ease-standard),
+    height var(--motion-dropdown) var(--ease-standard);
+}
+
+/* Antes da primeira medição não há posição para deslizar até: aparecer pronto
+ * no lugar certo é melhor que atravessar a barra vindo da esquerda. */
+.tabsIndicator[data-ready="false"] { opacity: 0; transition: none; }
+
+.tab {
+  position: relative;
+  z-index: 1;
+  min-height: 34px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: calc(var(--ui-radius-md) - 3px);
+  background: transparent;
+  color: var(--ui-text-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color var(--motion-hover) var(--ease-standard);
+}
+
+.tab:hover { color: var(--ui-text); }
+.tab[aria-selected="true"] { color: var(--ui-accent-text); font-weight: 700; }
+.tab svg { width: 15px; height: 15px; }
+
+/* -------------------------------------------------------------------------- */
+/* Redução de movimento (§20)                                                  */
+/* -------------------------------------------------------------------------- */
+/* A versão simplificada não é "sem transição nenhuma": o estado ainda muda de
+ * cor, o que continua explicando o que aconteceu. O que sai é o deslocamento —
+ * é o movimento não pedido que causa enjoo, não a mudança de tom. */
+@media (prefers-reduced-motion: reduce) {
+  .fadeIn,
+  .fadeInUp,
+  .staggerItem,
+  .pageTransition,
+  .backdrop,
+  .modal,
+  .drawerBackdrop,
+  .drawer {
+    animation: none !important;
+  }
+
+  .motionCard,
+  .motionCardArrow,
+  .tabsIndicator {
+    transition-property: background-color, border-color, color;
+  }
+
+  .motionCard[data-interactive="true"]:hover,
+  .motionCard[data-interactive="true"]:active:not(:disabled),
+  .motionCard[data-interactive="true"]:hover .motionCardArrow {
+    transform: none;
+  }
+}

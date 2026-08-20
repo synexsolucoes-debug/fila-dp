@@ -34,7 +34,7 @@
 .primaryButton { border: 1px solid var(--time-accent); background: var(--time-accent); color: var(--time-on-accent, #fff) !important; }
 .primaryButton:hover:not(:disabled) { transform: translateY(-1px); background: color-mix(in srgb, var(--time-accent) 88%, #000); }
 .secondaryButton { border: 1px solid var(--time-border); background: var(--time-surface); color: inherit; }
-.secondaryButton:hover:not(:disabled) { border-color: var(--time-accent); color: var(--time-accent); }
+.secondaryButton:hover:not(:disabled) { border-color: var(--time-accent-text); color: var(--time-accent-text); }
 .primaryButton:disabled, .secondaryButton:disabled { cursor: not-allowed; opacity: .48; transform: none; }
 
 .commandBar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -54,7 +54,7 @@
 .moduleHeadline p { margin: 0; color: var(--time-soft); font-size: .78rem; }
 .moduleIcon {
   display: grid; place-items: center; width: 40px; height: 40px; flex: none;
-  border-radius: 11px; background: var(--time-accent-soft); color: var(--time-accent);
+  border-radius: 11px; background: var(--time-accent-soft); color: var(--time-accent-text);
 }
 .cycleBadge {
   display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 6px 11px;
@@ -113,7 +113,7 @@
   border: 1px solid var(--time-border); border-radius: 6px; background: var(--time-surface);
   font-size: .67rem; font-weight: 720; cursor: pointer;
 }
-.rowActions button:hover:not(:disabled) { border-color: var(--time-accent); color: var(--time-accent); }
+.rowActions button:hover:not(:disabled) { border-color: var(--time-accent-text); color: var(--time-accent-text); }
 .rowActions button:disabled { opacity: .5; cursor: not-allowed; }
 
 .mappingList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -130,7 +130,7 @@
   font-size: .77rem; color: var(--time-soft);
 }
 .warningState { border-color: color-mix(in srgb, var(--time-warning) 45%, transparent); color: var(--time-warning); }
-.privacyNotice { border-color: color-mix(in srgb, var(--time-accent) 40%, transparent); color: var(--time-accent); }
+.privacyNotice { border-color: color-mix(in srgb, var(--time-accent) 40%, transparent); color: var(--time-accent-text); }
 .spin { animation: timeSpin 1s linear infinite; }
 @keyframes timeSpin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } .primaryButton:hover { transform: none; } }

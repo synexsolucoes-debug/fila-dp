@@ -177,17 +177,44 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.match(script, /if \(screensAudited < MINIMO_DE_TELAS\)/u);
   assert.match(script, /COBERTURA INSUFICIENTE/u);
 
+  /* E a varredura precisa entrar nas abas de dentro de cada módulo.
+     Sem isto ela visitava o módulo, media a primeira aba e seguia adiante: as
+     dez abas do Controle de EPI, as nove da gestão de Processos e as quatro do
+     quadro nunca eram medidas, e o relatório dizia "0 violações" sobre o que
+     não tinha olhado. A primeira passagem com elas dentro acusou 122 violações
+     de contraste reais. */
+  assert.match(script, /async function auditModuleTabs/u);
+  assert.match(script, /await auditModuleTabs\(/u);
+  // As abas do cabeçalho de processo ficam de fora: elas levam às mesmas telas
+  // que o segundo nível do menu, e medi-las de novo infla o piso sem medir nada.
+  assert.match(script, /\.process-context \[role="tab"\]/u);
+  assert.ok(Number(script.match(/const MINIMO_DE_TELAS = (\d+);/u)?.[1]) >= 55,
+    "o piso precisa acompanhar o alcance da varredura, senão vira folga acumulada");
+
   // E a varredura precisa alcançar o menu mesmo com os itens agrupados: o
   // seletor de filho direto era exatamente o que quebrou.
-  assert.match(script, /nav\[aria-label="Navegação do painel"\] button/u);
+  assert.match(script, /nav\[aria-label="Navegação do painel"\] /u);
   assert.doesNotMatch(script, /Navegação do painel"\] > button/u);
   // Console sem áreas visíveis passou a ser falha, não aviso.
   assert.match(script, /nenhuma área visível; a varredura não rodou/u);
 
-  // A interface tem um tema só desde que virou exclusivamente escura, e a
-  // varredura parou de clicar num alternador que não existe mais — era isso que
-  // a reprovava. A troca some, mas a regra que ela protegia não: se o segundo
-  // tema voltar, a varredura precisa acusar em vez de medir metade em silêncio.
+  /* O menu tem dois níveis desde que passou a agrupar por processo (§25), e os
+     módulos do segundo só existem no DOM enquanto o processo está aberto. Ler
+     os rótulos uma vez no começo mediria os processos e os módulos de um só
+     deles — a mesma classe de ponto cego que já tirou 32 telas desta varredura
+     imprimindo "0 violações". Os dois níveis são percorridos em sequência. */
+  assert.match(script, /\.sidebar-process > button/u);
+  assert.match(script, /\.sidebar-process-view/u);
+
+  /* O produto voltou a ter um tema só, por decisão de produto registrada — e a
+     varredura volta ao posto de sentinela.
+
+     Esta trava já mudou de lado três vezes, e é justamente por isso que ela
+     existe: a regra que atravessou as três versões é sempre a mesma, **nunca
+     audite metade**. Quando havia dois temas, ela cobrava que os dois fossem
+     medidos. Com um só, ela cobra que a volta do segundo seja acusada em vez
+     de passar em silêncio — que é a única coisa capaz de tornar esta varredura
+     parcial sem ninguém perceber. */
   assert.doesNotMatch(script, /async function switchTheme/u);
   assert.match(script, /async function themeToggleExists/u);
   assert.match(script, /um alternador de tema voltou à interface/u);

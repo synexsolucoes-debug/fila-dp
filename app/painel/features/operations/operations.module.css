@@ -73,7 +73,7 @@
 .cycleRail li small { color: var(--ui-text-soft); font-size: .49rem; font-weight: 820; letter-spacing: .09em; }
 .cycleRail li strong { font-size: .72rem; }
 .cycleRail li div > span { color: var(--ui-text-soft); font-size: .59rem; white-space: nowrap; }
-.stageIndex { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ops-border); border-radius: 9px; color: var(--ui-text-soft55,255,255,.56); font-size: .67rem; font-weight: 800; }
+.stageIndex { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--ops-border); border-radius: 9px; color: var(--ui-text-soft); font-size: .67rem; font-weight: 800; }
 .stageDone { background: var(--ui-done-soft); }
 .stageDone .stageIndex { border-color: var(--ui-done); background: var(--ui-done); color: var(--ui-on-done); }
 .stageActive { background: var(--ui-accent-soft); box-shadow: inset 0 -3px var(--ui-primary); }

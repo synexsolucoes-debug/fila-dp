@@ -23,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, LoadingState, PageSkeleton, StatusPill } from "../shared";
 import { ContractorsPanel } from "./ContractorsPanel";
 import { EmployeeEpiPanel } from "../epi";
 import styles from "./registrations.module.css";
@@ -332,7 +332,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
 }
 
 function CompaniesPanel({ companies, loading, selected, onSelect, onEdit, onCreate, onRefresh, canManage }: { companies: Company[]; loading: boolean; selected: Company | null; onSelect: (id: string) => void; onEdit: (company: Company) => void; onCreate: () => void; onRefresh: () => Promise<void>; canManage: boolean }) {
-  if (loading) return <LoadingState title="Organizando a estrutura empresarial" />;
+  if (loading) return <PageSkeleton label="Organizando a estrutura empresarial" metrics={0} rows={6} />;
   if (!companies.length) return <EmptyState icon={Building2} title="Sua estrutura começa aqui" text="Cadastre a empresa principal e, depois, seus estabelecimentos e filiais." action={<button className={styles.secondaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Cadastrar empresa</button>} />;
   return <div className={styles.masterDetail}>
     <section className={styles.masterPane} aria-label="Empresas e estabelecimentos">

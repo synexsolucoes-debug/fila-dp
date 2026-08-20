@@ -7,7 +7,7 @@ import { IntegrationDrawer } from "./IntegrationDrawers";
 import { normalizeOverview, requestJson, type Row } from "./integrations.api";
 import type { Connector, IntegrationEditor, IntegrationsOverview, StandardConnectorConfig } from "./integrations.types";
 import { SankhyaConnectorPanel } from "./SankhyaConnectorPanel";
-import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
+import { EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
 const empty: IntegrationsOverview = {
@@ -89,7 +89,7 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
     await mutate(() => requestJson(`/api/integrations/${connector.id}/verify`, { method: "POST" }), "Conexão testada e verificada pelo provedor.");
   }
 
-  if (loading) return <section className={styles.workspace}><LoadingState size="page" title="Carregando estado das integrações" text="Consultando conectores, fila e execuções recentes…" /></section>;
+  if (loading) return <section className={styles.workspace}><PageSkeleton label="Carregando o estado das integrações" metrics={3} rows={4} /></section>;
 
   const queue = overview.queue.reduce((sum, item) => sum + item.count, 0);
   const failures = overview.runs.filter((run) => run.status === "failed" || run.status === "partial").length;

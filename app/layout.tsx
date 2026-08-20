@@ -69,6 +69,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Um tema só. Declarar `dark light` faria o navegador oferecer controles
+  // nativos claros para quem tem o sistema no claro, dentro de uma interface
+  // que é escura em todo o resto.
   colorScheme: "dark",
 };
 

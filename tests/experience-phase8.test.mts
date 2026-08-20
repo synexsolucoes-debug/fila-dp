@@ -15,7 +15,8 @@ test("todo indicador da central de ação tem consulta real, destino e capabilit
     assert.ok(definition.description.length > 3, `${definition.key} precisa de descrição`);
     assert.ok(["critical", "warning", "neutral"].includes(definition.tone));
     // Destino real: cada indicador leva a uma tela existente do painel.
-    assert.ok(["processes", "auxiliary", "psychologistPayments", "contractorPayments", "timeTracking", "integrations", "board"].includes(definition.target));
+    assert.ok(["processes", "auxiliary", "psychologistPayments", "contractorPayments", "contractorClosings",
+      "contractorCaju", "timeTracking", "integrations", "board"].includes(definition.target));
     // Capability existente e sempre escopada ao workspace da sessão.
     assert.equal(hasCapability("admin", definition.capability as Capability), true, `${definition.key} usa capability inexistente`);
     assert.match(definition.sql, /workspace_id = \?/u, `${definition.key} não filtra por workspace`);

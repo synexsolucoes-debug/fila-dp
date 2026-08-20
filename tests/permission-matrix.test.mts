@@ -70,13 +70,38 @@ test("toda rota de escrita passa por alguma autorização", () => {
     "notifications/[id]/read/route.ts", "notifications/read-all/route.ts",
     "assistant/chat/route.ts", "v1/contractor-components/route.ts",
   ]);
+  /* Rotas cujo recurso é da própria pessoa, não do grupo: preferência de quem
+     está usando o painel, que ninguém mais lê e ninguém mais pode mudar.
+     Inventar uma capacidade só para elas criaria uma linha na matriz de acessos
+     que não corresponde a nada que se possa liberar ou negar na tela — e uma
+     verificação de papel que aceita todos os papéis é teatro, porque nunca
+     recusa nada.
+     Elas não ficam sem conferência: a regra delas é mais estreita que uma
+     capacidade, e está no bloco logo abaixo. */
+  const PESSOAIS = new Set(["shortcuts/route.ts"]);
   for (const [caminho, fonte] of routes) {
     if (!/export async function (POST|PATCH|PUT|DELETE)/u.test(fonte)) continue;
-    if (PUBLICAS.has(caminho)) continue;
+    if (PUBLICAS.has(caminho) || PESSOAIS.has(caminho)) continue;
     const guarda = /requireCapability|requireNamedCapability|requireWorkspaceRole|requirePlatformAdmin|hasCapability/u.test(fonte);
     if (!guarda) semGuarda.push(caminho);
   }
   assert.deepEqual(semGuarda, [], "rota de escrita sem nenhuma verificação de autorização");
+
+  /* O que prende as rotas pessoais: a identidade de quem escreve vem da
+     sessão, sempre. Se um dia alguém aceitar `body.userId` para "facilitar um
+     teste", uma pessoa passa a poder escrever a preferência de outra — e é
+     justamente por não haver capacidade guardando a porta que isso precisa ser
+     conferido aqui. */
+  for (const caminho of PESSOAIS) {
+    const fonte = routes.find(([nome]) => nome === caminho)?.[1];
+    assert.ok(fonte, `${caminho} não existe mais — tire da lista de rotas pessoais`);
+    assert.match(fonte, /const \{[^}]*\buser\b[^}]*\} = await getWorkspaceContext\(auth\.user\)/u,
+      `${caminho} precisa tirar a identidade da sessão`);
+    assert.match(fonte, /\.bind\([^)]*workspace\.id, user\.id/u,
+      `${caminho} precisa escrever escopado ao grupo e à pessoa da sessão`);
+    assert.doesNotMatch(fonte, /body\.userId|body\.workspaceId/u,
+      `${caminho} aceita identidade vinda do cliente`);
+  }
 });
 
 test("negar um módulo nega a escrita dele, não só a leitura", () => {

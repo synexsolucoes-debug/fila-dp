@@ -43,7 +43,7 @@
 .primaryButton { border: 1px solid var(--pay-accent); background: var(--pay-accent); color: var(--pay-on-accent, #fff) !important; }
 .primaryButton:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--pay-accent) 88%, #000); }
 .secondaryButton { border: 1px solid var(--pay-border); background: var(--pay-surface); color: inherit; }
-.secondaryButton:hover { border-color: var(--pay-accent); color: var(--pay-accent); }
+.secondaryButton:hover { border-color: var(--pay-accent-text); color: var(--pay-accent-text); }
 .primaryButton:disabled, .secondaryButton:disabled { cursor: not-allowed; opacity: .48; transform: none; }
 
 .commandBar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -63,7 +63,7 @@
 .moduleHeadline p { margin: 0; color: var(--pay-soft); font-size: .78rem; }
 .moduleIcon {
   display: grid; place-items: center; width: 40px; height: 40px; flex: none;
-  border-radius: 11px; background: var(--pay-accent-soft); color: var(--pay-accent);
+  border-radius: 11px; background: var(--pay-accent-soft); color: var(--pay-accent-text);
 }
 .cycleBadge {
   display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 6px 11px;
@@ -101,7 +101,7 @@
 .table small { display: block; margin-top: 2px; color: var(--pay-soft); font-size: .64rem; font-weight: 600; }
 .negative { color: var(--pay-danger); }
 .contractorDetailButton {
-  padding: 0; border: 0; background: transparent; color: var(--pay-accent) !important;
+  padding: 0; border: 0; background: transparent; color: var(--pay-accent-text) !important;
   font-weight: 780; text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
 }
 .contractorDetailButton:hover:not(:disabled) { color: color-mix(in srgb, var(--pay-accent) 78%, #000) !important; }
@@ -130,7 +130,7 @@
   border: 1px solid var(--pay-border); border-radius: 6px; background: var(--pay-surface);
   font-size: .67rem; font-weight: 720; cursor: pointer;
 }
-.rowActions button:hover:not(:disabled) { border-color: var(--pay-accent); color: var(--pay-accent); }
+.rowActions button:hover:not(:disabled) { border-color: var(--pay-accent-text); color: var(--pay-accent-text); }
 .rowActions button:disabled { opacity: .5; cursor: not-allowed; }
 
 .reportBar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -201,7 +201,7 @@
 .resultGrid strong { font-size: .87rem; }
 .resultGrid article[data-tone="debit"] strong { color: var(--pay-danger); }
 .resultGrid article[data-tone="caju"] { border-color: color-mix(in srgb, var(--pay-accent) 45%, transparent); }
-.resultGrid article[data-tone="caju"] strong { color: var(--pay-accent); }
+.resultGrid article[data-tone="caju"] strong { color: var(--pay-accent-text); }
 .resultGrid article[data-emphasis="true"] { border-color: color-mix(in srgb, var(--pay-success) 45%, transparent); }
 .resultGrid article[data-emphasis="true"] strong { color: var(--pay-success); }
 .paymentResult > p { margin: 0; color: var(--pay-soft); font-size: .68rem; line-height: 1.45; }
@@ -216,7 +216,7 @@
   min-height: 28px; padding: 0 8px; border: 1px solid var(--pay-border); border-radius: 6px;
   background: var(--pay-surface); font-size: .64rem; font-weight: 720; cursor: pointer;
 }
-.detailActions button:hover:not(:disabled), .inlineActionRow button:hover:not(:disabled) { border-color: var(--pay-accent); color: var(--pay-accent); }
+.detailActions button:hover:not(:disabled), .inlineActionRow button:hover:not(:disabled) { border-color: var(--pay-accent-text); color: var(--pay-accent-text); }
 .detailActions button:disabled, .inlineActionRow button:disabled { opacity: .5; cursor: not-allowed; }
 .detailActionHint { color: var(--pay-soft); font-size: .62rem; text-decoration: none; }
 .inlineInput, .inlineMoney, .inlineActionRow input, .deletePaymentPanel input {

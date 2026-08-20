@@ -3,32 +3,59 @@
  * Isolated from the legacy marketing/auth styles so the operational UI can
  * evolve without introducing another set of conflicting global overrides.
  */
+/* ==========================================================================
+   Escala de superfície do tema claro (§5, §6)
+   ==========================================================================
+   O tema claro anterior era `#ffffff` de superfície sobre `#f5f7f9` de fundo:
+   1,03:1 entre os dois. Numa tela cheia de cartões isso não é hierarquia, é
+   uma folha de papel com texto — não dá para ver onde um cartão começa nem
+   onde uma área termina, que é exatamente a queixa da §6.
+
+   A escala agora tem quatro degraus e todos derivam do matiz da marca (o navy
+   #062B60, ~215°), não de cinza neutro. O fundo é o degrau mais escuro e a
+   superfície flutua acima dele; a superfície elevada — modal, popover, menu —
+   sobe mais um. Nenhum deles é `#ffffff`: o branco puro sobrou apenas como
+   texto sobre preenchimento escuro.
+
+     --ui-bg               #edf1f7   fundo da página
+     --ui-surface          #f7f9fc   cartão, painel, tabela
+     --ui-surface-elevated #fcfdff   modal, gaveta, menu suspenso
+     --ui-surface-muted    #e7ecf4   recuo: cabeçalho de tabela, campo, faixa
+
+   Os pares de texto foram medidos contra os quatro degraus, não só contra a
+   superfície: `--ui-text-muted` sobre `--ui-surface-muted` é o pior par do
+   conjunto e rende 4,85:1. */
 .dashboard-shell {
   /* A identidade vem dos tokens da marca definidos em globals.css: o painel não
      mantém uma paleta própria concorrente. */
   --ui-brand: var(--vin-navy-deep);
   --ui-brand-soft: var(--vin-navy);
   --ui-primary: var(--vin-blue);
-  --ui-primary-hover: var(--vin-navy);
-  --ui-primary-soft: #e7f0fe;
-  --ui-bg: #f5f7f9;
-  --ui-surface: #ffffff;
-  --ui-surface-muted: #f0f4f6;
-  --ui-border: #d8e0e7;
-  --ui-border-strong: #bac7d2;
-  --ui-text: #172235;
-  --ui-text-soft: #5e6d7f;
-  --ui-info: #175cd3;
-  --ui-success: #137a4f;
-  --ui-warning: #a15c07;
-  --ui-danger: #b42318;
+  --ui-primary-hover: #0a4a94;
+  --ui-primary-active: var(--vin-navy);
+  --ui-primary-soft: #e2ecfb;
+  --ui-bg: #edf1f7;
+  --ui-surface: #f7f9fc;
+  --ui-surface-elevated: #fcfdff;
+  --ui-surface-muted: #e7ecf4;
+  --ui-border: #cbd6e6;
+  --ui-border-strong: #a9bad1;
+  --ui-text: #131c2e;
+  --ui-text-soft: #4e5c72;
+  --ui-text-muted: #5a6779;
+  --ui-info: #0f52c4;
+  --ui-success: #0b6b45;
+  --ui-warning: #8a4e06;
+  --ui-danger: #b0201a;
   /* Casca clara — Modelo 2 "Flow".
      A barra lateral deixa de ser um bloco escuro e passa a ser superfície,
      separada do conteúdo por um fio. Antes disso, ~20 cores fixas espalhadas
      pelo arquivo assumiam fundo escuro — inclusive um verde da marca antiga,
      `rgba(98,213,178,.16)`, ainda vivo no hover. Agora a barra tem tokens
      próprios e a mesma regra vale nos dois temas. */
-  --ui-rail: #ffffff;
+  /* A barra lateral é superfície, não bloco escuro: ela usa o degrau elevado
+     para se separar do fundo da página sem virar uma parede branca. */
+  --ui-rail: var(--ui-surface-elevated);
   /* Avatar: texto sobre fundo suave. Par com dono porque já regrediu duas
      vezes — a segunda quando esta casca clara chegou. No claro rende 6,06:1;
      no escuro, o azul vivo sobre o suave rendia 4,30:1 e precisa do tom
@@ -36,61 +63,96 @@
   --ui-avatar-bg: var(--ui-primary-soft);
   --ui-avatar-text: var(--ui-primary);
   --ui-rail-border: var(--ui-border);
-  --ui-rail-text: #55627a;
-  --ui-rail-icon: #8b97a8;
-  --ui-rail-hover: #f1f5fb;
-  --ui-rail-active: #e9f2fe;
+  --ui-rail-text: #4e5c72;
+  --ui-rail-icon: #7a879a;
+  --ui-rail-hover: #e9eff8;
+  --ui-rail-active: #e0eafb;
   --ui-rail-active-text: var(--vin-blue);
-  --ui-rail-section: #5f6b7d;
-  --ui-rail-context: #f7f9fc;
+  --ui-rail-section: #5a6779;
+  --ui-rail-context: #e7ecf4;
   /* Concluído/conectado. No Modelo 2 o verde é estado, nunca marca. */
   --ui-done: var(--ui-success);
-  --ui-done-soft: #e3f5ec;
+  --ui-done-soft: #dcf2e7;
   --ui-on-done: #ffffff;
   --ui-radius-sm: 7px;
   --ui-radius-md: 10px;
   --ui-radius-lg: 14px;
   --ui-shadow-card: 0 1px 2px rgba(11, 31, 51, .05), 0 5px 16px rgba(11, 31, 51, .035);
   --ui-shadow-modal: 0 22px 70px rgba(5, 18, 33, .25);
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: var(--layout-sidebar-width) minmax(0, 1fr);
   background: var(--ui-bg);
   color: var(--ui-text);
 }
 
+/* ==========================================================================
+   Tema escuro (§7)
+   ==========================================================================
+   O escuro tinha o mesmo defeito do claro pelo avesso: `#09131f` de fundo e
+   `#111e2c` de superfície separados por 1,10:1, e nada acima disso — modal e
+   menu suspenso caíam na mesma superfície do cartão que os abriu. Aqui a
+   escala tem os mesmos quatro degraus do claro, todos derivados do navy da
+   marca em vez de cinza-carvão, e a superfície elevada existe para o que
+   flutua. */
 .dashboard-shell.theme-dark {
   --ui-brand: #03122c;
   --ui-brand-soft: var(--vin-navy);
   --ui-primary: var(--vin-blue-vivid);
   --ui-primary-hover: #57adff;
+  --ui-primary-active: #8cc6ff;
   --ui-primary-soft: #12294a;
-  --ui-bg: #09131f;
-  --ui-surface: #111e2c;
-  --ui-surface-muted: #182838;
-  --ui-border: #2b3e51;
-  --ui-border-strong: #41576c;
-  --ui-text: #eef5f7;
-  --ui-text-soft: #a7b5c4;
-  --ui-info: #84adff;
-  --ui-success: #70e1b9;
-  --ui-warning: #ffd089;
-  --ui-danger: #ff9c96;
-  --ui-rail: #0d1826;
+  --ui-bg: #071527;
+  --ui-surface: #0e1f33;
+  --ui-surface-elevated: #16293f;
+  --ui-surface-muted: #132539;
+  --ui-border: #263b52;
+  --ui-border-strong: #3d566f;
+  --ui-text: #eaf1f8;
+  --ui-text-soft: #a6b7c9;
+  --ui-text-muted: #8496a9;
+  --ui-info: #7cc0ff;
+  --ui-success: #5fd9ac;
+  --ui-warning: #f5c069;
+  --ui-danger: #ff9089;
+  --ui-rail: #0a1a2c;
   --ui-avatar-bg: #12294a;
   --ui-avatar-text: var(--brand-accent-on-dark);
   --ui-rail-border: var(--ui-border);
-  --ui-rail-text: #a7b5c4;
+  --ui-rail-text: #a6b7c9;
   --ui-rail-icon: #7d8fa3;
-  --ui-rail-hover: #16273a;
-  --ui-rail-active: #12294a;
+  --ui-rail-hover: #142740;
+  --ui-rail-active: #143154;
   --ui-rail-active-text: var(--brand-accent-on-dark);
-  --ui-rail-section: #8095aa;
-  --ui-rail-context: #14202f;
+  --ui-rail-section: #8496a9;
+  --ui-rail-context: #112132;
   --ui-done: var(--ui-success);
   --ui-done-soft: #0f2f20;
   /* No escuro o verde clareia; branco em cima dele reprova. */
   --ui-on-done: #06251a;
   --ui-shadow-card: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px rgba(0, 0, 0, .14);
   --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .48);
+}
+
+/* ==========================================================================
+   Tokens de layout (§41, §42)
+   ==========================================================================
+   Cada módulo escolhia o próprio recuo, o próprio intervalo entre seções e a
+   própria largura máxima de conteúdo — daí a sensação da §2 de que as telas
+   foram construídas separadamente. Os valores abaixo são a medida única; um
+   módulo que precise de outra tem que dizer por quê no diff.
+
+   O recuo da página acompanha a largura da janela pelo `clamp`: 1366×768 é a
+   menor resolução alvo da §43 e ali 20px de recuo devolvem a coluna útil que
+   os 32px do desktop grande comiam. */
+.dashboard-shell {
+  --layout-sidebar-width: 268px;
+  --layout-sidebar-collapsed: 76px;
+  --layout-header-height: 64px;
+  --layout-page-padding: clamp(20px, 2.1vw, 32px);
+  --layout-page-gap: 20px;
+  --layout-section-gap: 16px;
+  --layout-card-padding: 20px;
+  --layout-card-padding-compact: 14px;
+  --layout-content-max: 1560px;
 }
 
 .dashboard-shell,
@@ -102,7 +164,16 @@
 }
 
 .dashboard-shell.sidebar-collapsed {
-  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-columns: var(--layout-sidebar-collapsed) minmax(0, 1fr);
+}
+
+/* A largura da coluna anima em vez de saltar (§18). É a única exceção à regra
+   de animar só `transform` e `opacity`: a coluna do grid não tem como encolher
+   por transform sem arrastar o conteúdo junto, e a alternativa — largura fixa
+   com o conteúdo deslizando para fora — reintroduz o "pulo" que a §18 proíbe.
+   O custo é um relayout por quadro durante 260ms, uma vez por clique. */
+.dashboard-shell {
+  transition: grid-template-columns var(--motion-slow) var(--ease-standard);
 }
 
 .dashboard-sidebar {
@@ -2905,6 +2976,37 @@
 .overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
 .overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-mint-text); }
 
+/* ==========================================================================
+   Meus processos (§29)
+   ==========================================================================
+   O cartão vem de `MotionCard`, que já traz borda em repouso, elevação no
+   hover e a seta andando 3px (§9). O que esta seção acrescenta é só a grade e
+   o cabeçalho — repetir o desenho do cartão aqui seria criar a segunda
+   definição dele.
+
+   `auto-fill` com mínimo de 250px em vez de um número fixo de colunas: a
+   quantidade de processos varia com a permissão de cada pessoa, e três colunas
+   fixas deixariam um buraco para quem alcança dois. */
+.workspace-processes { display: grid; gap: 13px; }
+.workspace-processes > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.workspace-processes > header span { display: block; color: var(--ui-mint-text); font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+.workspace-processes > header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 17px; letter-spacing: -.03em; }
+.workspace-processes > header p { margin: 0; color: var(--ui-text-soft); font-size: 12px; }
+.workspace-process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 13px; }
+/* O item da cascata precisa esticar: sem isto os cartões de uma linha ficam
+   com alturas diferentes conforme o tamanho da descrição. */
+.workspace-process-grid > * { display: flex; }
+.workspace-process-grid > * > * { flex: 1 1 auto; min-height: 158px; }
+.workspace-process-pending {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ui-state-warn-bg);
+  color: var(--ui-state-warn-text);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .overview-metrics article { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 .overview-metrics span { color: var(--ui-text-soft); font-size: 11px; font-weight: 700; }
@@ -3149,6 +3251,271 @@
 .sidebar-workspace button > span small { color: var(--ui-text-soft); font-size: 8px; }
 .sidebar-collapsed .sidebar-group-context, .sidebar-collapsed .sidebar-nav-section { display: none; }
 
+/* ==========================================================================
+   Navegação em dois níveis (§25, §64, §65, §66)
+   ==========================================================================
+   O primeiro nível é o processo; o segundo, os módulos dele — e o segundo só
+   existe para o processo aberto. A §66 é o motivo: a barra não precisa conter
+   cada página do sistema, e quinze itens simultâneos sob quatro rótulos de
+   departamento era exatamente isso.
+
+   O item do processo aberto ganha borda e superfície próprias mesmo quando o
+   destino ativo é um submódulo. Sem isso, entrar em "Pagamentos → Psicólogos"
+   apagava a marca do processo e a pessoa perdia de vista em que contexto
+   estava — que é o oposto do que a §69 pede. */
+.sidebar-process { display: flex; flex-direction: column; gap: 2px; }
+
+.sidebar-process-item.open {
+  border: 1px solid var(--ui-rail-border);
+  background: var(--ui-rail-context);
+  color: var(--ui-text);
+}
+
+.sidebar-process-item.open > span { color: var(--ui-rail-active-text); }
+
+/* Os submódulos recuam e ganham um fio à esquerda: o fio é o que os liga
+   visualmente ao processo dono, e o recuo é o que os põe num segundo nível
+   sem precisar de outro ícone. */
+.sidebar-process-views {
+  margin: 2px 0 4px 21px;
+  padding-left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-left: 1px solid var(--ui-rail-border);
+}
+
+.sidebar-process-view {
+  min-height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-rail-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  /* A cascata usa o índice que o React escreve em `--stagger-index`: os
+     submódulos aparecem em sequência quando o processo abre, o que mostra que
+     eles pertencem a ele em vez de surgirem do nada. */
+  animation: subNavEnter var(--motion-micro) var(--ease-enter) backwards;
+  animation-delay: calc(var(--stagger-index, 0) * 30ms);
+}
+
+.sidebar-process-view:hover { background: var(--ui-rail-hover); color: var(--ui-text); }
+
+.sidebar-process-view.active {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+  font-weight: 700;
+}
+
+.sidebar-process-view b {
+  min-width: 19px;
+  height: 19px;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ui-danger);
+  color: var(--ui-on-accent);
+  font-size: 9px;
+}
+
+@keyframes subNavEnter {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Recolhida, a barra mostra só os ícones dos processos: o segundo nível não
+   cabe em 76px e continua alcançável abrindo a barra ou pelo processo. */
+.sidebar-collapsed .sidebar-process-views { display: none; }
+.sidebar-collapsed .sidebar-process-item.open { border-color: transparent; }
+
+/* ==========================================================================
+   Cabeçalho contextual do processo (§70)
+   ==========================================================================
+   Ícone, nome, uma linha do que o processo faz e as abas dos módulos. É o que
+   diz "você está no Pagamento PJ" sem depender de a pessoa reparar em qual
+   item do menu está aceso. */
+.process-context {
+  margin-bottom: var(--layout-page-gap);
+  padding: var(--layout-card-padding);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-card);
+  animation: fadeInSoft var(--motion-base) var(--ease-enter) backwards;
+}
+
+.process-context-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.process-context-identity > span {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.process-context-identity > span svg { width: 19px; height: 19px; }
+.process-context-identity strong { display: block; color: var(--ui-text); font-size: 16px; letter-spacing: -.02em; }
+.process-context-identity p { margin: 3px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.45; }
+
+/* O lugar que o cabeçalho empresta ao módulo quando o processo tem um módulo
+   só (§70). Ele toma a linha inteira em vez de disputar espaço com o nome do
+   processo: o Controle de EPI entrega dez abas, que em 1366px não caberiam ao
+   lado da identidade sem virar o corte que a §94 proíbe. A barra em si já rola
+   quando precisa, então o que falta aqui é só a linha e a separação.
+
+   `:empty` cobre o primeiro render, antes de o módulo montar o portal: sem
+   isso o cabeçalho abriria com uma faixa vazia de 13px e uma borda solta. */
+/* ==========================================================================
+   Atalhos: favoritos e recentes (§67)
+   ==========================================================================
+   O caminho curto para quem já sabe onde vai. Organizar por processo tornou o
+   menu compreensível e fundo ao mesmo tempo — alcançar um destino custa dois
+   níveis, e quem trabalha em três destinos paga esse preço dezenas de vezes
+   por dia.
+
+   O bloco fica no topo da barra, acima de PROCESSOS, e é deliberadamente mais
+   discreto que eles: o atalho é conveniência, o processo é a estrutura. Se os
+   dois pesassem igual, a barra passaria a ter duas listas concorrendo pelo
+   mesmo olhar. */
+.sidebar-shortcuts { margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--ui-border); }
+
+.sidebar-shortcut { position: relative; font-size: 12.5px; }
+
+/* A marca diz de onde o atalho veio — fixado por escolha ou visitado há pouco.
+   Sem ela, os dois viram a mesma lista e a ordem parece arbitrária. */
+.sidebar-shortcut-mark {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--ui-accent-text);
+  opacity: .72;
+}
+
+.sidebar-shortcut-recent .sidebar-shortcut-mark { color: var(--ui-text-muted); opacity: .6; }
+
+/* O botão que fixa, no cabeçalho do processo: é ali que a pessoa está quando
+   descobre que volta sempre à mesma tela. */
+.process-context-pin {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
+  cursor: pointer;
+  transition: color var(--motion-hover) var(--ease-standard),
+    border-color var(--motion-hover) var(--ease-standard),
+    background var(--motion-hover) var(--ease-standard);
+}
+
+.process-context-pin:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
+.process-context-pin svg { width: 16px; height: 16px; }
+
+/* Marcado é preenchido, não só colorido: cor sozinha não distingue os dois
+   estados para quem não separa bem os tons (§85). */
+.process-context-pin[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, var(--ui-border));
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.process-context-pin[aria-pressed="true"] svg { fill: currentColor; }
+
+/* A faixa da home. Cartões pequenos, em linha, que rolam quando não cabem —
+   é um atalho, não uma seção que merece empurrar o resto da página. */
+.workspace-shortcuts { margin-bottom: var(--layout-section-gap); }
+
+.workspace-shortcuts > header { margin-bottom: 10px; }
+.workspace-shortcuts > header span {
+  display: block;
+  color: var(--ui-accent-text);
+  font-size: 10.5px;
+  font-weight: 820;
+  letter-spacing: .11em;
+}
+.workspace-shortcuts > header h2 { margin: 3px 0 0; font-size: 17px; letter-spacing: -.02em; }
+
+.workspace-shortcut-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace-shortcut {
+  min-width: 168px;
+  min-height: 58px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--motion-hover) var(--ease-standard),
+    border-color var(--motion-hover) var(--ease-standard),
+    background var(--motion-hover) var(--ease-standard);
+}
+
+.workspace-shortcut:hover { transform: translateY(-1px); border-color: var(--ui-border-strong); background: var(--ui-surface-elevated); }
+.workspace-shortcut:active { transform: scale(.985); }
+
+.workspace-shortcut > span {
+  grid-row: 1 / span 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-muted);
+  color: var(--ui-accent-text);
+}
+
+.workspace-shortcut > span svg { width: 16px; height: 16px; }
+.workspace-shortcut strong { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.workspace-shortcut small { color: var(--ui-text-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; }
+.workspace-shortcut[data-fixed="true"] > span { background: var(--ui-accent-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shortcut:hover, .workspace-shortcut:active { transform: none; }
+}
+
+.process-context-slot { flex: 1 1 100%; min-width: 0; padding-top: 12px; border-top: 1px solid var(--ui-border); }
+.process-context-slot:empty { display: none; }
+
+@keyframes fadeInSoft { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 760px) {
+  .process-context { padding: var(--layout-card-padding-compact); }
+}
+
 .companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
 .companies-list article > i { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 10px; font-style: normal; font-weight: 850; }
 .companies-list article.principal { border-left: 3px solid var(--ui-mint); }
@@ -3181,8 +3548,13 @@
   .sidebar-nav-section { display: none; }
   /* Nesta largura o menu vira barra inferior em `grid`. `display: contents`
      devolve os botões à grade: sem isso a grade posicionaria os quatro grupos,
-     e a barra mostraria quatro colunas com os itens empilhados dentro. */
-  .sidebar-nav-group { display: contents; }
+     e a barra mostraria quatro colunas com os itens empilhados dentro.
+     O invólucro de processo precisa do mesmo tratamento, senão o segundo nível
+     reintroduz a coluna que o `contents` do grupo acabou de dissolver. */
+  .sidebar-nav-group, .sidebar-process { display: contents; }
+  /* O segundo nível não existe na barra inferior: ela cabe em cinco alvos de
+     toque, e todos os módulos continuam alcançáveis pelo botão "Mais". */
+  .sidebar-process-views { display: none; }
   .companies-list article { grid-template-columns: 24px minmax(0, 1fr) auto; }
   .companies-list article > i { width: 21px; height: 21px; }
   .invite-company-scope { min-width: 100%; }
@@ -3642,9 +4014,19 @@
 
 /* Alvos interativos: mínimo de 24px (WCAG 2.2 AA — 2.5.8). Vários selects e
    botões de apoio do painel mediam 15px de altura, o que é difícil de acertar
-   no toque e reprova na auditoria. */
-.dashboard-shell :is(select, button):not(.dashboard-sidebar button) { min-height: 24px; }
-.dashboard-shell :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
+   no toque e reprova na auditoria.
+
+   O `:where()` é o detalhe que faz isto ser um piso em vez de um teto. Escrita
+   com `.dashboard-shell` valendo especificidade, esta regra ganhava de toda
+   classe de módulo: "Cadastrar EPI" pede 38px de altura no CSS do próprio
+   módulo e era servido com 26px, junto com praticamente todo botão do painel.
+   O resultado era o tamanho irregular que se via na tela — botão grande no
+   desenho, botão apertado no produto — e a causa não estava em nenhum dos
+   módulos, estava aqui. Com `:where()` a regra passa a valer zero de
+   especificidade: quem não pede altura recebe os 24px, quem pede fica com a
+   sua. */
+:where(.dashboard-shell) :is(select, button):not(:where(.dashboard-sidebar button)) { min-height: 24px; }
+:where(.dashboard-shell) :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
 
 
 /* ==========================================================================
@@ -3700,11 +4082,30 @@
     grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
     min-height: 0;
+    /* `min-width: auto` é o valor inicial de um item de grade, e ele impede a
+       coluna de encolher abaixo do conteúdo. A coluna do shell é
+       `minmax(0, 1fr)` justamente para poder encolher — mas isso não adianta
+       enquanto o item dentro dela se recusa.
+
+       O efeito medido em 1366×768 e 1280×720, nos dois temas: a coluna do
+       conteúdo ficava 60 a 140px mais larga que a janela e o `overflow: hidden`
+       do shell cortava a diferença. Não havia barra de rolagem porque não havia
+       rolagem: o excesso simplesmente não existia mais para quem estava
+       olhando. É o "conteúdo cortado" da §94, e ele só aparece nas resoluções
+       que a §43 lista como alvo — em 1920 sobra largura e o defeito some. */
+    min-width: 0;
   }
+
+  .dashboard-header,
+  .dashboard-content { min-width: 0; }
 
   .dashboard-content {
     min-height: 0;
     overflow-y: auto;
+    /* Um módulo pode legitimamente pedir mais largura que a janela — o quadro
+       com seis colunas é o caso. Rolar dentro da coluna de conteúdo é o
+       comportamento certo; cortar não é. */
+    overflow-x: auto;
     overscroll-behavior: contain;
   }
 }
@@ -3733,7 +4134,14 @@
   --ui-accent: var(--vin-blue, #0857b2);
   --ui-accent-text: var(--vin-blue, #0857b2);
   --ui-on-accent: #ffffff;
-  --ui-accent-soft: #e7f0fe;
+  --ui-accent-soft: #e2ecfb;
+  /* O que se lê EM CIMA do preenchimento vermelho, pelo mesmo motivo que
+     `--ui-on-accent` existe. O módulo de Processos já consumia este token —
+     `color: var(--ui-on-danger)` no botão de arquivar — e ele nunca foi
+     declarado em lugar nenhum: a declaração ficava inválida no valor
+     computado, e o texto do botão herdava a cor do pai. No tema escuro isso
+     era vermelho claro sobre vermelho claro. */
+  --ui-on-danger: #ffffff;
 }
 
 .dashboard-shell.theme-dark {
@@ -3745,6 +4153,9 @@
   --ui-accent-text: #7cc0ff;
   --ui-on-accent: #04121f;
   --ui-accent-soft: #14304f;
+  /* No escuro o vermelho clareia para ser legível como texto, e branco em cima
+     dele dá 2,3:1. O que se lê sobre o preenchimento escurece junto. */
+  --ui-on-danger: #2b0906;
 }
 
 
@@ -3882,15 +4293,43 @@
    (o bloco global do globals.css só zerava transições). */
 
 .dashboard-shell {
-  --motion-fast: 140ms;
+  --motion-fast: 150ms;
   --motion-base: 200ms;
   --motion-slow: 260ms;
   /* Desacelera no fim: o começo rápido dá a sensação de resposta imediata. */
   --motion-ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* Escala por papel (§78, §79). Os nomes dizem o que a duração serve, não
+     quanto ela mede: quem escreve um menu suspenso novo pega
+     `--motion-dropdown` e não precisa lembrar se o número era 180 ou 220. Os
+     valores vieram da tabela da §79 e todos ficam dentro dos 180–400ms que a
+     §11 pede para a troca de módulo. */
+  --motion-hover: 150ms;
+  --motion-micro: 180ms;
+  --motion-dropdown: 200ms;
+  --motion-modal: 250ms;
+  --motion-drawer: 300ms;
+  --motion-page: 300ms;
+
+  /* Três curvas, três papéis. `standard` é o que muda de estado sem entrar nem
+     sair; `enter` desacelera no fim porque o elemento está chegando e precisa
+     assentar; `exit` acelera porque o que sai não merece a atenção de quem
+     ficou. */
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-enter: cubic-bezier(.22, 1, .36, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+
+  /* Deslocamento de entrada. Mais que isto e a animação vira espera. */
+  --motion-distance-sm: 6px;
+  --motion-distance-md: 12px;
 }
 
 /* --- Troca de módulo ------------------------------------------------------ */
-.view-transition { animation: viewEnter var(--motion-slow) var(--motion-ease) both; }
+/* `backwards`, não `both`: o último quadro é `transform: none`, e mantê-lo
+   como valor animado deixa uma matriz identidade que faz deste elemento o
+   bloco de contenção de todo descendente `position: fixed`. Ver a explicação
+   longa em `features/shared/motion.module.css`. */
+.view-transition { animation: viewEnter var(--motion-slow) var(--motion-ease) backwards; }
 
 @keyframes viewEnter {
   from { opacity: 0; transform: translateY(8px); }
@@ -4091,3 +4530,106 @@
 .member-modules-details { grid-column: 1 / -1; margin-top: 8px; }
 .member-modules-details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--ui-primary); font-size: 11.5px; font-weight: 650; cursor: pointer; }
 .member-modules-details > summary:hover { text-decoration: underline; }
+
+/* ==========================================================================
+   Diagrama BPMN no tema escuro (§83)
+   ==========================================================================
+   O bpmn-js desenha com traço preto e preenchimento branco, fixos na folha de
+   estilo dele. No tema claro isso convive com a superfície; no escuro o
+   diagrama vira preto sobre azul-marinho — presente no DOM, ilegível na tela.
+   Foi o caso mais literal do que a §83 descreve.
+
+   Os seletores são do próprio bpmn-js e por isso vivem aqui, no CSS global:
+   um CSS Module transformaria `.djs-visual` num nome com hash e não casaria
+   com nada. O `!important` é a contrapartida de a biblioteca declarar as cores
+   como atributo de apresentação no SVG.
+
+   Só o traço, o preenchimento e o texto mudam. Forma, espessura e marcador
+   continuam vindo da biblioteca: reescrevê-los aqui criaria uma segunda
+   definição do BPMN, que sairia de sincronia na primeira atualização. */
+.theme-dark .djs-container {
+  --canvas-fill-color: var(--ui-surface);
+  background: var(--ui-surface);
+}
+
+.theme-dark .djs-visual > :is(path, polyline, polygon, rect, circle) {
+  stroke: var(--ui-text-soft) !important;
+}
+
+.theme-dark .djs-visual > :is(rect, circle, polygon) {
+  fill: var(--ui-surface-elevated) !important;
+}
+
+/* A seta da ligação é preenchida, não traçada: sem esta linha ela some. */
+.theme-dark .djs-connection .djs-visual > :is(path, polyline)[fill]:not([fill="none"]) {
+  fill: var(--ui-text-soft) !important;
+}
+
+.theme-dark .djs-visual > text,
+.theme-dark .djs-visual > text > tspan {
+  fill: var(--ui-text) !important;
+}
+
+/* Seleção e realce continuam sendo a cor de destaque do tema, e não o azul
+   fixo da biblioteca — que sobre o navy escuro fica quase invisível. */
+.theme-dark .djs-element.selected .djs-outline,
+.theme-dark .djs-shape.selected .djs-outline {
+  stroke: var(--ui-accent-text) !important;
+}
+
+/* Paleta, régua de contexto e menus flutuantes do editor. */
+.theme-dark :is(.djs-palette, .djs-context-pad, .djs-popup, .bjs-breadcrumbs) {
+  border-color: var(--ui-border) !important;
+  background: var(--ui-surface-elevated) !important;
+  color: var(--ui-text) !important;
+}
+
+.theme-dark :is(.djs-palette, .djs-context-pad) .entry { color: var(--ui-text-soft) !important; }
+.theme-dark :is(.djs-palette, .djs-context-pad) .entry:hover { background: var(--ui-surface-muted) !important; }
+
+/* ==========================================================================
+   Rótulos que ficaram no azul do tema claro (§82, §83)
+   ==========================================================================
+   Seis rótulos escritos em `access.css` com a cor da marca ou com um cinza
+   fixo, sem contrapartida no escuro. Cinco deles são o mesmo erro: `color:
+   var(--brand)` — o azul-marinho `#0857B2`, escolhido para ler sobre papel — em
+   texto sobre superfície escura. Ali ele rende de 2,21:1 a 2,44:1.
+
+   O sistema já sabia disso: `--ui-accent` e `--ui-accent-text` são separados
+   exatamente porque texto sobre superfície escura precisa clarear mais que
+   preenchimento. Estes rótulos é que tinham ficado fora da regra.
+
+   Eles sobreviveram porque moram em telas que a varredura de acessibilidade
+   não alcançava: ela visitava cada módulo, media a primeira aba e seguia para
+   o módulo seguinte. As abas internas — Tabela, Calendário, Processos,
+   Arquivados, as dez do EPI, as nove de Processos — nunca foram medidas, e o
+   relatório dizia "0 violações" sobre o que não tinha olhado. Com a varredura
+   entrando nelas, os seis apareceram de uma vez.
+
+   Medido depois: 8,59:1 sobre a superfície, 7,62:1 sobre a elevada, 6,93:1
+   sobre o preenchimento suave. */
+/* Descendente, não filho direto: nestes três o rótulo mora dentro de um `div`
+   que agrupa a linha do cabeçalho (`<header><div><span>…`). A primeira versão
+   desta correção usou `> span` e não casou com dois dos três — a varredura
+   continuou acusando 2,21:1 e 2,44:1, que foi como o erro apareceu. */
+.theme-dark :is(.workspace-modal > header, .process-tables-view > section > header, .archive-list > article > div) span {
+  color: var(--ui-accent-text);
+}
+
+.theme-dark :is(.demand-table-view, .demand-calendar-view) > header span {
+  color: var(--ui-text-soft);
+}
+
+/* O selo cinza de processo era o único par do conjunto pensado para papel que
+   não clareia junto — os outros quatro são texto escuro sobre pastilha clara e
+   continuam legíveis por conta própria. */
+.theme-dark .table-process.gray {
+  background: var(--ui-state-neutral-bg);
+  color: var(--ui-state-neutral-text);
+}
+
+/* Ícone do estado vazio: fundo verde-água fixo com a marca por cima. */
+.theme-dark .empty-view > span {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}

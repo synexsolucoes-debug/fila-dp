@@ -14,7 +14,10 @@ import {
   epiReturnConditionLabels, epiTypeLabels, epiTypes,
 } from "@/lib/epi";
 import { epiComplianceStatusLabels } from "@/lib/epi-compliance";
-import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared";
+import {
+  AnimatedTabs, EmptyState, ErrorBanner, LoadingState, PageSkeleton, PanelHeader,
+  ProcessTabsSlot, StatusPill, useProcessTabsTarget, type AnimatedTab,
+} from "../shared";
 import { EpiDialog } from "./EpiDialogs";
 import { EpiDashboardPanel, EpiPeoplePanel, EpiRequirementsPanel } from "./EpiCompliancePanels";
 import {
@@ -56,6 +59,25 @@ const tabs: Array<{ id: EpiTab; label: string; icon: typeof Boxes }> = [
 ];
 
 const PAGE = 50;
+
+/**
+ * A barra de abas do módulo, no cabeçalho do processo quando há um.
+ *
+ * O Controle de EPI vive dentro do processo "Gestão de EPI", que tem um módulo
+ * só — então o cabeçalho reserva o lugar das abas e o módulo o preenche. O
+ * mesmo componente é usado se um dia a tela for aberta fora de um processo: aí
+ * o destino não existe, e as abas ficam no fluxo da página, onde sempre
+ * estiveram.
+ */
+function EpiTabBar({ tabs: items, active, onChange }: {
+  tabs: readonly AnimatedTab<EpiTab>[];
+  active: EpiTab;
+  onChange: (id: EpiTab) => void;
+}) {
+  const hasHeader = useProcessTabsTarget();
+  const bar = <AnimatedTabs label="Áreas do Controle de EPI" tabs={items} active={active} onChange={onChange} />;
+  return hasHeader ? <ProcessTabsSlot>{bar}</ProcessTabsSlot> : bar;
+}
 
 export function EpiControlView({ role }: { role: WorkspaceRole }) {
   const [overview, setOverview] = useState<EpiOverview | null>(null);
@@ -198,6 +220,24 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   }, [companyId, loadOptions]);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 3800); return () => window.clearTimeout(timer); }, [toast]);
 
+  /**
+   * As abas com os contadores que cada uma exibe. O número vem do estado já
+   * carregado do módulo — é por isso que as abas continuam sendo montadas
+   * aqui, mesmo sendo pintadas no cabeçalho do processo.
+   */
+  const tabItems = useMemo(() => tabs.map((item) => ({
+    id: item.id,
+    label: item.label,
+    icon: item.icon,
+    badge: item.id === "dashboard" ? dashboard?.summary.activeEmployees ?? 0
+      : item.id === "people" ? dashboard?.employees.length ?? 0
+        : item.id === "requirements" ? requirements.length
+          : item.id === "stock" ? products.length : item.id === "deliveries" ? deliveries.length
+            : item.id === "returns" ? returns.length : item.id === "damages" ? damages.length
+              : item.id === "disposals" ? disposals.length : item.id === "discounts" ? discounts.length
+                : reportCatalog.length,
+  })), [dashboard, requirements, products, deliveries, returns, damages, disposals, discounts, reportCatalog]);
+
   const productOptions = useMemo(() => products, [products]);
   const deliveryOptions = useMemo(() => deliveries
     .filter((item) => item.outstanding > 0 && item.status !== "canceled")
@@ -303,7 +343,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   }
   if (loading) {
     return <section className={styles.workspace}>
-      <LoadingState size="page" title="Abrindo o Controle de EPI" text="Carregando estoque, entregas e casos em análise…" />
+      <PageSkeleton label="Abrindo o Controle de EPI" rows={5} />
     </section>;
   }
   if (error && !overview) {
@@ -315,7 +355,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   }
   if (!overview) {
     return <section className={styles.workspace}>
-      <LoadingState size="page" title="Abrindo o Controle de EPI" text="Preparando o estoque compartilhado do grupo…" />
+      <PageSkeleton label="Preparando o estoque compartilhado do grupo" rows={5} />
     </section>;
   }
   const summary = overview.summary;
@@ -368,21 +408,12 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
         tone={summary.caExpired ? "danger" : summary.caExpiring ? "warning" : "safe"} onClick={() => setTab("stock")} />
     </div>}
 
-    <div className={styles.tabs} role="tablist" aria-label="Áreas do Controle de EPI">
-      {tabs.map((item) => {
-        const Icon = item.icon;
-        const count = item.id === "dashboard" ? dashboard?.summary.activeEmployees ?? 0
-          : item.id === "people" ? dashboard?.employees.length ?? 0
-            : item.id === "requirements" ? requirements.length
-              : item.id === "stock" ? products.length : item.id === "deliveries" ? deliveries.length
-                : item.id === "returns" ? returns.length : item.id === "damages" ? damages.length
-                  : item.id === "disposals" ? disposals.length : item.id === "discounts" ? discounts.length : reportCatalog.length;
-        return <button key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? styles.activeTab : ""}
-          onClick={() => { setTab(item.id); setFilters({}); }}>
-          <Icon aria-hidden="true" />{item.label}<b>{count}</b>
-        </button>;
-      })}
-    </div>
+    {/* As abas do módulo são desenhadas no cabeçalho do processo (§70). O
+        módulo continua dono delas e dos contadores — o que muda é o lugar
+        onde aparecem, para que trocar de assunto dentro de "Gestão de EPI"
+        seja o mesmo gesto que dentro de "Pagamentos". Fora de um processo
+        (o destino não existe) elas caem aqui mesmo, no fluxo da página. */}
+    <EpiTabBar tabs={tabItems} active={tab} onChange={(next) => { setTab(next); setFilters({}); }} />
 
     {tabLoading && <LoadingState size="compact" title="Carregando" text="Buscando os registros desta aba…" />}
 
