@@ -68,7 +68,20 @@ export const processGroups: readonly ProcessGroup[] = [
     label: "Pagamentos e competências",
     description: "Prestadores, psicólogos, benefícios e folha: da apuração ao encerramento.",
     kind: "process",
-    views: ["contractorPayments", "psychologistPayments", "auxiliary", "payroll"],
+    /* O Pagamento PJ ocupa oito destas entradas (§74).
+     *
+     * Era uma tela só, rolando: totais, lançamentos fixos, exportação Caju e a
+     * tabela de fechamentos com treze colunas, um embaixo do outro. Quem
+     * precisava conferir um limite de nota rolava por tudo; quem só queria
+     * saber quanto sair rolava por tudo. Cada um destes oito destinos tem
+     * dados próprios vindos do servidor — nenhum é página vazia esperando
+     * conteúdo (§75). "Contratos" não está aqui justamente por isso: não
+     * existe a entidade. */
+    views: [
+      "contractorPayments", "contractorProviders", "contractorCycles", "contractorClosings",
+      "contractorAdjustments", "contractorLimits", "contractorCaju", "contractorArchive",
+      "psychologistPayments", "auxiliary", "payroll",
+    ],
   },
   {
     id: "epi",

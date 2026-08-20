@@ -34,7 +34,6 @@ import {
   PanelLeftOpen,
   Paperclip,
   Plus,
-  Receipt,
   RefreshCw,
   Search,
   AlertTriangle,
@@ -63,12 +62,16 @@ import { OperationsView } from "./features/operations";
 import { ProcessManagementView } from "./features/processes";
 import { AuxiliaryModulesView } from "./features/auxiliary";
 import { IntegrationsView } from "./features/integrations";
-import { PaymentsView } from "./features/payments";
+import { PaymentsView, contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments";
 import { TimeTrackingView } from "./features/time";
 import { EpiControlView } from "./features/epi";
 import { ActionCenter } from "./features/action-center";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "timeTracking" | "epi" | "integrations" | "registrations" | "payroll" | "indicators";
+/* Os oito destinos do Pagamento PJ (§74) estão escritos aqui um a um, e não
+   como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
+   que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
+   esconderia oito telas de quem confere. */
+type View = "overview" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -209,6 +212,17 @@ type ViewEntry = {
   primaryAction?: { label: string; kind: "card" | "inbox" };
 };
 
+/** Uma tela do Pagamento PJ, com rótulo e descrição vindos do catálogo do módulo. */
+function contractorEntry(id: ContractorSectionId): ViewEntry {
+  const section = contractorSections.find((entry) => entry.id === id);
+  if (!section) throw new Error(`destino de Pagamento PJ desconhecido: ${id}`);
+  return {
+    label: section.label, icon: section.icon, module: "contractorPayments",
+    hiddenFor: ["guest"], ownHeader: true,
+    eyebrow: "PAGAMENTO PJ", title: section.label, description: section.description,
+  };
+}
+
 const viewCatalog: Record<View, ViewEntry> = {
   overview: {
     label: "Visão geral", icon: LayoutDashboard,
@@ -276,11 +290,20 @@ const viewCatalog: Record<View, ViewEntry> = {
     eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos",
     description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro.",
   },
-  contractorPayments: {
-    label: "Pagamentos PJ", icon: Receipt, module: "contractorPayments", hiddenFor: ["guest"], ownHeader: true,
-    eyebrow: "CONTROLE DE PAGAMENTO", title: "Pagamentos PJ",
-    description: "Apure o líquido devido, o valor esperado da nota fiscal e o complemento destinado ao meio configurado.",
-  },
+  /* Os oito destinos do Pagamento PJ (§74). Escritos um a um pelo mesmo motivo
+     que a união acima: quem confere que toda tela tem porta no menu lê este
+     catálogo. O rótulo e a descrição vêm do catálogo do módulo — repetir a
+     frase aqui seria criar a segunda cópia que diverge da primeira. Todos
+     carregam a permissão do módulo inteiro: dividir a leitura não divide o
+     acesso. */
+  contractorPayments: { ...contractorEntry("contractorPayments") },
+  contractorProviders: { ...contractorEntry("contractorProviders") },
+  contractorCycles: { ...contractorEntry("contractorCycles") },
+  contractorClosings: { ...contractorEntry("contractorClosings") },
+  contractorAdjustments: { ...contractorEntry("contractorAdjustments") },
+  contractorLimits: { ...contractorEntry("contractorLimits") },
+  contractorCaju: { ...contractorEntry("contractorCaju") },
+  contractorArchive: { ...contractorEntry("contractorArchive") },
   indicators: {
     label: "Relatórios", icon: BarChart3, module: "indicators",
     eyebrow: "RELATÓRIOS", title: "Relatórios da operação",
@@ -1665,7 +1688,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
           {view === "psychologistPayments" && <PaymentsView role={snapshot.workspace.role} module="psychology" />}
 
-          {view === "contractorPayments" && <PaymentsView role={snapshot.workspace.role} module="contractors" />}
+          {isContractorSection(view) && <PaymentsView role={snapshot.workspace.role} module="contractors" section={view} />}
 
           {view === "timeTracking" && <TimeTrackingView role={snapshot.workspace.role} />}
 

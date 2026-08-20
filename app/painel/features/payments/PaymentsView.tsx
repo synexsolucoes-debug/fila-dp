@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight, Calculator, CalendarClock, CircleDot, Coins, Download, FileText, LoaderCircle, LockKeyhole,
+  ArrowRight, Calculator, CircleDot, Coins, Download, FileText, LoaderCircle, LockKeyhole,
   Plus, RefreshCw, RotateCcw, ShieldCheck, Stethoscope, WalletCards,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { PaymentDialog as PaymentDialogView } from "./PaymentDialogs";
-import { CajuExportPanel } from "./CajuExportPanel";
 import { ContractorPaymentDetail } from "./ContractorPaymentDetail";
+import { ContractorSectionView, contractorActionsFor } from "./ContractorSections";
+import { contractorSection, type ContractorSectionId } from "./contractor-sections";
 import {
   normalizeCompany, normalizeContractorOverview, normalizeContractorPaymentDetail,
   normalizePsychologyOverview, requestJson, type Row,
@@ -35,8 +36,13 @@ const moduleConfig: Record<PaymentModule, { title: string; eyebrow: string; desc
   },
 };
 
+/* Um mapa para dois vocabulários: o do fechamento de um prestador e o da
+   competência inteira. Faltavam os três estados intermediários da competência
+   — `pre_closing`, `processing`, `post_closing` — e o selo do cabeçalho os
+   imprimia crus: "Competência processing", em inglês, no meio da tela. */
 const statusLabels: Record<string, string> = {
   open: "Aberto", review: "Conferência", approval: "Aprovação", approved: "Aprovado", scheduled: "Programado",
+  pre_closing: "Em pré-fechamento", processing: "Em apuração", post_closing: "Em pós-fechamento",
   invoice_pending: "Aguardando nota", ready_to_pay: "Pronto para pagar", paid: "Pago", closed: "Fechado", reopened: "Reaberto",
   pending: "Pendente", not_required: "Não se aplica", received: "Recebida", validated: "Conferida", divergent: "Divergente",
   reconciled: "Conciliado", sent: "Enviado", processed: "Processado", error: "Erro", canceled: "Cancelado",
@@ -68,7 +74,13 @@ const competenceLabel = (value: string) => {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(Number(year), Number(month) - 1, 1));
 };
 
-export function PaymentsView({ role, module }: { role: WorkspaceRole; module: PaymentModule }) {
+export function PaymentsView({ role, module, section = "contractorPayments" }: {
+  role: WorkspaceRole;
+  module: PaymentModule;
+  /** Qual dos oito destinos do PJ desenhar (§74). Ignorado por Psicologia, que
+   *  continua sendo um módulo de tela única. */
+  section?: ContractorSectionId;
+}) {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [companyId, setCompanyId] = useState("");
   const [competence, setCompetence] = useState(currentCompetence);
@@ -382,7 +394,17 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
     return <section className={styles.workspace} data-module={module}><p className={styles.noteLine}>Seu perfil não tem acesso ao controle de pagamentos.</p></section>;
   }
 
-  const Icon = config.icon;
+  /* O cabeçalho e as ações passam a falar do destino, não do módulo inteiro
+     (§55, §70). Numa tela de limites de nota, "Crédito/desconto" não é ruído
+     inocente: é uma ação sem o que fazer ali competindo com a que tem. */
+  const destination = module === "contractors" ? contractorSection(section) : undefined;
+  const actions = module === "contractors"
+    ? contractorActionsFor(section)
+    : { provider: false, limit: false, component: false, recalculate: true };
+  const headline = destination
+    ? { eyebrow: "PAGAMENTO PJ", title: destination.label, description: destination.description }
+    : config;
+  const Icon = destination?.icon ?? config.icon;
 
   return (
     <section className={styles.workspace} data-module={module} aria-busy={loading}>
@@ -405,7 +427,7 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
           <button className={styles.secondaryButton} type="button" onClick={() => void loadOverview(companyId, competence, true)} disabled={refreshing || !companyId}>
             <RefreshCw aria-hidden="true" /> {refreshing ? "Atualizando…" : "Atualizar"}
           </button>
-          {canManage && (
+          {canManage && actions.recalculate && (
             <button className={styles.secondaryButton} type="button" onClick={() => void recalculate()} disabled={busy || !cycle}>
               <Calculator aria-hidden="true" /> Apurar competência
             </button>
@@ -422,17 +444,21 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
           )}
           {canManage && module === "contractors" && (
             <>
-              {permissions?.manageLimits && (
+              {permissions?.manageLimits && actions.limit && (
                 <button className={styles.secondaryButton} type="button" onClick={() => setDialog({ kind: "limit", contractors: contractors?.contractors ?? [] })}>
                   <ShieldCheck aria-hidden="true" /> Limite da nota
                 </button>
               )}
-              <button className={styles.secondaryButton} type="button" onClick={() => setDialog({ kind: "contractor" })}>
-                <Plus aria-hidden="true" /> Prestador
-              </button>
-              <button className={styles.primaryButton} type="button" onClick={() => setDialog({ kind: "component", contractors: contractors?.contractors ?? [] })}>
-                <Plus aria-hidden="true" /> Crédito/desconto
-              </button>
+              {actions.provider && (
+                <button className={styles.primaryButton} type="button" onClick={() => setDialog({ kind: "contractor" })}>
+                  <Plus aria-hidden="true" /> Prestador
+                </button>
+              )}
+              {actions.component && (
+                <button className={styles.primaryButton} type="button" onClick={() => setDialog({ kind: "component", contractors: contractors?.contractors ?? [] })}>
+                  <Plus aria-hidden="true" /> Crédito/desconto
+                </button>
+              )}
             </>
           )}
         </div>
@@ -441,9 +467,9 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
       <div className={styles.moduleHeadline}>
         <span className={styles.moduleIcon} aria-hidden="true"><Icon /></span>
         <div>
-          <span className={styles.eyebrow}>{config.eyebrow}</span>
-          <h2>{config.title}</h2>
-          <p>{config.description}</p>
+          <span className={styles.eyebrow}>{headline.eyebrow}</span>
+          <h2>{headline.title}</h2>
+          <p>{headline.description}</p>
         </div>
         {cycle && (
           <span className={styles.cycleBadge} data-locked={cycle.status === "closed" ? "true" : "false"}>
@@ -471,166 +497,27 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
       )}
 
       {!loading && module === "contractors" && contractors && cycle && (
-        <>
-          <div className={styles.summaryGrid}>
-            <article><span>Líquido devido</span><strong>{money(contractors.totals.netAmount)}</strong></article>
-            <article><span>Notas esperadas</span><strong>{money(contractors.totals.invoiceExpectedAmount)}</strong></article>
-            <article><span>Complemento</span><strong>{money(contractors.totals.complementAmount)}</strong></article>
-            <article><span>Caju Saldo Livre</span><strong>{money(contractors.totals.cajuAmount)}</strong></article>
-            <article data-alert={contractors.totals.divergentCount > 0 ? "true" : "false"}>
-              <span>Divergências</span><strong>{contractors.totals.divergentCount}</strong>
-            </article>
-          </div>
-
-          <section className={styles.fixedItemsPanel} aria-labelledby="fixed-items-title">
-            <header>
-              <div>
-                <span className={styles.eyebrow}>LANÇAMENTOS RECORRENTES</span>
-                <h3 id="fixed-items-title">Lançamentos fixos</h3>
-                <p>Plano de saúde, convênios, adicionais e outros valores que se repetem automaticamente por competência.</p>
-              </div>
-              {canManage ? (
-                <button
-                  className={styles.secondaryButton}
-                  type="button"
-                  onClick={() => setDialog({ kind: "fixed-item", contractors: contractors.contractors, competence })}
-                  disabled={busy}
-                >
-                  <CalendarClock aria-hidden="true" /> Novo lançamento fixo
-                </button>
-              ) : null}
-            </header>
-            {contractors.fixedItems.length === 0 ? (
-              <p className={styles.fixedItemsEmpty}>Nenhum lançamento fixo cadastrado para esta empresa.</p>
-            ) : (
-              <div className={styles.tableScroll}>
-                <table className={styles.table}>
-                  <caption className={styles.tableCaption}>Valores recorrentes que alimentam as apurações PJ</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Prestador</th><th scope="col">Rubrica</th><th scope="col">Tipo</th>
-                      <th scope="col">Valor mensal</th><th scope="col">Vigência</th><th scope="col">Nesta competência</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {contractors.fixedItems.map((item) => {
-                      const appliesNow = item.status === "active" && item.effectiveFrom <= competence
-                        && (!item.effectiveTo || competence <= item.effectiveTo);
-                      return (
-                        <tr key={item.id}>
-                          <th scope="row">{item.contractorName}</th>
-                          <td>{item.description || componentLabels[item.componentType] || item.componentType}<small>{componentLabels[item.componentType] || item.componentType}</small></td>
-                          <td>{item.direction === "credit" ? "Provento" : "Desconto"}</td>
-                          <td className={item.direction === "debit" ? styles.negative : undefined}>{money(item.amount)}</td>
-                          <td>{item.effectiveFrom} → {item.effectiveTo || "sem término"}<small>{item.effectiveTo ? "Prazo determinado" : "Sem prazo"}</small></td>
-                          <td><span className={styles.badge} data-tone={appliesNow ? "validated" : "pending"}>{appliesNow ? "Aplicado" : "Fora da vigência"}</span></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          {contractors.totals.cajuAmount > 0 && (
-            <CajuExportPanel competenceId={cycle.id} canExport={permissions?.exportCaju === true} />
-          )}
-
-          {contractors.closings.length === 0 ? (
-            <p className={styles.noteLine}>
-              Nenhum fechamento apurado nesta competência. Lance os créditos e descontos e use <b>Apurar competência</b>.
-            </p>
-          ) : (
-            <div className={styles.tableScroll}>
-              <table className={styles.table}>
-                <caption className={styles.tableCaption}>Fechamento PJ de {competenceLabel(competence)}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Prestador</th>
-                    <th scope="col">Base</th>
-                    <th scope="col">Créditos</th>
-                    <th scope="col">Descontos</th>
-                    <th scope="col">Líquido</th>
-                    <th scope="col">Limite NF</th>
-                    <th scope="col">NF esperada</th>
-                    <th scope="col">Complemento</th>
-                    <th scope="col">Status NF</th>
-                    <th scope="col">Status complemento</th>
-                    <th scope="col">Conciliação</th>
-                    <th scope="col">Fechamento</th>
-                    <th scope="col">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contractors.closings.map((row) => (
-                    <tr key={row.id}>
-                      <th scope="row">
-                        <button
-                          className={styles.contractorDetailButton}
-                          type="button"
-                          onClick={() => void openContractorDetail(row.id)}
-                          disabled={detailLoadingId === row.id}
-                          aria-label={`Ver proventos, descontos e resultado de ${row.contractorName}`}
-                        >
-                          {detailLoadingId === row.id ? "Carregando…" : row.contractorName}
-                        </button>
-                        <small>{row.contractReference || row.contractorCode}</small>
-                      </th>
-                      <td>{money(row.baseAmount)}</td>
-                      <td>{money(row.creditsAmount)}</td>
-                      <td className={styles.negative}>{money(row.debitsAmount)}</td>
-                      <td><strong>{money(row.netAmount)}</strong></td>
-                      <td>
-                        {row.invoiceLimitAmount === null ? "—" : money(row.invoiceLimitAmount)}
-                        <small>{limitSourceLabels[row.invoiceLimitSource] ?? row.invoiceLimitSource}</small>
-                      </td>
-                      <td><strong>{money(row.invoiceExpectedAmount)}</strong>{row.invoiceNumber && <small>NF {row.invoiceNumber}</small>}</td>
-                      <td>
-                        <strong>{money(row.complementAmount)}</strong>
-                        <small>{complementLabels[row.complementMethod] ?? row.complementMethod}</small>
-                      </td>
-                      <td><span className={styles.badge} data-tone={row.invoiceStatus}>{statusLabels[row.invoiceStatus] ?? row.invoiceStatus}</span></td>
-                      <td><span className={styles.badge} data-tone={row.cajuStatus}>{statusLabels[row.cajuStatus] ?? row.cajuStatus}</span></td>
-                      <td>
-                        <span className={styles.badge} data-tone={row.reconciliationStatus}>{statusLabels[row.reconciliationStatus] ?? row.reconciliationStatus}</span>
-                        {row.reconciliationDifference !== 0 && <small>{money(row.reconciliationDifference)}</small>}
-                      </td>
-                      <td><span className={styles.badge} data-tone={row.status}>{statusLabels[row.status] ?? row.status}</span></td>
-                      <td className={styles.rowActions}>
-                        {permissions?.manage && row.status !== "closed" && row.status !== "paid" && (
-                          <>
-                            <button type="button" onClick={() => setDialog({ kind: "invoice", closing: row })} disabled={busy}>Nota</button>
-                            {row.complementAmount > 0 && (
-                              <button type="button" onClick={() => setDialog({ kind: "complement", closing: row })} disabled={busy}>Complemento</button>
-                            )}
-                            <button type="button" onClick={() => void recalculate(row.providerId)} disabled={busy}>Reapurar</button>
-                            <button type="button" onClick={() => void transition(row.id, nextContractorStatus(row.status))} disabled={busy}>
-                              {statusLabels[nextContractorStatus(row.status)] ?? "Avançar"} <ArrowRight aria-hidden="true" />
-                            </button>
-                          </>
-                        )}
-                        {permissions?.close && row.status === "paid" && (
-                          <button type="button" onClick={() => void transition(row.id, "closed")} disabled={busy}>Fechar</button>
-                        )}
-                        {permissions?.reopen && (row.status === "closed" || row.status === "paid") && (
-                          <button type="button" onClick={() => setDialog({ kind: "reopen", closingId: row.id, module })} disabled={busy}>
-                            <RotateCcw aria-hidden="true" /> Reabrir
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <footer className={styles.reportBar}>
-            <a className={styles.secondaryButton} href={reportUrl("contractor-closing")}><Download aria-hidden="true" /> Fechamento (CSV)</a>
-            <a className={styles.secondaryButton} href={reportUrl("contractor-divergences")}><FileText aria-hidden="true" /> Divergências (CSV)</a>
-          </footer>
-        </>
+        <ContractorSectionView
+          section={section}
+          overview={contractors}
+          cycle={cycle}
+          competence={competence}
+          competenceLabel={competenceLabel}
+          money={money}
+          statusLabels={statusLabels}
+          limitSourceLabels={limitSourceLabels}
+          complementLabels={complementLabels}
+          componentLabels={componentLabels}
+          permissions={permissions}
+          busy={busy}
+          detailLoadingId={detailLoadingId}
+          reportUrl={reportUrl}
+          onDialog={setDialog}
+          onOpenDetail={(closingId) => void openContractorDetail(closingId)}
+          onRecalculate={(providerId) => void recalculate(providerId)}
+          onTransition={(closingId, status) => void transition(closingId, status)}
+          onCompetence={setCompetence}
+        />
       )}
 
       {!loading && module === "psychology" && psychology && cycle && (
@@ -727,14 +614,6 @@ export function PaymentsView({ role, module }: { role: WorkspaceRole; module: Pa
       {dialog && <PaymentDialogView dialog={dialog} busy={busy} onClose={() => setDialog(null)} onSubmit={submitDialog} />}
     </section>
   );
-}
-
-function nextContractorStatus(status: string) {
-  const flow: Record<string, string> = {
-    open: "review", review: "approval", approval: "approved", approved: "invoice_pending",
-    invoice_pending: "ready_to_pay", ready_to_pay: "paid", reopened: "review",
-  };
-  return flow[status] ?? "review";
 }
 
 function nextPsychologyStatus(status: string) {

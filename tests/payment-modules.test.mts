@@ -372,36 +372,39 @@ test("as APIs de pagamento validam tenant, competência fechada, permissão e au
 });
 
 test("a interface de pagamento é modular, acessível e sem controle decorativo", async () => {
-  const [workspace, view, dialogs, contractorDetail] = await Promise.all([
+  const [workspace, shell, sections, dialogs, contractorDetail] = await Promise.all([
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/PaymentDialogs.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/ContractorPaymentDetail.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(workspace, /<PaymentsView role=\{snapshot\.workspace\.role\} module="psychology" \/>/);
-  assert.match(workspace, /<PaymentsView role=\{snapshot\.workspace\.role\} module="contractors" \/>/);
+  // O PJ deixou de ser uma tela e virou oito (§74); a casca escolhe qual pelo
+  // destino ativo, em vez de repetir o componente oito vezes.
+  assert.match(workspace, /\{isContractorSection\(view\) && <PaymentsView role=\{snapshot\.workspace\.role\} module="contractors" section=\{view\} \/>\}/);
   assert.match(workspace, /Pagamento de Psicólogos/);
-  assert.match(workspace, /Pagamentos PJ/);
+  assert.match(workspace, /PAGAMENTO PJ/);
   // O menu não recria admissão digital concorrendo com a Sólides.
   assert.doesNotMatch(workspace, /setView\("admissions"\)/);
 
   // A tabela PJ responde às perguntas obrigatórias do produto.
   for (const column of ["Líquido", "Limite NF", "NF esperada", "Complemento", "Conciliação"]) {
-    assert.ok(view.includes(column), `coluna ausente: ${column}`);
+    assert.ok(sections.includes(column), `coluna ausente: ${column}`);
   }
-  assert.match(view, /Quanto o prestador tem a receber/);
-  assert.match(view, /Quantas consultas válidas/);
+  assert.match(shell, /Quanto o prestador tem a receber/);
+  assert.match(shell, /Quantas consultas válidas/);
   // Os três estados continuam existindo; mudaram de nome e de dono. A tira de
   // aviso em linha deste módulo nunca foi o estado vazio do painel — o nome
   // igual ao do componente compartilhado confundia os dois —, e o aviso de erro
   // passou a ser o mesmo dos outros oito módulos, que traz `role="alert"`
   // consigo em vez de depender de cada chamada lembrar dele.
-  assert.match(view, /styles\.noteLine/);
-  assert.match(view, /styles\.loadingLine/);
-  assert.match(view, /<ErrorBanner message=\{error\} \/>/);
+  assert.match(shell, /styles\.noteLine/);
+  assert.match(shell, /styles\.loadingLine/);
+  assert.match(shell, /<ErrorBanner message=\{error\} \/>/);
   const banner = await readFile(new URL("../app/painel/features/shared/panel-ui.tsx", import.meta.url), "utf8");
   assert.match(banner, /className=\{styles\.errorBanner\} role="alert"/);
-  assert.doesNotMatch(view + dialogs, /localStorage|sessionStorage|window\.location\.reload/);
+  assert.doesNotMatch(shell + sections + dialogs, /localStorage|sessionStorage|window\.location\.reload/);
   // Diálogos com foco preso, escape e sem campo clínico.
   assert.match(dialogs, /event\.key !== "Tab"/);
   assert.match(dialogs, /previous\?\.focus/);
@@ -451,7 +454,86 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
     "extrato deve apresentar somente o Complemento Caju",
   );
   assert.match(contractorDetail, /aria-modal="true"/);
-  assert.match(view, /openContractorDetail\(row\.id\)/);
+  // O nome do prestador é o botão que abre o detalhamento — o gesto mora na
+  // tabela, que agora é compartilhada pelos destinos que a mostram.
+  assert.match(shell, /openContractorDetail\(closingId\)/);
+  assert.match(sections, /onOpenDetail\(row\.id\)/);
+});
+
+test("o Pagamento PJ tem oito destinos, e cada um mostra dado que o servidor entrega (§74, §75)", async () => {
+  /* Era uma tela só, rolando: totais, lançamentos fixos, exportação Caju e uma
+     tabela de treze colunas, um embaixo do outro. Dois assuntos com dados
+     próprios no servidor não tinham lugar nenhum — as políticas de limite
+     existiam só dentro de um diálogo, e o histórico de competências só como
+     opção de um `<select>`.
+
+     O que este teste prende não é o número oito: é que nenhum destino seja
+     casca. Cada um lê um campo que a resposta do servidor de fato traz, e
+     "Contratos" continua fora justamente porque a entidade não existe. */
+  const [catalogo, secoes, navegacao, casca] = await Promise.all([
+    readFile(new URL("../app/painel/features/payments/contractor-sections.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/process-navigation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+  ]);
+
+  const destinos = [...catalogo.matchAll(/^\s{4}id: "(contractor\w+)",$/gmu)].map((match) => match[1]);
+  assert.equal(destinos.length, 8, "o Pagamento PJ deixou de ter oito destinos");
+  assert.deepEqual(new Set(destinos).size, 8, "há destino repetido no catálogo");
+
+  // Sem "Contratos": não existe a entidade, e página vazia esperando conteúdo
+  // é exatamente o que a §75 proíbe.
+  assert.doesNotMatch(catalogo, /label: "Contratos"/u);
+
+  // Cada destino é alcançável pelo menu e existe como tela na casca.
+  for (const destino of destinos) {
+    assert.ok(navegacao.includes(`"${destino}"`), `${destino} não tem porta no menu`);
+    assert.match(casca, new RegExp(`\\n  ${destino}: \\{`, "u"), `${destino} fora do catálogo de telas`);
+  }
+
+  // E cada um lê um campo real da resposta do servidor — nenhum é decoração.
+  for (const [destino, campo] of [
+    ["contractorProviders", "overview.contractors"],
+    ["contractorCycles", "overview.cycles"],
+    ["contractorClosings", "overview.closings"],
+    ["contractorAdjustments", "overview.fixedItems"],
+    ["contractorLimits", "overview.invoiceLimitPolicies"],
+    ["contractorCaju", "overview.totals.cajuAmount"],
+  ] as const) {
+    const campoNoDesestruturar = campo.replace("overview.", "");
+    assert.ok(
+      secoes.includes(campo) || new RegExp(`\\{[^}]*\\b${campoNoDesestruturar.split(".")[0]}\\b[^}]*\\} = overview`, "u").test(secoes),
+      `${destino} não lê ${campo} — é tela sem dado`,
+    );
+  }
+
+  // O cabeçalho e as ações falam do destino, não do módulo inteiro: numa tela
+  // de limites, "Crédito/desconto" é uma ação sem o que fazer ali.
+  const casca2 = await readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8");
+  assert.match(casca2, /const actions = module === "contractors"\s*\n\s*\? contractorActionsFor\(section\)/u);
+  assert.match(casca2, /\{canManage && actions\.recalculate && \(/u);
+  assert.match(casca2, /\{actions\.limit && \(|permissions\?\.manageLimits && actions\.limit && \(/u);
+});
+
+test("todo estado de competência tem tradução na tela", async () => {
+  /* O selo do cabeçalho imprimia o valor cru quando o mapa não conhecia o
+     estado: "Competência processing", em inglês, no meio de uma tela em
+     português. O mapa cobria os estados do fechamento de um prestador e
+     nenhum dos três intermediários da competência.
+
+     A lista de estados vem da restrição do banco, não de uma cópia à mão:
+     acrescentar um estado lá e esquecer aqui é justamente como o defeito
+     apareceu. */
+  const [migration, view] = await Promise.all([
+    readFile(new URL("../drizzle/postgres/0014_operation_dp_foundation.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+  ]);
+  const restricao = migration.match(/fdp_payroll_cycles_status_check[^\n]*IN \(([^)]*)\)/u)?.[1] ?? "";
+  const estados = [...restricao.matchAll(/'(\w+)'/gu)].map((match) => match[1]);
+  assert.ok(estados.length >= 5, "os estados da competência não foram lidos da migration");
+  for (const estado of estados) {
+    assert.match(view, new RegExp(`\\b${estado}: "`, "u"), `estado de competência sem tradução: ${estado}`);
+  }
 });
 
 test("exclusão lógica do pagamento PJ preserva auditoria e some da operação", async () => {
