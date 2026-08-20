@@ -208,12 +208,18 @@ test("a confirmação só libera quando todas as travas passam", async () => {
 /* Escala de superfície (§5, §6, §7)                                          */
 /* -------------------------------------------------------------------------- */
 
-test("os dois temas têm quatro degraus de superfície, e nenhum é branco puro", async () => {
+test("as duas escalas têm quatro degraus de superfície, e nenhum é branco puro", async () => {
   /* A queixa da §5 é literal: "não quero o sistema branco". O tema claro
      anterior era `#ffffff` de cartão sobre `#f5f7f9` de fundo — 1,03:1 entre os
      dois, o que não é hierarquia, é uma folha de papel com texto. O escuro
      tinha o mesmo defeito pelo avesso, e nenhum degrau acima da superfície:
-     modal e menu suspenso caíam no mesmo tom do cartão que os abriu. */
+     modal e menu suspenso caíam no mesmo tom do cartão que os abriu.
+
+     O produto entrega um tema só, o escuro. A escala clara continua medida
+     porque ela é a camada base: `.theme-dark` sobrescreve os quatro tokens,
+     mas qualquer regra futura que escape da sobrescrita resolve contra ela. Um
+     `#ffffff` de volta ali é uma superfície branca esperando a primeira regra
+     distraída — e a §5 existe justamente para isso não acontecer. */
   const css = await lerCss("app/dashboard-modern.css");
   const bloco = (seletor: string) => {
     const inicio = css.indexOf(seletor);

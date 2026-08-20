@@ -30,8 +30,6 @@ import {
   MessageSquareMore,
 
   MoreHorizontal,
-  Moon,
-  Sun,
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
@@ -321,12 +319,6 @@ const searchRecordColors: Record<string, string> = {
   contractor: "orange", competence: "blue", integration: "gray",
 };
 
-/** Onde a escolha de tema fica guardada. Chave nova: a antiga era apagada a
- *  cada carregamento pela versão que fixava o escuro, e reaproveitá-la faria
- *  o painel abrir com o valor que aquele código deixou para trás. */
-const themeStorageKey = "vinculato-theme";
-type ThemeChoice = "light" | "dark";
-
 const roleLabels: Record<WorkspaceRole, string> = {
   admin: "Administrador",
   member: "Membro",
@@ -597,49 +589,36 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [newBoardDescription, setNewBoardDescription] = useState("");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // O escuro continua sendo o padrão do produto; a preferência guardada e a do
-  // sistema operacional entram no primeiro quadro, já no cliente.
-  const [theme, setTheme] = useState<ThemeChoice>("dark");
   const [assistantSignal, setAssistantSignal] = useState(0);
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("syncing");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const sidebarPreferenceLoaded = useRef(false);
-  const themePreferenceLoaded = useRef(false);
   const mobileNavigationRef = useRef<HTMLDetailsElement>(null);
   const realtimeCursorRef = useRef("");
   const touchCardMoveRef = useRef<{ cardId: string; x: number; y: number } | null>(null);
   const suppressCardOpenRef = useRef<string | null>(null);
 
   /**
-   * Tema (§5, §6, §7, §12).
+   * Tema (§7).
    *
-   * A versão anterior apagava a preferência a cada carregamento e fixava o
-   * escuro. O motivo original era bom — o claro de então era `#ffffff` de
-   * cartão sobre `#f5f7f9` de fundo, 1,03:1, e não dava para ver onde um
-   * cartão começava. A resposta certa era consertar o claro, não retirá-lo:
-   * quem opera sob luz de escritório o dia inteiro tem motivo para querê-lo,
-   * e as duas escalas agora têm os mesmos quatro degraus tonalizados.
+   * O Vinculato tem um tema só, e ele é escuro — decisão de produto, tomada
+   * depois de o claro existir e ser avaliado. O que sobra aqui é a única parte
+   * que o CSS não resolve sozinho: `color-scheme` é o que faz a barra de
+   * rolagem, o seletor de data e os demais controles nativos do navegador
+   * acompanharem o tema. Sem ele, o painel escuro abre um calendário branco.
    *
-   * Sem preferência guardada, o sistema operacional decide. Só depois de um
-   * clique explícito a escolha passa a valer sobre ele.
+   * A escala clara continua declarada em `dashboard-modern.css` porque é a
+   * camada base sobre a qual as regras `.theme-dark` escrevem — apagá-la
+   * exigiria reescrever cada regra do painel, e o resultado na tela seria
+   * exatamente o mesmo.
    */
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const stored = window.localStorage.getItem(themeStorageKey);
-      if (stored === "light" || stored === "dark") setTheme(stored);
-      else if (window.matchMedia?.("(prefers-color-scheme: light)").matches) setTheme("light");
-      themePreferenceLoaded.current = true;
-    });
-    return () => window.cancelAnimationFrame(frame);
+    document.documentElement.style.colorScheme = "dark";
+    // A escolha de quem experimentou a alternância enquanto ela existiu não
+    // pode sobreviver a ela: sem esta linha, um valor guardado ficaria no
+    // navegador da pessoa sem nada que o leia nem o apague.
+    window.localStorage.removeItem("vinculato-theme");
   }, []);
-
-  useEffect(() => {
-    // `color-scheme` é o que faz a barra de rolagem, o seletor de data e os
-    // controles nativos do navegador acompanharem o tema. Sem ele o painel
-    // escuro abre um calendário branco.
-    document.documentElement.style.colorScheme = theme;
-    if (themePreferenceLoaded.current) window.localStorage.setItem(themeStorageKey, theme);
-  }, [theme]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -1444,16 +1423,14 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
 
   return (
-    <main className={`dashboard-shell theme-${theme}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <main className={`dashboard-shell theme-dark${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
-          {/* A barra lateral é superfície nos dois temas: no claro o logotipo
-              branco sumiria nela. A variante segue o tema, em vez de assumir
-              fundo escuro. */}
-          <VinculatoLogo size={28} tone={theme === "dark" ? "light" : "color"} />
+          {/* Variante clara do logotipo: a barra lateral é superfície escura. */}
+          <VinculatoLogo size={28} tone="light" />
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>
@@ -1597,14 +1574,6 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
-            {/* `aria-pressed` em vez de dois botões: é um estado do mesmo
-                comando, e o leitor de tela anuncia qual está valendo. */}
-            <button className="theme-toggle" aria-label={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
-              aria-pressed={theme === "dark"} title={theme === "dark" ? "Tema claro" : "Tema escuro"}
-              onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}>
-              {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-            </button>
-
             <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
             {/* A ação primária vem do catálogo, não de uma lista de exceções.
                 A versão anterior aparecia por negação — seis `view !== "…"` —,

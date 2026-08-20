@@ -188,17 +188,26 @@ let screensAudited = 0;
 /**
  * Piso de cobertura.
  *
- * A varredura completa mede 47 telas — o painel, o console e as subabas. Eram
- * 59 quando a interface tinha dois temas e cada tela era medida duas vezes; com
- * um tema só, o mesmo alcance custa uma passagem.
+ * A varredura completa mede 64 telas — o painel, os dois níveis do menu, as
+ * abas de dentro de cada módulo, o assistente e o console global, num tema só.
  *
  * O piso existe porque este script já falhou do jeito mais perigoso que um
- * verificador pode falhar: passando. Um seletor de navegação que deixou de casar
- * tirou 32 telas da varredura, e a conclusão impressa continuou sendo "OK: 0
- * violações" — 0 violações em nada. O número é folgado de propósito: acusa um
- * colapso de cobertura sem quebrar quando um módulo sai do plano.
+ * verificador pode falhar: passando. Um seletor de navegação que deixou de
+ * casar tirou 32 telas da varredura, e a conclusão impressa continuou sendo
+ * "OK: 0 violações" — 0 violações em nada.
+ *
+ * Ele subiu de 40 para 55 quando as abas de dentro dos módulos entraram na
+ * varredura. Vale registrar o que aquela entrada revelou, porque é a medida do
+ * que um piso baixo esconde: as dez abas do Controle de EPI, as nove da gestão
+ * de Processos e as quatro do quadro **nunca tinham sido medidas** — a
+ * varredura visitava o módulo, auditava a primeira aba e seguia adiante. A
+ * primeira passagem com elas dentro acusou 122 violações de contraste, todas
+ * reais, todas em rótulos que existiam há meses.
+ *
+ * O número continua folgado de propósito — 55 contra 64 medidas — para acusar
+ * um colapso de cobertura sem quebrar quando um módulo sai do plano.
  */
-const MINIMO_DE_TELAS = 40;
+const MINIMO_DE_TELAS = 55;
 
 /** `path === null` audita a tela já aberta, sem recarregar — usado nas visões do painel. */
 async function audit(label, path, setup) {
@@ -245,12 +254,32 @@ async function audit(label, path, setup) {
  * Colaboradores e Cadastros auxiliares são telas diferentes com formulários
  * diferentes — cada uma precisa passar por si.
  */
-async function auditSubTabs(prefix, selector) {
-  const tabs = page.locator(selector);
-  const labels = (await tabs.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
-  for (const label of labels) {
+/**
+ * As abas de dentro do módulo — as que a barra lateral não alcança.
+ *
+ * Controle de EPI tem dez destinos próprios, a gestão de Processos tem nove, e
+ * até aqui **nenhum deles era medido**: a varredura visitava o módulo, auditava
+ * a primeira aba e ia para o módulo seguinte. Trinta e poucas telas de produto
+ * ficavam de fora, e o relatório dizia "0 violações" sobre o que não tinha
+ * olhado — a mesma classe de ponto cego que o piso de cobertura existe para
+ * acusar.
+ *
+ * O cabeçalho de processo fica de fora de propósito: as abas dele levam às
+ * mesmas telas que o segundo nível do menu, que a varredura já percorreu.
+ * Medir de novo infla o número sem medir nada novo, e um piso inflado é pior
+ * que um piso baixo.
+ */
+async function auditModuleTabs(prefix) {
+  const dentro = '.dashboard-content [role="tab"], .dashboard-content [class*="tabs"] > button';
+  const fora = page.locator('.process-context [role="tab"]');
+  const foraLabels = new Set((await fora.allInnerTexts()).map((text) => text.trim().split("\n")[0]));
+  const tabs = page.locator(dentro);
+  const labels = [...new Set((await tabs.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean))]
+    .filter((label) => !foraLabels.has(label));
+  // A primeira já foi auditada com o módulo: ela é o destino de entrada.
+  for (const label of labels.slice(1)) {
     await tabs.filter({ hasText: label }).first().click().catch(() => undefined);
-    await page.waitForTimeout(1100);
+    await page.waitForTimeout(1000);
     await audit(`${prefix} › ${label}`, null);
   }
 }
@@ -313,6 +342,7 @@ async function auditPanelViews(theme = "") {
     await processos.filter({ hasText: rotulo }).first().click().catch(() => undefined);
     await page.waitForTimeout(900);
     await audit(`Painel › ${rotulo}${sufixo}`, null);
+    await auditModuleTabs(`Painel › ${rotulo}${sufixo}`);
 
     // Segundo nível: os módulos do processo recém-aberto. Eles nascem com a
     // abertura, então precisam ser lidos agora, não antes.
@@ -322,9 +352,7 @@ async function auditPanelViews(theme = "") {
       await modulos.filter({ hasText: nome }).first().click().catch(() => undefined);
       await page.waitForTimeout(900);
       await audit(`Painel › ${rotulo} › ${nome}${sufixo}`, null);
-      if (/Cadastros/u.test(nome)) {
-        await auditSubTabs(`Painel › ${nome}${sufixo}`, 'main [class*="tabs"] > button, [class*="__tabs"] > button');
-      }
+      await auditModuleTabs(`Painel › ${nome}${sufixo}`);
     }
     await page.keyboard.press("Escape").catch(() => undefined);
   }
@@ -344,49 +372,41 @@ async function auditPanelViews(theme = "") {
  * que o script olhou.
  */
 /**
- * Leva a interface ao tema pedido, lendo o estado real em vez de supor.
+ * O produto voltou a ter um tema só.
  *
- * A primeira versão disto supunha o padrão: só trocava quando o alvo era o
- * segundo tema. Errado por dois motivos somados — o padrão do painel depende
- * da preferência do sistema operacional, e o navegador da varredura roda com a
- * preferência clara. Resultado: a passagem rotulada "TEMA DARK" media o tema
- * claro, e a seguinte não achava o botão porque já estava no tema que queria.
- * Duas passagens sobre a mesma metade, com rótulos que diziam o contrário — a
- * falha exata que este bloco existe para impedir.
+ * Esta função já foi três coisas, e o histórico importa para não repetir
+ * nenhuma delas. Primeiro ela trocava de tema pelo botão do cabeçalho e a
+ * varredura cobria os dois. Quando a interface virou exclusivamente escura, o
+ * botão sumiu e no lugar da troca ficou uma sentinela: reprovar se um
+ * alternador reaparecesse, para o segundo tema nunca ficar sem auditoria em
+ * silêncio. Ele reapareceu, a sentinela acusou, e a varredura voltou a cobrir
+ * os dois — de um jeito que, na primeira tentativa, media o mesmo tema duas
+ * vezes com rótulos trocados.
  *
- * Agora ele confere a classe do shell, que é o estado de verdade, e só clica
- * quando falta clicar.
+ * O produto agora tem um tema só de novo, por decisão registrada. A regra que
+ * atravessou as três versões é sempre a mesma: **nunca audite metade**. Então
+ * a sentinela volta ao posto. Ela não mede tema nenhum; ela vigia o retorno do
+ * segundo, que é a única coisa capaz de tornar esta varredura parcial sem que
+ * ninguém perceba.
  */
-async function switchTheme(target) {
-  const toggle = page.locator(".theme-toggle");
-  // Esperar o botão, não só procurá-lo. O painel é um componente de cliente que
-  // busca o retrato do workspace antes de desenhar a barra superior: chegando
-  // do console global, a primeira passagem encontrava a página ainda vazia.
-  await toggle.first().waitFor({ state: "visible", timeout: 20000 }).catch(() => undefined);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const isDark = await page.locator("main.dashboard-shell.theme-dark").count() > 0;
-    if (isDark === (target === "dark")) return true;
-    if (await toggle.count() === 0) return false;
-    await toggle.first().click();
-    await page.waitForTimeout(700);
-  }
-  return false;
+async function themeToggleExists() {
+  return await page.locator(".theme-toggle").count() > 0;
 }
 
-async function auditEverything(theme) {
-  console.log(`\n\n═══════════ TEMA ${theme.toUpperCase()} ═══════════`);
+async function auditEverything() {
+  console.log("\n\n═══════════ INTERFACE ═══════════");
   await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
-  if (!await switchTheme(theme)) {
-    console.log(theme === "light" ? "não foi possível ativar o tema claro" : "não foi possível ativar o tema escuro");
+  if (await themeToggleExists()) {
+    console.log("um alternador de tema voltou à interface: a varredura precisa cobrir os dois temas de novo");
     failures += 1;
     return;
   }
-  await audit(`Painel [${theme}]`, null);
-  await auditPanelViews(theme);
-  await auditAssistant(theme);
-  await audit(`Console da plataforma [${theme}]`, "/plataforma");
-  await auditPlatformAreas(theme);
+  await audit("Painel", null);
+  await auditPanelViews();
+  await auditAssistant();
+  await audit("Console da plataforma", "/plataforma");
+  await auditPlatformAreas();
 }
 
 /**
@@ -421,10 +441,7 @@ try {
     await signIn();
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   });
-  // O tema fica no localStorage, então a escolha atravessa as navegações.
-  await auditEverything("dark");
-  await auditEverything("light");
-  await switchTheme("dark");
+  await auditEverything();
 } finally {
   await browser.close();
 }

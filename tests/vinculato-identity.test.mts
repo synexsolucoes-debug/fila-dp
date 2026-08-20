@@ -177,6 +177,20 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.match(script, /if \(screensAudited < MINIMO_DE_TELAS\)/u);
   assert.match(script, /COBERTURA INSUFICIENTE/u);
 
+  /* E a varredura precisa entrar nas abas de dentro de cada módulo.
+     Sem isto ela visitava o módulo, media a primeira aba e seguia adiante: as
+     dez abas do Controle de EPI, as nove da gestão de Processos e as quatro do
+     quadro nunca eram medidas, e o relatório dizia "0 violações" sobre o que
+     não tinha olhado. A primeira passagem com elas dentro acusou 122 violações
+     de contraste reais. */
+  assert.match(script, /async function auditModuleTabs/u);
+  assert.match(script, /await auditModuleTabs\(/u);
+  // As abas do cabeçalho de processo ficam de fora: elas levam às mesmas telas
+  // que o segundo nível do menu, e medi-las de novo infla o piso sem medir nada.
+  assert.match(script, /\.process-context \[role="tab"\]/u);
+  assert.ok(Number(script.match(/const MINIMO_DE_TELAS = (\d+);/u)?.[1]) >= 55,
+    "o piso precisa acompanhar o alcance da varredura, senão vira folga acumulada");
+
   // E a varredura precisa alcançar o menu mesmo com os itens agrupados: o
   // seletor de filho direto era exatamente o que quebrou.
   assert.match(script, /nav\[aria-label="Navegação do painel"\] /u);
@@ -192,16 +206,19 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.match(script, /\.sidebar-process > button/u);
   assert.match(script, /\.sidebar-process-view/u);
 
-  /* O segundo tema voltou (§6, §12), e com ele a varredura dos dois.
-     A sentinela que ficou no lugar da troca — reprovar se um alternador
-     reaparecesse — cumpriu exatamente o papel para o qual foi deixada: ela
-     acusou a volta em vez de deixar metade do produto sem auditoria. */
-  assert.match(script, /async function switchTheme/u);
-  assert.doesNotMatch(script, /async function themeToggleExists/u);
-  assert.match(script, /await auditEverything\("dark"\);/u);
-  assert.match(script, /await auditEverything\("light"\);/u);
-  // "Zero violações" precisa querer dizer zero nos dois temas.
-  assert.match(script, /não foi possível ativar o tema claro/u);
+  /* O produto voltou a ter um tema só, por decisão de produto registrada — e a
+     varredura volta ao posto de sentinela.
+
+     Esta trava já mudou de lado três vezes, e é justamente por isso que ela
+     existe: a regra que atravessou as três versões é sempre a mesma, **nunca
+     audite metade**. Quando havia dois temas, ela cobrava que os dois fossem
+     medidos. Com um só, ela cobra que a volta do segundo seja acusada em vez
+     de passar em silêncio — que é a única coisa capaz de tornar esta varredura
+     parcial sem ninguém perceber. */
+  assert.doesNotMatch(script, /async function switchTheme/u);
+  assert.match(script, /async function themeToggleExists/u);
+  assert.match(script, /um alternador de tema voltou à interface/u);
+  assert.match(script, /await auditEverything\(\);/u);
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts["a11y-check"], "node scripts/a11y-check.mjs");
 });

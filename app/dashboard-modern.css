@@ -4445,3 +4445,50 @@
 
 .theme-dark :is(.djs-palette, .djs-context-pad) .entry { color: var(--ui-text-soft) !important; }
 .theme-dark :is(.djs-palette, .djs-context-pad) .entry:hover { background: var(--ui-surface-muted) !important; }
+
+/* ==========================================================================
+   Rótulos que ficaram no azul do tema claro (§82, §83)
+   ==========================================================================
+   Seis rótulos escritos em `access.css` com a cor da marca ou com um cinza
+   fixo, sem contrapartida no escuro. Cinco deles são o mesmo erro: `color:
+   var(--brand)` — o azul-marinho `#0857B2`, escolhido para ler sobre papel — em
+   texto sobre superfície escura. Ali ele rende de 2,21:1 a 2,44:1.
+
+   O sistema já sabia disso: `--ui-accent` e `--ui-accent-text` são separados
+   exatamente porque texto sobre superfície escura precisa clarear mais que
+   preenchimento. Estes rótulos é que tinham ficado fora da regra.
+
+   Eles sobreviveram porque moram em telas que a varredura de acessibilidade
+   não alcançava: ela visitava cada módulo, media a primeira aba e seguia para
+   o módulo seguinte. As abas internas — Tabela, Calendário, Processos,
+   Arquivados, as dez do EPI, as nove de Processos — nunca foram medidas, e o
+   relatório dizia "0 violações" sobre o que não tinha olhado. Com a varredura
+   entrando nelas, os seis apareceram de uma vez.
+
+   Medido depois: 8,59:1 sobre a superfície, 7,62:1 sobre a elevada, 6,93:1
+   sobre o preenchimento suave. */
+/* Descendente, não filho direto: nestes três o rótulo mora dentro de um `div`
+   que agrupa a linha do cabeçalho (`<header><div><span>…`). A primeira versão
+   desta correção usou `> span` e não casou com dois dos três — a varredura
+   continuou acusando 2,21:1 e 2,44:1, que foi como o erro apareceu. */
+.theme-dark :is(.workspace-modal > header, .process-tables-view > section > header, .archive-list > article > div) span {
+  color: var(--ui-accent-text);
+}
+
+.theme-dark :is(.demand-table-view, .demand-calendar-view) > header span {
+  color: var(--ui-text-soft);
+}
+
+/* O selo cinza de processo era o único par do conjunto pensado para papel que
+   não clareia junto — os outros quatro são texto escuro sobre pastilha clara e
+   continuam legíveis por conta própria. */
+.theme-dark .table-process.gray {
+  background: var(--ui-state-neutral-bg);
+  color: var(--ui-state-neutral-text);
+}
+
+/* Ícone do estado vazio: fundo verde-água fixo com a marca por cima. */
+.theme-dark .empty-view > span {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
