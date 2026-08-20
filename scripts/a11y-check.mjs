@@ -343,22 +343,42 @@ async function auditPanelViews(theme = "") {
  * violações" precisa querer dizer zero no produto inteiro, não zero na metade
  * que o script olhou.
  */
+/**
+ * Leva a interface ao tema pedido, lendo o estado real em vez de supor.
+ *
+ * A primeira versão disto supunha o padrão: só trocava quando o alvo era o
+ * segundo tema. Errado por dois motivos somados — o padrão do painel depende
+ * da preferência do sistema operacional, e o navegador da varredura roda com a
+ * preferência clara. Resultado: a passagem rotulada "TEMA DARK" media o tema
+ * claro, e a seguinte não achava o botão porque já estava no tema que queria.
+ * Duas passagens sobre a mesma metade, com rótulos que diziam o contrário — a
+ * falha exata que este bloco existe para impedir.
+ *
+ * Agora ele confere a classe do shell, que é o estado de verdade, e só clica
+ * quando falta clicar.
+ */
 async function switchTheme(target) {
-  const label = target === "dark" ? /Usar tema escuro/u : /Usar tema claro/u;
-  const toggle = page.getByRole("button", { name: label });
-  if (await toggle.count() === 0) return false;
-  await toggle.first().click();
-  await page.waitForTimeout(700);
-  return true;
+  const toggle = page.locator(".theme-toggle");
+  // Esperar o botão, não só procurá-lo. O painel é um componente de cliente que
+  // busca o retrato do workspace antes de desenhar a barra superior: chegando
+  // do console global, a primeira passagem encontrava a página ainda vazia.
+  await toggle.first().waitFor({ state: "visible", timeout: 20000 }).catch(() => undefined);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const isDark = await page.locator("main.dashboard-shell.theme-dark").count() > 0;
+    if (isDark === (target === "dark")) return true;
+    if (await toggle.count() === 0) return false;
+    await toggle.first().click();
+    await page.waitForTimeout(700);
+  }
+  return false;
 }
 
 async function auditEverything(theme) {
   console.log(`\n\n═══════════ TEMA ${theme.toUpperCase()} ═══════════`);
   await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
-  // O padrão do produto é o escuro; o claro é que precisa ser pedido.
-  if (theme === "light" && !await switchTheme("light")) {
-    console.log("não foi possível ativar o tema claro");
+  if (!await switchTheme(theme)) {
+    console.log(theme === "light" ? "não foi possível ativar o tema claro" : "não foi possível ativar o tema escuro");
     failures += 1;
     return;
   }
