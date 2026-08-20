@@ -3941,11 +3941,30 @@
     grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
     min-height: 0;
+    /* `min-width: auto` é o valor inicial de um item de grade, e ele impede a
+       coluna de encolher abaixo do conteúdo. A coluna do shell é
+       `minmax(0, 1fr)` justamente para poder encolher — mas isso não adianta
+       enquanto o item dentro dela se recusa.
+
+       O efeito medido em 1366×768 e 1280×720, nos dois temas: a coluna do
+       conteúdo ficava 60 a 140px mais larga que a janela e o `overflow: hidden`
+       do shell cortava a diferença. Não havia barra de rolagem porque não havia
+       rolagem: o excesso simplesmente não existia mais para quem estava
+       olhando. É o "conteúdo cortado" da §94, e ele só aparece nas resoluções
+       que a §43 lista como alvo — em 1920 sobra largura e o defeito some. */
+    min-width: 0;
   }
+
+  .dashboard-header,
+  .dashboard-content { min-width: 0; }
 
   .dashboard-content {
     min-height: 0;
     overflow-y: auto;
+    /* Um módulo pode legitimamente pedir mais largura que a janela — o quadro
+       com seis colunas é o caso. Rolar dentro da coluna de conteúdo é o
+       comportamento certo; cortar não é. */
+    overflow-x: auto;
     overscroll-behavior: contain;
   }
 }

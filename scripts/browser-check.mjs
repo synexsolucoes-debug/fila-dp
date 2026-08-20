@@ -263,6 +263,39 @@ if (password) {
   record("a tela global nunca mostra hash de senha", !/\$argon|\$2[aby]\$|password_hash/u.test(globalText));
 }
 
+// 4a. A coluna de conteúdo do painel cabe na janela (§43, §94).
+//
+//     Este defeito não produz barra de rolagem: `.dashboard-shell` recorta com
+//     `overflow: hidden`, então o excesso simplesmente deixa de existir para
+//     quem está olhando. Medir `document.scrollWidth` — que é o que as outras
+//     conferências de largura fazem — devolvia zero enquanto 140px de conteúdo
+//     eram cortados em 1280×720.
+//
+//     A causa foi `min-width: auto`, o valor inicial de um item de grade: a
+//     coluna do shell é `minmax(0, 1fr)` para poder encolher, e o item dentro
+//     dela se recusava. Só aparece nas resoluções que a §43 lista como alvo —
+//     em 1920 sobra largura e o defeito some, que é por que ele durou.
+if (password) {
+  for (const [width, height] of [[1366, 768], [1280, 720]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+    await page.waitForTimeout(1200);
+    const medir = async () => page.evaluate(() => {
+      const main = document.querySelector("section.dashboard-main");
+      return main ? main.scrollWidth - main.clientWidth : -1;
+    });
+    // A home e um processo: em 1366 a home cabia e o cockpit de fechamento
+    // não, então medir só a primeira tela deixaria metade do defeito passar.
+    let corte = await medir();
+    await abrirModulo("Operação DP", "Visão geral");
+    await page.waitForTimeout(1400);
+    corte = Math.max(corte, await medir());
+    record(`o painel não corta conteúdo em ${width}x${height}`, corte >= 0 && corte <= 2, `${corte}px além da coluna`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
 // 4b. Liberação por plano: o menu do painel reflete o plano contratado.
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
