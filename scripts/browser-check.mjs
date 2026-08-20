@@ -41,6 +41,32 @@ const consoleErrors = [];
 page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text().slice(0, 160)); });
 page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error).slice(0, 160)}`));
 
+/**
+ * Abre um módulo do painel pelo menu de dois níveis (§25, §65).
+ *
+ * O menu agrupa os módulos pelo processo a que pertencem, e os do segundo
+ * nível só existem no DOM enquanto o processo está aberto. Esta verificação
+ * clicava direto em "Demandas" e "Relatórios" — que agora só aparecem depois
+ * de abrir "Operação DP" e "Relatórios e integrações". Sem isto, sete
+ * conferências reprovavam por não achar o botão, e nenhuma delas era sobre o
+ * menu: eram sobre exportação de CSV e persistência de demanda.
+ *
+ * O caminho é o da pessoa: abre o processo, depois o módulo. Navegar por rota
+ * seria mais curto e mediria menos — o painel troca de tela por estado, e um
+ * atalho pularia justamente a navegação que o produto oferece.
+ */
+async function abrirModulo(processo, modulo) {
+  const nav = "nav[aria-label='Navegação do painel']";
+  await page.waitForSelector(`${nav} button`, { timeout: 25000 }).catch(() => undefined);
+  await page.locator(`${nav} .sidebar-process > button`).filter({ hasText: processo }).first()
+    .click().catch(() => undefined);
+  await page.waitForTimeout(800);
+  const submenu = page.locator(`${nav} .sidebar-process-view`).filter({ hasText: modulo });
+  // Um processo recortado a um módulo só não tem segundo nível: entrar nele já
+  // abriu o módulo, e não há submenu para clicar.
+  if (await submenu.count() > 0) await submenu.first().click().catch(() => undefined);
+}
+
 // 1. Site público
 await page.goto(`${base}/`, { waitUntil: "domcontentloaded" });
 record("a página inicial responde e carrega", page.url().startsWith(base));
@@ -312,8 +338,7 @@ if (password) {
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
-  await page.getByRole("button", { name: /^Relatórios$/u }).first().click().catch(() => undefined);
+  await abrirModulo("Relatórios e integrações", "Relatórios");
   await page.waitForTimeout(1800);
 
   const linhasDoCsv = async () => {
@@ -379,8 +404,7 @@ if (password) {
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
-  await page.getByRole("button", { name: /^Demandas$/u }).first().click().catch(() => undefined);
+  await abrirModulo("Operação DP", "Demandas");
   await page.waitForTimeout(1500);
 
   const titulo = `Ensaio de ponta a ponta ${Date.now()}`;
@@ -403,8 +427,7 @@ if (password) {
   // de procurar. Sem isso a conferência mediria "o título aparece na primeira
   // tela que carregar", que não é a pergunta.
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
-  await page.getByRole("button", { name: /^Demandas$/u }).first().click().catch(() => undefined);
+  await abrirModulo("Operação DP", "Demandas");
   await page.waitForTimeout(2500);
   const depoisDoReload = await page.getByText(titulo, { exact: false }).count();
   record("a demanda sobrevive à recarga da página", depoisDoReload > 0, `${depoisDoReload} ocorrência(s)`);
