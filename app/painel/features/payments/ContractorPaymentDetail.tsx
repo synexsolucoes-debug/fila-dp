@@ -1,12 +1,13 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowDownRight, ArrowUpRight, FileText, Pencil, Trash2, WalletCards, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Pencil, Trash2, X } from "lucide-react";
 import type { ContractorComponent, ContractorPaymentDetail as Detail } from "./payments.types";
+import { ContractorAnalyticalStatement } from "./ContractorAnalyticalStatement";
 import styles from "./payments.module.css";
 
 const componentLabels: Record<string, string> = {
-  base: "Salário-base",
+  base: "Valor contratual",
   commission: "Comissão",
   bonus: "Bônus",
   award: "Prêmio",
@@ -228,7 +229,7 @@ export function ContractorPaymentDetail({
       >
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>DETALHAMENTO DO PAGAMENTO PJ</span>
+            <span className={styles.eyebrow}>EXTRATO ANALÍTICO DE PAGAMENTO PJ</span>
             <h2 id="contractor-payment-detail-title">{detail.provider.legalName}</h2>
             <p className={styles.detailMeta}>
               {detail.provider.roleTitle || detail.provider.contractReference || detail.provider.code} · competência {detail.closing.competence}
@@ -254,7 +255,7 @@ export function ContractorPaymentDetail({
                 <thead><tr><th scope="col">Rubrica</th><th scope="col">Origem</th><th scope="col">Situação</th><th scope="col">Valor</th><th scope="col">Ações</th></tr></thead>
                 <tbody>
                   <tr>
-                    <td>Salário-base</td><td>Contratual</td><td>Ativo</td><td>{money(detail.closing.baseAmount)}</td>
+                    <td>Valor contratual</td><td>Contratual</td><td>Ativo</td><td>{money(detail.closing.baseAmount)}</td>
                     <td className={styles.detailActions}><span className={styles.detailActionHint}>Altere no cadastro do PJ</span></td>
                   </tr>
                   {rows(credits)}
@@ -276,18 +277,7 @@ export function ContractorPaymentDetail({
             </div>
           </section>
 
-          <section className={styles.paymentResult} aria-labelledby="payment-result-title">
-            <header><FileText aria-hidden="true" /><h3 id="payment-result-title">Resultado final</h3></header>
-            <div className={styles.resultGrid}>
-              <article><span>Proventos</span><strong>{money(earnings)}</strong></article>
-              <article data-tone="debit"><span>Descontos</span><strong>- {money(detail.closing.debitsAmount)}</strong></article>
-              <article data-emphasis="true"><span>Líquido devido</span><strong>{money(detail.closing.netAmount)}</strong></article>
-              <article><span>Nota a emitir</span><strong>{money(detail.closing.invoiceExpectedAmount)}</strong></article>
-              <article><span>Complemento total</span><strong>{money(detail.closing.complementAmount)}</strong></article>
-              <article data-tone="caju"><span><WalletCards aria-hidden="true" /> Caju Saldo Livre</span><strong>{money(detail.closing.cajuAmount)}</strong></article>
-            </div>
-            <p>Proventos − descontos = líquido devido. Ao editar ou cancelar um lançamento, o fechamento é reapurado automaticamente.</p>
-          </section>
+          <ContractorAnalyticalStatement detail={detail} />
 
           {deleteMode ? (
             <section className={styles.deletePaymentPanel} aria-label="Excluir pagamento da competência">
