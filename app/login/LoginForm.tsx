@@ -2,12 +2,14 @@
 
 import { FormEvent, useState } from "react";
 import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { LoginIntroMotion } from "@/app/components/LoginIntroMotion";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loginDestination, setLoginDestination] = useState<string | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -22,11 +24,26 @@ export function LoginForm() {
       });
       const payload = await response.json() as { error?: string; redirectTo?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível concluir o acesso.");
-      window.location.assign(payload.redirectTo || "/painel");
+      const destination = payload.redirectTo || "/painel";
+
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      if (reducedMotion) {
+        window.location.assign(destination);
+        return;
+      }
+
+      setLoginDestination(destination);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível concluir o acesso.");
       setBusy(false);
     }
+  }
+
+  if (loginDestination) {
+    return <LoginIntroMotion destination={loginDestination} />;
   }
 
   return (
