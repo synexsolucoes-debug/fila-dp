@@ -44,7 +44,7 @@ type Movement = {
 };
 
 type Closing = {
-  competence: string; status: string; netCents: number; invoiceCents: number;
+  id: string; companyId: string; competence: string; status: string; netCents: number; invoiceCents: number;
   complementCents: number; fixedCajuCents: number; cajuCents: number;
 };
 
@@ -57,7 +57,7 @@ type Detail = {
   fixedItems: FixedItem[];
   movements: Movement[];
   closings: Closing[];
-  permissions: { manage: boolean };
+  permissions: { manage: boolean; readPayments: boolean };
 };
 
 const money = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -112,7 +112,11 @@ function BalanceBar({ balance }: { balance: Balance }) {
   );
 }
 
-export function ContractorsPanel({ canManage, createSignal }: { canManage: boolean; createSignal: number }) {
+export function ContractorsPanel({ canManage, createSignal, onOpenPayment }: {
+  canManage: boolean;
+  createSignal: number;
+  onOpenPayment: (target: { companyId: string; competence: string; closingId: string }) => void;
+}) {
   const [list, setList] = useState<ContractorSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -429,7 +433,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                     <thead>
                       <tr>
                         <th scope="col">Competência</th><th scope="col">Líquido</th><th scope="col">Nota</th>
-                        <th scope="col">Complemento</th><th scope="col">Situação</th>
+                        <th scope="col">Complemento</th><th scope="col">Situação</th><th scope="col">Pagamento</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -443,6 +447,12 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                             {row.cajuCents > 0 && <small>Caju {money(row.cajuCents)}{row.fixedCajuCents > 0 ? ` · fixa ${money(row.fixedCajuCents)}` : ""}</small>}
                           </td>
                           <td><StatusPill status={row.status} label={row.status} /></td>
+                          <td>
+                            <button type="button" className={styles.secondaryButton}
+                              onClick={() => onOpenPayment({ companyId: row.companyId, competence: row.competence, closingId: row.id })}>
+                              Consultar
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

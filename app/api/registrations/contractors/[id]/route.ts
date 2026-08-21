@@ -32,6 +32,7 @@ export async function GET(request: Request, { params }: Params) {
        apuração, nota — o acesso é conferido contra a empresa daquela
        operação, que é quem paga, e não contra o cadastro. */
 
+    const canReadPayments = hasCapability(workspace, "contractors.payments.read");
     const [identity, detail, fixedItems, movements, closings] = await Promise.all([
       d1.prepare(`SELECT a.code, a.legal_name, a.trade_name, a.tax_id, a.email, a.phone, a.status AS provider_status
         FROM fdp_auxiliary_providers a WHERE a.workspace_id = ? AND a.id = ?`)
@@ -48,9 +49,12 @@ export async function GET(request: Request, { params }: Params) {
           requested_by, decided_at, applied_at, decision_comment, created_at
         FROM fdp_contractor_movements WHERE workspace_id = ? AND provider_id = ?
         ORDER BY effective_date DESC, created_at DESC LIMIT 50`).bind(workspace.id, id).all<Record<string, unknown>>(),
-      d1.prepare(`SELECT competence, status, net_amount, invoice_expected_amount, complement_amount, fixed_caju_amount, caju_amount
-        FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ?
-        ORDER BY competence DESC LIMIT 24`).bind(workspace.id, id).all<Record<string, unknown>>(),
+      canReadPayments
+        ? d1.prepare(`SELECT id, company_id, competence, status, net_amount, invoice_expected_amount,
+            complement_amount, fixed_caju_amount, caju_amount
+          FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ? AND excluded_at IS NULL
+          ORDER BY competence DESC LIMIT 60`).bind(workspace.id, id).all<Record<string, unknown>>()
+        : Promise.resolve({ results: [] as Record<string, unknown>[] }),
     ]);
 
     const balance = await contractorBalance(d1, workspace.id, profile);
@@ -113,6 +117,8 @@ export async function GET(request: Request, { params }: Params) {
         createdAt: row.created_at,
       })),
       closings: closings.results.map((row) => ({
+        id: row.id,
+        companyId: row.company_id,
         competence: row.competence,
         status: row.status,
         netCents: centsFromDatabase(row.net_amount, "Líquido"),
@@ -121,7 +127,7 @@ export async function GET(request: Request, { params }: Params) {
         fixedCajuCents: centsFromDatabase(row.fixed_caju_amount, "Diferença fixa no Caju"),
         cajuCents: centsFromDatabase(row.caju_amount, "Caju"),
       })),
-      permissions: { manage: hasCapability(workspace, "contractors.manage") },
+      permissions: { manage: hasCapability(workspace, "contractors.manage"), readPayments: canReadPayments },
     });
   } catch (error) {
     return apiError(error);

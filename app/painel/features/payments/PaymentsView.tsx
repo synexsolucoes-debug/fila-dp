@@ -71,16 +71,17 @@ const competenceLabel = (value: string) => {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(Number(year), Number(month) - 1, 1));
 };
 
-export function PaymentsView({ role, module, section = "contractorPayments" }: {
+export function PaymentsView({ role, module, section = "contractorPayments", focus }: {
   role: WorkspaceRole;
   module: PaymentModule;
   /** Qual dos oito destinos do PJ desenhar (§74). Ignorado por Psicologia, que
    *  continua sendo um módulo de tela única. */
   section?: ContractorSectionId;
+  focus?: { companyId: string; competence: string; closingId: string } | null;
 }) {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
-  const [companyId, setCompanyId] = useState("");
-  const [competence, setCompetence] = useState(currentCompetence);
+  const [companyId, setCompanyId] = useState(() => focus?.companyId ?? "");
+  const [competence, setCompetence] = useState(() => focus?.competence ?? currentCompetence());
   const [psychology, setPsychology] = useState<PsychologyOverview | null>(null);
   const [contractors, setContractors] = useState<ContractorOverview | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -230,7 +231,7 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     await mutate(path, { method: "POST", body: JSON.stringify(body) }, "Apuração atualizada.");
   }
 
-  async function openContractorDetail(closingId: string) {
+  const openContractorDetail = useCallback(async (closingId: string) => {
     setDetailLoadingId(closingId);
     try {
       const payload = await requestJson<Row>(`/api/payments/contractors/closings/${closingId}`);
@@ -241,7 +242,13 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     } finally {
       setDetailLoadingId("");
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (module !== "contractors" || !focus) return;
+    const frame = window.requestAnimationFrame(() => void openContractorDetail(focus.closingId));
+    return () => window.cancelAnimationFrame(frame);
+  }, [focus, module, openContractorDetail]);
 
   async function updateContractorComponent(componentId: string, closingId: string, input: { amount: string; description: string }) {
     const result = await mutate<{ component: Row }>(`/api/payments/contractors/components/${componentId}`, {

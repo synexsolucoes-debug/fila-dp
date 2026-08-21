@@ -439,7 +439,8 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   assert.match(workspace, /<PaymentsView role=\{snapshot\.workspace\.role\} module="psychology" \/>/);
   // O PJ deixou de ser uma tela e virou oito (§74); a casca escolhe qual pelo
   // destino ativo, em vez de repetir o componente oito vezes.
-  assert.match(workspace, /\{isContractorSection\(view\) && <PaymentsView role=\{snapshot\.workspace\.role\} module="contractors" section=\{view\} \/>\}/);
+  assert.match(workspace, /\{isContractorSection\(view\) && <PaymentsView role=\{snapshot\.workspace\.role\} module="contractors" section=\{view\}/);
+  assert.match(workspace, /focus=\{contractorPaymentFocus\}/);
   assert.match(workspace, /Pagamento de Psicólogos/);
   assert.match(workspace, /PAGAMENTO PJ/);
   // O menu não recria admissão digital concorrendo com a Sólides.

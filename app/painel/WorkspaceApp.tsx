@@ -615,6 +615,9 @@ function canPreviewAttachment(attachment: CardAttachment) {
 export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: string }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [view, setView] = useState<View>("overview");
+  const [contractorPaymentFocus, setContractorPaymentFocus] = useState<{
+    companyId: string; competence: string; closingId: string;
+  } | null>(null);
   const [boardMode, setBoardMode] = useState<BoardMode>("kanban");
   const [cardTab, setCardTab] = useState<CardTab>("details");
   /** Segurança continua sendo a abertura padrão; administradores também podem
@@ -1822,7 +1825,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
           {view === "psychologistPayments" && <PaymentsView role={snapshot.workspace.role} module="psychology" />}
 
-          {isContractorSection(view) && <PaymentsView role={snapshot.workspace.role} module="contractors" section={view} />}
+          {isContractorSection(view) && <PaymentsView role={snapshot.workspace.role} module="contractors" section={view}
+            focus={contractorPaymentFocus} />}
 
           {view === "timeTracking" && <TimeTrackingView role={snapshot.workspace.role} />}
 
@@ -1830,7 +1834,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
 
-          {view === "registrations" && <RegistrationsView role={snapshot.workspace.role} />}
+          {view === "registrations" && <RegistrationsView role={snapshot.workspace.role}
+            onOpenContractorPayment={(target) => { setContractorPaymentFocus(target); setView("contractorClosings"); }} />}
 
           {view === "board" && (
             <>

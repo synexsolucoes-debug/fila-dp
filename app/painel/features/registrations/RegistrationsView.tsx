@@ -138,7 +138,10 @@ function initials(value: string) { return value.split(/\s+/).filter(Boolean).sli
 function statusLabel(status: Employee["employmentStatus"]) { return status === "on_leave" ? "Afastado" : status === "terminated" ? "Desligado" : "Ativo"; }
 function historyLabel(action: string) { return action.endsWith(".created") ? "Cadastro criado" : action.endsWith(".updated") ? "Dados atualizados" : action.endsWith(".inactivated") ? "Cadastro inativado" : action.replaceAll(".", " · "); }
 
-export function RegistrationsView({ role }: { role: WorkspaceRole }) {
+export function RegistrationsView({ role, onOpenContractorPayment }: {
+  role: WorkspaceRole;
+  onOpenContractorPayment: (target: { companyId: string; competence: string; closingId: string }) => void;
+}) {
   const canManageCompanies = false;
   const canManageRegistrations = role === "admin" || role === "member";
   const [tab, setTab] = useState<RegistrationTab>("employees");
@@ -334,7 +337,8 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
       )}
 
       {tab === "contractors" && (
-        <ContractorsPanel canManage={canManageRegistrations} createSignal={contractorCreateSignal} />
+        <ContractorsPanel canManage={canManageRegistrations} createSignal={contractorCreateSignal}
+          onOpenPayment={onOpenContractorPayment} />
       )}
 
       {tab === "catalogs" && (
