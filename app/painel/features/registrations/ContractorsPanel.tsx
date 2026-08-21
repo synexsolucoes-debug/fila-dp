@@ -264,7 +264,12 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
             <div>
               <small>{contractor ? (contractor.contractType === "determinado" ? "PRAZO DETERMINADO" : "PRAZO INDETERMINADO") : "PRESTADOR PJ"}</small>
               <h2>{contractor?.tradeName || contractor?.legalName || "Selecione um prestador"}</h2>
-              <p>{contractor ? `${contractor.companyName} · ${contractor.contractReference || "sem contrato de referência"}` : ""}</p>
+              {/* Sem empresa sugerida a linha não fica começando por um separador
+                  solto, que se lê como campo que não carregou. */}
+              <p>{contractor
+                ? [contractor.companyName, contractor.contractReference || "sem contrato de referência"]
+                  .filter(Boolean).join(" · ")
+                : ""}</p>
             </div>
           </div>
           {canManage && (
@@ -545,9 +550,9 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
                     : "O CPF é obrigatório para exportar o complemento ao cartão de benefício."}
                 </small>
               </label>
-              <label>Empresa contratante
-                <input name="companyId" defaultValue={current?.companyId ?? ""} required={mode === "new"} />
-                <small>Identificador da empresa do grupo.</small>
+              <label>Empresa sugerida
+                <input name="companyId" defaultValue={current?.companyId ?? ""} />
+                <small>Opcional. O prestador é do grupo — quem paga é a empresa que apurar a competência.</small>
               </label>
               <label>E-mail<input name="email" type="email" defaultValue={current?.email ?? ""} maxLength={180} /></label>
               <label>Telefone<input name="phone" defaultValue={current?.phone ?? ""} maxLength={40} /></label>

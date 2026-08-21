@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { readBatchEntries, readFixedItemInput } from "@/lib/contractor-input";
@@ -31,7 +31,10 @@ export async function POST(request: Request) {
       const statements = [];
       for (const entry of entries) {
         const profile = await requireContractorProfile(d1, workspace.id, entry.providerId);
-        await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+        /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
         const input = readFixedItemInput({ ...body, amount: entry.amount });
         const itemId = crypto.randomUUID();
         created.push(itemId);
@@ -39,7 +42,7 @@ export async function POST(request: Request) {
             (id, workspace_id, company_id, provider_id, direction, component_type, description, amount,
              effective_from, effective_to, note, created_by)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-          .bind(itemId, workspace.id, profile.company_id, entry.providerId, input.direction, input.componentType,
+          .bind(itemId, workspace.id, profile.company_id ?? null, entry.providerId, input.direction, input.componentType,
             input.description, fromCents(input.amountCents), input.effectiveFrom, input.effectiveTo,
             input.note, user.id));
       }
@@ -64,7 +67,10 @@ export async function POST(request: Request) {
     if (!providerId) throw ApiError.badRequest("Selecione o prestador.", "CONTRACTOR_REQUIRED");
 
     const profile = await requireContractorProfile(d1, workspace.id, providerId);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const input = readFixedItemInput(body);
     const itemId = crypto.randomUUID();
@@ -74,7 +80,7 @@ export async function POST(request: Request) {
           (id, workspace_id, company_id, provider_id, direction, component_type, description, amount,
            effective_from, effective_to, note, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(itemId, workspace.id, profile.company_id, providerId, input.direction, input.componentType,
+        .bind(itemId, workspace.id, profile.company_id ?? null, providerId, input.direction, input.componentType,
           input.description, fromCents(input.amountCents), input.effectiveFrom, input.effectiveTo,
           input.note, user.id),
       prepareAuditEvent({

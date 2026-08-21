@@ -23,11 +23,14 @@ export async function GET(request: Request, { params }: Params) {
   if (!auth.user) return auth.response;
   try {
     const { id } = await params;
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "contractors.read");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const [identity, detail, fixedItems, movements, closings] = await Promise.all([
       d1.prepare(`SELECT a.code, a.legal_name, a.trade_name, a.tax_id, a.email, a.phone, a.status AS provider_status
@@ -135,7 +138,10 @@ export async function PATCH(request: Request, { params }: Params) {
     requireCapability(workspace, "contractors.manage");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const currentIdentity = await d1.prepare("SELECT tax_id FROM fdp_auxiliary_providers WHERE workspace_id = ? AND id = ?")
       .bind(workspace.id, id).first<{ tax_id: string }>();
@@ -168,7 +174,7 @@ export async function PATCH(request: Request, { params }: Params) {
           base_amount = ?, fixed_caju_difference = ?, invoice_limit_override = ?, complement_method = ?, payment_day = ?, status = ?, notes = ?,
           updated_by = ?, updated_at = now()
         WHERE workspace_id = ? AND provider_id = ?`)
-        .bind(input.companyId || profile.company_id, input.contractReference, input.roleTitle,
+        .bind(input.companyId || profile.company_id || null, input.contractReference, input.roleTitle,
           input.contractType, input.contractStart, input.contractEnd,
           input.contractTotalCents === null ? null : fromCents(input.contractTotalCents),
           input.contractSignedAt, fromCents(input.baseAmountCents), fromCents(input.fixedCajuDifferenceCents),

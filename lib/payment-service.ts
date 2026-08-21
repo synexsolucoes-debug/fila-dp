@@ -38,6 +38,23 @@ export async function requireOpenCycle(d1: Database, workspaceId: string, compan
   return cycle;
 }
 
+/**
+ * A competência aberta pelo próprio id, sem exigir a empresa por fora.
+ *
+ * O lançamento PJ precisa disto porque o prestador é do grupo: não há uma
+ * "empresa do prestador" para procurar o ciclo. Quem diz a empresa é a
+ * competência escolhida, e é contra ela que o acesso é conferido — o que é mais
+ * exato do que conferir contra o cadastro, porque é a empresa da competência
+ * que vai pagar.
+ */
+export async function requireOpenCycleById(d1: Database, workspaceId: string, cycleId: string) {
+  const cycle = await d1.prepare("SELECT id, company_id, competence, status FROM fdp_payroll_cycles WHERE workspace_id = ? AND id = ?")
+    .bind(workspaceId, cycleId).first<CycleRow>();
+  if (!cycle) throw ApiError.badRequest("Competência inválida.", "INVALID_COMPETENCE");
+  if (cycle.status === "closed") throw ApiError.badRequest("A competência está fechada.", "COMPETENCE_CLOSED");
+  return cycle;
+}
+
 export async function requireCycle(d1: Database, workspaceId: string, companyId: string, cycleId: string) {
   const cycle = await d1.prepare("SELECT id, company_id, competence, status FROM fdp_payroll_cycles WHERE workspace_id = ? AND company_id = ? AND id = ?")
     .bind(workspaceId, companyId, cycleId).first<CycleRow>();
@@ -135,7 +152,11 @@ export async function upsertPsychologyClosing(d1: Database, input: {
 /* -------------------------------------------------------------------------- */
 
 export type ContractorProfileRow = {
-  provider_id: string; company_id: string; contract_reference: string; base_amount: string | number;
+  provider_id: string;
+  /** Empresa sugerida na apuração. O prestador é do grupo — quem paga naquela
+   *  competência é a empresa do ciclo, não esta. Pode vir vazia. */
+  company_id: string | null;
+  contract_reference: string; base_amount: string | number;
   fixed_caju_difference?: string | number;
   invoice_limit_override: string | number | null; complement_method: string; status: string;
   contract_type: string; contract_start: string | null; contract_end: string | null;
@@ -162,7 +183,9 @@ export async function requireContractorProfile(d1: Database, workspaceId: string
  * versionadas de prestador, contrato, empresa e workspace entram em seguida e a
  * precedência final é aplicada por `resolveInvoiceLimit`.
  */
-export async function invoiceLimitCandidates(d1: Database, workspaceId: string, profile: ContractorProfileRow, competence: string) {
+export async function invoiceLimitCandidates(
+  d1: Database, workspaceId: string, profile: ContractorProfileRow, competence: string, companyId: string,
+) {
   const referenceDate = `${competence}-01`;
   const policies = await d1.prepare(`SELECT id, scope, amount, effective_from FROM fdp_invoice_limit_policies
     WHERE workspace_id = ? AND effective_from <= ? AND (effective_to IS NULL OR effective_to >= ?)
@@ -173,7 +196,9 @@ export async function invoiceLimitCandidates(d1: Database, workspaceId: string, 
         OR (scope = 'provider' AND provider_id = ?)
       )
     ORDER BY effective_from DESC`)
-    .bind(workspaceId, referenceDate, referenceDate, profile.company_id, profile.company_id, profile.contract_reference, profile.provider_id)
+    /* A empresa que decide o limite é a que está apurando, não a do cadastro:
+       um limite de nota é uma regra de quem paga. */
+    .bind(workspaceId, referenceDate, referenceDate, companyId, companyId, profile.contract_reference, profile.provider_id)
     .all<{ id: string; scope: string; amount: string | number; effective_from: string }>();
 
   const candidates: InvoiceLimitCandidate[] = policies.results.map((row) => ({
@@ -295,7 +320,7 @@ export async function materializeFixedItems(d1: Database, input: {
           (id, workspace_id, company_id, provider_id, payroll_cycle_id, competence, direction, component_type,
            description, component_quantity, amount, origin, fixed_item_id, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'fixed_item', ?, ?)`)
-        .bind(crypto.randomUUID(), input.workspaceId, input.profile.company_id, input.profile.provider_id,
+        .bind(crypto.randomUUID(), input.workspaceId, input.cycle.company_id, input.profile.provider_id,
           input.cycle.id, input.cycle.competence, item.direction, item.componentType, item.description,
           fromCents(item.amountCents), item.id, input.userId));
     }
@@ -319,7 +344,7 @@ export async function computeContractorClosing(d1: Database, workspaceId: string
     WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?`)
     .bind(workspaceId, profile.provider_id, cycle.id)
     .all<{ direction: string; component_type: string; amount: string | number; status: string }>();
-  const candidates = await invoiceLimitCandidates(d1, workspaceId, profile, cycle.competence);
+  const candidates = await invoiceLimitCandidates(d1, workspaceId, profile, cycle.competence, cycle.company_id);
   const limit = resolveInvoiceLimit(candidates);
   const calculation = calculateContractorClosing({
     baseAmount: Number(profile.base_amount),
@@ -395,7 +420,7 @@ export async function upsertContractorClosing(d1: Database, input: {
         base_amount, credits_amount, debits_amount, net_amount, invoice_limit_amount, invoice_limit_source, invoice_limit_policy_id,
         invoice_expected_amount, complement_amount, complement_method, fixed_caju_amount, caju_amount, status, invoice_status, caju_status, calc_version, created_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`)
-      .bind(closingId, input.workspaceId, input.profile.company_id, input.profile.provider_id, input.cycle.id, input.cycle.competence,
+      .bind(closingId, input.workspaceId, input.cycle.company_id, input.profile.provider_id, input.cycle.id, input.cycle.competence,
         calculation.baseAmount, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
         calculation.invoiceLimitAmount, calculation.invoiceLimitSource, limitPolicyId, calculation.invoiceExpectedAmount,
         calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, invoiceStatus, cajuStatus,
@@ -455,7 +480,7 @@ export async function createContractorComponent(d1: Database, input: {
   await d1.prepare(`INSERT INTO fdp_contractor_components (id, workspace_id, company_id, provider_id, payroll_cycle_id, closing_id, competence,
       direction, component_type, description, component_quantity, amount, origin, document_reference, note, status, external_id, created_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`)
-    .bind(id, input.workspaceId, input.profile.company_id, input.profile.provider_id, input.cycle.id, closing?.id ?? null,
+    .bind(id, input.workspaceId, input.cycle.company_id, input.profile.provider_id, input.cycle.id, closing?.id ?? null,
       input.cycle.competence, direction, input.componentType, input.description ?? "", Math.max(input.quantity ?? 1, 0),
       input.amount, input.origin ?? "manual", input.documentReference ?? "", input.note ?? "", externalId, input.createdBy)
     .run();

@@ -89,7 +89,11 @@ export const reports = {
           c.company_id, 0 AS ordem
         FROM fdp_contractor_closings c
         JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
-        LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = c.workspace_id AND p.provider_id = c.provider_id AND p.company_id = c.company_id
+        -- O contrato é um só por prestador, e o prestador é do grupo: casar
+        -- também por empresa faria o contrato sumir do extrato justamente quando
+        -- a apuração corresse por outra empresa do grupo, deixando contrato e
+        -- função em branco sem nenhum aviso.
+        LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = c.workspace_id AND p.provider_id = c.provider_id
         WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL
         UNION ALL
         SELECT a.code AS codigo, a.legal_name AS prestador, a.tax_id AS cnpj, coalesce(p.contract_reference, '') AS contrato,
@@ -106,7 +110,7 @@ export const reports = {
         FROM fdp_contractor_components k
         JOIN fdp_contractor_closings c ON c.workspace_id = k.workspace_id AND c.id = k.closing_id
         JOIN fdp_auxiliary_providers a ON a.workspace_id = k.workspace_id AND a.id = k.provider_id
-        LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = k.workspace_id AND p.provider_id = k.provider_id AND p.company_id = k.company_id
+        LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = k.workspace_id AND p.provider_id = k.provider_id
         WHERE k.workspace_id = ? AND k.competence = ? AND c.excluded_at IS NULL
       ) t WHERE true`,
     /* A união menciona grupo e competência uma vez de cada lado. */
@@ -129,8 +133,20 @@ export const reports = {
    * A ordem é alfabética, a mesma da tela — o arquivo sai sem cabeçalho de
    * identificação, por escolha de quem usa, e é a ordem que permite acompanhar
    * a tabela enquanto se cola. */
+  /* Aviso de nota fiscal.
+   *
+   * Aqui a empresa escolhida não recorta a lista: ela é a emitente, quem vai
+   * receber a nota, e vale para todos os prestadores do grupo. O PJ é do
+   * grupo — é ele quem presta serviço para as empresas, e não uma empresa que
+   * possui o PJ —, então um arquivo que trouxesse só os prestadores de uma
+   * empresa deixaria de fora justamente quem atende mais de uma.
+   *
+   * `companyMeaning` é o que a rota lê para saber que não deve filtrar por
+   * `companyColumn` neste relatório. O recorte por acesso continua valendo:
+   * quem só enxerga parte das empresas continua enxergando só a parte dela. */
   "contractor-invoice-notice": {
     capability: "contractors.payments.read",
+    companyMeaning: "issuer",
     columns: ["prestador", "codigo", "cnpj", "competencia", "nf_esperada", "status_nf"],
     query: `SELECT a.legal_name AS prestador, a.code AS codigo, a.tax_id AS cnpj, c.competence AS competencia,
         c.invoice_expected_amount AS nf_esperada, c.invoice_status AS status_nf

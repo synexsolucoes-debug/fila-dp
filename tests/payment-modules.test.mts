@@ -344,9 +344,16 @@ test("as APIs de pagamento validam tenant, competência fechada, permissão e au
     assert.match(source, /getWorkspaceContext/);
     assert.doesNotMatch(source, /getWorkspaceSnapshot/);
   }
-  for (const source of [sessions, contractorClosings, transition, invoice, caju, adjustments, overview, fixedItems]) {
+  /* Onde há empresa em jogo, o acesso a ela continua sendo exigido.
+     `fixedItems` saiu desta lista: o item fixo pertence ao prestador, e o
+     prestador passou a ser do grupo (migração 0054). Não existe mais "empresa
+     do prestador" para conferir — conferir a do cadastro seria conferir uma
+     sugestão, o que dá a impressão de porta trancada sem trancar nada. O que
+     guarda a rota ali é a capacidade, e é isso que a linha abaixo cobra. */
+  for (const source of [sessions, contractorClosings, transition, invoice, caju, adjustments, overview]) {
     assert.match(source, /requireCompanyAccess/);
   }
+  assert.match(fixedItems, /requireCapability\(workspace, "contractors\.payments\.manage"\)/);
   assert.match(sessions, /assertNoClinicalData/);
   assert.match(sessions, /requireOpenCycle/);
   assert.match(sessions, /PAYMENT_CLOSING_LOCKED/);

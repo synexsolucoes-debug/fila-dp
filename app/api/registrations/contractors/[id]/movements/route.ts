@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { centsFromDatabase } from "@/lib/payments";
 import { contractorBalance, requireContractorProfile } from "@/lib/payment-service";
@@ -26,7 +26,10 @@ export async function POST(request: Request, { params }: Params) {
     requireCapability(workspace, "contractors.manage");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const input = readMovementInput(body);
     assertMovementEffect(input.movementType, input.effect);
@@ -73,7 +76,7 @@ export async function POST(request: Request, { params }: Params) {
           (id, workspace_id, company_id, provider_id, movement_type, effective_date, title, before_json, after_json,
            reason, status, requested_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, 'draft', ?)`)
-        .bind(movementId, workspace.id, profile.company_id, id, input.movementType, input.effectiveDate,
+        .bind(movementId, workspace.id, profile.company_id ?? null, id, input.movementType, input.effectiveDate,
           input.title, JSON.stringify(before), JSON.stringify(after), input.reason, user.id),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,

@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { cleanText, optionalDate } from "@/lib/registrations";
 import { complementMethods, openPayoutAccount, paymentEnum, payoutSummary, positiveMoney, sanitizePayoutAccount, sealPayoutAccount, withoutSealedPayout } from "@/lib/payments";
@@ -14,13 +14,23 @@ export async function GET(request: Request, { params }: Params) {
   if (!auth.user) return auth.response;
   try {
     const { id } = await params;
-    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "contractors.payments.manage");
     const profile = await requireContractorProfile(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const competence = cleanText(new URL(request.url).searchParams.get("competence"), 7) || new Date().toISOString().slice(0, 7);
-    const limit = resolveInvoiceLimit(await invoiceLimitCandidates(d1, workspace.id, profile, competence));
+    /* Aqui não há competência apurada, e portanto não há empresa pagadora: a
+       ficha mostra o limite que valeria pela empresa sugerida no contrato.
+       Sem empresa sugerida sobram as políticas de grupo e de prestador, que é
+       exatamente o que se aplicaria. Quem decide de verdade é a apuração, que
+       resolve o limite contra quem está pagando naquela competência. */
+    const limit = resolveInvoiceLimit(
+      await invoiceLimitCandidates(d1, workspace.id, profile, competence, profile.company_id ?? ""),
+    );
     const stored = await d1.prepare(`SELECT payout_encrypted, payout_iv, payout_tag, payout_key_version, notes, role_title, contract_reference,
         contract_start, contract_end, complement_platform, complement_external_id, department_id, cost_center_id, responsible_user_id, status
       FROM fdp_contractor_profiles WHERE workspace_id = ? AND provider_id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
@@ -55,7 +65,10 @@ export async function PATCH(request: Request, { params }: Params) {
     requireCapability(workspace, "contractors.payments.manage");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const baseAmount = positiveMoney(body.baseAmount ?? profile.base_amount, "Valor base");
     const hasOverrideField = Object.hasOwn(body, "invoiceLimitOverride");

@@ -60,13 +60,20 @@ test("sem lote no corpo, a rota segue pelo caminho de sempre", () => {
   assert.equal(readBatchEntries("pj-1"), null);
 });
 
-test("a mensagem de aviso diz o valor e mais nada", () => {
-  const mensagem = invoiceNoticeMessage(6000);
+test("a mensagem de aviso diz o valor e para quem emitir", () => {
+  const mensagem = invoiceNoticeMessage(6000, "Alfa Serviços");
   assert.match(mensagem, /Segue o valor a ser emitido referente a sua NF/u);
   assert.match(mensagem, /R\$\s?6\.000,00/u);
+  // A emitente entra no texto: é o dado que quem recebe precisa para emitir, e
+  // o único que ela não tem como conferir sozinha — o valor está na tela dela,
+  // a empresa não.
+  assert.match(mensagem, /para Alfa Serviços/u);
   // Sem saudação de horário: o arquivo é gerado uma vez e colado ao longo do
   // dia, e "Bom dia" colado às 15h desmente o próprio remetente.
   assert.doesNotMatch(mensagem, /Bom dia|Boa tarde|Boa noite/u);
+  // Sem empresa informada a frase volta a ser só o valor, sem um "para "
+  // pendurado no vazio.
+  assert.doesNotMatch(invoiceNoticeMessage(6000), /para\s*:/u);
 });
 
 test("o arquivo traz uma mensagem por prestador, separadas e na ordem da tela", () => {
@@ -83,6 +90,32 @@ test("o arquivo traz uma mensagem por prestador, separadas e na ordem da tela", 
   // parte das vezes, e com "\n" sozinho ele mostra tudo numa linha só.
   assert.ok(arquivo.includes("\r\n"), "sem CRLF o Bloco de Notas junta tudo");
   assert.equal(buildInvoiceNoticeFile([]), "");
+
+  // A emitente é uma só para o arquivo inteiro: ela é quem recebe a nota de
+  // todo mundo, não um recorte da lista.
+  const comEmpresa = buildInvoiceNoticeFile([
+    { prestador: "Alfa", nf_esperada: 6000 },
+    { prestador: "Beta", nf_esperada: 4750 },
+  ], "Vinculato Serviços");
+  assert.equal(comEmpresa.split("Vinculato Serviços").length - 1, 2, "a emitente vale para todas as mensagens");
+});
+
+test("a empresa do aviso é emitente, e por isso não entra no WHERE", async () => {
+  /* O prestador é do grupo: é ele quem presta serviço para as empresas, e não
+     uma empresa que possui o prestador. Se a empresa escolhida recortasse a
+     lista, o arquivo deixaria de fora justamente quem atende mais de uma — e
+     quem gerasse não teria como perceber, porque um arquivo com menos gente
+     parece igualmente correto. */
+  const relatorios = await readFile(new URL("../lib/payment-reports.ts", import.meta.url), "utf8");
+  const inicio = relatorios.indexOf(`"contractor-invoice-notice"`);
+  const trecho = relatorios.slice(inicio, relatorios.indexOf("},", inicio));
+  assert.match(trecho, /companyMeaning: "issuer"/u, "o aviso precisa declarar a empresa como emitente");
+
+  const rota = await readFile(new URL("../app/api/payments/reports/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /companyMeaning" in report && report\.companyMeaning === "issuer"/u);
+  // E o recorte por acesso continua: quem enxerga parte das empresas continua
+  // enxergando só a parte dela, mesmo sem o filtro da emitente.
+  assert.match(rota, /companyIsIssuer[\s\S]{0,400}!access\.unrestricted[\s\S]{0,200}IN \(/u);
 });
 
 test("a tabela de Pagamentos não mostra mais as três situações retiradas", async () => {

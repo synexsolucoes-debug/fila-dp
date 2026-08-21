@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { requireContractorProfile } from "@/lib/payment-service";
@@ -24,8 +24,12 @@ export async function PATCH(request: Request, { params }: Params) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "contractors.manage");
 
-    const profile = await requireContractorProfile(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    // Confere que o prestador existe antes de mexer no item dele.
+    await requireContractorProfile(d1, workspace.id, id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const item = await d1.prepare(`SELECT id, effective_from, effective_to, status
       FROM fdp_contractor_fixed_items WHERE workspace_id = ? AND provider_id = ? AND id = ?`)

@@ -660,6 +660,14 @@ for (const width of widths) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("nav[aria-label='Navegação do painel'] button", { timeout: 25000 }).catch(() => undefined);
+  /* O menu tem dois níveis desde que passou a agrupar por processo (§25): o
+     primeiro é o processo, o segundo são os módulos dele. Clicar direto no
+     módulo encontrava um botão de um processo já aberto e não levava a lugar
+     nenhum — a tela continuava na home, e as três conferências abaixo
+     reprovavam dizendo que o EPI não tinha ação de cadastro, quando o que
+     faltava era ter chegado até ele. */
+  await page.getByRole("button", { name: /^Gestão de EPI$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(1200);
   await page.getByRole("button", { name: /^Controle de EPI$/u }).first().click().catch(() => undefined);
   await page.waitForTimeout(2000);
 
@@ -693,6 +701,16 @@ for (const width of widths) {
   const motivo = recusa ? (await page.getByRole("dialog").getByRole("alert").first().innerText()).replace(/\s+/gu, " ").slice(0, 140) : "";
   record("o servidor aceita o cadastro que a tela montou", recusa === 0, motivo);
 
+  /* O cadastro devolve para a visão geral, e o produto novo mora no estoque.
+     Procurar o CA sem trocar de aba media a tela errada: o EPI existia, e a
+     conferência dizia que não.
+
+     A aba é procurada pelo papel `tab`, e não `button`: ela é um `<button>` no
+     HTML, mas com `role="tab"` — e é o papel ARIA, não a etiqueta, que o
+     `getByRole` enxerga. A âncora do fim também sai do padrão, porque o nome
+     acessível carrega o contador: é "Estoque 5", não "Estoque". */
+  await page.getByRole("tab", { name: /^Estoque/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(2500);
   const naListagem = await page.getByText(ca, { exact: false }).count();
   record("o EPI cadastrado aparece no estoque", naListagem > 0, `${naListagem} ocorrência(s)`);
 }
