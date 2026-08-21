@@ -170,4 +170,3 @@ export type IntegrationEditor =
   | { kind: "reconciliation"; reconciliation: Reconciliation }
   | { kind: "detail"; run: IntegrationRun }
   | null;
-
