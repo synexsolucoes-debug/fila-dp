@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertOctagon, Download, FileUp, LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertOctagon, ArrowDown, Download, FileUp, LoaderCircle, RefreshCw } from "lucide-react";
 import { requestJson } from "./payments.api";
 import { ErrorBanner } from "../shared";
 import styles from "./payments.module.css";
@@ -27,7 +27,18 @@ type TemplateInfo = {
 };
 
 type PreviewRow = { contractorId: string; contractorName: string; amountCents: number };
-type BlockedRow = { contractorId: string; contractorName: string; reason: string; reasonLabel: string };
+type BlockedRow = {
+  closingId: string;
+  contractorId: string;
+  contractorName: string;
+  closingStatus: string;
+  reason: string;
+  reasonLabel: string;
+  category: "workflow" | "data" | "configuration";
+  title: string;
+  detail: string;
+  action: string;
+};
 
 type Preview = {
   template: { version: number; categoryKey: string; amountLabel: string; format: string } | null;
@@ -167,9 +178,24 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
           <AlertOctagon aria-hidden="true" />
           <div>
             <strong>{preview.blocked.length} registro(s) impedem o arquivo.</strong>
-            <ul>
+            <p className={styles.cajuBlockedIntro}>
+              {preview.blocked.every((row) => row.category === "workflow")
+                ? "Não foi encontrada inconsistência automática nos valores abaixo. O bloqueio é a etapa de aprovação ainda não concluída."
+                : "Veja o motivo específico e a correção necessária em cada registro."}
+            </p>
+            <ul className={styles.cajuBlockList}>
               {preview.blocked.map((row) => (
-                <li key={row.contractorId}>{row.contractorName} — {row.reasonLabel}</li>
+                <li key={row.contractorId} className={styles.cajuBlockItem} data-category={row.category}>
+                  <div className={styles.cajuBlockHeader}>
+                    <strong>{row.contractorName}</strong>
+                    <span>{row.title}</span>
+                  </div>
+                  <p>{row.detail}</p>
+                  <p><b>Como corrigir:</b> {row.action}</p>
+                  <a href={`#contractor-closing-${row.closingId}`}>
+                    <ArrowDown aria-hidden="true" /> Ir ao fechamento
+                  </a>
+                </li>
               ))}
             </ul>
           </div>
