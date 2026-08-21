@@ -29,7 +29,7 @@ test("o shell não volta a ser contêiner de rolagem por overflow-x", async () =
 });
 
 test("no desktop o shell trava na viewport e quem rola é o conteúdo", async () => {
-  const css = await lerCss("app/dashboard-modern.css");
+  const css = (await lerCss("app/dashboard-modern.css")).replace(/\r\n/gu, "\n");
   const bloco = css.slice(css.indexOf("@media (min-width: 761px)"));
   assert.match(bloco, /\.dashboard-shell \{[^}]*height: 100dvh/u, "o shell precisa ter a altura da janela");
   assert.match(bloco, /\.dashboard-shell \{[^}]*overflow: hidden/u, "o recorte fica no shell");
