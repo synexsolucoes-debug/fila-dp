@@ -40,6 +40,22 @@ function admissionSyncConfig(body: Record<string, unknown>) {
   };
 }
 
+function teamsConfig(body: Record<string, unknown>) {
+  const automation = body.automations && typeof body.automations === "object" && !Array.isArray(body.automations)
+    ? body.automations as Record<string, unknown> : {};
+  return {
+    ...(text(body.tenantId, 100) ? { tenantId: text(body.tenantId, 100) } : {}),
+    ...(text(body.teamId, 200) ? { teamId: text(body.teamId, 200) } : {}),
+    ...(text(body.teamName, 160) ? { teamName: text(body.teamName, 160) } : {}),
+    ...(text(body.channelId, 200) ? { channelId: text(body.channelId, 200) } : {}),
+    ...(text(body.channelName, 160) ? { channelName: text(body.channelName, 160) } : {}),
+    ...(text(body.boardId, 80) ? { boardId: text(body.boardId, 80) } : {}),
+    ...(text(body.companyId, 80) ? { companyId: text(body.companyId, 80) } : {}),
+    automations: Object.fromEntries(["admission", "termination", "warning", "role_change", "salary_change"]
+      .map((key) => [key, automation[key] !== false])),
+  };
+}
+
 export async function PATCH(request: Request, { params }: Context) {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
@@ -64,6 +80,7 @@ export async function PATCH(request: Request, { params }: Context) {
       ...(body.requestBody ? { requestBody: safeRequestBody(body.requestBody) } : {}),
       ...((channel === "solides" || channel === "tangerino") && text(body.accountReference, 160) ? { accountReference: text(body.accountReference, 160) } : {}),
       ...(channel === "solides" || channel === "tangerino" ? admissionSyncConfig(body) : {}),
+      ...(channel === "teams" ? teamsConfig(body) : {}),
     };
     await d1.batch([
       d1.prepare("UPDATE fdp_integrations SET display_name = ?, status = ?, config_json = ?, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
@@ -74,3 +91,4 @@ export async function PATCH(request: Request, { params }: Context) {
     return Response.json({ id, channel, displayName, status, configuredFields: Object.keys(config) });
   } catch (error) { return apiError(error); }
 }
+
