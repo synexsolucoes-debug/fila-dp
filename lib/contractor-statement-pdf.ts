@@ -200,7 +200,13 @@ class StatementBuilder {
 
     const contrato = `Contrato : ${prestador.contrato || "Sem referência"}`;
     const inicioContrato = COL.complemento - textWidth(contrato, "helvetica", 7.4);
-    this.page.text(prestador.codigo, COL.codigo, this.y - 8, { font: "helvetica-bold", size: 8 });
+    /* O código também é cortado, e não é detalhe: quando ninguém informa um,
+       ele nasce do próprio nome da empresa, então "CEM-TELECOMUNICACOES E
+       SERVICOS LTDA" vira um código de mais de cem pontos numa coluna de
+       cinquenta e oito — e escreve por cima do nome que vem logo ao lado, que
+       é a primeira coisa que se lê na folha. */
+    this.page.text(this.fit(prestador.codigo, COL.nome - CANTO - COL.codigo, 8, "helvetica-bold"),
+      COL.codigo, this.y - 8, { font: "helvetica-bold", size: 8 });
     this.page.text(this.fit(prestador.nome, inicioContrato - CANTO - COL.nome, 8, "helvetica-bold"),
       COL.nome, this.y - 8, { font: "helvetica-bold", size: 8 });
     this.page.textRight(contrato, COL.complemento, this.y - 8, { size: 7.4 });
@@ -225,7 +231,9 @@ class StatementBuilder {
     for (const linha of prestador.linhas) {
       this.ensure(LINE + 8);
       const base = this.y - 8;
-      this.page.text(linha.rubrica.slice(0, 14), COL.codigo, base, { size: BODY });
+      /* Cortar por número de caracteres mede a coisa errada: catorze "M" não
+         cabem onde catorze "i" sobram. A conta é a mesma da coluna acima. */
+      this.page.text(this.fit(linha.rubrica, COL.nome - 8 - COL.codigo, BODY), COL.codigo, base, { size: BODY });
       this.page.text(this.fit(linha.descricao, COL.referencia - 10 - COL.nome, BODY), COL.nome, base, { size: BODY });
       if (linha.referencia) this.page.text(linha.referencia, COL.referencia, base, { size: BODY });
       /* Aqui não há valor riscado nem rótulo "(cancelado)": o lançamento
