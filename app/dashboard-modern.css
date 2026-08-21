@@ -206,6 +206,11 @@
   padding-inline: 8px;
 }
 
+.dashboard-brand-logo { display: inline-flex; }
+.dashboard-brand-logo-mark { display: none; }
+.sidebar-collapsed .dashboard-brand-logo-full { display: none; }
+.sidebar-collapsed .dashboard-brand-logo-mark { display: inline-flex; }
+
 .dashboard-sidebar nav {
   gap: 6px;
   margin-top: 38px;
@@ -287,6 +292,29 @@
   height: 17px;
   margin: 0;
   font-size: 8px;
+}
+
+/* A barra compacta continua rolavel por mouse, toque e teclado, mas o trilho
+   visivel rouba quase um quarto dos 76px e faz os icones parecerem fora do
+   centro. As marcas de favorito/recente tambem precisam sair: sem o rotulo que
+   explicava cada uma, elas viravam um segundo icone solto ao lado do destino. */
+.sidebar-collapsed .dashboard-sidebar nav {
+  scrollbar-width: none;
+}
+
+.sidebar-collapsed .dashboard-sidebar nav::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-shortcut-mark {
+  display: none;
+}
+
+/* Os dois comandos da conta somam mais que a largura util da coluna recolhida.
+   Empilha-los preserva as duas acoes sem cortar o botao de sair. */
+.sidebar-collapsed .sidebar-account-actions {
+  flex-direction: column;
+  gap: 2px;
 }
 
 .sidebar-workspace {
@@ -1075,6 +1103,13 @@
     display: inline;
     font-size: 17px;
   }
+
+  /* No celular a barra lateral vira cabeçalho. O estado salvo de recolhimento
+     não pode trocar a assinatura horizontal pelo símbolo nesse outro layout. */
+  .dashboard-brand-logo-full,
+  .sidebar-collapsed .dashboard-brand-logo-full { display: inline-flex; }
+  .dashboard-brand-logo-mark,
+  .sidebar-collapsed .dashboard-brand-logo-mark { display: none; }
 
   .dashboard-sidebar nav {
     position: fixed;

@@ -1480,7 +1480,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
         </button>
         <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
           {/* Variante clara do logotipo: a barra lateral é superfície escura. */}
-          <VinculatoLogo size={28} tone="light" />
+          <span className="dashboard-brand-logo dashboard-brand-logo-full"><VinculatoLogo size={28} tone="light" /></span>
+          <span className="dashboard-brand-logo dashboard-brand-logo-mark"><VinculatoLogo size={28} compact tone="light" /></span>
         </button>
         <div className="sidebar-group-context">
           <span>GRUPO OPERACIONAL</span>
