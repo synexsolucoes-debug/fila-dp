@@ -85,6 +85,23 @@ test("registration UI uses server search, async refresh and role-aware navigatio
   assert.match(workspace, /module: "registrations", hiddenFor: \["guest"\]/u);
 });
 
+test("ficha do contrato abre qualquer competência apurada no pagamento PJ", async () => {
+  const [route, contractors, registrations, workspace, payments] = await Promise.all([
+    readFile(new URL("../app/api/registrations/contractors/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/ContractorsPanel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(route, /SELECT id, company_id, competence/u);
+  assert.match(route, /contractors\.payments\.read/u);
+  assert.match(route, /excluded_at IS NULL/u);
+  assert.match(contractors, /onOpenPayment\(\{ companyId: row\.companyId, competence: row\.competence, closingId: row\.id \}\)/u);
+  assert.match(registrations, /onOpenPayment=\{onOpenContractorPayment\}/u);
+  assert.match(workspace, /setView\("contractorClosings"\)/u);
+  assert.match(payments, /void openContractorDetail\(focus\.closingId\)/u);
+});
+
 test("Sankhya workbook reader maps the minimal employee connector fields", async () => {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Resultado da Query");
