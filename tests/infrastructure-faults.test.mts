@@ -89,6 +89,34 @@ test("o manifesto de schema acompanha o diretório de migrations", async () => {
   assert.ok(journal.entries.every((entry, index) => entry.idx === index), "os índices do journal precisam ser sequenciais");
 });
 
+test("o procedimento de produção pergunta ao banco o que está pendente", async () => {
+  /* O passo chamado "veja o que está pendente" rodava `db:check`, que valida os
+     arquivos do clone e não abre conexão nenhuma. Quem seguia o roteiro à risca
+     aplicava sem saber o que ia aplicar, e só descobria depois. Um roteiro que
+     promete uma resposta e entrega outra é pior que um roteiro incompleto:
+     quem o segue acredita ter conferido. */
+  const runbook = await readFile(new URL("../docs/aplicar-migracoes-em-producao.md", import.meta.url), "utf8");
+  const passo = runbook.slice(runbook.indexOf("## Passo 2"), runbook.indexOf("## Passo 3"));
+  assert.match(passo, /npm run db:status/u, "o passo precisa consultar o banco, não só os arquivos");
+  assert.match(passo, /api\/health/u, "e dizer como conferir sem credencial nenhuma");
+  assert.doesNotMatch(passo.replace(/> `npm run db:check`[\s\S]*?produção\./u, ""), /npm run db:check/u,
+    "db:check não responde o que está pendente — só entra aqui para dizer que não responde");
+
+  // O comando existe e está declarado — sem isso o roteiro manda rodar o que
+  // não roda.
+  const pacote = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  assert.match(pacote.scripts["db:status"] ?? "", /migration-status\.mjs/u);
+
+  /* E ele não escreve: conferir estado é gesto de leitura, e um comando de
+     conferência que altera o banco não é rodado quando mais importa — na
+     dúvida, antes de aplicar. */
+  const script = await readFile(new URL("../scripts/migration-status.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(script, /\b(INSERT|UPDATE|DELETE|ALTER|CREATE TABLE|DROP)\b/u,
+    "db:status precisa ser somente leitura");
+});
+
 test("a prontidão confere acesso, não só o histórico de migrações", async () => {
   const source = await readFile(new URL("../lib/readiness.ts", import.meta.url), "utf8");
   // Histórico completo com papel sem privilégio dizia "ok" enquanto o produto

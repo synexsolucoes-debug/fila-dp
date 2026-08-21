@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:check": "node scripts/check-migrations.mjs",
+    "db:status": "node --experimental-strip-types scripts/migration-status.mjs",
     "schema:manifest": "node scripts/generate-schema-manifest.mjs",
     "smoke": "node scripts/smoke-http.mjs",
     "browser-check": "node scripts/browser-check.mjs",
