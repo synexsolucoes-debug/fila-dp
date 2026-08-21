@@ -72,6 +72,14 @@ jobs:
       - name: Preparar cada consulta do produto contra o schema real
         run: npm run verify:sql
 
+      # O extrato analítico PJ existe para conferência, e conferência tem uma
+      # exigência dura: as linhas precisam somar o número do fechamento. A soma
+      # acontece em SQL, sobre uma união, com um lançamento cancelado que
+      # aparece sem entrar na conta — nenhum teste de unidade alcança isso. O
+      # ensaio roda a consulta que a rota executa, importada e não copiada.
+      - name: Provar que o extrato analítico fecha com a apuração
+        run: npm run db:rehearse-statement
+
       # Isolamento multi-tenant provado, não afirmado. O ensaio usa o mesmo
       # adaptador da aplicação e um papel SEM superusuário — superusuário ignora
       # RLS e faria tudo passar sem provar nada, por isso o próprio ensaio

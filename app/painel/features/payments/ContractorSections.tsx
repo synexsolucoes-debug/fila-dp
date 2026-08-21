@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Archive, ArrowRight, CalendarClock, CreditCard, Download, FileText, Plus, ReceiptText, RotateCcw,
-  ShieldCheck, Users,
+  Archive, ArrowRight, CalendarClock, CreditCard, Download, FileSpreadsheet, FileText, Plus, ReceiptText,
+  RotateCcw, ShieldCheck, Users,
 } from "lucide-react";
 import { CajuExportPanel } from "./CajuExportPanel";
 import type {
@@ -246,8 +246,23 @@ function ClosingsSection(props: SectionProps) {
       />
     );
   }
-  return <ClosingsTable {...props} rows={rows}
-    caption={`Fechamento PJ de ${competenceLabel(competence)}`} showActions />;
+  return (
+    <>
+      <ClosingsTable {...props} rows={rows}
+        caption={`Fechamento PJ de ${competenceLabel(competence)}`} showActions />
+      {/* Conferir é perguntar de onde o número veio, e o número da tabela já
+          vem somado. O extrato analítico abre a soma: uma linha por rubrica,
+          de todos os prestadores da competência.
+          Fica aqui porque é aqui que a conferência acontece — o mesmo arquivo
+          existia por prestador, dentro do detalhamento, e conferir trinta
+          prestadores custava trinta diálogos e trinta arquivos. */}
+      <footer className={styles.reportBar}>
+        <a className={styles.secondaryButton} href={props.reportUrl("contractor-analytical")}>
+          <FileSpreadsheet aria-hidden="true" /> Extrato analítico da competência (CSV)
+        </a>
+      </footer>
+    </>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -450,6 +465,7 @@ function ArchiveSection(props: SectionProps) {
       )}
       <footer className={styles.reportBar}>
         <a className={styles.secondaryButton} href={reportUrl("contractor-closing")}><Download aria-hidden="true" /> Fechamento (CSV)</a>
+        <a className={styles.secondaryButton} href={reportUrl("contractor-analytical")}><FileSpreadsheet aria-hidden="true" /> Extrato analítico (CSV)</a>
         <a className={styles.secondaryButton} href={reportUrl("contractor-divergences")}><FileText aria-hidden="true" /> Divergências (CSV)</a>
       </footer>
     </>
