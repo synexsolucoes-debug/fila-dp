@@ -55,13 +55,16 @@ test("o extrato fecha nos dois sentidos: pela conta e pelas duas saídas", () =>
   assert.equal(prestador.valorNotaFiscal + prestador.complemento, prestador.totalApurado);
 });
 
-test("o lançamento cancelado não aparece e fica fora da soma", () => {
+test("o lançamento excluído não aparece e fica fora da soma", () => {
+  /* A consulta já descarta o excluído, e a montagem descarta de novo: são duas
+     origens diferentes para o mesmo documento — a rota e quem um dia montar o
+     extrato a partir de outra lista — e as duas precisam chegar ao mesmo lugar.
+     O ensaio contra PostgreSQL prende o lado da consulta. */
   const documento = buildStatement(linhasDeUmPrestador, contexto);
   const [prestador] = documento.prestadores;
   assert.equal(prestador.linhas.length, 5, "somente rubricas válidas aparecem");
-  assert.ok(!prestador.linhas.some((item) => item.cancelado));
   assert.ok(!prestador.linhas.some((item) => item.descricao === "Falta"));
-  assert.equal(prestador.totalDescontos, 640, "o total mantém 480 + 160, sem os 300 cancelados");
+  assert.equal(prestador.totalDescontos, 640, "o total mantém 480 + 160, sem os 300 excluídos");
 });
 
 test("prestadores são separados por código e CNPJ, não por nome", () => {
@@ -163,6 +166,68 @@ test("o PDF ignora completamente a rubrica cancelada", () => {
     buildStatement(linhasDeUmPrestador.filter((item) => item.situacao !== "canceled"), contexto),
   ).toString("latin1");
   assert.equal(comCancelado, semCancelado, "cancelados não podem alterar nenhuma página do extrato");
+});
+
+test("nada escreve por cima de nada, por mais comprido que seja o cadastro", () => {
+  /* A linha de identificação tem texto encostado à esquerda (código, nome,
+     CNPJ, função) e texto encostado à direita (contrato, situação). Reservar
+     uma largura fixa para o lado esquerdo erra dos dois jeitos: corta um nome
+     curto que caberia, e deixa uma função comprida escrever por cima da
+     situação — que é o defeito que aparece no papel e em nenhum teste, porque
+     o PDF continua sendo um PDF válido.
+
+     A conferência mede o desenho: para cada linha do arquivo, o fim de um
+     trecho não pode passar do começo do seguinte. É a mesma pergunta que se faz
+     olhando a folha impressa, feita em pontos. */
+  const gigante = buildStatement([linha({
+    tipo: "PROVENTO", rubrica: "Valor contratual", valor: 8000, origem: "contrato",
+    prestador: "Construtora Incorporadora Administradora e Participações Santa Terezinha do Vale Verde Grande do Norte Sociedade Empresária Limitada",
+    funcao: "Coordenação geral de obras civis, manutenção predial preventiva e corretiva e gestão integral de contratos de fachada e cobertura",
+    contrato: "CT-2026-0001-REVISAO-B-ADITIVO-3-PRORROGACAO-2027-ANEXO-IV",
+  })], contexto);
+
+  const texto = renderContractorStatement(gigante).toString("latin1");
+
+  /* Cada trecho sai como um `BT … Tf … Td (…) Tj ET` completo, então a fonte, o
+     corpo, a posição e o conteúdo estão todos na mesma linha do fluxo. Ler dali
+     dá posição e largura sem um leitor de PDF — uma dependência a mais para
+     provar uma conta que a própria métrica da fonte já sabe fazer. */
+  const fontes = { F1: "helvetica", F2: "helvetica-bold", F3: "courier" } as const;
+  const trechos: Array<{ x: number; y: number; fim: number; texto: string }> = [];
+  for (const evento of texto.matchAll(/BT \/(F\d) ([\d.]+) Tf ([\d.]+) ([\d.]+) Td \((.*?)\) Tj ET/gu)) {
+    const conteudo = evento[5]
+      .replace(/\\([()\\])/gu, "$1")
+      .replace(/\\(\d{3})/gu, (_, oct: string) => String.fromCharCode(parseInt(oct, 8)));
+    if (!conteudo.trim()) continue;
+    const x = Number(evento[3]);
+    const fonte = fontes[evento[1] as keyof typeof fontes];
+    trechos.push({ x, y: Number(evento[4]), fim: x + textWidth(conteudo, fonte, Number(evento[2])), texto: conteudo });
+  }
+  assert.ok(trechos.length > 20, `o arquivo precisa ter texto para medir — li ${trechos.length}`);
+
+  const porLinha = new Map<number, typeof trechos>();
+  for (const trecho of trechos) {
+    const chave = Math.round(trecho.y);
+    if (!porLinha.has(chave)) porLinha.set(chave, []);
+    porLinha.get(chave)!.push(trecho);
+  }
+  const colisoes: string[] = [];
+  for (const [y, mesmaLinha] of porLinha) {
+    mesmaLinha.sort((a, b) => a.x - b.x);
+    for (let i = 1; i < mesmaLinha.length; i += 1) {
+      const anterior = mesmaLinha[i - 1];
+      const atual = mesmaLinha[i];
+      // Meio ponto de folga: as métricas são as reais da Helvetica, mas o
+      // arredondamento das coordenadas é decimal.
+      if (anterior.fim > atual.x + 0.5) {
+        colisoes.push(`y=${y}: "${anterior.texto.slice(0, 40)}" invade "${atual.texto.slice(0, 40)}"`);
+      }
+    }
+  }
+  assert.deepEqual(colisoes, [], `texto sobreposto no extrato:\n${colisoes.join("\n")}`);
+
+  // E o corte, quando é preciso, é corte — não um nome que escapa da coluna.
+  assert.match(texto, /\.\.\./u, "um cadastro deste tamanho precisa ser cortado em algum campo");
 });
 
 test("texto fora do Latin-1 vira a letra sem acento, nunca lixo", () => {

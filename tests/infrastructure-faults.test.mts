@@ -89,6 +89,77 @@ test("o manifesto de schema acompanha o diretório de migrations", async () => {
   assert.ok(journal.entries.every((entry, index) => entry.idx === index), "os índices do journal precisam ser sequenciais");
 });
 
+test("o procedimento de produção pergunta ao banco o que está pendente", async () => {
+  /* O passo chamado "veja o que está pendente" rodava `db:check`, que valida os
+     arquivos do clone e não abre conexão nenhuma. Quem seguia o roteiro à risca
+     aplicava sem saber o que ia aplicar, e só descobria depois. Um roteiro que
+     promete uma resposta e entrega outra é pior que um roteiro incompleto:
+     quem o segue acredita ter conferido. */
+  const runbook = await readFile(new URL("../docs/aplicar-migracoes-em-producao.md", import.meta.url), "utf8");
+  const passo = runbook.slice(runbook.indexOf("## Passo 2"), runbook.indexOf("## Passo 3"));
+  assert.match(passo, /npm run db:status/u, "o passo precisa consultar o banco, não só os arquivos");
+  assert.match(passo, /api\/health/u, "e dizer como conferir sem credencial nenhuma");
+  assert.doesNotMatch(passo.replace(/> `npm run db:check`[\s\S]*?produção\./u, ""), /npm run db:check/u,
+    "db:check não responde o que está pendente — só entra aqui para dizer que não responde");
+
+  // O comando existe e está declarado — sem isso o roteiro manda rodar o que
+  // não roda.
+  const pacote = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  assert.match(pacote.scripts["db:status"] ?? "", /migration-status\.mjs/u);
+
+  /* E ele não escreve: conferir estado é gesto de leitura, e um comando de
+     conferência que altera o banco não é rodado quando mais importa — na
+     dúvida, antes de aplicar. */
+  const script = await readFile(new URL("../scripts/migration-status.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(script, /\b(INSERT|UPDATE|DELETE|ALTER|CREATE TABLE|DROP)\b/u,
+    "db:status precisa ser somente leitura");
+});
+
+test("só o build de produção migra, e migração que falha não publica", async () => {
+  /* Aplicar no deploy foi decisão de quem opera: o passo manual já foi
+     esquecido, e schema atrasado derruba o painel inteiro. O que este teste
+     prende são as bordas dessa decisão.
+
+     A mais perigosa é o preview. Um deployment de preview cuja `DATABASE_URL`
+     aponte para produção migraria o banco de verdade a partir de um branch
+     qualquer — a forma mais fácil que existe de aplicar em produção uma
+     migração que ninguém revisou. */
+  const passo = await readFile(new URL("../scripts/deploy-migrate.mjs", import.meta.url), "utf8");
+  assert.match(passo, /VERCEL_ENV/u);
+  assert.match(passo, /ambiente !== "production"/u, "qualquer ambiente que não seja produção precisa sair sem migrar");
+  assert.match(passo, /!process\.env\.VERCEL/u, "build local e o da integração também não migram");
+
+  /* E o build precisa parar quando a migração não aplica: publicar a versão
+     nova apontando para um banco que ela não entende troca uma falha visível
+     no deploy por `SCHEMA_OUTDATED` na cara de quem usa. */
+  assert.match(passo, /process\.exit\(1\)/u);
+
+  // A saída de emergência existe e não exige mexer em código.
+  assert.match(passo, /FDP_MIGRATE_ON_DEPLOY/u);
+
+  /* O comando do deploy é o que a Vercel chama, e ele precisa migrar ANTES de
+     construir: migrar depois publicaria o build junto com um banco que ainda
+     não mudou. */
+  const vercel = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url), "utf8")) as {
+    buildCommand?: string;
+  };
+  const pacote = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  const comando = vercel.buildCommand ?? "";
+  assert.match(comando, /build:deploy/u, "o build da Vercel precisa passar pelo passo de migração");
+  const roteiro = pacote.scripts["build:deploy"] ?? "";
+  assert.ok(
+    roteiro.indexOf("deploy-migrate") < roteiro.indexOf("next build") && roteiro.includes("&&"),
+    `a migração precisa vir antes do build, e só seguir se der certo — está "${roteiro}"`,
+  );
+  // `npm run build` continua sendo só o build: é o que a integração roda, e
+  // ali não existe banco de produção para migrar.
+  assert.equal(pacote.scripts.build, "next build");
+});
+
 test("a prontidão confere acesso, não só o histórico de migrações", async () => {
   const source = await readFile(new URL("../lib/readiness.ts", import.meta.url), "utf8");
   // Histórico completo com papel sem privilégio dizia "ok" enquanto o produto

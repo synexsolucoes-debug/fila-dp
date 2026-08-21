@@ -7,8 +7,8 @@
  * — é uma segunda versão da verdade, que é pior que não ter documento nenhum.
  *
  * Nenhum teste de unidade prova isso. A soma acontece em SQL, sobre uma união
- * de duas consultas, com valores em `numeric` e um lançamento cancelado que
- * precisa aparecer sem entrar na conta. Só um banco de verdade responde.
+ * de duas consultas, com valores em `numeric` e um lançamento excluído que
+ * precisa ficar de fora. Só um banco de verdade responde.
  *
  * A consulta vem de `lib/payment-reports.ts`, importada — não copiada. Um
  * ensaio que reescreve a consulta prova a cópia e deixa o produto sem prova.
@@ -74,8 +74,9 @@ async function main() {
     );
 
     /* Um prestador com o caso que interessa: base contratual, dois proventos,
-       dois descontos e um lançamento cancelado. O cancelado é o ponto — ele
-       precisa aparecer no extrato e ficar fora da soma. */
+       dois descontos e um lançamento excluído. O excluído é o ponto — ele
+       precisa ficar de fora do extrato, e a soma do que sobra precisa bater
+       exatamente com o líquido do fechamento. */
     const providerId = `${workspaceId}-pj`;
     await client.query(
       `INSERT INTO fdp_auxiliary_providers (id, workspace_id, provider_type, code, legal_name, trade_name, tax_id, status)
@@ -128,20 +129,29 @@ async function main() {
     const sql = `${report.query} ${report.order}`;
     const { rows } = await client.query(toPositional(sql), values);
 
-    // 1. Toda rubrica aparece, inclusive a cancelada.
-    const esperado = lancamentos.length + 1; // os lançamentos mais o valor contratual
+    /* 1. Toda rubrica viva aparece, e a excluída não.
+
+       O lançamento excluído continua no banco e na auditoria, que é onde se
+       responde o que foi lançado e retirado. O extrato responde outra coisa —
+       de onde veio o valor que está sendo pago —, e ali uma linha que não
+       entrou na conta só atrapalha quem soma a coluna conferindo. */
+    const ativos = lancamentos.filter(([, , , , status]) => status !== "canceled");
+    const esperado = ativos.length + 1; // os lançamentos vivos mais o valor contratual
     if (rows.length !== esperado) {
-      falhas.push(`o extrato trouxe ${rows.length} linha(s); esperado ${esperado} (uma por rubrica, mais o valor contratual)`);
+      falhas.push(`o extrato trouxe ${rows.length} linha(s); esperado ${esperado} (uma por rubrica viva, mais o valor contratual)`);
     }
     if (!rows.some((row) => row.rubrica === "Valor contratual")) {
       falhas.push("o valor contratual não aparece como linha — quem confere soma a coluna e o total não fecha");
     }
-    if (!rows.some((row) => row.situacao === "canceled")) {
-      falhas.push("o lançamento cancelado sumiu — quem confere fica sem explicação para a diferença");
+    if (rows.some((row) => row.situacao === "canceled")) {
+      falhas.push("lançamento excluído voltou ao extrato — ele não entrou na conta e não deve ocupar linha");
+    }
+    if (rows.some((row) => String(row.rubrica).includes("Falta não justificada"))) {
+      falhas.push("a rubrica excluída aparece pelo nome, ainda que sem a situação");
     }
 
-    // 2. A soma das linhas vivas é exatamente o líquido do fechamento.
-    const vivas = rows.filter((row) => row.situacao !== "canceled");
+    // 2. A soma das linhas é exatamente o líquido do fechamento.
+    const vivas = rows;
     const soma = (tipo) => vivas
       .filter((row) => row.tipo === tipo)
       .reduce((total, row) => total + Number(row.valor), 0);

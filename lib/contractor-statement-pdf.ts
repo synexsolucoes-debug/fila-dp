@@ -32,7 +32,6 @@ export type StatementLine = {
   referencia: string;
   proventos: number;
   descontos: number;
-  cancelado: boolean;
 };
 
 export type StatementProvider = {
@@ -192,14 +191,34 @@ class StatementBuilder {
     /* Identificação em duas linhas, e nada dela invade as colunas de valor:
        o valor do contrato não aparece aqui porque ele é a primeira rubrica do
        bloco, e repeti-lo faria a mesma quantia surgir duas vezes na folha. */
+    /* As duas linhas têm texto encostado à esquerda e texto encostado à
+       direita, e o da direita é quem manda: a largura que sobra depende de onde
+       ele começa, que depende do que ele diz. Reservar um número fixo erra dos
+       dois lados — corta um nome curto que caberia e deixa um cargo comprido
+       escrever por cima da situação, que é o defeito que se vê no papel. */
+    const CANTO = 8;
+
+    const contrato = `Contrato : ${prestador.contrato || "Sem referência"}`;
+    const inicioContrato = COL.complemento - textWidth(contrato, "helvetica", 7.4);
     this.page.text(prestador.codigo, COL.codigo, this.y - 8, { font: "helvetica-bold", size: 8 });
-    this.page.text(this.fit(prestador.nome, COL.referencia - 20 - COL.nome, 8, "helvetica-bold"),
+    this.page.text(this.fit(prestador.nome, inicioContrato - CANTO - COL.nome, 8, "helvetica-bold"),
       COL.nome, this.y - 8, { font: "helvetica-bold", size: 8 });
-    this.page.textRight(`Contrato : ${prestador.contrato || "Sem referência"}`, COL.complemento, this.y - 8, { size: 7.4 });
+    this.page.textRight(contrato, COL.complemento, this.y - 8, { size: 7.4 });
     this.y -= 10.5;
-    this.page.text(`CNPJ : ${prestador.cnpj}`, COL.nome, this.y - 8, { size: 7.2 });
-    this.page.text(`Função : ${prestador.funcao || "Não informada"}`, COL.nome + 122, this.y - 8, { size: 7.2 });
-    this.page.textRight(`Situação : ${prestador.statusFechamento}`, COL.complemento, this.y - 8, { size: 7.2 });
+
+    const situacao = `Situação : ${prestador.statusFechamento}`;
+    const inicioSituacao = COL.complemento - textWidth(situacao, "helvetica", 7.2);
+    /* O CNPJ tem largura conhecida e fixa, então a função começa depois dele em
+       vez de numa coluna arbitrária: com o deslocamento fixo de antes, um CNPJ
+       ausente deixava um vão, e a função nunca ganhava o espaço vago. */
+    const cnpj = `CNPJ : ${prestador.cnpj}`;
+    const inicioFuncao = COL.nome + textWidth(cnpj, "helvetica", 7.2) + 14;
+    this.page.text(cnpj, COL.nome, this.y - 8, { size: 7.2 });
+    this.page.text(
+      this.fit(`Função : ${prestador.funcao || "Não informada"}`, inicioSituacao - CANTO - inicioFuncao, 7.2),
+      inicioFuncao, this.y - 8, { size: 7.2 },
+    );
+    this.page.textRight(situacao, COL.complemento, this.y - 8, { size: 7.2 });
     this.y -= 13;
 
     // Rubricas
@@ -207,24 +226,15 @@ class StatementBuilder {
       this.ensure(LINE + 8);
       const base = this.y - 8;
       this.page.text(linha.rubrica.slice(0, 14), COL.codigo, base, { size: BODY });
-      const descricao = linha.descricao + (linha.cancelado ? "  (cancelado)" : "");
-      this.page.text(this.fit(descricao, COL.referencia - 10 - COL.nome, BODY), COL.nome, base, { size: BODY });
+      this.page.text(this.fit(linha.descricao, COL.referencia - 10 - COL.nome, BODY), COL.nome, base, { size: BODY });
       if (linha.referencia) this.page.text(linha.referencia, COL.referencia, base, { size: BODY });
-      /* Valor cancelado sai riscado.
-         O rótulo "(cancelado)" na descrição não basta: o número fica na mesma
-         coluna dos vivos, e quem soma a coluna com o dedo chega a um total que
-         não é o do quadro de fecho. O traço tira a dúvida sem tirar o dado,
-         que precisa continuar visível para explicar a diferença entre o que
-         foi lançado e o que foi apurado. */
+      /* Aqui não há valor riscado nem rótulo "(cancelado)": o lançamento
+         excluído não chega até este desenho. Ele é filtrado na consulta, para
+         que CSV, JSON e PDF contem a mesma história, e de novo na montagem do
+         documento. Desenhar um caso que não pode acontecer é pior que não
+         desenhar: quem lê o código passa a acreditar que ele acontece. */
       const valor = linha.proventos || linha.descontos;
-      const coluna = linha.proventos ? COL.proventos : COL.descontos;
-      if (valor) {
-        this.page.textRight(money(valor), coluna, base, { size: BODY });
-        if (linha.cancelado) {
-          const largura = textWidth(money(valor), "helvetica", BODY);
-          this.page.line(coluna - largura, base + 2.4, coluna, base + 2.4, 0.5);
-        }
-      }
+      if (valor) this.page.textRight(money(valor), linha.proventos ? COL.proventos : COL.descontos, base, { size: BODY });
       this.y -= LINE;
     }
 
