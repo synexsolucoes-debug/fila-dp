@@ -19,6 +19,7 @@ const date = (value: string) => value ? new Intl.DateTimeFormat("pt-BR", { dateS
 const tone = (status: string) => status === "connected" || status === "succeeded" ? "safe" : status === "error" || status === "failed" ? "danger" : "warning";
 const field = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 const credentialNames = ["token", "apiKey", "clientId", "clientSecret", "tenantId", "refreshToken", "phoneNumberId", "serviceAccount", "xToken"];
+type WebhookSetup = { secret: string; webhookUrl: string; header: string; notice: string };
 
 export function IntegrationsView({ role }: { role: WorkspaceRole }) {
   const [overview, setOverview] = useState(empty);
@@ -27,6 +28,7 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
   const [editor, setEditor] = useState<IntegrationEditor>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
+  const [webhookSetup, setWebhookSetup] = useState<WebhookSetup | null>(null);
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try { setOverview(normalizeOverview(await requestJson<Row>("/api/integrations/overview"))); setError(""); }
@@ -65,17 +67,40 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
       const boardId = field(form, "boardId");
       const companyId = field(form, "companyId");
       const pageSize = field(form, "pageSize");
+      const teams = nextEditor.connector.channel === "teams";
       await mutate(() => requestJson(`/api/integrations/${nextEditor.connector.id}`, {
         method: "PATCH",
         body: JSON.stringify({
           displayName: field(form, "displayName"), status: field(form, "status"), endpoint,
           ...(accountReference ? { accountReference } : {}), ...(admissionsSince ? { admissionsSince } : {}),
           ...(boardId ? { boardId } : {}), ...(companyId ? { companyId } : {}), ...(pageSize ? { pageSize: Number(pageSize) } : {}),
+          ...(teams ? {
+            tenantId: field(form, "tenantId"), teamId: field(form, "teamId"), teamName: field(form, "teamName"),
+            channelId: field(form, "channelId"), channelName: field(form, "channelName"),
+            automations: {
+              admission: form.has("automationAdmission"), termination: form.has("automationTermination"),
+              warning: form.has("automationWarning"), role_change: form.has("automationRole"),
+              salary_change: form.has("automationSalary"),
+            },
+          } : {}),
         }),
-      }), "Configuração salva. Agora guarde a credencial e teste a conexão.");
+      }), teams ? "Canal do Teams salvo. Agora gere o webhook seguro." : "Configuração salva. Agora guarde a credencial e teste a conexão.");
       return;
     }
     if (nextEditor.kind === "credentials") {
+      if (nextEditor.connector.channel === "teams") {
+        setBusy(true);
+        try {
+          const setup = await requestJson<WebhookSetup>(`/api/integrations/${nextEditor.connector.id}/webhook-secret`, { method: "POST" });
+          setWebhookSetup(setup);
+          setEditor(null);
+          setError("");
+          await load(true);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "Não foi possível gerar o webhook do Teams.");
+        } finally { setBusy(false); }
+        return;
+      }
       const credentials = Object.fromEntries(credentialNames.map((name) => [name, field(form, name)]).filter(([, value]) => value));
       await mutate(() => requestJson(`/api/integrations/${nextEditor.connector.id}/credentials`, { method: "PUT", body: JSON.stringify({ credentials }) }), nextEditor.connector.hasCredentials ? "Credencial rotacionada e campos limpos." : "Credencial guardada e campos limpos. Agora teste a conexão.");
       return;
@@ -111,18 +136,21 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
     <section className={styles.tabPanel}><PanelHeader eyebrow="OUTRAS CONEXÕES" title="Configuração e teste do piloto" description="Em cada conector: salve o endpoint oficial, guarde a credencial no cofre e faça uma verificação real antes de sincronizar." />
       {standardConnectors.length ? <div className={styles.connectorRack}>{standardConnectors.map((connector) => {
         const config = (connector.config ?? {}) as StandardConnectorConfig;
-        const configured = Boolean(config.endpoint);
+        const isTeams = connector.channel === "teams";
+        const configured = isTeams ? Boolean(config.teamId && config.channelId) : Boolean(config.endpoint);
+        const credentialReady = isTeams ? connector.hasWebhookSecret : connector.hasCredentials;
         const canManage = overview.permissions.manage;
         const permissionTitle = canManage ? undefined : "Seu perfil não possui permissão para gerenciar integrações.";
         return <article key={connector.id} data-status={connector.status}><header><span className={styles.connectorIcon}><Cable /></span><div><small>{connector.channel.toUpperCase()}</small><strong>{connector.displayName}</strong></div><StatusPill status={connector.status} tone={tone(connector.status)} label={connector.status.replaceAll("_", " ")} /></header>
-          <div className={styles.pilotFlow} aria-label="Etapas do piloto"><span data-done={configured}><b>1</b>Configurar</span><span data-done={connector.hasCredentials}><b>2</b>Credencial</span><span data-done={connector.status === "connected"}><b>3</b>Testar</span></div>
-          <dl><div><dt>Configuração</dt><dd><Settings2 />{configured ? "endpoint salvo" : "pendente"}</dd></div><div><dt>Credencial</dt><dd><KeyRound />{connector.hasCredentials ? "configurada" : "não configurada"}</dd></div><div><dt>Última verificação</dt><dd><ShieldCheck />{date(connector.verifiedAt)}</dd></div><div><dt>Última sincronização</dt><dd><Clock3 />{date(connector.lastSyncAt)}</dd></div></dl>
+          <div className={styles.pilotFlow} aria-label="Etapas do piloto"><span data-done={configured}><b>1</b>Configurar</span><span data-done={credentialReady}><b>2</b>{isTeams ? "Webhook" : "Credencial"}</span><span data-done={connector.status === "connected"}><b>3</b>{isTeams ? "Receber evento" : "Testar"}</span></div>
+          <dl><div><dt>Configuração</dt><dd><Settings2 />{configured ? (isTeams ? "canal salvo" : "endpoint salvo") : "pendente"}</dd></div><div><dt>{isTeams ? "Webhook" : "Credencial"}</dt><dd><KeyRound />{credentialReady ? "configurado" : "não configurado"}</dd></div><div><dt>{isTeams ? "Último evento" : "Última verificação"}</dt><dd><ShieldCheck />{date(isTeams ? connector.lastSyncAt : connector.verifiedAt)}</dd></div><div><dt>Última sincronização</dt><dd><Clock3 />{date(connector.lastSyncAt)}</dd></div></dl>
           {connector.lastError && <div className={styles.safeError}><AlertTriangle />{connector.lastError}</div>}
-          <footer><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "configure", connector })}><Settings2 />Configurar</button><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "credentials", connector })}><RotateCw />{connector.hasCredentials ? "Rotacionar" : "Credencial"}</button>{connector.hasCredentials && <button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "revoke", connector })}><Unplug />Revogar</button>}<button className={styles.verifyButton} type="button" disabled={!canManage || !configured || !connector.hasCredentials || busy} title={!canManage ? permissionTitle : !configured ? "Salve a configuração antes de testar." : !connector.hasCredentials ? "Guarde a credencial antes de testar." : "Faz uma requisição real ao provedor."} onClick={() => void verify(connector)}><ShieldCheck />Testar conexão</button></footer>
+          <footer><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "configure", connector })}><Settings2 />Configurar</button><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "credentials", connector })}><RotateCw />{isTeams ? (credentialReady ? "Rotacionar webhook" : "Gerar webhook") : (connector.hasCredentials ? "Rotacionar" : "Credencial")}</button>{!isTeams && connector.hasCredentials && <button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "revoke", connector })}><Unplug />Revogar</button>}{isTeams ? <span className={styles.managedBadge}><ShieldCheck />{connector.status === "connected" ? "Evento autenticado recebido" : "Aguardando evento do fluxo"}</span> : <button className={styles.verifyButton} type="button" disabled={!canManage || !configured || !connector.hasCredentials || busy} title={!canManage ? permissionTitle : !configured ? "Salve a configuração antes de testar." : !connector.hasCredentials ? "Guarde a credencial antes de testar." : "Faz uma requisição real ao provedor."} onClick={() => void verify(connector)}><ShieldCheck />Testar conexão</button>}</footer>
         </article>;
       })}</div> : <EmptyState icon={Cable} title="Nenhuma outra integração configurada" text="O conector Sankhya, quando habilitado, aparece acima." />}
     </section>
-    {editor && <IntegrationDrawer key={`${editor.kind}-${"connector" in editor ? editor.connector.id : "new"}`} editor={editor} connectors={overview.connectors} mappings={overview.mappings} detail={null} detailLoading={false} detailError="" busy={busy} onClose={() => setEditor(null)} onSubmit={submit} />}
+    {editor && <IntegrationDrawer key={`${editor.kind}-${"connector" in editor ? editor.connector.id : "new"}`} editor={editor} connectors={overview.connectors} mappings={overview.mappings} detail={null} detailLoading={false} detailError="" companies={overview.companies} busy={busy} onClose={() => setEditor(null)} onSubmit={submit} />}
+    {webhookSetup && <div className={styles.overlay} role="presentation"><section className={styles.drawer} role="dialog" aria-modal="true" aria-labelledby="teams-webhook-title"><header className={styles.drawerHeader}><div><span className={styles.eyebrow}>TEAMS · POWER AUTOMATE</span><h2 id="teams-webhook-title">Webhook gerado</h2><p>Copie os três valores agora. O segredo não será mostrado novamente.</p></div></header><div className={styles.drawerBody}><section className={styles.formSection}><div className={styles.formGrid}><label className={styles.fieldWide}><span>URL do webhook</span><input readOnly value={webhookSetup.webhookUrl} onFocus={(event) => event.currentTarget.select()} /></label><label className={styles.fieldWide}><span>Cabeçalho</span><input readOnly value={webhookSetup.header} onFocus={(event) => event.currentTarget.select()} /></label><label className={styles.fieldWide}><span>Segredo (copie agora)</span><input readOnly value={webhookSetup.secret} onFocus={(event) => event.currentTarget.select()} /></label></div><aside className={styles.securityNotice}><KeyRound /><div><strong>Configure a ação HTTP do Power Automate</strong><span>Método POST, corpo da mensagem em JSON e o cabeçalho acima com este segredo.</span></div></aside></section></div><footer className={styles.drawerFooter}><button className={styles.primaryButton} type="button" onClick={() => setWebhookSetup(null)}>Já copiei e configurei</button></footer></section></div>}
     {toast && <div className={styles.toast} role="status"><CheckCircle2 />{toast}</div>}
   </section>;
 }

@@ -124,7 +124,7 @@ test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessibl
   assert.match(view, /Rotacionar|Revogar/u);
   assert.match(drawer, /type="password"/u);
   assert.match(drawer, /autoComplete="new-password"/u);
-  const credentialForm = drawer.slice(drawer.indexOf("function CredentialFields"), drawer.indexOf("function RevokeFields"));
+  const credentialForm = drawer.slice(drawer.indexOf("function CredentialFields"), drawer.indexOf("function TeamsConfigureFields"));
   assert.doesNotMatch(credentialForm, /<input[^>]*(?:defaultValue|value)=/iu);
   assert.match(overview, /publicConnectorConfig/u);
   assert.match(overview, /config_json: undefined/u);

@@ -38,6 +38,12 @@ export type StandardConnectorConfig = {
   pageSize?: number;
   boardId?: string;
   companyId?: string;
+  tenantId?: string;
+  teamId?: string;
+  teamName?: string;
+  channelId?: string;
+  channelName?: string;
+  automations?: Partial<Record<"admission" | "termination" | "warning" | "role_change" | "salary_change", boolean>>;
 };
 
 export type Connector = {
@@ -49,6 +55,7 @@ export type Connector = {
   lastError: string;
   updatedAt: string;
   hasCredentials: boolean;
+  hasWebhookSecret: boolean;
   credentialId: string;
   fingerprint: string;
   keyVersion: number;

@@ -24,7 +24,7 @@ import { openCredentials } from "./integrations.ts";
 import { parseWorkspaceWebhookSecrets } from "./integration-security.ts";
 import { log } from "./observability.ts";
 import {
-  interpretTeamsMessage, movementTaskDraft, plainTextFromTeams,
+  interpretTeamsMessage, movementTaskDraft, MOVEMENT_PROCESS_TYPE, plainTextFromTeams,
   type MovementKind, type TeamsInterpretation, type TeamsMessageOrigin,
 } from "./teams-movements.ts";
 
@@ -68,6 +68,9 @@ export function parseTeamsConfig(raw: unknown): TeamsConfig {
       // movimentações não precisa ligar duas chaves para isso funcionar.
       salary_change: automations.salary_change !== false,
       role_change: automations.role_change !== false,
+      admission: automations.admission !== false,
+      termination: automations.termination !== false,
+      warning: automations.warning !== false,
     },
     boardId: textOf(config.boardId, 80),
     companyId: textOf(config.companyId, 80),
@@ -151,6 +154,30 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+/** Texto visível de Adaptive Cards/Approvals, sem guardar o JSON inteiro. */
+export function plainTextFromAdaptiveCard(value: unknown) {
+  const parts: string[] = [];
+  const visit = (item: unknown, depth: number) => {
+    if (depth > 8 || parts.join(" ").length >= 5000) return;
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if ((trimmed.startsWith("{") || trimmed.startsWith("[")) && trimmed.length <= 64 * 1024) {
+        try { visit(JSON.parse(trimmed) as unknown, depth + 1); return; } catch { /* texto comum */ }
+      }
+      const clean = plainTextFromTeams(trimmed);
+      if (clean) parts.push(clean);
+      return;
+    }
+    if (Array.isArray(item)) { for (const child of item) visit(child, depth + 1); return; }
+    const object = record(item);
+    for (const key of ["title", "text", "value", "name", "label", "body", "facts", "items", "columns", "content", "attachments"] as const) {
+      if (Object.hasOwn(object, key)) visit(object[key], depth + 1);
+    }
+  };
+  visit(value, 0);
+  return plainTextFromTeams(parts.join(" "));
+}
+
 /**
  * Extrai a mensagem do corpo enviado pelo Power Automate.
  *
@@ -182,6 +209,12 @@ export function parseTeamsPayload(raw: Record<string, unknown>): TeamsWebhookPay
   // `body` pode ser a string do contrato limpo OU o objeto {contentType, content}
   // do gatilho; `message.body` cobre o caso do corpo cru aninhado.
   const messageBody = record(raw.body ?? message.body);
+  const adaptiveText = plainTextFromAdaptiveCard(raw.attachments ?? message.attachments ?? raw.card ?? raw.adaptiveCard);
+  const primaryText = typeof raw.text === "string" ? raw.text
+    : typeof raw.body === "string" ? raw.body
+      : typeof message.content === "string" ? message.content
+        : typeof messageBody.content === "string" ? messageBody.content
+          : "";
 
   return {
     teamId: textOf(raw.teamId ?? raw.teamAadGroupId ?? channelIdentity.teamId, 200),
@@ -191,13 +224,7 @@ export function parseTeamsPayload(raw: Record<string, unknown>): TeamsWebhookPay
     messageId: textOf(raw.messageId ?? message.id ?? raw.id, 200),
     messageUrl: textOf(raw.messageUrl ?? raw.webUrl ?? message.webUrl, 500),
     senderName: textOf(raw.senderName ?? fromUser.displayName ?? from.displayName ?? raw.sender, 160),
-    text: plainTextFromTeams(
-      typeof raw.text === "string" ? raw.text
-        : typeof raw.body === "string" ? raw.body
-          : typeof message.content === "string" ? message.content
-            : typeof messageBody.content === "string" ? messageBody.content
-              : "",
-    ),
+    text: plainTextFromTeams([primaryText, adaptiveText].filter(Boolean).join(" ")),
     editedAt: textOf(raw.editedAt ?? message.lastEditedDateTime ?? message.lastModifiedDateTime, 40),
   };
 }
@@ -330,7 +357,7 @@ export async function processTeamsMessage(
       : "a mensagem não descreve uma movimentação de pessoal" };
   }
   if (!config.automations[interpretation.kind]) {
-    return { outcome: "ignored", reason: `a automação de ${interpretation.kind === "salary_change" ? "alteração salarial" : "alteração de cargo"} está desligada neste grupo` };
+    return { outcome: "ignored", reason: `a automação de ${MOVEMENT_PROCESS_TYPE[interpretation.kind].toLowerCase()} está desligada neste grupo` };
   }
 
   const employee = matchEmployee(employees, interpretation.employeeName);

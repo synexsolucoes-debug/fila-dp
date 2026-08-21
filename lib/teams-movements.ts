@@ -22,7 +22,7 @@
  * texto real que o cliente publica.
  */
 
-export type MovementKind = "salary_change" | "role_change";
+export type MovementKind = "salary_change" | "role_change" | "admission" | "termination" | "warning";
 export type MovementDecision = "create" | "review" | "ignore";
 
 export type TeamsInterpretation = {
@@ -196,6 +196,21 @@ const ROLE_TRIGGERS = [
   "transferencia de cargo", "mudanca de posicao", "alteracao de posicao",
 ];
 
+const ADMISSION_TRIGGERS = [
+  "admissao aprovada", "aprovacao de admissao", "processo admissional", "nova admissao",
+  "novo colaborador", "nova colaboradora", "candidato aprovado", "candidata aprovada",
+];
+
+const TERMINATION_TRIGGERS = [
+  "desligamento de", "solicitacao de desligamento", "rescisao de", "demissao de",
+  "sera desligado", "sera desligada", "ultimo dia de trabalho", "encerramento do vinculo",
+];
+
+const WARNING_TRIGGERS = [
+  "advertencia para", "advertencia de", "aplicar advertencia", "advertencia disciplinar",
+  "suspensao disciplinar", "medida disciplinar",
+];
+
 /** Marcas de que o texto discute a possibilidade, em vez de comunicar o fato. */
 const HYPOTHETICAL = [
   "sera que", "podemos", "poderia", "poderiamos", "seria possivel", "talvez",
@@ -219,7 +234,8 @@ const NEGATION = [
  */
 const STOP_WORDS = new Set([
   ...MANUAL_STOP_WORDS,
-  ...[...SALARY_TRIGGERS, ...ROLE_TRIGGERS, ...HYPOTHETICAL, ...NEGATION]
+  ...[...SALARY_TRIGGERS, ...ROLE_TRIGGERS, ...ADMISSION_TRIGGERS, ...TERMINATION_TRIGGERS,
+    ...WARNING_TRIGGERS, ...HYPOTHETICAL, ...NEGATION]
     .flatMap((phrase) => phrase.split(/\s+/u))
     .filter((word) => word.length > 1),
 ]);
@@ -280,6 +296,30 @@ function round(value: number) {
 }
 
 /**
+ * Admissão chega frequentemente como card, com “Nome completo: …”; os demais
+ * eventos costumam citar o colaborador antes ou depois do gatilho. O cadastro
+ * conhecido vence qualquer heurística, pois é a evidência menos ambígua.
+ */
+function extractOperationalName(text: string, triggerIndex: number, known: readonly string[]) {
+  const foldedText = fold(text);
+  const knownMatch = [...known]
+    .sort((left, right) => right.length - left.length)
+    .find((candidate) => foldedText.includes(fold(candidate)));
+  if (knownMatch) return knownMatch.slice(0, 160);
+
+  const labelled = /nome\s+completo\s*:\s*([^]{3,160}?)(?=\s+(?:cpf|cnh|e-?mail|telefone|solicitad[oa]\s+por|\d+:)\s*:|$)/iu.exec(text);
+  if (labelled) return labelled[1].replace(/[.,;:]+$/u, "").trim().slice(0, 160);
+
+  const afterTrigger = /(?:desligamento|rescis[ãa]o|demiss[ãa]o|advert[êe]ncia|suspens[ãa]o)\s+(?:de|para|do|da)?\s*([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:(?:da|de|do|dos|das|e)\s+)?[A-ZÀ-Ý][a-zà-ÿ]+)+)/u.exec(text);
+  if (afterTrigger) return afterTrigger[1].trim().slice(0, 160);
+
+  const cardTitle = /^(?:aprovad[oa]|rejeitad[oa]|pendente)?\s*([A-ZÀ-Ý][A-ZÀ-Ý\s]{5,100}?)(?=\s*[-–—])/u.exec(text);
+  if (cardTitle) return cardTitle[1].replace(/\s+/gu, " ").trim().slice(0, 160);
+
+  return extractEmployeeName(text, triggerIndex);
+}
+
+/**
  * Interpreta a mensagem e devolve a movimentação, a confiança e a decisão.
  *
  * `knownEmployees` é opcional e serve para elevar a confiança quando o nome
@@ -298,7 +338,15 @@ export function interpretTeamsMessage(rawText: unknown, knownEmployees: readonly
   const folded = fold(text);
   const salaryIndex = firstTriggerIndex(folded, text, SALARY_TRIGGERS);
   const roleIndex = firstTriggerIndex(folded, text, ROLE_TRIGGERS);
-  if (salaryIndex < 0 && roleIndex < 0) return { ...empty, signals: ["sem_gatilho_de_movimentacao"] };
+  const admissionCard = folded.includes("nome completo:") && folded.includes("cpf:")
+    && (folded.includes("solicitado por") || folded.includes("resposta pendente"));
+  const admissionTriggerIndex = firstTriggerIndex(folded, text, ADMISSION_TRIGGERS);
+  const admissionIndex = admissionTriggerIndex >= 0 ? admissionTriggerIndex : admissionCard ? 0 : -1;
+  const terminationIndex = firstTriggerIndex(folded, text, TERMINATION_TRIGGERS);
+  const warningIndex = firstTriggerIndex(folded, text, WARNING_TRIGGERS);
+  if ([salaryIndex, roleIndex, admissionIndex, terminationIndex, warningIndex].every((index) => index < 0)) {
+    return { ...empty, signals: ["sem_gatilho_de_movimentacao"] };
+  }
 
   const effectiveDate = extractEffectiveDate(text);
   const hypothetical = countHits(folded, HYPOTHETICAL);
@@ -307,11 +355,16 @@ export function interpretTeamsMessage(rawText: unknown, knownEmployees: readonly
 
   const salary = salaryIndex >= 0 ? scoreSalary(text, salaryIndex, effectiveDate, knownEmployees) : null;
   const role = roleIndex >= 0 ? scoreRole(text, roleIndex, effectiveDate, knownEmployees) : null;
+  const admission = admissionIndex >= 0 ? scoreOperational("admission", text, admissionIndex, effectiveDate, knownEmployees) : null;
+  const termination = terminationIndex >= 0 ? scoreOperational("termination", text, terminationIndex, effectiveDate, knownEmployees) : null;
+  const warning = warningIndex >= 0 ? scoreOperational("warning", text, warningIndex, effectiveDate, knownEmployees) : null;
 
   // Uma mensagem pode citar as duas coisas ("promovido a Analista com salário de
   // R$ 5.500"). Fica com a leitura mais bem evidenciada em vez de abrir duas
   // demandas a partir de um comunicado só.
-  const chosen = !salary ? role : !role ? salary : (role.score > salary.score ? role : salary);
+  const chosen = [salary, role, admission, termination, warning]
+    .filter((item): item is Scored => item !== null)
+    .sort((left, right) => right.score - left.score)[0] ?? null;
   if (!chosen) return { ...empty, signals: ["sem_gatilho_de_movimentacao"] };
 
   const penalties: string[] = [];
@@ -327,7 +380,8 @@ export function interpretTeamsMessage(rawText: unknown, knownEmployees: readonly
   // uma sugestão que alguém confirma em cinco segundos.
   const decision: MovementDecision = confidence >= CREATE_THRESHOLD && missing.length === 0
     ? "create"
-    : confidence >= REVIEW_THRESHOLD ? "review" : "ignore";
+    : (chosen.kind === "salary_change" || chosen.kind === "role_change") && confidence >= REVIEW_THRESHOLD
+      ? "review" : "ignore";
 
   return {
     kind: chosen.kind,
@@ -418,6 +472,24 @@ function scoreRole(text: string, triggerIndex: number, effectiveDate: string, kn
   };
 }
 
+function scoreOperational(kind: "admission" | "termination" | "warning", text: string, triggerIndex: number,
+  effectiveDate: string, known: readonly string[]): Scored {
+  const signals = [`gatilho_${kind}`];
+  let score = kind === "admission" ? 0.55 : 0.45;
+  const employeeName = extractOperationalName(text, triggerIndex, known);
+  const named = nameScore(employeeName, known);
+  // Um card admissional descreve candidato ainda ausente do cadastro; o rótulo
+  // “Nome completo” é evidência suficiente mesmo sem correspondência interna.
+  score += kind === "admission" && employeeName ? 0.3 : named.bonus;
+  if (employeeName) signals.push(kind === "admission" ? "nome_do_card_identificado" : named.signal || "nome_identificado");
+  if (effectiveDate) { score += 0.15; signals.push("vigencia_identificada"); }
+
+  return {
+    kind, score, employeeName, previousSalary: null, newSalary: null,
+    previousRole: "", newRole: "", missing: employeeName ? [] : ["colaborador"], signals,
+  };
+}
+
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 function brazilianDate(iso: string) {
@@ -429,6 +501,9 @@ function brazilianDate(iso: string) {
 export const MOVEMENT_PROCESS_TYPE: Record<MovementKind, string> = {
   salary_change: "ALTERAÇÃO SALARIAL",
   role_change: "ALTERAÇÃO DE CARGO/FUNÇÃO",
+  admission: "ADMISSÃO",
+  termination: "DESLIGAMENTO",
+  warning: "ADVERTÊNCIA",
 };
 
 export type TeamsMessageOrigin = {
@@ -487,7 +562,7 @@ export function movementTaskDraft(interpretation: TeamsInterpretation, origin: T
     };
   }
 
-  return {
+  if (kind === "role_change") return {
     processType: MOVEMENT_PROCESS_TYPE.role_change,
     title: `Alteração de cargo/função — ${employee}`.slice(0, 160),
     description: [
@@ -504,5 +579,51 @@ export function movementTaskDraft(interpretation: TeamsInterpretation, origin: T
       "Atualizar o cadastro do colaborador no Vinculato",
       "Comunicar o colaborador e arquivar o comprovante",
     ],
+  };
+
+  const simple = {
+    admission: {
+      title: `Admissão — ${employee}`,
+      intro: `Aprovação ou solicitação de admissão identificada no Teams para ${employee}.`,
+      checklist: [
+        "Conferir a decisão e os dados do candidato no card de aprovação",
+        "Validar empresa, cargo, salário e data de admissão",
+        "Conferir documentos obrigatórios e exame admissional",
+        "Registrar ou acompanhar a admissão no sistema oficial",
+        "Preparar acessos, benefícios e integração do novo colaborador",
+        "Arquivar a evidência da aprovação ou da rejeição",
+      ],
+    },
+    termination: {
+      title: `Desligamento — ${employee}`,
+      intro: `Solicitação de desligamento identificada no Teams para ${employee}.`,
+      checklist: [
+        "Conferir solicitante, motivo e aprovação do gestor",
+        "Confirmar último dia e tipo de desligamento",
+        "Calcular prazos de aviso, verbas e exame demissional",
+        "Registrar o desligamento no sistema oficial",
+        "Revogar acessos e recolher equipamentos",
+        "Arquivar documentos e comprovantes da rescisão",
+      ],
+    },
+    warning: {
+      title: `Advertência — ${employee}`,
+      intro: `Solicitação de advertência identificada no Teams para ${employee}.`,
+      checklist: [
+        "Conferir o relato, a data do fato e as evidências",
+        "Validar a medida com o responsável de RH/DP",
+        "Preparar o documento sem incluir dado sensível desnecessário",
+        "Coletar ciência e assinaturas aplicáveis",
+        "Registrar a medida no histórico funcional",
+        "Arquivar documento e evidências com acesso restrito",
+      ],
+    },
+  }[kind];
+
+  return {
+    processType: MOVEMENT_PROCESS_TYPE[kind],
+    title: simple.title.slice(0, 160),
+    description: [simple.intro, ...common].join("\n").slice(0, 4000),
+    checklist: simple.checklist,
   };
 }

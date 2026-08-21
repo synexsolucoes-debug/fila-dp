@@ -34,6 +34,31 @@ test("a mensagem de mudança de função do enunciado traz cargo atual e novo", 
   assert.equal(reading.effectiveDate, "2026-09-01");
 });
 
+test("card de aprovação admissional do Teams vira demanda mesmo para candidato ainda não cadastrado", () => {
+  const card = "Rejeitado VALMIR JUNIOR - VENDAS PAP - GOIÂNIA Nome completo: Valdemir dos Santos Paes de Andrade CPF: 987.654.321-00 CNH: Validade: Categoria: E-mail: candidato@example.com Telefone: (62) 99999-0000 Solicitado por: Gabriella de Paula 1: Rejeitada por Vanessa";
+  const reading = interpretTeamsMessage(card);
+  assert.equal(reading.kind, "admission");
+  assert.equal(reading.decision, "create");
+  assert.equal(reading.employeeName, "Valdemir dos Santos Paes de Andrade");
+  const draft = movementTaskDraft(reading, { senderName: "Power Automate", teamName: "RH", channelName: "Admissões", messageId: "card-1", messageUrl: "", originalText: card });
+  assert.equal(draft.processType, "ADMISSÃO");
+  assert.match(draft.title, /Valdemir dos Santos/u);
+  assert.ok(draft.checklist.some((item) => /decisão|aprovação/iu.test(item)));
+});
+
+test("desligamento e advertência assertivos no canal viram demandas", () => {
+  const known = ["João da Silva", "Maria Souza"];
+  const termination = interpretTeamsMessage("João da Silva será desligado em 30/09/2026. Último dia de trabalho confirmado.", known);
+  assert.equal(termination.kind, "termination");
+  assert.equal(termination.decision, "create");
+  assert.equal(movementTaskDraft(termination, { senderName: "Gestora", teamName: "RH", channelName: "Desligamentos", messageId: "2", messageUrl: "", originalText: "desligamento" }).processType, "DESLIGAMENTO");
+
+  const warning = interpretTeamsMessage("Aplicar advertência disciplinar para Maria Souza por ocorrência registrada hoje.", known);
+  assert.equal(warning.kind, "warning");
+  assert.equal(warning.decision, "create");
+  assert.equal(movementTaskDraft(warning, { senderName: "Gestor", teamName: "RH", channelName: "Advertências", messageId: "3", messageUrl: "", originalText: "advertência" }).processType, "ADVERTÊNCIA");
+});
+
 test("de X para Y com dois valores identifica salário anterior e novo", () => {
   const reading = interpretTeamsMessage("Reajuste salarial de Pedro Alves de R$ 4.000,00 para R$ 4.800,00 com vigência em 01/12/2026.");
   assert.equal(reading.previousSalary, 4000);
