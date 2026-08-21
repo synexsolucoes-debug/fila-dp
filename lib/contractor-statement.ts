@@ -110,10 +110,12 @@ export function buildStatement(
       porPrestador.set(chave, prestador);
     }
 
-    const cancelado = text(row.situacao) === "canceled";
-    // Lançamento cancelado permanece na origem e na auditoria, mas não
-    // pertence ao documento entregue para conferência.
-    if (cancelado) continue;
+    /* Lançamento excluído continua na origem e na auditoria, mas não pertence
+       ao documento entregue para conferência: ele não entrou na conta, e uma
+       linha fora da conta atrapalha quem soma a coluna com o dedo.
+       A consulta já o descarta — este é o segundo cadeado, para quem um dia
+       montar o documento a partir de outra origem de linhas. */
+    if (text(row.situacao) === "canceled") continue;
     const valor = number(row.valor);
     const provento = text(row.tipo) === "PROVENTO";
     const quantidade = number(row.quantidade);
@@ -128,7 +130,6 @@ export function buildStatement(
       referencia: quantidade && quantidade !== 1 ? quantidade.toFixed(2).replace(".", ",") : "",
       proventos: provento ? valor : 0,
       descontos: provento ? 0 : valor,
-      cancelado,
     });
 
     if (provento) prestador.totalProventos += valor;

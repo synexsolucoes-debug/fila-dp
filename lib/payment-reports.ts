@@ -111,7 +111,16 @@ export const reports = {
         JOIN fdp_contractor_closings c ON c.workspace_id = k.workspace_id AND c.id = k.closing_id
         JOIN fdp_auxiliary_providers a ON a.workspace_id = k.workspace_id AND a.id = k.provider_id
         LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = k.workspace_id AND p.provider_id = k.provider_id
-        WHERE k.workspace_id = ? AND k.competence = ? AND c.excluded_at IS NULL
+        -- Lançamento excluído não entra no extrato.
+        --
+        -- Ele continua no banco e na auditoria, que é onde se responde "o que
+        -- foi lançado e retirado, por quem e por quê". O extrato responde outra
+        -- pergunta — "de onde veio o valor que estou pagando" —, e uma linha
+        -- que não entrou na conta só atrapalha quem soma a coluna conferindo.
+        -- O filtro fica aqui, e não só na montagem do PDF, para que CSV, JSON e
+        -- PDF contem a mesma história: divergir entre formatos do mesmo
+        -- relatório é pior do que o próprio excesso de linhas.
+        WHERE k.workspace_id = ? AND k.competence = ? AND c.excluded_at IS NULL AND k.status <> 'canceled'
       ) t WHERE true`,
     /* A união menciona grupo e competência uma vez de cada lado. */
     paramPairs: 2,
