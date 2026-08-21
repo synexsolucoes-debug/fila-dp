@@ -30,6 +30,16 @@ export const domainEventTypes = [
   "sankhya.employee.created",
   "sankhya.employee.updated",
   "sankhya.connection.failed",
+  /* Consulta de admissão no Tangerino (§49).
+     `status_changed` é o único que carrega mudança de estado do processo, e é
+     de propósito que ele apenas notifica: nesta versão nada no Vinculato anda
+     sozinho por causa dele (§50). Ele existe para que a automação futura tenha
+     onde se pendurar sem que a decisão de automatizar tenha sido tomada agora. */
+  "tangerino.consultation.started",
+  "tangerino.consultation.completed",
+  "tangerino.consultation.failed",
+  "tangerino.authentication.required",
+  "tangerino.admission.status_changed",
 ] as const;
 export type DomainEventType = typeof domainEventTypes[number];
 

@@ -1,5 +1,5 @@
 export type RegistrationTab = "companies" | "employees" | "contractors" | "catalogs";
-export type EmployeeDetailTab = "personal" | "employment" | "contact" | "epi" | "history";
+export type EmployeeDetailTab = "personal" | "employment" | "contact" | "epi" | "tangerino" | "history";
 export type CatalogResource = "departments" | "positions" | "cost-centers" | "work-schedules";
 export type RecordStatus = "active" | "inactive";
 

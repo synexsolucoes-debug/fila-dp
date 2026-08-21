@@ -3,6 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { classifyInfrastructureFault } from "../lib/infrastructure-errors.ts";
+import { sealCredentials } from "../lib/integrations.ts";
 import { expectedMigrations, latestMigration } from "../lib/schema-manifest.ts";
 
 /**
@@ -232,9 +233,33 @@ test("a prontidão acusa capacidade desligada por segredo ausente", async () => 
 });
 
 test("o cofre recusado nomeia a variável que falta em vez de só falhar", async () => {
-  const source = await readFile(new URL("../lib/integrations.ts", import.meta.url), "utf8");
-  assert.match(source, /VAULT_NOT_CONFIGURED/u);
-  assert.match(source, /FDP_INTEGRATION_VAULT_KEY/u);
+  /* A conferência é do comportamento, e não do texto do arquivo.
+     Ela era um `grep` pelo nome da variável em `lib/integrations.ts`; quando os
+     conectores de navegador ganharam cofre próprio, o nome passou a ser montado
+     por canal e o grep reprovou uma mudança que preservava a mensagem inteira.
+     Exercitar a recusa cobre os dois: que ela acontece, e que ela diz o que
+     falta — que é a única coisa que quem administra o deployment consegue usar. */
+  const anterior = { ...process.env };
+  try {
+    for (const chave of Object.keys(process.env)) if (/_VAULT_KEY/u.test(chave)) delete process.env[chave];
+    // Cada canal só aceita as próprias chaves: um conector de navegador entra
+    // com usuário e senha, e mandar `token` nele reprovaria antes do cofre.
+    const senha = { username: "consulta.dp", password: "0".repeat(20) };
+    for (const [canal, variavel, credencial] of [
+      ["email", "FDP_INTEGRATION_VAULT_KEY", { token: "0".repeat(20) }],
+      ["sankhya_browser", "FDP_SANKHYA_VAULT_KEY", senha],
+      ["tangerino_browser", "FDP_TANGERINO_VAULT_KEY", senha],
+    ] as const) {
+      assert.throws(() => sealCredentials(canal, credencial), (error: unknown) => {
+        const falha = error as { code?: string; message?: string };
+        assert.equal(falha.code, "VAULT_NOT_CONFIGURED", `${canal} não recusou por cofre ausente`);
+        assert.match(String(falha.message), new RegExp(variavel, "u"), `${canal} não nomeou ${variavel}`);
+        return true;
+      });
+    }
+  } finally {
+    process.env = anterior;
+  }
   // O template de produção precisa listar o que o deployment exige de verdade.
   const template = await readFile(new URL("../vercel-env.example", import.meta.url), "utf8");
   for (const key of ["FDP_INTEGRATION_VAULT_KEY", "FDP_INTEGRATION_WORKER_SECRET", "FDP_PII_HASH_SECRET"]) {
