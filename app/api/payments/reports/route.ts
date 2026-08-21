@@ -68,10 +68,21 @@ export async function GET(request: Request) {
        mesmo recorte por empresa, mesma auditoria de exportação. */
     const parameterPairs = "paramPairs" in report ? report.paramPairs : 1;
     const values: unknown[] = Array.from({ length: parameterPairs }, () => [workspace.id, competence]).flat();
+    /* Na maioria dos relatórios a empresa recorta a lista. No aviso de nota ela
+       é a emitente: uma escolha só, que vale para todos os prestadores do
+       grupo. O acesso à empresa é exigido nos dois casos — é ela que aparece
+       no documento —, o que muda é se ela entra no WHERE. */
+    const companyIsIssuer = "companyMeaning" in report && report.companyMeaning === "issuer";
     if (companyId) {
       if (!access.unrestricted && !access.companyIds.has(companyId)) throw ApiError.forbidden("Você não tem acesso a esta empresa.", "COMPANY_ACCESS_REQUIRED");
-      filters.push(`${report.companyColumn} = ?`);
-      values.push(companyId);
+      if (!companyIsIssuer) {
+        filters.push(`${report.companyColumn} = ?`);
+        values.push(companyId);
+      } else if (!access.unrestricted) {
+        const ids = [...access.companyIds];
+        filters.push(`${report.companyColumn} IN (${ids.map(() => "?").join(",")})`);
+        values.push(...ids);
+      }
     } else if (!access.unrestricted) {
       const ids = [...access.companyIds];
       filters.push(`${report.companyColumn} IN (${ids.map(() => "?").join(",")})`);
@@ -82,12 +93,18 @@ export async function GET(request: Request) {
     const rows = await d1.prepare(sql).bind(...values).all<Record<string, unknown>>();
 
     if (format === "txt") {
-      const conteudo = buildInvoiceNoticeFile(rows.results);
+      /* A emitente vai no texto de cada mensagem: é o dado que quem recebe
+         precisa para emitir, e o único que ela não consegue conferir sozinha. */
+      const emitente = companyId
+        ? await d1.prepare("SELECT legal_name, trade_name FROM fdp_companies WHERE workspace_id = ? AND id = ?")
+          .bind(workspace.id, companyId).first<{ legal_name: string; trade_name: string }>()
+        : null;
+      const conteudo = buildInvoiceNoticeFile(rows.results, emitente?.trade_name || emitente?.legal_name || "");
       /* Arquivo vazio parece defeito. Se ninguém tem valor a emitir, a recusa
          diz isso — que é uma informação, e não um erro. */
       if (!conteudo) {
         throw ApiError.badRequest(
-          "Nenhum prestador desta empresa tem valor de nota a emitir nesta competência.",
+          "Nenhum prestador do grupo tem valor de nota a emitir nesta competência.",
           "INVOICE_NOTICE_EMPTY",
         );
       }

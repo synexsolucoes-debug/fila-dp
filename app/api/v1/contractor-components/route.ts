@@ -54,10 +54,24 @@ export async function POST(request: Request) {
     }
 
     const profile = await requireContractorProfile(d1, context.workspaceId, providerId);
-    const cycleRow = await d1.prepare("SELECT id FROM fdp_payroll_cycles WHERE workspace_id = ? AND company_id = ? AND competence = ?")
-      .bind(context.workspaceId, profile.company_id, competence).first<{ id: string }>();
-    if (!cycleRow) throw ApiError.badRequest("Competência não aberta para a empresa do prestador.", "INVALID_COMPETENCE");
-    const cycle = await requireCycle(d1, context.workspaceId, profile.company_id, String(cycleRow.id));
+    /* O prestador é do grupo, então não há "empresa do prestador" para achar a
+       competência. Quando o grupo tem uma competência aberta só naquele mês, ela
+       é a resposta e o cliente antigo continua funcionando sem mudar nada.
+       Com mais de uma, a rota exige `companyId`: escolher a primeira seria
+       lançar dinheiro na empresa errada em silêncio. */
+    const companyId = cleanText(body.companyId, 120);
+    const cycleRows = await d1.prepare(`SELECT id, company_id FROM fdp_payroll_cycles
+      WHERE workspace_id = ? AND competence = ?${companyId ? " AND company_id = ?" : ""}`)
+      .bind(...[context.workspaceId, competence, ...(companyId ? [companyId] : [])])
+      .all<{ id: string; company_id: string }>();
+    if (!cycleRows.results.length) throw ApiError.badRequest("Competência não aberta.", "INVALID_COMPETENCE");
+    if (cycleRows.results.length > 1) {
+      throw ApiError.badRequest(
+        "Mais de uma empresa tem esta competência aberta. Informe companyId.",
+        "COMPANY_REQUIRED_FOR_COMPETENCE",
+      );
+    }
+    const cycle = await requireCycle(d1, context.workspaceId, String(cycleRows.results[0].company_id), String(cycleRows.results[0].id));
 
     const componentType = requiredPaymentEnum(body.componentType, componentTypes, "Tipo do componente") as ContractorComponentType;
     const amount = positiveMoney(body.amount, "Valor do componente");

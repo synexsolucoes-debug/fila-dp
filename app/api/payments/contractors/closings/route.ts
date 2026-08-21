@@ -113,16 +113,32 @@ export async function POST(request: Request) {
       .all<{ provider_id: string }>();
     const excludedProviders = new Set(excludedRows.results.map((row) => String(row.provider_id)));
 
-    // Sem prestador informado, carrega somente os PJ operacionais da empresa.
-    // Um pagamento excluído não volta a nascer silenciosamente na reapuração.
+    /* Sem prestador informado, carrega os PJ operacionais do grupo — não os de
+       uma empresa. O prestador é do grupo: é ele quem presta serviço para as
+       empresas, e a empresa que apura é quem paga naquela competência.
+       Um pagamento excluído não volta a nascer silenciosamente na reapuração. */
     const providerIds = (providerId
       ? [providerId]
       : (await d1.prepare(`SELECT provider_id FROM fdp_contractor_profiles
-          WHERE workspace_id = ? AND company_id = ? AND status = 'active'
+          WHERE workspace_id = ? AND status = 'active'
             AND (contract_start IS NULL OR contract_start <= ?) AND (contract_end IS NULL OR contract_end >= ?)`)
-        .bind(workspace.id, companyId, `${cycle.competence}-01`, `${cycle.competence}-01`)
+        .bind(workspace.id, `${cycle.competence}-01`, `${cycle.competence}-01`)
         .all<{ provider_id: string }>()).results.map((row) => String(row.provider_id)))
       .filter((id) => !excludedProviders.has(id));
+
+    /* Quem já foi apurado nesta competência por outra empresa do grupo fica de
+       fora: o prestador recebe uma vez por mês, e é a primeira apuração que
+       define quem paga. Sem isto, apurar agosto na Empresa A e depois na
+       Empresa B geraria dois pagamentos para a mesma pessoa — e o segundo
+       pareceria tão correto quanto o primeiro. O banco também recusa, pelo
+       índice único; aqui a recusa vira uma linha explicada na tela em vez de
+       um erro de gravação. */
+    const jaApurados = new Map((await d1.prepare(`SELECT c.provider_id, coalesce(e.trade_name, e.legal_name) AS empresa
+      FROM fdp_contractor_closings c
+      JOIN fdp_companies e ON e.workspace_id = c.workspace_id AND e.id = c.company_id
+      WHERE c.workspace_id = ? AND c.competence = ? AND c.company_id <> ? AND c.excluded_at IS NULL`)
+      .bind(workspace.id, cycle.competence, companyId)
+      .all<{ provider_id: string; empresa: string }>()).results.map((row) => [String(row.provider_id), String(row.empresa)]));
 
     if (!providerIds.length) {
       return Response.json({ closings: removed, removedCount: removed.length });
@@ -131,7 +147,17 @@ export async function POST(request: Request) {
     const closings: Record<string, unknown>[] = [...removed];
     for (const id of providerIds) {
       const profile = await requireContractorProfile(d1, workspace.id, id);
-      if (profile.company_id !== companyId) continue;
+      const outraEmpresa = jaApurados.get(id);
+      if (outraEmpresa) {
+        closings.push({
+          providerId: id,
+          contractorName: profile.legal_name,
+          competence: cycle.competence,
+          removed: false,
+          blockedReason: `já apurado nesta competência por ${outraEmpresa}`,
+        });
+        continue;
+      }
 
       const blocked = operationalBlock(
         profile.status as ContractorStatus,

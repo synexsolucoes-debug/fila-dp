@@ -13,7 +13,7 @@ import {
   requiredPaymentEnum,
   type ContractorComponentType,
 } from "@/lib/payments";
-import { createContractorComponent, requireContractorProfile, requireOpenCycle } from "@/lib/payment-service";
+import { createContractorComponent, requireContractorProfile, requireOpenCycleById } from "@/lib/payment-service";
 import { readBatchEntries } from "@/lib/contractor-input";
 
 const componentTypes = [...contractorCreditTypes, ...contractorDebitTypes] as const;
@@ -85,8 +85,8 @@ export async function POST(request: Request) {
       const created: string[] = [];
       for (const entry of entries) {
         const profile = await requireContractorProfile(d1, workspace.id, entry.providerId);
-        await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
-        const cycle = await requireOpenCycle(d1, workspace.id, profile.company_id, cycleId);
+        const cycle = await requireOpenCycleById(d1, workspace.id, cycleId);
+        await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, cycle.company_id);
         const component = await createContractorComponent(d1, {
           workspaceId: workspace.id, profile, cycle, componentType,
           amount: positiveMoney(entry.amount, `Valor de ${entry.providerId}`),
@@ -110,8 +110,10 @@ export async function POST(request: Request) {
     if (!providerId || !cycleId) throw ApiError.badRequest("Prestador e competência são obrigatórios.", "COMPONENT_REQUIRED_FIELDS");
 
     const profile = await requireContractorProfile(d1, workspace.id, providerId);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
-    const cycle = await requireOpenCycle(d1, workspace.id, profile.company_id, cycleId);
+    /* O acesso é conferido contra a empresa da competência, e não contra o
+       cadastro: o prestador é do grupo, e quem paga é quem apura. */
+    const cycle = await requireOpenCycleById(d1, workspace.id, cycleId);
+    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, cycle.company_id);
 
     const componentType = requiredPaymentEnum(body.componentType, componentTypes, "Tipo do componente") as ContractorComponentType;
     const amount = positiveMoney(body.amount, "Valor do componente");

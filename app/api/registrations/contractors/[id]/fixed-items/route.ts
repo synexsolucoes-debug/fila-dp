@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { fromCents } from "@/lib/payments";
 import { requireContractorProfile } from "@/lib/payment-service";
@@ -24,7 +24,10 @@ export async function POST(request: Request, { params }: Params) {
     requireCapability(workspace, "contractors.manage");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, profile.company_id);
+    /* Sem porta por empresa: o prestador é do grupo (migração 0053). Quem
+       decide aqui é a capacidade. Onde há empresa em jogo — competência,
+       apuração, nota — o acesso é conferido contra a empresa daquela
+       operação, que é quem paga, e não contra o cadastro. */
 
     const input = readFixedItemInput(body);
     const itemId = crypto.randomUUID();
@@ -34,7 +37,7 @@ export async function POST(request: Request, { params }: Params) {
           (id, workspace_id, company_id, provider_id, direction, component_type, description, amount,
            effective_from, effective_to, note, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(itemId, workspace.id, profile.company_id, id, input.direction, input.componentType,
+        .bind(itemId, workspace.id, profile.company_id ?? null, id, input.direction, input.componentType,
           input.description, fromCents(input.amountCents), input.effectiveFrom, input.effectiveTo,
           input.note, user.id),
       prepareAuditEvent({

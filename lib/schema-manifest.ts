@@ -60,6 +60,7 @@ export const expectedMigrations = [
   "0050_contractor_payment_exclusions.sql",
   "0051_process_management.sql",
   "0052_user_module_shortcuts.sql",
+  "0053_contractor_belongs_to_group.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

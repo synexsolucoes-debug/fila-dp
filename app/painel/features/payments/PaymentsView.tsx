@@ -95,10 +95,10 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
   const [entryOpen, setEntryOpen] = useState(false);
   const [entryError, setEntryError] = useState("");
   const [entryNature, setEntryNature] = useState<"mensal" | "fixo" | "determinado">("mensal");
-  /* A escolha de empresa do arquivo de avisos. Ela é feita na hora e não
-     herdada do seletor do topo: o arquivo sai com as mensagens de todos os PJ
-     daquela empresa, e confirmar qual é antes de gerar evita mandar para o
-     grupo errado uma mensagem que fala de dinheiro. */
+  /* A empresa emitente do arquivo de avisos. Ela é escolhida na hora e não
+     herdada do seletor do topo: é a empresa para quem todos os prestadores vão
+     emitir a nota daquele mês, entra no texto de cada mensagem, e confirmar
+     qual é antes de gerar evita mandar a nota para o CNPJ errado. */
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeCompany, setNoticeCompany] = useState("");
   const [paymentDetail, setPaymentDetail] = useState<ContractorPaymentDetailData | null>(null);
@@ -430,7 +430,8 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     }
   }
 
-  /** O arquivo de avisos usa a empresa escolhida na janela, não a do topo. */
+  /** O arquivo de avisos usa a empresa escolhida na janela, não a do topo — e
+   *  ali ela é a emitente, não um recorte: saem todos os prestadores do grupo. */
   const noticeUrl = (company: string) => {
     const params = new URLSearchParams({ report: "contractor-invoice-notice", competence, format: "txt", companyId: company });
     return `/api/payments/reports?${params}`;
@@ -675,18 +676,21 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
                 <span className={styles.eyebrow}>PAGAMENTO PJ</span>
                 <h2>Gerar avisos de NF</h2>
                 <p className={styles.dialogSummary}>
-                  Sai um arquivo de texto com uma mensagem por prestador, com o valor que cada um tem a emitir
-                  em {competenceLabel(competence)}. As mensagens ficam na mesma ordem da tabela.
+                  Sai um arquivo de texto com uma mensagem por prestador do grupo, com o valor que cada um tem
+                  a emitir em {competenceLabel(competence)}. As mensagens ficam na mesma ordem da tabela.
                 </p>
               </div>
             </header>
             <div className={styles.dialogBody}>
-              <label>Empresa
+              <label>Empresa emitente
                 <select value={noticeCompany} onChange={(event) => setNoticeCompany(event.target.value)}>
                   <option value="" disabled>Selecione</option>
                   {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
               </label>
+              <p className={styles.noteLine}>
+                É para esta empresa que todos vão emitir a nota. O nome dela entra em cada mensagem.
+              </p>
             </div>
             <footer className={styles.dialogFooter}>
               <button type="button" className={styles.secondaryButton} onClick={() => setNoticeOpen(false)}>Cancelar</button>
