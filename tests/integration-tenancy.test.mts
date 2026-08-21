@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  matchesConfiguredChannel, parseTeamsConfig, parseTeamsPayload, teamsEventId,
+  matchesConfiguredChannel, parseTeamsConfig, parseTeamsPayload, plainTextFromAdaptiveCard, teamsEventId,
 } from "../lib/teams-integration.ts";
 
 /**
@@ -185,6 +185,24 @@ test("o contrato JSON limpo do fluxo também é aceito", () => {
   assert.match(parsed.text, /Maria Souza/u);
 });
 
+test("Adaptive Card de aprovação é convertido em texto utilizável", () => {
+  const attachments = [{ content: JSON.stringify({
+    type: "AdaptiveCard",
+    body: [
+      { type: "TextBlock", text: "Rejeitado" },
+      { type: "TextBlock", text: "VALMIR JUNIOR - VENDAS PAP - GOIÂNIA" },
+      { type: "FactSet", facts: [
+        { title: "Nome completo:", value: "Valdemir dos Santos Paes de Andrade" },
+        { title: "CPF:", value: "987.654.321-00" },
+        { title: "Solicitado por:", value: "Gabriella de Paula" },
+      ] },
+    ],
+  }) }];
+  assert.match(plainTextFromAdaptiveCard(attachments), /Nome completo: Valdemir/u);
+  const parsed = parseTeamsPayload({ id: "card-1", attachments });
+  assert.match(parsed.text, /Solicitado por: Gabriella/u);
+});
+
 test("mensagem de canal não monitorado é ignorada", () => {
   // O requisito: não existe um canal global para todos os clientes. Cada grupo
   // monitora o seu.
@@ -201,7 +219,9 @@ test("grupo recém-conectado, ainda sem canal escolhido, aceita as mensagens", (
 
 test("as automações são escolhidas por grupo", () => {
   const both = parseTeamsConfig({});
-  assert.deepEqual(both.automations, { salary_change: true, role_change: true });
+  assert.deepEqual(both.automations, {
+    salary_change: true, role_change: true, admission: true, termination: true, warning: true,
+  });
   const onlySalary = parseTeamsConfig({ automations: { salary_change: true, role_change: false } });
   assert.equal(onlySalary.automations.role_change, false);
 });
@@ -260,3 +280,4 @@ test("a confirmação da sugestão só cria demanda com os dados obrigatórios",
   assert.match(source, /MOVEMENT_SUGGESTION_RESOLVED/u);
   assert.match(source, /row\.status !== "pending"/u);
 });
+
