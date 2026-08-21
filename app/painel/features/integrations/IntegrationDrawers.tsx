@@ -273,4 +273,3 @@ function StatusMark({ status }: { status: string }) {
   const tone = ["connected", "completed", "processed", "succeeded"].includes(status) ? "safe" : ["failed", "dead_letter", "conflict"].includes(status) ? "danger" : "warning";
   return <StatusPill status={status} tone={tone} label={status.replaceAll("_", " ")} />;
 }
-
