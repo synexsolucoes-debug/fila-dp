@@ -128,6 +128,14 @@ test("sem configuração o assistente diz o que falta em vez de fingir que funci
   const desconhecido = readAssistantConfig({ FDP_ASSISTANT_PROVIDER: "meu-modelo" });
   assert.equal(desconhecido.configured, false);
 
+  const gatewayLocal = readAssistantConfig({ FDP_ASSISTANT_PROVIDER: "gateway" });
+  assert.equal(gatewayLocal.configured, false, "fora da Vercel o Gateway ainda precisa de chave");
+
+  const gatewayVercel = readAssistantConfig({ FDP_ASSISTANT_PROVIDER: "gateway", VERCEL: "1" });
+  assert.equal(gatewayVercel.configured, true, "na Vercel o Gateway usa OIDC sem chave persistente");
+  assert.ok(gatewayVercel.configured && gatewayVercel.config.model === "openai/gpt-5.5");
+  assert.ok(gatewayVercel.configured && gatewayVercel.config.apiKey === "");
+
   // A recusa ao usuário final não repete nome de variável secreta.
   assert.throws(() => assertConfigured(vazio), (error: { code: string; message: string }) => {
     assert.equal(error.code, "ASSISTANT_NOT_CONFIGURED");
@@ -164,8 +172,9 @@ test("a instrução do sistema diz o que o assistente não tem", async () => {
 test("a redação acontece antes da rede, no adaptador, não na rota", async () => {
   const source = await readFile(new URL("../lib/assistant/provider.ts", import.meta.url), "utf8");
   const redactAt = source.indexOf("redactDeep(input.messages");
+  const generateAt = source.indexOf("await generateText");
   const fetchAt = source.indexOf("await fetch(config.baseUrl");
-  assert.ok(redactAt > 0 && fetchAt > redactAt,
+  assert.ok(redactAt > 0 && generateAt > redactAt && fetchAt > redactAt,
     "a redação precisa ser o último passo antes da rede — na rota seria fácil esquecer numa chamada nova");
   // A chave nunca é devolvida ao cliente.
   assert.doesNotMatch(source, /Response\.json\([^)]*apiKey/u);
