@@ -150,7 +150,23 @@ async function main() {
       falhas.push(`o extrato soma ${somaDoExtrato.toFixed(2)} e o fechamento diz ${liquido.toFixed(2)} — não é documento de conferência`);
     }
 
-    // 3. Uma coluna, um vocabulário. "ativo" ao lado de "active" faria o filtro
+    /* 3. A identidade que o PDF afirma: o total apurado sai por dois caminhos.
+          É o que substitui o "líquido" da folha CLT, e o documento imprime as
+          duas parcelas lado a lado — se elas não somarem o total, o extrato
+          entrega uma conta que não fecha para o contador do outro lado. */
+    const nf = Number(rows[0].nf_esperada);
+    const complemento = Number(rows[0].complemento);
+    if (Math.abs(nf + complemento - liquido) > 0.005) {
+      falhas.push(`nota fiscal ${nf.toFixed(2)} + complemento ${complemento.toFixed(2)} = ${(nf + complemento).toFixed(2)}, e o apurado é ${liquido.toFixed(2)}`);
+    }
+    /* E o limite é o que separa os dois: com teto de 6.000 sobre 8.560
+       apurados, a nota é o teto e o resto é complemento. Sem esta conferência,
+       uma inversão dos dois campos passaria — os dois somam o mesmo total. */
+    if (Math.abs(nf - 6000) > 0.005) {
+      falhas.push(`a nota deveria parar no limite do contrato (6.000,00) e veio ${nf.toFixed(2)}`);
+    }
+
+    // 4. Uma coluna, um vocabulário. "ativo" ao lado de "active" faria o filtro
     //    da planilha descartar metade das linhas sem avisar.
     const situacoes = new Set(rows.map((row) => String(row.situacao)));
     for (const situacao of situacoes) {
@@ -159,13 +175,13 @@ async function main() {
       }
     }
 
-    // 4. Toda coluna declarada existe de fato na linha — uma coluna declarada e
+    // 5. Toda coluna declarada existe de fato na linha — uma coluna declarada e
     //    ausente vira campo vazio no CSV, sem erro nenhum.
     for (const coluna of report.columns) {
       if (!(coluna in rows[0])) falhas.push(`coluna declarada e ausente no resultado: ${coluna}`);
     }
 
-    console.log(`${rows.length} linha(s) no extrato; soma ${somaDoExtrato.toFixed(2)}; líquido ${liquido.toFixed(2)}`);
+    console.log(`${rows.length} linha(s); proventos-descontos = ${somaDoExtrato.toFixed(2)}; NF ${nf.toFixed(2)} + complemento ${complemento.toFixed(2)} = ${(nf + complemento).toFixed(2)}; apurado ${liquido.toFixed(2)}`);
   } finally {
     // O ensaio não deixa rastro, mesmo se falhar no meio.
     await client.query("ROLLBACK").catch(() => undefined);

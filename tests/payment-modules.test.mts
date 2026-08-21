@@ -563,7 +563,10 @@ test("o extrato analítico é analítico: rubrica por linha, e alcançável de o
   // E é alcançável de onde a conferência acontece, não só do arquivo de
   // encerramento.
   assert.match(secoes, /reportUrl\("contractor-analytical"\)/u);
-  assert.match(secoes, /Extrato analítico da competência \(CSV\)/u);
+  // E em PDF, que é o que se entrega: o formato da folha analítica que o
+  // escritório já sabe conferir. O CSV fica para quem cruza em planilha.
+  assert.match(secoes, /reportUrl\("contractor-analytical", "pdf"\)/u);
+  assert.match(secoes, /Emitir extrato analítico \(PDF\)/u);
 });
 
 test("todo estado de competência tem tradução na tela", async () => {

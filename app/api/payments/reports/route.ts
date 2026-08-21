@@ -5,6 +5,22 @@ import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { validCompetence } from "@/lib/operations";
 import { reports, type PaymentReportKey } from "@/lib/payment-reports";
+import { renderContractorStatement } from "@/lib/contractor-statement-pdf";
+import { buildStatement } from "@/lib/contractor-statement";
+
+/** Toda exportação entra na auditoria, em qualquer formato: é ela que responde
+ *  quem levou os valores de uma competência para fora do sistema. */
+function recordExport(
+  request: Request, workspaceId: string, userId: string, email: string,
+  key: string, competence: string, companyId: string, rowCount: number, format: string,
+) {
+  return prepareAuditEvent({
+    workspaceId, actorUserId: userId, actorEmail: email,
+    action: "payment_report.exported", entityType: "payment_report", entityId: key,
+    metadata: { competence, companyId: companyId || "all", rowCount, format },
+    requestId: request.headers.get("x-fila-dp-request-id"),
+  }).run();
+}
 
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
@@ -25,7 +41,14 @@ export async function GET(request: Request) {
 
     const competence = validCompetence(url.searchParams.get("competence"));
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
-    const format = url.searchParams.get("format") === "csv" ? "csv" : "json";
+    const requested = url.searchParams.get("format");
+    const format = requested === "csv" ? "csv" : requested === "pdf" ? "pdf" : "json";
+    /* O PDF existe para um documento só: o extrato analítico, que é o que se
+       entrega para conferência. Oferecê-lo nos outros seria prometer um
+       desenho que não existe. */
+    if (format === "pdf" && key !== "contractor-analytical") {
+      throw ApiError.badRequest("Este relatório não tem versão em PDF.", "PAYMENT_REPORT_NO_PDF");
+    }
 
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     if (!access.unrestricted && access.companyIds.size === 0) return Response.json({ report: key, competence, rows: [] });
@@ -50,13 +73,29 @@ export async function GET(request: Request) {
     const sql = `${report.query}${filters.length ? ` AND ${filters.join(" AND ")}` : ""} ${report.order}`;
     const rows = await d1.prepare(sql).bind(...values).all<Record<string, unknown>>();
 
+    if (format === "pdf") {
+      const empresa = companyId
+        ? await d1.prepare("SELECT legal_name, trade_name, tax_id FROM fdp_companies WHERE workspace_id = ? AND id = ?")
+          .bind(workspace.id, companyId).first<{ legal_name: string; trade_name: string; tax_id: string }>()
+        : null;
+      await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "pdf");
+      const pdf = renderContractorStatement(buildStatement(rows.results, {
+        competence,
+        empresa: empresa?.trade_name || empresa?.legal_name || workspace.name || "Todas as empresas do grupo",
+        cnpjEmpresa: empresa?.tax_id ?? "",
+        emitidoPor: user.name || auth.user.email,
+      }));
+      return new Response(new Uint8Array(pdf), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="extrato-analitico-pj-${competence}.pdf"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     if (format === "csv") {
-      await prepareAuditEvent({
-        workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
-        action: "payment_report.exported", entityType: "payment_report", entityId: key,
-        metadata: { competence, companyId: companyId || "all", rowCount: rows.results.length, format },
-        requestId: request.headers.get("x-fila-dp-request-id"),
-      }).run();
+      await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "csv");
       const header = report.columns.join(";");
       const body = rows.results.map((row) => report.columns.map((column) => csvCell(row[column])).join(";")).join("\n");
       return new Response(`${header}\n${body}\n`, {

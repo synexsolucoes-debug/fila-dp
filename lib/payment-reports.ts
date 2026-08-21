@@ -71,32 +71,37 @@ export const reports = {
    * que foi apurado — que é precisamente o que uma conferência procura. */
   "contractor-analytical": {
     capability: "contractors.payments.read",
-    columns: ["prestador", "cnpj", "contrato", "funcao", "competencia", "tipo", "rubrica", "quantidade",
-      "valor", "origem", "documento", "situacao", "liquido_prestador", "nf_esperada", "complemento", "status_fechamento"],
+    columns: ["codigo", "prestador", "cnpj", "contrato", "funcao", "competencia", "tipo", "rubrica", "quantidade",
+      "valor", "origem", "documento", "situacao", "valor_contrato", "total_apurado", "nf_esperada", "limite_nf",
+      "origem_limite", "complemento", "forma_complemento", "status_nf", "status_fechamento"],
     query: `SELECT t.* FROM (
-        SELECT a.legal_name AS prestador, a.tax_id AS cnpj, coalesce(p.contract_reference, '') AS contrato,
+        SELECT a.code AS codigo, a.legal_name AS prestador, a.tax_id AS cnpj, coalesce(p.contract_reference, '') AS contrato,
           coalesce(p.role_title, '') AS funcao, c.competence AS competencia,
           'PROVENTO' AS tipo, 'Valor contratual' AS rubrica, 1::numeric(18, 4) AS quantidade, c.base_amount AS valor,
           -- Mesmo vocabulário do lançamento, não um sinônimo: quem confere
           -- filtra a coluna inteira de uma vez, e "ativo" ao lado de "active"
           -- faria o filtro descartar metade das linhas sem avisar.
           'contrato' AS origem, coalesce(p.contract_reference, '') AS documento, 'active' AS situacao,
-          c.net_amount AS liquido_prestador, c.invoice_expected_amount AS nf_esperada,
-          c.complement_amount AS complemento, c.status AS status_fechamento,
+          c.base_amount AS valor_contrato, c.net_amount AS total_apurado, c.invoice_expected_amount AS nf_esperada,
+          c.invoice_limit_amount AS limite_nf, c.invoice_limit_source AS origem_limite,
+          c.complement_amount AS complemento, c.complement_method AS forma_complemento,
+          c.invoice_status AS status_nf, c.status AS status_fechamento,
           c.company_id, 0 AS ordem
         FROM fdp_contractor_closings c
         JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
         LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = c.workspace_id AND p.provider_id = c.provider_id AND p.company_id = c.company_id
         WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL
         UNION ALL
-        SELECT a.legal_name AS prestador, a.tax_id AS cnpj, coalesce(p.contract_reference, '') AS contrato,
+        SELECT a.code AS codigo, a.legal_name AS prestador, a.tax_id AS cnpj, coalesce(p.contract_reference, '') AS contrato,
           coalesce(p.role_title, '') AS funcao, c.competence AS competencia,
           CASE WHEN k.direction = 'credit' THEN 'PROVENTO' ELSE 'DESCONTO' END AS tipo,
           coalesce(nullif(k.description, ''), k.component_type) AS rubrica,
           k.component_quantity AS quantidade, k.amount AS valor,
           k.origin AS origem, k.document_reference AS documento, k.status AS situacao,
-          c.net_amount AS liquido_prestador, c.invoice_expected_amount AS nf_esperada,
-          c.complement_amount AS complemento, c.status AS status_fechamento,
+          c.base_amount AS valor_contrato, c.net_amount AS total_apurado, c.invoice_expected_amount AS nf_esperada,
+          c.invoice_limit_amount AS limite_nf, c.invoice_limit_source AS origem_limite,
+          c.complement_amount AS complemento, c.complement_method AS forma_complemento,
+          c.invoice_status AS status_nf, c.status AS status_fechamento,
           c.company_id, CASE WHEN k.direction = 'credit' THEN 1 ELSE 2 END AS ordem
         FROM fdp_contractor_components k
         JOIN fdp_contractor_closings c ON c.workspace_id = k.workspace_id AND c.id = k.closing_id

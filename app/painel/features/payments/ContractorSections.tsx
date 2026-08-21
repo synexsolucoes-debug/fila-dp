@@ -40,7 +40,7 @@ export type SectionProps = {
   permissions: PaymentPermissions | undefined;
   busy: boolean;
   detailLoadingId: string;
-  reportUrl: (report: string) => string;
+  reportUrl: (report: string, format?: "csv" | "pdf") => string;
   onDialog: (dialog: NonNullable<PaymentDialog>) => void;
   onOpenDetail: (closingId: string) => void;
   onRecalculate: (providerId?: string) => void;
@@ -257,8 +257,14 @@ function ClosingsSection(props: SectionProps) {
           existia por prestador, dentro do detalhamento, e conferir trinta
           prestadores custava trinta diálogos e trinta arquivos. */}
       <footer className={styles.reportBar}>
+        {/* O PDF vem primeiro porque é o que se entrega: sai no formato da
+            folha analítica que o escritório já sabe conferir. O CSV continua,
+            para quem vai cruzar os números em planilha. */}
+        <a className={styles.primaryButton} href={props.reportUrl("contractor-analytical", "pdf")}>
+          <FileText aria-hidden="true" /> Emitir extrato analítico (PDF)
+        </a>
         <a className={styles.secondaryButton} href={props.reportUrl("contractor-analytical")}>
-          <FileSpreadsheet aria-hidden="true" /> Extrato analítico da competência (CSV)
+          <FileSpreadsheet aria-hidden="true" /> Extrato analítico (CSV)
         </a>
       </footer>
     </>
@@ -465,6 +471,7 @@ function ArchiveSection(props: SectionProps) {
       )}
       <footer className={styles.reportBar}>
         <a className={styles.secondaryButton} href={reportUrl("contractor-closing")}><Download aria-hidden="true" /> Fechamento (CSV)</a>
+        <a className={styles.secondaryButton} href={reportUrl("contractor-analytical", "pdf")}><FileText aria-hidden="true" /> Extrato analítico (PDF)</a>
         <a className={styles.secondaryButton} href={reportUrl("contractor-analytical")}><FileSpreadsheet aria-hidden="true" /> Extrato analítico (CSV)</a>
         <a className={styles.secondaryButton} href={reportUrl("contractor-divergences")}><FileText aria-hidden="true" /> Divergências (CSV)</a>
       </footer>
