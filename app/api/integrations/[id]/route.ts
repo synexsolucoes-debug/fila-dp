@@ -91,4 +91,3 @@ export async function PATCH(request: Request, { params }: Context) {
     return Response.json({ id, channel, displayName, status, configuredFields: Object.keys(config) });
   } catch (error) { return apiError(error); }
 }
-
