@@ -42,6 +42,7 @@
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
     "@vercel/blob": "^2.6.1",
+    "ai": "^7.0.74",
     "bpmn-js": "18.22.1",
     "drizzle-orm": "0.45.2",
     "exceljs": "^4.4.0",
