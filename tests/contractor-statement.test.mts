@@ -4,6 +4,7 @@ import test from "node:test";
 import { buildStatement, competenceLabel, competencePeriod, formatTaxId } from "../lib/contractor-statement.ts";
 import { renderContractorStatement } from "../lib/contractor-statement-pdf.ts";
 import { A4, buildPdf, PdfPage, textWidth } from "../lib/pdf-document.ts";
+import { contractorComponentLabel, contractorCreditTypes, contractorDebitTypes } from "../lib/payments.ts";
 
 /**
  * Extrato analítico de pagamento PJ, em PDF.
@@ -90,6 +91,43 @@ test("o documento não vaza identificador de banco para quem confere", () => {
   // dinheiro vai, e `caju_saldo_livre` não é uma frase.
   assert.equal(prestador.formaComplemento, "Caju Saldo Livre");
   assert.equal(prestador.statusFechamento, "Conferência");
+});
+
+test("toda rubrica tem nome em português, e a rota traduz antes de escolher o formato", async () => {
+  /* O lançamento sem descrição cai no identificador do tipo, e o identificador
+     é do esquema: "health_plan", "advance". Num documento entregue para
+     conferência isso aparece exatamente como o que é — nome de coluna na mão de
+     quem lê. Foi assim que apareceu na folha de um cliente.
+
+     A lista de tipos e a lista de nomes moravam separadas: os nomes estavam
+     copiados dentro de cada tela, e o relatório, que não é tela, não tinha
+     cópia nenhuma. Agora andam juntas, e esta conferência cobra que nenhum tipo
+     fique para trás quando alguém acrescentar o próximo. */
+  for (const tipo of [...contractorCreditTypes, ...contractorDebitTypes]) {
+    const nome = contractorComponentLabel(tipo);
+    assert.notEqual(nome, tipo, `a rubrica "${tipo}" não tem nome em português`);
+    assert.doesNotMatch(nome, /_/u, `"${nome}" ainda parece identificador`);
+  }
+
+  /* Identificador que o sistema não conhece volta como veio: inventar um nome
+     bonito esconderia justamente o caso que precisa ser visto — um tipo novo no
+     banco que ninguém batizou. */
+  assert.equal(contractorComponentLabel("tipo_que_ninguem_criou"), "tipo_que_ninguem_criou");
+
+  /* E a tradução acontece na rota, antes de o formato ser escolhido: o CSV e o
+     JSON leem a mesma coluna que o PDF, e traduzir só no desenho deixaria dois
+     formatos do mesmo relatório falando línguas diferentes. */
+  const rota = await readFile(new URL("../app/api/payments/reports/route.ts", import.meta.url), "utf8");
+  const traducao = rota.indexOf("contractorComponentLabel(row.rubrica)");
+  assert.ok(traducao > 0, "a rota precisa traduzir a rubrica");
+  /* A âncora é quem consome as linhas, e não o `format === "txt"` mais próximo
+     do topo: aquele é a validação que recusa o formato no relatório errado, e
+     medir por ele daria um "passou" que não fala do que interessa. */
+  for (const consumidor of ["buildInvoiceNoticeFile(", "buildStatement(", "report.columns.map("]) {
+    const posicao = rota.indexOf(consumidor, rota.indexOf("const rows = await"));
+    assert.ok(posicao > 0, `a rota precisa montar a saída com ${consumidor}`);
+    assert.ok(traducao < posicao, `a tradução precisa vir antes de ${consumidor}`);
+  }
 });
 
 test("a quantidade só aparece quando diz alguma coisa", () => {
