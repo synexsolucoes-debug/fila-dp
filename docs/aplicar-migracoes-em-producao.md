@@ -1,5 +1,13 @@
 # Aplicar as migrações pendentes em produção
 
+> **O deploy de produção já aplica sozinho.** O build da Vercel roda as
+> migrações pendentes antes de publicar, e **não publica** se alguma falhar —
+> a versão nova não vai ao ar apontando para um banco que ela não entende.
+>
+> Este roteiro continua valendo para as vezes em que você aplica **fora do
+> deploy**: para conferir o estado, para adiantar uma migração antes de
+> publicar, ou quando o passo automático está desligado.
+
 Procedimento para colocar o banco de produção na mesma versão do aplicativo
 publicado. É o passo que faz o painel voltar quando ele responde
 `SCHEMA_OUTDATED`.
@@ -7,6 +15,34 @@ publicado. É o passo que faz o painel voltar quando ele responde
 Leva poucos minutos. Cada migração roda dentro de **uma transação** com trava
 exclusiva: ou ela aplica inteira, ou não aplica nada. Não existe estado pela
 metade.
+
+---
+
+## O que o deploy faz sozinho
+
+| Onde | O que acontece |
+| --- | --- |
+| Deploy de **produção** | Aplica as pendentes e só publica se der certo |
+| Deploy de **preview** | Não toca no banco |
+| `npm run build` local ou na integração | Não toca no banco |
+
+O preview é o caso que mais importa: se a `DATABASE_URL` de preview apontar
+para produção, migrar ali aplicaria no banco de verdade uma migração vinda de
+um branch qualquer. Por isso só o ambiente de produção migra, e isso é
+conferido por teste.
+
+**Para desligar**, sem mexer em código: defina `FDP_MIGRATE_ON_DEPLOY=off` nas
+variáveis de ambiente da Vercel. O deploy volta a publicar sem migrar, e o
+banco passa a ser sua responsabilidade — pelo roteiro abaixo.
+
+**Se o deploy falhar com `DATABASE_URL não está disponível no build`**, a
+variável existe mas não está marcada como disponível em *Build*. Marque em
+*Project → Settings → Environment Variables*, ou desligue o passo e aplique à
+mão.
+
+O ponto de restauração continua sendo decisão humana: o deploy não cria branch
+no Neon. Antes de publicar uma versão com migração que mexe em dado, faça o
+Passo 1 abaixo.
 
 ---
 
