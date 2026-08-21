@@ -234,6 +234,47 @@ export const contractorDebitTypes = [
 ] as const;
 export type ContractorComponentType = typeof contractorCreditTypes[number] | typeof contractorDebitTypes[number];
 
+/**
+ * O nome de cada rubrica em português, ao lado da lista que a define.
+ *
+ * Ficava copiado em cada tela que precisava dele, e o relatório — que não é
+ * tela — não tinha cópia nenhuma: o extrato caía no identificador cru e
+ * imprimia "health_plan" e "advance" num documento entregue para conferência.
+ * A lista e os nomes andam juntos daqui em diante, e o teste cobra que nenhum
+ * tipo fique sem nome.
+ */
+export const contractorComponentLabels: Record<ContractorComponentType, string> = {
+  base: "Valor contratual",
+  commission: "Comissão",
+  bonus: "Bônus",
+  award: "Prêmio",
+  reimbursement: "Reembolso",
+  additional: "Adicional",
+  positive_adjustment: "Ajuste positivo",
+  other_credit: "Outro provento",
+  health_plan: "Plano de saúde",
+  dental_plan: "Plano odontológico",
+  benefit: "Convênio ou benefício",
+  coparticipation: "Coparticipação",
+  equipment: "Equipamento",
+  advance: "Adiantamento",
+  absence: "Falta",
+  loan: "Empréstimo",
+  negative_adjustment: "Ajuste negativo",
+  other_debit: "Outro desconto",
+};
+
+/**
+ * O nome da rubrica para quem lê.
+ *
+ * Um identificador desconhecido volta como veio: inventar um nome bonito para
+ * um valor que o sistema não conhece esconderia justamente o caso que precisa
+ * ser visto — um tipo novo no banco que ninguém batizou.
+ */
+export function contractorComponentLabel(type: string) {
+  return contractorComponentLabels[type as ContractorComponentType] ?? type;
+}
+
 export const contractorComponentDirections = ["credit", "debit"] as const;
 export type ContractorComponentDirection = typeof contractorComponentDirections[number];
 

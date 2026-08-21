@@ -6,6 +6,7 @@ import {
   Plus, RefreshCw, RotateCcw, ShieldCheck, Stethoscope, WalletCards,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
+import { contractorComponentLabels as componentLabels } from "@/lib/payments";
 import { PaymentDialog as PaymentDialogView } from "./PaymentDialogs";
 import { ContractorPaymentDetail } from "./ContractorPaymentDetail";
 import { ContractorDocumentsDialog } from "./ContractorDocumentsDialog";
@@ -55,13 +56,6 @@ const limitSourceLabels: Record<string, string> = {
 };
 const complementLabels: Record<string, string> = {
   none: "Não configurado", caju_saldo_livre: "Caju Saldo Livre", other_benefit_card: "Outro cartão", manual_transfer: "Transferência",
-};
-const componentLabels: Record<string, string> = {
-  commission: "Comissão", bonus: "Bônus", award: "Prêmio", reimbursement: "Reembolso", additional: "Adicional",
-  positive_adjustment: "Ajuste positivo", other_credit: "Outro provento", health_plan: "Plano de saúde",
-  dental_plan: "Plano odontológico", benefit: "Convênio ou benefício", coparticipation: "Coparticipação",
-  equipment: "Equipamento", advance: "Adiantamento", absence: "Falta", loan: "Empréstimo",
-  negative_adjustment: "Ajuste negativo", other_debit: "Outro desconto",
 };
 
 const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);

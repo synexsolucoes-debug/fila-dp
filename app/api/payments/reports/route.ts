@@ -8,6 +8,7 @@ import { reports, type PaymentReportKey } from "@/lib/payment-reports";
 import { renderContractorStatement } from "@/lib/contractor-statement-pdf";
 import { buildStatement } from "@/lib/contractor-statement";
 import { buildInvoiceNoticeFile } from "@/lib/contractor-invoice-notice";
+import { contractorComponentLabel } from "@/lib/payments";
 
 /** Toda exportação entra na auditoria, em qualquer formato: é ela que responde
  *  quem levou os valores de uma competência para fora do sistema. */
@@ -91,6 +92,16 @@ export async function GET(request: Request) {
 
     const sql = `${report.query}${filters.length ? ` AND ${filters.join(" AND ")}` : ""} ${report.order}`;
     const rows = await d1.prepare(sql).bind(...values).all<Record<string, unknown>>();
+
+    /* A rubrica vem do banco: a descrição que alguém escreveu ou, quando ela
+       está em branco, o identificador do tipo. O identificador é do esquema —
+       `health_plan`, `advance` — e num documento de conferência ele aparece
+       exatamente como o que é: um vazamento de nome de coluna para a mão de
+       quem lê. A tradução fica aqui, antes de escolher o formato, para que
+       CSV, JSON e PDF digam a mesma palavra. */
+    for (const row of rows.results) {
+      if (typeof row.rubrica === "string") row.rubrica = contractorComponentLabel(row.rubrica);
+    }
 
     if (format === "txt") {
       /* Os dados da emitente vão no texto de cada mensagem: são o que quem

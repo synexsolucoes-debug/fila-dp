@@ -5,27 +5,8 @@ import { ArrowDownRight, ArrowUpRight, Pencil, Trash2, X } from "lucide-react";
 import type { ContractorComponent, ContractorPaymentDetail as Detail } from "./payments.types";
 import { ContractorAnalyticalStatement } from "./ContractorAnalyticalStatement";
 import styles from "./payments.module.css";
+import { contractorComponentLabel } from "@/lib/payments";
 
-const componentLabels: Record<string, string> = {
-  base: "Valor contratual",
-  commission: "Comissão",
-  bonus: "Bônus",
-  award: "Prêmio",
-  reimbursement: "Reembolso",
-  additional: "Adicional",
-  positive_adjustment: "Ajuste positivo",
-  other_credit: "Outro provento",
-  health_plan: "Plano de saúde",
-  dental_plan: "Plano odontológico",
-  benefit: "Convênio ou benefício",
-  coparticipation: "Coparticipação",
-  equipment: "Equipamento",
-  advance: "Adiantamento",
-  absence: "Falta",
-  loan: "Empréstimo",
-  negative_adjustment: "Ajuste negativo",
-  other_debit: "Outro desconto",
-};
 
 const originLabels: Record<string, string> = {
   manual: "Pontual",
@@ -100,7 +81,7 @@ export function ContractorPaymentDetail({
   function beginEdit(item: ContractorComponent) {
     setCancelingId("");
     setEditingId(item.id);
-    setEditDescription(item.description || componentLabels[item.componentType] || "");
+    setEditDescription(item.description || contractorComponentLabel(item.componentType));
     setEditAmount(String(item.amount).replace(".", ","));
   }
 
@@ -141,7 +122,7 @@ export function ContractorPaymentDetail({
                   disabled={busy}
                 />
               ) : (
-                item.description || componentLabels[item.componentType] || item.componentType
+                item.description || contractorComponentLabel(item.componentType)
               )}
             </td>
             <td>{originLabels[item.origin] || item.origin}</td>
