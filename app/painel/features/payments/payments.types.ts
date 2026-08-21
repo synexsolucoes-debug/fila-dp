@@ -81,9 +81,17 @@ export type ContractorPaymentDetail = {
   permissions: { manage: boolean; reopen: boolean };
 };
 
+/** Lançamento avulso da competência — a natureza "mensal". */
+export type ContractorMonthlyEntry = {
+  id: string; providerId: string; contractorName: string; direction: "credit" | "debit";
+  componentType: string; description: string; amount: number; quantity: number;
+  origin: string; documentReference: string; status: string;
+};
+
 export type ContractorOverview = {
   module: "contractors"; competence: string; cycle: CycleOption | null; cycles: CycleOption[];
   closings: ContractorClosing[]; contractors: Contractor[]; fixedItems: ContractorFixedItem[];
+  monthlyEntries: ContractorMonthlyEntry[];
   invoiceLimitPolicies: InvoiceLimitPolicy[];
   totals: { netAmount: number; invoiceExpectedAmount: number; complementAmount: number; cajuAmount: number; divergentCount: number };
   permissions: PaymentPermissions;

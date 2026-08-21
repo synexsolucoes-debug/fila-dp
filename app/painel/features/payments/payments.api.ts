@@ -1,5 +1,6 @@
 import type {
   CompanyOption, Contractor, ContractorClosing, ContractorComponent, ContractorFixedItem,
+  ContractorMonthlyEntry,
   ContractorOverview, ContractorPaymentDetail, CycleOption,
   InvoiceLimitPolicy, PaymentPermissions, Psychologist, PsychologyAdjustment, PsychologyClosing,
   PsychologyOverview, PsychologySession, UnassignedSessions,
@@ -183,6 +184,19 @@ export function normalizeFixedItem(row: Row): ContractorFixedItem {
   };
 }
 
+export function normalizeMonthlyEntry(row: Row): ContractorMonthlyEntry {
+  return {
+    id: text(row.id), providerId: text(pick(row, "providerId", "provider_id")),
+    contractorName: text(pick(row, "contractorName", "contractor_name")),
+    direction: text(row.direction) === "credit" ? "credit" : "debit",
+    componentType: text(pick(row, "componentType", "component_type")),
+    description: text(row.description), amount: number(row.amount),
+    quantity: number(pick(row, "quantity", "component_quantity")) || 1,
+    origin: text(row.origin), documentReference: text(pick(row, "documentReference", "document_reference")),
+    status: text(row.status),
+  };
+}
+
 export function normalizeContractorPaymentDetail(payload: Row): ContractorPaymentDetail {
   const provider = (payload.provider ?? {}) as Row;
   const rawClosing = (payload.closing ?? {}) as Row;
@@ -219,6 +233,7 @@ export function normalizeContractorOverview(payload: Row): ContractorOverview {
     closings: ((payload.closings ?? []) as Row[]).map(normalizeContractorClosing),
     contractors: ((payload.contractors ?? []) as Row[]).map(normalizeContractor),
     fixedItems: ((payload.fixedItems ?? []) as Row[]).map(normalizeFixedItem),
+    monthlyEntries: ((payload.monthlyEntries ?? []) as Row[]).map(normalizeMonthlyEntry),
     invoiceLimitPolicies: ((payload.invoiceLimitPolicies ?? []) as Row[]).map((row): InvoiceLimitPolicy => ({
       id: text(row.id), scope: text(row.scope), companyId: text(pick(row, "companyId", "company_id")),
       providerId: text(pick(row, "providerId", "provider_id")),

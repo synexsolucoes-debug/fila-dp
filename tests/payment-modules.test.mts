@@ -388,8 +388,14 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   // O menu não recria admissão digital concorrendo com a Sólides.
   assert.doesNotMatch(workspace, /setView\("admissions"\)/);
 
-  // A tabela PJ responde às perguntas obrigatórias do produto.
-  for (const column of ["Líquido", "Limite NF", "NF esperada", "Complemento", "Conciliação"]) {
+  /* A tabela PJ responde às perguntas obrigatórias do produto.
+     "Conciliação" saiu desta lista junto com "Status complemento" e
+     "Fechamento": as três foram retiradas da tabela a pedido de quem confere,
+     porque disputavam largura com os números que se olha todo dia. Elas
+     continuam no banco e no extrato analítico — o que mudou foi o que ocupa a
+     tela, não o que o sistema guarda. A conferência de que não voltaram está
+     em `tests/contractor-entry.test.mts`. */
+  for (const column of ["Líquido", "Limite NF", "NF esperada", "Complemento"]) {
     assert.ok(sections.includes(column), `coluna ausente: ${column}`);
   }
   assert.match(shell, /Quanto o prestador tem a receber/);

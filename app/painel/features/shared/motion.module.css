@@ -199,6 +199,23 @@
   animation: modalEnter var(--motion-modal) var(--ease-enter) both;
 }
 
+/* Diálogo cujo rodapé fica sempre à vista.
+ *
+ * Por padrão o modal rola inteiro: cabeçalho, corpo e rodapé sobem juntos. Num
+ * formulário curto isso não incomoda, mas num que cresce — uma lista de trinta
+ * prestadores para preencher — o botão de confirmar nasce abaixo da dobra, e
+ * quem abre a janela não vê que existe um jeito de concluir.
+ *
+ * Com esta variante o painel vira uma coluna de três faixas e só a do meio
+ * rola. O `min-height: 0` no corpo é o que permite ele encolher: sem isso, um
+ * item de flex se recusa a ficar menor que o próprio conteúdo e o rodapé é
+ * empurrado para fora de novo. */
+.modalStickyFooter {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .modal[data-state="closing"] {
   animation: modalEnter var(--motion-modal) var(--ease-exit) reverse both;
 }

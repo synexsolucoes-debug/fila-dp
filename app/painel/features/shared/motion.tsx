@@ -293,12 +293,15 @@ export function DialogPortal({ children }: { children: ReactNode }) {
   return createPortal(children, alvo);
 }
 
-export function AnimatedModal({ open, onClose, label, width, children, className }: {
+export function AnimatedModal({ open, onClose, label, width, stickyFooter, children, className }: {
   open: boolean;
   onClose: () => void;
   /** Rótulo acessível: `aria-modal` sem nome deixa o diálogo anônimo. */
   label: string;
   width?: number;
+  /** Prende cabeçalho e rodapé, deixando só o miolo rolar. Para formulários
+   *  que crescem — sem isto o botão de confirmar nasce abaixo da dobra. */
+  stickyFooter?: boolean;
   children: ReactNode;
   className?: string;
 }) {
@@ -309,7 +312,7 @@ export function AnimatedModal({ open, onClose, label, width, children, className
     <DialogPortal>
       <div className={styles.backdrop} data-state={state} onMouseDown={onClose}>
         <div ref={ref} role="dialog" aria-modal="true" aria-label={label} data-state={state}
-          className={`${styles.modal}${className ? ` ${className}` : ""}`}
+          className={`${styles.modal}${stickyFooter ? ` ${styles.modalStickyFooter}` : ""}${className ? ` ${className}` : ""}`}
           style={width ? { "--modal-width": `${width}px` } as CSSProperties : undefined}
           onMouseDown={(event) => event.stopPropagation()}>
           {children}

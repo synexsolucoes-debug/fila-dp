@@ -1,3 +1,15 @@
+/* Os apelidos locais do módulo.
+ *
+ * Eles ficavam só em `.workspace`, e isso bastava enquanto todo diálogo era
+ * desenhado dentro dela. O `AnimatedModal` porta o conteúdo para a casca do
+ * painel — para manter os tokens de tema —, e ali fora `--pay-border` deixa de
+ * existir: `border: 1px solid var(--pay-border)` vira declaração inválida e a
+ * borda some, sem erro nenhum. Foi o que aconteceu com a janela de lançamento:
+ * campos sem caixa, lista sem fundo, e nada no console.
+ *
+ * Por isso o bloco é uma classe própria, que a raiz do módulo e todo diálogo
+ * portado carregam. */
+.paymentTokens,
 .workspace {
   --pay-accent: var(--ui-accent, #0f6b53);
   --pay-accent-text: var(--ui-accent-text, #0f6b53);
@@ -281,3 +293,83 @@
 @media (max-width: 640px) {
   .cajuActions > button { flex: 1 1 100%; justify-content: center; }
 }
+
+/* ==========================================================================
+   Lançamento PJ: forma, natureza e lista em lote
+   ==========================================================================
+   Duas escolhas que mudam o resto do formulário — a forma de lançar e a
+   natureza do lançamento. Elas são botões de rádio de verdade, e não abas ou
+   um `<select>`, por dois motivos: cada opção precisa de uma linha de
+   explicação ao lado (a diferença entre fixo e determinado não cabe num
+   rótulo), e o teclado já sabe percorrer um grupo de rádio. */
+.choiceGroup { display: grid; gap: 6px; padding: 0; margin: 0; border: 0; }
+.choiceGroup legend {
+  padding: 0 0 5px; color: var(--pay-soft); font-size: .71rem; font-weight: 700;
+}
+.choiceGroup > label {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 3px 9px;
+  padding: 8px 11px;
+  border: 1px solid var(--pay-border);
+  border-radius: 8px;
+  background: var(--pay-surface);
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease;
+}
+.choiceGroup > label:hover { border-color: var(--pay-border-strong, var(--pay-accent-text)); }
+.choiceGroup > label[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--pay-accent) 55%, var(--pay-border));
+  background: var(--pay-accent-soft);
+}
+.choiceGroup > label > input { grid-row: 1 / span 2; width: 15px; height: 15px; margin: 0; accent-color: var(--pay-accent); }
+.choiceGroup > label > span {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--pay-text); font-size: .76rem; font-weight: 700;
+}
+.choiceGroup > label > span svg { width: 14px; height: 14px; }
+/* A explicação some no celular: em 390px ela empurraria o formulário para
+   fora da dobra, e ali o rótulo sozinho já distingue as três. */
+.choiceGroup > label > small { color: var(--pay-soft); font-size: .68rem; font-weight: 500; line-height: 1.35; }
+
+/* A lista do lançamento por rubrica. Rola dentro de si mesma: com trinta
+   prestadores, deixá-la crescer empurraria o botão de confirmar para fora da
+   janela, e quem preenche a última linha não alcançaria o botão. */
+.batchList {
+  display: grid;
+  gap: 4px;
+  min-height: 150px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--pay-border);
+  border-radius: 9px;
+  background: var(--pay-muted);
+}
+.batchRow {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  align-items: center;
+  gap: 10px !important;
+  padding: 5px 7px;
+  border-radius: 7px;
+}
+.batchRow:hover { background: var(--pay-surface); }
+.batchRow > span { display: grid; color: var(--pay-text); font-size: .74rem; font-weight: 600; }
+.batchRow > span > small { color: var(--pay-soft); font-size: .64rem; font-weight: 500; }
+.batchRow > input { min-height: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 480px) {
+  .choiceGroup > label > small { display: none; }
+  .batchRow { grid-template-columns: minmax(0, 1fr) 96px; }
+}
+
+/* Formulário desenhado DENTRO do `AnimatedModal`.
+   `.dialog` é a casca dos diálogos antigos, que montam o próprio fundo e a
+   própria borda sobre um overlay. Reaproveitá-la aqui empilhava dois painéis:
+   duas bordas, dois fundos e — o que quebrava de verdade — dois recortes, com
+   o `overflow: hidden` do de dentro cortando a lista de prestadores atrás do
+   rodapé. Aqui o painel é o modal; isto é só o arranjo em três faixas. */
+.modalForm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.modalForm .dialogBody { min-height: 0; flex: 1; }

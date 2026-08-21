@@ -9,6 +9,8 @@ import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { PaymentDialog as PaymentDialogView } from "./PaymentDialogs";
 import { ContractorPaymentDetail } from "./ContractorPaymentDetail";
 import { ContractorSectionView, contractorActionsFor } from "./ContractorSections";
+import { ContractorEntryDialog, type EntrySubmission } from "./ContractorEntryDialog";
+import { AnimatedModal } from "../shared";
 import { contractorSection, type ContractorSectionId } from "./contractor-sections";
 import {
   normalizeCompany, normalizeContractorOverview, normalizeContractorPaymentDetail,
@@ -88,6 +90,17 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
   const [contractors, setContractors] = useState<ContractorOverview | null>(null);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [dialog, setDialog] = useState<PaymentDialog>(null);
+  /* O lançamento PJ tem janela própria: ela decide sozinha para qual rota vai,
+     e o formulário genérico não saberia disso. */
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [entryError, setEntryError] = useState("");
+  const [entryNature, setEntryNature] = useState<"mensal" | "fixo" | "determinado">("mensal");
+  /* A escolha de empresa do arquivo de avisos. Ela é feita na hora e não
+     herdada do seletor do topo: o arquivo sai com as mensagens de todos os PJ
+     daquela empresa, e confirmar qual é antes de gerar evita mandar para o
+     grupo errado uma mensagem que fala de dinheiro. */
+  const [noticeOpen, setNoticeOpen] = useState(false);
+  const [noticeCompany, setNoticeCompany] = useState("");
   const [paymentDetail, setPaymentDetail] = useState<ContractorPaymentDetailData | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -176,6 +189,39 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível concluir a operação.");
       return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Envia o lançamento PJ.
+   *
+   * A natureza decide a rota, e não um parâmetro dentro de uma rota só:
+   * mensal é um componente da competência, fixo e determinado são o mesmo
+   * lançamento recorrente com e sem competência final. São tabelas diferentes
+   * porque são coisas diferentes — uma pertence a um mês, a outra ao contrato.
+   */
+  async function submitEntry(entry: EntrySubmission) {
+    setEntryError("");
+    const lote = entry.entries.length > 1;
+    const comum = { componentType: entry.componentType, description: entry.description, entries: entry.entries };
+    const alvo = entry.nature === "mensal"
+      ? { url: "/api/payments/contractors/components", body: { ...comum, competenceId: cycle?.id } }
+      : {
+        url: "/api/payments/contractors/fixed-items",
+        body: { ...comum, effectiveFrom: competence, effectiveTo: entry.nature === "determinado" ? entry.effectiveTo : "" },
+      };
+    setBusy(true);
+    try {
+      await requestJson(alvo.url, { method: "POST", body: JSON.stringify(alvo.body) });
+      setEntryOpen(false);
+      setToast(lote ? `${entry.entries.length} lançamentos registrados.` : "Lançamento registrado.");
+      await loadOverview(companyId, competence, true);
+    } catch (cause) {
+      // O erro fica na janela, não no topo da tela: quem acabou de preencher
+      // trinta valores não pode perder o formulário para ler o motivo.
+      setEntryError(cause instanceof Error ? cause.message : "Não foi possível registrar o lançamento.");
     } finally {
       setBusy(false);
     }
@@ -384,6 +430,12 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     }
   }
 
+  /** O arquivo de avisos usa a empresa escolhida na janela, não a do topo. */
+  const noticeUrl = (company: string) => {
+    const params = new URLSearchParams({ report: "contractor-invoice-notice", competence, format: "txt", companyId: company });
+    return `/api/payments/reports?${params}`;
+  };
+
   const reportUrl = (report: string, format: "csv" | "pdf" = "csv") => {
     const params = new URLSearchParams({ report, competence, format });
     if (companyId) params.set("companyId", companyId);
@@ -455,8 +507,8 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
                 </button>
               )}
               {actions.component && (
-                <button className={styles.primaryButton} type="button" onClick={() => setDialog({ kind: "component", contractors: contractors?.contractors ?? [] })}>
-                  <Plus aria-hidden="true" /> Crédito/desconto
+                <button className={styles.primaryButton} type="button" onClick={() => { setEntryError(""); setEntryNature("mensal"); setEntryOpen(true); }}>
+                  <Plus aria-hidden="true" /> Novo lançamento
                 </button>
               )}
             </>
@@ -517,6 +569,8 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
           onRecalculate={(providerId) => void recalculate(providerId)}
           onTransition={(closingId, status) => void transition(closingId, status)}
           onCompetence={setCompetence}
+          onNewEntry={(nature) => { setEntryError(""); setEntryNature(nature); setEntryOpen(true); }}
+          onInvoiceNotice={() => { setNoticeCompany(companyId); setNoticeOpen(true); }}
         />
       )}
 
@@ -612,6 +666,52 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
         />
       ) : null}
       {dialog && <PaymentDialogView dialog={dialog} busy={busy} onClose={() => setDialog(null)} onSubmit={submitDialog} />}
+      {module === "contractors" && (
+        <AnimatedModal open={noticeOpen} onClose={() => setNoticeOpen(false)}
+          label="Gerar avisos de nota fiscal" width={460} stickyFooter className={styles.paymentTokens}>
+          <div className={styles.modalForm}>
+            <header className={styles.dialogHeader}>
+              <div>
+                <span className={styles.eyebrow}>PAGAMENTO PJ</span>
+                <h2>Gerar avisos de NF</h2>
+                <p className={styles.dialogSummary}>
+                  Sai um arquivo de texto com uma mensagem por prestador, com o valor que cada um tem a emitir
+                  em {competenceLabel(competence)}. As mensagens ficam na mesma ordem da tabela.
+                </p>
+              </div>
+            </header>
+            <div className={styles.dialogBody}>
+              <label>Empresa
+                <select value={noticeCompany} onChange={(event) => setNoticeCompany(event.target.value)}>
+                  <option value="" disabled>Selecione</option>
+                  {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <footer className={styles.dialogFooter}>
+              <button type="button" className={styles.secondaryButton} onClick={() => setNoticeOpen(false)}>Cancelar</button>
+              <a className={styles.primaryButton} aria-disabled={!noticeCompany}
+                href={noticeCompany ? noticeUrl(noticeCompany) : undefined}
+                onClick={() => { if (noticeCompany) setNoticeOpen(false); }}>
+                Gerar arquivo
+              </a>
+            </footer>
+          </div>
+        </AnimatedModal>
+      )}
+      {module === "contractors" && (
+        <ContractorEntryDialog
+          open={entryOpen}
+          contractors={contractors?.contractors ?? []}
+          competence={competence}
+          competenceLabel={competenceLabel(competence)}
+          initialNature={entryNature}
+          busy={busy}
+          error={entryError}
+          onClose={() => setEntryOpen(false)}
+          onSubmit={(entry) => void submitEntry(entry)}
+        />
+      )}
     </section>
   );
 }
