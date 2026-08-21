@@ -11,6 +11,7 @@ import {
   CircleAlert,
   Edit3,
   Factory,
+  FileSpreadsheet,
   History,
   LoaderCircle,
   MapPin,
@@ -19,13 +20,16 @@ import {
   Search,
   SlidersHorizontal,
   UserRound,
+  UserMinus,
   UsersRound,
+  Trash2,
   X,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { EmptyState, ErrorBanner, LoadingState, PageSkeleton, StatusPill } from "../shared";
 import { ContractorsPanel } from "./ContractorsPanel";
 import { EmployeeEpiPanel } from "../epi";
+import { SankhyaImportDialog } from "./SankhyaImportDialog";
 import styles from "./registrations.module.css";
 import type {
   CatalogItem,
@@ -94,7 +98,8 @@ function normalizeEmployee(raw: JsonRecord): Employee {
     email: text(raw.email), phone: text(raw.phone), birthDate: text(key(raw, "birthDate", "birth_date")), admissionDate: text(key(raw, "admissionDate", "admission_date")),
     terminationDate: text(key(raw, "terminationDate", "termination_date")), employmentStatus: status === "on_leave" || status === "terminated" ? status : "active",
     employmentType: employmentType === "intern" || employmentType === "apprentice" || employmentType === "temporary" ? employmentType : "clt",
-    workModel: workModel === "hybrid" || workModel === "remote" ? workModel : "onsite", sourceSystem: key(raw, "sourceSystem", "source_system") === "solides" ? "solides" : "manual",
+    workModel: workModel === "hybrid" || workModel === "remote" ? workModel : "onsite",
+    sourceSystem: key(raw, "sourceSystem", "source_system") === "solides" ? "solides" : key(raw, "sourceSystem", "source_system") === "sankhya" ? "sankhya" : "manual",
     externalId: text(key(raw, "externalId", "external_id")), notes: text(raw.notes), createdAt: text(key(raw, "createdAt", "created_at")), updatedAt: text(key(raw, "updatedAt", "updated_at")),
   };
 }
@@ -119,7 +124,9 @@ function normalizeHistory(raw: JsonRecord): HistoryEvent {
 }
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...options, cache: "no-store", headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
+  const headers = new Headers(options?.headers);
+  if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const response = await fetch(url, { ...options, cache: "no-store", headers });
   const payload = await response.json().catch(() => ({})) as T & { error?: string; message?: string };
   if (!response.ok) throw new Error(payload.error || payload.message || "Não foi possível concluir a operação.");
   return payload;
@@ -155,6 +162,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
   const [catalogEditor, setCatalogEditor] = useState<CatalogItem | "new" | null>(null);
   const [companyEditor, setCompanyEditor] = useState<Company | "new" | null>(null);
   const [employeeEditor, setEmployeeEditor] = useState<Employee | "new" | null>(null);
+  const [employeeImportOpen, setEmployeeImportOpen] = useState(false);
   const [employeeEditing, setEmployeeEditing] = useState(false);
   const [employeeDetailTab, setEmployeeDetailTab] = useState<EmployeeDetailTab>("personal");
   const [history, setHistory] = useState<HistoryEvent[]>([]);
@@ -162,7 +170,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; run: () => Promise<void> } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; confirmLabel?: string; run: () => Promise<void> } | null>(null);
 
   const selectedCompany = companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null;
   const visibleEmployees = useMemo(() => {
@@ -223,7 +231,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
     return () => window.clearTimeout(timeout);
   }, [employeeSearch]);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { setCompanyEditor(null); setCatalogEditor(null); setEmployeeEditor(null); setConfirmAction(null); } };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { setCompanyEditor(null); setCatalogEditor(null); setEmployeeEditor(null); setEmployeeImportOpen(false); setConfirmAction(null); } };
     window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
   }, []);
 
@@ -281,6 +289,24 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
     finally { setBusy(false); setConfirmAction(null); }
   }
 
+  async function terminateEmployee(employee: Employee, terminationDate: string) {
+    setBusy(true);
+    try {
+      await requestJson(`/api/employees/${employee.id}/terminate`, { method: "POST", body: JSON.stringify({ terminationDate }) });
+      setToast("Demissão registrada e histórico preservado."); setEmployeeEditor(null); await loadEmployees();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível registrar a demissão."); }
+    finally { setBusy(false); setConfirmAction(null); }
+  }
+
+  async function deleteEmployee(employee: Employee) {
+    setBusy(true);
+    try {
+      await requestJson(`/api/employees/${employee.id}`, { method: "DELETE" });
+      setToast("Colaborador excluído."); setEmployeeEditor(null); await loadEmployees();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível excluir o colaborador."); }
+    finally { setBusy(false); setConfirmAction(null); }
+  }
+
   function goNext() { if (!nextCursor) return; setCursorHistory((items) => [...items, cursor]); setCursor(nextCursor); }
   function goBack() { const previous = cursorHistory.at(-1); if (previous === undefined) return; setCursorHistory((items) => items.slice(0, -1)); setCursor(previous); }
 
@@ -292,7 +318,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
           <button className={tab === "contractors" ? styles.activeTab : ""} onClick={() => setTab("contractors")}><Briefcase aria-hidden="true" /> Prestadores PJ</button>
           <button className={tab === "catalogs" ? styles.activeTab : ""} onClick={() => setTab("catalogs")}><SlidersHorizontal aria-hidden="true" /> Cadastros auxiliares</button>
         </nav>
-        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
+        <div className={styles.commandActions}>{tab === "employees" && canManageRegistrations && <button className={styles.secondaryButton} onClick={() => setEmployeeImportOpen(true)} disabled={companiesLoading || !companies.length}><FileSpreadsheet aria-hidden="true" /> Importar Sankhya</button>}<button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button></div>
       </header>
 
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
@@ -323,9 +349,13 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
       {employeeEditor && <EmployeeDrawer employee={employeeEditor === "new" ? null : employeeEditor} companies={companies} catalogs={catalogs} busy={busy} editing={employeeEditing} activeTab={employeeDetailTab}
         history={history} historyLoading={historyLoading} canManage={canManageRegistrations} onTab={(next) => { if (next === "history" && employeeEditor !== "new") void openHistory(employeeEditor); else setEmployeeDetailTab(next); }}
         onCompanyCatalogs={loadEmployeeCatalogs} onEdit={() => setEmployeeEditing(true)} onClose={() => setEmployeeEditor(null)} onBusy={setBusy} onError={setError}
+        onTerminate={(employee, terminationDate) => setConfirmAction({ title: "Confirmar demissão?", description: `${employee.fullName} será marcado como desligado em ${dateLabel(terminationDate)}. O histórico e os vínculos de EPI serão preservados.`, confirmLabel: "Confirmar demissão", run: () => terminateEmployee(employee, terminationDate) })}
+        onDelete={(employee) => setConfirmAction({ title: "Excluir colaborador?", description: `${employee.fullName} será removido definitivamente apenas se não possuir histórico operacional. Se houver vínculos, o sistema bloqueará a exclusão.`, confirmLabel: "Excluir", run: () => deleteEmployee(employee) })}
         onSaved={async (saved) => { setEmployeeEditor(saved); setEmployeeEditing(false); setToast(employeeEditor === "new" ? "Colaborador cadastrado." : "Colaborador atualizado."); await loadEmployees(); }} />}
 
-      {confirmAction && <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}><section className={styles.confirm} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><span className={styles.confirmIcon}><CircleAlert /></span><h2 id="confirm-title">{confirmAction.title}</h2><p>{confirmAction.description}</p><div><button className={styles.secondaryButton} onClick={() => setConfirmAction(null)}>Cancelar</button><button className={styles.dangerButton} disabled={busy} onClick={() => void confirmAction.run()}>{busy ? <LoaderCircle className={styles.spin} /> : null} Inativar</button></div></section></div>}
+      {employeeImportOpen && <SankhyaImportDialog companies={companies} initialCompanyId={selectedCompanyId} onClose={() => setEmployeeImportOpen(false)} onImported={async (message) => { setEmployeeImportOpen(false); setToast(message); await loadEmployees(); }} />}
+
+      {confirmAction && <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}><section className={styles.confirm} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><span className={styles.confirmIcon}><CircleAlert /></span><h2 id="confirm-title">{confirmAction.title}</h2><p>{confirmAction.description}</p><div><button className={styles.secondaryButton} onClick={() => setConfirmAction(null)}>Cancelar</button><button className={styles.dangerButton} disabled={busy} onClick={() => void confirmAction.run()}>{busy ? <LoaderCircle className={styles.spin} /> : null} {confirmAction.confirmLabel ?? "Inativar"}</button></div></section></div>}
       {toast && <div className={styles.toast} role="status"><Check aria-hidden="true" /> {toast}</div>}
     </section>
   );
@@ -376,15 +406,16 @@ function CatalogEditor({ resource, item, company, busy, onClose, onBusy, onError
   return <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className={styles.compactEditor} onSubmit={submit}><header><div><span>{displayCompany(company)}</span><h2>{item ? "Editar" : "Novo"} {catalogMeta[resource].singular.toLowerCase()}</h2></div><button type="button" onClick={onClose}><X /></button></header><div className={styles.editorBody}><label><span>Código *</span><input required value={code} onChange={(event) => setCode(event.target.value)} /></label><label><span>Nome *</span><input required value={name} onChange={(event) => setName(event.target.value)} /></label>{resource === "positions" && <label><span>Código CBO</span><input value={cboCode} onChange={(event) => setCboCode(event.target.value)} /></label>}{resource === "work-schedules" && <><label><span>Carga semanal</span><input type="number" min="1" max="60" value={weeklyHours} onChange={(event) => setWeeklyHours(event.target.value)} /></label><label><span>Descrição da jornada</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} /></label></>}</div><footer>{item?.status === "active" && <button type="button" className={styles.textDanger} onClick={() => onInactivate(item)}>Inativar</button>}<span /><button type="button" className={styles.secondaryButton} onClick={onClose}>Cancelar</button><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} /> : <Check />} Salvar</button></footer></form></div>;
 }
 
-function EmployeeDrawer({ employee, companies, catalogs, busy, editing, activeTab, history, historyLoading, canManage, onTab, onCompanyCatalogs, onEdit, onClose, onBusy, onError, onSaved }: { employee: Employee | null; companies: Company[]; catalogs: CatalogMap; busy: boolean; editing: boolean; activeTab: EmployeeDetailTab; history: HistoryEvent[]; historyLoading: boolean; canManage: boolean; onTab: (tab: EmployeeDetailTab) => void; onCompanyCatalogs: (companyId: string) => Promise<void>; onEdit: () => void; onClose: () => void; onBusy: (value: boolean) => void; onError: (value: string) => void; onSaved: (employee: Employee) => Promise<void> }) {
+function EmployeeDrawer({ employee, companies, catalogs, busy, editing, activeTab, history, historyLoading, canManage, onTab, onCompanyCatalogs, onEdit, onClose, onBusy, onError, onSaved, onTerminate, onDelete }: { employee: Employee | null; companies: Company[]; catalogs: CatalogMap; busy: boolean; editing: boolean; activeTab: EmployeeDetailTab; history: HistoryEvent[]; historyLoading: boolean; canManage: boolean; onTab: (tab: EmployeeDetailTab) => void; onCompanyCatalogs: (companyId: string) => Promise<void>; onEdit: () => void; onClose: () => void; onBusy: (value: boolean) => void; onError: (value: string) => void; onSaved: (employee: Employee) => Promise<void>; onTerminate: (employee: Employee, terminationDate: string) => void; onDelete: (employee: Employee) => void }) {
   const [draft, setDraft] = useState<EmployeeDraft>(() => employee ? { companyId: employee.companyId, registrationNumber: employee.registrationNumber, fullName: employee.fullName, socialName: employee.socialName, cpf: "", departmentId: employee.departmentId ?? "", positionId: employee.positionId ?? "", costCenterId: employee.costCenterId ?? "", workScheduleId: employee.workScheduleId ?? "", admissionDate: employee.admissionDate, birthDate: employee.birthDate, terminationDate: employee.terminationDate, employmentStatus: employee.employmentStatus, employmentType: employee.employmentType, workModel: employee.workModel, email: employee.email, phone: employee.phone, notes: employee.notes } : { ...emptyEmployee, companyId: companies.find((item) => item.status === "active")?.id ?? "" });
+  const [terminationDate, setTerminationDate] = useState(() => new Date().toISOString().slice(0, 10));
   function update<K extends keyof EmployeeDraft>(field: K, value: EmployeeDraft[K]) { setDraft((current) => ({ ...current, [field]: value })); }
   async function submit(event: FormEvent) { event.preventDefault(); onBusy(true); try { const body: JsonRecord = { ...draft }; if (!draft.cpf) delete body.cpf; const payload = await requestJson<{ employee: JsonRecord }>(employee ? `/api/employees/${employee.id}` : "/api/employees", { method: employee ? "PATCH" : "POST", body: JSON.stringify(body) }); await onSaved(normalizeEmployee(payload.employee)); } catch (cause) { onError(cause instanceof Error ? cause.message : "Não foi possível salvar o colaborador."); } finally { onBusy(false); } }
   const readOnly = !editing;
   return <div className={styles.drawerOverlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside className={styles.employeeDrawer} role="dialog" aria-modal="true" aria-labelledby="employee-title"><header className={styles.drawerHeader}><div className={styles.employeeHero}><span>{employee ? initials(employee.socialName || employee.fullName) : <UserRound />}</span><div><small>{employee ? `MATRÍCULA ${employee.registrationNumber}` : "NOVO CADASTRO MANUAL"}</small><h2 id="employee-title">{employee ? employee.socialName || employee.fullName : "Novo colaborador"}</h2><p>{employee ? `${employee.positionName || "Sem cargo"} · ${employee.companyName}` : "Registre uma admissão já concluída na origem."}</p></div></div><div>{employee && canManage && !editing && <button className={styles.secondaryButton} onClick={onEdit}><Edit3 /> Editar</button>}<button className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X /></button></div></header><nav className={styles.drawerTabs}>{(["personal", "employment", "contact", "epi", "history"] as EmployeeDetailTab[]).map((item) => <button key={item} className={activeTab === item ? styles.drawerTabActive : ""} onClick={() => onTab(item)} disabled={!employee && (item === "history" || item === "epi")}>{item === "personal" ? "Dados pessoais" : item === "employment" ? "Vínculo e lotação" : item === "contact" ? "Contato" : item === "epi" ? "EPIs" : "Histórico"}</button>)}</nav>
       <form onSubmit={submit} className={styles.drawerForm}><div className={styles.drawerBody}>
         {activeTab === "personal" && <div className={styles.formGrid}><label className={styles.spanTwo}><span>Nome completo *</span><input required readOnly={readOnly} value={draft.fullName} onChange={(event) => update("fullName", event.target.value)} /></label><label className={styles.spanTwo}><span>Nome social</span><input readOnly={readOnly} value={draft.socialName} onChange={(event) => update("socialName", event.target.value)} /></label><label><span>CPF</span><input readOnly={readOnly} inputMode="numeric" autoComplete="off" value={readOnly && employee?.cpfLast4 ? `•••.•••.•••-${employee.cpfLast4}` : draft.cpf} onChange={(event) => update("cpf", event.target.value)} placeholder={employee?.cpfLast4 ? "Preencha apenas para alterar" : "000.000.000-00"} /></label><label><span>Data de nascimento</span><input readOnly={readOnly} type="date" value={draft.birthDate} onChange={(event) => update("birthDate", event.target.value)} /></label><label className={styles.spanTwo}><span>Observações</span><textarea readOnly={readOnly} value={draft.notes} onChange={(event) => update("notes", event.target.value)} /></label></div>}
-        {activeTab === "employment" && <div className={styles.formGrid}><label><span>Empresa *</span><select disabled={readOnly} required value={draft.companyId} onChange={(event) => { update("companyId", event.target.value); void onCompanyCatalogs(event.target.value); }}><option value="">Selecione</option>{companies.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{displayCompany(item)}</option>)}</select></label><label><span>Matrícula *</span><input readOnly={readOnly} required value={draft.registrationNumber} onChange={(event) => update("registrationNumber", event.target.value)} /></label><label><span>Admissão *</span><input readOnly={readOnly} required type="date" value={draft.admissionDate} onChange={(event) => update("admissionDate", event.target.value)} /></label><label><span>Status</span><select disabled={readOnly} value={draft.employmentStatus} onChange={(event) => update("employmentStatus", event.target.value as EmployeeDraft["employmentStatus"])}><option value="active">Ativo</option><option value="on_leave">Afastado</option><option value="terminated">Desligado</option></select></label><label><span>Departamento</span><select disabled={readOnly} value={draft.departmentId} onChange={(event) => update("departmentId", event.target.value)}><option value="">Não informado</option>{catalogs.departments.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Cargo</span><select disabled={readOnly} value={draft.positionId} onChange={(event) => update("positionId", event.target.value)}><option value="">Não informado</option>{catalogs.positions.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Centro de custo</span><select disabled={readOnly} value={draft.costCenterId} onChange={(event) => update("costCenterId", event.target.value)}><option value="">Não informado</option>{catalogs["cost-centers"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Jornada</span><select disabled={readOnly} value={draft.workScheduleId} onChange={(event) => update("workScheduleId", event.target.value)}><option value="">Não informada</option>{catalogs["work-schedules"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Tipo de vínculo</span><select disabled={readOnly} value={draft.employmentType} onChange={(event) => update("employmentType", event.target.value as EmployeeDraft["employmentType"])}><option value="clt">CLT</option><option value="intern">Estágio</option><option value="apprentice">Aprendiz</option><option value="temporary">Temporário</option></select></label><label><span>Modelo de trabalho</span><select disabled={readOnly} value={draft.workModel} onChange={(event) => update("workModel", event.target.value as EmployeeDraft["workModel"])}><option value="onsite">Presencial</option><option value="hybrid">Híbrido</option><option value="remote">Remoto</option></select></label><label><span>Desligamento</span><input readOnly={readOnly} type="date" value={draft.terminationDate} onChange={(event) => update("terminationDate", event.target.value)} /></label></div>}
+        {activeTab === "employment" && <><div className={styles.formGrid}><label><span>Empresa *</span><select disabled={readOnly} required value={draft.companyId} onChange={(event) => { update("companyId", event.target.value); void onCompanyCatalogs(event.target.value); }}><option value="">Selecione</option>{companies.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{displayCompany(item)}</option>)}</select></label><label><span>Matrícula *</span><input readOnly={readOnly} required value={draft.registrationNumber} onChange={(event) => update("registrationNumber", event.target.value)} /></label><label><span>Admissão *</span><input readOnly={readOnly} required type="date" value={draft.admissionDate} onChange={(event) => update("admissionDate", event.target.value)} /></label><label><span>Status</span><select disabled={readOnly} value={draft.employmentStatus} onChange={(event) => update("employmentStatus", event.target.value as EmployeeDraft["employmentStatus"])}><option value="active">Ativo</option><option value="on_leave">Afastado</option><option value="terminated">Desligado</option></select></label><label><span>Departamento</span><select disabled={readOnly} value={draft.departmentId} onChange={(event) => update("departmentId", event.target.value)}><option value="">Não informado</option>{catalogs.departments.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Cargo</span><select disabled={readOnly} value={draft.positionId} onChange={(event) => update("positionId", event.target.value)}><option value="">Não informado</option>{catalogs.positions.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Centro de custo</span><select disabled={readOnly} value={draft.costCenterId} onChange={(event) => update("costCenterId", event.target.value)}><option value="">Não informado</option>{catalogs["cost-centers"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Jornada</span><select disabled={readOnly} value={draft.workScheduleId} onChange={(event) => update("workScheduleId", event.target.value)}><option value="">Não informada</option>{catalogs["work-schedules"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Tipo de vínculo</span><select disabled={readOnly} value={draft.employmentType} onChange={(event) => update("employmentType", event.target.value as EmployeeDraft["employmentType"])}><option value="clt">CLT</option><option value="intern">Estágio</option><option value="apprentice">Aprendiz</option><option value="temporary">Temporário</option></select></label><label><span>Modelo de trabalho</span><select disabled={readOnly} value={draft.workModel} onChange={(event) => update("workModel", event.target.value as EmployeeDraft["workModel"])}><option value="onsite">Presencial</option><option value="hybrid">Híbrido</option><option value="remote">Remoto</option></select></label><label><span>Desligamento</span><input readOnly={readOnly} type="date" value={draft.terminationDate} onChange={(event) => update("terminationDate", event.target.value)} /></label></div>{employee && canManage && readOnly && <section className={styles.employeeActions}><div><strong>Encerramento do vínculo</strong><p>Demissão preserva todo o histórico. Exclusão só é liberada para cadastros sem movimentações.</p></div>{employee.employmentStatus !== "terminated" && <label><span>Data da demissão</span><input type="date" value={terminationDate} min={employee.admissionDate} onChange={(event) => setTerminationDate(event.target.value)} /><button type="button" className={styles.secondaryButton} disabled={!terminationDate} onClick={() => onTerminate(employee, terminationDate)}><UserMinus /> Demitir</button></label>}<button type="button" className={styles.textDangerButton} onClick={() => onDelete(employee)}><Trash2 /> Excluir cadastro</button></section>}</>}
         {activeTab === "contact" && <div className={styles.formGrid}><label className={styles.spanTwo}><span>E-mail</span><input readOnly={readOnly} type="email" value={draft.email} onChange={(event) => update("email", event.target.value)} /></label><label className={styles.spanTwo}><span>Telefone</span><input readOnly={readOnly} value={draft.phone} onChange={(event) => update("phone", event.target.value)} /></label><div className={`${styles.infoNote} ${styles.spanTwo}`}><BadgeCheck /><span><strong>Dados protegidos</strong><small>Informações pessoais ficam apenas no cadastro e não entram no snapshot operacional, URLs ou armazenamento local.</small></span></div></div>}
         {activeTab === "epi" && employee && <EmployeeEpiPanel employeeId={employee.id} />}
         {activeTab === "history" && <HistoryTrail events={history} loading={historyLoading} />}
