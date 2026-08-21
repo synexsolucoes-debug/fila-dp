@@ -154,4 +154,3 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
     {toast && <div className={styles.toast} role="status"><CheckCircle2 />{toast}</div>}
   </section>;
 }
-
