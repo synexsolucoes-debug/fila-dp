@@ -627,4 +627,3 @@ export function movementTaskDraft(interpretation: TeamsInterpretation, origin: T
     checklist: simple.checklist,
   };
 }
-
