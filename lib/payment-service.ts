@@ -8,6 +8,7 @@ import {
   type ContractorComponentType,
   type InvoiceLimitCandidate,
   type PaymentOrigin,
+  calculateContractorBaseProration,
   calculateContractorClosing,
   calculatePsychologyClosing,
   invoiceComparison,
@@ -346,17 +347,25 @@ export async function computeContractorClosing(d1: Database, workspaceId: string
     .all<{ direction: string; component_type: string; amount: string | number; status: string }>();
   const candidates = await invoiceLimitCandidates(d1, workspaceId, profile, cycle.competence, cycle.company_id);
   const limit = resolveInvoiceLimit(candidates);
-  const calculation = calculateContractorClosing({
+  const proration = calculateContractorBaseProration({
     baseAmount: Number(profile.base_amount),
-    components: components.results.map((row) => ({
-      direction: row.direction as ContractorComponentDirection,
-      amount: Number(row.amount),
-      status: row.status === "canceled" ? "canceled" : "active",
-    })),
-    invoiceLimit: limit,
-    complementMethod: profile.complement_method as ComplementMethod,
-    fixedCajuAmount: Number(profile.fixed_caju_difference ?? 0),
+    competence: cycle.competence,
+    contractEnd: profile.contract_end,
   });
+  const calculation = {
+    ...calculateContractorClosing({
+      baseAmount: proration.baseAmount,
+      components: components.results.map((row) => ({
+        direction: row.direction as ContractorComponentDirection,
+        amount: Number(row.amount),
+        status: row.status === "canceled" ? "canceled" : "active",
+      })),
+      invoiceLimit: limit,
+      complementMethod: profile.complement_method as ComplementMethod,
+      fixedCajuAmount: Number(profile.fixed_caju_difference ?? 0),
+    }),
+    ...proration,
+  };
   return {
     calculation,
     limitPolicyId: limit.policyId,
@@ -404,24 +413,28 @@ export async function upsertContractorClosing(d1: Database, input: {
   const invoiceStatus = calculation.invoiceExpectedAmount > 0 ? "pending" : "not_required";
 
   if (existing) {
-    await d1.prepare(`UPDATE fdp_contractor_closings SET base_amount = ?, credits_amount = ?, debits_amount = ?, net_amount = ?,
+    await d1.prepare(`UPDATE fdp_contractor_closings SET base_amount = ?, contract_base_amount = ?, proration_days = ?,
+        proration_total_days = ?, proration_end_date = ?, credits_amount = ?, debits_amount = ?, net_amount = ?,
         invoice_limit_amount = ?, invoice_limit_source = ?, invoice_limit_policy_id = ?, invoice_expected_amount = ?,
         complement_amount = ?, complement_method = ?, fixed_caju_amount = ?, caju_amount = ?, calc_version = ?,
         invoice_status = CASE WHEN invoice_number = '' THEN ? ELSE invoice_status END,
         caju_status = CASE WHEN caju_status IN ('sent', 'processed') THEN caju_status ELSE ? END,
         updated_at = now()
       WHERE workspace_id = ? AND id = ?`)
-      .bind(calculation.baseAmount, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
+      .bind(calculation.baseAmount, calculation.contractBaseAmount, calculation.prorationDays, calculation.prorationTotalDays,
+        calculation.prorationEndDate, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
         calculation.invoiceLimitAmount, calculation.invoiceLimitSource, limitPolicyId, calculation.invoiceExpectedAmount,
         calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, calculation.calcVersion,
         invoiceStatus, cajuStatus, input.workspaceId, closingId).run();
   } else {
     await d1.prepare(`INSERT INTO fdp_contractor_closings (id, workspace_id, company_id, provider_id, payroll_cycle_id, competence,
-        base_amount, credits_amount, debits_amount, net_amount, invoice_limit_amount, invoice_limit_source, invoice_limit_policy_id,
+        base_amount, contract_base_amount, proration_days, proration_total_days, proration_end_date,
+        credits_amount, debits_amount, net_amount, invoice_limit_amount, invoice_limit_source, invoice_limit_policy_id,
         invoice_expected_amount, complement_amount, complement_method, fixed_caju_amount, caju_amount, status, invoice_status, caju_status, calc_version, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`)
       .bind(closingId, input.workspaceId, input.cycle.company_id, input.profile.provider_id, input.cycle.id, input.cycle.competence,
-        calculation.baseAmount, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
+        calculation.baseAmount, calculation.contractBaseAmount, calculation.prorationDays, calculation.prorationTotalDays,
+        calculation.prorationEndDate, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
         calculation.invoiceLimitAmount, calculation.invoiceLimitSource, limitPolicyId, calculation.invoiceExpectedAmount,
         calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, invoiceStatus, cajuStatus,
         calculation.calcVersion, input.userId).run();
@@ -519,7 +532,11 @@ export async function contractorClosingSnapshot(d1: Database, workspaceId: strin
     capturedAt: new Date().toISOString(),
     totals: closing
       ? {
-        baseAmount: Number(closing.base_amount), creditsAmount: Number(closing.credits_amount), debitsAmount: Number(closing.debits_amount),
+        baseAmount: Number(closing.base_amount), contractBaseAmount: Number(closing.contract_base_amount ?? closing.base_amount),
+        prorationDays: closing.proration_days === null ? null : Number(closing.proration_days),
+        prorationTotalDays: closing.proration_total_days === null ? null : Number(closing.proration_total_days),
+        prorationEndDate: closing.proration_end_date === null ? null : String(closing.proration_end_date),
+        creditsAmount: Number(closing.credits_amount), debitsAmount: Number(closing.debits_amount),
         netAmount: Number(closing.net_amount), invoiceLimitAmount: closing.invoice_limit_amount === null ? null : Number(closing.invoice_limit_amount),
         invoiceLimitSource: String(closing.invoice_limit_source), invoiceExpectedAmount: Number(closing.invoice_expected_amount),
         complementAmount: Number(closing.complement_amount), complementMethod: String(closing.complement_method),

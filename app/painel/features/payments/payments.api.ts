@@ -142,6 +142,11 @@ export function normalizeContractorClosing(row: Row): ContractorClosing {
     contractReference: text(pick(row, "contractReference", "contract_reference")),
     competence: text(row.competence),
     baseAmount: number(pick(row, "baseAmount", "base_amount")),
+    contractBaseAmount: number(pick(row, "contractBaseAmount", "contract_base_amount"))
+      || number(pick(row, "baseAmount", "base_amount")),
+    prorationDays: nullableNumber(pick(row, "prorationDays", "proration_days")),
+    prorationTotalDays: nullableNumber(pick(row, "prorationTotalDays", "proration_total_days")),
+    prorationEndDate: text(pick(row, "prorationEndDate", "proration_end_date")),
     creditsAmount: number(pick(row, "creditsAmount", "credits_amount")),
     debitsAmount: number(pick(row, "debitsAmount", "debits_amount")),
     netAmount: number(pick(row, "netAmount", "net_amount")),

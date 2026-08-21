@@ -48,7 +48,8 @@ export type Contractor = {
 
 export type ContractorClosing = {
   id: string; providerId: string; contractorName: string; contractorCode: string; contractReference: string; competence: string;
-  baseAmount: number; creditsAmount: number; debitsAmount: number; netAmount: number;
+  baseAmount: number; contractBaseAmount: number; prorationDays: number | null; prorationTotalDays: number | null;
+  prorationEndDate: string; creditsAmount: number; debitsAmount: number; netAmount: number;
   invoiceLimitAmount: number | null; invoiceLimitSource: string; invoiceExpectedAmount: number;
   complementAmount: number; complementMethod: string; cajuAmount: number;
   status: string; invoiceNumber: string; invoiceReceivedAmount: number; invoiceStatus: string;

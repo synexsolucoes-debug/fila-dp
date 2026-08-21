@@ -6,6 +6,7 @@ import {
   CONTRACTOR_CALC_VERSION,
   PSYCHOLOGY_CALC_VERSION,
   assertTransition,
+  calculateContractorBaseProration,
   calculateContractorClosing,
   calculatePsychologyClosing,
   calculateSessionTotal,
@@ -22,6 +23,55 @@ import {
 const limit = (amount: number | null) => (
   amount === null ? { amount: null, source: "none" as const, policyId: null } : { amount, source: "workspace" as const, policyId: "policy" }
 );
+
+test("encerramento proporcionaliza a base pelos dias corridos da competência", () => {
+  const march = calculateContractorBaseProration({
+    baseAmount: 6200,
+    competence: "2026-03",
+    contractEnd: "2026-03-15",
+  });
+  assert.deepEqual(march, {
+    contractBaseAmount: 6200,
+    baseAmount: 3000,
+    prorationApplied: true,
+    prorationDays: 15,
+    prorationTotalDays: 31,
+    prorationEndDate: "2026-03-15",
+  });
+
+  const february = calculateContractorBaseProration({
+    baseAmount: 2800,
+    competence: "2026-02",
+    contractEnd: "2026-02-10",
+  });
+  assert.equal(february.baseAmount, 1000);
+  assert.equal(february.prorationTotalDays, 28);
+});
+
+test("proporcionalidade arredonda em centavos e não altera outros meses", () => {
+  assert.equal(calculateContractorBaseProration({
+    baseAmount: 1000,
+    competence: "2026-03",
+    contractEnd: "2026-03-15",
+  }).baseAmount, 483.87);
+
+  const previousMonth = calculateContractorBaseProration({
+    baseAmount: 6200,
+    competence: "2026-02",
+    contractEnd: "2026-03-15",
+  });
+  assert.equal(previousMonth.baseAmount, 6200);
+  assert.equal(previousMonth.prorationApplied, false);
+  assert.equal(previousMonth.prorationDays, null);
+
+  const lastDay = calculateContractorBaseProration({
+    baseAmount: 6200,
+    competence: "2026-03",
+    contractEnd: "2026-03-31",
+  });
+  assert.equal(lastDay.baseAmount, 6200);
+  assert.equal(lastDay.prorationApplied, false);
+});
 
 test("exemplo 1 da especificação: crédito e descontos antes do limite da nota", () => {
   const result = calculateContractorClosing({
@@ -604,12 +654,14 @@ test("todo estado de competência tem tradução na tela", async () => {
 });
 
 test("exclusão lógica do pagamento PJ preserva auditoria e some da operação", async () => {
-  const [migration, detailRoute, closingRoute, componentRoute, overview, cajuExport, reports, publicApi, detail] = await Promise.all([
+  const [migration, prorationMigration, detailRoute, closingRoute, paymentService, overview, componentRoute, cajuExport, reports, publicApi, detail] = await Promise.all([
     readFile(new URL("../drizzle/postgres/0050_contractor_payment_exclusions.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/postgres/0055_contractor_termination_proration.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/contractors/closings/[id]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/contractors/closings/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/payments/contractors/components/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/payment-service.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/overview/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/components/[id]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8"),
     // As consultas dos relatórios mudaram de casa: saíram da rota para
     // `lib/payment-reports.ts`, de onde o ensaio contra PostgreSQL também as
@@ -628,8 +680,15 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
   assert.doesNotMatch(detailRoute, /DELETE FROM fdp_contractor_closings/i);
   assert.match(closingRoute, /excluded_by_recalculation/);
   assert.match(closingRoute, /apurationBlock/);
-  assert.match(closingRoute, /competence >= endCompetence/);
+  assert.doesNotMatch(closingRoute, /competence >= endCompetence/);
+  assert.match(closingRoute, /status IN \('active', 'inactive'\)/);
   assert.match(closingRoute, /removedCount/);
+  assert.match(prorationMigration, /contract_base_amount/);
+  assert.match(prorationMigration, /proration_days/);
+  assert.match(prorationMigration, /proration_end_date/);
+  assert.match(paymentService, /calculateContractorBaseProration/);
+  assert.match(paymentService, /calculation\.prorationDays/);
+  assert.match(overview, /c\.proration_total_days/);
   assert.match(componentRoute, /upsertContractorClosing/);
   assert.match(componentRoute, /FIXED_COMPONENT_EDIT_REQUIRES_SOURCE/);
   assert.match(overview, /c\.excluded_at IS NULL/);

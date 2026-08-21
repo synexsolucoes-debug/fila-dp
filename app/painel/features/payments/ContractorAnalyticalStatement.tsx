@@ -81,7 +81,7 @@ export function ContractorAnalyticalStatement({
       ["Contrato", detail.provider.contractReference],
       [],
       ["TIPO", "RUBRICA", "VALOR"],
-      ["PROVENTO", "Valor contratual", decimal(detail.closing.baseAmount)],
+      ["PROVENTO", detail.closing.prorationDays !== null ? "Valor contratual proporcional" : "Valor contratual", decimal(detail.closing.baseAmount)],
       ...credits.map((item) => [
         "PROVENTO",
         item.description || item.componentType,

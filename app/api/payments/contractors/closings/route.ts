@@ -12,13 +12,7 @@ function operationalBlock(
   contractStart: string | null,
   contractEnd: string | null,
 ) {
-  const domainBlock = apurationBlock(status, competence, contractStart, contractEnd);
-  if (domainBlock) return domainBlock;
-  if (status === "inactive") {
-    const endCompetence = contractEnd ? contractEnd.slice(0, 7) : "";
-    if (!endCompetence || competence >= endCompetence) return "contrato encerrado";
-  }
-  return null;
+  return apurationBlock(status, competence, contractStart, contractEnd);
 }
 
 /**
@@ -120,7 +114,7 @@ export async function POST(request: Request) {
     const providerIds = (providerId
       ? [providerId]
       : (await d1.prepare(`SELECT provider_id FROM fdp_contractor_profiles
-          WHERE workspace_id = ? AND status = 'active'
+          WHERE workspace_id = ? AND status IN ('active', 'inactive')
             AND (contract_start IS NULL OR contract_start <= ?) AND (contract_end IS NULL OR contract_end >= ?)`)
         .bind(workspace.id, `${cycle.competence}-01`, `${cycle.competence}-01`)
         .all<{ provider_id: string }>()).results.map((row) => String(row.provider_id)))
@@ -182,7 +176,10 @@ export async function POST(request: Request) {
         action: result.created ? "contractor_closing.created" : "contractor_closing.recalculated",
         entityType: "contractor_closing", entityId: result.closingId,
         after: {
-          providerId: id, competence: cycle.competence, netAmount: result.calculation.netAmount,
+          providerId: id, competence: cycle.competence, contractBaseAmount: result.calculation.contractBaseAmount,
+          baseAmount: result.calculation.baseAmount, prorationDays: result.calculation.prorationDays,
+          prorationTotalDays: result.calculation.prorationTotalDays, prorationEndDate: result.calculation.prorationEndDate,
+          netAmount: result.calculation.netAmount,
           invoiceExpectedAmount: result.calculation.invoiceExpectedAmount, complementAmount: result.calculation.complementAmount,
           cajuAmount: result.calculation.cajuAmount, invoiceLimitSource: result.calculation.invoiceLimitSource,
         },

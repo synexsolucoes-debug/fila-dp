@@ -20,6 +20,10 @@ const money = (value: number) => new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 }).format(value || 0);
 
+const date = (value: string) => value
+  ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T00:00:00Z`))
+  : "";
+
 type Props = {
   detail: Detail;
   busy: boolean;
@@ -50,6 +54,7 @@ export function ContractorPaymentDetail({
   const credits = useMemo(() => detail.components.filter((item) => item.direction === "credit"), [detail.components]);
   const debits = useMemo(() => detail.components.filter((item) => item.direction === "debit"), [detail.components]);
   const earnings = detail.closing.baseAmount + detail.closing.creditsAmount;
+  const prorated = detail.closing.prorationDays !== null && detail.closing.prorationTotalDays !== null;
   const locked = detail.closing.status === "closed" || detail.closing.status === "paid";
   const canEdit = detail.permissions.manage && !locked;
   const canDelete = detail.permissions.manage && (!locked || detail.permissions.reopen);
@@ -236,8 +241,20 @@ export function ContractorPaymentDetail({
                 <thead><tr><th scope="col">Rubrica</th><th scope="col">Origem</th><th scope="col">Situação</th><th scope="col">Valor</th><th scope="col">Ações</th></tr></thead>
                 <tbody>
                   <tr>
-                    <td>Valor contratual</td><td>Contratual</td><td>Ativo</td><td>{money(detail.closing.baseAmount)}</td>
-                    <td className={styles.detailActions}><span className={styles.detailActionHint}>Altere no cadastro do PJ</span></td>
+                    <td>
+                      {prorated ? "Valor contratual proporcional" : "Valor contratual"}
+                      {prorated ? (
+                        <small className={styles.detailRowMeta}>
+                          {detail.closing.prorationDays} de {detail.closing.prorationTotalDays} dias · encerramento em {date(detail.closing.prorationEndDate)}
+                        </small>
+                      ) : null}
+                    </td>
+                    <td>{prorated ? "Encerramento" : "Contratual"}</td><td>Ativo</td><td>{money(detail.closing.baseAmount)}</td>
+                    <td className={styles.detailActions}>
+                      <span className={styles.detailActionHint}>
+                        {prorated ? `Base mensal: ${money(detail.closing.contractBaseAmount)}` : "Altere no cadastro do PJ"}
+                      </span>
+                    </td>
                   </tr>
                   {rows(credits)}
                 </tbody>

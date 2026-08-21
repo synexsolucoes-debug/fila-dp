@@ -11,7 +11,7 @@ import { cleanText } from "./registrations.ts";
  * isoladamente, e os fechamentos guardam a versão usada no cálculo.
  */
 export const PSYCHOLOGY_CALC_VERSION = "psychology-payment-1.0.0";
-export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.1.0";
+export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.2.0";
 
 const MAX_MONEY = 1_000_000_000;
 
@@ -320,6 +320,81 @@ export type ContractorClosingCalculation = {
   negativeNet: boolean;
   calcVersion: string;
 };
+
+export type ContractorBaseProration = {
+  /** Valor mensal contratado antes de qualquer proporcionalidade. */
+  contractBaseAmount: number;
+  /** Valor base que efetivamente entra no fechamento da competência. */
+  baseAmount: number;
+  prorationApplied: boolean;
+  prorationDays: number | null;
+  prorationTotalDays: number | null;
+  prorationEndDate: string | null;
+};
+
+/**
+ * Proporcionaliza o valor mensal na competência em que o contrato termina.
+ *
+ * A contagem usa dias corridos do próprio mês e inclui o último dia do
+ * contrato. Assim, um encerramento em 15/03 paga 15 de 31 dias. Créditos,
+ * descontos e valores recorrentes continuam explícitos e não são alterados por
+ * esta regra: só o valor-base contratual é proporcionalizado.
+ */
+export function calculateContractorBaseProration(input: {
+  baseAmount: number;
+  competence: string;
+  contractEnd: string | Date | null;
+}): ContractorBaseProration {
+  const contractBaseCents = toCents(input.baseAmount, "Valor base");
+  if (contractBaseCents < 0) throw ApiError.badRequest("Valor base não pode ser negativo.", "NEGATIVE_MONEY");
+
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/u.exec(input.competence);
+  if (!match) throw ApiError.badRequest("Competência inválida.", "INVALID_COMPETENCE");
+
+  const endDate = input.contractEnd instanceof Date
+    ? input.contractEnd.toISOString().slice(0, 10)
+    : String(input.contractEnd ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(endDate) || endDate.slice(0, 7) !== input.competence) {
+    return {
+      contractBaseAmount: fromCents(contractBaseCents),
+      baseAmount: fromCents(contractBaseCents),
+      prorationApplied: false,
+      prorationDays: null,
+      prorationTotalDays: null,
+      prorationEndDate: null,
+    };
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const endDay = Number(endDate.slice(8, 10));
+  if (!Number.isInteger(endDay) || endDay < 1 || endDay > totalDays) {
+    throw ApiError.badRequest("Data de encerramento inválida.", "INVALID_DATE");
+  }
+
+  // Encerrar no último dia mantém a mensalidade integral e não precisa gerar
+  // uma marca de proporcionalidade na memória do fechamento.
+  if (endDay === totalDays) {
+    return {
+      contractBaseAmount: fromCents(contractBaseCents),
+      baseAmount: fromCents(contractBaseCents),
+      prorationApplied: false,
+      prorationDays: null,
+      prorationTotalDays: null,
+      prorationEndDate: null,
+    };
+  }
+
+  return {
+    contractBaseAmount: fromCents(contractBaseCents),
+    baseAmount: fromCents(Math.round((contractBaseCents * endDay) / totalDays)),
+    prorationApplied: true,
+    prorationDays: endDay,
+    prorationTotalDays: totalDays,
+    prorationEndDate: endDate,
+  };
+}
 
 /**
  * Ordem obrigatória do cálculo PJ:
