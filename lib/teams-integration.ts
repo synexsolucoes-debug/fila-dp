@@ -465,4 +465,3 @@ async function createMovementCard(d1: TeamsDatabase, input: {
 
   return cardId;
 }
-
