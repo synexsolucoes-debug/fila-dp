@@ -5,10 +5,9 @@ import { createGateway, generateText } from "ai";
 /**
  * Adaptador do provedor de modelo.
  *
- * O produto não decide qual provedor você usa nem embute chave de ninguém. Sem
- * configuração, o assistente **diz o que falta** em vez de fingir que funciona
- * — o mesmo padrão do modelo oficial da Caju, e pelo mesmo motivo: uma resposta
- * inventada num sistema de DP é pior que resposta nenhuma.
+ * Na Vercel, o produto usa automaticamente o AI Gateway com a identidade OIDC
+ * temporária do deployment. Fora dela, o provedor continua explícito e, sem
+ * configuração, o assistente **diz o que falta** em vez de fingir que funciona.
  *
  * Toda saída passa pela redação antes de deixar o processo. Isso não é opcional
  * e não tem chave de ambiente que desligue: um limite de privacidade que pode
@@ -70,7 +69,8 @@ export type ConfigurationStatus =
  * não é serializado em resposta nenhuma.
  */
 export function readAssistantConfig(env: Readonly<Record<string, string | undefined>> = process.env): ConfigurationStatus {
-  const raw = String(env.FDP_ASSISTANT_PROVIDER ?? "").trim().toLowerCase();
+  const isVercel = env.VERCEL === "1" || Boolean(String(env.VERCEL_OIDC_TOKEN ?? "").trim());
+  const raw = String(env.FDP_ASSISTANT_PROVIDER ?? (isVercel ? "gateway" : "")).trim().toLowerCase();
   if (!raw) {
     return {
       configured: false,
@@ -89,8 +89,7 @@ export function readAssistantConfig(env: Readonly<Record<string, string | undefi
   const provider = raw as AssistantProviderName;
   const definition = PROVIDERS[provider];
   const apiKey = String(env.FDP_ASSISTANT_API_KEY ?? env[definition.keyEnv] ?? "").trim();
-  const hasVercelOidc = Boolean(definition.acceptsVercelOidc
-    && (env.VERCEL === "1" || String(env.VERCEL_OIDC_TOKEN ?? "").trim()));
+  const hasVercelOidc = Boolean(definition.acceptsVercelOidc && isVercel);
   if (!apiKey && !hasVercelOidc) {
     return {
       configured: false,
