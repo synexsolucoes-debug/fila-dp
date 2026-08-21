@@ -332,13 +332,47 @@
 /* A lista de bloqueios cresce: o alinhamento ao topo evita o texto "flutuando"
    ao lado do ícone quando são muitos registros. */
 .cajuBlocked { align-items: flex-start; margin: 0; }
-.cajuBlocked ul { margin: 6px 0 0; padding-left: 17px; display: grid; gap: 3px; }
-.cajuBlocked li { font-size: .73rem; }
+.cajuBlocked > div { width: 100%; min-width: 0; }
+.cajuBlockedIntro { margin: 5px 0 0; color: inherit; font-size: .72rem; line-height: 1.45; }
+.cajuBlockList {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 8px; margin: 11px 0 0; padding: 0; list-style: none;
+}
+.cajuBlockItem {
+  display: grid; align-content: start; gap: 6px; min-width: 0; padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--pay-warning) 36%, var(--pay-border));
+  border-radius: 9px; background: color-mix(in srgb, var(--pay-warning) 6%, var(--pay-surface));
+  color: var(--pay-text); font-size: .72rem;
+}
+.cajuBlockItem[data-category="data"] { border-color: color-mix(in srgb, var(--pay-danger) 44%, var(--pay-border)); }
+.cajuBlockHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.cajuBlockHeader > strong { font-size: .74rem; line-height: 1.35; }
+.cajuBlockHeader > span {
+  flex: none; max-width: 48%; padding: 3px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--pay-warning) 13%, transparent);
+  color: var(--pay-warning); font-size: .61rem; font-weight: 780; text-align: center;
+}
+.cajuBlockItem[data-category="data"] .cajuBlockHeader > span {
+  background: color-mix(in srgb, var(--pay-danger) 11%, transparent); color: var(--pay-danger);
+}
+.cajuBlockItem p { margin: 0; color: var(--pay-soft); line-height: 1.45; }
+.cajuBlockItem p b { color: var(--pay-text); }
+.cajuBlockItem a {
+  display: inline-flex; align-items: center; gap: 5px; width: fit-content; margin-top: 1px;
+  color: var(--pay-accent-text); font-weight: 760; text-underline-offset: 3px;
+}
+.cajuBlockItem a:hover { color: color-mix(in srgb, var(--pay-accent-text) 78%, var(--pay-text)); }
+.table tbody tr:target {
+  background: color-mix(in srgb, var(--pay-warning) 10%, var(--pay-surface));
+  outline: 2px solid var(--pay-warning); outline-offset: -2px;
+}
 .cajuActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cajuLoading { display: flex; align-items: center; gap: 9px; }
 
 @media (max-width: 640px) {
   .cajuActions > button { flex: 1 1 100%; justify-content: center; }
+  .cajuBlockHeader { align-items: stretch; flex-direction: column; }
+  .cajuBlockHeader > span { max-width: none; width: fit-content; text-align: left; }
   .documentList > li { grid-template-columns: auto minmax(0, 1fr); }
   .documentActions { grid-column: 1 / -1; }
   .approvalToolbar > button { flex: 1 1 100%; }
