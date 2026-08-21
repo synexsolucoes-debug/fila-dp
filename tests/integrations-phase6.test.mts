@@ -147,4 +147,3 @@ test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessibl
   assert.doesNotMatch(featureSource, /localStorage|sessionStorage|location\.reload|encrypted_value|initialization_vector|auth_tag/);
   assert.doesNotMatch(featureSource, /window\.(prompt|confirm)/u);
 });
-
