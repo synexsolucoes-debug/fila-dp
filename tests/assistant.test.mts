@@ -136,6 +136,10 @@ test("sem configuração o assistente diz o que falta em vez de fingir que funci
   assert.ok(gatewayVercel.configured && gatewayVercel.config.model === "openai/gpt-5.5");
   assert.ok(gatewayVercel.configured && gatewayVercel.config.apiKey === "");
 
+  const gatewayAutomatico = readAssistantConfig({ VERCEL: "1" });
+  assert.equal(gatewayAutomatico.configured, true, "deployment Vercel deve selecionar o Gateway automaticamente");
+  assert.ok(gatewayAutomatico.configured && gatewayAutomatico.config.provider === "gateway");
+
   // A recusa ao usuário final não repete nome de variável secreta.
   assert.throws(() => assertConfigured(vazio), (error: { code: string; message: string }) => {
     assert.equal(error.code, "ASSISTANT_NOT_CONFIGURED");
