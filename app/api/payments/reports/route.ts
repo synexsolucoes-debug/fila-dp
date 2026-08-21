@@ -93,13 +93,19 @@ export async function GET(request: Request) {
     const rows = await d1.prepare(sql).bind(...values).all<Record<string, unknown>>();
 
     if (format === "txt") {
-      /* A emitente vai no texto de cada mensagem: é o dado que quem recebe
-         precisa para emitir, e o único que ela não consegue conferir sozinha. */
+      /* Os dados da emitente vão no texto de cada mensagem: são o que quem
+         recebe precisa digitar na nota, e nada disso ela consegue conferir
+         sozinha — o valor está na tela dela, a empresa e a cidade não.
+         Razão social, e não nome fantasia: é a razão social que a nota exige. */
       const emitente = companyId
-        ? await d1.prepare("SELECT legal_name, trade_name FROM fdp_companies WHERE workspace_id = ? AND id = ?")
-          .bind(workspace.id, companyId).first<{ legal_name: string; trade_name: string }>()
+        ? await d1.prepare("SELECT legal_name, tax_id, city FROM fdp_companies WHERE workspace_id = ? AND id = ?")
+          .bind(workspace.id, companyId).first<{ legal_name: string; tax_id: string; city: string }>()
         : null;
-      const conteudo = buildInvoiceNoticeFile(rows.results, emitente?.trade_name || emitente?.legal_name || "");
+      const conteudo = buildInvoiceNoticeFile(rows.results, {
+        razaoSocial: emitente?.legal_name ?? "",
+        cnpj: emitente?.tax_id ?? "",
+        cidade: emitente?.city ?? "",
+      }, competence);
       /* Arquivo vazio parece defeito. Se ninguém tem valor a emitir, a recusa
          diz isso — que é uma informação, e não um erro. */
       if (!conteudo) {

@@ -60,20 +60,47 @@ test("sem lote no corpo, a rota segue pelo caminho de sempre", () => {
   assert.equal(readBatchEntries("pj-1"), null);
 });
 
-test("a mensagem de aviso diz o valor e para quem emitir", () => {
-  const mensagem = invoiceNoticeMessage(6000, "Alfa Serviços");
-  assert.match(mensagem, /Segue o valor a ser emitido referente a sua NF/u);
-  assert.match(mensagem, /R\$\s?6\.000,00/u);
-  // A emitente entra no texto: é o dado que quem recebe precisa para emitir, e
-  // o único que ela não tem como conferir sozinha — o valor está na tela dela,
-  // a empresa não.
-  assert.match(mensagem, /para Alfa Serviços/u);
-  // Sem saudação de horário: o arquivo é gerado uma vez e colado ao longo do
-  // dia, e "Bom dia" colado às 15h desmente o próprio remetente.
-  assert.doesNotMatch(mensagem, /Bom dia|Boa tarde|Boa noite/u);
-  // Sem empresa informada a frase volta a ser só o valor, sem um "para "
-  // pendurado no vazio.
-  assert.doesNotMatch(invoiceNoticeMessage(6000), /para\s*:/u);
+const emitente = {
+  razaoSocial: "ULTRA TELECOMUNICAÇÕES LTDA",
+  cnpj: "26016500000105",
+  cidade: "Goiânia",
+};
+
+test("a mensagem traz tudo que quem recebe precisa para emitir sem perguntar", () => {
+  /* Cada campo que faltasse aqui vira uma pergunta no privado, e trinta
+     prestadores perguntando a mesma coisa é justamente o trabalho que este
+     arquivo existe para não ter. */
+  const mensagem = invoiceNoticeMessage({
+    prestador: "Alfa Consultoria LTDA", amount: 10187.12, competence: "2026-07", emitente,
+  });
+
+  assert.match(mensagem, /^Bom dia, Alfa Consultoria LTDA, tudo bem\?/u);
+  assert.match(mensagem, /mês de JULHO deve ser gerada no valor de R\$\s?10\.187,12\./u);
+  // O CNPJ sai pontuado: é assim que se digita no emissor, e conferir dígito a
+  // dígito num número corrido é onde o erro acontece.
+  assert.match(mensagem, /CNPJ: 26\.016\.500\/0001-05/u);
+  // Razão social, não nome fantasia — é a razão social que a nota exige.
+  assert.match(mensagem, /Razão Social: ULTRA TELECOMUNICAÇÕES LTDA/u);
+  assert.match(mensagem, /cidade de prestação do serviço: Goiânia\./u);
+  assert.match(mensagem, /"Serviço prestado referente ao mês de JULHO\/2026"/u);
+  assert.match(mensagem, /emitir sua NF e enviar/u);
+});
+
+test("linha sem dado não sai pela metade", () => {
+  /* Um "CNPJ:" seguido de nada, ou um pedido para conferir a cidade sem dizer
+     qual, é pior que a ausência: quem recebe entende que o dado existe e que
+     alguém errou ao mandar. */
+  const semCidade = invoiceNoticeMessage({
+    prestador: "Alfa", amount: 6000, competence: "2026-07",
+    emitente: { ...emitente, cidade: "" },
+  });
+  assert.doesNotMatch(semCidade, /cidade de prestação/u);
+  assert.match(semCidade, /Razão Social/u, "o resto da mensagem continua inteiro");
+
+  const semNada = invoiceNoticeMessage({ prestador: "", amount: 6000, competence: "2026-07" });
+  assert.match(semNada, /^Bom dia, tudo bem\?/u, "sem nome, a saudação não fica com vírgula no vazio");
+  assert.doesNotMatch(semNada, /CNPJ:|Razão Social:|Dados para emissão/u);
+  assert.match(semNada, /R\$\s?6\.000,00/u, "o valor é o que nunca pode faltar");
 });
 
 test("o arquivo traz uma mensagem por prestador, separadas e na ordem da tela", () => {
@@ -81,23 +108,22 @@ test("o arquivo traz uma mensagem por prestador, separadas e na ordem da tela", 
     { prestador: "Alfa", nf_esperada: 6000 },
     { prestador: "Beta", nf_esperada: "4750.00" },
     { prestador: "Gama", nf_esperada: 0 },
-  ]);
-  const blocos = arquivo.split("\r\n\r\n");
+  ], emitente, "2026-07");
+  /* O separador é maior que a quebra interna de propósito: a mensagem tem
+     parágrafos agora, e um separador do mesmo tamanho deixaria de separar. */
+  const blocos = arquivo.split("\r\n\r\n\r\n");
   assert.equal(blocos.length, 2, "quem não tem valor a emitir não entra");
+  assert.match(blocos[0], /Bom dia, Alfa, tudo bem\?/u);
   assert.match(blocos[0], /6\.000,00/u);
+  assert.match(blocos[1], /Bom dia, Beta, tudo bem\?/u);
   assert.match(blocos[1], /4\.750,00/u);
-  // Quebra de linha do Windows: o arquivo é aberto no Bloco de Notas na maior
-  // parte das vezes, e com "\n" sozinho ele mostra tudo numa linha só.
   assert.ok(arquivo.includes("\r\n"), "sem CRLF o Bloco de Notas junta tudo");
   assert.equal(buildInvoiceNoticeFile([]), "");
 
   // A emitente é uma só para o arquivo inteiro: ela é quem recebe a nota de
   // todo mundo, não um recorte da lista.
-  const comEmpresa = buildInvoiceNoticeFile([
-    { prestador: "Alfa", nf_esperada: 6000 },
-    { prestador: "Beta", nf_esperada: 4750 },
-  ], "Vinculato Serviços");
-  assert.equal(comEmpresa.split("Vinculato Serviços").length - 1, 2, "a emitente vale para todas as mensagens");
+  assert.equal(arquivo.split("ULTRA TELECOMUNICAÇÕES LTDA").length - 1, 2,
+    "a emitente vale para todas as mensagens");
 });
 
 test("a empresa do aviso é emitente, e por isso não entra no WHERE", async () => {
