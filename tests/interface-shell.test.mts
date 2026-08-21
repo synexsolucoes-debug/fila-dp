@@ -322,6 +322,26 @@ test("recuo, intervalo e largura são medida única, não escolha de cada módul
   assert.match(css, /grid-template-columns: var\(--layout-sidebar-collapsed\)/u);
 });
 
+test("a barra recolhida troca a marca e remove adornos que não cabem", async () => {
+  const [workspace, css] = await Promise.all([
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    lerCss("app/dashboard-modern.css"),
+  ]);
+
+  assert.match(workspace, /dashboard-brand-logo-full[^\n]*<VinculatoLogo[^>]*tone="light"/u,
+    "a assinatura horizontal precisa continuar disponível no cabeçalho móvel");
+  assert.match(workspace, /dashboard-brand-logo-mark[^\n]*<VinculatoLogo[^>]*compact/u,
+    "a barra recolhida precisa usar o símbolo oficial em vez de recortar o logotipo");
+  assert.match(css, /\.sidebar-collapsed \.dashboard-brand-logo-full\s*\{\s*display:\s*none;/u);
+  assert.match(css, /\.sidebar-collapsed \.dashboard-brand-logo-mark\s*\{\s*display:\s*inline-flex;/u);
+  assert.match(css, /\.sidebar-collapsed \.sidebar-shortcut-mark\s*\{\s*display:\s*none;/u,
+    "a marca secundaria vira um icone solto quando o rotulo do atalho desaparece");
+  assert.match(css, /\.sidebar-collapsed \.dashboard-sidebar nav\s*\{\s*scrollbar-width:\s*none;/u,
+    "o trilho de rolagem não pode consumir a largura da barra compacta");
+  assert.match(css, /\.sidebar-collapsed \.sidebar-account-actions\s*\{[^}]*flex-direction:\s*column;/u,
+    "as duas acoes da conta precisam caber sem cortar o botao de sair");
+});
+
 test("as durações têm nome por papel, e as curvas separam entrar de sair", async () => {
   // A §78 pede que a interface inteira fale a mesma língua de movimento. Nome
   // por papel é o que permite isso: quem escreve um menu suspenso novo pega
