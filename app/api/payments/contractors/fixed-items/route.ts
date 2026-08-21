@@ -31,7 +31,7 @@ export async function POST(request: Request) {
       const statements = [];
       for (const entry of entries) {
         const profile = await requireContractorProfile(d1, workspace.id, entry.providerId);
-        /* Sem porta por empresa: o prestador é do grupo (migração 0053). Quem
+        /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
        decide aqui é a capacidade. Onde há empresa em jogo — competência,
        apuração, nota — o acesso é conferido contra a empresa daquela
        operação, que é quem paga, e não contra o cadastro. */
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     if (!providerId) throw ApiError.badRequest("Selecione o prestador.", "CONTRACTOR_REQUIRED");
 
     const profile = await requireContractorProfile(d1, workspace.id, providerId);
-    /* Sem porta por empresa: o prestador é do grupo (migração 0053). Quem
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
        decide aqui é a capacidade. Onde há empresa em jogo — competência,
        apuração, nota — o acesso é conferido contra a empresa daquela
        operação, que é quem paga, e não contra o cadastro. */

@@ -206,6 +206,11 @@
   padding-inline: 8px;
 }
 
+.dashboard-brand-logo { display: inline-flex; }
+.dashboard-brand-logo-mark { display: none; }
+.sidebar-collapsed .dashboard-brand-logo-full { display: none; }
+.sidebar-collapsed .dashboard-brand-logo-mark { display: inline-flex; }
+
 .dashboard-sidebar nav {
   gap: 6px;
   margin-top: 38px;
@@ -287,6 +292,29 @@
   height: 17px;
   margin: 0;
   font-size: 8px;
+}
+
+/* A barra compacta continua rolavel por mouse, toque e teclado, mas o trilho
+   visivel rouba quase um quarto dos 76px e faz os icones parecerem fora do
+   centro. As marcas de favorito/recente tambem precisam sair: sem o rotulo que
+   explicava cada uma, elas viravam um segundo icone solto ao lado do destino. */
+.sidebar-collapsed .dashboard-sidebar nav {
+  scrollbar-width: none;
+}
+
+.sidebar-collapsed .dashboard-sidebar nav::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-shortcut-mark {
+  display: none;
+}
+
+/* Os dois comandos da conta somam mais que a largura util da coluna recolhida.
+   Empilha-los preserva as duas acoes sem cortar o botao de sair. */
+.sidebar-collapsed .sidebar-account-actions {
+  flex-direction: column;
+  gap: 2px;
 }
 
 .sidebar-workspace {
@@ -1075,6 +1103,13 @@
     display: inline;
     font-size: 17px;
   }
+
+  /* No celular a barra lateral vira cabeçalho. O estado salvo de recolhimento
+     não pode trocar a assinatura horizontal pelo símbolo nesse outro layout. */
+  .dashboard-brand-logo-full,
+  .sidebar-collapsed .dashboard-brand-logo-full { display: inline-flex; }
+  .dashboard-brand-logo-mark,
+  .sidebar-collapsed .dashboard-brand-logo-mark { display: none; }
 
   .dashboard-sidebar nav {
     position: fixed;
@@ -3894,8 +3929,10 @@
 .payroll-toolbar > div > span, .payroll-entry-panel header span { color: var(--ui-primary); font-size: 9px; font-weight: 850; letter-spacing: .1em; }
 .payroll-toolbar h2, .payroll-entry-panel h2 { margin: 5px 0 0; color: var(--ui-text); font-size: 19px; letter-spacing: -.04em; }
 .payroll-toolbar p, .payroll-entry-panel header p { margin: 5px 0 0; color: var(--ui-text-soft); font-size: 10px; line-height: 1.45; }
-.payroll-toolbar > label { min-width: 128px; display: grid; gap: 5px; color: var(--ui-text-soft); font-size: 8px; font-weight: 850; }
+.payroll-toolbar > label, .payroll-toolbar-actions > label { min-width: 128px; display: grid; gap: 5px; color: var(--ui-text-soft); font-size: 8px; font-weight: 850; }
 .payroll-toolbar select { min-height: 37px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text); font: 750 10px inherit; }
+.payroll-toolbar-actions { display: flex; align-items: flex-end; gap: 9px; }
+.payroll-toolbar-actions .secondary-button { min-height: 37px; white-space: nowrap; }
 .payroll-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .payroll-kpi-grid article { min-height: 122px; padding: 15px; position: relative; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 .payroll-kpi-grid article > svg { width: 18px; height: 18px; margin-bottom: 12px; color: var(--ui-primary); }
@@ -3928,9 +3965,46 @@
 .payroll-entry-panel .primary-button { width: max-content; min-height: 39px; }
 .payroll-entry-panel .primary-button svg { width: 15px; height: 15px; }
 
+.payroll-import-overlay { position: fixed; z-index: 140; inset: 0; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(3, 14, 29, .62); animation: modal-backdrop-in .16s ease both; }
+.payroll-import-dialog { display: flex; flex-direction: column; width: min(900px, 100%); max-height: min(780px, 100%); overflow: hidden; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-surface); box-shadow: var(--ui-shadow-modal); animation: modal-content-in .2s ease both; }
+.payroll-import-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid var(--ui-border); }
+.payroll-import-dialog > header span { color: var(--ui-accent-text); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
+.payroll-import-dialog > header h2 { margin: 5px 0; color: var(--ui-text); font-size: 19px; letter-spacing: -.035em; }
+.payroll-import-dialog > header p { margin: 0; color: var(--ui-text-soft); font-size: 10px; line-height: 1.45; }
+.payroll-import-dialog > header button { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
+.payroll-import-dialog > footer { display: flex; align-items: center; gap: 9px; padding: 12px 18px; border-top: 1px solid var(--ui-border); background: var(--ui-surface-muted); }
+.payroll-import-dialog > footer > span { flex: 1; color: var(--ui-text-soft); font-size: 8px; }
+.payroll-import-setup { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(300px, 1.3fr) auto; align-items: end; gap: 11px; padding: 17px 22px; border-bottom: 1px solid var(--ui-border); }
+.payroll-import-setup > label { display: grid; gap: 5px; min-width: 0; color: var(--ui-text-soft); font-size: 9px; font-weight: 800; }
+.payroll-import-setup select { width: 100%; min-height: 40px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text); font-size: 10px; }
+.payroll-file-picker { position: relative; }
+.payroll-file-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.payroll-file-picker > div { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 6px 10px; border: 1px dashed color-mix(in srgb, var(--ui-accent) 52%, var(--ui-border)); border-radius: 9px; background: var(--ui-accent-soft); color: var(--ui-accent-text); cursor: pointer; }
+.payroll-file-picker > div > span { display: grid; flex: 1; min-width: 0; }
+.payroll-file-picker strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.payroll-file-picker small { color: var(--ui-text-soft); font-size: 8px; }
+.payroll-import-error { grid-column: 1 / -1; margin: 0; padding: 9px 11px; border-radius: 8px; background: color-mix(in srgb, var(--ui-danger) 10%, var(--ui-surface)); color: var(--ui-danger); font-size: 9px; }
+.payroll-import-preview { flex: 1; min-height: 0; padding: 18px 22px 22px; overflow-y: auto; }
+.payroll-import-identification { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 13px; border: 1px solid color-mix(in srgb, var(--ui-accent) 30%, var(--ui-border)); border-radius: 11px; background: var(--ui-accent-soft); }
+.payroll-import-identification > svg { color: var(--ui-accent-text); }
+.payroll-import-identification > div { display: grid; gap: 3px; }
+.payroll-import-identification strong { color: var(--ui-text); font-size: 10px; }
+.payroll-import-identification span { color: var(--ui-text-soft); font-size: 8px; }
+.payroll-import-identification b { padding: 5px 7px; border-radius: 7px; background: var(--ui-surface); color: var(--ui-accent-text); font-size: 8px; }
+.payroll-import-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 12px; }
+.payroll-import-kpis article { display: grid; gap: 5px; min-height: 104px; padding: 13px; border: 1px solid var(--ui-border); border-radius: 11px; background: var(--ui-surface); }
+.payroll-import-kpis span { color: var(--ui-text-soft); font-size: 8px; font-weight: 750; }
+.payroll-import-kpis strong { color: var(--ui-text); font-size: 15px; letter-spacing: -.035em; }
+.payroll-import-kpis small { align-self: end; color: var(--ui-text-soft); font-size: 7px; line-height: 1.45; }
+.payroll-import-notice { display: grid; gap: 4px; margin-top: 12px; padding: 12px 13px; border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface-muted); }
+.payroll-import-notice strong { color: var(--ui-text); font-size: 9px; }
+.payroll-import-notice span, .payroll-import-notice small { color: var(--ui-text-soft); font-size: 8px; line-height: 1.45; }
+.payroll-import-notice small::before { content: "• "; color: var(--ui-accent-text); }
+
 @media (max-width: 1050px) {
   .payroll-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .payroll-entry-panel form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .payroll-import-kpis { grid-template-columns: repeat(2, 1fr); }
   .company-settings-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .company-settings-list > article { grid-template-columns: 28px minmax(160px, 1fr) minmax(88px, .45fr) auto; }
   .company-settings-list > article > span:nth-of-type(2) { display: none; }
@@ -3942,16 +4016,29 @@
   .company-settings-access { grid-template-columns: 1fr; }
   .company-settings-access .secondary-button { justify-self: start; }
   .company-settings-catalog > header, .payroll-toolbar, .payroll-entry-panel > header { align-items: flex-start; flex-direction: column; }
+  .payroll-toolbar-actions { align-items: stretch; width: 100%; }
+  .payroll-toolbar-actions > label { flex: 1; }
   .company-settings-form, .payroll-entry-panel form { grid-template-columns: 1fr 1fr; }
   .company-settings-list > article { grid-template-columns: 26px minmax(0, 1fr) auto; }
   .company-settings-list > article > span { display: none; }
   .payroll-layout { grid-template-columns: 1fr; }
+  .payroll-import-setup { grid-template-columns: 1fr; padding-inline: 16px; }
+  .payroll-import-preview { padding-inline: 16px; }
 }
 
 @media (max-width: 470px) {
   .payroll-kpi-grid, .company-settings-form, .payroll-entry-panel form { grid-template-columns: 1fr; }
   .payroll-company-breakdown > article { grid-template-columns: minmax(0, 1fr) auto; }
   .payroll-company-breakdown > article > b { display: none; }
+  .payroll-toolbar-actions { flex-direction: column; }
+  .payroll-import-overlay { padding: 0; }
+  .payroll-import-dialog { width: 100%; max-height: 100%; border: 0; border-radius: 0; }
+  .payroll-import-identification { grid-template-columns: auto minmax(0, 1fr); }
+  .payroll-import-identification > b { grid-column: 2; justify-self: start; }
+  .payroll-import-kpis { grid-template-columns: 1fr; }
+  .payroll-import-dialog > footer { align-items: stretch; flex-wrap: wrap; }
+  .payroll-import-dialog > footer > span { flex-basis: 100%; }
+  .payroll-import-dialog > footer button { flex: 1; }
 }
 
 /* Lançamento completo da folha: os totais são derivados de valores já apurados no ERP/folha. */
@@ -4247,6 +4334,7 @@
 
 /* Rótulos de apoio da folha ficavam abaixo de 4.5:1 sobre o painel da tela. */
 .payroll-toolbar > label,
+.payroll-toolbar-actions > label,
 .payroll-live-totals > span { color: var(--ui-text-strong-soft, var(--ui-text-soft)); }
 .dashboard-shell { --ui-text-strong-soft: #4d5a6b; }
 .dashboard-shell.theme-dark { --ui-text-strong-soft: #b6c3d1; }
@@ -4263,7 +4351,9 @@
 
 /* O rótulo da competência ficava em 4.08:1 sobre o painel da folha. */
 .payroll-toolbar > label,
-.payroll-toolbar > label > span { color: var(--ui-text-strong-soft); }
+.payroll-toolbar > label > span,
+.payroll-toolbar-actions > label,
+.payroll-toolbar-actions > label > span { color: var(--ui-text-strong-soft); }
 
 /* `--ui-primary` no escuro é o azul vivo, ótimo como preenchimento e fraco
    como texto sobre o painel translúcido da folha (4.08:1). O token de texto

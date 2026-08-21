@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Archive, BookOpenCheck, CheckCircle2, Clock3, FilePenLine, FolderArchive, History,
-  LayoutTemplate, Plus, Search, Settings2, ShieldCheck, SlidersHorizontal, UserRound, Workflow, X,
+  Archive, BookOpenCheck, Building2, CheckCircle2, Clock3, FilePenLine, FolderArchive, History,
+  LayoutTemplate, Pencil, Play, Plus, RotateCcw, Search, Settings2, ShieldCheck, SlidersHorizontal,
+  UserRound, Workflow, X,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { processTemplates, templateShape } from "@/lib/process-templates";
@@ -14,7 +15,7 @@ import {
 import { ProcessModeler } from "./ProcessModeler";
 import { processRequest, processStatusLabel, processVersionLabel } from "./processes.api";
 import type {
-  ProcessCatalogPayload, ProcessDefinition, ProcessOptions, ProcessSection,
+  ProcessCatalogPayload, ProcessDefinition, ProcessOptions, ProcessPermissions, ProcessSection,
   ProcessStepConfig, ProcessVersionDetail, ProcessVersionSummary,
 } from "./processes.types";
 import styles from "./processes.module.css";
@@ -102,6 +103,7 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
   const [templateKey, setTemplateKey] = useState("");
   const [corporate, setCorporate] = useState(true);
   const [archiveTarget, setArchiveTarget] = useState<ProcessDefinition | null>(null);
+  const [detailTarget, setDetailTarget] = useState<ProcessDefinition | null>(null);
 
   const [version, setVersion] = useState<ProcessVersionDetail | null>(null);
   const [steps, setSteps] = useState<ProcessStepConfig[]>([]);
@@ -165,6 +167,13 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
       return true;
     });
   }, [area, category, company, currentUserId, owner, processes, query, section, status]);
+
+  const maturity = useMemo(() => ({
+    drafts: processes.filter((item) => item.lifecycleStatus !== "archived" && item.currentVersion?.status === "draft").length,
+    review: processes.filter((item) => item.lifecycleStatus !== "archived" && item.currentVersion?.status === "in_review").length,
+    published: processes.filter((item) => item.lifecycleStatus === "published").length,
+    archived: processes.filter((item) => item.lifecycleStatus === "archived").length,
+  }), [processes]);
 
   const save = useCallback(async () => {
     if (!version || version.status !== "draft" || serial <= savedSerial) return true;
@@ -313,10 +322,28 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
         body: JSON.stringify({ ...process, companyIds: process.companies.map((item) => item.id), lifecycleStatus: "archived" }),
       });
       setArchiveTarget(null);
+      setDetailTarget(null);
       await load();
       setToast("Processo arquivado.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Erro ao arquivar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restoreProcess(process: ProcessDefinition) {
+    setBusy(true);
+    try {
+      await processRequest(`/api/processes/${process.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...process, active: true, companyIds: process.companies.map((item) => item.id), lifecycleStatus: "restore" }),
+      });
+      setDetailTarget(null);
+      await load();
+      setToast("Processo restaurado para a biblioteca.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao restaurar processo.");
     } finally {
       setBusy(false);
     }
@@ -386,6 +413,21 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
             <small>Perfil atual: {role}</small>
           </div>
         ) : <>
+          <section className={styles.maturityStrip} aria-label="Maturidade operacional da biblioteca">
+            <button type="button" onClick={() => setSection("drafts")} data-tone="draft">
+              <span>Rascunhos</span><strong>{maturity.drafts}</strong><small>Aguardando desenho ou ajuste</small>
+            </button>
+            <button type="button" onClick={() => setSection("review")} data-tone="review">
+              <span>Em revisão</span><strong>{maturity.review}</strong><small>Prontos para decisão</small>
+            </button>
+            <button type="button" onClick={() => setSection("published")} data-tone="published">
+              <span>Publicados</span><strong>{maturity.published}</strong><small>Referências vigentes</small>
+            </button>
+            <button type="button" onClick={() => setSection("archived")} data-tone="archived">
+              <span>Arquivados</span><strong>{maturity.archived}</strong><small>Histórico preservado</small>
+            </button>
+          </section>
+
           <div className={styles.filterBar}>
             <label className={styles.searchField}>
               <Search aria-hidden="true" />
@@ -430,7 +472,7 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
                     <td>{process.stepCount}</td>
                     <td>{formatMoment(process.updatedAt)}</td>
                     <td><div className={styles.rowActions}>
-                      {process.currentVersionId && <button type="button" onClick={() => void openVersion(process.currentVersionId)}>Abrir</button>}
+                      <button type="button" onClick={() => setDetailTarget(process)}>Abrir</button>
                       {permissions.manage && process.lifecycleStatus !== "archived" && <button type="button" onClick={() => { setTemplateKey(""); setDialog(process); setCorporate(process.isCorporate); }}>Editar</button>}
                       {permissions.manage && process.lifecycleStatus === "published" && <button type="button" onClick={() => void createVersion(process)}>Nova versão</button>}
                       {permissions.manage && process.lifecycleStatus !== "archived" && <button type="button" className={styles.dangerText} onClick={() => setArchiveTarget(process)}><Archive aria-hidden="true" />Arquivar</button>}
@@ -451,7 +493,7 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
       </div>
     </div>
 
-    <AnimatedDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)} label="Filtros avançados de processos">
+    <AnimatedDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)} label="Filtros avançados de processos" className={styles.processPortal}>
       <div className={styles.filterDrawer}>
         <header>
           <strong>Filtros avançados</strong>
@@ -479,7 +521,7 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
       </div>
     </AnimatedDrawer>
 
-    <AnimatedModal open={galleryOpen} onClose={() => setGalleryOpen(false)} label="Modelagens iniciais" width={820}>
+    <AnimatedModal open={galleryOpen} onClose={() => setGalleryOpen(false)} label="Modelagens iniciais" width={820} className={styles.processPortal}>
       <div className={styles.dialogHeader}>
         <h3>Como este processo começa</h3>
         <button type="button" onClick={() => setGalleryOpen(false)}>Fechar</button>
@@ -515,9 +557,20 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
     </AnimatedModal>
 
     <AnimatedModal open={dialog !== undefined} onClose={() => setDialog(undefined)}
-      label={dialog ? "Editar processo" : "Novo processo"} width={880}>
+      label={dialog ? "Editar processo" : "Novo processo"} width={920} className={styles.processPortal}>
       <ProcessDialog process={dialog ?? null} options={options} corporate={corporate} setCorporate={setCorporate}
         close={() => setDialog(undefined)} submit={submit} busy={busy} template={selectedTemplate} />
+    </AnimatedModal>
+
+    <AnimatedModal open={detailTarget !== null} onClose={() => setDetailTarget(null)}
+      label={`Ficha operacional de ${detailTarget?.name ?? "processo"}`} width={900} className={styles.processPortal}>
+      {detailTarget && <ProcessDetail process={detailTarget} permissions={permissions} busy={busy}
+        close={() => setDetailTarget(null)}
+        openModeler={() => { setDetailTarget(null); if (detailTarget.currentVersionId) void openVersion(detailTarget.currentVersionId); }}
+        edit={() => { setTemplateKey(""); setDialog(detailTarget); setCorporate(detailTarget.isCorporate); setDetailTarget(null); }}
+        createVersion={() => { setDetailTarget(null); void createVersion(detailTarget); }}
+        archive={() => { setArchiveTarget(detailTarget); setDetailTarget(null); }}
+        restore={() => void restoreProcess(detailTarget)} />}
     </AnimatedModal>
 
     {/* A confirmação vem do componente compartilhado (§53): ele exige a
@@ -532,6 +585,95 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
       onCancel={() => setArchiveTarget(null)}
       onConfirm={() => archiveTarget && void archiveProcess(archiveTarget)}
     />
+  </div>;
+}
+
+const criticalityLabel: Record<ProcessDefinition["criticality"], string> = { low: "Baixa", medium: "Média", high: "Alta", critical: "Crítica" };
+const priorityLabel: Record<ProcessDefinition["defaultPriority"], string> = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
+const slaUnitLabel: Record<ProcessDefinition["globalSlaUnit"], string> = { minutes: "minutos", hours: "horas", days: "dias" };
+
+function ProcessDetail({ process, permissions, busy, close, openModeler, edit, createVersion, archive, restore }: {
+  process: ProcessDefinition;
+  permissions: ProcessPermissions;
+  busy: boolean;
+  close: () => void;
+  openModeler: () => void;
+  edit: () => void;
+  createVersion: () => void;
+  archive: () => void;
+  restore: () => void;
+}) {
+  const archived = process.lifecycleStatus === "archived";
+  return <div className={styles.detailSheet}>
+    <header className={styles.detailHeader}>
+      <div>
+        <span className={styles.eyebrow}>FICHA OPERACIONAL · {process.code}</span>
+        <h3>{process.name}</h3>
+        <div className={styles.detailStatus}>
+          <StatusPill status={process.lifecycleStatus} label={processStatusLabel[process.lifecycleStatus]} />
+          <span>{process.category || "Sem categoria"}</span>
+          <span>Atualizado {formatMoment(process.updatedAt)}</span>
+        </div>
+      </div>
+      <button type="button" className={styles.secondaryButton} onClick={close}>Fechar</button>
+    </header>
+
+    <section className={styles.detailPurpose}>
+      <span>Propósito</span>
+      <p>{process.objective || process.description || "Este processo ainda não possui objetivo documentado."}</p>
+      {process.description && process.description !== process.objective ? <small>{process.description}</small> : null}
+    </section>
+
+    <div className={styles.detailGrid}>
+      <section>
+        <header><Building2 aria-hidden="true" /><strong>Governança e escopo</strong></header>
+        <dl>
+          <div><dt>Área dona</dt><dd>{process.ownerDepartmentName || "Não definida"}</dd></div>
+          <div><dt>Responsável</dt><dd>{process.ownerUserName || "Não definido"}</dd></div>
+          <div><dt>Empresas</dt><dd>{process.isCorporate ? "Todas — processo corporativo" : process.companies.map((item) => item.name).join(", ") || "Nenhuma selecionada"}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <header><Play aria-hidden="true" /><strong>Início e publicação</strong></header>
+        <dl>
+          <div><dt>Abertura</dt><dd>{[process.allowManualStart && "Manual", process.allowAutomaticStart && "Automática"].filter(Boolean).join(" + ") || "Sem regra de início"}</dd></div>
+          <div><dt>Publicação</dt><dd>{process.requirePublicationApproval ? "Exige revisão" : "Publicação direta permitida"}</dd></div>
+          <div><dt>Disponibilidade</dt><dd>{process.active ? "Ativo" : "Inativo"}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <header><Clock3 aria-hidden="true" /><strong>Nível de serviço</strong></header>
+        <dl>
+          <div><dt>SLA global</dt><dd>{process.globalSlaValue ? `${process.globalSlaValue} ${slaUnitLabel[process.globalSlaUnit]}` : "Não definido"}</dd></div>
+          <div><dt>Prioridade</dt><dd>{priorityLabel[process.defaultPriority]}</dd></div>
+          <div><dt>Criticidade</dt><dd>{criticalityLabel[process.criticality]}</dd></div>
+        </dl>
+      </section>
+      <section>
+        <header><Workflow aria-hidden="true" /><strong>Modelagem vigente</strong></header>
+        <dl>
+          <div><dt>Versão atual</dt><dd>{process.currentVersion ? processVersionLabel(process.currentVersion.versionMajor, process.currentVersion.versionMinor) : "Sem versão"}</dd></div>
+          <div><dt>Estado da versão</dt><dd>{process.currentVersion ? processStatusLabel[process.currentVersion.status] : "Não iniciada"}</dd></div>
+          <div><dt>Etapas configuradas</dt><dd>{process.stepCount}</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    {(process.tags.length > 0 || process.notes) && <section className={styles.detailNotes}>
+      {process.tags.length > 0 && <div><strong>Etiquetas</strong><span>{process.tags.map((tag) => <b key={tag}>{tag}</b>)}</span></div>}
+      {process.notes && <div><strong>Observações</strong><p>{process.notes}</p></div>}
+    </section>}
+
+    <footer className={styles.detailActions}>
+      <div>{archived ? "Processo arquivado — versões e histórico foram preservados." : "Escolha a próxima ação sem perder o contexto da ficha."}</div>
+      <span>
+        {permissions.manage && archived && <button type="button" className={styles.secondaryButton} onClick={restore} disabled={busy}><RotateCcw aria-hidden="true" />Restaurar</button>}
+        {permissions.manage && !archived && <button type="button" className={styles.secondaryButton} onClick={edit}><Pencil aria-hidden="true" />Editar cadastro</button>}
+        {permissions.manage && process.lifecycleStatus === "published" && <button type="button" className={styles.secondaryButton} onClick={createVersion} disabled={busy}><Plus aria-hidden="true" />Nova versão</button>}
+        {permissions.manage && !archived && <button type="button" className={styles.secondaryButton} onClick={archive}><Archive aria-hidden="true" />Arquivar</button>}
+        {process.currentVersionId && <button type="button" className={styles.primaryButton} onClick={openModeler}><Workflow aria-hidden="true" />Abrir modelador</button>}
+      </span>
+    </footer>
   </div>;
 }
 
@@ -583,55 +725,83 @@ function ProcessDialog({ process, options, corporate, setCorporate, close, submi
       <button type="button" onClick={close}>Fechar</button>
     </div>
     <form className={styles.processForm} onSubmit={submit}>
-      <div className={styles.formGrid}>
-        <label>Nome<input name="name" required defaultValue={seed?.name ?? ""} /></label>
-        <label>Código<input name="code" required disabled={!!process} defaultValue={seed?.code ?? ""} /></label>
-        <label className={styles.wideField}>Descrição<textarea name="description" rows={2} defaultValue={seed?.description ?? ""} /></label>
-        <label className={styles.wideField}>Objetivo<textarea name="objective" rows={2} defaultValue={seed?.objective ?? ""} /></label>
-        <label>Categoria<input name="category" defaultValue={seed?.category ?? "general"} /></label>
-        <label>Área
-          <select name="ownerDepartmentId" defaultValue={process?.ownerDepartmentId ?? ""}>
-            <option value="">Não definida</option>
-            {options.areas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <label>Responsável
-          <select name="ownerUserId" defaultValue={process?.ownerUserId ?? options.currentUserId}>
-            <option value="">Não definido</option>
-            {options.members.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <label>Etiquetas<input name="tags" defaultValue={(process?.tags ?? template?.tags ?? []).join(", ")} /></label>
-        <label>SLA<input type="number" name="globalSlaValue" min={0} defaultValue={process?.globalSlaValue ?? 0} /></label>
-        <label>Unidade
-          <select name="globalSlaUnit" defaultValue={process?.globalSlaUnit ?? "hours"}>
-            <option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Dias</option>
-          </select>
-        </label>
-        <label>Criticidade
-          <select name="criticality" defaultValue={process?.criticality ?? "medium"}>
-            <option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="critical">Crítica</option>
-          </select>
-        </label>
-        <label>Prioridade
-          <select name="defaultPriority" defaultValue={process?.defaultPriority ?? "normal"}>
-            <option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option>
-          </select>
-        </label>
-        <label className={styles.wideField}>Observações<textarea name="notes" rows={2} defaultValue={process?.notes ?? ""} /></label>
-      </div>
-      <div className={styles.toggleGrid}>
-        <label><input type="checkbox" name="active" defaultChecked={process?.active ?? true} />Ativo</label>
-        <label><input type="checkbox" checked={corporate} onChange={(event) => setCorporate(event.target.checked)} />Corporativo</label>
-        <label><input type="checkbox" name="allowManualStart" defaultChecked={process?.allowManualStart ?? true} />Abertura manual</label>
-        <label><input type="checkbox" name="allowAutomaticStart" defaultChecked={process?.allowAutomaticStart ?? false} />Criação automática</label>
-        <label><input type="checkbox" name="requirePublicationApproval" defaultChecked={process?.requirePublicationApproval ?? false} />Exigir revisão</label>
-      </div>
-      {!corporate && <div className={styles.companyPicker}>
-        {options.companies.map((item) => <label key={item.id}>
-          <input type="checkbox" name="companyIds" value={item.id} defaultChecked={process?.companies.some((entry) => entry.id === item.id)} />{item.name}
-        </label>)}
-      </div>}
+      <fieldset className={styles.formSection}>
+        <legend><span>01</span><strong>Identificação</strong><small>O que este processo representa na organização.</small></legend>
+        <div className={styles.formGrid}>
+          <label>Nome<input name="name" required autoFocus defaultValue={seed?.name ?? ""} placeholder="Ex.: Aprovação de pagamento PJ" /></label>
+          <label>Código<input name="code" required disabled={!!process} defaultValue={seed?.code ?? ""} placeholder="PAGAMENTO_PJ" /></label>
+          <label className={styles.wideField}>Descrição<textarea name="description" rows={2} defaultValue={seed?.description ?? ""} placeholder="Explique quando e para que o processo é usado." /></label>
+          <label className={styles.wideField}>Objetivo<textarea name="objective" rows={2} defaultValue={seed?.objective ?? ""} placeholder="Descreva o resultado esperado ao final do fluxo." /></label>
+          <label>Categoria<input name="category" defaultValue={seed?.category ?? "general"} placeholder="Ex.: pagamentos" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset className={styles.formSection}>
+        <legend><span>02</span><strong>Escopo e responsáveis</strong><small>Quem governa e onde a definição se aplica.</small></legend>
+        <div className={styles.formGrid}>
+          <label>Área responsável
+            <select name="ownerDepartmentId" defaultValue={process?.ownerDepartmentId ?? ""}>
+              <option value="">Não definida</option>
+              {options.areas.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+          <label>Dono do processo
+            <select name="ownerUserId" defaultValue={process?.ownerUserId ?? options.currentUserId}>
+              <option value="">Não definido</option>
+              {options.members.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className={styles.toggleGrid}>
+          <label><input type="checkbox" name="active" defaultChecked={process?.active ?? true} />Processo ativo</label>
+          <label><input type="checkbox" checked={corporate} onChange={(event) => setCorporate(event.target.checked)} />Aplicação corporativa</label>
+        </div>
+        {!corporate && <div className={styles.companyPicker}>
+          <strong>Empresas incluídas</strong>
+          {options.companies.map((item) => <label key={item.id}>
+            <input type="checkbox" name="companyIds" value={item.id} defaultChecked={process?.companies.some((entry) => entry.id === item.id)} />{item.name}
+          </label>)}
+        </div>}
+      </fieldset>
+
+      <fieldset className={styles.formSection}>
+        <legend><span>03</span><strong>Início e publicação</strong><small>Como o processo nasce e qual controle antecede sua vigência.</small></legend>
+        <div className={styles.toggleGrid}>
+          <label><input type="checkbox" name="allowManualStart" defaultChecked={process?.allowManualStart ?? true} />Permitir abertura manual</label>
+          <label><input type="checkbox" name="allowAutomaticStart" defaultChecked={process?.allowAutomaticStart ?? false} />Permitir criação automática</label>
+          <label><input type="checkbox" name="requirePublicationApproval" defaultChecked={process?.requirePublicationApproval ?? false} />Exigir revisão para publicar</label>
+        </div>
+      </fieldset>
+
+      <fieldset className={styles.formSection}>
+        <legend><span>04</span><strong>SLA e prioridade</strong><small>Parâmetros padrão usados na leitura operacional do fluxo.</small></legend>
+        <div className={styles.formGrid}>
+          <label>SLA global<input type="number" name="globalSlaValue" min={0} defaultValue={process?.globalSlaValue ?? 0} /></label>
+          <label>Unidade
+            <select name="globalSlaUnit" defaultValue={process?.globalSlaUnit ?? "hours"}>
+              <option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Dias</option>
+            </select>
+          </label>
+          <label>Criticidade
+            <select name="criticality" defaultValue={process?.criticality ?? "medium"}>
+              <option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option><option value="critical">Crítica</option>
+            </select>
+          </label>
+          <label>Prioridade padrão
+            <select name="defaultPriority" defaultValue={process?.defaultPriority ?? "normal"}>
+              <option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className={styles.formSection}>
+        <legend><span>05</span><strong>Etiquetas e observações</strong><small>Contexto para busca, governança e manutenção futura.</small></legend>
+        <div className={styles.formGrid}>
+          <label className={styles.wideField}>Etiquetas<input name="tags" defaultValue={(process?.tags ?? template?.tags ?? []).join(", ")} placeholder="Separe por vírgula: pj, financeiro, mensal" /></label>
+          <label className={styles.wideField}>Observações<textarea name="notes" rows={3} defaultValue={process?.notes ?? ""} /></label>
+        </div>
+      </fieldset>
       <footer>
         <button type="button" onClick={close}>Cancelar</button>
         <button type="submit" className={styles.primaryButton} disabled={busy}>

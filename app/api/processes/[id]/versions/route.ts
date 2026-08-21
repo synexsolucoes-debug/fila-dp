@@ -4,14 +4,16 @@ import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { defaultBpmnXml } from "@/lib/process-management";
+import { requireProcessCompanyAccess } from "@/lib/process-access";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { id } = await params; const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user); requireNamedCapability(workspace, "processes.manage", "criar uma nova versão de processo");
-    const process = await d1.prepare("SELECT id,name,code,lifecycle_status FROM fdp_process_definitions WHERE workspace_id=? AND id=?").bind(workspace.id, id).first<{id:string;name:string;code:string;lifecycle_status:string}>();
+    const process = await d1.prepare("SELECT id,name,code,lifecycle_status,is_corporate FROM fdp_process_definitions WHERE workspace_id=? AND id=?").bind(workspace.id, id).first<{id:string;name:string;code:string;lifecycle_status:string;is_corporate:number}>();
     if (!process || process.lifecycle_status === "archived") throw ApiError.notFound("Processo ativo não encontrado.", "PROCESS_NOT_FOUND");
+    await requireProcessCompanyAccess(d1, workspace.id, user.id, workspace.role, id, Number(process.is_corporate) === 1);
     const latest = await d1.prepare("SELECT * FROM fdp_process_versions WHERE workspace_id=? AND definition_id=? ORDER BY version_major DESC,version_minor DESC,version DESC LIMIT 1").bind(workspace.id, id).first<Record<string, unknown>>();
     if (latest && ["draft", "in_review"].includes(String(latest.status))) throw new ApiError(409, "PROCESS_DRAFT_EXISTS", "Este processo já possui uma versão em rascunho ou revisão.");
     const sequential = Number(latest?.version ?? 0)+1; const bumpMajor = body.bump === "major"; const major = latest ? (bumpMajor ? Number(latest.version_major ?? 1)+1 : Number(latest.version_major ?? 1)) : 1; const minor = latest ? (bumpMajor ? 0 : Number(latest.version_minor ?? 0)+1) : 0;

@@ -1,8 +1,9 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
-  Archive, ArrowRight, CalendarClock, CreditCard, Download, FileSpreadsheet, FileText, MessageSquare, Plus,
-  ReceiptText, RotateCcw, ShieldCheck, Users,
+  Archive, ArrowRight, CalendarClock, CheckCheck, CreditCard, Download, FileDown, FileSpreadsheet, FileText,
+  FolderOpen, MessageSquare, Plus, ReceiptText, RotateCcw, ShieldCheck, Users,
 } from "lucide-react";
 import { CajuExportPanel } from "./CajuExportPanel";
 import type {
@@ -46,6 +47,9 @@ export type SectionProps = {
   onRecalculate: (providerId?: string) => void;
   onTransition: (closingId: string, status: string) => void;
   onCompetence: (competence: string) => void;
+  onIssueStatements: () => void;
+  onApproveClosings: (closingIds: string[]) => void;
+  onOpenDocuments: (providerId: string) => void;
   /** Abre a janela de lançamento com a natureza já escolhida (§55). */
   onNewEntry: (nature: "mensal" | "fixo" | "determinado") => void;
   /** Abre a escolha de empresa antes de gerar o arquivo de avisos de NF. */
@@ -141,7 +145,7 @@ function OverviewSection({ overview, money, statusLabels, competence, competence
 /* Prestadores                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function ProvidersSection({ overview, money, statusLabels, complementLabels, permissions, onDialog }: SectionProps) {
+function ProvidersSection({ overview, money, statusLabels, complementLabels, permissions, onDialog, onOpenDocuments }: SectionProps) {
   const { contractors } = overview;
   if (contractors.length === 0) {
     return (
@@ -164,7 +168,7 @@ function ProvidersSection({ overview, money, statusLabels, complementLabels, per
         <thead>
           <tr>
             <th scope="col">Prestador</th><th scope="col">Código</th><th scope="col">Valor de contrato</th>
-            <th scope="col">Limite próprio</th><th scope="col">Complemento</th><th scope="col">Situação</th>
+            <th scope="col">Limite próprio</th><th scope="col">Complemento</th><th scope="col">Situação</th><th scope="col">Arquivos</th>
           </tr>
         </thead>
         <tbody>
@@ -178,6 +182,7 @@ function ProvidersSection({ overview, money, statusLabels, complementLabels, per
               <td><span className={styles.badge} data-tone={item.status === "active" ? "validated" : "pending"}>
                 {statusLabels[item.status] ?? (item.status === "active" ? "Ativo" : "Inativo")}
               </span></td>
+              <td className={styles.rowActions}><button type="button" onClick={() => onOpenDocuments(item.id)}><FolderOpen aria-hidden="true" /> Documentos</button></td>
             </tr>
           ))}
         </tbody>
@@ -252,6 +257,7 @@ function ClosingsSection(props: SectionProps) {
   }
   return (
     <>
+      <ContractorApprovalPanel {...props} rows={rows} />
       <ClosingsTable {...props} rows={rows}
         caption={`Fechamento PJ de ${competenceLabel(competence)}`} showActions />
       {/* Conferir é perguntar de onde o número veio, e o número da tabela já
@@ -278,6 +284,72 @@ function ClosingsSection(props: SectionProps) {
         </button>
       </footer>
     </>
+  );
+}
+
+function ContractorApprovalPanel({ rows, permissions, busy, competence, competenceLabel, onIssueStatements, onApproveClosings }: SectionProps & { rows: ContractorClosing[] }) {
+  const pending = useMemo(() => rows.filter((row) => row.status === "review" || row.status === "approval"), [rows]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const selectedPending = useMemo(() => {
+    const available = new Set(pending.map((row) => row.id));
+    return new Set([...selected].filter((id) => available.has(id)));
+  }, [pending, selected]);
+  const allSelected = pending.length > 0 && pending.every((row) => selectedPending.has(row.id));
+
+  return (
+    <section className={styles.approvalPanel} aria-labelledby="contractor-approval-title">
+      <header>
+        <div>
+          <span className={styles.eyebrow}>CONFERÊNCIA E APROVAÇÃO</span>
+          <h3 id="contractor-approval-title">Aprovação da competência</h3>
+          <p>Emita o PDF para colocar pagamentos abertos em conferência. Depois aprove todos ou somente os selecionados.</p>
+        </div>
+        {permissions?.manage ? (
+          <button className={styles.secondaryButton} type="button" onClick={onIssueStatements} disabled={busy}>
+            <FileDown aria-hidden="true" /> Emitir extratos PDF
+          </button>
+        ) : null}
+      </header>
+
+      {pending.length === 0 ? (
+        <p className={styles.approvalEmpty}>Nenhum prestador aguardando aprovação em {competenceLabel(competence)}.</p>
+      ) : (
+        <>
+          <div className={styles.approvalToolbar}>
+            <label>
+              <input type="checkbox" checked={allSelected} onChange={(event) => setSelected(event.target.checked ? new Set(pending.map((row) => row.id)) : new Set())} />
+              Selecionar todos ({pending.length})
+            </label>
+            <span>{selectedPending.size} selecionado(s)</span>
+            {permissions?.manage ? (
+              <>
+                <button type="button" className={styles.secondaryButton} disabled={busy || selectedPending.size === 0}
+                  onClick={() => onApproveClosings([...selectedPending])}>
+                  <CheckCheck aria-hidden="true" /> Aprovar selecionados
+                </button>
+                <button type="button" className={styles.primaryButton} disabled={busy}
+                  onClick={() => onApproveClosings(pending.map((row) => row.id))}>
+                  <CheckCheck aria-hidden="true" /> Aprovar todos
+                </button>
+              </>
+            ) : null}
+          </div>
+          <div className={styles.approvalRows}>
+            {pending.map((row) => (
+              <label key={row.id}>
+                <input type="checkbox" checked={selectedPending.has(row.id)} onChange={(event) => setSelected((current) => {
+                  const next = new Set(current);
+                  if (event.target.checked) next.add(row.id); else next.delete(row.id);
+                  return next;
+                })} />
+                <span><strong>{row.contractorName}</strong><small>{row.contractReference || row.contractorCode}</small></span>
+                <b>{row.status === "review" ? "Em conferência" : "Em aprovação"}</b>
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -493,7 +565,7 @@ function CajuSection(props: SectionProps) {
 /* -------------------------------------------------------------------------- */
 
 function ArchiveSection(props: SectionProps) {
-  const { overview, competence, competenceLabel, reportUrl, permissions, busy, onDialog } = props;
+  const { overview, competence, competenceLabel, reportUrl, permissions, busy, onDialog, onOpenDocuments } = props;
   const rows = overview.closings.filter((row) => row.status === "paid" || row.status === "closed");
   return (
     <>
@@ -524,6 +596,7 @@ function ArchiveSection(props: SectionProps) {
                   <td><span className={styles.badge} data-tone={row.status}>{props.statusLabels[row.status] ?? row.status}</span></td>
                   <td>{row.closedAt ? row.closedAt.slice(0, 10) : "—"}</td>
                   <td className={styles.rowActions}>
+                    <button type="button" onClick={() => onOpenDocuments(row.providerId)}><FolderOpen aria-hidden="true" /> Documentos</button>
                     {permissions?.reopen && (
                       <button type="button" disabled={busy}
                         onClick={() => onDialog({ kind: "reopen", closingId: row.id, module: "contractors" })}>
@@ -564,7 +637,7 @@ function ArchiveSection(props: SectionProps) {
  */
 function ClosingsTable({
   rows, caption, showActions, money, statusLabels, limitSourceLabels, complementLabels,
-  permissions, busy, detailLoadingId, onDialog, onOpenDetail, onRecalculate, onTransition,
+  permissions, busy, detailLoadingId, onDialog, onOpenDetail, onRecalculate, onTransition, onOpenDocuments,
 }: SectionProps & { rows: ContractorClosing[]; caption: string; showActions?: boolean }) {
   return (
     <div className={styles.tableScroll}>
@@ -609,6 +682,7 @@ function ClosingsTable({
               <td><span className={styles.badge} data-tone={row.invoiceStatus}>{statusLabels[row.invoiceStatus] ?? row.invoiceStatus}</span></td>
               {showActions && (
                 <td className={styles.rowActions}>
+                  <button type="button" onClick={() => onOpenDocuments(row.providerId)} disabled={busy}><FolderOpen aria-hidden="true" /> Arquivos</button>
                   {permissions?.manage && row.status !== "closed" && row.status !== "paid" && (
                     <>
                       <button type="button" onClick={() => onDialog({ kind: "invoice", closing: row })} disabled={busy}>Nota</button>

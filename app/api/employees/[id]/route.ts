@@ -88,3 +88,36 @@ export async function PATCH(request: Request, context: RouteContext) {
     return Response.json({ employee: updated ? publicEmployee(updated) : null });
   } catch (error) { return apiError(error); }
 }
+
+export async function DELETE(request: Request, context: RouteContext) {
+  const auth = await getApiUser();
+  if (!auth.user) return auth.response;
+  try {
+    const { id } = await context.params;
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "employees.manage");
+    const employee = await getEmployee(d1, workspace.id, id);
+    if (!employee) throw ApiError.notFound("Colaborador não encontrado.", "EMPLOYEE_NOT_FOUND");
+    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(employee.company_id));
+    const usage = await d1.prepare(`SELECT
+      (SELECT COUNT(*) FROM fdp_employee_movements WHERE workspace_id = ? AND employee_id = ?) +
+      (SELECT COUNT(*) FROM fdp_psychology_sessions WHERE workspace_id = ? AND employee_id = ?) +
+      (SELECT COUNT(*) FROM fdp_time_sheets WHERE workspace_id = ? AND employee_id = ?) +
+      (SELECT COUNT(*) FROM fdp_epi_deliveries WHERE workspace_id = ? AND employee_id = ?) +
+      (SELECT COUNT(*) FROM fdp_epi_returns WHERE workspace_id = ? AND employee_id = ?) +
+      (SELECT COUNT(*) FROM fdp_epi_damages WHERE workspace_id = ? AND employee_id = ?) +
+      (SELECT COUNT(*) FROM fdp_epi_discount_requests WHERE workspace_id = ? AND employee_id = ?) +
+      (SELECT COUNT(*) FROM fdp_employees WHERE workspace_id = ? AND manager_employee_id = ?) AS total`)
+      .bind(workspace.id, id, workspace.id, id, workspace.id, id, workspace.id, id, workspace.id, id, workspace.id, id,
+        workspace.id, id, workspace.id, id)
+      .first<{ total: number }>();
+    if (Number(usage?.total ?? 0) > 0) throw new ApiError(409, "EMPLOYEE_HAS_HISTORY", "Este colaborador possui histórico operacional. Use Demitir para preservar EPIs, ponto e auditoria.");
+    await d1.batch([
+      prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "employee.deleted",
+        entityType: "employee", entityId: id, before: publicEmployee(employee), after: null,
+        requestId: request.headers.get("x-fila-dp-request-id") }),
+      d1.prepare("DELETE FROM fdp_employees WHERE workspace_id = ? AND id = ?").bind(workspace.id, id),
+    ]);
+    return Response.json({ deleted: true });
+  } catch (error) { return apiError(error); }
+}

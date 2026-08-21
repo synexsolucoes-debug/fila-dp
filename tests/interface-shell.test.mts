@@ -29,7 +29,7 @@ test("o shell não volta a ser contêiner de rolagem por overflow-x", async () =
 });
 
 test("no desktop o shell trava na viewport e quem rola é o conteúdo", async () => {
-  const css = await lerCss("app/dashboard-modern.css");
+  const css = (await lerCss("app/dashboard-modern.css")).replace(/\r\n/gu, "\n");
   const bloco = css.slice(css.indexOf("@media (min-width: 761px)"));
   assert.match(bloco, /\.dashboard-shell \{[^}]*height: 100dvh/u, "o shell precisa ter a altura da janela");
   assert.match(bloco, /\.dashboard-shell \{[^}]*overflow: hidden/u, "o recorte fica no shell");
@@ -220,7 +220,7 @@ test("as duas escalas têm quatro degraus de superfície, e nenhum é branco pur
      mas qualquer regra futura que escape da sobrescrita resolve contra ela. Um
      `#ffffff` de volta ali é uma superfície branca esperando a primeira regra
      distraída — e a §5 existe justamente para isso não acontecer. */
-  const css = await lerCss("app/dashboard-modern.css");
+  const css = (await lerCss("app/dashboard-modern.css")).replaceAll("\r\n", "\n");
   const bloco = (seletor: string) => {
     const inicio = css.indexOf(seletor);
     return css.slice(inicio, css.indexOf("\n}", inicio));
@@ -320,6 +320,26 @@ test("recuo, intervalo e largura são medida única, não escolha de cada módul
   // E a casca consome os seus, em vez de repetir o número.
   assert.match(css, /grid-template-columns: var\(--layout-sidebar-width\)/u);
   assert.match(css, /grid-template-columns: var\(--layout-sidebar-collapsed\)/u);
+});
+
+test("a barra recolhida troca a marca e remove adornos que não cabem", async () => {
+  const [workspace, css] = await Promise.all([
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    lerCss("app/dashboard-modern.css"),
+  ]);
+
+  assert.match(workspace, /dashboard-brand-logo-full[^\n]*<VinculatoLogo[^>]*tone="light"/u,
+    "a assinatura horizontal precisa continuar disponível no cabeçalho móvel");
+  assert.match(workspace, /dashboard-brand-logo-mark[^\n]*<VinculatoLogo[^>]*compact/u,
+    "a barra recolhida precisa usar o símbolo oficial em vez de recortar o logotipo");
+  assert.match(css, /\.sidebar-collapsed \.dashboard-brand-logo-full\s*\{\s*display:\s*none;/u);
+  assert.match(css, /\.sidebar-collapsed \.dashboard-brand-logo-mark\s*\{\s*display:\s*inline-flex;/u);
+  assert.match(css, /\.sidebar-collapsed \.sidebar-shortcut-mark\s*\{\s*display:\s*none;/u,
+    "a marca secundaria vira um icone solto quando o rotulo do atalho desaparece");
+  assert.match(css, /\.sidebar-collapsed \.dashboard-sidebar nav\s*\{\s*scrollbar-width:\s*none;/u,
+    "o trilho de rolagem não pode consumir a largura da barra compacta");
+  assert.match(css, /\.sidebar-collapsed \.sidebar-account-actions\s*\{[^}]*flex-direction:\s*column;/u,
+    "as duas acoes da conta precisam caber sem cortar o botao de sair");
 });
 
 test("as durações têm nome por papel, e as curvas separam entrar de sair", async () => {

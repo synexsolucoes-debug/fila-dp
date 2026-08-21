@@ -24,7 +24,7 @@ export async function POST(request: Request, { params }: Params) {
     requireCapability(workspace, "contractors.manage");
 
     const profile = await requireContractorProfile(d1, workspace.id, id);
-    /* Sem porta por empresa: o prestador é do grupo (migração 0053). Quem
+    /* Sem porta por empresa: o prestador é do grupo (migração 0054). Quem
        decide aqui é a capacidade. Onde há empresa em jogo — competência,
        apuração, nota — o acesso é conferido contra a empresa daquela
        operação, que é quem paga, e não contra o cadastro. */

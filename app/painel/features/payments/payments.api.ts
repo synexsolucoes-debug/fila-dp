@@ -15,10 +15,13 @@ const nullableNumber = (input: unknown) => (input === null || input === undefine
 const bool = (input: unknown) => input === true || input === "true";
 
 export async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  if (!isForm && init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(url, {
     ...init,
     cache: "no-store",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers,
   });
   const payload = await response.json().catch(() => ({})) as T & { error?: string; message?: string };
   if (!response.ok) throw new Error(payload.message || payload.error || "Não foi possível concluir a operação.");

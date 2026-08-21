@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "contractors.manage");
 
-    /* A empresa virou opcional: o prestador é do grupo (migração 0053), e
+    /* A empresa virou opcional: o prestador é do grupo (migração 0054), e
        obrigá-la aqui faria inventar uma resposta para quem atende várias.
        Quando vem, continua sendo conferida — sugerir uma empresa que a pessoa
        não pode ver seria vazar o nome dela. */

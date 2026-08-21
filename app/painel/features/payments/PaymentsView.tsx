@@ -8,6 +8,7 @@ import {
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { PaymentDialog as PaymentDialogView } from "./PaymentDialogs";
 import { ContractorPaymentDetail } from "./ContractorPaymentDetail";
+import { ContractorDocumentsDialog } from "./ContractorDocumentsDialog";
 import { ContractorSectionView, contractorActionsFor } from "./ContractorSections";
 import { ContractorEntryDialog, type EntrySubmission } from "./ContractorEntryDialog";
 import { AnimatedModal } from "../shared";
@@ -17,7 +18,7 @@ import {
   normalizePsychologyOverview, requestJson, type Row,
 } from "./payments.api";
 import type {
-  CompanyOption, ContractorOverview, ContractorPaymentDetail as ContractorPaymentDetailData,
+  CompanyOption, Contractor, ContractorOverview, ContractorPaymentDetail as ContractorPaymentDetailData,
   EmployeeOption, PaymentDialog, PaymentModule, PsychologyOverview,
 } from "./payments.types";
 import { ErrorBanner } from "../shared";
@@ -102,6 +103,7 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeCompany, setNoticeCompany] = useState("");
   const [paymentDetail, setPaymentDetail] = useState<ContractorPaymentDetailData | null>(null);
+  const [documentsContractor, setDocumentsContractor] = useState<Pick<Contractor, "id" | "legalName" | "contractReference"> | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -285,6 +287,45 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     await mutate(path, { method: "POST", body: JSON.stringify({ status, reason }) }, `Fechamento atualizado para ${statusLabels[status] ?? status}.`);
   }
 
+  async function approveContractors(closingIds: string[]) {
+    return Boolean(await mutate<{ approvedCount: number }>("/api/payments/contractors/closings/approve", {
+      method: "POST",
+      body: JSON.stringify({ closingIds }),
+    }, `${closingIds.length === 1 ? "Prestador aprovado" : `${closingIds.length} prestadores aprovados`}.`));
+  }
+
+  async function issueContractorStatements() {
+    if (!cycle) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/payments/contractors/statements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, competenceId: cycle.id }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
+        throw new Error(payload.message || payload.error || "Não foi possível emitir os extratos.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `extratos-pj-${competence}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setError("");
+      setToast("Extratos emitidos. Os pagamentos abertos entraram em conferência.");
+      await loadOverview(companyId, competence, true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível emitir os extratos.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitDialog(active: NonNullable<PaymentDialog>, form: FormData) {
     const payout = {
       pixKey: field(form, "pixKey"), bankCode: field(form, "bankCode"),
@@ -390,10 +431,7 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     if (active.kind === "invoice") {
       const result = await mutate(`/api/payments/contractors/closings/${active.closing.id}/invoice`, {
         method: "POST",
-        body: JSON.stringify({
-          invoiceNumber: field(form, "invoiceNumber"), receivedAmount: numeric(form, "receivedAmount") ?? 0,
-          issueDate: field(form, "issueDate"), attachmentReference: field(form, "attachmentReference"),
-        }),
+        body: form,
       }, "Nota fiscal registrada.");
       if (result) setDialog(null);
       return;
@@ -570,6 +608,12 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
           onRecalculate={(providerId) => void recalculate(providerId)}
           onTransition={(closingId, status) => void transition(closingId, status)}
           onCompetence={setCompetence}
+          onIssueStatements={() => void issueContractorStatements()}
+          onApproveClosings={(closingIds) => void approveContractors(closingIds)}
+          onOpenDocuments={(providerId) => {
+            const provider = contractors.contractors.find((item) => item.id === providerId);
+            if (provider) setDocumentsContractor(provider);
+          }}
           onNewEntry={(nature) => { setEntryError(""); setEntryNature(nature); setEntryOpen(true); }}
           onInvoiceNotice={() => { setNoticeCompany(companyId); setNoticeOpen(true); }}
         />
@@ -667,6 +711,14 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
         />
       ) : null}
       {dialog && <PaymentDialogView dialog={dialog} busy={busy} onClose={() => setDialog(null)} onSubmit={submitDialog} />}
+      {documentsContractor ? (
+        <ContractorDocumentsDialog
+          providerId={documentsContractor.id}
+          providerName={documentsContractor.legalName}
+          contractReference={documentsContractor.contractReference}
+          onClose={() => setDocumentsContractor(null)}
+        />
+      ) : null}
       {module === "contractors" && (
         <AnimatedModal open={noticeOpen} onClose={() => setNoticeOpen(false)}
           label="Gerar avisos de nota fiscal" width={460} stickyFooter className={styles.paymentTokens}>

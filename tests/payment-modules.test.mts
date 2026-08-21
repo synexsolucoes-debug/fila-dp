@@ -346,7 +346,7 @@ test("as APIs de pagamento validam tenant, competência fechada, permissão e au
   }
   /* Onde há empresa em jogo, o acesso a ela continua sendo exigido.
      `fixedItems` saiu desta lista: o item fixo pertence ao prestador, e o
-     prestador passou a ser do grupo (migração 0053). Não existe mais "empresa
+     prestador passou a ser do grupo (migração 0054). Não existe mais "empresa
      do prestador" para conferir — conferir a do cadastro seria conferir uma
      sugestão, o que dá a impressão de porta trancada sem trancar nada. O que
      guarda a rota ali é a capacidade, e é isso que a linha abaixo cobra. */

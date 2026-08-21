@@ -111,6 +111,9 @@ export function buildStatement(
     }
 
     const cancelado = text(row.situacao) === "canceled";
+    // Lançamento cancelado permanece na origem e na auditoria, mas não
+    // pertence ao documento entregue para conferência.
+    if (cancelado) continue;
     const valor = number(row.valor);
     const provento = text(row.tipo) === "PROVENTO";
     const quantidade = number(row.quantidade);
@@ -128,9 +131,6 @@ export function buildStatement(
       cancelado,
     });
 
-    /* Cancelado entra na lista e fica fora da soma. É a mesma regra do
-       cálculo da apuração, e é o que faz o quadro de fecho bater com ela. */
-    if (cancelado) continue;
     if (provento) prestador.totalProventos += valor;
     else prestador.totalDescontos += valor;
   }

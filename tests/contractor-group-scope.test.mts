@@ -5,7 +5,7 @@ import test from "node:test";
 /**
  * O prestador PJ é do grupo, e não de uma empresa.
  *
- * Até a migração 0053 o contrato do PJ carregava uma empresa obrigatória, e era
+ * Até a migração 0054 o contrato do PJ carregava uma empresa obrigatória, e era
  * ela que decidia em qual apuração o prestador entrava. Só que quem presta
  * serviço é o PJ: ele atende as empresas do grupo, e não o contrário. Um PJ que
  * atendia duas empresas precisava existir duas vezes, com dois códigos e duas
@@ -29,7 +29,7 @@ import test from "node:test";
 const ler = (caminho: string) => readFile(new URL(`../${caminho}`, import.meta.url), "utf8");
 
 test("a migração solta o contrato da empresa e tranca o pagamento em dobro", async () => {
-  const migracao = await ler("drizzle/postgres/0053_contractor_belongs_to_group.sql");
+  const migracao = await ler("drizzle/postgres/0054_contractor_belongs_to_group.sql");
   assert.match(migracao, /ALTER TABLE "fdp_contractor_profiles"\s*\n\s*ALTER COLUMN "company_id" DROP NOT NULL/u);
 
   /* O índice é parcial de propósito: o fechamento excluído continua no banco

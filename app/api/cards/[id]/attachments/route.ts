@@ -29,7 +29,8 @@ async function storageQuotaError(
 ) {
   const row = await d1.prepare(`SELECT
       (SELECT COALESCE(SUM(size_bytes), 0)::bigint FROM fdp_card_attachments WHERE workspace_id = $1)
-        + (SELECT COALESCE(SUM(size_bytes), 0)::bigint FROM fdp_epi_attachments WHERE workspace_id = $1) AS used,
+        + (SELECT COALESCE(SUM(size_bytes), 0)::bigint FROM fdp_epi_attachments WHERE workspace_id = $1)
+        + (SELECT COALESCE(SUM(size_bytes), 0)::bigint FROM fdp_contractor_documents WHERE workspace_id = $1) AS used,
       (SELECT plan.storage_limit_mb FROM fdp_workspace_subscriptions subscription
        JOIN fdp_saas_plans plan ON plan.id = subscription.plan_id
        WHERE subscription.workspace_id = $1 AND subscription.status IN ('trialing', 'active')) AS limit_mb`)
@@ -99,12 +100,13 @@ export async function POST(request: Request, context: RouteContext) {
             (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by)
           SELECT ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
           WHERE (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_card_attachments WHERE workspace_id = ?)
-              + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_epi_attachments WHERE workspace_id = ?) + ?
+              + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_epi_attachments WHERE workspace_id = ?)
+              + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_contractor_documents WHERE workspace_id = ?) + ?
             <= entitlement.storage_limit_mb::bigint * 1024 * 1024
           RETURNING id
         ) SELECT id FROM inserted`)
         .bind(workspace.id, workspace.id, attachmentId, workspace.id, id, objectKey, file.name.slice(0, 220),
-          file.type, file.size, auth.user.email, workspace.id, workspace.id, file.size)
+          file.type, file.size, auth.user.email, workspace.id, workspace.id, workspace.id, file.size)
         .first<{ id: string }>();
 
       if (!stored) {
