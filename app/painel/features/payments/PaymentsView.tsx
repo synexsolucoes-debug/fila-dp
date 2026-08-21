@@ -384,8 +384,8 @@ export function PaymentsView({ role, module, section = "contractorPayments" }: {
     }
   }
 
-  const reportUrl = (report: string) => {
-    const params = new URLSearchParams({ report, competence, format: "csv" });
+  const reportUrl = (report: string, format: "csv" | "pdf" = "csv") => {
+    const params = new URLSearchParams({ report, competence, format });
     if (companyId) params.set("companyId", companyId);
     return `/api/payments/reports?${params}`;
   };

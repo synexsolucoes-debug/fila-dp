@@ -515,6 +515,60 @@ test("o Pagamento PJ tem oito destinos, e cada um mostra dado que o servidor ent
   assert.match(casca2, /\{actions\.limit && \(|permissions\?\.manageLimits && actions\.limit && \(/u);
 });
 
+test("o extrato analítico é analítico: rubrica por linha, e alcançável de onde se confere", async () => {
+  /* O módulo já tinha dois relatórios PJ, os dois sintéticos: uma linha por
+     prestador, com os totais somados. Servem para saber quanto sai, não para
+     conferir de onde o número veio — e conferir é exatamente perguntar "por
+     que este desconto de 340,00 existe".
+
+     Havia um analítico, mas de um prestador por vez, montado no navegador a
+     partir do detalhamento aberto na tela: conferir trinta prestadores custava
+     trinta diálogos e trinta arquivos.
+
+     O que este teste prende é a forma. Que a soma fecha com a apuração é outra
+     conta, feita contra um PostgreSQL de verdade em
+     `scripts/rehearse-contractor-statement.mjs` — aqui não haveria como. */
+  const [catalogo, secoes] = await Promise.all([
+    readFile(new URL("../lib/payment-reports.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(catalogo, /"contractor-analytical": \{/u);
+  // Rubrica e valor por linha é o que separa analítico de sintético.
+  for (const coluna of ["rubrica", "valor", "tipo", "quantidade", "situacao", "documento"]) {
+    assert.match(catalogo, new RegExp(`"${coluna}"`, "u"), `o extrato não traz a coluna ${coluna}`);
+  }
+  // O valor contratual é linha, não coluna repetida: quem confere soma a coluna
+  // e o total precisa bater com o líquido.
+  assert.match(catalogo, /'Valor contratual' AS rubrica/u);
+  assert.match(catalogo, /UNION ALL/u);
+  // Lançamento cancelado aparece. Sumir com ele deixaria quem confere sem
+  // explicação para a diferença entre o lançado e o apurado.
+  assert.doesNotMatch(catalogo, /k\.status = 'active'/u);
+  // Uma coluna, um vocabulário: "ativo" ao lado de "active" faria o filtro da
+  // planilha descartar metade das linhas sem avisar.
+  assert.doesNotMatch(catalogo, /'ativo' AS situacao/u);
+  // O fechamento excluído continua fora, nos dois lados da união.
+  assert.equal((catalogo.match(/c\.excluded_at IS NULL/gu) ?? []).length >= 2, true,
+    "o lado dos lançamentos precisa excluir o fechamento excluído também");
+
+  // A rota e o ensaio leem o mesmo catálogo — um ensaio que reescreve a
+  // consulta prova a cópia e deixa o produto sem prova.
+  const rota = await readFile(new URL("../app/api/payments/reports/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /import \{ reports, type PaymentReportKey \} from "@\/lib\/payment-reports"/u);
+  assert.doesNotMatch(rota, /const reports = \{/u);
+  const ensaio = await readFile(new URL("../scripts/rehearse-contractor-statement.mjs", import.meta.url), "utf8");
+  assert.match(ensaio, /import \{ reports \} from "\.\.\/lib\/payment-reports\.ts"/u);
+
+  // E é alcançável de onde a conferência acontece, não só do arquivo de
+  // encerramento.
+  assert.match(secoes, /reportUrl\("contractor-analytical"\)/u);
+  // E em PDF, que é o que se entrega: o formato da folha analítica que o
+  // escritório já sabe conferir. O CSV fica para quem cruza em planilha.
+  assert.match(secoes, /reportUrl\("contractor-analytical", "pdf"\)/u);
+  assert.match(secoes, /Emitir extrato analítico \(PDF\)/u);
+});
+
 test("todo estado de competência tem tradução na tela", async () => {
   /* O selo do cabeçalho imprimia o valor cru quando o mapa não conhecia o
      estado: "Competência processing", em inglês, no meio de uma tela em
@@ -544,7 +598,10 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
     readFile(new URL("../app/api/payments/contractors/components/[id]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/overview/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/caju/export/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/api/payments/reports/route.ts", import.meta.url), "utf8"),
+    // As consultas dos relatórios mudaram de casa: saíram da rota para
+    // `lib/payment-reports.ts`, de onde o ensaio contra PostgreSQL também as
+    // importa. A conferência segue o SQL, não o arquivo onde ele morava.
+    readFile(new URL("../lib/payment-reports.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/v1/contractor-closings/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/ContractorPaymentDetail.tsx", import.meta.url), "utf8"),
   ]);
