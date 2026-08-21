@@ -45,6 +45,7 @@ export function normalizeConnector(row: Row): Connector {
     lastError: text(value(row, "lastError", "last_error")),
     updatedAt: text(value(row, "updatedAt", "updated_at")),
     hasCredentials: bool(value(row, "hasCredentials", "has_credentials")),
+    hasWebhookSecret: bool(value(row, "hasWebhookSecret", "has_webhook_secret")),
     credentialId: text(value(row, "credentialId", "credential_id")),
     fingerprint: text(row.fingerprint),
     keyVersion: number(value(row, "keyVersion", "key_version")),
@@ -162,3 +163,4 @@ export function normalizeRunDetail(payload: Row): RunDetail {
     jobs: Array.isArray(payload.jobs) ? payload.jobs.map((row) => normalizeJob(row as Row)) : [],
   };
 }
+
