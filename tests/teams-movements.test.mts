@@ -200,4 +200,3 @@ test("a demanda de cargo descreve a transição e verifica reflexo salarial", ()
     "mudança de cargo costuma vir com reflexo salarial e o checklist precisa lembrar disso",
   );
 });
-
