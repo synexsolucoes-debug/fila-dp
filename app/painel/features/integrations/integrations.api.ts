@@ -163,4 +163,3 @@ export function normalizeRunDetail(payload: Row): RunDetail {
     jobs: Array.isArray(payload.jobs) ? payload.jobs.map((row) => normalizeJob(row as Row)) : [],
   };
 }
-
