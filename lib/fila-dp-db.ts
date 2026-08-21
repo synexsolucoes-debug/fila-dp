@@ -4,7 +4,7 @@ import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 import { getTenantContext, setTenantContext } from "./tenant-context";
 import { hasCapability } from "./authorization";
-import { deniedWriteCapabilities, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
+import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
@@ -303,8 +303,9 @@ export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, works
         WHERE assignment.workspace_id = ? AND assignment.area_id = ?`)
       .bind(workspaceId, department.id).all<{ module_key: string }>()
     : null;
-  // O proprietário preserva o acesso de recuperação do Workspace. Para todos
-  // os demais, um departamento principal ativo vira o teto do acesso.
+  // O proprietário preserva o acesso de recuperação do Workspace. Para todos os
+  // demais, um departamento principal ativo define o padrão de acesso — o que a
+  // pessoa recebe sem que ninguém decida nada para ela.
   const departmentModules = departmentRows
     ? new Set(departmentRows.results.map((row) => String(row.module_key)))
     : undefined;
@@ -314,16 +315,11 @@ export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, works
     byModule.set(String(row.module_key), row.granted === true || Number(row.granted) === 1);
   }
 
-  // A autorização recebe o mapa efetivo: bloqueios do departamento vencem
-  // liberações nominais antigas. O mapa individual separado continua sendo
-  // devolvido para a tela explicar o que foi decidido para a pessoa.
-  const effectiveByModule = new Map(byModule);
-  if (departmentModules) {
-    for (const moduleEntry of catalog.results) {
-      const key = String(moduleEntry.module_key);
-      if (!departmentModules.has(key)) effectiveByModule.set(key, false);
-    }
-  }
+  // A autorização recebe o mapa efetivo; o mapa individual separado continua
+  // sendo devolvido para a tela explicar o que foi decidido para a pessoa.
+  const effectiveByModule = mergeDepartmentAndMemberGrants(
+    catalog.results.map((row) => String(row.module_key)), byModule, departmentModules,
+  );
 
   const extraCapabilities = new Set<string>();
   const deniedCapabilities = new Set<string>();

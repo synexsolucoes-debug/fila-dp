@@ -139,24 +139,23 @@ export async function PUT(request: Request, { params }: Params) {
     const definition = catalog.find((item) => item.key === moduleKey);
     if (!definition) throw ApiError.notFound("Módulo não encontrado.", "MODULE_NOT_FOUND");
 
-    const memberAccess = await loadMemberModuleGrants(d1, workspace.id, id);
-    if (!memberAccess.isOwner && !memberAccess.department) {
-      throw new ApiError(409, "MEMBER_DEPARTMENT_REQUIRED",
-        "Defina o departamento principal do usuário antes de alterar os módulos.");
-    }
-    if (memberAccess.departmentScoped && !memberAccess.departmentModules?.has(moduleKey)) {
-      throw new ApiError(409, "MODULE_OUTSIDE_DEPARTMENT",
-        `"${definition.name}" não pertence ao departamento ${memberAccess.department?.name}. Altere o departamento ou os módulos dele primeiro.`);
-    }
+    /* Três recusas saíram daqui, todas pelo mesmo motivo: elas faziam do
+       departamento um teto, e não um padrão.
 
-    // `null` remove a exceção e devolve a pessoa ao que o papel dela decide.
+       Recusava-se alterar módulos de quem não tinha departamento; recusava-se
+       liberar módulo fora do departamento; e recusava-se remover a exceção de
+       quem tinha departamento. Juntas, tornavam impossível dar a uma pessoa o
+       acesso que a área dela não tem — que é o pedido mais comum de quem
+       administra, e a razão de esta tela existir.
+
+       O que continua acima da exceção é o plano: liberar para uma pessoa o que
+       o grupo não contratou seria vender por dentro da tela. Essa recusa está
+       logo abaixo e não mudou. */
+
+    // `null` remove a exceção e devolve a pessoa ao que o papel e o
+    // departamento dela decidem.
     const raw = body.granted;
     const granted = raw === null || raw === undefined || raw === "" ? null : raw === true || raw === "true";
-
-    if (granted === null && memberAccess.departmentScoped) {
-      throw new ApiError(409, "MODULE_DECISION_REQUIRED",
-        "Neste modelo de acesso, cada módulo do departamento precisa ficar explicitamente liberado ou bloqueado.");
-    }
 
     if (granted !== null) {
       const plan = await loadPlanContext(d1, workspace.id);

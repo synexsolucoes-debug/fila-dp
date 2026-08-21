@@ -8,7 +8,10 @@ import test from "node:test";
  * Este arquivo existe porque descobri duas por acidente, em dias diferentes da
  * mesma auditoria:
  *
- *  - oito seções de configurações, fechadas de propósito em `d2d8d5a`;
+ *  - oito seções de configurações, fechadas em `d2d8d5a`, que eu tomei por
+ *    decisão deliberada e registrei como tal — até o dono do repositório pedir
+ *    para editar uma empresa e não achar por onde. Sete delas reabriram, e a
+ *    regra que garante a porta de cada uma está em `settings-scope.test.mts`;
  *  - o módulo SaaS inteiro — plano, faturas, cotas, sequência de ativação —,
  *    que nada renderiza e para o qual não achei decisão registrada.
  *

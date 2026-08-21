@@ -80,6 +80,49 @@ type BoardMode = "kanban" | "table" | "calendar" | "process";
 
 type CardTab = "details" | "checklist" | "attachments" | "activity";
 type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
+
+/**
+ * Cada seção de configuração precisa de um cabeçalho próprio.
+ *
+ * Antes o cabeçalho tinha só dois textos escritos à mão — um para "security" e
+ * outro para todo o resto — o que fazia sete telas anunciarem "Usuários e
+ * acessos" no título. Com o mapa, acrescentar uma seção sem lhe dar um nome
+ * passa a ser um erro de tipo, e não uma tela mal rotulada em produção.
+ */
+const settingsSectionMeta: Record<SettingsSection, { group: string; title: string; description: string }> = {
+  security: { group: "CONTA PESSOAL", title: "Perfil e segurança", description: "Revise apenas as sessões da identidade atual." },
+  general: { group: "CONTA E WORKSPACE", title: "Geral", description: "Nome do workspace, quadros disponíveis e a conta com que você está entrando." },
+  companies: { group: "ADMINISTRAÇÃO DO WORKSPACE", title: "Empresas", description: "Cadastre, edite e organize os CNPJs do grupo." },
+  team: { group: "ADMINISTRAÇÃO DO WORKSPACE", title: "Usuários e acessos", description: "Defina o departamento e os módulos disponíveis para cada usuário." },
+  columns: { group: "CONFIGURAÇÃO DO QUADRO", title: "Colunas", description: "Nome, ordem e efeito de cada coluna sobre o SLA." },
+  fields: { group: "CONFIGURAÇÃO DO QUADRO", title: "Campos e etiquetas", description: "Etiquetas e campos personalizados que aparecem nas demandas." },
+  templates: { group: "CONFIGURAÇÃO DO QUADRO", title: "Templates", description: "Checklists e SLA prontos para abrir uma demanda sem esquecer etapas." },
+  sla: { group: "CONFIGURAÇÃO DO QUADRO", title: "SLA e calendário", description: "Expediente, feriados e metas de prazo por processo." },
+  automations: { group: "CONFIGURAÇÃO DO QUADRO", title: "Automações", description: "Regras que reagem automaticamente aos eventos das demandas." },
+};
+
+/* O menu lateral das configurações escrito como dado, e não como sete botões
+   soltos no JSX. Sete das nove seções existiam, funcionavam e conversavam com
+   a API — e nenhuma tinha botão que levasse até elas. Escritas aqui, a lista de
+   seções e a lista de portas ficam lado a lado, e um teste consegue exigir que
+   toda seção de `SettingsSection` apareça neste menu. */
+const settingsNavGroups: Array<{ label: string; adminOnly: boolean; sections: Array<{ section: SettingsSection; icon: LucideIcon; hint: string }> }> = [
+  { label: "CONTA E WORKSPACE", adminOnly: false, sections: [
+    { section: "security", icon: Smartphone, hint: "Dispositivos e sessões" },
+    { section: "general", icon: LayoutDashboard, hint: "Workspaces e quadros" },
+  ] },
+  { label: "WORKSPACE", adminOnly: true, sections: [
+    { section: "companies", icon: Building2, hint: "CNPJs do grupo" },
+    { section: "team", icon: Users, hint: "Departamento e módulos" },
+  ] },
+  { label: "QUADRO", adminOnly: true, sections: [
+    { section: "columns", icon: ListChecks, hint: "Etapas e SLA" },
+    { section: "fields", icon: Blocks, hint: "Etiquetas e campos" },
+    { section: "templates", icon: ClipboardCheck, hint: "Checklists prontos" },
+    { section: "sla", icon: CalendarClock, hint: "Expediente e feriados" },
+    { section: "automations", icon: Workflow, hint: "Regras automáticas" },
+  ] },
+];
 type RealtimeStatus = "syncing" | "current" | "delayed";
 type User = { displayName: string; email: string; fullName: string | null };
 type SearchResult = { id: string; title: string; company: string; processType: string; priority: string; slaStatus: string; dueAt: string | null; assigneeName: string; archived: boolean; listId: string };
@@ -1404,6 +1447,10 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     return mutate("/api/companies", { method: "POST", body: JSON.stringify(payload) }, "Empresa cadastrada.");
   }
 
+  async function updateCompany(id: string, payload: Record<string, unknown>) {
+    return mutate(`/api/companies/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, "Empresa atualizada.");
+  }
+
   function deleteCompany(id: string, name: string) {
     requestConfirmation({
       title: "Excluir empresa?",
@@ -1665,7 +1712,11 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
-            <button className="header-profile" aria-label="Abrir perfil e segurança" title="Perfil e segurança" onClick={openSecuritySettings}><span>{userInitials}</span></button>
+            {/* O rótulo muda com o papel porque a porta é a mesma, mas o que
+                há atrás dela não: para o administrador este botão é a única
+                entrada para empresas, usuários, colunas e automações, e dizer
+                só "Perfil e segurança" escondia tudo isso. */}
+            <button className="header-profile" aria-label={isAdmin ? "Abrir configurações do workspace e do perfil" : "Abrir perfil e segurança"} title={isAdmin ? "Configurações do workspace" : "Perfil e segurança"} onClick={openSecuritySettings}><span>{userInitials}</span></button>
             {/* A ação primária vem do catálogo, não de uma lista de exceções.
                 A versão anterior aparecia por negação — seis `view !== "…"` —,
                 então uma tela nova nascia com "Nova demanda" no topo mesmo sem
@@ -2013,33 +2064,39 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
       {workspaceModalOpen && (
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setWorkspaceModalOpen(false); }}>
           <section className="workspace-modal workspace-settings-modal" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
-            <header><div><span>{settingsSection === "security" ? "CONTA PESSOAL" : "ADMINISTRAÇÃO DO WORKSPACE"}</span><h2 id="workspace-modal-title">{settingsSection === "security" ? "Perfil e segurança" : "Usuários e acessos"}</h2><p>{settingsSection === "security" ? "Revise apenas as sessões da identidade atual." : "Defina o departamento e os módulos disponíveis para cada usuário."}</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>{settingsSectionMeta[settingsSection].group}</span><h2 id="workspace-modal-title">{settingsSectionMeta[settingsSection].title}</h2><p>{settingsSectionMeta[settingsSection].description}</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
             <div className="workspace-settings-layout">
               <nav className="settings-nav" aria-label="Seções das configurações">
-                <span className="settings-nav-label">CONTA</span>
-                <button className={settingsSection === "security" ? "active" : ""} onClick={() => { setSettingsSection("security"); void loadAuthSessions(); }}><Smartphone aria-hidden="true" /><span>Segurança<small>Dispositivos e sessões</small></span></button>
-                {isAdmin && <>
-                  <span className="settings-nav-label">WORKSPACE</span>
-                  <button className={settingsSection === "team" ? "active" : ""} onClick={() => setSettingsSection("team")}><Users aria-hidden="true" /><span>Usuários e acessos<small>Departamento e módulos</small></span></button>
-                </>}
+                {settingsNavGroups.filter((group) => isAdmin || !group.adminOnly).flatMap((group) => [
+                  <span className="settings-nav-label" key={group.label}>{group.label}</span>,
+                  /* O `aria-label` repete o título porque em telas estreitas o
+                     CSS esconde o `<span>` e deixa só o ícone: sem ele o botão
+                     fica sem nome acessível justamente onde ninguém consegue
+                     adivinhar o desenho. */
+                  ...group.sections.map((item) => (
+                    <button key={item.section} aria-label={settingsSectionMeta[item.section].title} className={settingsSection === item.section ? "active" : ""} onClick={() => { setSettingsSection(item.section); if (item.section === "security") void loadAuthSessions(); }}>
+                      <item.icon aria-hidden="true" /><span>{settingsSectionMeta[item.section].title}<small>{item.hint}</small></span>
+                    </button>
+                  )),
+                ])}
               </nav>
               <div className="workspace-settings-content">
                 {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}
                 {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
-                {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
+                {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onUpdateCompany={updateCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
                 {settingsSection === "team" && <>
                   <section className="access-admin-hero">
                     <span><Users aria-hidden="true" /></span>
                     <div>
                       <strong>Workspace → Departamento → Módulos</strong>
-                      <p>Todo usuário precisa de um departamento principal. Ele só pode receber módulos vinculados a esse departamento.</p>
+                      <p>O departamento principal define os módulos que a pessoa recebe por padrão. Em “Usuários e acessos” você abre exceção para alguém, inclusive em módulo que a área dela não tem.</p>
                     </div>
                     <b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b>
                   </section>
                   <section className="workspace-team">
                     <header>
                       <div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div>
-                      <p>O papel define as ações; o departamento limita os módulos; a empresa limita os CNPJs.</p>
+                      <p>O papel define as ações; o departamento dá os módulos padrão; a exceção individual vence o departamento; a empresa limita os CNPJs.</p>
                     </header>
                     <div className="workspace-member-list">{snapshot.members.map((member) => (
                       <article key={member.userId}>
@@ -2425,17 +2482,32 @@ function ProcessTablesView({ cards, lists, onOpen }: { cards: Card[]; lists: Wor
   return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>FLUXO ESPECÍFICO</span><strong>{process}</strong></div><b>{grouped[process].length} demanda(s)</b></header><DemandTableView cards={grouped[process]} lists={lists} onOpen={onOpen} /></section>)}</div>;
 }
 
-function CompanySettings({ companies, members, busy, onCreateCompany, onDeleteCompany, onOpenAccess }: { companies: WorkspaceSnapshot["companies"]; members: WorkspaceSnapshot["members"]; busy: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onOpenAccess: () => void }) {
-  const [showForm, setShowForm] = useState(false);
+function CompanySettings({ companies, members, busy, onCreateCompany, onUpdateCompany, onDeleteCompany, onOpenAccess }: { companies: WorkspaceSnapshot["companies"]; members: WorkspaceSnapshot["members"]; busy: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onUpdateCompany: (id: string, payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onOpenAccess: () => void }) {
+  /* `null` = formulário fechado, `""` = cadastrando, um id = editando aquela
+     empresa. Um estado só, porque cadastrar e editar são o mesmo formulário:
+     manter dois formulários lado a lado é como o cadastro de campos acaba
+     divergindo do de edição sem ninguém perceber. */
+  const [editing, setEditing] = useState<string | null>(null);
   const companyName = new Map(companies.map((company) => [company.id, company.tradeName || company.legalName]));
   const principalCompanies = companies.filter((company) => company.isPrincipal);
   const orderedCompanies = [...companies].sort((a, b) => Number(b.isPrincipal) - Number(a.isPrincipal) || (companyName.get(a.parentCompanyId ?? "") ?? "").localeCompare(companyName.get(b.parentCompanyId ?? "") ?? "") || (a.tradeName || a.legalName).localeCompare(b.tradeName || b.legalName));
+  const current = editing ? companies.find((company) => company.id === editing) ?? null : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const result = await onCreateCompany({ legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"), externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"), companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId") });
-    if (result) { event.currentTarget.reset(); setShowForm(false); }
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const payload = {
+      legalName: data.get("legalName"), tradeName: data.get("tradeName"), taxId: data.get("taxId"),
+      externalCode: data.get("externalCode"), email: data.get("email"), phone: data.get("phone"),
+      companyType: data.get("companyType"), parentCompanyId: data.get("parentCompanyId"),
+    };
+    const result = current
+      // Ao editar, a situação também é editável: desativar um CNPJ é o caminho
+      // de quem não pode excluí-lo por causa do histórico.
+      ? await onUpdateCompany(current.id, { ...payload, status: data.get("status") })
+      : await onCreateCompany(payload);
+    if (result) { form.reset(); setEditing(null); }
   }
 
   return <div className="company-settings-view">
@@ -2444,23 +2516,27 @@ function CompanySettings({ companies, members, busy, onCreateCompany, onDeleteCo
     </section>
     <section className="company-settings-access"><div><strong>Controle de acesso por empresa</strong><p>Após cadastrar um CNPJ, escolha quais usuários poderão consultar ou operar demandas daquela empresa.</p></div><button className="secondary-button" onClick={onOpenAccess}><Users aria-hidden="true" /> Gerenciar usuários e acessos</button></section>
     <section className="company-settings-catalog">
-      <header><div><strong>Cadastros do grupo</strong><span>CNPJ, estrutura societária, contato e código externo para Sankhya.</span></div><button className="primary-button" disabled={busy} onClick={() => setShowForm((current) => !current)}><Plus aria-hidden="true" /> {showForm ? "Fechar cadastro" : "Cadastrar empresa"}</button></header>
-      {showForm && <form className="company-settings-form" onSubmit={submit}>
-        <label>Tipo<select name="companyType" defaultValue={companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"} disabled={busy}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label>
-        <label>Empresa principal<select name="parentCompanyId" defaultValue="" disabled={busy}><option value="">Vincular à principal automaticamente</option>{principalCompanies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
-        <label>Razão social<input name="legalName" placeholder="Empresa Exemplo Ltda." maxLength={160} required disabled={busy} /></label>
-        <label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" maxLength={160} disabled={busy} /></label>
-        <label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" maxLength={30} disabled={busy} /></label>
-        <label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" maxLength={80} disabled={busy} /></label>
-        <label>E-mail<input type="email" name="email" maxLength={160} disabled={busy} /></label>
-        <label>Telefone<input name="phone" maxLength={40} disabled={busy} /></label>
-        <button className="primary-button" disabled={busy}>Salvar empresa</button>
+      <header><div><strong>Cadastros do grupo</strong><span>CNPJ, estrutura societária, contato e código externo para Sankhya.</span></div><button className="primary-button" disabled={busy} onClick={() => setEditing((value) => value === null ? "" : null)}><Plus aria-hidden="true" /> {editing === null ? "Cadastrar empresa" : "Fechar formulário"}</button></header>
+      {editing !== null && <form className="company-settings-form" key={editing || "new"} onSubmit={submit}>
+        <label>Tipo<select name="companyType" defaultValue={current ? (current.isPrincipal ? "principal" : "subsidiary") : companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"} disabled={busy}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label>
+        <label>Empresa principal<select name="parentCompanyId" defaultValue={current?.parentCompanyId ?? ""} disabled={busy}><option value="">Vincular à principal automaticamente</option>{principalCompanies.filter((company) => company.id !== current?.id).map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
+        <label>Razão social<input name="legalName" defaultValue={current?.legalName ?? ""} placeholder="Empresa Exemplo Ltda." maxLength={160} required disabled={busy} /></label>
+        <label>Nome fantasia<input name="tradeName" defaultValue={current?.tradeName ?? ""} placeholder="Empresa Exemplo" maxLength={160} disabled={busy} /></label>
+        <label>CNPJ<input name="taxId" defaultValue={current?.taxId ?? ""} placeholder="00.000.000/0001-00" maxLength={30} disabled={busy} /></label>
+        <label>Código Sankhya<input name="externalCode" defaultValue={current?.externalCode ?? ""} placeholder="COD_EMPRESA" maxLength={80} disabled={busy} /></label>
+        <label>E-mail<input type="email" name="email" defaultValue={current?.email ?? ""} maxLength={160} disabled={busy} /></label>
+        <label>Telefone<input name="phone" defaultValue={current?.phone ?? ""} maxLength={40} disabled={busy} /></label>
+        {current && <label>Situação<select name="status" defaultValue={current.status} disabled={busy}><option value="active">Ativa</option><option value="inactive">Inativa</option></select></label>}
+        <div className="company-settings-form-actions">
+          {current && <button type="button" className="secondary-button" disabled={busy} onClick={() => setEditing(null)}>Cancelar</button>}
+          <button className="primary-button" disabled={busy}>{current ? "Salvar alterações" : "Salvar empresa"}</button>
+        </div>
       </form>}
       <div className="company-settings-list">
         {orderedCompanies.length === 0 && <div className="empty-view"><span><Building2 aria-hidden="true" /></span><strong>Nenhuma empresa cadastrada</strong><p>Cadastre a empresa principal para estruturar o grupo e liberar acessos.</p></div>}
         {orderedCompanies.map((company) => {
           const allowedMembers = members.filter((member) => member.role === "admin" || member.companyIds.includes(company.id)).length;
-          return <article className={company.isPrincipal ? "principal" : "subsidiary"} key={company.id}><i>{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} · {company.taxId || "CNPJ não informado"}</small></div><span><small>Usuários com acesso</small><b>{allowedMembers}</b></span><span><small>Sankhya</small><b>{company.externalCode || "Não vinculado"}</b></span><button className="danger-link" type="button" disabled={busy} onClick={() => onDeleteCompany(company.id, company.legalName)}>Excluir</button></article>;
+          return <article className={company.isPrincipal ? "principal" : "subsidiary"} key={company.id}><i>{company.isPrincipal ? "P" : "↳"}</i><div><strong>{company.tradeName || company.legalName}{company.isPrincipal && <em>Principal</em>}{company.status === "inactive" && <em className="inactive">Inativa</em>}</strong><small>{company.isPrincipal ? "Empresa raiz do grupo" : `Grupo: ${companyName.get(company.parentCompanyId ?? "") ?? "Principal"}`} · {company.taxId || "CNPJ não informado"}</small></div><span><small>Usuários com acesso</small><b>{allowedMembers}</b></span><span><small>Sankhya</small><b>{company.externalCode || "Não vinculado"}</b></span><button className="secondary-button" type="button" disabled={busy} onClick={() => setEditing(editing === company.id ? null : company.id)} aria-label={`Editar ${company.tradeName || company.legalName}`}>{editing === company.id ? "Editando" : "Editar"}</button><button className="danger-link" type="button" disabled={busy} onClick={() => onDeleteCompany(company.id, company.legalName)}>Excluir</button></article>;
         })}
       </div>
     </section>

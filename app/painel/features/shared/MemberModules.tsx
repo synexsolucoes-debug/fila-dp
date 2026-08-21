@@ -110,15 +110,15 @@ export function MemberModules({ memberId, memberName, canManage }: {
     <div className={styles.matrixArea}>
       <p className={styles.detailNote}>
         {payload.member.department ? <>
-          <Building2 aria-hidden="true" /> O departamento <b>{payload.member.department.name}</b> limita o acesso a {departmentModules} módulo(s).
-          {" "}{approved} estão explicitamente liberados para {memberName}.
+          <Building2 aria-hidden="true" /> O departamento <b>{payload.member.department.name}</b> dá {departmentModules} módulo(s) por
+          padrão, e {approved} estão liberados para {memberName}.
         </> : <>
-          O papel <b>{payload.member.role}</b> ainda decide o acesso porque não há departamento principal cadastrado.
+          O papel <b>{payload.member.role}</b> decide o acesso porque não há departamento principal cadastrado.
         </>}
+        {" "}Aqui você abre exceção para esta pessoa, inclusive em módulo que o departamento dela não tem.
         {" "}A liberação concede a <b>leitura</b>; as ações de escrita continuam vindo do papel.
       </p>
 
-      {payload.member.departmentRequired && <ErrorBanner message="Defina o departamento principal deste usuário antes de alterar os módulos." />}
       {error && <ErrorBanner message={error} />}
 
       <div className={styles.tableScroll}>
@@ -143,7 +143,9 @@ export function MemberModules({ memberId, memberName, canManage }: {
                   <span className={item.inDepartment ? undefined : styles.matrixDenied}>
                     {item.inDepartment ? "Incluído" : payload.member.departmentRequired ? "Departamento não definido" : "Fora do departamento"}
                   </span>
-                  {item.inDepartment && <small>{item.allowedByRole ? "O papel também permite" : "Depende de liberação individual"}</small>}
+                  {item.inDepartment
+                    ? <small>{item.allowedByRole ? "O papel também permite" : "Depende de liberação individual"}</small>
+                    : item.override === true ? <small>Liberado por exceção para esta pessoa</small> : null}
                 </td>
                 <td>
                   <span className={item.allowed ? undefined : styles.matrixDenied}>
@@ -153,15 +155,7 @@ export function MemberModules({ memberId, memberName, canManage }: {
                 </td>
                 {canManage && (
                   <td className={styles.rowActions}>
-                    {payload.member.departmentRequired ? (
-                      <span className={styles.detailEmpty}>
-                        <Building2 aria-hidden="true" /> Defina o departamento
-                      </span>
-                    ) : item.lockedByDepartment ? (
-                      <span className={styles.detailEmpty}>
-                        <Building2 aria-hidden="true" /> Outro departamento
-                      </span>
-                    ) : item.lockedByPlan ? (
+                    {item.lockedByPlan ? (
                       // Fora do plano nem o administrador do grupo pode liberar: dizer
                       // isso é mais útil que esconder o botão.
                       <span className={styles.detailEmpty}>
@@ -181,7 +175,11 @@ export function MemberModules({ memberId, memberName, canManage }: {
                             <MinusCircle aria-hidden="true" /> Bloquear
                           </button>
                         )}
-                        {!payload.member.department && item.override !== null && (
+                        {/* Remover a exceção devolve a pessoa ao que o papel e o
+                            departamento decidem. Antes o botão sumia para quem
+                            tinha departamento, porque a rota recusava limpar —
+                            então uma exceção aberta por engano não tinha volta. */}
+                        {item.override !== null && (
                           <button type="button" className={styles.secondaryButton} disabled={busy === item.key}
                             onClick={() => void apply(item.key, null)}
                             title="Remove a exceção e devolve esta pessoa ao que o papel decide">

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { areaModuleList } from "../lib/areas.ts";
-import { resolveModules } from "../lib/modules.ts";
+import { mergeDepartmentAndMemberGrants, resolveModules } from "../lib/modules.ts";
 
 test("departamentos aceitam módulos do catálogo sem perder o roteamento SESMT e DP", () => {
   assert.deepEqual(
@@ -82,7 +82,20 @@ const accessBase = {
   subscriptionStatus: "active",
 };
 
-test("departamento é o limite máximo mesmo diante de liberação individual antiga", () => {
+/**
+ * O departamento é padrão, não teto.
+ *
+ * Este par de testes já disse o contrário. A regra anterior — departamento
+ * acima da exceção individual — tornava impossível dar a uma pessoa o acesso
+ * que a área dela não tem, e era exatamente esse o pedido que chegava de quem
+ * administra o grupo. A tela de módulos por usuário existia e não conseguia
+ * fazer a única coisa para a qual serve.
+ *
+ * A inversão precisa ser provada **nas duas direções** no mesmo lugar: liberar
+ * fora do departamento e bloquear dentro dele. Testar só a direção nova deixaria
+ * passar a correção que abre demais.
+ */
+test("exceção individual abre módulo fora do departamento", () => {
   const modules = resolveModules({
     ...accessBase,
     role: "admin",
@@ -91,8 +104,69 @@ test("departamento é o limite máximo mesmo diante de liberação individual an
   });
   assert.equal(modules.find((item) => item.key === "payroll")?.allowed, true);
   const board = modules.find((item) => item.key === "board");
+  assert.equal(board?.allowed, true, "a liberação nominal deve vencer o departamento");
+  assert.equal(board?.reason, "ok");
+});
+
+test("exceção individual fecha módulo que o departamento daria", () => {
+  const modules = resolveModules({
+    ...accessBase,
+    role: "admin",
+    departmentModules: new Set(["payroll", "board"]),
+    memberGrants: new Map([["payroll", false]]),
+  });
+  const payroll = modules.find((item) => item.key === "payroll");
+  assert.equal(payroll?.allowed, false);
+  assert.equal(payroll?.reason, "denied_for_member");
+  assert.equal(modules.find((item) => item.key === "board")?.allowed, true);
+});
+
+test("sem exceção, quem manda continua sendo o departamento", () => {
+  // A parte que **não** mudou, e que a inversão poderia ter derrubado junto:
+  // um módulo que ninguém decidiu à mão segue o que a área dá.
+  const modules = resolveModules({
+    ...accessBase,
+    role: "admin",
+    departmentModules: new Set(["payroll"]),
+    memberGrants: new Map(),
+  });
+  assert.equal(modules.find((item) => item.key === "payroll")?.allowed, true);
+  const board = modules.find((item) => item.key === "board");
   assert.equal(board?.allowed, false);
   assert.equal(board?.reason, "not_in_department");
+});
+
+test("o plano continua acima da exceção individual", () => {
+  // O limite que sobreviveu à inversão: liberar para uma pessoa o que o grupo
+  // não contratou seria vender por dentro da tela de permissões.
+  const modules = resolveModules({
+    ...accessBase,
+    planModules: new Set(["payroll"]),
+    role: "admin",
+    departmentModules: new Set(["payroll"]),
+    memberGrants: new Map([["board", true]]),
+  });
+  const board = modules.find((item) => item.key === "board");
+  assert.equal(board?.allowed, false);
+  assert.equal(board?.reason, "not_in_plan");
+});
+
+test("a junção de departamento e exceção segue a mesma regra da resolução", () => {
+  // Duas implementações leem a mesma decisão: `resolveModuleAccess` monta o
+  // menu e `mergeDepartmentAndMemberGrants` monta as capacidades. Divergirem é
+  // como um módulo aparece no menu e devolve 403 ao ser aberto.
+  const merged = mergeDepartmentAndMemberGrants(
+    ["payroll", "board", "epi"],
+    new Map([["board", true], ["payroll", false]]),
+    new Set(["payroll"]),
+  );
+  assert.equal(merged.get("board"), true, "exceção fora do departamento continua liberada");
+  assert.equal(merged.get("payroll"), false, "exceção contra o departamento continua bloqueada");
+  assert.equal(merged.get("epi"), false, "sem exceção, fora do departamento segue negado");
+
+  // Sem departamento principal não há padrão a aplicar: só valem as exceções.
+  const semDepartamento = mergeDepartmentAndMemberGrants(["payroll", "board"], new Map([["board", true]]), undefined);
+  assert.deepEqual([...semDepartamento], [["board", true]]);
 });
 
 test("módulo do departamento ainda exige decisão individual ou papel compatível", () => {
@@ -125,16 +199,32 @@ test("criação e alteração persistem departamento e módulos no mesmo fluxo",
   assert.match(helper, /fdp_member_module_grants/u);
   assert.match(screen, /departmentId: memberDepartmentId/u);
   assert.match(screen, /Workspace → Departamento → Módulos/u);
-  assert.match(screen, /onClick=\{\(\) => setSettingsSection\("team"\)\}.*Usuários e acessos/u);
+  // A porta de "Usuários e acessos" agora nasce de `settingsNavGroups`; o
+  // desenho do botão é conferido em `settings-scope.test.mts`, aqui basta que a
+  // seção exista e continue exigindo administrador.
+  assert.match(screen, /\{ section: "team", icon: Users, hint: "Departamento e módulos" \}/u);
+  assert.match(screen, /title: "Usuários e acessos"/u);
   assert.match(screen, /Departamento principal/u);
   assert.match(screen, /Módulos liberados neste departamento/u);
 });
 
-test("a API individual impede liberar módulo de outro departamento", async () => {
-  const route = await readFile(new URL("../app/api/members/[id]/modules/route.ts", import.meta.url), "utf8");
-  assert.match(route, /MODULE_OUTSIDE_DEPARTMENT/u);
-  assert.match(route, /MODULE_DECISION_REQUIRED/u);
-  assert.match(route, /departmentModules/u);
+test("a API individual libera módulo fora do departamento e ainda para no plano", async () => {
+  const [route, screen] = await Promise.all([
+    readFile(new URL("../app/api/members/[id]/modules/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/shared/MemberModules.tsx", import.meta.url), "utf8"),
+  ]);
+  // As três recusas que faziam do departamento um teto saíram; se voltarem, a
+  // tela volta a não conseguir fazer aquilo para que existe.
+  for (const recusa of ["MODULE_OUTSIDE_DEPARTMENT", "MODULE_DECISION_REQUIRED", "MEMBER_DEPARTMENT_REQUIRED"]) {
+    assert.doesNotMatch(route, new RegExp(recusa, "u"),
+      `${recusa} voltou: o departamento voltou a ser teto em vez de padrão`);
+  }
+  // As duas que continuam, e por motivos diferentes: contrato e recuperação.
+  assert.match(route, /MODULE_NOT_CONTRACTED/u);
+  assert.match(route, /SELF_LOCKOUT/u);
+  // E a tela precisa oferecer o botão, senão a API aberta não serve para nada.
+  assert.doesNotMatch(screen, /Defina o departamento principal deste usuário antes de alterar os módulos/u);
+  assert.match(screen, /Liberado por exceção para esta pessoa/u);
 });
 
 test("lotação também é protegida quando alterada pelo cadastro do departamento", async () => {

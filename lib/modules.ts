@@ -138,7 +138,8 @@ export type ModuleAccessInput = {
   /**
    * Módulos do departamento principal do usuário. `undefined` preserva o
    * acesso legado de proprietários e pessoas ainda sem lotação; quando existe,
-   * funciona como limite máximo e uma exceção individual nunca o ultrapassa.
+   * é o **padrão** do acesso: decide todo módulo que ninguém decidiu à mão para
+   * esta pessoa, e cede para a exceção individual quando ela existe.
    */
   departmentModules?: ReadonlySet<string>;
   role: string;
@@ -203,17 +204,23 @@ export function resolveModuleAccess(input: ModuleAccessInput): ModuleAccess {
   const contracted = input.planModules.has(definition.key) || grant === true;
   if (!contracted) return { allowed: false, reason: "not_in_plan", upgradeable: true };
 
-  // O departamento é o limite organizacional do acesso. Esta checagem vem
-  // antes da exceção individual para impedir que uma liberação nominal abra um
-  // módulo pertencente a outro departamento.
-  if (input.departmentModules && !input.departmentModules.has(definition.key)) {
-    return { allowed: false, reason: "not_in_department", upgradeable: false };
-  }
-
   // Bloqueio individual vem depois do plano e antes de tudo mais: é exceção do
   // grupo sobre a pessoa, não sobre o contrato.
   const memberGrant = input.memberGrants?.get(definition.key);
   if (memberGrant === false) return { allowed: false, reason: "denied_for_member", upgradeable: false };
+
+  /* O departamento é o **padrão** do acesso, não o teto: ele decide todo módulo
+     que ninguém decidiu à mão para esta pessoa, e só esses. Por isso a checagem
+     vem depois da exceção individual e só vale quando não há exceção.
+
+     Antes vinha antes, e o efeito era não existir como dar a uma pessoa o
+     acesso que a área dela não tem — que é o pedido mais comum de quem
+     administra, e a razão de a tela de módulos por usuário existir. O que
+     continua acima da exceção é o plano, porque isso é contrato, e essa recusa
+     já foi dada algumas linhas acima. */
+  if (memberGrant === undefined && input.departmentModules && !input.departmentModules.has(definition.key)) {
+    return { allowed: false, reason: "not_in_department", upgradeable: false };
+  }
 
   if (definition.dependsOn && !input.enabledKeys.has(definition.dependsOn)) {
     return { allowed: false, reason: "dependency_missing", upgradeable: true };
@@ -226,6 +233,32 @@ export function resolveModuleAccess(input: ModuleAccessInput): ModuleAccess {
     return { allowed: false, reason: "missing_capability", upgradeable: false };
   }
   return { allowed: true, reason: "ok", upgradeable: false };
+}
+
+/**
+ * Junta a decisão individual com o padrão do departamento.
+ *
+ * A mesma regra de `resolveModuleAccess`, aplicada ao mapa que vira capacidade
+ * em vez de item de menu. São dois consumidores da mesma decisão: um monta o
+ * menu, o outro decide se a rota responde. Divergirem é como um módulo aparece
+ * no menu e devolve 403 ao ser aberto — por isso a regra mora ao lado, e não
+ * junto do SQL que a alimenta.
+ *
+ * Quem tem exceção segue a exceção, nas duas direções; quem não tem segue o
+ * departamento. O departamento é o padrão, não o teto.
+ */
+export function mergeDepartmentAndMemberGrants(
+  moduleKeys: Iterable<string>,
+  memberGrants: ReadonlyMap<string, boolean>,
+  departmentModules: ReadonlySet<string> | undefined,
+) {
+  const effective = new Map(memberGrants);
+  if (!departmentModules) return effective;
+  for (const key of moduleKeys) {
+    if (memberGrants.has(key)) continue;
+    if (!departmentModules.has(key)) effective.set(key, false);
+  }
+  return effective;
 }
 
 export type ResolvedModule = ModuleDefinition & {
