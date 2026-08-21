@@ -12,6 +12,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Há outros lockfiles acima deste repositório na estação de desenvolvimento.
+  // Sem uma raiz explícita o Next pode tentar resolver dependências a partir
+  // da pasta pessoal, além de tornar o build dependente da máquina.
+  turbopack: { root: process.cwd() },
+  outputFileTracingRoot: process.cwd(),
   images: {
     // O otimizador entrega WebP/AVIF com qualidade 75 por padrão, e 75 num
     // logotipo — borda dura de cor chapada sobre fundo escuro — é exatamente o

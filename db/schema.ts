@@ -1879,6 +1879,10 @@ export const contractorClosings = pgTable("fdp_contractor_closings", {
   payrollCycleId: text("payroll_cycle_id").notNull().references(() => payrollCycles.id, { onDelete: "restrict" }),
   competence: text("competence").notNull(),
   baseAmount: numeric("base_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  contractBaseAmount: numeric("contract_base_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  prorationDays: integer("proration_days"),
+  prorationTotalDays: integer("proration_total_days"),
+  prorationEndDate: date("proration_end_date", { mode: "string" }),
   creditsAmount: numeric("credits_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
   debitsAmount: numeric("debits_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
   netAmount: numeric("net_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
@@ -1936,7 +1940,9 @@ export const contractorClosings = pgTable("fdp_contractor_closings", {
   check("fdp_contractor_closings_complement_check", sql`${table.complementMethod} IN ('none', 'caju_saldo_livre', 'other_benefit_card', 'manual_transfer')`),
   check("fdp_contractor_closings_fixed_caju_amount_check", sql`${table.fixedCajuAmount} >= 0`),
   check("fdp_contractor_closings_exclusion_reason_check", sql`${table.excludedAt} IS NULL OR length(${table.exclusionReason}) >= 5`),
-  check("fdp_contractor_closings_amount_check", sql`${table.baseAmount} >= 0 AND ${table.creditsAmount} >= 0 AND ${table.debitsAmount} >= 0 AND ${table.netAmount} >= 0
+  check("fdp_contractor_closings_proration_check", sql`(${table.prorationDays} IS NULL AND ${table.prorationTotalDays} IS NULL AND ${table.prorationEndDate} IS NULL)
+    OR (${table.prorationDays} BETWEEN 1 AND ${table.prorationTotalDays} AND ${table.prorationTotalDays} BETWEEN 28 AND 31 AND ${table.prorationEndDate} IS NOT NULL)`),
+  check("fdp_contractor_closings_amount_check", sql`${table.baseAmount} >= 0 AND ${table.contractBaseAmount} >= 0 AND ${table.creditsAmount} >= 0 AND ${table.debitsAmount} >= 0 AND ${table.netAmount} >= 0
     AND ${table.invoiceExpectedAmount} >= 0 AND ${table.complementAmount} >= 0 AND ${table.cajuAmount} >= 0 AND ${table.invoiceReceivedAmount} >= 0 AND ${table.complementPaidAmount} >= 0`),
   check("fdp_contractor_closings_split_check", sql`${table.invoiceExpectedAmount} + ${table.complementAmount} = ${table.netAmount}`),
   check("fdp_contractor_closings_limit_cap_check", sql`${table.invoiceLimitAmount} IS NULL OR ${table.invoiceExpectedAmount} <= ${table.invoiceLimitAmount}`),

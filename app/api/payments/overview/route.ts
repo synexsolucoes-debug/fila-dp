@@ -79,7 +79,8 @@ export async function GET(request: Request) {
 
     const [closings, contractors, fixedItems, monthlyEntries, policies] = await Promise.all([
       cycleId
-        ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.credits_amount, c.debits_amount, c.net_amount,
+        ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.contract_base_amount,
+            c.proration_days, c.proration_total_days, c.proration_end_date, c.credits_amount, c.debits_amount, c.net_amount,
             c.invoice_limit_amount, c.invoice_limit_source, c.invoice_expected_amount, c.complement_amount, c.complement_method,
             c.caju_amount, c.status, c.invoice_number, c.invoice_received_amount, c.invoice_status, c.caju_status, c.caju_batch_reference,
             c.complement_paid_amount, c.reconciliation_status, c.reconciliation_difference, c.calc_version, c.closed_at,

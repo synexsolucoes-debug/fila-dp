@@ -276,6 +276,7 @@
 .detailActions button:hover:not(:disabled), .inlineActionRow button:hover:not(:disabled) { border-color: var(--pay-accent-text); color: var(--pay-accent-text); }
 .detailActions button:disabled, .inlineActionRow button:disabled { opacity: .5; cursor: not-allowed; }
 .detailActionHint { color: var(--pay-soft); font-size: .62rem; text-decoration: none; }
+.detailRowMeta { display: block; margin-top: 3px; color: var(--pay-soft); font-size: .64rem; font-weight: 500; line-height: 1.35; }
 .inlineInput, .inlineMoney, .inlineActionRow input, .deletePaymentPanel input {
   min-height: 32px; padding: 6px 8px; border: 1px solid var(--pay-border); border-radius: 6px;
   background: var(--pay-surface); color: var(--pay-text);

@@ -49,7 +49,11 @@ test("a apuração varre o grupo, e não os prestadores de uma empresa", async (
   const consulta = rota.slice(rota.indexOf("SELECT provider_id FROM fdp_contractor_profiles"));
   const ateOFecho = consulta.slice(0, consulta.indexOf("`"));
   assert.doesNotMatch(ateOFecho, /company_id/u, "a apuração voltou a recortar os prestadores por empresa");
-  assert.match(ateOFecho, /status = 'active'/u);
+  // O inativo continua elegível apenas nas competências cobertas pela data de
+  // encerramento: é isso que permite recalcular o mês final proporcional sem
+  // ressuscitar pagamento nos meses seguintes.
+  assert.match(ateOFecho, /status IN \('active', 'inactive'\)/u);
+  assert.match(ateOFecho, /contract_end IS NULL OR contract_end >= \?/u);
 
   /* Varrer o grupo inteiro só é seguro com a outra metade da regra: quem já foi
      apurado no mês por outra empresa fica de fora. Sem isso, apurar agosto na
