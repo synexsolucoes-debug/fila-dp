@@ -204,3 +204,41 @@ export function readMovementInput(body: Record<string, unknown>): MovementInput 
 
   return { movementType, effectiveDate, title, reason, effect };
 }
+
+/**
+ * Os pares prestador-valor de um lançamento em lote.
+ *
+ * Devolve `null` quando o corpo não traz lote — é assim que a rota distingue
+ * as duas formas de lançar sem precisar de um sinalizador à parte, que um
+ * cliente poderia mandar errado.
+ *
+ * O teto de duzentos não é arbitrário: é mais que o maior grupo em operação e
+ * pequeno o bastante para a requisição não estourar o tempo da função. Sem
+ * teto, um corpo com dez mil entradas viraria dez mil idas ao banco dentro de
+ * uma requisição só.
+ */
+export function readBatchEntries(value: unknown): Array<{ providerId: string; amount: number }> | null {
+  if (!Array.isArray(value)) return null;
+  if (value.length === 0) throw ApiError.badRequest("Informe ao menos um prestador com valor.", "BATCH_EMPTY");
+  if (value.length > 200) throw ApiError.badRequest("São no máximo 200 prestadores por lançamento.", "BATCH_TOO_LARGE");
+
+  const entries: Array<{ providerId: string; amount: number }> = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const row = (item ?? {}) as Record<string, unknown>;
+    const providerId = cleanText(row.providerId ?? row.contractorId, 120);
+    if (!providerId) throw ApiError.badRequest("Há uma linha sem prestador.", "BATCH_PROVIDER_REQUIRED");
+    /* O mesmo prestador duas vezes no mesmo lote quase sempre é engano de
+       preenchimento, e lançar os dois valores em silêncio é o pior desfecho:
+       a apuração fecha com um número que ninguém digitou de propósito. */
+    if (seen.has(providerId)) throw ApiError.badRequest("O mesmo prestador aparece duas vezes no lançamento.", "BATCH_DUPLICATE");
+    seen.add(providerId);
+    const amountCents = optionalCents(row.amount, "Valor") ?? 0;
+    // Linha em branco é ignorada: quem preenche a lista deixa vazia a de quem
+    // não recebe aquela rubrica, e obrigar a apagar seria trabalho sem motivo.
+    if (amountCents <= 0) continue;
+    entries.push({ providerId, amount: amountCents / 100 });
+  }
+  if (entries.length === 0) throw ApiError.badRequest("Nenhuma linha tem valor preenchido.", "BATCH_EMPTY");
+  return entries;
+}

@@ -114,6 +114,33 @@ export const reports = {
     companyColumn: "t.company_id",
     order: "ORDER BY t.prestador, t.ordem, t.rubrica",
   },
+  /* As mensagens de aviso de nota fiscal.
+   *
+   * Não é um relatório: é um arquivo de texto com uma mensagem pronta por
+   * prestador, para quem avisa copiar e colar na conversa de cada um. Mora
+   * aqui porque o caminho é o mesmo dos relatórios — mesma permissão, mesmo
+   * recorte por empresa, mesma auditoria de exportação — e uma rota paralela
+   * seria a segunda cópia dessas três coisas.
+   *
+   * Entram os prestadores com valor a emitir na competência, tenham já mandado
+   * a nota ou não. Quem tem nota zerada fica de fora: uma mensagem dizendo
+   * "segue o valor a ser emitido: R$ 0,00" não avisa nada.
+   *
+   * A ordem é alfabética, a mesma da tela — o arquivo sai sem cabeçalho de
+   * identificação, por escolha de quem usa, e é a ordem que permite acompanhar
+   * a tabela enquanto se cola. */
+  "contractor-invoice-notice": {
+    capability: "contractors.payments.read",
+    columns: ["prestador", "codigo", "cnpj", "competencia", "nf_esperada", "status_nf"],
+    query: `SELECT a.legal_name AS prestador, a.code AS codigo, a.tax_id AS cnpj, c.competence AS competencia,
+        c.invoice_expected_amount AS nf_esperada, c.invoice_status AS status_nf
+      FROM fdp_contractor_closings c
+      JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
+      WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL
+        AND c.invoice_expected_amount > 0`,
+    companyColumn: "c.company_id",
+    order: "ORDER BY a.legal_name",
+  },
   "contractor-divergences": {
     capability: "contractors.payments.read",
     columns: ["prestador", "competencia", "liquido", "nf_esperada", "nf_recebida", "complemento", "complemento_pago", "diferenca", "conciliacao"],

@@ -7,6 +7,7 @@ import { validCompetence } from "@/lib/operations";
 import { reports, type PaymentReportKey } from "@/lib/payment-reports";
 import { renderContractorStatement } from "@/lib/contractor-statement-pdf";
 import { buildStatement } from "@/lib/contractor-statement";
+import { buildInvoiceNoticeFile } from "@/lib/contractor-invoice-notice";
 
 /** Toda exportação entra na auditoria, em qualquer formato: é ela que responde
  *  quem levou os valores de uma competência para fora do sistema. */
@@ -42,12 +43,19 @@ export async function GET(request: Request) {
     const competence = validCompetence(url.searchParams.get("competence"));
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     const requested = url.searchParams.get("format");
-    const format = requested === "csv" ? "csv" : requested === "pdf" ? "pdf" : "json";
+    const format = requested === "csv" ? "csv"
+      : requested === "pdf" ? "pdf"
+        : requested === "txt" ? "txt" : "json";
     /* O PDF existe para um documento só: o extrato analítico, que é o que se
        entrega para conferência. Oferecê-lo nos outros seria prometer um
        desenho que não existe. */
     if (format === "pdf" && key !== "contractor-analytical") {
       throw ApiError.badRequest("Este relatório não tem versão em PDF.", "PAYMENT_REPORT_NO_PDF");
+    }
+    /* O texto puro só faz sentido para o aviso de nota: é uma mensagem pronta
+       por prestador, não uma tabela. */
+    if (format === "txt" && key !== "contractor-invoice-notice") {
+      throw ApiError.badRequest("Este relatório não tem versão em texto.", "PAYMENT_REPORT_NO_TXT");
     }
 
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
@@ -72,6 +80,26 @@ export async function GET(request: Request) {
 
     const sql = `${report.query}${filters.length ? ` AND ${filters.join(" AND ")}` : ""} ${report.order}`;
     const rows = await d1.prepare(sql).bind(...values).all<Record<string, unknown>>();
+
+    if (format === "txt") {
+      const conteudo = buildInvoiceNoticeFile(rows.results);
+      /* Arquivo vazio parece defeito. Se ninguém tem valor a emitir, a recusa
+         diz isso — que é uma informação, e não um erro. */
+      if (!conteudo) {
+        throw ApiError.badRequest(
+          "Nenhum prestador desta empresa tem valor de nota a emitir nesta competência.",
+          "INVOICE_NOTICE_EMPTY",
+        );
+      }
+      await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "txt");
+      return new Response(`\uFEFF${conteudo}\r\n`, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `attachment; filename="avisos-nf-${competence}.txt"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
 
     if (format === "pdf") {
       const empresa = companyId

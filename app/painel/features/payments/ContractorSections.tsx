@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  Archive, ArrowRight, CalendarClock, CreditCard, Download, FileSpreadsheet, FileText, Plus, ReceiptText,
-  RotateCcw, ShieldCheck, Users,
+  Archive, ArrowRight, CalendarClock, CreditCard, Download, FileSpreadsheet, FileText, MessageSquare, Plus,
+  ReceiptText, RotateCcw, ShieldCheck, Users,
 } from "lucide-react";
 import { CajuExportPanel } from "./CajuExportPanel";
 import type {
@@ -46,6 +46,10 @@ export type SectionProps = {
   onRecalculate: (providerId?: string) => void;
   onTransition: (closingId: string, status: string) => void;
   onCompetence: (competence: string) => void;
+  /** Abre a janela de lançamento com a natureza já escolhida (§55). */
+  onNewEntry: (nature: "mensal" | "fixo" | "determinado") => void;
+  /** Abre a escolha de empresa antes de gerar o arquivo de avisos de NF. */
+  onInvoiceNotice: () => void;
 };
 
 export function ContractorSectionView(props: SectionProps) {
@@ -266,6 +270,12 @@ function ClosingsSection(props: SectionProps) {
         <a className={styles.secondaryButton} href={props.reportUrl("contractor-analytical")}>
           <FileSpreadsheet aria-hidden="true" /> Extrato analítico (CSV)
         </a>
+        {/* As mensagens de aviso. Não é um link direto como os outros: a
+            empresa é escolhida na hora, porque é ela que define de quem são as
+            mensagens do arquivo. */}
+        <button type="button" className={styles.secondaryButton} onClick={props.onInvoiceNotice}>
+          <MessageSquare aria-hidden="true" /> Gerar avisos de NF (TXT)
+        </button>
       </footer>
     </>
   );
@@ -275,24 +285,81 @@ function ClosingsSection(props: SectionProps) {
 /* Ajustes                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function AdjustmentsSection({ overview, competence, money, componentLabels, permissions, busy, onDialog }: SectionProps) {
-  const { fixedItems, contractors } = overview;
+/**
+ * Ajustes: os lançamentos da competência, nas três naturezas.
+ *
+ * A tela mostrava só os recorrentes, e quem lançava um desconto avulso não
+ * tinha onde conferir o que lançou — o valor entrava na apuração e sumia de
+ * vista. Agora as duas listas convivem: o que vale só neste mês e o que se
+ * repete, com a vigência dizendo até quando.
+ */
+function AdjustmentsSection(props: SectionProps) {
+  const { overview, competence, competenceLabel, money, componentLabels, permissions, busy, onNewEntry } = props;
+  const { fixedItems, monthlyEntries } = overview;
+  const mensais = monthlyEntries.filter((item) => item.status !== "canceled");
   return (
+    <>
+    <section className={styles.fixedItemsPanel} aria-labelledby="monthly-entries-title">
+      <header>
+        <div>
+          <span className={styles.eyebrow}>LANÇAMENTOS DA COMPETÊNCIA</span>
+          <h3 id="monthly-entries-title">Mensais de {competenceLabel(competence)}</h3>
+          <p>Valem só nesta competência. Os que vêm de um lançamento fixo aparecem na lista de baixo, não aqui.</p>
+        </div>
+        {permissions?.manage ? (
+          <button className={styles.primaryButton} type="button" disabled={busy}
+            onClick={() => onNewEntry("mensal")}>
+            <Plus aria-hidden="true" /> Novo lançamento
+          </button>
+        ) : null}
+      </header>
+      {mensais.length === 0 ? (
+        <p className={styles.fixedItemsEmpty}>
+          Nenhum lançamento avulso nesta competência. Use <b>Novo lançamento</b> para registrar um crédito ou
+          desconto — de um prestador só ou de vários de uma vez.
+        </p>
+      ) : (
+        <div className={styles.tableScroll}>
+          <table className={styles.table}>
+            <caption className={styles.tableCaption}>Créditos e descontos lançados em {competenceLabel(competence)}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Prestador</th><th scope="col">Rubrica</th>
+                <th scope="col">Tipo</th><th scope="col">Valor</th><th scope="col">Documento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mensais.map((item) => (
+                <tr key={item.id}>
+                  <th scope="row">{item.contractorName}</th>
+                  <td>{item.description || componentLabels[item.componentType] || item.componentType}
+                    <small>{componentLabels[item.componentType] || item.componentType}</small></td>
+                  <td>{item.direction === "credit" ? "Provento" : "Desconto"}</td>
+                  <td className={item.direction === "debit" ? styles.negative : undefined}>{money(item.amount)}</td>
+                  <td>{item.documentReference || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+
     <section className={styles.fixedItemsPanel} aria-labelledby="fixed-items-title">
       <header>
         <div>
           <span className={styles.eyebrow}>LANÇAMENTOS RECORRENTES</span>
-          <h3 id="fixed-items-title">Lançamentos fixos</h3>
-          <p>Plano de saúde, convênios, adicionais e outros valores que se repetem automaticamente por competência.</p>
+          <h3 id="fixed-items-title">Fixos e determinados</h3>
+          <p>Entram automaticamente em cada competência dentro da vigência. Sem competência final, o lançamento é fixo; com ela, determinado.</p>
         </div>
         {permissions?.manage ? (
           <button
             className={styles.secondaryButton}
             type="button"
-            onClick={() => onDialog({ kind: "fixed-item", contractors, competence })}
+            onClick={() => onNewEntry("fixo")}
             disabled={busy}
           >
-            <CalendarClock aria-hidden="true" /> Novo lançamento fixo
+            <CalendarClock aria-hidden="true" /> Novo recorrente
           </button>
         ) : null}
       </header>
@@ -321,7 +388,7 @@ function AdjustmentsSection({ overview, competence, money, componentLabels, perm
                     <td>{item.description || componentLabels[item.componentType] || item.componentType}<small>{componentLabels[item.componentType] || item.componentType}</small></td>
                     <td>{item.direction === "credit" ? "Provento" : "Desconto"}</td>
                     <td className={item.direction === "debit" ? styles.negative : undefined}>{money(item.amount)}</td>
-                    <td>{item.effectiveFrom} → {item.effectiveTo || "sem término"}<small>{item.effectiveTo ? "Prazo determinado" : "Sem prazo"}</small></td>
+                    <td>{item.effectiveFrom} → {item.effectiveTo || "sem término"}<small>{item.effectiveTo ? "Determinado" : "Fixo"}</small></td>
                     <td><span className={styles.badge} data-tone={appliesNow ? "validated" : "pending"}>{appliesNow ? "Aplicado" : "Fora da vigência"}</span></td>
                   </tr>
                 );
@@ -331,6 +398,7 @@ function AdjustmentsSection({ overview, competence, money, componentLabels, perm
         </div>
       )}
     </section>
+    </>
   );
 }
 
@@ -484,11 +552,15 @@ function ArchiveSection(props: SectionProps) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Treze colunas é muito para uma tabela — e é o que a apuração PJ tem de
- * verdade: base, créditos, descontos, líquido, limite, nota esperada,
- * complemento e três situações. Reduzir esconderia o que a conferência
- * precisa. O que se pode fazer é não repetir a definição dela em três
- * destinos, e é o que este componente resolve.
+ * A apuração PJ tem muita coluna de verdade: base, créditos, descontos,
+ * líquido, limite, nota esperada e complemento. O que saiu foram as três
+ * situações que não se acompanha aqui — status do complemento, conciliação e
+ * fechamento. Elas continuam no banco e no extrato analítico; o que deixaram
+ * de fazer é disputar largura com os números que se confere todo dia.
+ *
+ * O status do fechamento continua governando os botões da linha: ele decide o
+ * que se pode fazer com aquele prestador, só não ocupa mais uma coluna para
+ * dizer o que os próprios botões já dizem.
  */
 function ClosingsTable({
   rows, caption, showActions, money, statusLabels, limitSourceLabels, complementLabels,
@@ -503,7 +575,6 @@ function ClosingsTable({
             <th scope="col">Prestador</th><th scope="col">Base</th><th scope="col">Créditos</th>
             <th scope="col">Descontos</th><th scope="col">Líquido</th><th scope="col">Limite NF</th>
             <th scope="col">NF esperada</th><th scope="col">Complemento</th><th scope="col">Status NF</th>
-            <th scope="col">Status complemento</th><th scope="col">Conciliação</th><th scope="col">Fechamento</th>
             {showActions && <th scope="col">Ações</th>}
           </tr>
         </thead>
@@ -536,12 +607,6 @@ function ClosingsTable({
                 <small>{complementLabels[row.complementMethod] ?? row.complementMethod}</small>
               </td>
               <td><span className={styles.badge} data-tone={row.invoiceStatus}>{statusLabels[row.invoiceStatus] ?? row.invoiceStatus}</span></td>
-              <td><span className={styles.badge} data-tone={row.cajuStatus}>{statusLabels[row.cajuStatus] ?? row.cajuStatus}</span></td>
-              <td>
-                <span className={styles.badge} data-tone={row.reconciliationStatus}>{statusLabels[row.reconciliationStatus] ?? row.reconciliationStatus}</span>
-                {row.reconciliationDifference !== 0 && <small>{money(row.reconciliationDifference)}</small>}
-              </td>
-              <td><span className={styles.badge} data-tone={row.status}>{statusLabels[row.status] ?? row.status}</span></td>
               {showActions && (
                 <td className={styles.rowActions}>
                   {permissions?.manage && row.status !== "closed" && row.status !== "paid" && (
