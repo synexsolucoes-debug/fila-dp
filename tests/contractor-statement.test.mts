@@ -55,18 +55,13 @@ test("o extrato fecha nos dois sentidos: pela conta e pelas duas saídas", () =>
   assert.equal(prestador.valorNotaFiscal + prestador.complemento, prestador.totalApurado);
 });
 
-test("o lançamento cancelado aparece e fica fora da soma", () => {
-  /* Sumir com ele deixaria quem confere sem explicação para a diferença entre
-     o que foi lançado e o que foi apurado — que é o que se procura ao
-     conferir. Somá-lo faria o extrato discordar da apuração. */
+test("o lançamento cancelado não aparece e fica fora da soma", () => {
   const documento = buildStatement(linhasDeUmPrestador, contexto);
   const [prestador] = documento.prestadores;
-  assert.equal(prestador.linhas.length, 6, "toda rubrica aparece");
-  const cancelada = prestador.linhas.find((item) => item.cancelado);
-  assert.ok(cancelada, "a rubrica cancelada precisa aparecer");
-  assert.equal(cancelada.descricao, "Falta");
-  assert.equal(cancelada.descontos, 300, "com o valor visível");
-  assert.equal(prestador.totalDescontos, 640, "e fora do total: 480 + 160, sem os 300");
+  assert.equal(prestador.linhas.length, 5, "somente rubricas válidas aparecem");
+  assert.ok(!prestador.linhas.some((item) => item.cancelado));
+  assert.ok(!prestador.linhas.some((item) => item.descricao === "Falta"));
+  assert.equal(prestador.totalDescontos, 640, "o total mantém 480 + 160, sem os 300 cancelados");
 });
 
 test("prestadores são separados por código e CNPJ, não por nome", () => {
@@ -162,22 +157,12 @@ test("o deslocamento de cada objeto é contado em bytes, não em caracteres", ()
   }
 });
 
-test("o valor cancelado sai riscado, não só rotulado", () => {
-  /* O rótulo "(cancelado)" na descrição não basta: o número fica na mesma
-     coluna dos vivos, e quem soma a coluna com o dedo chega a 940,00 onde o
-     quadro de fecho diz 640,00. O traço tira a dúvida sem tirar o dado, que
-     precisa continuar visível para explicar a diferença entre o lançado e o
-     apurado.
-
-     A conferência é por contagem de traços: o mesmo documento sem a rubrica
-     cancelada desenha uma linha a menos. */
-  const contaLinhas = (texto: string) => [...texto.matchAll(/ l S/gu)].length;
+test("o PDF ignora completamente a rubrica cancelada", () => {
   const comCancelado = renderContractorStatement(buildStatement(linhasDeUmPrestador, contexto)).toString("latin1");
   const semCancelado = renderContractorStatement(
     buildStatement(linhasDeUmPrestador.filter((item) => item.situacao !== "canceled"), contexto),
   ).toString("latin1");
-  assert.equal(contaLinhas(comCancelado), contaLinhas(semCancelado) + 1,
-    "a rubrica cancelada precisa acrescentar exatamente um traço");
+  assert.equal(comCancelado, semCancelado, "cancelados não podem alterar nenhuma página do extrato");
 });
 
 test("texto fora do Latin-1 vira a letra sem acento, nunca lixo", () => {

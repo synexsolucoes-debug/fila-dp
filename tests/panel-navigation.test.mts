@@ -178,7 +178,7 @@ test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §
   assert.ok(contexto > 0 && transicao > contexto,
     "o cabeçalho do processo precisa vir antes da transição, e fora dela");
   // Abas com indicador deslizante (§17), não troca instantânea de cor.
-  assert.match(source, /<AnimatedTabs\n\s+label=\{`Módulos de \$\{activeGroup\.label\}`\}/u);
+  assert.match(source, /<AnimatedTabs\r?\n\s+label=\{`Módulos de \$\{activeGroup\.label\}`\}/u);
   // Todo processo ganha cabeçalho, inclusive o de um módulo só (§70).
   //
   // A regra anterior era o contrário — um processo de um módulo não tinha

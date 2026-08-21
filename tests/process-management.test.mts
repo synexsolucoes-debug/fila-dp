@@ -104,3 +104,57 @@ test("modelador mantém instância durante autosave e responde ao viewport",asyn
   assert.match(css,/\.modelerShell:fullscreen/u);
   assert.match(css,/\.bpmnCanvas :global\(\.djs-container\)/u);
 });
+
+test("modais portados preservam tokens, controles e prévia acessível", async () => {
+  const [view, modeler, css] = await Promise.all([
+    readFile(new URL("../app/painel/features/processes/ProcessManagementView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/processes/ProcessModeler.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/processes/processes.module.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(view, /className=\{styles\.processPortal\}/u);
+  assert.match(css, /\.processPortal\s*\{[\s\S]*--b: var\(--ui-border\);[\s\S]*--t: var\(--ui-text\);/u);
+  assert.match(css, /\.processPortal :is\(input, select, textarea, button\):focus-visible/u);
+  assert.match(modeler, /<AnimatedModal open=\{preview!==null\}/u);
+  assert.doesNotMatch(modeler, /styles\.(modalBackdrop|previewModal)/u);
+});
+
+test("cadastro e abertura entregam ficha operacional e maturidade", async () => {
+  const [view, route] = await Promise.all([
+    readFile(new URL("../app/painel/features/processes/ProcessManagementView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/processes/[id]/route.ts", import.meta.url), "utf8"),
+  ]);
+  for (const section of ["Identificação", "Escopo e responsáveis", "Início e publicação", "SLA e prioridade", "Etiquetas e observações"]) {
+    assert.match(view, new RegExp(section, "u"));
+  }
+  assert.match(view, /function ProcessDetail/u);
+  assert.match(view, /FICHA OPERACIONAL/u);
+  assert.match(view, /className=\{styles\.maturityStrip\}/u);
+  assert.match(view, /lifecycleStatus: "restore"/u);
+  assert.match(route, /requestedLifecycle === "restore"/u);
+  assert.match(route, /process\.restored/u);
+});
+
+test("configuração de etapa expõe os campos avançados já persistidos", async () => {
+  const modeler = await readFile(new URL("../app/painel/features/processes/ProcessModeler.tsx", import.meta.url), "utf8");
+  for (const label of ["Prioridade da demanda", "SLA da demanda", "Documentos opcionais", "Formulário", "Quantidade", "Modo", "Escalonar após", "Regra de atribuição dinâmica", "Modelo de notificação"]) {
+    assert.match(modeler, new RegExp(label, "u"), `campo ${label} não foi exposto`);
+  }
+});
+
+test("edição e ciclo de versões respeitam o escopo de empresa", async () => {
+  const [definition, version, review, publish, createVersion, access] = await Promise.all([
+    readFile(new URL("../app/api/processes/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/processes/versions/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/processes/versions/[id]/review/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/processes/versions/[id]/publish/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/processes/[id]/versions/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/process-access.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(definition, /requireProcessCompanyAccess/u);
+  assert.match(definition, /definition_id=\?/u, "restauração deve consultar a coluna real da versão");
+  assert.doesNotMatch(definition, /fdp_process_versions[^\n]+process_id=\?/u);
+  assert.match(version, /await requireScope/u);
+  for (const source of [review, publish, createVersion]) assert.match(source, /requireProcessCompanyAccess/u);
+  assert.match(access, /fdp_process_companies/u);
+  assert.match(access, /COMPANY_ACCESS_REQUIRED/u);
+});

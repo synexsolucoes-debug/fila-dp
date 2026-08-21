@@ -325,7 +325,10 @@ export function PaymentDialog({ dialog, busy, onClose, onSubmit }: Props) {
                   <label>Valor recebido (R$)<input name="receivedAmount" type="number" min="0" step="0.01" defaultValue={dialog.closing.invoiceExpectedAmount} required /></label>
                   <label>Emissão<input name="issueDate" type="date" /></label>
                 </div>
-                <label>Arquivo/referência<input name="attachmentReference" maxLength={200} /></label>
+                <label>Arquivo da nota fiscal
+                  <input name="invoiceFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+                  <span className={styles.hint}>Opcional. PDF, JPG, PNG ou WEBP, até 20 MB. O arquivo ficará na pasta deste contrato.</span>
+                </label>
                 <p className={styles.hint}>Valor diferente do esperado gera divergência e bloqueia o pagamento até a conferência.</p>
               </>
             )}

@@ -1981,6 +1981,35 @@ export const contractorComponents = pgTable("fdp_contractor_components", {
     OR (${table.direction} = 'debit' AND ${table.componentType} IN ('health_plan', 'dental_plan', 'benefit', 'coparticipation', 'equipment', 'advance', 'absence', 'loan', 'negative_adjustment', 'other_debit'))`),
 ]);
 
+export const contractorDocuments = pgTable("fdp_contractor_documents", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  providerId: text("provider_id").notNull().references(() => auxiliaryProviders.id, { onDelete: "restrict" }),
+  closingId: text("closing_id").notNull().references(() => contractorClosings.id, { onDelete: "restrict" }),
+  documentKind: text("document_kind").notNull().default("invoice"),
+  competence: text("competence").notNull(),
+  invoiceNumber: text("invoice_number").notNull().default(""),
+  objectKey: text("object_key").notNull(),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_contractor_documents_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_contractor_documents_object_key_uq").on(table.objectKey),
+  index("fdp_contractor_documents_workspace_provider_idx").on(table.workspaceId, table.providerId, table.createdAt),
+  index("fdp_contractor_documents_workspace_closing_idx").on(table.workspaceId, table.closingId, table.createdAt),
+  foreignKey({ name: "fdp_contractor_documents_workspace_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_contractor_documents_workspace_provider_fk", columns: [table.workspaceId, table.providerId], foreignColumns: [auxiliaryProviders.workspaceId, auxiliaryProviders.id] }),
+  foreignKey({ name: "fdp_contractor_documents_workspace_closing_fk", columns: [table.workspaceId, table.closingId], foreignColumns: [contractorClosings.workspaceId, contractorClosings.id] }),
+  foreignKey({ name: "fdp_contractor_documents_workspace_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_contractor_documents_kind_check", sql`${table.documentKind} IN ('invoice')`),
+  check("fdp_contractor_documents_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_contractor_documents_size_check", sql`${table.sizeBytes} > 0`),
+]);
+
 /* -------------------------------------------------------------------------- */
 /* Escala — outbox transacional, webhooks de saída e API pública               */
 /* -------------------------------------------------------------------------- */

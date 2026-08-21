@@ -35,7 +35,10 @@ export async function GET() {
           (SELECT COUNT(*)::integer FROM fdp_workspace_members WHERE workspace_id = ?) AS members,
           (SELECT COUNT(*)::integer FROM fdp_companies WHERE workspace_id = ? AND status = 'active') AS companies,
           (SELECT COUNT(*)::integer FROM fdp_integrations WHERE workspace_id = ? AND status = 'connected') AS integrations,
-          CEIL(COALESCE((SELECT SUM(size_bytes) FROM fdp_card_attachments WHERE workspace_id = ?), 0) / 1048576.0)::integer AS storage_mb`).bind(workspace.id, workspace.id, workspace.id, workspace.id).first<Record<string, unknown>>(),
+          CEIL((COALESCE((SELECT SUM(size_bytes) FROM fdp_card_attachments WHERE workspace_id = ?), 0)
+            + COALESCE((SELECT SUM(size_bytes) FROM fdp_epi_attachments WHERE workspace_id = ?), 0)
+            + COALESCE((SELECT SUM(size_bytes) FROM fdp_contractor_documents WHERE workspace_id = ?), 0)) / 1048576.0)::integer AS storage_mb`)
+          .bind(workspace.id, workspace.id, workspace.id, workspace.id, workspace.id, workspace.id).first<Record<string, unknown>>(),
     ]);
     return Response.json({
       workspace: { id: workspace.id, name: workspace.name },

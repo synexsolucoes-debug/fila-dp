@@ -81,6 +81,18 @@ export type ContractorPaymentDetail = {
   permissions: { manage: boolean; reopen: boolean };
 };
 
+export type ContractorDocument = {
+  id: string;
+  closingId: string;
+  documentKind: string;
+  competence: string;
+  invoiceNumber: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+};
+
 /** Lançamento avulso da competência — a natureza "mensal". */
 export type ContractorMonthlyEntry = {
   id: string; providerId: string; contractorName: string; direction: "credit" | "debit";
