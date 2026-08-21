@@ -178,12 +178,36 @@ test("nada escreve por cima de nada, por mais comprido que seja o cadastro", () 
 
      A conferência mede o desenho: para cada linha do arquivo, o fim de um
      trecho não pode passar do começo do seguinte. É a mesma pergunta que se faz
-     olhando a folha impressa, feita em pontos. */
+     olhando a folha impressa, feita em pontos.
+
+     **Todo campo de texto entra comprido, e não uma escolha de quais.** A
+     primeira versão deste teste esticou o nome, a função e o contrato, e deixou
+     o código em "PJ001" — e foi exatamente pelo código que o defeito voltou:
+     quando ninguém informa um, ele nasce do nome da empresa, e
+     "CEM-TELECOMUNICACOES" mede 107pt numa coluna de 58. Escolher quais campos
+     estressar é escolher quais defeitos não encontrar. */
+  const comprido = (texto: string) => texto.repeat(4).slice(0, 130);
   const gigante = buildStatement([linha({
-    tipo: "PROVENTO", rubrica: "Valor contratual", valor: 8000, origem: "contrato",
-    prestador: "Construtora Incorporadora Administradora e Participações Santa Terezinha do Vale Verde Grande do Norte Sociedade Empresária Limitada",
-    funcao: "Coordenação geral de obras civis, manutenção predial preventiva e corretiva e gestão integral de contratos de fachada e cobertura",
-    contrato: "CT-2026-0001-REVISAO-B-ADITIVO-3-PRORROGACAO-2027-ANEXO-IV",
+    tipo: "PROVENTO", valor: 8000, origem: "contrato",
+    codigo: "CEM-TELECOMUNICACOES-E-SERVICOS-LTDA-FILIAL-ZONA-NORTE",
+    prestador: comprido("Construtora Incorporadora Administradora e Participações Santa Terezinha do Vale Verde "),
+    cnpj: "11222333000181",
+    funcao: comprido("Coordenação geral de obras civis, manutenção predial preventiva e corretiva "),
+    contrato: comprido("CT-2026-0001-REVISAO-B-ADITIVO-3-PRORROGACAO-2027-ANEXO-IV-"),
+    rubrica: "Valor contratual",
+    quantidade: 12345.6789,
+  }), linha({
+    /* Uma segunda linha para a coluna da esquerda das rubricas, que na do
+       contrato recebe sempre "CONTRATO". Ali o texto vem de `origem`, e uma
+       origem que o mapa de rótulos não conhece sai crua e em maiúsculas — é a
+       única forma de aquela coluna receber algo comprido, e é a que apareceria
+       no dia em que o banco ganhasse um valor de origem novo. */
+    tipo: "DESCONTO", valor: 320, quantidade: 3,
+    codigo: "CEM-TELECOMUNICACOES-E-SERVICOS-LTDA-FILIAL-ZONA-NORTE",
+    prestador: comprido("Construtora Incorporadora Administradora e Participações Santa Terezinha do Vale Verde "),
+    cnpj: "11222333000181",
+    origem: comprido("origem_desconhecida_de_um_integrador_futuro_"),
+    rubrica: comprido("Desconto de coparticipação em plano de saúde com reajuste retroativo "),
   })], contexto);
 
   const texto = renderContractorStatement(gigante).toString("latin1");
