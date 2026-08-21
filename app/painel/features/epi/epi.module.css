@@ -148,8 +148,14 @@ button.summaryCard:hover { border-color: var(--epi-accent); transform: translate
 .consequence ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
 .consequence li[data-alert="true"] { color: var(--epi-warning); font-weight: 700; }
 
+/* A camada é a mesma dos diálogos do resto do painel (120 em motion.module.css).
+   Em 60 ela empatava com o botão flutuante do assistente, e empate de z-index é
+   decidido pela ordem no DOM: o assistente é montado depois e ficava por cima
+   justamente no canto inferior direito, onde mora o botão de confirmar da
+   gaveta. O clique ia para o assistente, a gaveta continuava aberta e nada era
+   gravado — sem erro na tela, porque erro nenhum houve. */
 .drawerOverlay {
-  position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end;
+  position: fixed; inset: 0; z-index: 120; display: flex; justify-content: flex-end;
   background: color-mix(in srgb, var(--epi-text) 42%, transparent); backdrop-filter: blur(2px);
 }
 .drawer {
