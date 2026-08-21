@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  assertExportable, buildCajuPreview, cajuFileName, isValidTaxId, type CajuCandidate,
+  assertExportable, buildCajuPreview, cajuFileName, describeCajuBlock, isValidTaxId, type CajuCandidate,
 } from "../lib/caju-export.ts";
 import { calculateContractorClosing } from "../lib/payments.ts";
 
 function candidate(partial: Partial<CajuCandidate> & { contractorId: string }): CajuCandidate {
   return {
+    closingId: partial.closingId ?? `fechamento-${partial.contractorId}`,
     contractorId: partial.contractorId,
     contractorName: partial.contractorName ?? `Prestador ${partial.contractorId}`,
     taxId: partial.taxId ?? "52998224725",
@@ -111,6 +112,32 @@ test("CPF inválido, cálculo não aprovado e duplicidade nunca passam em silên
     assert.equal(error.code, "CAJU_EXPORT_INVALID");
     return true;
   });
+});
+
+test("o bloqueio informa a etapa real e como concluir a aprovação", () => {
+  const aberto = describeCajuBlock("not_approved", "open");
+  assert.equal(aberto.category, "workflow");
+  assert.match(aberto.title, /conferência/u);
+  assert.match(aberto.detail, /não encontrou uma inconsistência de valor/u);
+  assert.match(aberto.action, /Conferência.*Aprovação.*Aprovado/u);
+
+  const aguardando = describeCajuBlock("not_approved", "approval");
+  assert.match(aguardando.title, /Aguardando aprovação/u);
+  assert.match(aguardando.action, /clique em Aprovado/u);
+
+  const cpf = describeCajuBlock("invalid_tax_id", "approved");
+  assert.equal(cpf.category, "data");
+  assert.match(cpf.detail, /11 dígitos válidos/u);
+  assert.match(cpf.action, /cadastro do prestador/u);
+});
+
+test("o diagnóstico leva diretamente ao fechamento PJ correto", async () => {
+  const [panel, sections] = await Promise.all([
+    readFile(new URL("../app/painel/features/payments/CajuExportPanel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.ok(panel.includes('href={`#contractor-closing-${row.closingId}`}'));
+  assert.ok(sections.includes('id={`contractor-closing-${row.id}`}'));
 });
 
 test("o mesmo CPF em empresas diferentes não é duplicidade", () => {
