@@ -52,7 +52,7 @@ export type Employee = {
   employmentStatus: "active" | "on_leave" | "terminated";
   employmentType: "clt" | "intern" | "apprentice" | "temporary";
   workModel: "onsite" | "hybrid" | "remote";
-  sourceSystem: "manual" | "solides";
+  sourceSystem: "manual" | "solides" | "sankhya";
   externalId: string;
   notes: string;
   createdAt: string;
