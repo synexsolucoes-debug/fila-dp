@@ -3911,8 +3911,10 @@
 .company-settings-form input, .company-settings-form select, .payroll-entry-panel input, .payroll-entry-panel select { padding: 0 9px; }
 .company-settings-form input:focus, .company-settings-form select:focus, .payroll-entry-panel input:focus, .payroll-entry-panel select:focus, .payroll-entry-panel textarea:focus { border-color: var(--ui-mint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-mint) 18%, transparent); }
 .company-settings-form .primary-button { width: max-content; min-height: 38px; align-self: end; }
+.company-settings-form-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.company-settings-form-actions .primary-button, .company-settings-form-actions .secondary-button { width: max-content; min-height: 38px; }
 .company-settings-list { display: grid; }
-.company-settings-list > article { min-height: 68px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) minmax(85px, .38fr) minmax(100px, .44fr) auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--ui-border); }
+.company-settings-list > article { min-height: 68px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) minmax(85px, .38fr) minmax(100px, .44fr) auto auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--ui-border); }
 .company-settings-list > article:last-child { border-bottom: 0; }
 .company-settings-list > article > i { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 9px; font-style: normal; font-weight: 850; }
 .company-settings-list > article.principal { box-shadow: inset 3px 0 0 var(--ui-mint); }
@@ -3923,6 +3925,8 @@
 .company-settings-list article small { margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .company-settings-list article > span small { margin-top: 0; }
 .company-settings-list article > span b { margin-top: 3px; overflow: hidden; color: var(--ui-text); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.company-settings-list article strong em.inactive { background: color-mix(in srgb, var(--ui-text-soft) 20%, transparent); color: var(--ui-text-soft); }
+.company-settings-list .secondary-button { min-height: 30px; padding: 0 11px; justify-self: end; font-size: 8px; white-space: nowrap; }
 .company-settings-list .danger-link { justify-self: end; font-size: 8px; }
 
 .payroll-toolbar { padding: 19px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid color-mix(in srgb, var(--ui-mint) 44%, var(--ui-border)); border-radius: 16px; background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 12%, var(--ui-surface)), var(--ui-surface) 62%); }
