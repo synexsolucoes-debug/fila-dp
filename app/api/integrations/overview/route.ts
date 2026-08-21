@@ -14,7 +14,7 @@ function publicConnectorConfig(value: unknown) {
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) parsed = candidate as Record<string, unknown>;
   } catch { return {}; }
 
-  const config: Record<string, string | number> = {};
+  const config: Record<string, unknown> = {};
   if (typeof parsed.endpoint === "string" && parsed.endpoint.length <= 500) {
     try {
       const endpoint = new URL(parsed.endpoint);
@@ -22,11 +22,17 @@ function publicConnectorConfig(value: unknown) {
       if (endpoint.protocol === "https:" && !endpoint.username && !endpoint.password && !hasSensitiveQuery) config.endpoint = endpoint.toString();
     } catch { /* Configuração legada inválida não deve derrubar o overview. */ }
   }
-  for (const key of ["accountReference", "admissionsSince", "boardId", "companyId"] as const) {
+  for (const key of ["accountReference", "admissionsSince", "boardId", "companyId", "tenantId", "teamId", "teamName", "channelId", "channelName"] as const) {
     if (typeof parsed[key] === "string" && parsed[key].length <= 160) config[key] = parsed[key];
   }
   const pageSize = Math.trunc(Number(parsed.pageSize) || 0);
   if (pageSize > 0) config.pageSize = Math.min(150, pageSize);
+  if (parsed.automations && typeof parsed.automations === "object" && !Array.isArray(parsed.automations)) {
+    config.automations = Object.fromEntries(
+      ["admission", "termination", "warning", "role_change", "salary_change"]
+        .map((key) => [key, (parsed.automations as Record<string, unknown>)[key] !== false]),
+    );
+  }
   return config;
 }
 
@@ -40,7 +46,10 @@ export async function GET() {
       d1.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.config_json, i.last_sync_at, i.last_connection_at,
           i.last_successful_sync_at, i.next_sync_at, i.schedule_enabled, i.connector_version, i.last_error, i.updated_at,
           credential.id AS credential_id, credential.fingerprint, credential.public_hint, credential.key_version, credential.verified_at, credential.expires_at,
-          (credential.id IS NOT NULL) AS has_credentials
+          (credential.id IS NOT NULL) AS has_credentials,
+          EXISTS (SELECT 1 FROM fdp_integration_credentials webhook
+            WHERE webhook.workspace_id = i.workspace_id AND webhook.integration_id = i.id
+              AND webhook.credential_type = 'webhook_signing' AND webhook.status = 'active') AS has_webhook_secret
         FROM fdp_integrations i
         LEFT JOIN LATERAL (
           SELECT id, fingerprint, public_hint, key_version, verified_at, expires_at FROM fdp_integration_credentials
@@ -97,3 +106,4 @@ export async function GET() {
     });
   } catch (error) { return apiError(error); }
 }
+
