@@ -280,4 +280,3 @@ test("a confirmação da sugestão só cria demanda com os dados obrigatórios",
   assert.match(source, /MOVEMENT_SUGGESTION_RESOLVED/u);
   assert.match(source, /row\.status !== "pending"/u);
 });
-
