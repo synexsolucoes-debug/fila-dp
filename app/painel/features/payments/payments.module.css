@@ -103,6 +103,29 @@
 .fixedItemsPanel header p { margin: 0; color: var(--pay-soft); font-size: .73rem; }
 .fixedItemsEmpty { margin: 0; color: var(--pay-soft); font-size: .75rem; }
 
+.approvalPanel {
+  display: grid; gap: 12px; margin-bottom: 12px; padding: 15px 16px;
+  border: 1px solid color-mix(in srgb, var(--pay-accent) 34%, var(--pay-border));
+  border-radius: 12px; background: linear-gradient(135deg, var(--pay-surface), color-mix(in srgb, var(--pay-accent-soft) 38%, var(--pay-surface)));
+}
+.approvalPanel > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.approvalPanel h3 { margin: 3px 0; font-size: .96rem; }
+.approvalPanel header p { margin: 0; color: var(--pay-soft); font-size: .72rem; }
+.approvalEmpty { margin: 0; padding: 10px 12px; border: 1px dashed var(--pay-border); border-radius: 8px; color: var(--pay-soft); font-size: .72rem; }
+.approvalToolbar { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--pay-border); }
+.approvalToolbar > label { display: inline-flex; align-items: center; gap: 7px; font-size: .71rem; font-weight: 740; }
+.approvalToolbar > span { margin-right: auto; color: var(--pay-soft); font-size: .68rem; }
+.approvalToolbar input, .approvalRows input { width: 16px; height: 16px; accent-color: var(--pay-accent); }
+.approvalRows { display: grid; grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)); gap: 7px; }
+.approvalRows > label {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px;
+  padding: 9px 10px; border: 1px solid var(--pay-border); border-radius: 8px; background: var(--pay-surface); cursor: pointer;
+}
+.approvalRows span { display: grid; min-width: 0; }
+.approvalRows strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .71rem; }
+.approvalRows small { color: var(--pay-soft); font-size: .62rem; }
+.approvalRows b { color: var(--pay-accent-text); font-size: .62rem; white-space: nowrap; }
+
 .tableScroll { overflow-x: auto; border: 1px solid var(--pay-border); border-radius: 12px; background: var(--pay-surface); }
 .table { width: 100%; border-collapse: collapse; font-size: .76rem; }
 .tableCaption { padding: 11px 14px; text-align: left; font-size: .68rem; font-weight: 800; letter-spacing: .08em; color: var(--pay-soft); text-transform: uppercase; }
@@ -190,6 +213,28 @@
 .hint { margin: 0; color: var(--pay-soft); font-size: .69rem; line-height: 1.45; }
 .dialogFooter { display: flex; justify-content: flex-end; gap: 9px; padding: 13px 18px; border-top: 1px solid var(--pay-border); background: var(--pay-muted); }
 
+.documentsDialog { width: min(780px, 100%); }
+.documentsBody { min-height: 220px; padding: 16px 18px; overflow-y: auto; }
+.documentsEmpty { display: grid; justify-items: center; gap: 7px; padding: 32px 18px; text-align: center; color: var(--pay-soft); }
+.documentsEmpty > svg { width: 34px; height: 34px; color: var(--pay-accent-text); }
+.documentsEmpty strong { color: var(--pay-text); font-size: .82rem; }
+.documentsEmpty p { max-width: 440px; margin: 0; font-size: .7rem; line-height: 1.5; }
+.documentList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.documentList > li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px;
+  padding: 11px 12px; border: 1px solid var(--pay-border); border-radius: 9px; background: var(--pay-surface);
+}
+.documentIcon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9px; background: var(--pay-accent-soft); color: var(--pay-accent-text); }
+.documentList li > div { display: grid; gap: 2px; min-width: 0; }
+.documentList strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .76rem; }
+.documentList span, .documentList small { color: var(--pay-soft); font-size: .65rem; }
+.documentActions { display: flex !important; grid-auto-flow: column; gap: 6px !important; }
+.documentActions a {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 31px; padding: 0 9px;
+  border: 1px solid var(--pay-border); border-radius: 6px; color: var(--pay-text); text-decoration: none; font-size: .65rem; font-weight: 720;
+}
+.documentActions a:hover { border-color: var(--pay-accent-text); color: var(--pay-accent-text); }
+
 .detailDialog { width: min(920px, 100%); max-height: min(92vh, 920px); }
 .detailMeta { margin: 4px 0 0; color: var(--pay-soft); font-size: .7rem; }
 .detailBody { display: grid; gap: 14px; padding: 16px 18px; overflow-y: auto; }
@@ -265,6 +310,8 @@
   .moduleHeadline { flex-wrap: wrap; }
   .cycleBadge { margin-left: 0; }
   .fixedItemsPanel > header { align-items: stretch; flex-direction: column; }
+  .approvalPanel > header { align-items: stretch; flex-direction: column; }
+  .approvalPanel > header > button { align-self: flex-start; }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -292,6 +339,9 @@
 
 @media (max-width: 640px) {
   .cajuActions > button { flex: 1 1 100%; justify-content: center; }
+  .documentList > li { grid-template-columns: auto minmax(0, 1fr); }
+  .documentActions { grid-column: 1 / -1; }
+  .approvalToolbar > button { flex: 1 1 100%; }
 }
 
 /* ==========================================================================

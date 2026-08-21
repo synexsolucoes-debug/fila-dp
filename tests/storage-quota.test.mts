@@ -40,6 +40,9 @@ test("o total considera o workspace inteiro, não o cartão", () => {
   const inicio = route.indexOf("WITH lock AS (");
   const statement = route.slice(inicio, route.indexOf(".bind(", inicio));
   assert.match(statement, /FROM fdp_card_attachments WHERE workspace_id = \?/u);
+  assert.match(statement, /FROM fdp_epi_attachments WHERE workspace_id = \?/u);
+  assert.match(statement, /FROM fdp_contractor_documents WHERE workspace_id = \?/u,
+    "notas fiscais de contratos PJ também consomem a cota do plano");
   assert.doesNotMatch(statement, /SUM\(size_bytes\)[\s\S]{0,120}card_id/u);
 });
 
@@ -101,6 +104,10 @@ test("a soma da cota tem índice: ela roda dentro do lock a cada envio", async (
   assert.match(migration, /ON "fdp_card_attachments" \("workspace_id"\) INCLUDE \("size_bytes"\)/u);
   // `INCLUDE` evita voltar à tabela para ler a única coluna que a soma precisa.
   assert.match(migration, /IF NOT EXISTS/u, "reaplicar a migration não pode falhar");
+
+  const contractorMigration = await readFile(
+    new URL("../drizzle/postgres/0053_contractor_documents.sql", import.meta.url), "utf8");
+  assert.match(contractorMigration, /fdp_contractor_documents_workspace_provider_idx/u);
 
   const journal = JSON.parse(await readFile(new URL("../drizzle/postgres/meta/_journal.json", import.meta.url), "utf8")) as
     { entries: Array<{ tag: string }> };

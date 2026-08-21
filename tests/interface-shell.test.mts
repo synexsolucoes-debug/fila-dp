@@ -220,7 +220,7 @@ test("as duas escalas têm quatro degraus de superfície, e nenhum é branco pur
      mas qualquer regra futura que escape da sobrescrita resolve contra ela. Um
      `#ffffff` de volta ali é uma superfície branca esperando a primeira regra
      distraída — e a §5 existe justamente para isso não acontecer. */
-  const css = await lerCss("app/dashboard-modern.css");
+  const css = (await lerCss("app/dashboard-modern.css")).replaceAll("\r\n", "\n");
   const bloco = (seletor: string) => {
     const inicio = css.indexOf(seletor);
     return css.slice(inicio, css.indexOf("\n}", inicio));

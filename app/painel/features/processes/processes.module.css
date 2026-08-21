@@ -35,10 +35,45 @@
   color: var(--t);
 }
 
+/* Modais e gavetas são portados para `main.dashboard-shell`, portanto deixam
+   de ser descendentes de `.workspace`. Esta classe viaja no próprio conteúdo
+   portado e recompõe os aliases locais nos dois temas. */
+.processPortal {
+  --p: var(--ui-accent);
+  --p-text: var(--ui-accent-text);
+  --s: var(--ui-surface);
+  --elevated: var(--ui-surface-elevated);
+  --m: var(--ui-surface-muted);
+  --b: var(--ui-border);
+  --b-strong: var(--ui-border-strong);
+  --t: var(--ui-text);
+  --soft: var(--ui-text-soft);
+  --muted: var(--ui-text-muted);
+  --danger: var(--ui-danger);
+  color: var(--t);
+}
+
 .workspace button,
 .workspace input,
 .workspace select,
-.workspace textarea { font: inherit; }
+.workspace textarea,
+.processPortal button,
+.processPortal input,
+.processPortal select,
+.processPortal textarea { font: inherit; }
+
+.processPortal :is(input, select, textarea) {
+  border-color: var(--b);
+  background: var(--s);
+  color: var(--t);
+}
+
+.processPortal :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
+.workspace :is(input, select, textarea, button):focus-visible,
+.processPortal :is(input, select, textarea, button):focus-visible {
+  outline: 2px solid var(--p);
+  outline-offset: 2px;
+}
 /* Mira os ícones, não todo `<svg>`.
  *
  * `.workspace svg` alcançava também o `<svg>` raiz que o bpmn-js cria para o
@@ -119,6 +154,41 @@
   background: var(--s);
   box-shadow: var(--ui-shadow-card);
 }
+
+.maturityStrip {
+  margin-bottom: var(--layout-section-gap);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-md);
+  background: var(--b);
+  overflow: hidden;
+  gap: 1px;
+}
+
+.maturityStrip button {
+  min-width: 0;
+  min-height: 82px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: center;
+  gap: 2px 10px;
+  border: 0;
+  border-top: 3px solid var(--p);
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  text-align: left;
+}
+
+.maturityStrip button[data-tone="review"] { border-top-color: var(--ui-warning); }
+.maturityStrip button[data-tone="published"] { border-top-color: var(--ui-done); }
+.maturityStrip button[data-tone="archived"] { border-top-color: var(--muted); }
+.maturityStrip button:hover { background: var(--m); }
+.maturityStrip span { color: var(--soft); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .045em; }
+.maturityStrip strong { grid-row: 1 / 3; grid-column: 2; align-self: center; color: var(--t); font-size: 24px; line-height: 1; }
+.maturityStrip small { overflow: hidden; color: var(--muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
 
 /* -------------------------------------------------------------------------- */
 /* Barra de filtros (§45, §46)                                                 */
@@ -484,6 +554,7 @@
 }
 
 .dialogHeader strong, .dialogHeader h3 { margin: 0; color: var(--t); font-size: 16px; letter-spacing: -.02em; }
+.dialogHeader > div { display: grid; gap: 3px; }
 
 .dialogHeader button,
 .processForm footer button,
@@ -499,13 +570,54 @@
   font-weight: 650;
 }
 
-.processForm { padding: 16px; }
+.processForm { padding: 16px; display: grid; gap: 12px; }
+.formSection {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+}
+
+.formSection > legend {
+  max-width: calc(100% - 8px);
+  padding: 0 8px 0 0;
+  display: grid;
+  grid-template-columns: 26px auto 1fr;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--t);
+}
+
+.formSection > legend span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--ui-accent-soft);
+  color: var(--p-text);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.formSection > legend strong { font-size: 12.5px; }
+.formSection > legend small { color: var(--muted); font-size: 10.5px; font-weight: 500; }
 .formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .wideField { grid-column: 1 / -1; }
-.toggleGrid { margin: 14px 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.toggleGrid { margin-top: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .toggleGrid label, .companyPicker label { display: flex; align-items: center; gap: 7px; color: var(--t); font-size: 12.5px; }
+.toggleGrid label {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--b);
+  border-radius: 7px;
+  background: var(--m);
+}
+.toggleGrid input, .companyPicker input { width: 16px; height: 16px; accent-color: var(--p); }
 
 .companyPicker {
+  margin-top: 10px;
   padding: 11px;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -515,7 +627,48 @@
   background: var(--m);
 }
 
-.processForm footer { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; }
+.companyPicker > strong { grid-column: 1 / -1; color: var(--soft); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+
+.processForm footer { position: sticky; bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--b); background: var(--elevated); }
+
+/* Ficha operacional: a abertura do cadastro mostra contexto e decisões antes
+   de levar o usuário ao canvas BPMN. */
+.detailSheet { color: var(--t); }
+.detailHeader {
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--b);
+  background: var(--m);
+}
+.detailHeader h3 { margin: 4px 0 0; color: var(--t); font-size: 21px; letter-spacing: -.03em; }
+.detailStatus { margin-top: 9px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.detailStatus > span:not(:first-child) { color: var(--soft); font-size: 11px; }
+.detailPurpose { padding: 18px 20px; border-bottom: 1px solid var(--b); }
+.detailPurpose > span { color: var(--p-text); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.detailPurpose p { max-width: 760px; margin: 6px 0 0; color: var(--t); font-size: 14px; font-weight: 650; line-height: 1.55; }
+.detailPurpose small { display: block; max-width: 760px; margin-top: 6px; color: var(--soft); font-size: 12px; line-height: 1.5; }
+.detailGrid { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.detailGrid > section { min-width: 0; border: 1px solid var(--b); border-radius: var(--ui-radius-sm); background: var(--s); }
+.detailGrid > section > header { padding: 10px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--b); background: var(--m); }
+.detailGrid > section > header svg { color: var(--p-text); }
+.detailGrid > section > header strong { color: var(--t); font-size: 12px; }
+.detailGrid dl { margin: 0; }
+.detailGrid dl > div { padding: 8px 12px; display: grid; grid-template-columns: 112px 1fr; gap: 10px; border-bottom: 1px solid var(--b); }
+.detailGrid dl > div:last-child { border-bottom: 0; }
+.detailGrid dt { color: var(--muted); font-size: 10.5px; }
+.detailGrid dd { min-width: 0; margin: 0; color: var(--t); font-size: 11.5px; font-weight: 650; overflow-wrap: anywhere; }
+.detailNotes { margin: 0 20px 16px; padding: 12px; display: grid; gap: 10px; border: 1px solid var(--b); border-radius: var(--ui-radius-sm); background: var(--m); }
+.detailNotes > div { display: grid; grid-template-columns: 100px 1fr; gap: 10px; }
+.detailNotes strong { color: var(--soft); font-size: 11px; }
+.detailNotes p { margin: 0; color: var(--t); font-size: 11.5px; line-height: 1.5; }
+.detailNotes span { display: flex; flex-wrap: wrap; gap: 5px; }
+.detailNotes b { padding: 3px 7px; border: 1px solid var(--b); border-radius: 6px; background: var(--s); color: var(--soft); font-size: 10px; }
+.detailActions { padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--b); background: var(--m); }
+.detailActions > div { color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+.detailActions > span { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 
 .confirmBody { padding: 24px; display: grid; gap: 10px; justify-items: center; text-align: center; }
 .confirmBody svg { width: 32px; height: 32px; color: var(--danger); }
@@ -557,12 +710,26 @@
 
 @media (max-width: 850px) {
   .pageHeader { align-items: stretch; flex-direction: column; }
+  .maturityStrip { grid-template-columns: 1fr 1fr; }
   .filterBar select { flex: 1 1 140px; }
   .modelerGrid { display: block; height: auto; }
   .canvasPanel { height: 56dvh; border-right: 0; border-bottom: 1px solid var(--b); }
   .propertiesPanel { max-height: 60dvh; }
   .formGrid, .toggleGrid, .companyPicker { grid-template-columns: 1fr; }
   .wideField { grid-column: auto; }
+  .companyPicker > strong { grid-column: auto; }
+  .detailGrid { grid-template-columns: 1fr; }
+  .detailActions { align-items: stretch; flex-direction: column; }
+  .detailActions > span { justify-content: flex-start; }
+}
+
+@media (max-width: 560px) {
+  .maturityStrip { grid-template-columns: 1fr; }
+  .formSection > legend { grid-template-columns: 26px 1fr; }
+  .formSection > legend small { grid-column: 2; }
+  .detailHeader { flex-direction: column; }
+  .detailGrid dl > div { grid-template-columns: 96px 1fr; }
+  .detailNotes > div { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
