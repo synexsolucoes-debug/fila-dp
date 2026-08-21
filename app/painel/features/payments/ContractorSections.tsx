@@ -653,7 +653,7 @@ function ClosingsTable({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id}>
+            <tr key={row.id} id={`contractor-closing-${row.id}`}>
               <th scope="row">
                 <button
                   className={styles.contractorDetailButton}
