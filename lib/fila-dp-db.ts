@@ -130,6 +130,23 @@ export async function provisionWorkspaceDefaults(
     ...nativeTemplates.map((template, index) => d1.prepare("INSERT INTO fdp_process_templates (id, workspace_id, name, process_type, description, checklist_json, default_sla_days, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:template:${template.key}`, workspaceId, template.name, template.process, `Fluxo padrão de ${template.name.toLowerCase()} do Vinculato.`, JSON.stringify(template.checklist), template.days, (index + 1) * 1000)),
     ...policies.map(([processType, target, warning]) => d1.prepare("INSERT INTO fdp_sla_policies (id, workspace_id, process_type, target_business_days, warning_business_days) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:sla:${processType}`, workspaceId, processType, target, warning)),
     ...integrationRows.map(([channel, displayName]) => d1.prepare("INSERT INTO fdp_integrations (id, workspace_id, channel, display_name) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:integration:${channel}`, workspaceId, channel, displayName)),
+    // Local de estoque padrão do Controle de EPI.
+    //
+    // A migration `0045` criou este local para todo workspace que já existia, e
+    // o provisionamento não acompanhou: grupo novo nascia sem nenhum local, e
+    // toda movimentação de EPI é recusada com "Configure um local de estoque
+    // padrão antes de movimentar EPI." — inclusive o primeiro cadastro, que é a
+    // primeira coisa que alguém faz no módulo.
+    //
+    // O efeito era um beco: a tela oferecia "Cadastrar EPI", a pessoa preenchia
+    // o formulário inteiro e o servidor recusava. Criar o local aqui faz o
+    // caminho do grupo novo coincidir com o do grupo migrado, que é o que a
+    // 0045 já tinha decidido ser o certo.
+    d1.prepare(`INSERT INTO fdp_stock_locations (id, workspace_id, code, name, description, status, is_default, created_by, updated_by)
+      SELECT ?, ?, 'PRINCIPAL', 'Estoque principal', 'Local padrão criado junto com o grupo.', 'active', 1, w.owner_user_id, w.owner_user_id
+      FROM fdp_workspaces w WHERE w.id = ?
+      ON CONFLICT (workspace_id, code) DO NOTHING`)
+      .bind(`${workspaceId}:stock:default`, workspaceId, workspaceId),
   ]);
 }
 

@@ -78,6 +78,16 @@ try {
     `INSERT INTO fdp_workspace_members (workspace_id, user_id, role) VALUES ('ws-ui', 'u-ui', 'admin') ON CONFLICT DO NOTHING`,
   );
 
+  /* Local de estoque padrão, como todo grupo real tem.
+     Sem ele, qualquer movimentação de EPI é recusada — e a semente mediria um
+     produto que nenhum cliente enxerga, porque o provisionamento e a migration
+     `0045` dão esse local a todos os grupos de verdade. */
+  await client.query(
+    `INSERT INTO fdp_stock_locations (id, workspace_id, code, name, description, status, is_default, created_by, updated_by)
+     VALUES ('ws-ui:stock:default', 'ws-ui', 'PRINCIPAL', 'Estoque principal', 'Local padrão da semente de interface.', 'active', 1, 'u-ui', 'u-ui')
+     ON CONFLICT (workspace_id, code) DO NOTHING`,
+  );
+
   /* Um segundo membro, que não é o dono.
      A ficha de membro só oferece papel, empresas, link de ativação, remoção e
      exceção de módulo quando `!member.isOwner` — e a semente tinha uma pessoa
