@@ -2364,6 +2364,41 @@ export const timeEntries = pgTable("fdp_time_entries", {
   check("fdp_time_entries_punches_check", sql`jsonb_typeof(${table.punchesJson}) = 'array' AND jsonb_array_length(${table.punchesJson}) <= 12`),
 ]);
 
+/**
+ * Totais de hora apurados por folha de ponto — **avaliação de renome (§53)**.
+ *
+ * O nome mente, e vale registrar por quê: esta tabela não guarda evento
+ * nenhum. Ela guarda **uma linha por (folha, rubrica)** com os minutos
+ * acumulados — o índice único `(workspace, time_sheet, event_code)` prova
+ * isso. Quem procura o histórico de batidas acha em `fdp_time_entries`; quem
+ * procura a apuração acha aqui. O nome semanticamente correto seria algo como
+ * `fdp_time_sheet_hour_totals`.
+ *
+ * **Decisão: não renomear agora.** O §53 pede a avaliação antes da migração, e
+ * ela é esta:
+ *
+ * - *Dependências mapeadas*: 38 referências em 10 arquivos — três rotas de
+ *   ponto, `lib/time-service.ts`, `lib/action-center.ts`, este schema, o ensaio
+ *   `scripts/time-db-rehearsal.sql`, um teste e duas migrations. **Nenhuma**
+ *   exposição externa: a tabela não aparece na API `/api/v1` nem na exportação
+ *   do workspace, então nenhum cliente depende do nome.
+ * - *O que torna o risco desproporcional*: renomear exige uma camada de
+ *   compatibilidade durante a janela de deploy, porque as funções da versão
+ *   anterior continuam de pé por alguns minutos consultando o nome antigo. A
+ *   compatibilidade natural seria uma view — e uma view sobre tabela com RLS
+ *   **não** aplica a política da tabela base por padrão. Errar o
+ *   `security_invoker` ali trocaria um nome confuso por um vazamento entre
+ *   clientes em dados de jornada.
+ * - *Conclusão*: o ganho é de clareza interna; o custo é uma janela em que um
+ *   detalhe de configuração de view separa o produto de um vazamento. Enquanto
+ *   o nome estiver documentado aqui, a confusão custa uma leitura; o renome mal
+ *   feito custa um incidente.
+ *
+ * O caminho, quando for feito: `ALTER TABLE ... RENAME`, view de compatibilidade
+ * com `WITH (security_invoker = true)`, atualização dos 10 arquivos, e uma
+ * segunda migration removendo a view depois que nenhum deployment antigo
+ * responder.
+ */
 export const timeSheetEvents = pgTable("fdp_time_sheet_events", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
