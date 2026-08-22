@@ -278,7 +278,19 @@ export const cards = pgTable("fdp_cards", {
   legalDueAt: timestamp("legal_due_at", { withTimezone: true, mode: "string" }),
   processTemplateId: text("process_template_id"),
   closedAt: timestamp("closed_at", { withTimezone: true, mode: "string" }),
+  /* Instância de processo (§11). A demanda fica presa à versão que a originou:
+     publicar a versão seguinte não reescreve o que esta segue. */
+  processDefinitionId: text("process_definition_id"),
+  processVersionId: text("process_version_id"),
+  processVersionNumber: text("process_version_number").notNull().default(""),
+  currentStepId: text("current_step_id").notNull().default(""),
+  instantiatedAt: timestamp("instantiated_at", { withTimezone: true, mode: "string" }),
+  /* Concorrência otimista (§34): a atualização exige a versão lida. */
+  version: integer("version").notNull().default(1),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_cards_ws_board_id_fk", columns: [table.workspaceId, table.boardId], foreignColumns: [boards.workspaceId, boards.id] }),
   uniqueIndex("fdp_cards_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_cards_board_list_position_idx").on(table.boardId, table.listId, table.position),
   index("fdp_cards_due_status_idx").on(table.dueAt, table.slaStatus),
@@ -297,6 +309,16 @@ export const cards = pgTable("fdp_cards", {
   foreignKey({ name: "fdp_cards_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   index("fdp_cards_workspace_requester_area_idx").on(table.workspaceId, table.requesterAreaId, table.createdAt),
   index("fdp_cards_workspace_responsible_area_idx").on(table.workspaceId, table.responsibleAreaId, table.createdAt),
+  // Sem `ON DELETE`: versão usada por demanda não some, e é isso que impede a
+  // v5 de reescrever o que a v4 determinou.
+  foreignKey({ name: "fdp_cards_process_definition_fk", columns: [table.workspaceId, table.processDefinitionId], foreignColumns: [processDefinitions.workspaceId, processDefinitions.id] }),
+  foreignKey({ name: "fdp_cards_process_version_fk", columns: [table.workspaceId, table.processVersionId], foreignColumns: [processVersions.workspaceId, processVersions.id] }),
+  index("fdp_cards_process_version_idx").on(table.workspaceId, table.processVersionId, table.currentStepId)
+    .where(sql`${table.processVersionId} IS NOT NULL`),
+  index("fdp_cards_process_definition_idx").on(table.workspaceId, table.processDefinitionId, table.archived)
+    .where(sql`${table.processDefinitionId} IS NOT NULL`),
+  check("fdp_cards_version_check", sql`${table.version} > 0`),
+  check("fdp_cards_process_instance_check", sql`(${table.processVersionId} IS NULL AND ${table.processDefinitionId} IS NULL AND ${table.currentStepId} = '' AND ${table.processVersionNumber} = '' AND ${table.instantiatedAt} IS NULL) OR (${table.processVersionId} IS NOT NULL AND ${table.processDefinitionId} IS NOT NULL AND ${table.currentStepId} <> '' AND ${table.instantiatedAt} IS NOT NULL)`),
 ]);
 
 export const checklistItems = pgTable("fdp_checklist_items", {
@@ -455,8 +477,15 @@ export const workspaceSettings = pgTable("fdp_workspace_settings", {
   dayStart: text("day_start").notNull().default("08:00"),
   dayEnd: text("day_end").notNull().default("18:00"),
   realtimeSeconds: integer("realtime_seconds").notNull().default(30),
+  /* Política de automação por agente (§18, §66). Fica aqui, e não em variável
+     de ambiente, porque parar uma automação problemática não pode depender de
+     deploy. O padrão é pedir confirmação humana. */
+  agentAutomation: text("agent_automation").notNull().default("suggest_only"),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-});
+}, (table) => [
+  check("fdp_workspace_settings_agent_automation_check",
+    sql`${table.agentAutomation} IN ('off', 'suggest_only', 'trusted')`),
+]);
 
 export const businessHolidays = pgTable("fdp_business_holidays", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -865,6 +894,9 @@ export const payrollCycleItems = pgTable("fdp_payroll_cycle_items", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_payroll_cycle_items_ws_company_id_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   uniqueIndex("fdp_payroll_cycle_items_cycle_phase_title_uq").on(table.payrollCycleId, table.phase, table.title),
   uniqueIndex("fdp_payroll_cycle_items_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_payroll_cycle_items_workspace_status_idx").on(table.workspaceId, table.status, table.dueDate),
@@ -1295,6 +1327,9 @@ export const integrationRunLogs = pgTable("fdp_integration_run_logs", {
   metadataJson: jsonb("metadata_json").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_run_logs_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_run_logs_run_sequence_uq").on(table.runId, table.sequence),
   index("fdp_integration_run_logs_workspace_run_idx").on(table.workspaceId, table.runId, table.createdAt),
   foreignKey({ name: "fdp_integration_run_logs_workspace_run_fk", columns: [table.workspaceId, table.integrationId, table.runId], foreignColumns: [integrationSyncRuns.workspaceId, integrationSyncRuns.integrationId, integrationSyncRuns.id] }).onDelete("cascade"),
@@ -1335,6 +1370,9 @@ export const integrationSyncItems = pgTable("fdp_integration_sync_items", {
   processedAt: timestamp("processed_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_sync_items_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_sync_items_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_sync_items_run_key_uq").on(table.runId, table.itemKey),
   uniqueIndex("fdp_integration_sync_items_payload_uq").on(table.workspaceId, table.integrationId, table.mappingId, table.externalId, table.payloadHash),
@@ -1365,6 +1403,9 @@ export const integrationJobs = pgTable("fdp_integration_jobs", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_jobs_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_jobs_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_jobs_idempotency_uq").on(table.workspaceId, table.integrationId, table.idempotencyKey),
   index("fdp_integration_jobs_claim_idx").on(table.workspaceId, table.status, table.availableAt, table.leaseExpiresAt),
@@ -1434,6 +1475,9 @@ export const integrationReconciliations = pgTable("fdp_integration_reconciliatio
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_reconciliations_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_reconciliations_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_reconciliations_item_uq").on(table.itemId),
   index("fdp_integration_reconciliations_workspace_status_idx").on(table.workspaceId, table.integrationId, table.status, table.createdAt),
@@ -1534,7 +1578,11 @@ export const workspaceUsageCounters = pgTable("fdp_workspace_usage_counters", {
   uniqueIndex("fdp_workspace_usage_metric_period_uq").on(table.workspaceId, table.metric, table.period),
   uniqueIndex("fdp_workspace_usage_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_workspace_usage_period_idx").on(table.workspaceId, table.period, table.metric),
-  check("fdp_workspace_usage_metric_check", sql`${table.metric} IN ('members', 'companies', 'integrations', 'storage_mb')`),
+  /* Quota do plano mais telemetria de adoção (§50, §77). A tabela deixou de
+     ser morta: ela é onde os contadores de adoção vivem, e o índice único
+     por (workspace, métrica, período) é o que torna o incremento seguro sob
+     concorrência. */
+  check("fdp_workspace_usage_metric_check", sql`${table.metric} IN ('members', 'companies', 'integrations', 'storage_mb', 'demands_from_process', 'process_steps_advanced', 'process_instances_completed', 'events_received', 'events_deduplicated', 'triage_opened', 'agent_actions_automatic', 'agent_actions_refused', 'work_center_opened', 'assistant_queries', 'deep_links_opened')`),
   check("fdp_workspace_usage_quantity_check", sql`${table.quantity} >= 0 AND ${table.limitSnapshot} >= 0`),
 ]);
 
@@ -1831,6 +1879,7 @@ export const contractorProfiles = pgTable("fdp_contractor_profiles", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  uniqueIndex("fdp_contractor_profiles_ws_key_uq").on(table.workspaceId, table.providerId),
   uniqueIndex("fdp_contractor_profiles_workspace_provider_uq").on(table.workspaceId, table.providerId),
   index("fdp_contractor_profiles_workspace_company_idx").on(table.workspaceId, table.companyId, table.status),
   foreignKey({ name: "fdp_contractor_profiles_workspace_provider_fk", columns: [table.workspaceId, table.providerId], foreignColumns: [auxiliaryProviders.workspaceId, auxiliaryProviders.id] }).onDelete("cascade"),
@@ -1920,6 +1969,8 @@ export const contractorClosings = pgTable("fdp_contractor_closings", {
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  /* Concorrência otimista (§34): o trigger da 0061 incrementa. */
+  version: integer("version").notNull().default(1),
 }, (table) => [
   uniqueIndex("fdp_contractor_closings_workspace_provider_cycle_uq").on(table.workspaceId, table.providerId, table.payrollCycleId),
   uniqueIndex("fdp_contractor_closings_workspace_id_uq").on(table.workspaceId, table.id),
@@ -2033,11 +2084,30 @@ export const domainEvents = pgTable("fdp_domain_events", {
   occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   publishedAt: timestamp("published_at", { withTimezone: true, mode: "string" }),
   deliveriesCount: integer("deliveries_count").notNull().default(0),
+  /* Envelope do catálogo (§6). Ver `lib/domain-events.ts`. */
+  schemaVersion: integer("schema_version").notNull().default(1),
+  origin: text("origin").notNull().default("internal"),
+  externalId: text("external_id").notNull().default(""),
+  correlationId: text("correlation_id").notNull().default(""),
+  causationId: text("causation_id").notNull().default(""),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
+  evidenceRefsJson: jsonb("evidence_refs_json").$type<string[]>().notNull().default([]),
+  receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_domain_events_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_domain_events_pending_idx").on(table.workspaceId, table.status, table.occurredAt),
   index("fdp_domain_events_type_idx").on(table.workspaceId, table.eventType, table.occurredAt),
+  index("fdp_domain_events_origin_idx").on(table.workspaceId, table.origin, table.occurredAt),
+  // Parcial: o evento interno não deriva chave, e um único índice total faria a
+  // segunda mutação do dia colidir com a primeira.
+  uniqueIndex("fdp_domain_events_idempotency_uq").on(table.workspaceId, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} <> ''`),
+  index("fdp_domain_events_correlation_idx").on(table.workspaceId, table.correlationId)
+    .where(sql`${table.correlationId} <> ''`),
   check("fdp_domain_events_status_check", sql`${table.status} IN ('pending', 'published', 'skipped')`),
+  check("fdp_domain_events_schema_version_check", sql`${table.schemaVersion} > 0`),
+  check("fdp_domain_events_origin_check",
+    sql`${table.origin} IN ('internal', 'teams', 'solides', 'tangerino', 'sankhya', 'caju', 'agent', 'api', 'import')`),
 ]);
 
 export const webhookEndpoints = pgTable("fdp_webhook_endpoints", {
@@ -2223,6 +2293,9 @@ export const timeExports = pgTable("fdp_time_exports", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_time_exports_ws_company_id_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   uniqueIndex("fdp_time_exports_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_time_exports_workspace_cycle_idx").on(table.workspaceId, table.payrollCycleId, table.createdAt),
   foreignKey({ name: "fdp_time_exports_workspace_cycle_fk", columns: [table.workspaceId, table.companyId, table.payrollCycleId], foreignColumns: [payrollCycles.workspaceId, payrollCycles.companyId, payrollCycles.id] }),
@@ -2258,7 +2331,12 @@ export const timeSheets = pgTable("fdp_time_sheets", {
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  /* Concorrência otimista (§34): o trigger da 0061 incrementa. */
+  version: integer("version").notNull().default(1),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_time_sheets_ws_company_id_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   uniqueIndex("fdp_time_sheets_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_time_sheets_workspace_employee_cycle_uq").on(table.workspaceId, table.employeeId, table.payrollCycleId),
   index("fdp_time_sheets_workspace_status_idx").on(table.workspaceId, table.competence, table.status),
@@ -2311,6 +2389,41 @@ export const timeEntries = pgTable("fdp_time_entries", {
   check("fdp_time_entries_punches_check", sql`jsonb_typeof(${table.punchesJson}) = 'array' AND jsonb_array_length(${table.punchesJson}) <= 12`),
 ]);
 
+/**
+ * Totais de hora apurados por folha de ponto — **avaliação de renome (§53)**.
+ *
+ * O nome mente, e vale registrar por quê: esta tabela não guarda evento
+ * nenhum. Ela guarda **uma linha por (folha, rubrica)** com os minutos
+ * acumulados — o índice único `(workspace, time_sheet, event_code)` prova
+ * isso. Quem procura o histórico de batidas acha em `fdp_time_entries`; quem
+ * procura a apuração acha aqui. O nome semanticamente correto seria algo como
+ * `fdp_time_sheet_hour_totals`.
+ *
+ * **Decisão: não renomear agora.** O §53 pede a avaliação antes da migração, e
+ * ela é esta:
+ *
+ * - *Dependências mapeadas*: 38 referências em 10 arquivos — três rotas de
+ *   ponto, `lib/time-service.ts`, `lib/action-center.ts`, este schema, o ensaio
+ *   `scripts/time-db-rehearsal.sql`, um teste e duas migrations. **Nenhuma**
+ *   exposição externa: a tabela não aparece na API `/api/v1` nem na exportação
+ *   do workspace, então nenhum cliente depende do nome.
+ * - *O que torna o risco desproporcional*: renomear exige uma camada de
+ *   compatibilidade durante a janela de deploy, porque as funções da versão
+ *   anterior continuam de pé por alguns minutos consultando o nome antigo. A
+ *   compatibilidade natural seria uma view — e uma view sobre tabela com RLS
+ *   **não** aplica a política da tabela base por padrão. Errar o
+ *   `security_invoker` ali trocaria um nome confuso por um vazamento entre
+ *   clientes em dados de jornada.
+ * - *Conclusão*: o ganho é de clareza interna; o custo é uma janela em que um
+ *   detalhe de configuração de view separa o produto de um vazamento. Enquanto
+ *   o nome estiver documentado aqui, a confusão custa uma leitura; o renome mal
+ *   feito custa um incidente.
+ *
+ * O caminho, quando for feito: `ALTER TABLE ... RENAME`, view de compatibilidade
+ * com `WITH (security_invoker = true)`, atualização dos 10 arquivos, e uma
+ * segunda migration removendo a view depois que nenhum deployment antigo
+ * responder.
+ */
 export const timeSheetEvents = pgTable("fdp_time_sheet_events", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
@@ -2439,6 +2552,9 @@ export const movementSuggestions = pgTable("fdp_movement_suggestions", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_movement_suggestions_ws_event_id_fk", columns: [table.workspaceId, table.eventId], foreignColumns: [integrationEvents.workspaceId, integrationEvents.id] }),
   uniqueIndex("fdp_movement_suggestions_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_movement_suggestions_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
   // Mensagem editada reencontra a própria sugestão em vez de abrir outra.
@@ -2508,7 +2624,10 @@ export const epiProducts = pgTable("fdp_epi_products", {
   index("fdp_epi_products_workspace_status_idx").on(table.workspaceId, table.status, table.name),
   index("fdp_epi_products_workspace_ca_idx").on(table.workspaceId, table.caNumber),
   check("fdp_epi_products_type_check", sql`${table.epiType} IN ('head', 'eye_face', 'hearing', 'respiratory', 'trunk', 'upper_limbs', 'lower_limbs', 'full_body', 'fall_protection', 'other')`),
-  check("fdp_epi_products_status_check", sql`${table.status} IN ('active', 'inactive', 'in_stock', 'delivered', 'returned', 'sanitizing', 'discarded', 'damaged', 'lost')`),
+  /* Catálogo, não unidade (§52). Os estados da peça física vivem em
+     fdp_epi_movements.status; aceitar os dois vocabulários aqui era convite
+     documentado a gravar posse no modelo do equipamento. */
+  check("fdp_epi_products_status_check", sql`${table.status} IN ('active', 'inactive')`),
   check("fdp_epi_products_reason_check", sql`${table.registrationReason} IN ('first_delivery', 'periodic_exchange', 'damage_replacement', 'loss_replacement', 'expiry_replacement', 'initial_purchase', 'stock_replenishment', 'manual_adjustment', 'other')`),
   check("fdp_epi_products_stock_check", sql`${table.stockQuantity} >= 0`),
   check("fdp_epi_products_value_check", sql`${table.unitValue} >= 0`),
@@ -2873,4 +2992,59 @@ export const epiAttachments = pgTable("fdp_epi_attachments", {
   ) OR (
     ${table.entityType} <> 'product' AND ${table.companyId} IS NOT NULL
   )`),
+]);
+
+/**
+ * Proposta de agente (§17).
+ *
+ * O agente propõe; o motor determinístico decide. Esta tabela guarda as duas
+ * coisas — a proposta com a nota de confiança e a evidência, e a decisão com o
+ * código que a explica. É ela que responde "por que isso não andou sozinho?".
+ *
+ * Não é um objeto de trabalho novo (§93): a proposta não é tarefa de ninguém
+ * até o motor decidir. O que aparece na Central de Trabalho é o item de
+ * triagem, quando a decisão foi triagem.
+ */
+export const agentProposals = pgTable("fdp_agent_proposals", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  agentKey: text("agent_key").notNull(),
+  agentVersion: text("agent_version").notNull().default(""),
+  eventId: text("event_id").notNull().default(""),
+  eventName: text("event_name").notNull().default(""),
+  entityType: text("entity_type").notNull().default(""),
+  entityId: text("entity_id").notNull().default(""),
+  processInstanceId: text("process_instance_id"),
+  currentStepId: text("current_step_id").notNull().default(""),
+  proposedAction: text("proposed_action").notNull(),
+  proposedStepId: text("proposed_step_id").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  confidence: integer("confidence").notNull().default(0),
+  requiresHumanApproval: integer("requires_human_approval").notNull().default(1),
+  evidenceRefsJson: jsonb("evidence_refs_json").$type<string[]>().notNull().default([]),
+  status: text("status").notNull().default("pending_triage"),
+  decisionCode: text("decision_code").notNull().default(""),
+  decisionReason: text("decision_reason").notNull().default(""),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "string" }),
+  resolutionNote: text("resolution_note").notNull().default(""),
+  resultType: text("result_type").notNull().default(""),
+  resultId: text("result_id").notNull().default(""),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_agent_proposals_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_agent_proposals_idempotency_uq").on(table.workspaceId, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} <> ''`),
+  index("fdp_agent_proposals_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
+  index("fdp_agent_proposals_workspace_agent_idx").on(table.workspaceId, table.agentKey, table.createdAt),
+  index("fdp_agent_proposals_instance_idx").on(table.workspaceId, table.processInstanceId)
+    .where(sql`${table.processInstanceId} IS NOT NULL`),
+  foreignKey({ name: "fdp_agent_proposals_instance_fk", columns: [table.workspaceId, table.processInstanceId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("set null"),
+  check("fdp_agent_proposals_status_check", sql`${table.status} IN ('pending_triage', 'suggested', 'accepted', 'rejected', 'applied', 'discarded')`),
+  check("fdp_agent_proposals_confidence_check", sql`${table.confidence} BETWEEN 0 AND 100`),
+  check("fdp_agent_proposals_human_flag_check", sql`${table.requiresHumanApproval} IN (0, 1)`),
+  check("fdp_agent_proposals_agent_check", sql`length(${table.agentKey}) > 0`),
+  check("fdp_agent_proposals_resolution_check", sql`(${table.status} IN ('pending_triage', 'suggested') AND ${table.resolvedAt} IS NULL) OR (${table.status} NOT IN ('pending_triage', 'suggested') AND ${table.resolvedAt} IS NOT NULL)`),
 ]);

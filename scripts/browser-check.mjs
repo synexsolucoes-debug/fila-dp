@@ -146,6 +146,53 @@ if (password && await emailField.count()) {
   ]);
   record("login pela interface leva ao painel", !page.url().includes("/login"), page.url());
 
+  /* Endereços do painel (§43, §44, §74).
+     O painel trocava de tela por estado e não tinha URL: não dava para mandar o
+     link de uma demanda, voltar saía do produto e F5 perdia o contexto. Estas
+     conferências medem o que HTTP não mede — o navegador de verdade fazendo
+     F5, voltar e avançar. */
+  await page.goto(`${base}/painel/ponto`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1200);
+  record("deep link abre direto na tela pedida",
+    new URL(page.url()).pathname === "/painel/ponto",
+    `${new URL(page.url()).pathname} · ${(await page.locator("h1").first().innerText().catch(() => "")).slice(0, 30)}`);
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  record("recarregar a página mantém o contexto",
+    new URL(page.url()).pathname === "/painel/ponto", new URL(page.url()).pathname);
+
+  await page.goto(`${base}/painel`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  await page.goto(`${base}/painel/demandas`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  await page.goBack({ waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  const voltou = new URL(page.url()).pathname;
+  await page.goForward({ waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+  record("voltar e avançar navegam dentro do produto",
+    voltou === "/painel" && new URL(page.url()).pathname === "/painel/demandas",
+    `voltar=${voltou} avançar=${new URL(page.url()).pathname}`);
+
+  await page.goto(`${base}/painel/configuracoes/seguranca`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1200);
+  record("as configurações têm endereço próprio",
+    await page.locator("[role=dialog]").count() > 0
+      && new URL(page.url()).pathname === "/painel/configuracoes/seguranca",
+    new URL(page.url()).pathname);
+
+  await page.goto(`${base}/painel`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  record("configurações têm porta na navegação, e não só atrás do avatar",
+    await page.locator("aside button[aria-label='Abrir configurações']").count() > 0);
+
+  // Endereço desconhecido não pune quem clicou num link antigo.
+  await page.goto(`${base}/painel/secao-que-nao-existe`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  record("endereço desconhecido abre a visão geral em vez de 404",
+    new URL(page.url()).pathname.startsWith("/painel"), new URL(page.url()).pathname);
+
   // 3. Console global
   await page.goto(`${base}/plataforma`, { waitUntil: "domcontentloaded" });
   // O console navega por URL (`?area=...`), então a marcação correta é <nav>

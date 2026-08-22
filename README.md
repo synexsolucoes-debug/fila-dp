@@ -16,13 +16,19 @@ npm run dev
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+## Arquitetura operacional
+
+**Comece por `docs/arquitetura-operacional.md`.** Ele descreve como o trabalho
+anda dentro do produto — Fonte → Evento → Processo → Trabalho → Execução — e é o
+vocabulário comum que integrações, agentes, processos e IA usam. Quem for
+escrever qualquer funcionalidade que produza trabalho precisa ler a §11 dele
+antes.
 
 ## Arquitetura de produção
 
 - edit site code under `app/`
 - `app/` contém as telas e rotas do Next.js
-- `db/index.ts` mantém temporariamente uma API compatível com D1 sobre PostgreSQL/Neon e uma API compatível com R2 sobre Blob
+- `db/index.ts` expõe o adaptador de banco (`SqlDatabase`) sobre PostgreSQL/Neon e o de anexos (`ObjectStorageBucket`) sobre Vercel Blob; os contratos estão em `types/database-adapter.d.ts`
 - `db/schema.ts` define o modelo PostgreSQL; `scripts/migrate.mjs` é o único caminho autorizado para criar ou alterar schema
 - `vercel.json` configura o build nativo do Next.js
 - `VERCEL_DEPLOYMENT.md` descreve as credenciais e o processo de publicação
@@ -215,5 +221,6 @@ deploys devem usar a sessão própria e a validação de membros do workspace.
 
 ## Learn More
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+- [Next.js](https://nextjs.org/docs)
+- [Drizzle ORM com PostgreSQL](https://orm.drizzle.team/docs/get-started-postgresql)
+- [Neon](https://neon.tech/docs)

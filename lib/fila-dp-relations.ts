@@ -1,4 +1,6 @@
-import { ApiError } from "./api-errors";
+// Extensão explícita: sem ela o carregador de tipos do Node recusa o módulo, e
+// `addBusinessDays` precisa ser importável por teste sem passar pelo bundler.
+import { ApiError } from "./api-errors.ts";
 
 export function addBusinessDays(start: string, days: number, businessDays: number[], holidays: Set<string>) {
   const cursor = new Date(`${start}T12:00:00Z`);

@@ -398,7 +398,23 @@ function EmployeesPanel({ companies, companyId, onCompanyChange, status, onStatu
   </section>;
 }
 
-function CatalogsPanel({ companies, companyId, onCompanyChange, resource, onResourceChange, items, loading, onEdit, onCreate, canManage }: { companies: Company[]; companyId: string; onCompanyChange: (id: string) => void; resource: CatalogResource; onResourceChange: (resource: CatalogResource) => void; items: CatalogItem[]; loading: boolean; onEdit: (item: CatalogItem) => void; onCreate: () => void; canManage: boolean }) {
+type CatalogsPanelProps = {
+  companies: Company[];
+  companyId: string;
+  onCompanyChange: (id: string) => void;
+  resource: CatalogResource;
+  onResourceChange: (resource: CatalogResource) => void;
+  items: CatalogItem[];
+  loading: boolean;
+  onEdit: (item: CatalogItem) => void;
+  onCreate: () => void;
+  canManage: boolean;
+};
+
+function CatalogsPanel({
+  companies, companyId, onCompanyChange, resource, onResourceChange,
+  items, loading, onEdit, onCreate, canManage,
+}: CatalogsPanelProps) {
   return <div className={styles.catalogLayout}><aside className={styles.catalogNav}><label><span>EMPRESA</span><select value={companyId} onChange={(event) => onCompanyChange(event.target.value)}>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{displayCompany(company)}</option>)}</select></label>{(Object.keys(catalogMeta) as CatalogResource[]).map((keyName) => <button key={keyName} className={resource === keyName ? styles.catalogActive : ""} onClick={() => onResourceChange(keyName)}><span><strong>{catalogMeta[keyName].label}</strong><small>{catalogMeta[keyName].description}</small></span><ChevronRight /></button>)}</aside><section className={styles.dataPanel}><header className={styles.catalogHeader}><div><span>CADASTRO AUXILIAR</span><h2>{catalogMeta[resource].label}</h2><p>{catalogMeta[resource].description}.</p></div>{canManage && <button className={styles.secondaryButton} onClick={onCreate}><Plus /> Adicionar</button>}</header>{loading ? <LoadingState title={`Carregando ${catalogMeta[resource].label.toLowerCase()}`} /> : items.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Código</th><th>Nome</th>{resource === "positions" && <th>CBO</th>}{resource === "work-schedules" && <th>Carga semanal</th>}<th>Status</th><th /></tr></thead><tbody>{items.map((item) => <tr key={item.id} onClick={() => canManage && onEdit(item)}><td data-label="Código"><strong className={styles.mono}>{item.code}</strong></td><td data-label="Nome"><strong>{item.name}</strong>{item.description && <small>{item.description}</small>}</td>{resource === "positions" && <td data-label="CBO">{item.cboCode || "—"}</td>}{resource === "work-schedules" && <td data-label="Carga semanal">{item.weeklyHours ? `${item.weeklyHours}h` : "—"}</td>}<td data-label="Status">{activePill(item.status === "active")}</td><td><button aria-label={`Editar ${item.name}`} disabled={!canManage}><ChevronRight /></button></td></tr>)}</tbody></table></div> : <EmptyState icon={SlidersHorizontal} title={`Nenhum ${catalogMeta[resource].singular.toLowerCase()} cadastrado`} text="Crie o primeiro item para organizar a lotação dos colaboradores." action={canManage ? <button className={styles.secondaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Adicionar cadastro</button> : undefined} />}</section></div>;
 }
 
@@ -415,7 +431,33 @@ function CatalogEditor({ resource, item, company, busy, onClose, onBusy, onError
   return <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className={styles.compactEditor} onSubmit={submit}><header><div><span>{displayCompany(company)}</span><h2>{item ? "Editar" : "Novo"} {catalogMeta[resource].singular.toLowerCase()}</h2></div><button type="button" onClick={onClose}><X /></button></header><div className={styles.editorBody}><label><span>Código *</span><input required value={code} onChange={(event) => setCode(event.target.value)} /></label><label><span>Nome *</span><input required value={name} onChange={(event) => setName(event.target.value)} /></label>{resource === "positions" && <label><span>Código CBO</span><input value={cboCode} onChange={(event) => setCboCode(event.target.value)} /></label>}{resource === "work-schedules" && <><label><span>Carga semanal</span><input type="number" min="1" max="60" value={weeklyHours} onChange={(event) => setWeeklyHours(event.target.value)} /></label><label><span>Descrição da jornada</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} /></label></>}</div><footer>{item?.status === "active" && <button type="button" className={styles.textDanger} onClick={() => onInactivate(item)}>Inativar</button>}<span /><button type="button" className={styles.secondaryButton} onClick={onClose}>Cancelar</button><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} /> : <Check />} Salvar</button></footer></form></div>;
 }
 
-function EmployeeDrawer({ employee, companies, catalogs, busy, editing, activeTab, history, historyLoading, canManage, canConsultTangerino, onTab, onCompanyCatalogs, onEdit, onClose, onBusy, onError, onSaved, onTerminate, onDelete }: { employee: Employee | null; companies: Company[]; catalogs: CatalogMap; busy: boolean; editing: boolean; activeTab: EmployeeDetailTab; history: HistoryEvent[]; historyLoading: boolean; canManage: boolean; canConsultTangerino: boolean; onTab: (tab: EmployeeDetailTab) => void; onCompanyCatalogs: (companyId: string) => Promise<void>; onEdit: () => void; onClose: () => void; onBusy: (value: boolean) => void; onError: (value: string) => void; onSaved: (employee: Employee) => Promise<void>; onTerminate: (employee: Employee, terminationDate: string) => void; onDelete: (employee: Employee) => void }) {
+type EmployeeDrawerProps = {
+  employee: Employee | null;
+  companies: Company[];
+  catalogs: CatalogMap;
+  busy: boolean;
+  editing: boolean;
+  activeTab: EmployeeDetailTab;
+  history: HistoryEvent[];
+  historyLoading: boolean;
+  canManage: boolean;
+  canConsultTangerino: boolean;
+  onTab: (tab: EmployeeDetailTab) => void;
+  onCompanyCatalogs: (companyId: string) => Promise<void>;
+  onEdit: () => void;
+  onClose: () => void;
+  onBusy: (value: boolean) => void;
+  onError: (value: string) => void;
+  onSaved: (employee: Employee) => Promise<void>;
+  onTerminate: (employee: Employee, terminationDate: string) => void;
+  onDelete: (employee: Employee) => void;
+};
+
+function EmployeeDrawer({
+  employee, companies, catalogs, busy, editing, activeTab, history, historyLoading,
+  canManage, canConsultTangerino, onTab, onCompanyCatalogs, onEdit, onClose,
+  onBusy, onError, onSaved, onTerminate, onDelete,
+}: EmployeeDrawerProps) {
   const [draft, setDraft] = useState<EmployeeDraft>(() => employee ? { companyId: employee.companyId, registrationNumber: employee.registrationNumber, fullName: employee.fullName, socialName: employee.socialName, cpf: "", departmentId: employee.departmentId ?? "", positionId: employee.positionId ?? "", costCenterId: employee.costCenterId ?? "", workScheduleId: employee.workScheduleId ?? "", admissionDate: employee.admissionDate, birthDate: employee.birthDate, terminationDate: employee.terminationDate, employmentStatus: employee.employmentStatus, employmentType: employee.employmentType, workModel: employee.workModel, email: employee.email, phone: employee.phone, notes: employee.notes } : { ...emptyEmployee, companyId: companies.find((item) => item.status === "active")?.id ?? "" });
   const [terminationDate, setTerminationDate] = useState(() => new Date().toISOString().slice(0, 10));
   function update<K extends keyof EmployeeDraft>(field: K, value: EmployeeDraft[K]) { setDraft((current) => ({ ...current, [field]: value })); }

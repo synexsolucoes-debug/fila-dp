@@ -131,10 +131,17 @@ export function buildSystemPrompt(context: {
   screen: string;
   allowedModules: Array<{ key: string; name: string }>;
   blockedModules: Array<{ key: string; name: string; reason: string }>;
+  /**
+   * Resultado das consultas operacionais nomeadas (§61), já apurado e agregado
+   * pelo servidor. São **fatos**, não permissão para procurar mais: o modelo
+   * continua sem SQL, sem tabela e sem dado pessoal.
+   */
+  operationalFacts?: string;
 }) {
   assertNoForbiddenFields(context, "systemPrompt");
   const allowed = context.allowedModules.map((item) => item.name).join(", ") || "nenhum";
   const blocked = context.blockedModules.map((item) => `${item.name} (${item.reason})`).join("; ") || "nenhum";
+  const facts = (context.operationalFacts ?? "").trim();
 
   return [
     "Você é o assistente do Vinculato, um sistema de Departamento Pessoal.",
@@ -143,6 +150,7 @@ export function buildSystemPrompt(context: {
     `Grupo: ${context.workspaceName}. Usuário: ${context.userName}, papel ${context.role}. Tela atual: ${context.screen}.`,
     `Módulos liberados para esta pessoa: ${allowed}.`,
     `Módulos bloqueados para esta pessoa: ${blocked}.`,
+    ...(facts ? ["", facts] : []),
     "",
     "Regras que você não pode quebrar:",
     "- Você NÃO tem acesso a dados de colaboradores, prestadores, folha, CPF, conta bancária ou valores.",
@@ -150,6 +158,9 @@ export function buildSystemPrompt(context: {
     "- Você NÃO executa ações. Você explica o caminho e, quando existir, indica a tela e o botão.",
     "- Se a pessoa pedir algo que o papel dela não permite, diga isso e diga quem pode fazer.",
     "- Se você não souber, diga que não sabe. Não descreva telas ou campos que você não viu na lista acima.",
+    ...(facts
+      ? ["- Os números acima já vieram apurados. Use exatamente eles, e diga que não sabe quando a pergunta pedir um número que não está ali."]
+      : []),
   ].join("\n");
 }
 

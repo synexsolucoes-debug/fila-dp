@@ -1,6 +1,10 @@
 import type { getD1 } from "../db";
 
 import { ApiError } from "./api-errors.ts";
+import {
+  buildDomainEvent, domainEventNames, findDomainEvent, requireDomainEvent,
+  type DomainEventInputEnvelope, type DomainEventName, type DomainEventOrigin,
+} from "./domain-events.ts";
 import { cleanText } from "./registrations.ts";
 
 /**
@@ -9,42 +13,18 @@ import { cleanText } from "./registrations.ts";
  * O evento de domínio é gravado no mesmo lote da mutação de negócio. Só depois,
  * fora da requisição do usuário, o publicador transforma eventos pendentes em
  * entregas de webhook. Assim não existe evento sem fato nem fato sem evento.
+ *
+ * A lista de tipos deixou de morar aqui: ela é derivada do catálogo em
+ * `lib/domain-events.ts`. Duas listas do mesmo vocabulário divergem — bastava
+ * alguém publicar um evento novo e esquecer de torná-lo assinável.
  */
 type Database = ReturnType<typeof getD1>;
 
-export const domainEventTypes = [
-  "psychology_closing.closed",
-  "psychology_closing.reopened",
-  "psychology_payment.registered",
-  "contractor_closing.closed",
-  "contractor_closing.reopened",
-  "contractor_invoice.registered",
-  "contractor_complement.updated",
-  "competence.closed",
-  "time_sheet.approved",
-  "time_sheet.reopened",
-  "time_export.prepared",
-  "sankhya.sync.started",
-  "sankhya.sync.completed",
-  "sankhya.sync.failed",
-  "sankhya.employee.created",
-  "sankhya.employee.updated",
-  "sankhya.connection.failed",
-  /* Consulta de admissão no Tangerino (§49).
-     `status_changed` é o único que carrega mudança de estado do processo, e é
-     de propósito que ele apenas notifica: nesta versão nada no Vinculato anda
-     sozinho por causa dele (§50). Ele existe para que a automação futura tenha
-     onde se pendurar sem que a decisão de automatizar tenha sido tomada agora. */
-  "tangerino.consultation.started",
-  "tangerino.consultation.completed",
-  "tangerino.consultation.failed",
-  "tangerino.authentication.required",
-  "tangerino.admission.status_changed",
-] as const;
-export type DomainEventType = typeof domainEventTypes[number];
+export const domainEventTypes = domainEventNames;
+export type DomainEventType = DomainEventName;
 
 export function isDomainEventType(value: unknown): value is DomainEventType {
-  return typeof value === "string" && (domainEventTypes as readonly string[]).includes(value);
+  return findDomainEvent(value) !== null;
 }
 
 export function parseEventTypes(value: unknown): DomainEventType[] {
@@ -76,11 +56,21 @@ const allowedPayloadKeys = new Set([
   "updatedCount", "ignoredCount", "failedCount", "errorCode",
 ]);
 
-/** Allowlist explícita: o que não está previsto não sai do produto. */
-export function sanitizeEventPayload(payload: Record<string, unknown>) {
+/**
+ * Allowlist explícita: o que não está previsto não sai do produto.
+ *
+ * Eventos do catálogo que declaram as próprias chaves usam **só** as delas —
+ * um evento de admissão não deve conseguir carregar `netAmount` por acidente.
+ * Os eventos anteriores ao catálogo declaram lista vazia e continuam sob a
+ * allowlist geral, porque restringi-los agora mudaria o corpo já entregue a
+ * endpoints de clientes.
+ */
+export function sanitizeEventPayload(payload: Record<string, unknown>, eventType?: string) {
+  const declared = eventType ? findDomainEvent(eventType)?.payloadKeys ?? [] : [];
+  const allowed = declared.length ? new Set(declared) : allowedPayloadKeys;
   const safe: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(payload)) {
-    if (!allowedPayloadKeys.has(key)) continue;
+    if (!allowed.has(key)) continue;
     if (value === null || value === undefined) continue;
     if (typeof value === "number" || typeof value === "boolean") safe[key] = value;
     else if (typeof value === "string") safe[key] = value.slice(0, 200);
@@ -88,15 +78,94 @@ export function sanitizeEventPayload(payload: Record<string, unknown>) {
   return safe;
 }
 
-/** Statement do evento, para entrar no mesmo `batch` da mutação de negócio. */
+/**
+ * Statement do evento, para entrar no mesmo `batch` da mutação de negócio.
+ *
+ * Origem `internal` e chave de idempotência vazia são deliberados: este caminho
+ * é o do fato que nasce dentro de uma transação nossa, que já acontece uma vez
+ * só. Quem recebe de fora usa `prepareDomainEventEnvelope`, onde a chave existe
+ * e o índice único faz o trabalho. O `requestId` vira a correlação, porque é o
+ * que liga o evento à requisição que o provocou.
+ */
 export function prepareDomainEvent(d1: Database, input: DomainEventInput) {
-  if (!isDomainEventType(input.eventType)) throw new Error(`Evento de domínio desconhecido: ${input.eventType}`);
-  return d1.prepare(`INSERT INTO fdp_domain_events (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id)
-    VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?)`)
+  const definition = requireDomainEvent(input.eventType);
+  return d1.prepare(`INSERT INTO fdp_domain_events
+      (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id,
+       schema_version, origin, external_id, correlation_id, causation_id, idempotency_key, evidence_refs_json)
+    VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, 'internal', '', ?, '', '', '[]'::jsonb)`)
     .bind(
-      crypto.randomUUID(), input.workspaceId, input.eventType, input.entityType, input.entityId,
-      JSON.stringify(sanitizeEventPayload(input.payload)), input.actorUserId ?? null, cleanText(input.requestId, 120),
+      crypto.randomUUID(), input.workspaceId, definition.name, input.entityType, input.entityId,
+      JSON.stringify(sanitizeEventPayload(input.payload, definition.name)),
+      input.actorUserId ?? null, cleanText(input.requestId, 120),
+      definition.schemaVersion, cleanText(input.requestId, 120),
     );
+}
+
+/**
+ * Statement do evento a partir do envelope completo (§6).
+ *
+ * É o caminho de quem recebe de fora: o envelope já carrega origem,
+ * identificador externo, correlação, causa, evidência e a chave de
+ * idempotência derivada. `ON CONFLICT DO NOTHING` sobre
+ * `(workspace_id, idempotency_key)` é o que torna a segunda entrega da mesma
+ * ocorrência inofensiva **no banco**, e não numa verificação em código que duas
+ * requisições simultâneas atravessam juntas (§8).
+ */
+export function prepareDomainEventFromEnvelope(d1: Database, envelope: {
+  name: DomainEventName; schemaVersion: number; origin: DomainEventOrigin; workspaceId: string;
+  entityType: string; entityId: string; externalId: string; correlationId: string; causationId: string;
+  occurredAt: string; payload: Record<string, unknown>; evidenceRefs: string[]; idempotencyKey: string;
+}, actor: { actorUserId?: string | null; requestId?: string | null; onConflict?: "ignore" | "raise" } = {}) {
+  /* Duas consultas escritas por extenso, e não uma com o `ON CONFLICT`
+     interpolado: SQL montado por concatenação escapa do verificador que prepara
+     cada consulta contra o schema real, e o produto perderia a garantia de que
+     esta escrita continua válida quando a tabela mudar.
+
+     `raise` é o modo de quem grava o evento **no mesmo lote** da mutação de
+     negócio: a violação da chave única aborta a transação inteira, e é isso que
+     impede a segunda entrega de criar uma segunda demanda. `ignore` serve a
+     quem só registra o fato e não tem nada para desfazer. */
+  const statement = actor.onConflict === "raise"
+    ? d1.prepare(`INSERT INTO fdp_domain_events
+        (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id,
+         schema_version, origin, external_id, correlation_id, causation_id, idempotency_key, evidence_refs_json, occurred_at)
+      VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)`)
+    : d1.prepare(`INSERT INTO fdp_domain_events
+        (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id,
+         schema_version, origin, external_id, correlation_id, causation_id, idempotency_key, evidence_refs_json, occurred_at)
+      VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
+      ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key <> '' DO NOTHING`);
+  return statement
+    .bind(
+      crypto.randomUUID(), envelope.workspaceId, envelope.name, envelope.entityType, envelope.entityId,
+      JSON.stringify(sanitizeEventPayload(envelope.payload, envelope.name)),
+      actor.actorUserId ?? null, cleanText(actor.requestId, 120),
+      envelope.schemaVersion, envelope.origin, envelope.externalId,
+      envelope.correlationId, envelope.causationId, envelope.idempotencyKey,
+      JSON.stringify(envelope.evidenceRefs), envelope.occurredAt,
+    );
+}
+
+/** Atalho: monta o envelope validado e devolve o statement pronto para o batch. */
+export function prepareDomainEventEnvelope(d1: Database, input: DomainEventInputEnvelope,
+  actor: { actorUserId?: string | null; requestId?: string | null; onConflict?: "ignore" | "raise" } = {}) {
+  return prepareDomainEventFromEnvelope(d1, buildDomainEvent(input), actor);
+}
+
+/** Violação da chave única de idempotência — a resposta certa é "já existe". */
+export function isIdempotencyConflict(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /fdp_domain_events_idempotency_uq/u.test(message)
+    || (/duplicate key value/iu.test(message) && /idempotency/iu.test(message));
+}
+
+/** Localiza o resultado já produzido por uma ocorrência, pela chave. */
+export async function findEventByIdempotencyKey(d1: Database, workspaceId: string, idempotencyKey: string) {
+  if (!idempotencyKey) return null;
+  return d1.prepare(`SELECT id, event_type, entity_type, entity_id, occurred_at
+    FROM fdp_domain_events WHERE workspace_id = ? AND idempotency_key = ?`)
+    .bind(workspaceId, idempotencyKey)
+    .first<{ id: string; event_type: string; entity_type: string; entity_id: string; occurred_at: string }>();
 }
 
 /**

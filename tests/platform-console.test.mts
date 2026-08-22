@@ -101,7 +101,16 @@ test("o painel é operacional e recebe o conector Sankhya pronto da Plataforma G
     source("app/api/integrations/[id]/credentials/route.ts"), source("app/painel/features/registrations/RegistrationsView.tsx"),
   ]);
   assert.doesNotMatch(panel, /AccessView|SaasView|view === "access"|view === "saas"/u);
-  assert.doesNotMatch(panel, /title="Configurações"/u);
+  /* A fronteira é o **conteúdo**, não a palavra.
+     Esta asserção proibia o texto "Configurações" no painel, como atalho para
+     dizer "o painel não administra a plataforma". O atalho deixou de servir
+     quando o §46 exigiu que as configurações **do grupo** tivessem porta na
+     navegação — o que é outra coisa, e é exatamente o que o botão abaixo abre.
+     O que continua proibido, e é o que importa, são as superfícies da
+     plataforma dentro do painel do cliente: elas estão na linha acima. */
+  assert.match(panel, /title="Configurações"[\s\S]{0,80}Settings aria-hidden/u,
+    "a porta de configurações do painel precisa abrir as configurações do grupo");
+  assert.match(panel, /onClick=\{openWorkspaceSettings\}/u);
   assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/u);
   assert.match(integrations, /SankhyaConnectorPanel/u);
   assert.match(integrations, /IntegrationDrawer/u);

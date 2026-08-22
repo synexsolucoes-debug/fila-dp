@@ -110,5 +110,20 @@ function IntegrationDetail({ integrationId, workspaceId, onClose, onEnableModule
 }
 
 function DetailTable({ title, subtitle, actions, headers, rows, render }: { title: string; subtitle: string; actions?: ReactNode; headers: string[]; rows: Row[]; render: (row: Row) => ReactNode }) {
-  return <section className={styles.detailSection}><div className={styles.detailSectionHeader}><h3>{title}</h3>{actions}</div><p className={styles.detailSubtitle}>{subtitle}</p>{rows.length ? <div className={styles.tableWrap}><table className={styles.detailTable}><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={text(row.id) || index}>{render(row)}</tr>)}</tbody></table></div> : <Empty />}</section>;
+  return (
+    <section className={styles.detailSection}>
+      <div className={styles.detailSectionHeader}><h3>{title}</h3>{actions}</div>
+      <p className={styles.detailSubtitle}>{subtitle}</p>
+      {rows.length
+        ? (
+          <div className={styles.tableWrap}>
+            <table className={styles.detailTable}>
+              <thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead>
+              <tbody>{rows.map((row, index) => <tr key={text(row.id) || index}>{render(row)}</tr>)}</tbody>
+            </table>
+          </div>
+        )
+        : <Empty />}
+    </section>
+  );
 }

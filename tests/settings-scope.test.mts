@@ -107,7 +107,9 @@ test("o modal abre por um caminho só, e o botão do topo diz o que há atrás d
   const aberturas = source.match(/setWorkspaceModalOpen\(true\)/gu) ?? [];
   assert.equal(aberturas.length, 1, "mais de um caminho abre o modal: a seção pode divergir do menu");
   assert.match(source, /function openSecuritySettings\(\) \{\s*setSettingsSection\("security"\);/u);
-  assert.match(source, /useState<SettingsSection>\("security"\)/u);
+  // A seção passou a poder vir do endereço (§46, /painel/configuracoes/...),
+  // e "security" continua sendo o padrão de quem chega sem seção nenhuma.
+  assert.match(source, /useState<SettingsSection>\(\s*\(initialLocation\.settings \?\? "security"\)/u);
   // O rótulo antigo dizia só "Perfil e segurança" enquanto escondia empresas,
   // usuários, colunas e automações atrás do mesmo botão.
   assert.match(source, /aria-label=\{isAdmin \? "Abrir configurações do workspace e do perfil" : "Abrir perfil e segurança"\}/u);

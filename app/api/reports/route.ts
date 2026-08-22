@@ -58,6 +58,32 @@ export async function GET(request: Request) {
       accumulator[key] = Math.round(((accumulator[key] ?? 0) + Number(row.payroll_cost ?? 0)) * 100) / 100;
       return accumulator;
     }, {});
-    return Response.json({ from, to, companyId: companyId || null, total: visibleCards.length, completed, completionRate: visibleCards.length ? Math.round((completed / visibleCards.length) * 100) : 100, averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0, byProcess, byMember, activityCount: visibleActivity.length, activityByType: visibleActivity.reduce<Record<string, number>>((accumulator, item) => { const key = String(item.event_type); accumulator[key] = (accumulator[key] ?? 0) + 1; return accumulator; }, {}), hrMetrics: { periods: metricRows.length, admissions, terminations, averageHeadcount: Math.round(averageHeadcount * 10) / 10, payrollCostTotal: Math.round(payrollCostTotal * 100) / 100, turnoverRate, payrollByCompany } });
+    const activityByType = visibleActivity.reduce<Record<string, number>>((accumulator, item) => {
+      const key = String(item.event_type);
+      accumulator[key] = (accumulator[key] ?? 0) + 1;
+      return accumulator;
+    }, {});
+    return Response.json({
+      from,
+      to,
+      companyId: companyId || null,
+      total: visibleCards.length,
+      completed,
+      completionRate: visibleCards.length ? Math.round((completed / visibleCards.length) * 100) : 100,
+      averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0,
+      byProcess,
+      byMember,
+      activityCount: visibleActivity.length,
+      activityByType,
+      hrMetrics: {
+        periods: metricRows.length,
+        admissions,
+        terminations,
+        averageHeadcount: Math.round(averageHeadcount * 10) / 10,
+        payrollCostTotal: Math.round(payrollCostTotal * 100) / 100,
+        turnoverRate,
+        payrollByCompany,
+      },
+    });
   } catch (error) { return apiError(error); }
 }

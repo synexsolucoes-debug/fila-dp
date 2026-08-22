@@ -66,9 +66,33 @@ test("o arquivo continua completo: o filtro corta o conteúdo, não as demandas"
 test("as consultas com teto continuam com teto", () => {
   // Atividades, planner e notificações já eram limitadas. Um filtro novo não
   // pode ter afrouxado nenhuma delas.
-  assert.match(source, /ORDER BY ae\.created_at DESC LIMIT 150/u);
+  //
+  // O teto de atividades deixou de ser o literal `150` e passou a ser a
+  // constante `SNAPSHOT_ACTIVITY_LIMIT` (§37) — a asserção acompanha a mudança
+  // deliberada e continua exigindo que o teto exista e valha 150.
+  assert.match(source, /ORDER BY ae\.created_at DESC LIMIT \?/u);
+  assert.match(source, /SNAPSHOT_ACTIVITY_LIMIT = 150/u);
   assert.match(source, /fdp_planner_blocks[\s\S]{0,200}LIMIT 300/u);
   assert.match(source, /fdp_notifications[\s\S]{0,200}LIMIT 50/u);
+});
+
+test("o histórico sem teto ganhou janela — e a janela é declarada", () => {
+  // Comentário e caixa de entrada vinham inteiros e crescem para sempre (§37).
+  assert.match(source, /SNAPSHOT_HISTORY_DAYS = 90/u);
+  assert.match(source, /fdp_card_comments[\s\S]{0,400}make_interval\(days => \?\)/u,
+    "os comentários precisam de janela temporal");
+  assert.match(source, /fdp_workspace_inbox_items[\s\S]{0,300}make_interval\(days => \?\)/u,
+    "a caixa de entrada precisa de janela temporal");
+  assert.match(source, /SNAPSHOT_COMMENT_LIMIT/u);
+  assert.match(source, /SNAPSHOT_INBOX_LIMIT/u);
+});
+
+test("a janela nunca esconde que existe registro mais antigo", () => {
+  // §39 é explícito: pode haver janela, não pode haver omissão silenciosa.
+  assert.match(source, /history:\s*\{/u, "o snapshot precisa declarar a janela");
+  assert.match(source, /comments_total/u);
+  assert.match(source, /inbox_total/u);
+  assert.match(source, /activity_total/u);
 });
 
 test("o filtro usa a coluna, não uma comparação frágil", () => {
