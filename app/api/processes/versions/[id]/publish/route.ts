@@ -3,6 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { validBpmnXml } from "@/lib/process-management";
+import { initialStepId, parseBpmnGraph } from "@/lib/bpmn-graph";
 import { requireProcessCompanyAccess } from "@/lib/process-access";
 
 /**
@@ -53,6 +54,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       throw ApiError.badRequest(
         "Configure ao menos uma etapa do BPMN antes de publicar.",
         "PROCESS_STEP_CONFIG_REQUIRED",
+      );
+    }
+
+    /* Publicar passou a significar "isto gera trabalho" (§12), então o desenho
+       precisa ser executável na hora da publicação — e não na primeira vez que
+       alguém tentar abrir uma demanda e receber um erro sobre um diagrama que
+       foi aprovado meses antes. */
+    const graph = parseBpmnGraph(version.bpmn_xml);
+    if (graph.nodes.size === 0) {
+      throw ApiError.badRequest(
+        "O diagrama não possui etapas legíveis. Adicione ao menos uma atividade antes de publicar.",
+        "PROCESS_GRAPH_EMPTY",
+      );
+    }
+    if (!initialStepId(graph)) {
+      throw ApiError.badRequest(
+        "O diagrama não tem um evento de início ligado a nenhuma etapa, então não é possível iniciar uma demanda por ele.",
+        "PROCESS_START_MISSING",
       );
     }
 

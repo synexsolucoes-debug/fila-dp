@@ -116,18 +116,26 @@ export function prepareDomainEventFromEnvelope(d1: Database, envelope: {
   entityType: string; entityId: string; externalId: string; correlationId: string; causationId: string;
   occurredAt: string; payload: Record<string, unknown>; evidenceRefs: string[]; idempotencyKey: string;
 }, actor: { actorUserId?: string | null; requestId?: string | null; onConflict?: "ignore" | "raise" } = {}) {
-  /* `raise` é o modo de quem grava o evento **no mesmo lote** da mutação de
+  /* Duas consultas escritas por extenso, e não uma com o `ON CONFLICT`
+     interpolado: SQL montado por concatenação escapa do verificador que prepara
+     cada consulta contra o schema real, e o produto perderia a garantia de que
+     esta escrita continua válida quando a tabela mudar.
+
+     `raise` é o modo de quem grava o evento **no mesmo lote** da mutação de
      negócio: a violação da chave única aborta a transação inteira, e é isso que
      impede a segunda entrega de criar uma segunda demanda. `ignore` serve a
      quem só registra o fato e não tem nada para desfazer. */
-  const conflict = actor.onConflict === "raise"
-    ? ""
-    : "ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key <> '' DO NOTHING";
-  return d1.prepare(`INSERT INTO fdp_domain_events
-      (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id,
-       schema_version, origin, external_id, correlation_id, causation_id, idempotency_key, evidence_refs_json, occurred_at)
-    VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
-    ${conflict}`)
+  const statement = actor.onConflict === "raise"
+    ? d1.prepare(`INSERT INTO fdp_domain_events
+        (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id,
+         schema_version, origin, external_id, correlation_id, causation_id, idempotency_key, evidence_refs_json, occurred_at)
+      VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)`)
+    : d1.prepare(`INSERT INTO fdp_domain_events
+        (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id,
+         schema_version, origin, external_id, correlation_id, causation_id, idempotency_key, evidence_refs_json, occurred_at)
+      VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
+      ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key <> '' DO NOTHING`);
+  return statement
     .bind(
       crypto.randomUUID(), envelope.workspaceId, envelope.name, envelope.entityType, envelope.entityId,
       JSON.stringify(sanitizeEventPayload(envelope.payload, envelope.name)),
