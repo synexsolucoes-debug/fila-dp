@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
+/*
+ * A `Content-Security-Policy` saiu daqui e passou a ser escrita em `proxy.ts`
+ * (§67): ela carrega um nonce por requisição, e um valor estático neste arquivo
+ * não teria como conter script injetado. Mantê-la nos dois lugares faria o
+ * navegador aplicar as duas políticas ao mesmo tempo — a interseção delas — e
+ * quebrar a hidratação da aplicação.
+ */
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: "base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
