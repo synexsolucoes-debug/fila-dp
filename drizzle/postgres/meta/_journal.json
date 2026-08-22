@@ -456,6 +456,13 @@
       "when": 1787900000005,
       "tag": "0062_epi_catalog_status_and_adoption_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1787900000006,
+      "tag": "0063_composite_tenant_foreign_keys",
+      "breakpoints": true
     }
   ]
 }

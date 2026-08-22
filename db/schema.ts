@@ -288,6 +288,9 @@ export const cards = pgTable("fdp_cards", {
   /* Concorrência otimista (§34): a atualização exige a versão lida. */
   version: integer("version").notNull().default(1),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_cards_ws_board_id_fk", columns: [table.workspaceId, table.boardId], foreignColumns: [boards.workspaceId, boards.id] }),
   uniqueIndex("fdp_cards_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_cards_board_list_position_idx").on(table.boardId, table.listId, table.position),
   index("fdp_cards_due_status_idx").on(table.dueAt, table.slaStatus),
@@ -891,6 +894,9 @@ export const payrollCycleItems = pgTable("fdp_payroll_cycle_items", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_payroll_cycle_items_ws_company_id_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   uniqueIndex("fdp_payroll_cycle_items_cycle_phase_title_uq").on(table.payrollCycleId, table.phase, table.title),
   uniqueIndex("fdp_payroll_cycle_items_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_payroll_cycle_items_workspace_status_idx").on(table.workspaceId, table.status, table.dueDate),
@@ -1321,6 +1327,9 @@ export const integrationRunLogs = pgTable("fdp_integration_run_logs", {
   metadataJson: jsonb("metadata_json").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_run_logs_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_run_logs_run_sequence_uq").on(table.runId, table.sequence),
   index("fdp_integration_run_logs_workspace_run_idx").on(table.workspaceId, table.runId, table.createdAt),
   foreignKey({ name: "fdp_integration_run_logs_workspace_run_fk", columns: [table.workspaceId, table.integrationId, table.runId], foreignColumns: [integrationSyncRuns.workspaceId, integrationSyncRuns.integrationId, integrationSyncRuns.id] }).onDelete("cascade"),
@@ -1361,6 +1370,9 @@ export const integrationSyncItems = pgTable("fdp_integration_sync_items", {
   processedAt: timestamp("processed_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_sync_items_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_sync_items_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_sync_items_run_key_uq").on(table.runId, table.itemKey),
   uniqueIndex("fdp_integration_sync_items_payload_uq").on(table.workspaceId, table.integrationId, table.mappingId, table.externalId, table.payloadHash),
@@ -1391,6 +1403,9 @@ export const integrationJobs = pgTable("fdp_integration_jobs", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_jobs_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_jobs_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_jobs_idempotency_uq").on(table.workspaceId, table.integrationId, table.idempotencyKey),
   index("fdp_integration_jobs_claim_idx").on(table.workspaceId, table.status, table.availableAt, table.leaseExpiresAt),
@@ -1460,6 +1475,9 @@ export const integrationReconciliations = pgTable("fdp_integration_reconciliatio
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_integration_reconciliations_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_reconciliations_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_reconciliations_item_uq").on(table.itemId),
   index("fdp_integration_reconciliations_workspace_status_idx").on(table.workspaceId, table.integrationId, table.status, table.createdAt),
@@ -1861,6 +1879,7 @@ export const contractorProfiles = pgTable("fdp_contractor_profiles", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  uniqueIndex("fdp_contractor_profiles_ws_key_uq").on(table.workspaceId, table.providerId),
   uniqueIndex("fdp_contractor_profiles_workspace_provider_uq").on(table.workspaceId, table.providerId),
   index("fdp_contractor_profiles_workspace_company_idx").on(table.workspaceId, table.companyId, table.status),
   foreignKey({ name: "fdp_contractor_profiles_workspace_provider_fk", columns: [table.workspaceId, table.providerId], foreignColumns: [auxiliaryProviders.workspaceId, auxiliaryProviders.id] }).onDelete("cascade"),
@@ -2274,6 +2293,9 @@ export const timeExports = pgTable("fdp_time_exports", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_time_exports_ws_company_id_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   uniqueIndex("fdp_time_exports_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_time_exports_workspace_cycle_idx").on(table.workspaceId, table.payrollCycleId, table.createdAt),
   foreignKey({ name: "fdp_time_exports_workspace_cycle_fk", columns: [table.workspaceId, table.companyId, table.payrollCycleId], foreignColumns: [payrollCycles.workspaceId, payrollCycles.companyId, payrollCycles.id] }),
@@ -2312,6 +2334,9 @@ export const timeSheets = pgTable("fdp_time_sheets", {
   /* Concorrência otimista (§34): o trigger da 0061 incrementa. */
   version: integer("version").notNull().default(1),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_time_sheets_ws_company_id_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   uniqueIndex("fdp_time_sheets_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_time_sheets_workspace_employee_cycle_uq").on(table.workspaceId, table.employeeId, table.payrollCycleId),
   index("fdp_time_sheets_workspace_status_idx").on(table.workspaceId, table.competence, table.status),
@@ -2527,6 +2552,9 @@ export const movementSuggestions = pgTable("fdp_movement_suggestions", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  /* Chave composta que impede a combinação entre grupos (§87). A simples
+     continua existindo; é esta que dá a garantia estrutural. */
+  foreignKey({ name: "fdp_movement_suggestions_ws_event_id_fk", columns: [table.workspaceId, table.eventId], foreignColumns: [integrationEvents.workspaceId, integrationEvents.id] }),
   uniqueIndex("fdp_movement_suggestions_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_movement_suggestions_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
   // Mensagem editada reencontra a própria sugestão em vez de abrir outra.
