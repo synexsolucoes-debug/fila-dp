@@ -134,7 +134,17 @@ export async function recordIntegrationEvent(
     return { kind: "new", event: inserted };
   }
 
-  const existing = await loadEvent(d1, workspaceId, integrationId, externalEventId);
+  /* Reentrega contada na própria linha (§37). O teto vem do CHECK: um provedor
+     em laço não pode transformar o contador em um número sem significado, e
+     parar de contar em 100.000 diz a mesma coisa que continuar. */
+  const existing = await d1.prepare(
+    `UPDATE fdp_integration_events
+        SET duplicate_count = LEAST(duplicate_count + 1, 100000), updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND integration_id = ? AND external_event_id = ?
+      RETURNING id, workspace_id, integration_id, connector, event_type, external_event_id, status,
+                result_type, result_id, error_code, error_message, retry_count, received_at, processed_at`,
+  ).bind(workspaceId, integrationId, externalEventId).first<IntegrationEventRow>()
+    ?? await loadEvent(d1, workspaceId, integrationId, externalEventId);
   if (!existing) {
     // Só acontece se a linha sumir entre o conflito e a leitura; tratar como
     // falha explícita é melhor do que seguir com um evento fantasma.

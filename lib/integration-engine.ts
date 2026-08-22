@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getD1 } from "@/db";
+import { prepareAgentOutcome } from "./agent-scheduler";
 import { ApiError } from "./api-errors";
 import { computeSlaStatus } from "./fila-dp-api";
 import { addBusinessDays } from "./fila-dp-relations";
@@ -187,6 +188,14 @@ export async function queueIntegrationRun(d1: Database, input: {
     ), inserted_job AS (
       INSERT INTO fdp_integration_jobs (id, workspace_id, integration_id, run_id, idempotency_key, payload_json)
       SELECT ?, ?, chosen_run.integration_id, chosen_run.id, 'run:' || chosen_run.id, jsonb_build_object('runId', chosen_run.id) FROM chosen_run
+      -- Um agente por vez (§31). O índice único parcial garante a invariante no
+      -- banco; esta condição faz com que a segunda chamada simplesmente não
+      -- insira, em vez de estourar erro de restrição em quem só reenviou.
+      WHERE NOT EXISTS (
+        SELECT 1 FROM fdp_integration_jobs active
+        WHERE active.workspace_id = chosen_run.workspace_id AND active.integration_id = chosen_run.integration_id
+          AND active.status IN ('queued', 'leased')
+      )
       ON CONFLICT (workspace_id, integration_id, idempotency_key) DO NOTHING
     ) SELECT id, integration_id, mapping_id, trigger_type, status, idempotency_key, created_at FROM chosen_run`)
     .bind(input.mappingId || null, input.workspaceId, input.integrationId, runId, input.workspaceId, input.triggerType ?? "manual", key, input.requestedBy ?? null, input.workspaceId, key, jobId, input.workspaceId)
@@ -496,6 +505,10 @@ async function executeRun(d1: Database, workspaceId: string, job: JobRow) {
     d1.prepare("UPDATE fdp_integration_credentials SET verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?").bind(workspaceId, credential.id),
     d1.prepare("UPDATE fdp_integrations SET status = 'connected', last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?").bind(workspaceId, integration.id),
     d1.prepare("UPDATE fdp_integration_jobs SET status = 'succeeded', completed_at = CURRENT_TIMESTAMP, lease_token = '', lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ? AND lease_token = ?").bind(workspaceId, job.id, job.lease_token),
+    /* Zera a contagem de falhas e marca a última leitura bem-sucedida (§34).
+       Sem isto, um conector que se recuperou continuaria "degradado" na tela
+       até alguém mexer nele à mão. */
+    prepareAgentOutcome(d1, { workspaceId, integrationId: integration.id, succeeded: true }),
   ]);
   return { runId: job.run_id, status: finalStatus, received: records.length, ...totals };
 }
@@ -528,6 +541,11 @@ export async function processNextIntegrationJob(d1: Database, workspaceId: strin
         .bind(exhausted ? "failed" : "queued", job.attempt, safe.code, safe.message, exhausted ? "failed" : "queued", workspaceId, job.run_id),
       d1.prepare("UPDATE fdp_integrations SET status = CASE WHEN channel = 'solides' THEN 'needs_credentials' ELSE 'error' END, last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
         .bind(safe.message, workspaceId, job.integration_id),
+      /* Espera crescente até a próxima leitura da origem (§33) e marcação de
+         degradado depois de falhas seguidas (§34). É distinto da retentativa do
+         job: aquela tenta de novo o mesmo trabalho, esta afasta a próxima ida ao
+         sistema externo que já se sabe indisponível. */
+      prepareAgentOutcome(d1, { workspaceId, integrationId: job.integration_id, succeeded: false }),
     ]);
     return { runId: job.run_id, status: nextStatus, attempt: job.attempt, retryInSeconds: exhausted ? null : delay, error: safe.message };
   }

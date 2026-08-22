@@ -1,5 +1,7 @@
 import type { getD1 } from "../../db/index.ts";
 import { getAttachmentsBucket } from "../../db/index.ts";
+import { renewAgentLease } from "../agent-scheduler.ts";
+import { DEGRADED_AFTER_FAILURES } from "../agent-schedule.ts";
 import { prepareAuditEvent } from "../fila-dp-db.ts";
 import { openCredentials, retryDelaySeconds } from "../integrations.ts";
 import { log } from "../observability.ts";
@@ -13,6 +15,9 @@ type Database = ReturnType<typeof getD1>;
 type Job = { id: string; integration_id: string; run_id: string; job_type: string; attempt: number; max_attempts: number; lease_token: string };
 type Integration = { id: string; config_json: string; status: string };
 type Credential = { id: string; encrypted_value: string; initialization_vector: string; auth_tag: string; key_version: number };
+
+/** Duração da reserva, renovada a cada fase. É o mesmo valor do `claim`. */
+const LEASE_MINUTES = 20;
 
 const phaseMessages = {
   running: "Preparando execução Sankhya",
@@ -34,9 +39,23 @@ async function appendLog(d1: Database, input: { workspaceId: string; integration
       input.phase, input.code ?? "", input.message.slice(0, 500), JSON.stringify(allowedMetadata)).run();
 }
 
+/**
+ * Muda a fase e renova a reserva (§32).
+ *
+ * A execução de navegador dura mais do que a reserva inicial, e cada fase é a
+ * prova de que o worker continua vivo. Sem a renovação, a reserva vence no meio
+ * de uma extração longa, outro runner assume o mesmo job, e o cliente recebe a
+ * mesma importação duas vezes — a falha que o lease existe para impedir.
+ *
+ * A renovação não é obrigatória para a fase avançar: perder a corrida da
+ * reserva significa que outro worker já assumiu, e nesse caso quem deve parar
+ * é este, na próxima escrita condicionada ao `lease_token`.
+ */
 async function setPhase(d1: Database, workspaceId: string, job: Job, phase: keyof typeof phaseMessages) {
   await d1.prepare("UPDATE fdp_integration_sync_runs SET status = ? WHERE workspace_id = ? AND id = ?")
     .bind(phase, workspaceId, job.run_id).run();
+  await renewAgentLease(d1, { workspaceId, jobId: job.id, leaseToken: job.lease_token, minutes: LEASE_MINUTES })
+    .catch(() => false);
   await appendLog(d1, { workspaceId, integrationId: job.integration_id, runId: job.run_id, phase, message: phaseMessages[phase] });
 }
 
@@ -60,7 +79,7 @@ export async function claimNextSankhyaJob(d1: Database, workspaceId: string) {
       WHERE job.workspace_id = ? AND integration.channel = 'sankhya_browser' AND job.status IN ('queued', 'leased')
         AND job.available_at <= CURRENT_TIMESTAMP AND (job.status = 'queued' OR job.lease_expires_at < CURRENT_TIMESTAMP)
       ORDER BY job.available_at, job.created_at FOR UPDATE OF job SKIP LOCKED LIMIT 1
-    ) UPDATE fdp_integration_jobs job SET status = 'leased', lease_token = ?, lease_expires_at = CURRENT_TIMESTAMP + INTERVAL '20 minutes',
+    ) UPDATE fdp_integration_jobs job SET status = 'leased', lease_token = ?, lease_expires_at = CURRENT_TIMESTAMP + make_interval(mins => 20),
       attempt = job.attempt + 1, updated_at = CURRENT_TIMESTAMP FROM candidate WHERE job.id = candidate.id
     RETURNING job.id, job.integration_id, job.run_id, job.job_type, job.attempt, job.max_attempts, job.lease_token`)
     .bind(workspaceId, leaseToken).first<Job>();
@@ -142,7 +161,9 @@ export async function processNextSankhyaJob(d1: Database, workspaceId: string, c
         .bind(finalStatus, totals.found, totals.imported, totals.ignored, totals.failed, totals.updated, totals.unchanged, durationMs, summary, workspaceId, job.run_id),
       d1.prepare("UPDATE fdp_integration_jobs SET status = 'succeeded', completed_at = CURRENT_TIMESTAMP, lease_token = '', lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ? AND lease_token = ?")
         .bind(workspaceId, job.id, job.lease_token),
-      d1.prepare("UPDATE fdp_integrations SET status = 'connected', last_connection_at = CURRENT_TIMESTAMP, last_sync_at = CURRENT_TIMESTAMP, last_successful_sync_at = CASE WHEN ? = 'succeeded' THEN CURRENT_TIMESTAMP ELSE last_successful_sync_at END, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
+      /* Zera a contagem de falhas junto com o sucesso (§34): sem isto o
+         conector recuperado continuaria marcado como degradado na tela. */
+      d1.prepare("UPDATE fdp_integrations SET status = 'connected', last_connection_at = CURRENT_TIMESTAMP, last_sync_at = CURRENT_TIMESTAMP, last_successful_sync_at = CASE WHEN ? = 'succeeded' THEN CURRENT_TIMESTAMP ELSE last_successful_sync_at END, consecutive_failures = 0, degraded_since = NULL, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
         .bind(finalStatus, workspaceId, job.integration_id),
       prepareDomainEvent(d1, { workspaceId, eventType: "sankhya.sync.completed", entityType: "integration_run", entityId: job.run_id,
         payload: { integrationId: job.integration_id, runId: job.run_id, status: finalStatus, foundCount: totals.found, importedCount: totals.imported,
@@ -167,8 +188,15 @@ export async function processNextSankhyaJob(d1: Database, workspaceId: string, c
       d1.prepare(`UPDATE fdp_integration_sync_runs SET status = ?, attempt = ?, error_code = ?, error_message = ?, duration_ms = ?,
         completed_at = CASE WHEN ? IN ('failed', 'requires_user_action') THEN CURRENT_TIMESTAMP ELSE NULL END WHERE workspace_id = ? AND id = ?`)
         .bind(runStatus, job.attempt, safe.code, safe.message, Date.now() - startedAt, runStatus, workspaceId, job.run_id),
-      d1.prepare("UPDATE fdp_integrations SET status = ?, last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
-        .bind(retry ? "connected" : safe.requiresUserAction ? "requires_user_action" : safe.code.includes("CREDENTIAL") || safe.code.includes("LOGIN_INVALID") ? "needs_credentials" : "error", safe.message, workspaceId, job.integration_id),
+      /* Falhas seguidas acumulam no conector e, no terceiro tropeço, marcam o
+         agente como degradado (§34). O horário da próxima execução continua
+         vindo da configuração do próprio Sankhya — a espera crescente daqui é
+         a do job, que já tem teto de tentativas. */
+      d1.prepare(`UPDATE fdp_integrations SET status = ?, last_error = ?,
+          consecutive_failures = consecutive_failures + 1,
+          degraded_since = CASE WHEN consecutive_failures + 1 >= ? THEN COALESCE(degraded_since, CURRENT_TIMESTAMP) ELSE degraded_since END,
+          updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?`)
+        .bind(retry ? "connected" : safe.requiresUserAction ? "requires_user_action" : safe.code.includes("CREDENTIAL") || safe.code.includes("LOGIN_INVALID") ? "needs_credentials" : "error", safe.message, DEGRADED_AFTER_FAILURES, workspaceId, job.integration_id),
       prepareDomainEvent(d1, { workspaceId, eventType: safe.code.includes("LOGIN") ? "sankhya.connection.failed" : "sankhya.sync.failed", entityType: "integration_run", entityId: job.run_id,
         payload: { integrationId: job.integration_id, runId: job.run_id, status: runStatus, errorCode: safe.code, occurredAt: new Date().toISOString() } }),
       prepareAuditEvent({ workspaceId, actorType: "system", actorEmail: "SYSTEM", action: "sankhya.sync.failed", outcome: "failure", entityType: "integration_run", entityId: job.run_id,
