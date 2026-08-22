@@ -65,6 +65,7 @@ export const expectedMigrations = [
   "0055_contractor_termination_proration.sql",
   "0056_tangerino_admission_agent.sql",
   "0057_domain_event_catalog.sql",
+  "0058_process_instances.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

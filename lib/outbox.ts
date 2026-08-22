@@ -115,12 +115,19 @@ export function prepareDomainEventFromEnvelope(d1: Database, envelope: {
   name: DomainEventName; schemaVersion: number; origin: DomainEventOrigin; workspaceId: string;
   entityType: string; entityId: string; externalId: string; correlationId: string; causationId: string;
   occurredAt: string; payload: Record<string, unknown>; evidenceRefs: string[]; idempotencyKey: string;
-}, actor: { actorUserId?: string | null; requestId?: string | null } = {}) {
+}, actor: { actorUserId?: string | null; requestId?: string | null; onConflict?: "ignore" | "raise" } = {}) {
+  /* `raise` é o modo de quem grava o evento **no mesmo lote** da mutação de
+     negócio: a violação da chave única aborta a transação inteira, e é isso que
+     impede a segunda entrega de criar uma segunda demanda. `ignore` serve a
+     quem só registra o fato e não tem nada para desfazer. */
+  const conflict = actor.onConflict === "raise"
+    ? ""
+    : "ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key <> '' DO NOTHING";
   return d1.prepare(`INSERT INTO fdp_domain_events
       (id, workspace_id, event_type, entity_type, entity_id, payload_json, status, actor_user_id, request_id,
        schema_version, origin, external_id, correlation_id, causation_id, idempotency_key, evidence_refs_json, occurred_at)
     VALUES (?, ?, ?, ?, ?, ?::jsonb, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?)
-    ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key <> '' DO NOTHING`)
+    ${conflict}`)
     .bind(
       crypto.randomUUID(), envelope.workspaceId, envelope.name, envelope.entityType, envelope.entityId,
       JSON.stringify(sanitizeEventPayload(envelope.payload, envelope.name)),
@@ -133,8 +140,24 @@ export function prepareDomainEventFromEnvelope(d1: Database, envelope: {
 
 /** Atalho: monta o envelope validado e devolve o statement pronto para o batch. */
 export function prepareDomainEventEnvelope(d1: Database, input: DomainEventInputEnvelope,
-  actor: { actorUserId?: string | null; requestId?: string | null } = {}) {
+  actor: { actorUserId?: string | null; requestId?: string | null; onConflict?: "ignore" | "raise" } = {}) {
   return prepareDomainEventFromEnvelope(d1, buildDomainEvent(input), actor);
+}
+
+/** Violação da chave única de idempotência — a resposta certa é "já existe". */
+export function isIdempotencyConflict(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /fdp_domain_events_idempotency_uq/u.test(message)
+    || (/duplicate key value/iu.test(message) && /idempotency/iu.test(message));
+}
+
+/** Localiza o resultado já produzido por uma ocorrência, pela chave. */
+export async function findEventByIdempotencyKey(d1: Database, workspaceId: string, idempotencyKey: string) {
+  if (!idempotencyKey) return null;
+  return d1.prepare(`SELECT id, event_type, entity_type, entity_id, occurred_at
+    FROM fdp_domain_events WHERE workspace_id = ? AND idempotency_key = ?`)
+    .bind(workspaceId, idempotencyKey)
+    .first<{ id: string; event_type: string; entity_type: string; entity_id: string; occurred_at: string }>();
 }
 
 /**

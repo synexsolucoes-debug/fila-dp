@@ -278,6 +278,15 @@ export const cards = pgTable("fdp_cards", {
   legalDueAt: timestamp("legal_due_at", { withTimezone: true, mode: "string" }),
   processTemplateId: text("process_template_id"),
   closedAt: timestamp("closed_at", { withTimezone: true, mode: "string" }),
+  /* Instância de processo (§11). A demanda fica presa à versão que a originou:
+     publicar a versão seguinte não reescreve o que esta segue. */
+  processDefinitionId: text("process_definition_id"),
+  processVersionId: text("process_version_id"),
+  processVersionNumber: text("process_version_number").notNull().default(""),
+  currentStepId: text("current_step_id").notNull().default(""),
+  instantiatedAt: timestamp("instantiated_at", { withTimezone: true, mode: "string" }),
+  /* Concorrência otimista (§34): a atualização exige a versão lida. */
+  version: integer("version").notNull().default(1),
 }, (table) => [
   uniqueIndex("fdp_cards_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_cards_board_list_position_idx").on(table.boardId, table.listId, table.position),
@@ -297,6 +306,16 @@ export const cards = pgTable("fdp_cards", {
   foreignKey({ name: "fdp_cards_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   index("fdp_cards_workspace_requester_area_idx").on(table.workspaceId, table.requesterAreaId, table.createdAt),
   index("fdp_cards_workspace_responsible_area_idx").on(table.workspaceId, table.responsibleAreaId, table.createdAt),
+  // Sem `ON DELETE`: versão usada por demanda não some, e é isso que impede a
+  // v5 de reescrever o que a v4 determinou.
+  foreignKey({ name: "fdp_cards_process_definition_fk", columns: [table.workspaceId, table.processDefinitionId], foreignColumns: [processDefinitions.workspaceId, processDefinitions.id] }),
+  foreignKey({ name: "fdp_cards_process_version_fk", columns: [table.workspaceId, table.processVersionId], foreignColumns: [processVersions.workspaceId, processVersions.id] }),
+  index("fdp_cards_process_version_idx").on(table.workspaceId, table.processVersionId, table.currentStepId)
+    .where(sql`${table.processVersionId} IS NOT NULL`),
+  index("fdp_cards_process_definition_idx").on(table.workspaceId, table.processDefinitionId, table.archived)
+    .where(sql`${table.processDefinitionId} IS NOT NULL`),
+  check("fdp_cards_version_check", sql`${table.version} > 0`),
+  check("fdp_cards_process_instance_check", sql`(${table.processVersionId} IS NULL AND ${table.processDefinitionId} IS NULL AND ${table.currentStepId} = '' AND ${table.processVersionNumber} = '' AND ${table.instantiatedAt} IS NULL) OR (${table.processVersionId} IS NOT NULL AND ${table.processDefinitionId} IS NOT NULL AND ${table.currentStepId} <> '' AND ${table.instantiatedAt} IS NOT NULL)`),
 ]);
 
 export const checklistItems = pgTable("fdp_checklist_items", {
