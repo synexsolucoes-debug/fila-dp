@@ -1,0 +1,58 @@
+name: Worker Tangerino sob demanda
+
+# Disparado pelo backend quando alguém pede uma consulta. Um runner efêmero por
+# disparo: ele drena a fila e morre. Não há processo ocioso guardando sessão de
+# navegador entre execuções — que seria uma credencial de cliente viva num
+# container esperando trabalho aparecer.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Um worker por vez. Dois runners drenando a mesma fila não entregam resposta
+# mais rápido — o trinco por colaborador já serializa — e multiplicam a chance
+# de o Tangerino tratar a conta do cliente como uso anômalo.
+concurrency:
+  group: tangerino-browser-worker
+  cancel-in-progress: false
+
+jobs:
+  process-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Instalar dependências do worker
+        run: npm ci --omit=dev
+      - name: Restaurar cache do Chromium
+        id: browser-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Instalar Chromium e dependências do sistema
+        run: npx playwright install --with-deps --only-shell chromium
+      - name: Processar a fila do agente Tangerino uma vez
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Cofre exclusivo do agente. O worker roda fora da aplicação e nunca
+          # recebe a chave global das demais integrações.
+          FDP_TANGERINO_VAULT_KEYS: ${{ secrets.FDP_TANGERINO_VAULT_KEYS }}
+          FDP_TANGERINO_VAULT_KEY: ${{ secrets.FDP_TANGERINO_VAULT_KEY }}
+          FDP_TANGERINO_VAULT_KEY_VERSION: ${{ secrets.FDP_TANGERINO_VAULT_KEY_VERSION }}
+          TANGERINO_BROWSER_AGENT_ENABLED: "true"
+          FDP_TANGERINO_BROWSER_ALLOWED_HOSTS: ${{ vars.FDP_TANGERINO_BROWSER_ALLOWED_HOSTS }}
+          FDP_TANGERINO_CHROMIUM_SANDBOX: "true"
+          TANGERINO_BROWSER_CONCURRENCY: "2"
+          # Orçamento abaixo do timeout do job: o runner precisa encerrar por
+          # decisão própria, com o `finally` fechando o navegador, e não morrer
+          # no meio de uma leitura deixando a consulta presa em RUNNING.
+          FDP_TANGERINO_WORKER_BUDGET_MS: "900000"
+        run: npm run worker:tangerino:once

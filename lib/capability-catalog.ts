@@ -118,6 +118,7 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "integrations.credentials.manage": { area: "platform", label: "Alterar credenciais protegidas de integração" },
   "integrations.execute": { area: "platform", label: "Testar conexões e executar sincronizações" },
   "integrations.logs.view": { area: "platform", label: "Consultar logs técnicos seguros das integrações" },
+  "integrations.tangerino.admission.read": { area: "platform", label: "Consultar o andamento de admissões no Tangerino (somente leitura)" },
   "saas.read": { area: "platform", label: "Ver plano, limites e faturas" },
   "saas.manage": { area: "platform", label: "Contratar, trocar de plano e cancelar" },
   "audit.read": { area: "platform", label: "Consultar a trilha de auditoria" },

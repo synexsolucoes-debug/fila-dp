@@ -28,6 +28,13 @@ export const capabilities = [
   "integrations.credentials.manage",
   "integrations.execute",
   "integrations.logs.view",
+  /* Consultar o Tangerino é uma permissão à parte, e não `integrations.execute`.
+     Executar uma integração move dado do provedor para dentro do Vinculato; esta
+     abre um navegador autenticado como o cliente, dentro do sistema do cliente,
+     sob demanda de uma pessoa. Quem pode uma coisa não deveria automaticamente
+     poder a outra — e separar agora é barato, separar depois exige revisar cada
+     concessão já feita. */
+  "integrations.tangerino.admission.read",
   "saas.read",
   "saas.manage",
   "audit.read",
@@ -150,6 +157,10 @@ const roleCapabilities = {
     "workspace.read", "members.directory.read", "cards.read", "cards.write", "comments.write",
     "attachments.read", "attachments.write", "reports.read", "hr.read", "hr.write",
     "integrations.status.read", "integrations.view",
+    // Quem confere admissão é o analista de DP; a consulta serve ao trabalho
+    // dele. O que ele continua sem ter é configurar credencial e executar
+    // integração — ler o andamento não é administrar o conector.
+    "integrations.tangerino.admission.read",
     "companies.read", "employees.read", "employees.manage", "registrations.catalogs.manage",
     "departments.view", "departments.create", "departments.edit", "departments.manage_members", "departments.archive",
     "processes.read", "competences.read", "competences.manage", "competences.transition",

@@ -2,9 +2,10 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes }
 import { ApiError } from "./api-errors.ts";
 import { validateIntegrationEndpoint } from "./integration-security.ts";
 import { validateSolidesEndpoint } from "./solides.ts";
+import { tangerinoBrowserHosts } from "./tangerino/hosts.ts";
 import { validateTangerinoEndpoint } from "./tangerino.ts";
 
-export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "sankhya_browser", "erp"] as const;
+export const integrationChannels = ["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "tangerino_browser", "sankhya_browser", "erp"] as const;
 export type IntegrationChannel = typeof integrationChannels[number];
 export const integrationResources = ["inbox", "employees", "hr_metrics", "files", "admissions"] as const;
 export type IntegrationResource = typeof integrationResources[number];
@@ -17,6 +18,11 @@ const allowedCredentialKeys: Record<IntegrationChannel, ReadonlySet<string>> = {
   onedrive: new Set(["token", "clientId", "clientSecret", "tenantId", "refreshToken"]),
   solides: new Set(["token", "apiKey", "clientId", "clientSecret", "refreshToken"]),
   tangerino: new Set(["token", "apiKey"]),
+  // O agente de navegador entra com usuário e senha porque é isso que a tela de
+  // login da Admissão Digital pede. Canal separado do `tangerino` de API de
+  // propósito: são credenciais diferentes, com alcance diferente, e guardá-las
+  // no mesmo canal faria uma valer pela outra.
+  tangerino_browser: new Set(["username", "password"]),
   sankhya_browser: new Set(["username", "password"]),
   erp: new Set(["token", "apiKey", "clientId", "clientSecret", "xToken"]),
 };
@@ -47,10 +53,31 @@ function decodeVaultKey(raw: string) {
   return key;
 }
 
+/** Conectores que entram com usuário e senha numa tela, e não com token numa API. */
+const browserChannels: ReadonlySet<IntegrationChannel> = new Set(["sankhya_browser", "tangerino_browser"]);
+
+/**
+ * Qual cofre guarda a credencial de cada canal.
+ *
+ * Os conectores de navegador têm cofre próprio por um motivo operacional, não
+ * estético: o worker deles roda **fora** da aplicação — em runner efêmero — e
+ * precisa da chave para abrir a credencial. Dar-lhe a chave global significaria
+ * entregar, a um processo externo, o cofre de todas as integrações do produto.
+ * Cada agente de navegador recebe só a sua.
+ */
+const vaultPrefixByChannel: Partial<Record<IntegrationChannel, string>> = {
+  sankhya_browser: "FDP_SANKHYA",
+  tangerino_browser: "FDP_TANGERINO",
+};
+
+function vaultPrefix(channel?: IntegrationChannel) {
+  return (channel && vaultPrefixByChannel[channel]) || "FDP_INTEGRATION";
+}
+
 function vaultKeys(channel?: IntegrationChannel) {
   const result = new Map<number, Buffer>();
-  const sankhya = channel === "sankhya_browser";
-  const configured = sankhya ? process.env.FDP_SANKHYA_VAULT_KEYS : process.env.FDP_INTEGRATION_VAULT_KEYS;
+  const prefix = vaultPrefix(channel);
+  const configured = process.env[`${prefix}_VAULT_KEYS`];
   if (configured) {
     try {
       const parsed = JSON.parse(configured) as Record<string, unknown>;
@@ -62,12 +89,12 @@ function vaultKeys(channel?: IntegrationChannel) {
       throw new ApiError(500, "VAULT_KEYS_INVALID", "O cofre de credenciais não está configurado corretamente.");
     }
   }
-  const singleKey = sankhya ? process.env.FDP_SANKHYA_VAULT_KEY : process.env.FDP_INTEGRATION_VAULT_KEY;
+  const singleKey = process.env[`${prefix}_VAULT_KEY`];
   if (!result.size && singleKey) result.set(1, decodeVaultKey(singleKey));
   // Nomear a variável é o que transforma "não salva" em algo acionável: quem vê
   // esta mensagem administra integrações e precisa saber o que falta no deployment.
   if (!result.size) {
-    const variable = sankhya ? "FDP_SANKHYA_VAULT_KEY" : "FDP_INTEGRATION_VAULT_KEY";
+    const variable = `${prefix}_VAULT_KEY`;
     throw new ApiError(503, "VAULT_NOT_CONFIGURED", `Cofre de credenciais não configurado neste deployment: defina ${variable} (chave AES-256 em base64) e publique novamente antes de guardar segredos.`);
   }
   return result;
@@ -77,7 +104,7 @@ function vaultKeys(channel?: IntegrationChannel) {
 export function currentVaultKey(channelValue?: unknown) {
   const channel = channelValue === undefined ? undefined : parseChannel(channelValue);
   const keys = vaultKeys(channel);
-  const configuredVersion = channel === "sankhya_browser" ? process.env.FDP_SANKHYA_VAULT_KEY_VERSION : process.env.FDP_INTEGRATION_VAULT_KEY_VERSION;
+  const configuredVersion = process.env[`${vaultPrefix(channel)}_VAULT_KEY_VERSION`];
   const requested = Number(configuredVersion || Math.max(...keys.keys()));
   const key = keys.get(requested);
   if (!key) throw new ApiError(500, "VAULT_KEY_VERSION_MISSING", "A versão ativa do cofre não está disponível.");
@@ -103,7 +130,9 @@ export function sanitizeCredentials(channelValue: unknown, value: unknown) {
   for (const [key, raw] of entries) {
     if (!allowed.has(key) || typeof raw !== "string") throw ApiError.badRequest(`O campo de credencial ${key} não é aceito para este conector.`, "CREDENTIAL_FIELD_INVALID");
     const secret = raw.trim();
-    const minimumLength = channel === "sankhya_browser" && key === "username" ? 2 : 8;
+    // Nome de usuário de ERP costuma ser curto ("ria", "dp01"); exigir oito
+    // caracteres recusaria a credencial real do cliente. A senha continua em oito.
+    const minimumLength = browserChannels.has(channel) && key === "username" ? 2 : 8;
     if (secret.length < minimumLength || secret.length > 16_000) throw ApiError.badRequest(`A credencial ${key} possui tamanho inválido.`, "CREDENTIAL_VALUE_INVALID");
     sanitized[key] = secret;
   }
@@ -185,7 +214,13 @@ export function validateConnectorEndpoint(channel: string, value: unknown) {
   if (!endpoint) throw ApiError.badRequest("Configure o endpoint oficial do conector.", "INTEGRATION_ENDPOINT_REQUIRED");
   const upper = channel.toUpperCase();
   const configuredEndpoint = process.env[`FDP_${upper}_ENDPOINT`] ?? "";
-  const extraHosts = [process.env.FDP_INTEGRATION_ALLOWED_HOSTS, process.env[`FDP_${upper}_ALLOWED_HOSTS`]].filter(Boolean).join(",");
+  /* O agente Tangerino nasce com os domínios oficiais já na lista. Sem isso, a
+     configuração dependeria de alguém lembrar de preencher a allowlist antes de
+     gravar a URL — e a falha apareceria como "host não permitido" apontando para
+     o endereço certo, que é o tipo de recusa que ninguém consegue interpretar. */
+  const channelDefaults = channel === "tangerino_browser" ? tangerinoBrowserHosts.join(",") : "";
+  const extraHosts = [channelDefaults, process.env.FDP_INTEGRATION_ALLOWED_HOSTS, process.env[`FDP_${upper}_ALLOWED_HOSTS`]]
+    .filter(Boolean).join(",");
   return validateIntegrationEndpoint(channel, endpoint, configuredEndpoint, extraHosts);
 }
 
@@ -196,7 +231,7 @@ export function publicCredentialFingerprint(value: string) {
 /** Exibe somente um indício não reversível do usuário; a senha nunca tem representação pública. */
 export function credentialPublicHint(channelValue: unknown, value: unknown) {
   const { channel, credentials } = sanitizeCredentials(channelValue, value);
-  if (channel !== "sankhya_browser") return "";
+  if (!browserChannels.has(channel)) return "";
   const username = credentials.username;
   const visible = username.slice(0, Math.min(3, username.length));
   return `${visible}${"*".repeat(Math.max(8, username.length - visible.length))}`;

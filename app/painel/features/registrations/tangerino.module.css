@@ -1,0 +1,197 @@
+/* Aba do agente Tangerino no cadastro do colaborador.
+ *
+ * Nenhuma cor escrita à mão: tudo sai dos tokens do painel, como no módulo de
+ * EPI. O que muda de tom aqui é o significado do aviso — informação, atenção e
+ * erro —, e cada um usa o token semântico correspondente, não um verde ou
+ * vermelho escolhido a olho.
+ */
+.panel {
+  --tg-surface: var(--ui-surface, #fff);
+  --tg-muted: var(--ui-surface-muted, #f0f4f6);
+  --tg-border: var(--ui-border, #d8e0e7);
+  --tg-text: var(--ui-text, #172235);
+  --tg-soft: var(--ui-text-soft, #5e6d7f);
+  --tg-accent: var(--ui-accent, #1f5f8b);
+  /* Duas cores para o mesmo acento, e o motivo é contraste: `--tg-accent`
+     PINTA (fundo de botão), `--tg-accent-text` é a mesma família num tom que se
+     LÊ sobre a página. No tema claro os dois quase coincidem e a troca não
+     aparece; no escuro, o texto some. */
+  --tg-accent-text: var(--ui-accent-text, #1f5f8b);
+  --tg-accent-soft: var(--ui-accent-soft, #e6f0f7);
+  --tg-warning: var(--ui-warning, #a15c07);
+  --tg-danger: var(--ui-danger, #b42318);
+  --tg-info: var(--ui-info, #175cd3);
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  color: var(--tg-text);
+}
+
+.intro {
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--tg-border);
+  border-radius: 12px;
+  background: var(--tg-muted);
+}
+.intro > span {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 9px;
+  background: var(--tg-accent-soft);
+  /* Aqui o acento é fundo do quadradinho, então a cor do ícone é a de leitura. */
+  color: var(--tg-accent-text);
+}
+.intro svg { width: 17px; height: 17px; }
+.intro strong { display: block; font-size: 12px; }
+.intro p { margin: 4px 0 0; color: var(--tg-soft); font-size: 11px; line-height: 1.45; }
+.intro > b {
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--tg-surface);
+  color: var(--tg-accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.unbound { color: var(--tg-soft) !important; }
+
+.actions {
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--tg-border);
+  border-radius: 12px;
+}
+.actions strong { display: block; font-size: 11px; }
+.actions > div > span { display: block; margin-top: 3px; color: var(--tg-soft); font-size: 11px; }
+.actionButtons { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.primaryButton, .secondaryButton {
+  min-height: 36px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.primaryButton { border: 0; background: var(--tg-accent); color: var(--ui-on-accent, #fff); }
+.secondaryButton { border: 1px solid var(--tg-border); background: var(--tg-surface); color: var(--tg-text); }
+.primaryButton:disabled, .secondaryButton:disabled { opacity: .55; cursor: not-allowed; }
+.primaryButton svg, .secondaryButton svg { width: 15px; height: 15px; }
+.noPermission { display: inline-flex; align-items: center; gap: 6px; color: var(--tg-soft); font-size: 11px; }
+.noPermission svg { width: 14px; height: 14px; }
+
+.notice {
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 11px;
+  border: 1px solid var(--tg-border);
+  border-radius: 11px;
+}
+.notice svg { width: 18px; height: 18px; margin-top: 1px; }
+.notice strong { display: block; font-size: 11px; }
+.notice p { margin: 4px 0 0; color: var(--tg-soft); font-size: 11px; line-height: 1.5; }
+.notice small { margin-top: 6px; display: inline-flex; align-items: center; gap: 5px; color: var(--tg-soft); font-size: 10px; }
+.notice small svg { width: 13px; height: 13px; margin: 0; }
+.noticeInfo { border-color: color-mix(in srgb, var(--tg-info) 40%, var(--tg-border)); background: color-mix(in srgb, var(--tg-info) 8%, transparent); }
+.noticeInfo > svg { color: var(--tg-info); }
+.noticeWarn { border-color: color-mix(in srgb, var(--tg-warning) 40%, var(--tg-border)); background: color-mix(in srgb, var(--tg-warning) 8%, transparent); }
+.noticeWarn > svg { color: var(--tg-warning); }
+.noticeError { border-color: color-mix(in srgb, var(--tg-danger) 40%, var(--tg-border)); background: color-mix(in srgb, var(--tg-danger) 8%, transparent); }
+.noticeError > svg { color: var(--tg-danger); }
+
+.result {
+  overflow: hidden;
+  border: 1px solid var(--tg-border);
+  border-radius: 12px;
+}
+.result > header {
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--tg-border);
+  background: var(--tg-muted);
+}
+.result header span { display: block; color: var(--tg-accent-text); font-size: 9px; font-weight: 800; letter-spacing: .09em; }
+.result header strong { display: block; margin-top: 4px; font-size: 15px; letter-spacing: -.02em; }
+/* Situação não reconhecida não se disfarça de resposta: ela avisa, e o texto
+   original logo abaixo é quem responde de verdade. */
+.unknown { color: var(--tg-warning); }
+.result header b {
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--tg-surface);
+  color: var(--tg-soft);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.result blockquote {
+  margin: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--tg-border);
+  color: var(--tg-soft);
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.5;
+}
+.result dl {
+  margin: 0;
+  padding: 13px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+.result dl > div { min-width: 0; }
+.result dt { color: var(--tg-soft); font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.result dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 12px; }
+
+.history { border: 1px solid var(--tg-border); border-radius: 12px; overflow: hidden; }
+.history > header {
+  padding: 11px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--tg-border);
+  background: var(--tg-muted);
+}
+.history header svg { width: 15px; height: 15px; color: var(--tg-accent-text); }
+.history header strong { font-size: 11px; }
+.history ol { margin: 0; padding: 0; list-style: none; display: grid; }
+.history li {
+  padding: 10px 16px;
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 12px;
+  border-bottom: 1px solid var(--tg-border);
+}
+.history li:last-child { border-bottom: 0; }
+.history time { color: var(--tg-soft); font-size: 10px; }
+.history li span { font-size: 11px; font-weight: 650; }
+.history li small { grid-column: 2; color: var(--tg-soft); font-size: 10px; overflow-wrap: anywhere; }
+
+.spin { animation: tangerino-spin 1.1s linear infinite; }
+@keyframes tangerino-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+@media (max-width: 620px) {
+  .intro { grid-template-columns: 34px minmax(0, 1fr); }
+  .intro > b { grid-column: 2; justify-self: start; }
+  .actions { flex-direction: column; align-items: stretch; }
+  .history li { grid-template-columns: minmax(0, 1fr); }
+  .history li small { grid-column: 1; }
+}
