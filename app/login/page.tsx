@@ -51,7 +51,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <span className="auth-status"><i /> Sessão ativa</span>
               <h2>Bem-vindo de volta.</h2>
               <p>Você está conectado como <strong>{user.displayName}</strong>.</p>
-              <a className="button auth-primary" href="/painel">Continuar para o painel <ArrowRight aria-hidden="true" /></a>
+              <Link className="button auth-primary" href="/painel">Continuar para o painel <ArrowRight aria-hidden="true" /></Link>
               <form method="post" action="/api/auth/logout">
                 <input type="hidden" name="trocar" value="1" />
                 <button type="submit" className="auth-secondary-link">Entrar em outra conta</button>

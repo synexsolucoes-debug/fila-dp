@@ -3,6 +3,10 @@
 import Image from "next/image";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
+  defaultPanelLocation, panelPath, parsePanelPath,
+  type PanelLocation, type PanelSettingsSection, type PanelView,
+} from "@/lib/panel-routes";
+import {
   Archive,
   ArrowRight,
   BarChart3,
@@ -37,6 +41,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings,
   AlertTriangle,
   UserRoundCog,
   Smartphone,
@@ -612,9 +617,19 @@ function canPreviewAttachment(attachment: CardAttachment) {
   return attachment.contentType === "application/pdf" || attachment.contentType.startsWith("image/");
 }
 
-export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: string }) {
+export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanelLocation }: {
+  user: User;
+  signOutPath: string;
+  /**
+   * Onde o endereço mandou abrir (§43).
+   *
+   * Vem resolvido do servidor, e não de um efeito depois da hidratação: com
+   * efeito, quem abre o link de uma demanda vê a visão geral piscar antes dela.
+   */
+  initialLocation?: PanelLocation;
+}) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = useState<View>(initialLocation.view as View);
   const [contractorPaymentFocus, setContractorPaymentFocus] = useState<{
     companyId: string; competence: string; closingId: string;
   } | null>(null);
@@ -622,7 +637,8 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [cardTab, setCardTab] = useState<CardTab>("details");
   /** Segurança continua sendo a abertura padrão; administradores também podem
    * alcançar daqui o cadastro hierárquico de usuários do Workspace. */
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("security");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>(
+    (initialLocation.settings ?? "security") as SettingsSection);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -635,11 +651,11 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newComment, setNewComment] = useState("");
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
-  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(Boolean(initialLocation.settings));
   const [workspaceName, setWorkspaceName] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [slaFilter, setSlaFilter] = useState("all");
-  const [companyFilter, setCompanyFilter] = useState("all");
+  const [companyFilter, setCompanyFilter] = useState(initialLocation.companyId || "all");
   const [processFilter, setProcessFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
   const [memberEmail, setMemberEmail] = useState("");
@@ -709,6 +725,72 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     if (!sidebarPreferenceLoaded.current) return;
     window.localStorage.setItem("fila-dp-sidebar-collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  /* ---------------------------------------------------------------------- *
+   * Endereço do painel (§43, §44)
+   *
+   * Duas direções, e as duas precisam existir para a navegação do navegador
+   * funcionar:
+   *
+   *   estado → endereço, para que copiar o link, abrir em outra aba e mandar
+   *   para um colega levem ao mesmo lugar;
+   *   endereço → estado, para que voltar e avançar façam o que a pessoa espera
+   *   em vez de sair do produto.
+   *
+   * `replaceState` na primeira sincronização e `pushState` nas seguintes: sem
+   * isso, o primeiro render empilharia uma entrada de histórico idêntica à
+   * atual e o botão voltar precisaria de dois cliques para sair da tela.
+   * ---------------------------------------------------------------------- */
+  const locationSynced = useRef(false);
+  const currentPath = useMemo(() => panelPath({
+    view: view as PanelView,
+    recordId: cardModalOpen && selectedCardId ? selectedCardId : "",
+    settings: workspaceModalOpen ? settingsSection as PanelSettingsSection : null,
+    companyId: companyFilter === "all" ? "" : companyFilter,
+  }), [view, cardModalOpen, selectedCardId, workspaceModalOpen, settingsSection, companyFilter]);
+
+  useEffect(() => {
+    const here = `${window.location.pathname}${window.location.search}`;
+    if (here === currentPath) { locationSynced.current = true; return; }
+    if (locationSynced.current) window.history.pushState(null, "", currentPath);
+    else window.history.replaceState(null, "", currentPath);
+    locationSynced.current = true;
+  }, [currentPath]);
+
+  useEffect(() => {
+    function applyLocation() {
+      const next = parsePanelPath(window.location.pathname, window.location.search);
+      setView(next.view as View);
+      setCompanyFilter(next.companyId || "all");
+      setWorkspaceModalOpen(Boolean(next.settings));
+      if (next.settings) setSettingsSection(next.settings as SettingsSection);
+      if (!next.recordId) {
+        setCardModalOpen(false);
+        setSelectedCardId(null);
+      }
+    }
+    window.addEventListener("popstate", applyLocation);
+    return () => window.removeEventListener("popstate", applyLocation);
+  }, []);
+
+  /**
+   * Abre a demanda que o endereço pediu, assim que ela existe.
+   *
+   * Só uma vez: depois disso, quem manda na demanda aberta é o clique da
+   * pessoa. Reabrir a cada carregamento de snapshot faria o modal ressurgir
+   * sozinho depois de a pessoa fechá-lo.
+   */
+  const deepLinkedCardOpened = useRef(false);
+  useEffect(() => {
+    if (deepLinkedCardOpened.current || !initialLocation.recordId || !snapshot) return;
+    const card = [...snapshot.lists.flatMap((list) => list.cards), ...snapshot.archivedCards]
+      .find((item) => item.id === initialLocation.recordId);
+    deepLinkedCardOpened.current = true;
+    if (card) openCard(card);
+    // Demanda que não está no quadro carregado não é erro de endereço: ela pode
+    // ser de outro quadro ou de uma empresa fora do escopo da pessoa. A tela
+    // abre onde dá para abrir, e quem recusa acesso continua sendo o servidor.
+  }, [snapshot, initialLocation.recordId]);
 
   useEffect(() => {
     void requestSnapshot("/api/workspace")
@@ -1695,6 +1777,14 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <span className="user-avatar">{userInitials}</span>
           <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
           <div className="sidebar-account-actions">
+            {/* Configurações na navegação, e não só atrás do avatar (§46).
+                O avatar é o lugar onde se procura "minha conta"; quem procura
+                "configurar o grupo" olha o menu, não a foto. Enquanto a única
+                porta era o avatar, nove seções de configuração ficavam a um
+                clique que ninguém sabia que existia. */}
+            <button type="button" className="switch-account-button"
+              onClick={openWorkspaceSettings}
+              aria-label="Abrir configurações" title="Configurações"><Settings aria-hidden="true" /></button>
             {/* Dois comandos distintos: sair encerra e volta ao site; trocar de
                 conta encerra e já abre a autenticação de outra identidade. */}
             <form method="post" action="/api/auth/logout">

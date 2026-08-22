@@ -211,15 +211,27 @@ const STATUS_LABELS: Record<string, string> = {
   blocked: "Bloqueada",
 };
 
-/** Destino no painel. É o deep link, e ele precisa existir de verdade (§43). */
+/**
+ * Destino no painel.
+ *
+ * Todo endereço aqui precisa existir de verdade (§43, §44) — um `href` que leva
+ * a lugar nenhum é pior do que não ter link, porque a pessoa clica, não acontece
+ * nada e ela conclui que o produto está quebrado.
+ *
+ * Por isso os destinos são as telas que já existem: aprovação, movimentação e
+ * pendência abrem em **Operação DP**, que é onde elas são resolvidas, e triagem
+ * abre em **Integrações**, que é a casa operacional dos conectores e dos
+ * eventos. O identificador vai na querystring para a tela poder destacar o item.
+ */
 export function workItemHref(source: WorkItemSource, id: string): string {
+  const item = encodeURIComponent(id);
   switch (source) {
-    case "card": return `/painel/demandas/${encodeURIComponent(id)}`;
-    case "approval": return `/painel/processos?aprovacao=${encodeURIComponent(id)}`;
-    case "movement": return `/painel/processos?movimentacao=${encodeURIComponent(id)}`;
-    case "auxiliary": return `/painel/auxiliares?execucao=${encodeURIComponent(id)}`;
-    case "pending_item": return `/painel/processos?pendencia=${encodeURIComponent(id)}`;
-    case "triage": return `/painel/triagem?item=${encodeURIComponent(id)}`;
+    case "card": return `/painel/demandas/${item}`;
+    case "approval": return `/painel/operacao?aprovacao=${item}`;
+    case "movement": return `/painel/operacao?movimentacao=${item}`;
+    case "pending_item": return `/painel/operacao?pendencia=${item}`;
+    case "auxiliary": return `/painel/auxiliares?execucao=${item}`;
+    case "triage": return `/painel/integracoes?triagem=${item}`;
     default: return "/painel";
   }
 }

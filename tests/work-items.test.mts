@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { panelPath, parsePanelPath } from "../lib/panel-routes.ts";
 import {
   buildWorkItemQuery, sortWorkItems, toWorkItem, workItemHref, workItemSources,
 } from "../lib/work-items.ts";
@@ -85,9 +86,19 @@ test("o limite é preso à faixa e nunca vem do cliente sem tratamento", () => {
   assert.match(buildWorkItemQuery({ ...base, limit: Number.NaN }).sql, /LIMIT 50$/u);
 });
 
-test("o item traz um destino real no painel", () => {
+test("o item traz um destino real no painel, e não um link para lugar nenhum", () => {
   assert.equal(workItemHref("card", "abc"), "/painel/demandas/abc");
-  assert.equal(workItemHref("triage", "a b"), "/painel/triagem?item=a%20b");
+  assert.equal(workItemHref("triage", "a b"), "/painel/integracoes?triagem=a%20b");
+  // Todo destino precisa resolver para uma visão que o painel sabe abrir.
+  for (const source of ["card", "approval", "movement", "auxiliary", "pending_item", "triage"] as const) {
+    const href = workItemHref(source, "x");
+    const [path] = href.split("?");
+    const location = parsePanelPath(path);
+    assert.ok(href.startsWith("/painel"), `${source} aponta fora do painel`);
+    assert.equal(panelPath({ view: location.view }).replace(/\?.*$/u, ""),
+      location.view === "board" ? "/painel/demandas" : path,
+      `${source} leva a um endereço que o painel não reconhece: ${path}`);
+  }
 });
 
 test("a linha crua vira o contrato comum", () => {
