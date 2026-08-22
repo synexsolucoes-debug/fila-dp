@@ -42,10 +42,26 @@ export const epiTypeLabels: Record<EpiType, string> = {
   other: "Outro",
 };
 
-export const epiProductStatuses = [
-  "active", "inactive", "in_stock", "delivered", "returned",
-  "sanitizing", "discarded", "damaged", "lost",
+/**
+ * Estado da **unidade** de EPI: onde a peça física está e em que condição.
+ *
+ * Ele vive em `fdp_epi_movements.status` — a linha que registra a
+ * movimentação —, e nunca no catálogo. O catálogo descreve o modelo do
+ * equipamento, e um modelo não é "entregue" nem "extraviado": uma peça dele é.
+ * O CHECK do catálogo aceitava os dois vocabulários misturados até a migration
+ * 0062, e um vocabulário que o banco aceita e ninguém usa é convite documentado
+ * ao erro (§52).
+ */
+export const epiUnitStatuses = [
+  "in_stock", "delivered", "returned", "sanitizing", "discarded", "damaged", "lost",
 ] as const;
+export type EpiUnitStatus = typeof epiUnitStatuses[number];
+
+/** Estado do **catálogo**: o modelo está disponível para uso ou não. */
+export const epiCatalogStatuses = ["active", "inactive"] as const;
+export type EpiCatalogStatus = typeof epiCatalogStatuses[number];
+
+export const epiProductStatuses = [...epiCatalogStatuses, ...epiUnitStatuses] as const;
 export type EpiProductStatus = typeof epiProductStatuses[number];
 
 export const epiProductStatusLabels: Record<EpiProductStatus, string> = {
@@ -257,7 +273,7 @@ export function returnRouting(condition: EpiReturnCondition): {
   needsSanitizing: boolean;
   sendToDisposal: boolean;
   generateDpDemand: boolean;
-  productStatus: EpiProductStatus;
+  productStatus: EpiUnitStatus;
   disposalReason: EpiDisposalReason | null;
   discountTrigger: EpiDiscountTrigger | null;
 } {

@@ -4,6 +4,7 @@ import {
 } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
+import { prepareAdoptionIncrement } from "@/lib/adoption-metrics";
 import { deriveIdempotencyKey } from "@/lib/domain-events";
 import {
   findEventByIdempotencyKey, isIdempotencyConflict, prepareDomainEventEnvelope,
@@ -135,6 +136,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           requestId: request.headers.get("x-fila-dp-request-id"),
           onConflict: idempotencyKey ? "raise" : "ignore",
         }),
+        prepareAdoptionIncrement(d1, workspace.id, "demands_from_process"),
         prepareAuditEvent({
           workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
           action: "process.instance_started", entityType: "card", entityId: result.cardId,

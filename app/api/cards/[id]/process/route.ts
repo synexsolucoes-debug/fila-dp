@@ -4,6 +4,7 @@ import {
 } from "@/lib/fila-dp-db";
 import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
+import { prepareAdoptionIncrement } from "@/lib/adoption-metrics";
 import { prepareDomainEventEnvelope } from "@/lib/outbox";
 import {
   availableTransitions, evaluateTransition, loadProcessInstance, loadPublishedVersion,
@@ -177,6 +178,8 @@ export async function POST(request: Request, { params }: RouteContext) {
           companyId: instance.companyId ?? "",
         },
       }, { actorUserId: user.id, requestId: context.requestId }),
+      prepareAdoptionIncrement(d1, workspace.id,
+        evaluation.terminal ? "process_instances_completed" : "process_steps_advanced"),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
         action: "process.step_advanced", entityType: "card", entityId: instance.id,

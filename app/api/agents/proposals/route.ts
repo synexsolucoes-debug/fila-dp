@@ -6,6 +6,7 @@ import {
   agentProposalStatuses, decideAgentProposal, sanitizeAgentProposal, statusForDecision,
 } from "@/lib/agent-proposals";
 import { isAgentEnabled, readAgentAutomationPolicy } from "@/lib/agent-runtime";
+import { prepareAdoptionIncrement } from "@/lib/adoption-metrics";
 import { prepareDomainEventEnvelope } from "@/lib/outbox";
 import { cleanText } from "@/lib/registrations";
 
@@ -120,7 +121,18 @@ export async function POST(request: Request) {
       return Response.json({ proposal: existing ? toProposalPayload(existing) : null, duplicate: true });
     }
 
+    /* Adoção (§77): quantas ações o motor autorizou sozinho e quantas recusou.
+       É a razão entre as duas que diz se a automação está calibrada. */
+    const adoptionMetric = outcome.decision === "execute"
+      ? "agent_actions_automatic" as const
+      : outcome.decision === "triage"
+        ? "triage_opened" as const
+        : outcome.decision === "reject"
+          ? "agent_actions_refused" as const
+          : null;
+
     await d1.batch([
+      ...(adoptionMetric ? [prepareAdoptionIncrement(d1, workspace.id, adoptionMetric)] : []),
       prepareDomainEventEnvelope(d1, {
         name: outcome.decision === "reject" ? "agent.proposal_rejected"
           : outcome.decision === "triage" ? "triage.item_opened"

@@ -6,6 +6,7 @@ import {
   buildNamedQuery, findNamedQuery, namedQueries, toNamedQueryResult,
   type NamedQueryResult,
 } from "@/lib/assistant/named-queries";
+import { recordAdoption } from "@/lib/adoption-metrics";
 import { log } from "@/lib/observability";
 import { cleanText } from "@/lib/registrations";
 
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
     }
 
     if (results.length) {
+      await recordAdoption(d1, workspace.id, "assistant_queries", results.length);
       await prepareAuditEvent({
         workspaceId: workspace.id,
         actorUserId: user.id,

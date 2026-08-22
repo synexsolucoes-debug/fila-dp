@@ -1560,7 +1560,11 @@ export const workspaceUsageCounters = pgTable("fdp_workspace_usage_counters", {
   uniqueIndex("fdp_workspace_usage_metric_period_uq").on(table.workspaceId, table.metric, table.period),
   uniqueIndex("fdp_workspace_usage_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_workspace_usage_period_idx").on(table.workspaceId, table.period, table.metric),
-  check("fdp_workspace_usage_metric_check", sql`${table.metric} IN ('members', 'companies', 'integrations', 'storage_mb')`),
+  /* Quota do plano mais telemetria de adoção (§50, §77). A tabela deixou de
+     ser morta: ela é onde os contadores de adoção vivem, e o índice único
+     por (workspace, métrica, período) é o que torna o incremento seguro sob
+     concorrência. */
+  check("fdp_workspace_usage_metric_check", sql`${table.metric} IN ('members', 'companies', 'integrations', 'storage_mb', 'demands_from_process', 'process_steps_advanced', 'process_instances_completed', 'events_received', 'events_deduplicated', 'triage_opened', 'agent_actions_automatic', 'agent_actions_refused', 'work_center_opened', 'assistant_queries', 'deep_links_opened')`),
   check("fdp_workspace_usage_quantity_check", sql`${table.quantity} >= 0 AND ${table.limitSnapshot} >= 0`),
 ]);
 
@@ -2557,7 +2561,10 @@ export const epiProducts = pgTable("fdp_epi_products", {
   index("fdp_epi_products_workspace_status_idx").on(table.workspaceId, table.status, table.name),
   index("fdp_epi_products_workspace_ca_idx").on(table.workspaceId, table.caNumber),
   check("fdp_epi_products_type_check", sql`${table.epiType} IN ('head', 'eye_face', 'hearing', 'respiratory', 'trunk', 'upper_limbs', 'lower_limbs', 'full_body', 'fall_protection', 'other')`),
-  check("fdp_epi_products_status_check", sql`${table.status} IN ('active', 'inactive', 'in_stock', 'delivered', 'returned', 'sanitizing', 'discarded', 'damaged', 'lost')`),
+  /* Catálogo, não unidade (§52). Os estados da peça física vivem em
+     fdp_epi_movements.status; aceitar os dois vocabulários aqui era convite
+     documentado a gravar posse no modelo do equipamento. */
+  check("fdp_epi_products_status_check", sql`${table.status} IN ('active', 'inactive')`),
   check("fdp_epi_products_reason_check", sql`${table.registrationReason} IN ('first_delivery', 'periodic_exchange', 'damage_replacement', 'loss_replacement', 'expiry_replacement', 'initial_purchase', 'stock_replenishment', 'manual_adjustment', 'other')`),
   check("fdp_epi_products_stock_check", sql`${table.stockQuantity} >= 0`),
   check("fdp_epi_products_value_check", sql`${table.unitValue} >= 0`),

@@ -1,6 +1,7 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
 import { hasCapability } from "@/lib/authorization";
+import { recordAdoption } from "@/lib/adoption-metrics";
 import {
   buildWorkItemQuery, sortWorkItems, toWorkItem, workItemSources,
   type WorkItem, type WorkItemScope,
@@ -50,6 +51,8 @@ export async function GET(request: Request) {
     }));
 
     const items = sortWorkItems(results.flat());
+    // Adoção (§77): a Central de Trabalho só se justifica se for aberta.
+    await recordAdoption(d1, workspace.id, "work_center_opened");
     const counts: Record<string, number> = {};
     for (const item of items) counts[item.sourceType] = (counts[item.sourceType] ?? 0) + 1;
 
