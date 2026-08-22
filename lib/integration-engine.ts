@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { getD1 } from "@/db";
 import { prepareAgentOutcome } from "./agent-scheduler";
+import { prepareActivity } from "./fila-dp-db";
 import { ApiError } from "./api-errors";
 import { computeSlaStatus } from "./fila-dp-api";
 import { addBusinessDays } from "./fila-dp-relations";
@@ -448,8 +449,17 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
     source: input.channel, eventId: event.event.id, cardId, processType: admissionProcessType,
   });
 
-  await d1.batch(draft.checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
-    .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)));
+  await d1.batch([
+    ...draft.checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
+      .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)),
+    /* A demanda nasceu de uma leitura automática, e a linha do tempo dela
+       precisa dizer isso (§45). Sem este registro, o histórico começava com a
+       primeira ação humana e ninguém conseguia responder "de onde veio esta
+       demanda?" sem abrir o log do servidor. */
+    prepareActivity(input.workspaceId, cardId, "SYSTEM", "integration.demand_created", {
+      source: input.channel, externalId: admission.externalId, admissionDate: admission.admissionDate,
+    }),
+  ]);
   return { processed: 1, skipped: 0, conflict: 0, failed: 0 };
 }
 
