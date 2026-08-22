@@ -16,6 +16,14 @@ npm run dev
 npm run build
 ```
 
+## Arquitetura operacional
+
+**Comece por `docs/arquitetura-operacional.md`.** Ele descreve como o trabalho
+anda dentro do produto — Fonte → Evento → Processo → Trabalho → Execução — e é o
+vocabulário comum que integrações, agentes, processos e IA usam. Quem for
+escrever qualquer funcionalidade que produza trabalho precisa ler a §11 dele
+antes.
+
 ## Arquitetura de produção
 
 - edit site code under `app/`
