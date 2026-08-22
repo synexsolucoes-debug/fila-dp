@@ -59,9 +59,12 @@ export const processGroups: readonly ProcessGroup[] = [
   {
     id: "operacao-dp",
     label: "Operação DP",
-    description: "Competências, demandas, triagem e agenda do departamento pessoal.",
+    description: "O trabalho do dia, competências, demandas e agenda do departamento pessoal.",
     kind: "process",
-    views: ["processes", "board", "inbox", "planner"],
+    /* "Meu trabalho" entra primeiro e vira a porta do processo (§46, §48): a
+       primeira pergunta de quem abre o Vinculato é "o que eu preciso fazer
+       agora?", e a resposta estava espalhada por quatro telas. */
+    views: ["work", "processes", "board", "inbox", "planner"],
   },
   {
     id: "pagamentos",
@@ -114,9 +117,12 @@ export const processGroups: readonly ProcessGroup[] = [
   {
     id: "analise",
     label: "Relatórios e integrações",
-    description: "Indicadores da operação e estado das conexões com os sistemas de origem.",
+    description: "Indicadores da operação, conexões com os sistemas de origem e a automação que lê deles.",
     kind: "support",
-    views: ["indicators", "integrations"],
+    /* Triagem e Agentes moram aqui, e não no menu principal (§48): quem opera o
+       dia a dia raramente precisa delas, e um item de menu que quase ninguém
+       abre empurra para baixo os que todo mundo abre. */
+    views: ["indicators", "integrations", "triage", "agents"],
   },
 ] as const;
 

@@ -12,6 +12,7 @@ import {
   BarChart3,
   Bell,
   Blocks,
+  Bot,
   Building2,
   Cable,
   HardHat,
@@ -24,6 +25,7 @@ import {
   CircleAlert,
   CircleHelp,
   ClipboardCheck,
+  ClipboardList,
   Clock3,
   Download,
   Inbox,
@@ -42,6 +44,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  ShieldQuestion,
   AlertTriangle,
   UserRoundCog,
   Smartphone,
@@ -74,13 +77,14 @@ import { PaymentsView, contractorSections, isContractorSection, type ContractorS
 import { TimeTrackingView } from "./features/time";
 import { EpiControlView } from "./features/epi";
 import { ActionCenter } from "./features/action-center";
+import { AgentsView, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
 
 /* Os oito destinos do Pagamento PJ (§74) estão escritos aqui um a um, e não
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "registrations" | "payroll" | "indicators";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -282,6 +286,12 @@ const viewCatalog: Record<View, ViewEntry> = {
     description: "Acompanhe o que exige ação e mantenha a operação sob controle.",
     primaryAction: { label: "Nova demanda", kind: "card" },
   },
+  work: {
+    label: "Meu trabalho", icon: ClipboardList,
+    eyebrow: "CENTRAL DE TRABALHO", title: "O que está comigo hoje",
+    description: "Demandas, aprovações, movimentações, entregas, pendências, triagem e falhas que exigem ação — em uma lista só.",
+    ownHeader: true,
+  },
   board: {
     label: "Demandas", icon: ListChecks,
     eyebrow: "DEMANDAS", title: "Quadro de demandas",
@@ -315,6 +325,16 @@ const viewCatalog: Record<View, ViewEntry> = {
     label: "Módulos auxiliares", icon: Blocks, module: "auxiliary", hiddenFor: ["guest"],
     eyebrow: "SERVIÇOS DA COMPETÊNCIA", title: "Módulos auxiliares",
     description: "Controle entradas, aprovações, saídas e fechamento de Benefícios, Psicologia e Prestadores PJ.",
+  },
+  agents: {
+    label: "Agentes", icon: Bot, module: "integrations", hiddenFor: ["guest", "observer"], ownHeader: true,
+    eyebrow: "CENTRAL DE AGENTES", title: "Automação sob controle",
+    description: "Estado, cadência, execução e histórico dos agentes que leem os sistemas de origem.",
+  },
+  triage: {
+    label: "Triagem", icon: ShieldQuestion, module: "integrations", hiddenFor: ["guest"], ownHeader: true,
+    eyebrow: "CENTRAL DE TRIAGEM", title: "O que o sistema não teve certeza",
+    description: "Entradas que a automação não conseguiu classificar sozinha e aguardam decisão humana.",
   },
   registrations: {
     label: "Cadastros", icon: Users, module: "registrations", hiddenFor: ["guest"],
@@ -377,7 +397,7 @@ const navOrder = Object.keys(viewCatalog) as View[];
  * toda rotina ficam expostos; os demais continuam alcançáveis pelo botão
  * "Mais", agrupados com os mesmos contextos do menu lateral.
  */
-const mobilePrimaryViews = new Set<View>(["overview", "board", "inbox", "planner"]);
+const mobilePrimaryViews = new Set<View>(["overview", "work", "board", "inbox"]);
 
 /** Estados do ciclo de vida do workspace, para o seletor dizer por que um grupo
     não pode ser aberto em vez de apenas desabilitar o botão. */
@@ -1923,6 +1943,15 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {view === "epi" && <EpiControlView role={snapshot.workspace.role} />}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
+
+          {/* As três centrais operacionais. Elas são camadas de leitura sobre o
+              que já existe: nenhuma delas cria objeto de trabalho novo, e cada
+              item que mostram é resolvido na tela do módulo dono dele. */}
+          {view === "work" && <WorkCenterView onOpenCompanyFilter={(companyId) => setCompanyFilter(companyId || "all")} />}
+
+          {view === "triage" && <TriageView initialItemId={initialLocation.view === "triage" ? initialLocation.recordId : ""} />}
+
+          {view === "agents" && <AgentsView />}
 
           {view === "registrations" && <RegistrationsView role={snapshot.workspace.role}
             onOpenContractorPayment={(target) => { setContractorPaymentFocus(target); setView("contractorClosings"); }} />}

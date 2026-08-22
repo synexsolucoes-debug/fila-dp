@@ -3058,10 +3058,19 @@ export const agentProposals = pgTable("fdp_agent_proposals", {
   resultType: text("result_type").notNull().default(""),
   resultId: text("result_id").notNull().default(""),
   idempotencyKey: text("idempotency_key").notNull().default(""),
+  /* Encaminhamento (§16): o item continua na mesma fila e com o mesmo ciclo de
+     vida; o que muda é de quem a operação espera a decisão. */
+  assignedTo: text("assigned_to"),
+  assignedAt: timestamp("assigned_at", { withTimezone: true, mode: "string" }),
+  assignmentNote: text("assignment_note").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_agent_proposals_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_agent_proposals_assignee_idx").on(table.workspaceId, table.assignedTo, table.status)
+    .where(sql`${table.assignedTo} IS NOT NULL`),
+  foreignKey({ name: "fdp_agent_proposals_assignee_fk", columns: [table.workspaceId, table.assignedTo], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }).onDelete("set null"),
+  check("fdp_agent_proposals_assignment_check", sql`(${table.assignedTo} IS NULL AND ${table.assignedAt} IS NULL) OR (${table.assignedTo} IS NOT NULL AND ${table.assignedAt} IS NOT NULL)`),
   uniqueIndex("fdp_agent_proposals_idempotency_uq").on(table.workspaceId, table.idempotencyKey)
     .where(sql`${table.idempotencyKey} <> ''`),
   index("fdp_agent_proposals_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),

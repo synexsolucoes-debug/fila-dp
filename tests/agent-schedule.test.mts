@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  agentCadence, agentHealth, agentHealthLabels, agentIsDue, BACKOFF_MINUTES, backoffMinutes,
+  agentCadence, agentHealth, agentHealthLabels, BACKOFF_MINUTES, backoffMinutes,
   DEGRADED_AFTER_FAILURES, LATE_AFTER_MINUTES, localParts, manualRunKey,
   MINIMUM_INTERVAL_MINUTES, nextRunAt, scheduledRunKey, withinBusinessHours,
 } from "../lib/agent-schedule.ts";

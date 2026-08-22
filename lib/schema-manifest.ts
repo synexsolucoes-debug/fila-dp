@@ -72,6 +72,7 @@ export const expectedMigrations = [
   "0062_epi_catalog_status_and_adoption_metrics.sql",
   "0063_composite_tenant_foreign_keys.sql",
   "0064_agent_schedule.sql",
+  "0065_triage_assignment.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
