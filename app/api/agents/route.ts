@@ -1,0 +1,121 @@
+import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
+import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
+import { hasCapability, requireNamedCapability } from "@/lib/authorization";
+import { ApiError } from "@/lib/api-errors";
+import { agentAutomationPolicies, type AgentAutomationPolicy } from "@/lib/agent-proposals";
+import { isAgentChannel, listAgentRuntime, readAgentAutomationPolicy } from "@/lib/agent-runtime";
+
+/**
+ * Administração de agentes (§65) e kill switch (§66).
+ *
+ * O `GET` responde o que um operador precisa antes de decidir pausar: quantas
+ * execuções, quantas falharam, quantos eventos entraram, quantos foram
+ * ignorados, quantas propostas estão em triagem e quantas foram aplicadas.
+ * Tudo agregado por consulta — contador próprio que alguém esquece de
+ * incrementar mente por meses.
+ *
+ * O `PATCH` é o kill switch. Ele muda `fdp_integrations.status`, que é o mesmo
+ * interruptor que o webhook já respeita: não existe um segundo lugar onde a
+ * automação continue rodando depois de pausada. E não depende de deploy, que é
+ * exatamente o requisito.
+ */
+
+export async function GET() {
+  const auth = await getApiUser();
+  if (!auth.user) return auth.response;
+  try {
+    const { d1, workspace } = await getWorkspaceContext(auth.user);
+    requireNamedCapability(workspace, "integrations.status.read", "consultar os agentes");
+
+    const [agents, policy] = await Promise.all([
+      listAgentRuntime(d1, workspace.id),
+      readAgentAutomationPolicy(d1, workspace.id),
+    ]);
+
+    return Response.json({
+      agents,
+      automation: {
+        policy,
+        /* O rótulo diz o que a política faz, não o nome dela: "suggest_only"
+           não significa nada para quem opera. */
+        label: policy === "off"
+          ? "Desligada — toda entrada vai para triagem"
+          : policy === "trusted"
+            ? "Automática para rotina de alta confiança, com evidência"
+            : "Só sugere — nenhuma ação acontece sem confirmação",
+      },
+      permissions: {
+        manage: hasCapability(workspace, "integrations.manage"),
+        resolveTriage: hasCapability(workspace, "integrations.reconcile"),
+      },
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
+export async function PATCH(request: Request) {
+  const auth = await getApiUser();
+  if (!auth.user) return auth.response;
+  try {
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireNamedCapability(workspace, "integrations.manage", "pausar ou reativar um agente");
+    const requestId = request.headers.get("x-fila-dp-request-id");
+
+    const policy = text(body.automationPolicy, 20);
+    if (policy) {
+      if (!(agentAutomationPolicies as readonly string[]).includes(policy)) {
+        throw ApiError.badRequest("Política de automação desconhecida.", "AGENT_POLICY_INVALID");
+      }
+      const previous = await readAgentAutomationPolicy(d1, workspace.id);
+      await d1.batch([
+        d1.prepare(`INSERT INTO fdp_workspace_settings (workspace_id, agent_automation)
+          VALUES (?, ?)
+          ON CONFLICT (workspace_id) DO UPDATE SET agent_automation = EXCLUDED.agent_automation, updated_at = now()`)
+          .bind(workspace.id, policy as AgentAutomationPolicy),
+        prepareAuditEvent({
+          workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
+          action: "agent.automation_policy_changed", entityType: "workspace_settings", entityId: workspace.id,
+          before: { agentAutomation: previous }, after: { agentAutomation: policy }, requestId,
+        }),
+      ]);
+      return Response.json({ automation: { policy } });
+    }
+
+    const agentKey = text(body.agentKey, 60);
+    const enabled = body.enabled;
+    if (!isAgentChannel(agentKey) || typeof enabled !== "boolean") {
+      throw ApiError.badRequest(
+        "Informe o agente e se ele deve ficar ativo, ou a política de automação do grupo.",
+        "AGENT_TOGGLE_INVALID",
+      );
+    }
+
+    const current = await d1.prepare("SELECT id, status FROM fdp_integrations WHERE workspace_id = ? AND channel = ?")
+      .bind(workspace.id, agentKey).first<{ id: string; status: string }>();
+    if (!current) throw ApiError.notFound("Este agente não está configurado neste grupo.", "AGENT_NOT_CONFIGURED");
+
+    /* Reativar devolve o conector a `connected` só quando ele estava pausado.
+       Um conector em `needs_credentials` não vira `connected` por um clique —
+       isso seria declarar conectado o que nunca autenticou. */
+    const nextStatus = enabled
+      ? (current.status === "paused" ? "connected" : current.status)
+      : "paused";
+    await d1.batch([
+      d1.prepare("UPDATE fdp_integrations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
+        .bind(nextStatus, workspace.id, current.id),
+      prepareAuditEvent({
+        workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
+        action: enabled ? "agent.resumed" : "agent.paused",
+        entityType: "integration", entityId: current.id,
+        before: { status: current.status }, after: { status: nextStatus },
+        metadata: { agentKey }, requestId,
+      }),
+    ]);
+
+    return Response.json({ agent: { key: agentKey, status: nextStatus, enabled: nextStatus !== "paused" } });
+  } catch (error) {
+    return apiError(error);
+  }
+}

@@ -474,8 +474,15 @@ export const workspaceSettings = pgTable("fdp_workspace_settings", {
   dayStart: text("day_start").notNull().default("08:00"),
   dayEnd: text("day_end").notNull().default("18:00"),
   realtimeSeconds: integer("realtime_seconds").notNull().default(30),
+  /* Política de automação por agente (§18, §66). Fica aqui, e não em variável
+     de ambiente, porque parar uma automação problemática não pode depender de
+     deploy. O padrão é pedir confirmação humana. */
+  agentAutomation: text("agent_automation").notNull().default("suggest_only"),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-});
+}, (table) => [
+  check("fdp_workspace_settings_agent_automation_check",
+    sql`${table.agentAutomation} IN ('off', 'suggest_only', 'trusted')`),
+]);
 
 export const businessHolidays = pgTable("fdp_business_holidays", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
@@ -2911,4 +2918,59 @@ export const epiAttachments = pgTable("fdp_epi_attachments", {
   ) OR (
     ${table.entityType} <> 'product' AND ${table.companyId} IS NOT NULL
   )`),
+]);
+
+/**
+ * Proposta de agente (§17).
+ *
+ * O agente propõe; o motor determinístico decide. Esta tabela guarda as duas
+ * coisas — a proposta com a nota de confiança e a evidência, e a decisão com o
+ * código que a explica. É ela que responde "por que isso não andou sozinho?".
+ *
+ * Não é um objeto de trabalho novo (§93): a proposta não é tarefa de ninguém
+ * até o motor decidir. O que aparece na Central de Trabalho é o item de
+ * triagem, quando a decisão foi triagem.
+ */
+export const agentProposals = pgTable("fdp_agent_proposals", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  agentKey: text("agent_key").notNull(),
+  agentVersion: text("agent_version").notNull().default(""),
+  eventId: text("event_id").notNull().default(""),
+  eventName: text("event_name").notNull().default(""),
+  entityType: text("entity_type").notNull().default(""),
+  entityId: text("entity_id").notNull().default(""),
+  processInstanceId: text("process_instance_id"),
+  currentStepId: text("current_step_id").notNull().default(""),
+  proposedAction: text("proposed_action").notNull(),
+  proposedStepId: text("proposed_step_id").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  confidence: integer("confidence").notNull().default(0),
+  requiresHumanApproval: integer("requires_human_approval").notNull().default(1),
+  evidenceRefsJson: jsonb("evidence_refs_json").$type<string[]>().notNull().default([]),
+  status: text("status").notNull().default("pending_triage"),
+  decisionCode: text("decision_code").notNull().default(""),
+  decisionReason: text("decision_reason").notNull().default(""),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "string" }),
+  resolutionNote: text("resolution_note").notNull().default(""),
+  resultType: text("result_type").notNull().default(""),
+  resultId: text("result_id").notNull().default(""),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_agent_proposals_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_agent_proposals_idempotency_uq").on(table.workspaceId, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} <> ''`),
+  index("fdp_agent_proposals_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
+  index("fdp_agent_proposals_workspace_agent_idx").on(table.workspaceId, table.agentKey, table.createdAt),
+  index("fdp_agent_proposals_instance_idx").on(table.workspaceId, table.processInstanceId)
+    .where(sql`${table.processInstanceId} IS NOT NULL`),
+  foreignKey({ name: "fdp_agent_proposals_instance_fk", columns: [table.workspaceId, table.processInstanceId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("set null"),
+  check("fdp_agent_proposals_status_check", sql`${table.status} IN ('pending_triage', 'suggested', 'accepted', 'rejected', 'applied', 'discarded')`),
+  check("fdp_agent_proposals_confidence_check", sql`${table.confidence} BETWEEN 0 AND 100`),
+  check("fdp_agent_proposals_human_flag_check", sql`${table.requiresHumanApproval} IN (0, 1)`),
+  check("fdp_agent_proposals_agent_check", sql`length(${table.agentKey}) > 0`),
+  check("fdp_agent_proposals_resolution_check", sql`(${table.status} IN ('pending_triage', 'suggested') AND ${table.resolvedAt} IS NULL) OR (${table.status} NOT IN ('pending_triage', 'suggested') AND ${table.resolvedAt} IS NOT NULL)`),
 ]);
