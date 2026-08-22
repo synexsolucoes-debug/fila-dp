@@ -350,7 +350,12 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     String((workspace as Record<string, unknown>).status ?? "active"),
     (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
     (workspace as { departmentModules?: ReadonlySet<string> }).departmentModules);
-  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult] = await Promise.all([
+  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult,
+    rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult,
+    assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult,
+    settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult,
+    companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult,
+  ] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
@@ -649,10 +654,28 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     slaPolicies: policyRows.map((row) => ({ id: String(row.id), processType: String(row.process_type), targetBusinessDays: Number(row.target_business_days), warningBusinessDays: Number(row.warning_business_days), active: Boolean(row.active) })),
     holidays: (holidaysResult.results as Array<Record<string, unknown>>).map((row) => ({ date: String(row.holiday_date), name: String(row.name) })),
     settings: { businessDays: businessDays.length ? businessDays : [1, 2, 3, 4, 5], dayStart: String(settingsRow?.day_start ?? "08:00"), dayEnd: String(settingsRow?.day_end ?? "18:00"), realtimeSeconds: Number(settingsRow?.realtime_seconds ?? 30) },
-    notifications: (notificationsResult.results as Array<Record<string, unknown>>).filter((row) => companyAccess.unrestricted || Boolean(row.card_id && visibleCardIds.has(String(row.card_id)))).map((row) => ({ id: String(row.id), type: String(row.notification_type), title: String(row.title), body: String(row.body), cardId: row.card_id ? String(row.card_id) : null, readAt: row.read_at ? String(row.read_at) : null, createdAt: String(row.created_at) })),
+    notifications: (notificationsResult.results as Array<Record<string, unknown>>)
+      .filter((row) => companyAccess.unrestricted || Boolean(row.card_id && visibleCardIds.has(String(row.card_id))))
+      .map((row) => ({
+        id: String(row.id),
+        type: String(row.notification_type),
+        title: String(row.title),
+        body: String(row.body),
+        cardId: row.card_id ? String(row.card_id) : null,
+        readAt: row.read_at ? String(row.read_at) : null,
+        createdAt: String(row.created_at),
+      })),
     integrations: (integrationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), channel: String(row.channel), displayName: String(row.display_name), status: String(row.status) as "connected" | "needs_credentials" | "paused" | "error", config: canManageIntegrations ? publicIntegrationConfig(String(row.config_json)) : {}, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: canManageIntegrations && row.last_error ? safeIntegrationError(new Error(String(row.last_error))).message : null })),
     plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: String(row.start_at), endAt: String(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
-    calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), provider: String(row.provider), status: String(row.status), config: safeJson(String(row.config_json)), externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
+    calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      provider: String(row.provider),
+      status: String(row.status),
+      config: safeJson(String(row.config_json)),
+      externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null,
+      lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null,
+      lastError: row.last_error ? String(row.last_error) : null,
+    })),
     companies: visibleCompanyRows.map((row) => ({ id: String(row.id), parentCompanyId: row.parent_company_id ? String(row.parent_company_id) : null, isPrincipal: Boolean(row.is_principal), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
     areas: (areasResult.results as Array<Record<string, unknown>>).map((row) => ({
       id: String(row.id), name: String(row.name), code: String(row.code), description: String(row.description ?? ""),

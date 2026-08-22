@@ -48,7 +48,22 @@ function WorkspaceDetail({ id, plans, onClose, onConfigure, onChanged }: { id: s
   </div>}</aside></div><AdminActionDialog action={action} onClose={() => setAction(null)} /></>;
 }
 
-function DetailRows({ title, rows }: { title: string; rows: unknown }) { const list = Array.isArray(rows) ? rows as Row[] : []; return <section className={styles.detailSection}><h3>{title}</h3>{list.length ? list.slice(0, 20).map((row, index) => <article key={text(row.id ?? row.userId ?? row.key) || index}><strong>{text(row.name ?? row.email ?? row.legalName ?? row.action ?? row.key)}</strong><small>{text(row.role ?? row.status ?? row.category ?? row.createdAt)}</small></article>) : <Empty />}</section>; }
+function DetailRows({ title, rows }: { title: string; rows: unknown }) {
+  const list = Array.isArray(rows) ? rows as Row[] : [];
+  return (
+    <section className={styles.detailSection}>
+      <h3>{title}</h3>
+      {list.length
+        ? list.slice(0, 20).map((row, index) => (
+          <article key={text(row.id ?? row.userId ?? row.key) || index}>
+            <strong>{text(row.name ?? row.email ?? row.legalName ?? row.action ?? row.key)}</strong>
+            <small>{text(row.role ?? row.status ?? row.category ?? row.createdAt)}</small>
+          </article>
+        ))
+        : <Empty />}
+    </section>
+  );
+}
 
 function CreateWorkspaceDialog({ plans, onClose, onCreated }: { plans: Row[]; onClose: () => void; onCreated: (id: string) => void }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");

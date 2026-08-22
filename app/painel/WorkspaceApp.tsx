@@ -2954,7 +2954,16 @@ function PlannerView({ cards, blocks, connections, onOpen, onCreateBlock, onDele
 }
 
 function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRules, canExportWorkspace, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; companyId: string; scopeLabel: string; canExportWorkspace: boolean; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {
-  const [report, setReport] = useState<{ from: string; to: string; total: number; completed: number; completionRate: number; averageCompletionHours: number; activityCount: number; byProcess: Record<string, number>; hrMetrics?: { admissions: number; terminations: number; averageHeadcount: number; payrollCostTotal: number; turnoverRate: number; payrollByCompany: Record<string, number> } } | null>(null);
+  type ReportHrMetrics = {
+    admissions: number; terminations: number; averageHeadcount: number;
+    payrollCostTotal: number; turnoverRate: number; payrollByCompany: Record<string, number>;
+  };
+  type ReportSummary = {
+    from: string; to: string; total: number; completed: number; completionRate: number;
+    averageCompletionHours: number; activityCount: number; byProcess: Record<string, number>;
+    hrMetrics?: ReportHrMetrics;
+  };
+  const [report, setReport] = useState<ReportSummary | null>(null);
   const [reportDays, setReportDays] = useState("30");
   const [reportLoading, setReportLoading] = useState(true);
   const [reportError, setReportError] = useState("");
