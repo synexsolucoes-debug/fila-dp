@@ -40,7 +40,8 @@
     "worker:tangerino:once": "tsx worker/tangerino/once.ts",
     "worker:sankhya:check": "node scripts/check-sankhya-worker-env.mjs",
     "og:generate": "node scripts/generate-og-image.mjs",
-    "db:rehearse-work": "node --experimental-strip-types scripts/rehearse-work-items.mjs"
+    "db:rehearse-work": "node --experimental-strip-types scripts/rehearse-work-items.mjs",
+    "db:rehearse-concurrency": "node --experimental-strip-types scripts/rehearse-concurrency.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",

@@ -561,8 +561,12 @@ export function prepareTransitionStatement(d1: Database, input: {
   workspaceId: string; cardId: string; fromStepId: string; toStepId: string;
   expectedVersion: number; terminal: boolean; dueAt: string | null;
 }) {
+  /* A versão não é incrementada aqui: o trigger `fdp_cards_version_bump` faz
+     isso em toda alteração da linha (migration 0061). Somar `version + 1` no
+     `SET` também produziria um salto de dois, e — pior — deixaria a garantia
+     dependente de cada caminho de escrita lembrar de somar. */
   return d1.prepare(`UPDATE fdp_cards
-      SET current_step_id = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP,
+      SET current_step_id = ?, updated_at = CURRENT_TIMESTAMP,
           due_at = COALESCE(?, due_at),
           closed_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE closed_at END
     WHERE workspace_id = ? AND id = ? AND current_step_id = ? AND version = ?

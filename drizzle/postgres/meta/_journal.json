@@ -435,6 +435,20 @@
       "when": 1787900000002,
       "tag": "0059_agent_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1787900000003,
+      "tag": "0060_foreign_key_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1787900000004,
+      "tag": "0061_optimistic_concurrency",
+      "breakpoints": true
     }
   ]
 }

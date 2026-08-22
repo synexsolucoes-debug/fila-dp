@@ -297,6 +297,20 @@ export type WorkspaceSnapshot = {
    * snapshot — uma consulta a mais, nenhuma ida extra ao banco.
    */
   payrollCycles: PayrollCycleSummary[];
+  /**
+   * Janela do histórico carregado (§39).
+   *
+   * O snapshot de abertura traz uma janela de comentários, caixa de entrada e
+   * atividade — não o histórico inteiro. `total` existe para que a interface
+   * possa dizer que há mais: janela sem aviso vira "o sistema perdeu meus
+   * dados".
+   */
+  history: {
+    windowDays: number;
+    comments: { loaded: number; total: number };
+    inbox: { loaded: number; total: number };
+    activity: { loaded: number; total: number };
+  };
 };
 
 /** Um ciclo de folha, do jeito que a Visão geral precisa dele. */

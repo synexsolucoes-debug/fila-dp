@@ -1946,6 +1946,8 @@ export const contractorClosings = pgTable("fdp_contractor_closings", {
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  /* Concorrência otimista (§34): o trigger da 0061 incrementa. */
+  version: integer("version").notNull().default(1),
 }, (table) => [
   uniqueIndex("fdp_contractor_closings_workspace_provider_cycle_uq").on(table.workspaceId, table.providerId, table.payrollCycleId),
   uniqueIndex("fdp_contractor_closings_workspace_id_uq").on(table.workspaceId, table.id),
@@ -2303,6 +2305,8 @@ export const timeSheets = pgTable("fdp_time_sheets", {
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  /* Concorrência otimista (§34): o trigger da 0061 incrementa. */
+  version: integer("version").notNull().default(1),
 }, (table) => [
   uniqueIndex("fdp_time_sheets_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_time_sheets_workspace_employee_cycle_uq").on(table.workspaceId, table.employeeId, table.payrollCycleId),
