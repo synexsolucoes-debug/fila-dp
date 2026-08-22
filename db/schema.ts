@@ -2033,11 +2033,30 @@ export const domainEvents = pgTable("fdp_domain_events", {
   occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   publishedAt: timestamp("published_at", { withTimezone: true, mode: "string" }),
   deliveriesCount: integer("deliveries_count").notNull().default(0),
+  /* Envelope do catálogo (§6). Ver `lib/domain-events.ts`. */
+  schemaVersion: integer("schema_version").notNull().default(1),
+  origin: text("origin").notNull().default("internal"),
+  externalId: text("external_id").notNull().default(""),
+  correlationId: text("correlation_id").notNull().default(""),
+  causationId: text("causation_id").notNull().default(""),
+  idempotencyKey: text("idempotency_key").notNull().default(""),
+  evidenceRefsJson: jsonb("evidence_refs_json").$type<string[]>().notNull().default([]),
+  receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_domain_events_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_domain_events_pending_idx").on(table.workspaceId, table.status, table.occurredAt),
   index("fdp_domain_events_type_idx").on(table.workspaceId, table.eventType, table.occurredAt),
+  index("fdp_domain_events_origin_idx").on(table.workspaceId, table.origin, table.occurredAt),
+  // Parcial: o evento interno não deriva chave, e um único índice total faria a
+  // segunda mutação do dia colidir com a primeira.
+  uniqueIndex("fdp_domain_events_idempotency_uq").on(table.workspaceId, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} <> ''`),
+  index("fdp_domain_events_correlation_idx").on(table.workspaceId, table.correlationId)
+    .where(sql`${table.correlationId} <> ''`),
   check("fdp_domain_events_status_check", sql`${table.status} IN ('pending', 'published', 'skipped')`),
+  check("fdp_domain_events_schema_version_check", sql`${table.schemaVersion} > 0`),
+  check("fdp_domain_events_origin_check",
+    sql`${table.origin} IN ('internal', 'teams', 'solides', 'tangerino', 'sankhya', 'caju', 'agent', 'api', 'import')`),
 ]);
 
 export const webhookEndpoints = pgTable("fdp_webhook_endpoints", {

@@ -414,6 +414,13 @@
       "when": 1787335000001,
       "tag": "0056_tangerino_admission_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1787900000000,
+      "tag": "0057_domain_event_catalog",
+      "breakpoints": true
     }
   ]
 }
