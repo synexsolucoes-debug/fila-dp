@@ -27,6 +27,18 @@ type Credential = {
   key_version: number;
 };
 
+async function activeTangerinoHealthCheck(d1: Database, workspaceId: string, integrationId: string) {
+  return d1.prepare(`SELECT run.id, run.integration_id, run.trigger_type, run.status,
+      run.idempotency_key, run.created_at
+    FROM fdp_integration_jobs job
+    JOIN fdp_integration_sync_runs run
+      ON run.workspace_id = job.workspace_id AND run.id = job.run_id
+    WHERE job.workspace_id = ? AND job.integration_id = ? AND job.job_type = 'health_check'
+      AND job.status IN ('queued', 'leased')
+    ORDER BY job.created_at DESC LIMIT 1`)
+    .bind(workspaceId, integrationId).first<Record<string, unknown>>();
+}
+
 /**
  * Enfileira uma autenticação real, sem consultar colaborador nem abrir Admissão.
  * A tabela é a mesma das execuções dos demais conectores: assim a tela, a fila,
@@ -51,6 +63,11 @@ export async function queueTangerinoHealthCheck(d1: Database, input: {
 
   const key = input.idempotencyKey.trim().slice(0, 180);
   if (key.length < 8) throw ApiError.badRequest("Chave de idempotência inválida.", "IDEMPOTENCY_KEY_REQUIRED");
+  /* Um teste pode ficar na fila se o dispatch do worker ainda não estava
+     configurado. Reaproveitar essa execução permite que o mesmo botão acorde o
+     worker depois da correção operacional, sem duplicar run nem apagar fila. */
+  const activeRun = await activeTangerinoHealthCheck(d1, input.workspaceId, input.integrationId);
+  if (activeRun) return activeRun;
   const runId = crypto.randomUUID();
   const jobId = crypto.randomUUID();
   try {
@@ -85,6 +102,8 @@ export async function queueTangerinoHealthCheck(d1: Database, input: {
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
     if (code === "23505" || (error instanceof Error && /fdp_(?:sankhya_active_run|integration_jobs_active)_uq/iu.test(error.message))) {
+      const concurrentRun = await activeTangerinoHealthCheck(d1, input.workspaceId, input.integrationId);
+      if (concurrentRun) return concurrentRun;
       throw new ApiError(409, "TANGERINO_RUN_ALREADY_ACTIVE", "Já existe um teste ou execução do agente Tangerino em andamento.");
     }
     throw error;
