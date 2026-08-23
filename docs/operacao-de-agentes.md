@@ -91,6 +91,30 @@ vira duas folhas para a mesma pessoa.
 A proposta nasce em triagem com confiança deliberadamente baixa: o agente leu
 certo, mas o que ele leu não decide se a mudança deve entrar.
 
+### Antes de guardar a primeira credencial: o cofre
+
+Cada agente de navegador tem **cofre próprio**, e a chave dele precisa existir no
+deployment antes que alguém consiga guardar usuário e senha:
+
+| Agente | Variável |
+|---|---|
+| Agente Sankhya | `FDP_SANKHYA_VAULT_KEY` (ou `FDP_SANKHYA_VAULT_KEYS`) |
+| Agente Tangerino | `FDP_TANGERINO_VAULT_KEY` (ou `FDP_TANGERINO_VAULT_KEYS`) |
+
+São chaves AES-256 em base64, geradas com:
+
+```
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+Cofres separados não são zelo excessivo: a credencial do Tangerino abre a
+Admissão Digital e a do Sankhya abre o ERP onde a folha é fechada. Uma chave só
+faria o vazamento de um virar o vazamento dos dois.
+
+Sem a variável, guardar a credencial responde **503** com o nome exato do que
+falta — a mensagem existe para que "não salva" vire algo acionável por quem
+administra o deployment, e não um mistério para quem opera.
+
 ### Configurar um conector: as duas portas
 
 Configuração é outra coisa que operar, e mora em dois lugares — de propósito:

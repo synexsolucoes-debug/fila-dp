@@ -25,7 +25,7 @@
 import type { getD1 } from "../db";
 
 import {
-  agentState, agentStateLabels, canRunNow, isVisibleChannel, productAgentByChannel,
+  agentIsConfigured, agentState, agentStateLabels, canRunNow, isVisibleChannel, productAgentByChannel,
   resolveProductAgent, type ProductAgent,
 } from "./agent-catalog.ts";
 import {
@@ -141,7 +141,7 @@ export async function listAgentRuntime(
           i.last_successful_sync_at, i.next_sync_at, i.schedule_enabled, i.schedule_cadence,
           i.schedule_timezone, i.consecutive_failures, i.degraded_since, i.last_error,
           i.last_connection_at,
-          (NULLIF(i.config_json, '') IS NOT NULL AND i.config_json <> '{}') AS configured,
+          i.config_json,
           EXISTS (SELECT 1 FROM fdp_integration_credentials c
             WHERE c.workspace_id = i.workspace_id AND c.integration_id = i.id
               AND c.status = 'active' AND (c.expires_at IS NULL OR c.expires_at > now())) AS has_credential
@@ -250,7 +250,14 @@ export async function listAgentRuntime(
          do caminho isto está". Quem nunca configurou precisa do segundo. */
       const state = agentState({
         paused: status === "paused",
-        configured: row.configured === true,
+        /* "Configurado" é ter o que este agente exige — não é ter algo gravado.
+           O Agente Tangerino não exige campo nenhum, e medir por "config_json
+           vazio" o deixava em "Não configurado" para sempre, travando o setup
+           inteiro depois da credencial. */
+        configured: agentIsConfigured(channel, (() => {
+          try { return JSON.parse(text(row.config_json) || "{}") as Record<string, unknown>; }
+          catch { return {}; }
+        })()),
         hasCredential: row.has_credential === true,
         testedAt: nullable(row.last_connection_at),
         enabled: count(row.schedule_enabled) === 1 || status === "connected",

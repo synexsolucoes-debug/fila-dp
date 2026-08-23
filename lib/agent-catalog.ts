@@ -327,3 +327,26 @@ export function agentConfigFields(channel: unknown): readonly AgentSetupField[] 
 export function agentCredentialFields(channel: unknown): readonly AgentSetupField[] {
   return (productAgentByChannel(channel)?.fields ?? []).filter((field) => field.storage === "credential");
 }
+
+/**
+ * O agente já tem a configuração que ele **exige**?
+ *
+ * A pergunta anterior era outra: "o `config_json` está vazio?". Para o Agente
+ * Sankhya as duas coincidem, porque ele exige endereço e empresa. Para o Agente
+ * Tangerino, não: o único campo dele é opcional, então o `config_json` fica
+ * vazio para sempre — e o estado travava em "Não configurado" mesmo depois de a
+ * credencial ser guardada e o acesso testado. O caminho inteiro do setup ficava
+ * inalcançável por causa de um campo que ninguém precisa preencher.
+ *
+ * Quem sabe o que é exigido é o catálogo, e é ele quem responde.
+ */
+export function agentIsConfigured(channel: unknown, config: Record<string, unknown>): boolean {
+  const agent = productAgentByChannel(channel);
+  if (!agent) return false;
+  return agent.fields
+    .filter((field) => field.storage === "config" && field.required)
+    .every((field) => {
+      const valor = config[field.key];
+      return typeof valor === "string" ? valor.trim() !== "" : valor != null;
+    });
+}
