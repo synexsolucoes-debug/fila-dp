@@ -25,6 +25,10 @@
 import type { getD1 } from "../db";
 
 import {
+  agentState, agentStateLabels, canRunNow, isVisibleChannel, productAgentByChannel,
+  resolveProductAgent, type ProductAgent,
+} from "./agent-catalog.ts";
+import {
   agentCadence, agentHealth, agentHealthLabels,
   type AgentCadence, type AgentHealth,
 } from "./agent-schedule.ts";
@@ -45,46 +49,39 @@ type Database = ReturnType<typeof getD1>;
  * propostas, mas quem as traz é um webhook. E-mail e WhatsApp alimentam a caixa
  * de entrada e não propõem nada — não estão aqui.
  */
-export const agentChannels = ["sankhya_browser", "tangerino", "solides", "teams"] as const;
-export type AgentChannel = typeof agentChannels[number];
-
-/** Canais cuja execução o Vinculato dispara; os demais só recebem. */
-const EXECUTOR_CHANNELS = new Set<AgentChannel>(["sankhya_browser", "tangerino", "solides"]);
-
 /**
- * Apelidos aceitos de fora.
+ * A lista deixou de morar aqui.
  *
- * As propostas gravadas em `fdp_agent_proposals.agent_key` usam `sankhya`, e a
- * chave já está em dado de cliente. Traduzir aqui deixa os dois vocabulários
- * válidos sem migrar histórico — o mesmo caminho que a autorização já usa para
- * as capacidades renomeadas.
+ * Ela agora é a decisão de produto, em `lib/agent-catalog.ts`: **Teams,
+ * Tangerino e Sankhya**, e mais nada. Manter uma segunda lista neste arquivo
+ * era o que produzia a divergência que a auditoria encontrou — a Central
+ * listava `tangerino` e `solides`, que são as **APIs**, e o agente de navegador
+ * do Tangerino, que é o que de fato lê o sistema, não aparecia em lugar nenhum.
+ * Quem configurava "o Tangerino" configurava outra coisa.
  */
-const CHANNEL_ALIASES: Record<string, AgentChannel> = {
-  sankhya: "sankhya_browser",
-  sankhya_browser: "sankhya_browser",
-  tangerino: "tangerino",
-  solides: "solides",
-  teams: "teams",
-};
-
-export function isAgentChannel(value: unknown): value is AgentChannel {
-  return typeof value === "string" && (agentChannels as readonly string[]).includes(value);
-}
-
-/** O canal canônico de uma chave vinda de fora, ou `""` quando não é agente. */
-export function resolveAgentChannel(value: unknown): AgentChannel | "" {
-  const key = cleanText(value, 60);
-  return CHANNEL_ALIASES[key] ?? "";
+/** O canal interno de uma chave vinda de fora, ou `""` quando não é um dos três. */
+export function resolveAgentChannel(value: unknown): string {
+  return resolveProductAgent(cleanText(value, 60))?.channel ?? "";
 }
 
 export type AgentRuntimeStatus = {
-  /** Canal canônico — é ele que a tela usa como identificador. */
-  key: AgentChannel;
+  /** A chave de produto (`tangerino_agent`…). O canal interno não sai daqui. */
+  key: string;
   integrationId: string;
-  channel: string;
+  /** "Agente Tangerino". Nunca `tangerino_browser` (§2, §4, §7). */
   displayName: string;
+  /** O que ele faz, em uma frase. */
+  summary: string;
   /** `agent` executa; `channel` apenas recebe (§82). */
   kind: "agent" | "channel";
+  /** Estado em português, com o que ele significa (§10). */
+  state: { key: string; label: string; detail: string };
+  /** Os passos do setup deste agente, na ordem (§11, §12, §13). */
+  steps: readonly string[];
+  /** Este agente tem o que executar periodicamente? */
+  supportsSchedule: boolean;
+  /** "Executar agora" pode aparecer habilitado? (§25) */
+  canRunNow: boolean;
   connectorVersion: string;
   /** `connected`, `paused`, `needs_credentials`… vem do conector. */
   status: string;
@@ -145,10 +142,21 @@ export async function listAgentRuntime(
   now = new Date(),
 ): Promise<AgentRuntimeStatus[]> {
   const [integrations, runs, lastRuns, events, proposals, jobs] = await Promise.all([
-    d1.prepare(`SELECT id, channel, display_name, status, connector_version, last_sync_at,
-          last_successful_sync_at, next_sync_at, schedule_enabled, schedule_cadence,
-          schedule_timezone, consecutive_failures, degraded_since, last_error
-        FROM fdp_integrations WHERE workspace_id = ? ORDER BY channel`)
+    /* `last_connection_at` e a existência de credencial ativa entram na mesma
+       leitura porque são degraus do estado, não detalhe: sem eles a tela não
+       consegue distinguir "credencial pendente" de "teste pendente", e volta a
+       dizer só "precisa de credenciais" para as duas situações — que foi o que
+       fez alguém gravar a senha e continuar sem entender por que não conectava
+       (§10, §23). */
+    d1.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.connector_version, i.last_sync_at,
+          i.last_successful_sync_at, i.next_sync_at, i.schedule_enabled, i.schedule_cadence,
+          i.schedule_timezone, i.consecutive_failures, i.degraded_since, i.last_error,
+          i.last_connection_at,
+          (NULLIF(i.config_json, '') IS NOT NULL AND i.config_json <> '{}') AS configured,
+          EXISTS (SELECT 1 FROM fdp_integration_credentials c
+            WHERE c.workspace_id = i.workspace_id AND c.integration_id = i.id
+              AND c.status = 'active' AND (c.expires_at IS NULL OR c.expires_at > now())) AS has_credential
+        FROM fdp_integrations i WHERE i.workspace_id = ? ORDER BY i.channel`)
       .bind(workspaceId).all<Record<string, unknown>>(),
     d1.prepare(`SELECT r.integration_id, count(*)::int AS total,
           count(*) FILTER (WHERE r.status IN ('failed', 'requires_user_action'))::int AS failed,
@@ -217,11 +225,16 @@ export async function listAgentRuntime(
     proposalsByChannel.set(channel, current);
   }
 
+  /* Só os três do catálogo saem daqui. Os demais conectores continuam no banco,
+     com execuções, eventos e auditoria intactos, e continuam administráveis
+     pelo console da plataforma — o que muda é que a pessoa que opera não
+     precisa mais escolher entre dez coisas para configurar três (§16, §17). */
   return integrations.results
-    .filter((row) => isAgentChannel(text(row.channel)))
+    .filter((row) => isVisibleChannel(text(row.channel)))
     .map((row) => {
       const id = text(row.id);
-      const channel = text(row.channel) as AgentChannel;
+      const channel = text(row.channel);
+      const product = productAgentByChannel(channel) as ProductAgent;
       const run = runsById.get(id) ?? {};
       const last = lastById.get(id) ?? {};
       const event = eventsById.get(id) ?? {};
@@ -243,12 +256,34 @@ export async function listAgentRuntime(
       });
       const meta = agentHealthLabels[health];
 
+      /* O estado de produto e a saúde respondem perguntas diferentes, e por
+         isso convivem: a saúde diz "como vai indo", o estado diz "em que degrau
+         do caminho isto está". Quem nunca configurou precisa do segundo. */
+      const state = agentState({
+        paused: status === "paused",
+        configured: row.configured === true,
+        hasCredential: row.has_credential === true,
+        testedAt: nullable(row.last_connection_at),
+        enabled: count(row.schedule_enabled) === 1 || status === "connected",
+        consecutiveFailures: count(row.consecutive_failures),
+        degraded: Boolean(nullable(row.degraded_since)),
+        lastRunFailed: lastStatus === "failed" || lastStatus === "requires_user_action",
+      });
+      const stateMeta = agentStateLabels[state];
+
       return {
-        key: channel,
+        key: product.key,
         integrationId: id,
-        channel,
-        displayName: text(row.display_name) || channel,
-        kind: EXECUTOR_CHANNELS.has(channel) ? "agent" : "channel",
+        /* O nome vem do catálogo, não da coluna. `display_name` guarda o que
+           alguém digitou um dia — inclusive "Tangerino Browser Connector" —, e
+           é exatamente esse vazamento de nome técnico que a decisão proíbe. */
+        displayName: product.label,
+        summary: product.summary,
+        kind: product.reads ? "agent" : "channel",
+        state: { key: state, label: stateMeta.label, detail: stateMeta.detail },
+        steps: product.steps,
+        supportsSchedule: product.supportsSchedule,
+        canRunNow: canRunNow(product, state),
         connectorVersion: text(row.connector_version),
         status,
         enabled: status !== "paused",

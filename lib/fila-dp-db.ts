@@ -147,7 +147,17 @@ export async function provisionWorkspaceDefaults(
     ["CONCILIAÇÃO CADASTRAL", 2, 1], ["RESCISÃO", 2, 1], ["FÉRIAS", 5, 2], ["BENEFÍCIOS", 3, 1], ["FOLHA", 2, 1], ["OUTROS", 3, 1],
   ] as const;
   const integrationRows = [
-    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["teams", "Microsoft Teams"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["solides", "Sólides"], ["tangerino", "Sólides DP (Tangerino)"], ["sankhya_browser", "Sankhya Browser Connector"], ["erp", "ERP / Folha"],
+    /* Os três agentes que o produto mostra vêm primeiro e com o nome de
+       produto. `tangerino_browser` faltava nesta lista, e essa ausência tornava
+       o agente de navegador do Tangerino inalcançável: a consulta o procura por
+       canal, não achava, e recusava mandando configurar numa tela onde ele não
+       existia (ver a migration 0066). */
+    ["teams", "Agente Teams"], ["tangerino_browser", "Agente Tangerino"], ["sankhya_browser", "Agente Sankhya"],
+    /* Conectores anteriores à decisão de produto. Continuam provisionados
+       porque workspaces existentes têm histórico neles e o console da
+       plataforma continua administrando-os; o que mudou é que a experiência
+       operacional não os lista mais (§16, §17). */
+    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["solides", "Sólides"], ["tangerino", "Sólides DP (Tangerino)"], ["erp", "ERP / Folha"],
   ] as const;
 
   await d1.batch([

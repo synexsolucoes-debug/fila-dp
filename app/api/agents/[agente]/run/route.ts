@@ -3,7 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { manualRunKey } from "@/lib/agent-schedule";
-import { asAgentQueueConflict, prepareNextRun, requireAgentChannel } from "@/lib/agent-scheduler";
+import { asAgentQueueConflict, prepareNextRun, requireSchedulableAgent } from "@/lib/agent-scheduler";
 import { queueIntegrationRun } from "@/lib/integration-engine";
 import { queueSankhyaRun } from "@/lib/sankhya/queue";
 import { agentCadence } from "@/lib/agent-schedule";
@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "integrations.execute", "executar um agente");
 
-    const channel = requireAgentChannel(agente);
+    const channel = requireSchedulableAgent(agente);
     if (body.confirm !== true) {
       throw ApiError.badRequest(
         "Confirme a execução. Ela consulta o sistema de origem e pode abrir novas demandas.",

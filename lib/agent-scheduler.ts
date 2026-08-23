@@ -36,6 +36,7 @@ import {
   nextRunAt, scheduledRunKey, type AgentCadence, type AgentEligibilityReason,
 } from "./agent-schedule.ts";
 import { resolveAgentChannel } from "./agent-runtime.ts";
+import { resolveProductAgent } from "./agent-catalog.ts";
 
 type Database = ReturnType<typeof getD1>;
 
@@ -260,4 +261,29 @@ export function requireAgentChannel(value: unknown) {
     throw ApiError.badRequest("Este agente não existe.", "AGENT_UNKNOWN");
   }
   return channel;
+}
+
+/**
+ * O agente aceita execução e cadência próprias?
+ *
+ * Nem todos aceitam, e a diferença não é limitação: é o que cada um faz. O
+ * Agente Teams **recebe** avisos — não há o que ele vá buscar por conta
+ * própria. O Agente Tangerino consulta a admissão de um colaborador por vez, a
+ * partir da ficha dele, e ainda não tem varredura periódica definida.
+ *
+ * A guarda existe no servidor e não só na tela porque `/api/agents/:agente/run`
+ * é uma porta: esconder o botão impede o clique, não a requisição. Sem isto,
+ * chamar a rota para o Teams enfileiraria um trabalho que nenhum runner sabe
+ * executar — um job que nasce condenado e só aparece na carta morta.
+ */
+export function requireSchedulableAgent(value: unknown) {
+  const agent = resolveProductAgent(value);
+  if (!agent) throw ApiError.badRequest("Este agente não existe.", "AGENT_UNKNOWN");
+  if (!agent.supportsSchedule) {
+    throw new ApiError(409, "AGENT_NOT_SCHEDULABLE",
+      `${agent.label} não tem execução própria: ${agent.reads
+        ? "a consulta é disparada a partir da ficha do colaborador."
+        : "ele recebe avisos da origem, e não vai buscá-los."}`);
+  }
+  return agent.channel;
 }

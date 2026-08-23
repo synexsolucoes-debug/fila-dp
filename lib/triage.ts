@@ -290,12 +290,28 @@ export type TriageItem = {
   } | null;
 };
 
+/**
+ * De onde o item veio, em nome de produto.
+ *
+ * "Sankhya (navegador)" contava ao operador como a leitura é feita, o que é
+ * detalhe interno: quem tria precisa saber **quem** trouxe o item, não que
+ * mecanismo aquele agente usa por dentro. As chaves antigas continuam na
+ * tabela porque estão gravadas em propostas já existentes — traduzi-las é o
+ * que mantém o histórico legível sem migrar dado (§15, §17).
+ */
 export const triageOriginLabels: Record<string, string> = {
-  sankhya_browser: "Sankhya (navegador)",
-  sankhya: "Sankhya (navegador)",
-  tangerino: "Tangerino",
-  solides: "Sólides",
-  teams: "Microsoft Teams",
+  sankhya_browser: "Agente Sankhya",
+  sankhya: "Agente Sankhya",
+  sankhya_agent: "Agente Sankhya",
+  tangerino_browser: "Agente Tangerino",
+  tangerino: "Agente Tangerino",
+  tangerino_agent: "Agente Tangerino",
+  teams: "Agente Teams",
+  teams_agent: "Agente Teams",
+  /* Conector aposentado pela decisão de produto. O rótulo fica porque as
+     propostas que ele gerou continuam na fila e precisam dizer de onde vieram —
+     esconder a origem seria pedir que alguém decidisse às cegas. */
+  solides: "Sólides (conector anterior)",
 };
 
 export function originLabel(origin: string) {

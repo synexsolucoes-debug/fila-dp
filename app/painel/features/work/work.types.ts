@@ -104,11 +104,19 @@ export type TriagePayload = {
  * -------------------------------------------------------------------------- */
 
 export type AgentStatus = {
+  /** Chave de produto (`tangerino_agent`…). O canal interno não chega à tela. */
   key: string;
   integrationId: string;
-  channel: string;
+  /** "Agente Tangerino". Nunca o nome do canal. */
   displayName: string;
+  summary: string;
   kind: "agent" | "channel";
+  /** Estado em português, com o que ele significa (§10). */
+  state: { key: string; label: string; detail: string };
+  /** Os passos do setup deste agente, na ordem (§11, §12, §13). */
+  steps: string[];
+  supportsSchedule: boolean;
+  canRunNow: boolean;
   connectorVersion: string;
   status: string;
   enabled: boolean;
