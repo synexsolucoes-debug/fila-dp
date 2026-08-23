@@ -707,5 +707,3 @@ test("o modo assistido libera só recursos do desafio e nunca a navegação prin
   const cliente = source("worker/tangerino/playwright-session.ts");
   assert.match(cliente, /interactiveChallengeResource && request\.isNavigationRequest\(\)[\s\S]*?mainFrame\(\)[\s\S]*?route\.abort/u);
 });
-
-
