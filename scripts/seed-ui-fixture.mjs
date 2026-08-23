@@ -191,7 +191,12 @@ try {
     // produto ficava sem cobertura nenhuma.
     ["int-ui-1", "sankhya_browser", "Agente Sankhya", "connected", "now() - interval '8 minutes'"],
     ["int-ui-3", "teams", "Agente Teams", "needs_credentials", "null"],
-    ["int-ui-5", "tangerino_browser", "Agente Tangerino", "needs_credentials", "null"],
+    // Em erro de propósito: a tela operacional passou a mostrar só estes três, e
+    // os quatro tons do diagrama de conexões precisam existir **entre eles**.
+    // Antes o tom de erro vivia no conector Tangerino de API, que a decisão de
+    // produto aposentou — e ao pausá-lo a auditoria de contraste deixaria de
+    // medir o estado de erro em qualquer cartão visível.
+    ["int-ui-5", "tangerino_browser", "Agente Tangerino", "error", "now() - interval '20 minutes'"],
     // Conectores aposentados, pausados: a semente precisa reproduzir o estado
     // real de um grupo migrado, inclusive para provar que eles não aparecem.
     ["int-ui-2", "solides", "Sólides", "paused", "now() - interval '3 hours'"],
