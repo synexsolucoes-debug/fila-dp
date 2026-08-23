@@ -1,4 +1,5 @@
 import type { getD1 } from "../db";
+import { agentConfigFields, productAgentByChannel } from "./agent-catalog.ts";
 import { ApiError } from "./api-errors.ts";
 import { validateConnectorEndpoint } from "./integrations.ts";
 import { solidesDateToIso } from "./solides.ts";
@@ -97,6 +98,24 @@ export const AUTOMATION_LABELS: Record<string, string> = {
  */
 export function connectorFields(channel: string): readonly ConnectorField[] {
   if (channel === PLATFORM_ONLY_CHANNEL) return [];
+  /* Os agentes do produto declaram os próprios campos no catálogo, e é de lá
+     que eles vêm. O Agente Tangerino entra por usuário e senha, sem endpoint:
+     os domínios oficiais dele já são conhecidos pelo produto, e pedir endereço
+     seria pedir configuração de API justamente ao agente que existe para não
+     ter uma. */
+  const doCatalogo = agentConfigFields(channel);
+  if (doCatalogo.length) {
+    return doCatalogo.map((field) => ({
+      key: field.key, label: field.label, hint: field.hint,
+      kind: field.kind === "password" ? "text" : field.kind === "select" ? "text" : field.kind,
+    }));
+  }
+  // Agente de navegador sem campo de configuração não cai no genérico: ele
+  // simplesmente não tem configuração, e oferecer endpoint seria inventá-la.
+  if (productAgentByChannel(channel)?.mechanism === "browser") return [];
+  /* O Agente Teams e os conectores anteriores seguem pelo caminho de sempre: a
+     configuração deles já existe, é testada, e o catálogo descreve o setup
+     deles, não o contrato de persistência. */
   if (channel === "teams") return [ENDPOINT_FIELD, ...TEAMS_FIELDS];
   if (channel === "solides" || channel === "tangerino") return [ENDPOINT_FIELD, ...ADMISSION_FIELDS];
   return [ENDPOINT_FIELD];
@@ -179,10 +198,33 @@ export function buildConnectorConfig(input: {
       "SANKHYA_CONFIG_SEPARATE",
     );
   }
-  const endpointInput = text(body.endpoint, 500);
+  /* Endpoint só existe para quem o declara. O Agente Tangerino não declara: os
+     domínios oficiais dele já são conhecidos pelo produto, e aceitar um endereço
+     aqui recriaria a configuração de API que a decisão de produto aposentou —
+     agora pela porta dos fundos, e gravada como se fosse legítima. */
+  const aceitaEndpoint = connectorFields(channel).some((field) => field.key === "endpoint");
+  const endpointInput = aceitaEndpoint ? text(body.endpoint, 500) : "";
   const endpoint = endpointInput ? validateConnectorEndpoint(channel, endpointInput) : "";
   const displayName = text(body.displayName, 120) || input.currentDisplayName;
   const status = body.status === "paused" ? "paused" as const : "needs_credentials" as const;
+
+  /* Um agente do produto grava exatamente os campos que declara — nem mais,
+     nem menos.
+     "Nem menos" é a parte que faltava: `accountReference` estava no catálogo do
+     Agente Tangerino e fora da lista de gravação, então o formulário coletaria
+     o valor e o servidor o descartaria **sem erro nenhum**. É o defeito mudo
+     que o comentário de `connectorFields` já descrevia e que o código não
+     cumpria. */
+  const doCatalogo = agentConfigFields(channel);
+  if (doCatalogo.length) {
+    const config = Object.fromEntries(doCatalogo
+      .map((field) => [field.key, field.key === "endpoint"
+        ? (endpoint || "")
+        : text(body[field.key], 500)])
+      .filter(([, valor]) => valor !== ""));
+    return { displayName, status, config, configuredFields: Object.keys(config) };
+  }
+
   const config = {
     ...(endpoint ? { endpoint } : {}),
     ...(body.requestBody ? { requestBody: safeRequestBody(body.requestBody) } : {}),
