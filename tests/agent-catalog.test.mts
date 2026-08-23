@@ -40,7 +40,7 @@ test("o Tangerino visível é o de navegador, e não o da API (§1)", () => {
 test("nenhum agente pede token, endpoint de API ou mapeamento do Tangerino (§1, §19)", () => {
   const tangerino = productAgents.find((agent) => agent.key === "tangerino_agent");
   const chaves = (tangerino?.fields ?? []).map((field) => field.key);
-  assert.deepEqual(chaves, ["username", "password", "accountReference"]);
+  assert.deepEqual(chaves, ["username", "password", "accountReference", "boardId"]);
   for (const proibido of ["token", "endpoint", "authorization", "mapping"]) {
     assert.ok(!chaves.includes(proibido), `o Agente Tangerino voltou a exigir ${proibido}`);
   }
@@ -310,14 +310,14 @@ test("o Agente Tangerino não pede endpoint em lugar nenhum (§1, §2)", async (
   const { connectorFields } = await import("../lib/connector-config.ts");
   assert.ok(!connectorFields("tangerino_browser").some((field) => field.key === "endpoint"),
     "o Agente Tangerino voltou a aceitar endpoint");
-  assert.deepEqual(connectorFields("tangerino_browser").map((f) => f.key), ["accountReference"]);
+  assert.deepEqual(connectorFields("tangerino_browser").map((f) => f.key), ["accountReference", "boardId"]);
 });
 
 test("os campos do formulário vêm do catálogo, não de listas paralelas", async () => {
   const { agentConfigFields, agentCredentialFields } = await import("../lib/agent-catalog.ts");
   // Usuário e senha vão para o cofre; nunca para o config_json.
   assert.deepEqual(agentCredentialFields("tangerino_browser").map((f) => f.key), ["username", "password"]);
-  assert.deepEqual(agentConfigFields("tangerino_browser").map((f) => f.key), ["accountReference"]);
+  assert.deepEqual(agentConfigFields("tangerino_browser").map((f) => f.key), ["accountReference", "boardId"]);
   assert.ok(agentConfigFields("tangerino_browser").every((f) => !f.secret),
     "campo secreto não pode ser gravado em configuração");
 });
