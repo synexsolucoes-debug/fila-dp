@@ -286,3 +286,18 @@ test("a migration provisiona o Tangerino sem apagar nada (§17, §18)", async ()
   // Renomear canal persistido é exatamente o que a decisão manda evitar.
   assert.ok(!/SET "channel"/u.test(sql), "a migration renomeia canal persistido");
 });
+
+test("a Central de Integrações também lista só os três (§9)", async () => {
+  /* Esta era a metade que ficou de fora: a Central de Agentes foi religada ao
+     catálogo e a de Integrações não, então quem opera continuava escolhendo
+     entre dez conectores para configurar três. Duas telas com duas listas é
+     exatamente o arranjo que a decisão de produto existe para eliminar. */
+  const source = await readFile(
+    new URL("../app/api/integrations/overview/route.ts", import.meta.url), "utf8");
+  assert.match(source, /visibleChannels/u, "a tela operacional voltou a listar todos os canais");
+  assert.match(source, /i\.channel IN \(SELECT jsonb_array_elements_text/u);
+  // O filtro vem do catálogo, e nunca de uma lista escrita aqui.
+  for (const canal of ["onedrive", "whatsapp", "drive", "erp"]) {
+    assert.ok(!source.includes(`'${canal}'`), `a rota escreveu a própria lista de canais: ${canal}`);
+  }
+});

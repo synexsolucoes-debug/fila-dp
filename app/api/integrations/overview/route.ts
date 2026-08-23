@@ -1,6 +1,7 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext } from "@/lib/fila-dp-db";
 import { hasCapability, requireCapability } from "@/lib/authorization";
+import { visibleChannels } from "@/lib/agent-catalog";
 import { publicCredentialFingerprint, safeIntegrationError } from "@/lib/integrations";
 import { parseSankhyaConfig } from "@/lib/sankhya/config";
 import { isSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
@@ -56,7 +57,19 @@ export async function GET() {
           WHERE workspace_id = i.workspace_id AND integration_id = i.id AND credential_type = 'provider_auth' AND status = 'active'
           ORDER BY created_at DESC LIMIT 1
         ) credential ON TRUE
-        WHERE i.workspace_id = ? ORDER BY i.display_name`).bind(workspace.id).all<Record<string, unknown>>(),
+        /* Só os três agentes do catálogo.
+           A Central de Agentes foi religada à decisão de produto e esta tela
+           não: ela continuava listando os dez conectores, e quem opera seguia
+           escolhendo entre dez coisas para configurar três. O filtro vem da
+           mesma lista que as demais telas consultam — repetir os canais aqui
+           criaria a segunda lista que a decisão existe para eliminar.
+
+           Os conectores anteriores continuam no banco, com histórico intacto, e
+           continuam administráveis pelo console da plataforma (§16, §17). */
+        WHERE i.workspace_id = ?
+          AND i.channel IN (SELECT jsonb_array_elements_text(?::jsonb))
+        ORDER BY i.display_name`)
+        .bind(workspace.id, JSON.stringify(visibleChannels)).all<Record<string, unknown>>(),
       d1.prepare(`SELECT id, integration_id, resource_type, direction, version, status, checksum, published_at, created_at
         FROM fdp_integration_mappings WHERE workspace_id = ? ORDER BY integration_id, resource_type, version DESC`).bind(workspace.id).all(),
       d1.prepare(`SELECT r.id, r.integration_id, i.display_name, r.mapping_id, r.trigger_type, r.status, r.attempt,
