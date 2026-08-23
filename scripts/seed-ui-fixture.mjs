@@ -185,10 +185,22 @@ try {
     timeoutMs: 300_000, maxAttempts: 3, downloadLimitBytes: 25 * 1024 * 1024, diagnosticRetentionHours: 24,
   });
   for (const [id, canal, nome, status, sync] of [
+    // Os três agentes que o produto mostra, com o nome de produto. O Tangerino
+    // de navegador faltava aqui — e a semente é o que o ensaio de navegador e a
+    // auditoria de acessibilidade medem, então sem ele um terço da decisão de
+    // produto ficava sem cobertura nenhuma.
     ["int-ui-1", "sankhya_browser", "Agente Sankhya", "connected", "now() - interval '8 minutes'"],
-    ["int-ui-2", "solides", "Sólides", "connected", "now() - interval '3 hours'"],
-    ["int-ui-3", "teams", "Microsoft Teams", "needs_credentials", "null"],
-    ["int-ui-4", "tangerino", "Sólides DP (Tangerino)", "error", "now() - interval '2 days'"],
+    ["int-ui-3", "teams", "Agente Teams", "needs_credentials", "null"],
+    // Em erro de propósito: a tela operacional passou a mostrar só estes três, e
+    // os quatro tons do diagrama de conexões precisam existir **entre eles**.
+    // Antes o tom de erro vivia no conector Tangerino de API, que a decisão de
+    // produto aposentou — e ao pausá-lo a auditoria de contraste deixaria de
+    // medir o estado de erro em qualquer cartão visível.
+    ["int-ui-5", "tangerino_browser", "Agente Tangerino", "error", "now() - interval '20 minutes'"],
+    // Conectores aposentados, pausados: a semente precisa reproduzir o estado
+    // real de um grupo migrado, inclusive para provar que eles não aparecem.
+    ["int-ui-2", "solides", "Sólides", "paused", "now() - interval '3 hours'"],
+    ["int-ui-4", "tangerino", "Sólides DP (Tangerino)", "paused", "now() - interval '2 days'"],
   ]) {
     await client.query(
       `INSERT INTO fdp_integrations (id, workspace_id, channel, display_name, status, last_sync_at, config_json)
