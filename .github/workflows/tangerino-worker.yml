@@ -49,7 +49,9 @@ jobs:
           FDP_TANGERINO_VAULT_KEY_VERSION: ${{ secrets.FDP_TANGERINO_VAULT_KEY_VERSION }}
           TANGERINO_BROWSER_AGENT_ENABLED: "true"
           FDP_TANGERINO_BROWSER_ALLOWED_HOSTS: ${{ vars.FDP_TANGERINO_BROWSER_ALLOWED_HOSTS }}
-          FDP_TANGERINO_CHROMIUM_SANDBOX: "true"
+          # GitHub-hosted runners não oferecem o namespace necessário ao
+          # sandbox do Chromium. O isolamento continua sendo o runner efêmero.
+          FDP_TANGERINO_CHROMIUM_SANDBOX: "false"
           TANGERINO_BROWSER_CONCURRENCY: "2"
           # Orçamento abaixo do timeout do job: o runner precisa encerrar por
           # decisão própria, com o `finally` fechando o navegador, e não morrer
