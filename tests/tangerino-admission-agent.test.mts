@@ -8,6 +8,8 @@ import { credentialPublicHint, openCredentials, sealCredentials } from "../lib/i
 import { dispatchTangerinoWorker } from "../lib/tangerino/actions-dispatch.ts";
 import { tangerinoAgentConfig } from "../lib/tangerino/config.ts";
 import { TangerinoAgentError, safeTangerinoError, tangerinoErrors } from "../lib/tangerino/errors.ts";
+import { tangerinoBrowserLoginUrl } from "../lib/tangerino/hosts.ts";
+import { verifyTangerinoBrowserLogin } from "../lib/tangerino/login.ts";
 import { allowedTangerinoHosts, isAllowedTangerinoHost, isPrivateNetworkAddress } from "../lib/tangerino/navigation-security.ts";
 import { admissionChanged, admissionSearchTerm, chooseAdmission, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../lib/tangerino/read-only.ts";
@@ -367,6 +369,17 @@ test("o caminho feliz percorre exatamente os comandos previstos", async () => {
   assert.equal(parsed.admissionDate, "2026-09-01");
 });
 
+test("o teste de conexão autentica e não consulta nenhum colaborador", async () => {
+  const session = new MockTangerinoSession("success");
+  await verifyTangerinoBrowserLogin(session, {
+    username: "conta.dedicada",
+    password: "segredo-de-teste",
+    timeoutMs: 30_000,
+  });
+  assert.deepEqual(session.calls, ["ensureAuthenticated"]);
+  assert.equal(tangerinoBrowserLoginUrl, "https://app.tangerino.com.br/Tangerino/pages/LoginPage");
+});
+
 test("MFA e CAPTCHA param o fluxo em vez de serem contornados", async () => {
   // Um agente que contorna mecanismo de segurança é indistinguível de um
   // invasor. A resposta certa é parar e pedir ação humana (§16).
@@ -412,7 +425,7 @@ test("toda consulta ao banco é escopada por workspace", async () => {
   /* Nenhum usuário consulta admissão de outro workspace (§58). O RLS forçado é
      a garantia final, mas uma consulta sem `workspace_id` no WHERE já seria um
      erro de raciocínio — e é isso que este teste pega, antes do banco. */
-  for (const arquivo of ["lib/tangerino/queue.ts", "lib/tangerino/agent.ts"]) {
+  for (const arquivo of ["lib/tangerino/queue.ts", "lib/tangerino/agent.ts", "lib/tangerino/health-check.ts"]) {
     const conteudo = await readFile(new URL(`../${arquivo}`, import.meta.url), "utf8");
     const consultas = [...conteudo.matchAll(/(SELECT|UPDATE|INSERT INTO|DELETE FROM)[\s\S]*?`\)/gu)].map((match) => match[0]);
     assert.ok(consultas.length >= 4, `${arquivo}: nenhuma consulta encontrada, o teste está lendo o arquivo errado`);

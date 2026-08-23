@@ -5,6 +5,7 @@ import { log } from "../observability.ts";
 import { prepareDomainEvent } from "../outbox.ts";
 import { tangerinoAgentConfig } from "./config.ts";
 import { safeTangerinoError, tangerinoErrors } from "./errors.ts";
+import { tangerinoBrowserLoginUrl } from "./hosts.ts";
 import { admissionChanged, admissionSearchTerm, chooseAdmission, parseAdmission } from "./parser.ts";
 import type { AdmissionConsultationTarget, ConsultationResult, TangerinoSessionFactory } from "./types.ts";
 
@@ -142,8 +143,8 @@ export async function runNextConsultation(
         WHERE workspace_id = ? AND integration_id = ? AND credential_type = 'provider_auth' AND status = 'active'
           AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) ORDER BY created_at DESC LIMIT 1`)
         .bind(workspaceId, claimed.integration_id).first<Credential>(),
-      d1.prepare("SELECT config_json FROM fdp_integrations WHERE workspace_id = ? AND id = ? AND channel = 'tangerino_browser'")
-        .bind(workspaceId, claimed.integration_id).first<{ config_json: string }>(),
+      d1.prepare("SELECT id FROM fdp_integrations WHERE workspace_id = ? AND id = ? AND channel = 'tangerino_browser'")
+        .bind(workspaceId, claimed.integration_id).first<{ id: string }>(),
     ]);
     if (!credential || !integration) throw tangerinoErrors.credentialRequired();
 
@@ -154,9 +155,6 @@ export async function runNextConsultation(
       keyVersion: Number(credential.key_version),
     });
     if (!secrets.username || !secrets.password) throw tangerinoErrors.credentialRequired();
-    const endpoint = String((JSON.parse(integration.config_json || "{}") as { endpoint?: unknown }).endpoint ?? "");
-    if (!endpoint) throw tangerinoErrors.credentialRequired();
-
     await d1.batch([
       prepareDomainEvent(d1, {
         workspaceId, eventType: "tangerino.consultation.started", entityType: "tangerino_consultation", entityId: claimed.id,
@@ -171,7 +169,7 @@ export async function runNextConsultation(
 
     session = await createSession({ workspaceId, integrationId: claimed.integration_id, consultationId: claimed.id });
     await session.ensureAuthenticated({
-      endpoint, username: secrets.username, password: secrets.password, timeoutMs: config.timeoutMs,
+      endpoint: tangerinoBrowserLoginUrl, username: secrets.username, password: secrets.password, timeoutMs: config.timeoutMs,
     });
     await session.openAdmissions();
     const hits = await session.searchAdmission(admissionSearchTerm(target));

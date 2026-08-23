@@ -4,6 +4,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { publicCredentialFingerprint, safeIntegrationError } from "@/lib/integrations";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { isSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
+import { isTangerinoAgentEnabled } from "@/lib/tangerino/queue";
 import { withPlatformContext } from "@/lib/platform-context";
 import { decodePlatformCursor, encodePlatformCursor, platformListLimit } from "@/lib/platform-console";
 import { cleanText } from "@/lib/registrations";
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
         // recusar a ação, e não por uma cópia do critério aqui: cópia é o que
         // deixa a tela e o servidor discordarem com o tempo. Vai no mesmo
         // `Promise.all` da listagem, então não custa uma ida a mais ao banco.
-        const [rows, sankhyaEnabled] = await Promise.all([
+        const [rows, sankhyaEnabled, tangerinoEnabled] = await Promise.all([
           scoped.prepare(`SELECT i.id, i.channel, i.display_name, i.status, i.last_sync_at, i.last_connection_at, i.last_successful_sync_at,
             i.next_sync_at, i.last_error, i.created_at, i.updated_at,
             NULLIF(i.config_json, '')::jsonb->>'companyId' AS company_id,
@@ -99,20 +100,22 @@ export async function GET(request: Request) {
             SELECT count(*)::int AS run_count,
               count(*) FILTER (WHERE status = 'succeeded')::int AS success_count,
               COALESCE(avg(duration_ms) FILTER (WHERE duration_ms > 0), 0)::int AS average_duration_ms,
-              count(*) FILTER (WHERE error_code LIKE 'SANKHYA_LOGIN%' OR error_code LIKE 'SANKHYA_%CREDENTIAL%')::int AS authentication_errors,
-              count(*) FILTER (WHERE error_code IN ('SELECTOR_NOT_FOUND', 'DP_EXPLORER_NOT_FOUND', 'UI_CHANGED'))::int AS layout_errors,
+              count(*) FILTER (WHERE error_code LIKE 'SANKHYA_LOGIN%' OR error_code LIKE 'SANKHYA_%CREDENTIAL%'
+                OR error_code LIKE 'TANGERINO_%AUTHENTICATION%' OR error_code LIKE 'TANGERINO_%CREDENTIAL%')::int AS authentication_errors,
+              count(*) FILTER (WHERE error_code IN ('SELECTOR_NOT_FOUND', 'DP_EXPLORER_NOT_FOUND', 'UI_CHANGED', 'TANGERINO_UI_CHANGED'))::int AS layout_errors,
               COALESCE(sum(processed_count), 0)::int AS processed_total
             FROM fdp_integration_sync_runs WHERE workspace_id = i.workspace_id AND integration_id = i.id
           ) health ON TRUE
           WHERE i.workspace_id = ? ORDER BY i.created_at DESC, i.id DESC`).bind(workspace.id).all<Row>(),
           isSankhyaWorkspaceEnabled(scoped, workspace.id),
+          isTangerinoAgentEnabled(scoped, workspace.id),
         ]);
-        return rows.results.map((row) => ({ workspace, row, sankhyaEnabled }));
+        return rows.results.map((row) => ({ workspace, row, sankhyaEnabled, tangerinoEnabled }));
       }));
 
       const now = Date.now();
       const expiringCutoff = now + 30 * 24 * 60 * 60 * 1000;
-      let integrations = grouped.flat().map(({ workspace, row, sankhyaEnabled }) => {
+      let integrations = grouped.flat().map(({ workspace, row, sankhyaEnabled, tangerinoEnabled }) => {
         const lastError = text(row.last_error);
         const expiresAt = text(row.expires_at);
         const queueTotal = number(row.queued) + number(row.processing);
@@ -120,9 +123,9 @@ export async function GET(request: Request) {
           id: text(row.id), workspaceId: workspace.id, workspaceName: workspace.name,
           companyId: text(row.company_id), companyName: text(row.company_name),
           connector: text(row.channel), displayName: text(row.display_name), status: text(row.status),
-          // Só o Sankhya depende de liberação por workspace; para os demais o
-          // campo é verdadeiro para que a tela tenha uma regra só a aplicar.
-          moduleEnabled: text(row.channel) !== "sankhya_browser" || sankhyaEnabled,
+          // Os dois agentes de navegador dependem de liberação individual.
+          moduleEnabled: text(row.channel) === "sankhya_browser" ? sankhyaEnabled
+            : text(row.channel) === "tangerino_browser" ? tangerinoEnabled : true,
           // Mesma condição que `assertRunnableSankhyaConfig` aplica antes de
           // enfileirar: sem URL ou sem empresa de destino, executar é recusado.
           // Sem isto o cartão oferecia executar sobre um conector cuja gravação

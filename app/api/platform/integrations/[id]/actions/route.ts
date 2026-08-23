@@ -6,6 +6,8 @@ import { credentialPublicHint, mappingDirection, mappingResource, publicCredenti
 import { queueSankhyaRun, requireSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
 import { nextSankhyaRunAt, parseSankhyaConfig, sanitizeSankhyaConfig } from "@/lib/sankhya/config";
+import { queueTangerinoHealthCheck } from "@/lib/tangerino/health-check";
+import { wakeTangerinoWorker } from "@/lib/tangerino/actions-dispatch";
 import { assertConnectorTargets, buildConnectorConfig, PLATFORM_ONLY_CHANNEL } from "@/lib/connector-config";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
@@ -49,6 +51,7 @@ export async function POST(request: Request, { params }: Params) {
       let auditEntityType = "integration";
       let auditEntityId = id;
       let shouldWakeSankhya = false;
+      let shouldWakeTangerino = false;
 
       if (action === "run") {
         const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `platform:${crypto.randomUUID()}`;
@@ -132,13 +135,17 @@ export async function POST(request: Request, { params }: Params) {
           .bind(built.displayName, built.status, JSON.stringify(built.config), workspaceId, id).run();
         result = { displayName: built.displayName, status: built.status, configuredFields: built.configuredFields };
       } else if (action === "test_connection") {
-        if (integration.channel !== "sankhya_browser") {
-          throw ApiError.badRequest("O teste RPA é exclusivo do conector Sankhya.", "SANKHYA_INTEGRATION_REQUIRED");
+        if (!["sankhya_browser", "tangerino_browser"].includes(String(integration.channel))) {
+          throw ApiError.badRequest("O teste RPA é exclusivo dos agentes de navegador.", "BROWSER_INTEGRATION_REQUIRED");
         }
         const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `platform-health:${crypto.randomUUID()}`;
-        const run = await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "health_check", requestedBy: null, idempotencyKey });
+        const isTangerino = integration.channel === "tangerino_browser";
+        const run = isTangerino
+          ? await queueTangerinoHealthCheck(scoped, { workspaceId, integrationId: id, requestedBy: null, idempotencyKey })
+          : await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "health_check", requestedBy: null, idempotencyKey });
         result = { runId: run.id, status: run.status, healthCheck: true };
-        shouldWakeSankhya = true;
+        shouldWakeTangerino = isTangerino;
+        shouldWakeSankhya = !isTangerino;
       } else if (action === "pause") {
         await scoped.prepare("UPDATE fdp_integrations SET status = 'paused', updated_at = now() WHERE workspace_id = ? AND id = ?")
           .bind(workspaceId, id).run();
@@ -255,6 +262,10 @@ export async function POST(request: Request, { params }: Params) {
 
       if (shouldWakeSankhya) {
         const workerDispatch = await wakeSankhyaWorker({ workspaceId, connectorId: id, syncRunId: String(result.runId ?? "") });
+        result.workerDispatch = workerDispatch.status;
+      }
+      if (shouldWakeTangerino) {
+        const workerDispatch = await wakeTangerinoWorker({ workspaceId, connectorId: id, syncRunId: String(result.runId ?? "") });
         result.workerDispatch = workerDispatch.status;
       }
       const after = sanitizePlatformValue({ workspaceId, workspaceName: workspace.name, action, reason, ...result });

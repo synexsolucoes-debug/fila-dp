@@ -5,7 +5,7 @@ import { assertTangerinoWorkerConfiguration, sweepTangerinoQueue } from "./runne
  * Uma passada na fila e encerra.
  *
  * É este o modo usado em produção: o backend dispara o workflow, o runner
- * efêmero drena o que existe e morre. Não há processo ocioso guardando sessão de
+ * efêmero drena testes de login e consultas e morre. Não há processo ocioso guardando sessão de
  * navegador entre execuções — que seria uma credencial de cliente viva num
  * container esperando trabalho aparecer.
  */

@@ -11,3 +11,12 @@
  * não deve herdar as dependências de quem o usa.
  */
 export const tangerinoBrowserHosts = ["tangerino.com.br", "solides.com.br"] as const;
+
+/**
+ * Entrada oficial do produto web usada pelo agente.
+ *
+ * Não é configuração do workspace: permitir que o cliente informe este endereço
+ * transformaria o navegador autenticado em um cliente de URL arbitrária. Quando
+ * a Sólides mudar a entrada, a alteração passa por revisão e pela allowlist.
+ */
+export const tangerinoBrowserLoginUrl = "https://app.tangerino.com.br/Tangerino/pages/LoginPage";
