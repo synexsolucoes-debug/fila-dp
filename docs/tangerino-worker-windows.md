@@ -30,10 +30,9 @@ o perfil guarda a sessão para as próximas consultas.
    chaves `FDP_TANGERINO_VAULT_*` usados pelo Agente Tangerino no deployment.
    Usuário e senha do Tangerino não ficam nesse arquivo; continuam cifrados no
    cofre do Vinculato.
-4. Na Vercel, remova `FDP_TANGERINO_ACTIONS_TOKEN` (e o fallback
-   `FDP_SANKHYA_ACTIONS_TOKEN` do dispatcher Tangerino, se ele estiver sendo
-   compartilhado). Assim o GitHub Actions não disputa a mesma fila com o worker
-   local.
+4. Na Vercel, defina `FDP_TANGERINO_WORKER_MODE=persistent` em produção. Assim o
+   backend mantém a consulta na fila para este worker e não dispara GitHub
+   Actions. Não remova o token compartilhado do Sankhya.
 5. Inicie o processo em uma sessão Windows visível:
 
    ```powershell
@@ -60,4 +59,5 @@ conta Windows dedicada. Para produção, registre esse comando em uma tarefa do
 Agendador do Windows disparada **ao entrar na conta**, pois o navegador precisa
 de uma sessão gráfica quando houver desafio humano. Não configure a tarefa para
 “Executar independentemente de o usuário estar conectado”.
+
 
