@@ -185,7 +185,7 @@ try {
     timeoutMs: 300_000, maxAttempts: 3, downloadLimitBytes: 25 * 1024 * 1024, diagnosticRetentionHours: 24,
   });
   for (const [id, canal, nome, status, sync] of [
-    ["int-ui-1", "sankhya_browser", "Sankhya Browser Connector", "connected", "now() - interval '8 minutes'"],
+    ["int-ui-1", "sankhya_browser", "Agente Sankhya", "connected", "now() - interval '8 minutes'"],
     ["int-ui-2", "solides", "Sólides", "connected", "now() - interval '3 hours'"],
     ["int-ui-3", "teams", "Microsoft Teams", "needs_credentials", "null"],
     ["int-ui-4", "tangerino", "Sólides DP (Tangerino)", "error", "now() - interval '2 days'"],

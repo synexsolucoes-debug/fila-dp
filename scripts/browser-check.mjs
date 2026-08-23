@@ -644,7 +644,11 @@ if (password) {
 //     normal de um workspace novo — então é este o estado que se mede aqui.
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
-  const sankhya = () => page.locator("article").filter({ hasText: /Sankhya Browser Connector/u });
+  // O cartão é reconhecido pelo canal, e não pelo nome exibido: o nome é
+  // decisão de produto e já mudou uma vez ("Sankhya Browser Connector" virou
+  // "Agente Sankhya"). Amarrar a verificação ao rótulo faz a renomeação seguinte
+  // quebrar o ensaio em vez de o produto.
+  const sankhya = () => page.locator("article").filter({ hasText: /SANKHYA_BROWSER/u });
 
   // Estado liberado: o workspace da semente tem a concessão. Filtrar por ele em
   // vez de contar com a ordenação — cada execução desta conferência cria um
@@ -679,7 +683,14 @@ if (password) {
 
   // Estado bloqueado: qualquer workspace sem a concessão — inclusive o que a
   // seção 3 acabou de criar, que é o caso real de um cliente recém-provisionado.
-  await page.goto(`${base}/plataforma?area=integrations`, { waitUntil: "domcontentloaded" });
+  /* Filtrado pelo conector, e não a lista inteira.
+     A lista traz 30 conectores por página, e todo workspace tem um de cada
+     canal — então "o cartão do workspace novo está na primeira página" depende
+     de **quantos canais existem**, que é decisão de produto e muda. Foi o que
+     aconteceu ao provisionar o Agente Tangerino: três workspaces passaram a
+     encher a página exata, e o cartão medido aqui caiu para a segunda. A
+     verificação passa a pedir o que ela mede. */
+  await page.goto(`${base}/plataforma?area=integrations&connector=sankhya_browser`, { waitUntil: "domcontentloaded" });
   await sankhya().first().waitFor({ timeout: 25000 }).catch(() => undefined);
   const bloqueado = sankhya().filter({ hasText: /não liberado/u }).first();
   const achouBloqueado = await bloqueado.count();
@@ -735,7 +746,7 @@ if (password) {
       // preenchido o formulário e tido a gravação recusada sem perceber.
       const workspaceLiberado = destino.searchParams.get("workspace") ?? "";
       await page.locator('[role="tab"]').filter({ hasText: /Acessos e módulos/u }).first().click().catch(() => undefined);
-      const linhaModulo = page.locator("form").filter({ hasText: /Sankhya Browser Connector/u }).first();
+      const linhaModulo = page.locator("form").filter({ hasText: /Sankhya/u }).first();
       await linhaModulo.waitFor({ timeout: 25000 }).catch(() => undefined);
       await linhaModulo.locator("select").selectOption("allow").catch(() => undefined);
       await linhaModulo.getByRole("button", { name: /Revisar/u }).click().catch(() => undefined);
