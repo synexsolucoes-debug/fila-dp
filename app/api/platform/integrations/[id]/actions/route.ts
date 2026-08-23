@@ -6,6 +6,7 @@ import { credentialPublicHint, mappingDirection, mappingResource, publicCredenti
 import { queueSankhyaRun, requireSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
 import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
 import { nextSankhyaRunAt, parseSankhyaConfig, sanitizeSankhyaConfig } from "@/lib/sankhya/config";
+import { assertConnectorTargets, buildConnectorConfig, PLATFORM_ONLY_CHANNEL } from "@/lib/connector-config";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { requiredPlatformReason, sanitizePlatformValue } from "@/lib/platform-console";
@@ -13,7 +14,7 @@ import { cleanText } from "@/lib/registrations";
 
 type Params = { params: Promise<{ id: string }> };
 type Row = Record<string, unknown>;
-const actions = new Set(["run", "retry", "pause", "resume", "revoke_credential", "rotate_credential", "configure_sankhya", "test_connection", "create_mapping", "publish_mapping", "resolve_reconciliation"]);
+const actions = new Set(["run", "retry", "pause", "resume", "revoke_credential", "rotate_credential", "configure_sankhya", "configure_connector", "test_connection", "create_mapping", "publish_mapping", "resolve_reconciliation"]);
 const truthy = (value: unknown) => value === true || value === 1 || value === "1" || value === "t" || value === "true";
 
 export async function POST(request: Request, { params }: Params) {
@@ -93,6 +94,43 @@ export async function POST(request: Request, { params }: Params) {
           WHERE workspace_id = ? AND id = ?`)
           .bind(displayName, status, JSON.stringify(config), config.automaticEnabled ? 1 : 0, nextSyncAt, workspaceId, id).run();
         result = { displayName, status, configuration: config, nextSyncAt };
+      } else if (action === "configure_connector") {
+        /* A configuração dos demais conectores existia só no console do
+           workspace. Quem administra a plataforma via os nove cartões com um
+           botão "Detalhes" que abria um painel somente leitura — e nada na tela
+           dizia onde a configuração morava. Agora ela também mora aqui.
+
+           As regras não são escritas de novo: `buildConnectorConfig` é a mesma
+           função que a rota do workspace usa. O que esta porta acrescenta é o
+           que a plataforma exige de qualquer escrita sobre dado de cliente —
+           administrador da plataforma, motivo obrigatório, confirmação
+           explícita e auditoria nos dois livros. */
+        if (integration.channel === PLATFORM_ONLY_CHANNEL) {
+          throw ApiError.badRequest(
+            "O conector Sankhya tem configuração própria: use a ação dedicada.",
+            "SANKHYA_CONFIG_SEPARATE",
+          );
+        }
+        const built = buildConnectorConfig({
+          channel: String(integration.channel),
+          currentDisplayName: String(integration.display_name),
+          body,
+        });
+        await assertConnectorTargets(scoped, workspaceId, built.config);
+        before = {
+          workspaceId, displayName: integration.display_name, status: integration.status,
+          // O conteúdo gravado não entra na auditoria: `config_json` carrega
+          // endpoint e identificadores do cliente. Os nomes dos campos bastam
+          // para reconstruir o que mudou sem republicar o que estava lá.
+          configuredFields: Object.keys(
+            (() => { try { return JSON.parse(String(integration.config_json ?? "{}")) as Row; } catch { return {}; } })(),
+          ),
+        };
+        await scoped.prepare(`UPDATE fdp_integrations
+            SET display_name = ?, status = ?, config_json = ?, last_error = NULL, updated_at = now()
+          WHERE workspace_id = ? AND id = ?`)
+          .bind(built.displayName, built.status, JSON.stringify(built.config), workspaceId, id).run();
+        result = { displayName: built.displayName, status: built.status, configuredFields: built.configuredFields };
       } else if (action === "test_connection") {
         if (integration.channel !== "sankhya_browser") {
           throw ApiError.badRequest("O teste RPA é exclusivo do conector Sankhya.", "SANKHYA_INTEGRATION_REQUIRED");

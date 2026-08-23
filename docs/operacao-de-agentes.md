@@ -52,6 +52,31 @@ mostra execução vazia em vez de fingir que tem uma.
 A tela responde três perguntas, nesta ordem: **está rodando?**, **o que ele
 fez?**, **posso parar?**.
 
+### Configurar um conector: as duas portas
+
+Configuração é outra coisa que operar, e mora em dois lugares — de propósito:
+
+| Onde | Quem | O que configura |
+|---|---|---|
+| `Relatórios e integrações › Integrações` | quem tem `integrations.manage` no workspace | endereço, destino, referência da conta, corte de admissões, avisos do Teams |
+| Console da plataforma › Integrações | administrador da plataforma | os mesmos campos, em qualquer workspace, **mais** o conector Sankhya |
+
+**As regras são as mesmas nos dois lugares.** Uma função só (`lib/connector-config.ts`)
+valida o que entra; o que muda entre as portas é quem pode abrir e o que fica
+registrado. Pela plataforma, toda gravação exige **motivo administrativo** e
+entra nas auditorias global **e** do workspace.
+
+Duas consequências que surpreendem quem grava pela primeira vez:
+
+- **Gravar substitui a configuração inteira.** Por isso o formulário nasce
+  preenchido com o que está lá: salvar em branco apagaria o resto.
+- **Gravar devolve o conector para `aguardando credencial`.** Trocar o endereço
+  invalida a conexão que foi provada contra o endereço antigo — é a conexão que
+  precisa ser provada de novo, não a configuração que se perdeu.
+
+O Sankhya continua sendo exceção nos dois sentidos: só a plataforma o
+configura, e o console do workspace recusa explicitamente quem tentar.
+
 ---
 
 ## Ativar um agente

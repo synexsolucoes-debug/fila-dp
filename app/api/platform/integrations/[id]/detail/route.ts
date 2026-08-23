@@ -1,6 +1,7 @@
 import { getD1, getPlatformScopedD1 } from "@/db";
 import { ApiError } from "@/lib/api-errors";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { AUTOMATION_LABELS, connectorFields } from "@/lib/connector-config";
 import { publicCredentialFingerprint } from "@/lib/integrations";
 import { sanitizePlatformValue } from "@/lib/platform-console";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
@@ -65,6 +66,18 @@ export async function GET(request: Request, { params }: Params) {
       ]);
       if (!integration) throw ApiError.notFound("Integração não encontrada neste workspace.", "INTEGRATION_NOT_FOUND");
       const configuration = integration.channel === "sankhya_browser" ? parseSankhyaConfig(integration.config_json) : null;
+      /* A configuração dos demais conectores, para o formulário nascer com o que
+         está gravado. Um formulário em branco sobre um conector já configurado é
+         pior que nenhum formulário: quem grava sem reescrever tudo apaga o que
+         não digitou de novo.
+
+         `config_json` não guarda segredo — `safeRequestBody` recusa a gravação
+         de qualquer campo que pareça senha, token ou chave —, então o que volta
+         aqui é endpoint e identificadores, e nada além. Os campos aceitos vêm
+         junto para a tela não manter a própria lista e envelhecer sozinha. */
+      const connectorConfiguration = integration.channel === "sankhya_browser"
+        ? null
+        : (() => { try { return JSON.parse(String(integration.config_json ?? "{}")) as Row; } catch { return {} as Row; } })();
       const publicIntegration = { ...integration };
       delete publicIntegration.config_json;
       const reconciliationMap = new Map<string, Row & { differenceFields: string[] }>();
@@ -77,6 +90,9 @@ export async function GET(request: Request, { params }: Params) {
         workspace,
         integration: { ...publicIntegration, last_error: safeError(integration.last_error) },
         configuration,
+        connectorConfiguration,
+        connectorFields: connectorFields(String(integration.channel)),
+        automationLabels: AUTOMATION_LABELS,
         moduleEnabled: integration.channel !== "sankhya_browser" || sankhyaEnabled,
         moduleDisabledMessage: SANKHYA_MODULE_DISABLED_MESSAGE,
         companies: companies.results,
