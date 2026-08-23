@@ -94,7 +94,9 @@ export async function GET(request: Request) {
               AND (c.company_id IS NULL OR c.company_id IN (SELECT jsonb_array_elements_text(?::jsonb)))))
           AND (? = '' OR p.agent_key = ? OR (? = 'sankhya_browser' AND p.agent_key = 'sankhya'))
           AND (? = '' OR p.assigned_to = ?)
-          AND (? = '' OR p.created_at < ?::timestamptz)
+          -- NULLIF antes do cast: '' não é um instante, e a conversão falha mesmo
+          -- com a condição à esquerda verdadeira.
+          AND (NULLIF(?, '') IS NULL OR p.created_at < NULLIF(?, '')::timestamptz)
         ORDER BY p.created_at DESC LIMIT ?`)
         .bind(...proposalParameters).all<Record<string, unknown>>(),
 
@@ -111,7 +113,7 @@ export async function GET(request: Request) {
           WHERE s.workspace_id = ?
             AND ((?::boolean AND s.status IN ('confirmed', 'rejected', 'superseded'))
               OR (NOT ?::boolean AND s.status = 'pending'))
-            AND (? = '' OR s.created_at < ?::timestamptz)
+            AND (NULLIF(?, '') IS NULL OR s.created_at < NULLIF(?, '')::timestamptz)
           ORDER BY s.created_at DESC LIMIT ?`)
           .bind(workspace.id, resolved, resolved, cursor, cursor, limit + 1).all<Record<string, unknown>>(),
 

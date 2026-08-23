@@ -93,7 +93,11 @@ export async function GET(request: Request, { params }: RouteContext) {
              WHERE j.workspace_id = r.workspace_id AND j.run_id = r.id
              ORDER BY j.created_at DESC LIMIT 1) AS job_id
         FROM fdp_integration_sync_runs r
-      WHERE r.workspace_id = ? AND r.integration_id = ? AND (? = '' OR r.created_at < ?::timestamptz)
+      WHERE r.workspace_id = ? AND r.integration_id = ?
+        -- NULLIF antes do cast: '' não é um instante, e PostgreSQL recusa a
+        -- conversão mesmo quando a condição à esquerda já teria decidido. Sem
+        -- isto a primeira página funciona e a consulta sem cursor explode.
+        AND (NULLIF(?, '') IS NULL OR r.created_at < NULLIF(?, '')::timestamptz)
       ORDER BY r.created_at DESC LIMIT ?`)
       .bind(workspace.id, integration.id, cursor, cursor, limit + 1)
       .all<Record<string, unknown>>();

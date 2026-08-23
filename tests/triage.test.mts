@@ -183,3 +183,56 @@ test("a rota de triagem também é só leitura", async () => {
     "a central de triagem ganhou porta de escrita própria, contornando o módulo dono");
   assert.match(source, /getCompanyAccessScope/u, "o escopo por empresa precisa ser resolvido no servidor (§50)");
 });
+
+
+/* -------------------------------------------------------------------------- *
+ * A resolução, na rota que a governa (§62)
+ * -------------------------------------------------------------------------- */
+
+const resolveRoute = async () => readFile(
+  new URL("../app/api/agents/proposals/[id]/resolve/route.ts", import.meta.url), "utf8");
+
+test("aceitar, recusar e descartar são as três saídas, e nenhuma outra", async () => {
+  const source = await resolveRoute();
+  assert.match(source, /\["apply", "reject", "discard"\]\.includes\(action\)/u,
+    "uma ação nova entrando por texto livre é a porta que a triagem existe para fechar");
+});
+
+test("item já resolvido devolve conflito, e não sobrescreve a decisão anterior", async () => {
+  const source = await resolveRoute();
+  assert.match(source, /AGENT_PROPOSAL_ALREADY_RESOLVED/u);
+  assert.match(source, /409/u);
+  // A condição também está no `WHERE` da escrita: duas pessoas resolvendo ao
+  // mesmo tempo não podem produzir duas resoluções.
+  assert.match(source, /status IN \('pending_triage', 'suggested', 'accepted'\)/u);
+});
+
+test("ação sensível é recusada mesmo depois de confirmada por uma pessoa (§18)", async () => {
+  const source = await resolveRoute();
+  assert.match(source, /isSensitiveAction\(proposedAction\)/u);
+  assert.match(source, /AGENT_SENSITIVE_ACTION/u);
+  // A recusa vem antes de qualquer escrita: confirmar não abre exceção.
+  assert.ok(source.indexOf("isSensitiveAction") < source.indexOf("prepareTransitionStatement"),
+    "a checagem de ação sensível precisa vir antes da escrita");
+});
+
+test("aplicar passa pelo serviço de domínio, e não por UPDATE direto (§17)", async () => {
+  const source = await resolveRoute();
+  for (const exigido of ["loadPublishedVersion", "evaluateTransition", "prepareTransitionStatement"]) {
+    assert.ok(source.includes(exigido), `a aplicação deixou de reavaliar: ${exigido}`);
+  }
+  assert.match(source, /CARD_VERSION_CONFLICT/u,
+    "a concorrência otimista precisa recusar quem viu um estado antigo");
+});
+
+test("toda decisão de triagem entra na auditoria (§51)", async () => {
+  const source = await resolveRoute();
+  assert.match(source, /action: "agent\.proposal_resolved"/u);
+  assert.match(source, /action: "agent\.proposal_applied"/u);
+
+  const assign = await readFile(new URL("../app/api/agents/proposals/[id]/assign/route.ts", import.meta.url), "utf8");
+  assert.match(assign, /triage\.assigned/u);
+  assert.match(assign, /triage\.unassigned/u);
+  assert.match(assign, /AGENT_PROPOSAL_ALREADY_RESOLVED/u,
+    "encaminhar item já decidido faria alguém abrir para descobrir que não havia o que fazer");
+});
