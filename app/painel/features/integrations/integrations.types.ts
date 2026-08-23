@@ -1,4 +1,10 @@
-export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "tangerino" | "erp" | "sankhya_browser";
+/* Espelho dos canais que o servidor pode devolver.
+   `tangerino_browser` faltava aqui, e a ausência não era cosmética: sem o canal
+   no tipo, o mapa de credenciais não podia ter entrada para ele, o formulário
+   caía no ramo genérico e pedia "Endpoint oficial" obrigatório ao único agente
+   que a decisão de produto proíbe de ter configuração de API — sem nunca
+   oferecer usuário e senha, que é o acesso dele. */
+export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "tangerino" | "erp" | "sankhya_browser" | "tangerino_browser";
 export type IntegrationTab = "connectors" | "mappings" | "runs" | "reconciliations";
 export type ConnectorStatus = "connected" | "needs_credentials" | "paused" | "error" | "requires_user_action";
 export type MappingStatus = "draft" | "active" | "archived";

@@ -17,7 +17,12 @@ const object = (input: unknown): Row => {
   return {};
 };
 
-const channels = new Set(["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "erp", "sankhya_browser"]);
+/* Os canais que o servidor pode mandar. `tangerino_browser` faltava, e a
+   consequência não era o campo sumir: o canal desconhecido caía no `"erp"` da
+   normalização abaixo, e o Agente Tangerino chegava à tela **como se fosse o
+   conector de ERP** — com o formulário genérico pedindo endpoint obrigatório e
+   sem oferecer usuário e senha. */
+const channels = new Set(["email", "whatsapp", "teams", "drive", "onedrive", "solides", "tangerino", "erp", "sankhya_browser", "tangerino_browser"]);
 const connectorStatuses = new Set(["connected", "needs_credentials", "paused", "error", "requires_user_action"]);
 const mappingStatuses = new Set(["draft", "active", "archived"]);
 const runStatuses = new Set(["queued", "running", "authenticating", "navigating", "processing", "extracting", "importing", "succeeded", "partial", "failed", "requires_user_action", "canceled"]);
@@ -38,7 +43,13 @@ export function normalizeConnector(row: Row): Connector {
   const rawStatus = text(row.status);
   return {
     id: text(row.id),
-    channel: (channels.has(rawChannel) ? rawChannel : "erp") as IntegrationChannel,
+    /* Canal desconhecido fica como veio, e não vira "erp".
+       Trocar um canal por outro real é o pior desfecho possível: a tela passa a
+       oferecer o formulário de outro conector, com outra regra, e ninguém vê
+       erro nenhum — foi exatamente assim que o Agente Tangerino passou meses
+       pedindo endpoint. Um canal estranho na tela é visível; um canal
+       silenciosamente trocado é uma armadilha. */
+    channel: (channels.has(rawChannel) ? rawChannel : rawChannel || "erp") as IntegrationChannel,
     displayName: text(value(row, "displayName", "display_name")),
     status: (connectorStatuses.has(rawStatus) ? rawStatus : "needs_credentials") as ConnectorStatus,
     lastSyncAt: text(value(row, "lastSyncAt", "last_sync_at")),

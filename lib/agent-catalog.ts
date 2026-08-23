@@ -73,6 +73,17 @@ export type AgentSetupField = {
   hint: string;
   kind: "text" | "password" | "url" | "select";
   required: boolean;
+  /**
+   * Onde o valor é guardado, e por isso por que porta ele entra.
+   *
+   * `credential` vai cifrado para o cofre e nunca volta; `config` entra no
+   * `config_json`, que é público para quem administra. A distinção existe aqui
+   * porque era ela que faltava: o formulário da Central de Integrações tinha a
+   * própria lista de campos, não conhecia o Agente Tangerino, e por isso pedia
+   * **endpoint** onde deveria pedir **usuário e senha** — o inverso exato da
+   * decisão de produto.
+   */
+  storage: "config" | "credential";
   /** Segredo nunca volta do servidor: o campo existe para gravar, não para ler (§2). */
   secret?: boolean;
 };
@@ -100,11 +111,11 @@ const TANGERINO: ProductAgent = {
      agentes; o que muda é o que ela enfileira (`lib/tangerino/sweep.ts`). */
   supportsSchedule: true,
   fields: [
-    { key: "username", label: "Usuário do Tangerino", kind: "text", required: true,
+    { key: "username", label: "Usuário do Tangerino", kind: "text", required: true, storage: "credential",
       hint: "A conta dedicada ao Vinculato. Use uma conta de leitura, não a de quem administra." },
-    { key: "password", label: "Senha", kind: "password", required: true, secret: true,
+    { key: "password", label: "Senha", kind: "password", required: true, secret: true, storage: "credential",
       hint: "Guardada cifrada em cofre próprio do agente. Nunca volta para esta tela, para a API ou para os registros." },
-    { key: "accountReference", label: "Referência da conta", kind: "text", required: false,
+    { key: "accountReference", label: "Referência da conta", kind: "text", required: false, storage: "config",
       hint: "Opcional. Como este cliente é identificado no Tangerino, para você reconhecer o agente na lista." },
   ],
   setupBy: "workspace",
@@ -129,15 +140,15 @@ const SANKHYA: ProductAgent = {
   reads: true,
   supportsSchedule: true,
   fields: [
-    { key: "endpoint", label: "Endereço do ambiente", kind: "url", required: true,
+    { key: "endpoint", label: "Endereço do ambiente", kind: "url", required: true, storage: "config",
       hint: "A URL de login do Sankhya deste cliente. Só domínios oficiais são aceitos." },
-    { key: "username", label: "Usuário do Sankhya", kind: "text", required: true,
+    { key: "username", label: "Usuário do Sankhya", kind: "text", required: true, storage: "credential",
       hint: "A conta dedicada ao Vinculato. Use uma conta de leitura." },
-    { key: "password", label: "Senha", kind: "password", required: true, secret: true,
+    { key: "password", label: "Senha", kind: "password", required: true, secret: true, storage: "credential",
       hint: "Guardada cifrada em cofre próprio do agente. Nunca volta para esta tela, para a API ou para os registros." },
-    { key: "companyId", label: "Empresa de destino", kind: "select", required: true,
+    { key: "companyId", label: "Empresa de destino", kind: "select", required: true, storage: "config",
       hint: "A empresa do Vinculato a que os colaboradores lidos pertencem." },
-    { key: "companyContext", label: "Empresa no Sankhya", kind: "text", required: false,
+    { key: "companyContext", label: "Empresa no Sankhya", kind: "text", required: false, storage: "config",
       hint: "Opcional. O código ou nome que aparece na tela de login, quando o ambiente pede." },
   ],
   setupBy: "platform",
@@ -165,19 +176,19 @@ const TEAMS: ProductAgent = {
   reads: false,
   supportsSchedule: false,
   fields: [
-    { key: "tenantId", label: "Tenant", kind: "text", required: false,
+    { key: "tenantId", label: "Tenant", kind: "text", required: false, storage: "config",
       hint: "Identificador do tenant Microsoft. Só é necessário quando o fluxo do cliente exige." },
-    { key: "teamId", label: "Equipe", kind: "text", required: true,
+    { key: "teamId", label: "Equipe", kind: "text", required: true, storage: "config",
       hint: "A equipe de onde os avisos vêm." },
-    { key: "teamName", label: "Nome da equipe", kind: "text", required: false,
+    { key: "teamName", label: "Nome da equipe", kind: "text", required: false, storage: "config",
       hint: "Como a equipe aparece nos registros, para você reconhecê-la depois." },
-    { key: "channelId", label: "Canal", kind: "text", required: true,
+    { key: "channelId", label: "Canal", kind: "text", required: true, storage: "config",
       hint: "O canal de onde os avisos vêm." },
-    { key: "channelName", label: "Nome do canal", kind: "text", required: false,
+    { key: "channelName", label: "Nome do canal", kind: "text", required: false, storage: "config",
       hint: "Como o canal aparece nos registros." },
-    { key: "boardId", label: "Quadro de destino", kind: "select", required: false,
+    { key: "boardId", label: "Quadro de destino", kind: "select", required: false, storage: "config",
       hint: "Onde as demandas criadas por este agente nascem." },
-    { key: "companyId", label: "Empresa de destino", kind: "select", required: false,
+    { key: "companyId", label: "Empresa de destino", kind: "select", required: false, storage: "config",
       hint: "A empresa a que os avisos recebidos pertencem." },
   ],
   setupBy: "workspace",
@@ -290,4 +301,29 @@ export function agentState(input: {
 export function canRunNow(agent: ProductAgent, state: AgentState): boolean {
   if (!agent.reads || !agent.supportsSchedule) return false;
   return state === "active" || state === "ready";
+}
+
+/**
+ * Os campos que este agente grava em configuração, e os que vão para o cofre.
+ *
+ * Existem para que ninguém precise manter uma segunda lista. Era a segunda
+ * lista que produzia o defeito: a Central de Integrações tinha os campos
+ * escritos à mão, não conhecia o Agente Tangerino e por isso lhe pedia um
+ * endpoint obrigatório — que a decisão de produto proíbe — sem oferecer usuário
+ * e senha, que é o único acesso que ele tem.
+ */
+export function agentConfigFields(channel: unknown): readonly AgentSetupField[] {
+  const agent = productAgentByChannel(channel);
+  /* Só os agentes de navegador. O Agente Teams é webhook e sua configuração —
+     endpoint do Graph e quais eventos disparam aviso — já existe, é testada e
+     não cabe neste formato: tratá-la por aqui derrubaria os avisos automáticos
+     para o padrão a cada gravação, que é perda silenciosa de configuração.
+     O catálogo descreve o **setup** dos três; a persistência só é derivada dele
+     onde ele é o contrato inteiro. */
+  if (agent?.mechanism !== "browser") return [];
+  return agent.fields.filter((field) => field.storage === "config");
+}
+
+export function agentCredentialFields(channel: unknown): readonly AgentSetupField[] {
+  return (productAgentByChannel(channel)?.fields ?? []).filter((field) => field.storage === "credential");
 }

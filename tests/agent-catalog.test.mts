@@ -301,3 +301,73 @@ test("a Central de Integrações também lista só os três (§9)", async () => 
     assert.ok(!source.includes(`'${canal}'`), `a rota escreveu a própria lista de canais: ${canal}`);
   }
 });
+
+test("o Agente Tangerino não pede endpoint em lugar nenhum (§1, §2)", async () => {
+  /* O defeito relatado: a Central de Integrações pedia "Endpoint oficial"
+     obrigatório ao Agente Tangerino e não oferecia usuário nem senha — o
+     inverso exato da decisão de produto. A causa era uma terceira cópia da
+     lista de canais, nos tipos da tela, que nunca teve `tangerino_browser`. */
+  const { connectorFields } = await import("../lib/connector-config.ts");
+  assert.ok(!connectorFields("tangerino_browser").some((field) => field.key === "endpoint"),
+    "o Agente Tangerino voltou a aceitar endpoint");
+  assert.deepEqual(connectorFields("tangerino_browser").map((f) => f.key), ["accountReference"]);
+});
+
+test("os campos do formulário vêm do catálogo, não de listas paralelas", async () => {
+  const { agentConfigFields, agentCredentialFields } = await import("../lib/agent-catalog.ts");
+  // Usuário e senha vão para o cofre; nunca para o config_json.
+  assert.deepEqual(agentCredentialFields("tangerino_browser").map((f) => f.key), ["username", "password"]);
+  assert.deepEqual(agentConfigFields("tangerino_browser").map((f) => f.key), ["accountReference"]);
+  assert.ok(agentConfigFields("tangerino_browser").every((f) => !f.secret),
+    "campo secreto não pode ser gravado em configuração");
+});
+
+test("a tela conhece o canal do Agente Tangerino", async () => {
+  const tipos = await readFile(
+    new URL("../app/painel/features/integrations/integrations.types.ts", import.meta.url), "utf8");
+  assert.match(tipos, /"tangerino_browser"/u, "o canal sumiu do tipo e a tela volta a desconhecê-lo");
+
+  const drawer = await readFile(
+    new URL("../app/painel/features/integrations/IntegrationDrawers.tsx", import.meta.url), "utf8");
+  assert.match(drawer, /tangerino_browser: \[\{ name: "username"/u,
+    "sem entrada no mapa de credenciais, o agente fica sem usuário e senha");
+  assert.match(drawer, /CANAIS_DE_NAVEGADOR\.has\(connector\.channel\)/u,
+    "agente de navegador não pode receber campo de endpoint");
+});
+
+test("o servidor recusa endpoint no agente de navegador, e não só a tela", async () => {
+  const { buildConnectorConfig } = await import("../lib/connector-config.ts");
+  // Esconder o campo impede o formulário, não a requisição. Aceitar aqui
+  // recriaria a configuração de API pela porta dos fundos, gravada como legítima.
+  const built = buildConnectorConfig({
+    channel: "tangerino_browser", currentDisplayName: "Agente Tangerino",
+    body: { endpoint: "https://employer.tangerino.com.br/employee/find-all", accountReference: "cliente-1" },
+  });
+  assert.equal(built.config.endpoint, undefined);
+  assert.equal(built.config.accountReference, "cliente-1");
+});
+
+test("nenhuma lista paralela de canais deixa o Agente Tangerino de fora", async () => {
+  /* Foram **quatro** listas do mesmo conjunto, e o agente faltava em três
+     delas. A pior consequência não foi um campo a menos: o normalizador da tela
+     trocava canal desconhecido por "erp", então o Agente Tangerino chegava como
+     se fosse o conector de ERP — formulário genérico, endpoint obrigatório,
+     nenhum campo de acesso, e erro nenhum em lugar nenhum. */
+  const arquivos = [
+    "../lib/integrations.ts",
+    "../app/painel/features/integrations/integrations.types.ts",
+    "../app/painel/features/integrations/integrations.api.ts",
+    "../app/painel/features/integrations/IntegrationDrawers.tsx",
+  ];
+  for (const arquivo of arquivos) {
+    const source = await readFile(new URL(arquivo, import.meta.url), "utf8");
+    assert.match(source, /tangerino_browser/u, `${arquivo} não conhece o Agente Tangerino`);
+  }
+});
+
+test("canal desconhecido não é rebatizado como outro canal real", async () => {
+  const api = await readFile(
+    new URL("../app/painel/features/integrations/integrations.api.ts", import.meta.url), "utf8");
+  assert.ok(!/channels\.has\(rawChannel\) \? rawChannel : "erp"/u.test(api),
+    "canal desconhecido voltou a virar erp, e a tela volta a mentir sobre qual conector é");
+});

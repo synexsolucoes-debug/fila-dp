@@ -38,7 +38,16 @@ const credentialFields: Record<Connector["channel"], Array<{ name: string; label
   tangerino: [{ name: "token", label: "Token de integração (Empregador → Integrações)" }],
   erp: [{ name: "apiKey", label: "Chave da API" }, { name: "xToken", label: "X-Token" }],
   sankhya_browser: [{ name: "username", label: "Usuário dedicado" }, { name: "password", label: "Senha" }],
+  /* O Agente Tangerino faltava neste mapa, e a ausência não deixava o
+     formulário vazio: deixava-o **errado**. Sem entrada aqui ele não oferecia
+     usuário nem senha — o único acesso que ele tem —, e caía no ramo genérico
+     que pede "Endpoint oficial" obrigatório, que é justamente a configuração de
+     API que a decisão de produto proíbe para ele. */
+  tangerino_browser: [{ name: "username", label: "Usuário dedicado" }, { name: "password", label: "Senha" }],
 };
+
+/** Agentes de navegador entram por usuário e senha; endereço não é o acesso deles. */
+const CANAIS_DE_NAVEGADOR = new Set(["sankhya_browser", "tangerino_browser"]);
 
 const formatDate = (value: string) => value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
 
@@ -128,7 +137,7 @@ function ConfigureFields({ connector, companies }: { connector: Connector; compa
     <ContextStrip icon={Cable} label="CONECTOR" value={`${connector.displayName} · ${connector.channel}`} />
     <section className={styles.formSection}><header><strong>Identificação e operação</strong><span>Salvar configurações nunca comprova uma conexão.</span></header><div className={styles.formGrid}>
       <label className={styles.fieldWide}><span>Nome de exibição</span><input name="displayName" defaultValue={connector.displayName} maxLength={120} required /></label>
-      {!isAdmissionSource(connector.channel) && connector.channel !== "teams" && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint} placeholder="https://api.fornecedor.com/v1/recurso" required /><small>Use um recurso HTTPS oficial do provedor. O teste fará uma requisição real a este endereço.</small></label>}
+      {!isAdmissionSource(connector.channel) && connector.channel !== "teams" && !CANAIS_DE_NAVEGADOR.has(connector.channel) && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint} placeholder="https://api.fornecedor.com/v1/recurso" required /><small>Use um recurso HTTPS oficial do provedor. O teste fará uma requisição real a este endereço.</small></label>}
       {connector.channel === "solides" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint || "https://app.solides.com/pt-BR/api/v1/colaboradores"} pattern="https://app\.solides\.com/(pt-BR|es|en)/api/v1/colaboradores" required /></label>}
       {connector.channel === "tangerino" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides DP</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint || "https://employer.tangerino.com.br/employee/find-all"} pattern="https://(employer|api)\.tangerino\.com\.br(/api/employer)?/employee/find-all" required /></label>}
       {isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Referência da conta</span><input name="accountReference" defaultValue={config.accountReference ?? ""} maxLength={160} placeholder="Referência administrativa da conta" /></label>}
