@@ -38,8 +38,27 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 900 
 const page = await context.newPage();
 
 const consoleErrors = [];
-page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text().slice(0, 160)); });
+/* O console do Chromium relata falha de rede sem dizer qual pedido falhou: a
+   mensagem é sempre "Failed to load resource…". Sem o endereço, a verificação
+   acusa um defeito que ninguém consegue procurar — foi o que aconteceu aqui.
+   `message.location()` carrega a URL do recurso; quando ela vem vazia, o
+   registro das respostas ruins abaixo diz qual pedido estava em curso. */
+const formatConsole = (message) => {
+  const url = message.location()?.url ?? "";
+  const texto = message.text().slice(0, 160);
+  return url && !texto.includes(url) ? `${texto} [${url.replace(base, "")}]` : texto;
+};
+page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(formatConsole(message)); });
 page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error).slice(0, 160)}`));
+
+// Respostas de erro que o navegador recebeu, na ordem: é o rastro que
+// transforma "algo deu 400" em "este pedido deu 400".
+const respostasRuins = [];
+page.on("response", (resposta) => {
+  if (resposta.status() >= 400) {
+    respostasRuins.push(`${resposta.status()} ${resposta.request().method()} ${resposta.url().replace(base, "")}`);
+  }
+});
 
 /**
  * Abre um módulo do painel pelo menu de dois níveis (§25, §65).
@@ -863,7 +882,9 @@ record("o site usa o logotipo oficial colorido",
   siteSources.some((src) => src.includes("vinculato-logo")),
   siteSources.join(" ").slice(0, 120));
 
-record("nenhum erro de JavaScript no console do navegador", consoleErrors.length === 0, consoleErrors.slice(0, 2).join(" | "));
+record("nenhum erro de JavaScript no console do navegador", consoleErrors.length === 0,
+  [consoleErrors.slice(0, 2).join(" | "), respostasRuins.length ? `respostas: ${[...new Set(respostasRuins)].slice(0, 4).join(" | ")}` : ""]
+    .filter(Boolean).join(" — "));
 
 await browser.close();
 

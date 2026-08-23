@@ -72,6 +72,7 @@ async function loadContext(request: Request, cardId: string) {
 function payload(context: Extract<Loaded, { instance: unknown }>) {
   const { version, instance } = context;
   return {
+    linked: true,
     instance: {
       cardId: instance.id,
       processId: instance.processDefinitionId,
@@ -98,6 +99,17 @@ export async function GET(request: Request, { params }: RouteContext) {
     if ("response" in context) return context.response;
     return Response.json(payload(context));
   } catch (error) {
+    /* "Em que etapa esta demanda está?" tem resposta mesmo quando a demanda não
+       nasceu de processo: **nenhuma**. Responder 400 a uma pergunta legítima
+       transformava o caso mais comum do produto — toda demanda anterior à
+       consolidação e toda demanda aberta à mão — em erro de rede no console, e
+       um console cheio de erro esperado é um console onde ninguém enxerga o
+       erro de verdade. Foi assim que esta rota apareceu na verificação de
+       navegador. Ler continua respondendo; **avançar** (`POST`) continua
+       recusando, porque aí não há etapa para onde ir. */
+    if (error instanceof ApiError && error.code === "CARD_WITHOUT_PROCESS") {
+      return Response.json({ linked: false, reason: error.code, message: error.message, transitions: [] });
+    }
     return apiError(error);
   }
 }

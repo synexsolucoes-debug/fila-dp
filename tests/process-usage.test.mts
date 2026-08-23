@@ -185,3 +185,31 @@ test("a linha do tempo da demanda reconhece processo e automação (§45)", asyn
   assert.match(app, /Proposta do agente/u,
     "avanço vindo de proposta precisa dizer que foi confirmado por uma pessoa");
 });
+
+test("demanda sem processo é resposta, e não erro de rede (§43)", async () => {
+  /* O caso mais comum do produto — demanda anterior à consolidação, demanda
+     aberta à mão — chegava como 400. A tela sabia contornar, mas o navegador
+     registrava um erro por demanda antiga aberta, e um console cheio de erro
+     esperado é um console onde o erro de verdade passa despercebido: foi
+     exatamente assim que esta rota apareceu na verificação de navegador. */
+  const route = await readFile(new URL("../app/api/cards/[id]/process/route.ts", import.meta.url), "utf8");
+  const get = route.slice(route.indexOf("export async function GET"), route.indexOf("export async function POST"));
+  assert.match(get, /CARD_WITHOUT_PROCESS/u, "ler a etapa de demanda sem processo voltou a ser recusa");
+  assert.match(get, /linked: false/u);
+  assert.ok(!/ApiError\.badRequest/u.test(get));
+
+  // Avançar continua recusando: não há etapa para onde ir.
+  const post = route.slice(route.indexOf("export async function POST"));
+  assert.ok(!/CARD_WITHOUT_PROCESS/u.test(post),
+    "o POST não pode inventar sucesso para demanda que não tem etapa");
+});
+
+test("a tela reconhece a demanda sem processo por campo, não por frase", async () => {
+  /* Procurar "processo" e "não" na mensagem de erro fazia uma recusa de
+     permissão ("Você **não** tem permissão para consultar a etapa da demanda do
+     **processo**") virar a explicação tranquilizadora de que a demanda não tem
+     processo — e a pessoa acreditaria que não há nada ali. */
+  const panel = await readFile(new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /data\.linked === false/u);
+  assert.ok(!/\/processo\/iu\.test/u.test(panel), "a tela voltou a decidir por texto da mensagem");
+});

@@ -101,16 +101,24 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
     setLoading(true);
     try {
       const data = await requestJson<Record<string, unknown>>(`/api/cards/${encodeURIComponent(cardId)}/process`);
-      setState(normalize(data));
-      setNotLinked(false);
+      /* Demanda sem processo é o caso comum — as anteriores à consolidação e as
+         abertas à mão. Isso não é erro, e o servidor diz isso em um campo, não
+         em uma frase: a versão anterior reconhecia o caso procurando "processo"
+         e "não" na mensagem de erro, e assim uma recusa de permissão
+         ("Você **não** tem permissão para consultar a etapa da demanda do
+         **processo**") teria virado a explicação tranquilizadora abaixo, com a
+         pessoa acreditando que a demanda não tem processo quando ela só não
+         podia vê-lo. */
+      if (data.linked === false) {
+        setNotLinked(true);
+        setState(null);
+      } else {
+        setState(normalize(data));
+        setNotLinked(false);
+      }
       setError("");
     } catch (cause) {
-      /* Demanda sem processo é o caso comum — as anteriores à consolidação e as
-         abertas à mão. Isso não é erro, e tratá-lo como erro encheria a tela de
-         aviso vermelho em toda demanda antiga. */
-      const message = cause instanceof Error ? cause.message : "";
-      if (/processo/iu.test(message) && /não/iu.test(message)) setNotLinked(true);
-      else setError(message || "Não foi possível carregar a etapa desta demanda.");
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar a etapa desta demanda.");
     } finally { setLoading(false); }
   }, [cardId]);
 
