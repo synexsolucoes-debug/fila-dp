@@ -4,6 +4,7 @@ import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { agentAutomationPolicies, type AgentAutomationPolicy } from "@/lib/agent-proposals";
 import { listAgentRuntime, readAgentAutomationPolicy, resolveAgentChannel } from "@/lib/agent-runtime";
+import { requireSchedulableAgent } from "@/lib/agent-scheduler";
 import { agentCadences, isAgentCadence, nextRunAt } from "@/lib/agent-schedule";
 
 /**
@@ -142,6 +143,11 @@ export async function PATCH(request: Request) {
           "AGENT_CADENCE_INVALID",
         );
       }
+      /* Frequência só faz sentido para quem tem o que executar periodicamente.
+         Gravar cadência num agente que só recebe deixaria o banco afirmando um
+         agendamento que nenhum runner honra — e a tela mostrando "próxima
+         execução" para algo que nunca vai executar. */
+      requireSchedulableAgent(agentKey);
       if (timeZone && !isSupportedTimeZone(timeZone)) {
         throw ApiError.badRequest(
           "Fuso horário desconhecido. Use um identificador como America/Sao_Paulo.",

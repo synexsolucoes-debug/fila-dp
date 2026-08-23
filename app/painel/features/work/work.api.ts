@@ -168,12 +168,26 @@ export function normalizeAgent(row: Row): AgentStatus {
   const events = (row.events ?? {}) as Row;
   const proposals = (row.proposals ?? {}) as Row;
   const tone = text(row.healthTone);
+  const state = (row.state ?? {}) as Row;
   return {
     key: text(row.key),
     integrationId: text(row.integrationId),
-    channel: text(row.channel),
     displayName: text(row.displayName),
+    summary: text(row.summary),
     kind: text(row.kind) === "channel" ? "channel" : "agent",
+    state: {
+      key: text(state.key) || "not_configured",
+      label: text(state.label) || "Não configurado",
+      detail: text(state.detail),
+    },
+    // `rows` só deixa passar objeto; os passos são texto puro.
+    steps: (Array.isArray(row.steps) ? row.steps : []).map((step) => text(step)).filter(Boolean),
+    setup: {
+      by: text((row.setup as Row | undefined)?.by) || "workspace",
+      note: text((row.setup as Row | undefined)?.note),
+    },
+    supportsSchedule: bool(row.supportsSchedule),
+    canRunNow: bool(row.canRunNow),
     connectorVersion: text(row.connectorVersion),
     status: text(row.status),
     enabled: bool(row.enabled),

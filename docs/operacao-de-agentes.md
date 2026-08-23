@@ -32,18 +32,38 @@ item vai para a **triagem** — nunca para um palpite.
 
 ## Os agentes que existem
 
-| Agente | O que lê | Como |
-| --- | --- | --- |
-| **Sankhya** | Cadastro de colaboradores no ERP | Navegador autenticado (RPA) |
-| **Tangerino** | Fichas de admissão e ponto | API |
-| **Sólides** | Admissões concluídas | API |
-| **Microsoft Teams** | Mensagens de movimentação | Webhook — **não é executor** |
+O Vinculato tem **três**, e só três:
 
-O Teams aparece na Central de Agentes como **canal**: ele produz propostas, mas
-quem as traz é um webhook. Não há execução a disparar, e por isso a linha dele
-mostra execução vazia em vez de fingir que tem uma.
+| Agente | O que faz | Como conversa com a origem |
+|---|---|---|
+| **Agente Teams** | Recebe avisos de movimentação e abre a demanda correspondente | Webhook — ele recebe, não vai buscar |
+| **Agente Tangerino** | Confere a situação das admissões pendentes | Navegador, com usuário e senha |
+| **Agente Sankhya** | Confere o cadastro de colaboradores e traz as diferenças | Navegador, com usuário e senha |
 
----
+Nomes técnicos de canal não aparecem em tela nenhuma. Se algum aparecer, o
+defeito está no catálogo (`lib/agent-catalog.ts`), que é a única lista que as
+telas consultam.
+
+### O Tangerino não usa API
+
+O Agente Tangerino é **exclusivamente** automação de navegador. Ele não pede
+token, não usa endpoint de API, não tem mapeamento e não guarda `Authorization`.
+O caminho é: usuário e senha → navegador → leitura → normalização → evento.
+
+O conector de API do Tangerino existiu e foi aposentado. Ele continua no banco,
+com todo o histórico que produziu, mas **não executa mais sozinho** e não
+aparece na experiência operacional.
+
+### Conectores anteriores
+
+E-mail, WhatsApp, Drive, OneDrive, Sólides, Tangerino API e ERP saíram da
+experiência. Nada foi apagado: execuções, eventos, propostas, jobs e auditoria
+continuam íntegros, e o console da plataforma continua administrando-os — um
+administrador pode reativá-los quando quiser. O que mudou é que eles pararam de
+executar sozinhos e deixaram de disputar a atenção de quem opera.
+
+As propostas que a Sólides gerou continuam na Triagem, rotuladas como conector
+anterior: esconder a origem seria pedir que alguém decidisse às cegas.
 
 ## Onde tudo isso fica
 
@@ -51,6 +71,25 @@ mostra execução vazia em vez de fingir que tem uma.
 
 A tela responde três perguntas, nesta ordem: **está rodando?**, **o que ele
 fez?**, **posso parar?**.
+
+### O que o Agente Sankhya grava sozinho
+
+Nem tudo que ele lê entra direto. A linha separa **transcrever** de **decidir**:
+
+| O que mudou na origem | O que acontece |
+|---|---|
+| Telefone, e-mail, nome, departamento, escala | Gravado direto |
+| **Colaborador novo** | Vira proposta |
+| **Salário, cargo, situação do vínculo, data de desligamento** | Vira proposta |
+
+O critério não é frequência — é o que dói se estiver errado. Um telefone errado
+se corrige quando alguém liga; um desligamento inventado tira a pessoa da folha
+e tem prazo legal. Colaborador novo entra na lista porque o agente não consegue
+distinguir admissão de cadastro duplicado, e um duplicado criado em silêncio
+vira duas folhas para a mesma pessoa.
+
+A proposta nasce em triagem com confiança deliberadamente baixa: o agente leu
+certo, mas o que ele leu não decide se a mudança deve entrar.
 
 ### Configurar um conector: as duas portas
 

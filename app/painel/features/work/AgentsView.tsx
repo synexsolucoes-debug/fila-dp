@@ -36,6 +36,17 @@ import styles from "./work.module.css";
 
 type Confirmation = { agent: AgentStatus; kind: "run" | "pause" | "resume" } | null;
 
+/** Os estados em que a pessoa ainda está montando o agente, e o roteiro ajuda. */
+const SETUP_STATES = new Set(["not_configured", "credential_pending", "test_pending", "ready"]);
+
+/** A cor do estado. Cinza é o padrão: nem tudo que não é verde é alarme. */
+function agentStateTone(state: string): "critical" | "warning" | "positive" | undefined {
+  if (state === "error") return "critical";
+  if (state === "degraded" || state === "paused") return "warning";
+  if (state === "active") return "positive";
+  return undefined;
+}
+
 export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
   const [payload, setPayload] = useState<AgentsPayload | null>(null);
   const [expanded, setExpanded] = useState("");
@@ -177,24 +188,40 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
     {agents.length === 0
       ? <EmptyState
         icon={Cable}
-        title="Nenhum agente configurado neste grupo"
-        text="Conecte Tangerino, Sólides ou Sankhya em Integrações. Enquanto não houver conector, nada é lido automaticamente."
+        title="Nenhum agente disponível neste grupo"
+        text="O Vinculato trabalha com três automações: Agente Teams, Agente Tangerino e Agente Sankhya. Se nenhuma aparece aqui, o grupo ainda não foi provisionado."
       />
       : <div className={styles.agentGrid}>
         {agents.map((agent) => <article key={agent.key} className={styles.agentCard}>
           <header>
             {agent.kind === "agent" ? <Bot aria-hidden="true" /> : <Cable aria-hidden="true" />}
             <h3>{agent.displayName}</h3>
-            <span className={styles.badge} data-tone={agent.healthTone === "neutral" ? undefined : agent.healthTone}>
-              {agent.healthLabel}
+            {/* O estado vem primeiro porque é a pergunta que a pessoa traz:
+                "em que ponto isto está?". A saúde responde outra coisa —
+                "como vem indo" — e só faz sentido depois que existe algo
+                rodando (§10). */}
+            <span className={styles.badge} data-tone={agentStateTone(agent.state.key)}>
+              {agent.state.label}
             </span>
             {agent.kind === "channel"
-              ? <span className={styles.badge}>Canal — recebe, não executa</span>
+              ? <span className={styles.badge}>Recebe avisos — não entra em sistema nenhum</span>
               : null}
-            {agent.connectorVersion ? <span className={styles.badge}>{agent.connectorVersion}</span> : null}
           </header>
 
-          <p className={styles.agentDetail}>{agent.healthDetail}</p>
+          <p className={styles.agentDetail}>{agent.summary}</p>
+          <p className={styles.agentDetail}>{agent.state.detail}</p>
+
+          {/* O caminho até o agente trabalhar, na ordem (§11, §12, §13). Some
+              quando ele já está pronto: passo a passo de setup em cima de um
+              agente ativo é ruído. */}
+          {SETUP_STATES.has(agent.state.key) && agent.steps.length ? <ol className={styles.itemMeta}>
+            {agent.steps.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
+          </ol> : null}
+
+          {/* Quando o acesso não é preparado aqui, a tela diz **onde** e **por
+              quê**. Um card sem formulário e sem explicação seria o mesmo beco
+              de antes com outra aparência: a pessoa conclui que está quebrado. */}
+          {agent.setup.note ? <p className={styles.agentDetail}>{agent.setup.note}</p> : null}
 
           {agent.lastError ? <div className={styles.errorDetail}>
             <strong>Última falha</strong>
@@ -225,18 +252,27 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
           </p>
 
           <div className={styles.agentActions}>
-            {permissions?.manage && agent.kind === "agent" ? <label>
+            {/* Cadência só para quem tem o que executar periodicamente. O
+                Agente Teams recebe avisos e o Agente Tangerino consulta a
+                admissão de um colaborador por vez, a partir da ficha dele:
+                oferecer "a cada 30 minutos" para eles seria agendar o nada. */}
+            {permissions?.manage && agent.supportsSchedule ? <label>
               <Timer aria-hidden="true" />
-              <span>Cadência</span>
+              <span>Frequência</span>
               <select value={agent.schedule.cadence} disabled={busy === agent.key}
-                aria-label={`Cadência de ${agent.displayName}`}
+                aria-label={`Frequência de ${agent.displayName}`}
                 onChange={(event) => void setCadence(agent, event.target.value)}>
                 {(payload?.cadences ?? []).map((cadence) => <option key={cadence.key} value={cadence.key}>{cadence.label}</option>)}
               </select>
             </label> : null}
 
-            {permissions?.execute && agent.kind === "agent" ? <button type="button" className={styles.secondaryButton}
-              disabled={busy === agent.key || !agent.enabled}
+            {/* §25: o botão só existe habilitado quando há o que executar e o
+                acesso já foi provado. `canRunNow` é decidido no servidor, a
+                partir do mesmo estado que a tela mostra — a alternativa era a
+                tela adivinhar e oferecer o clique que o servidor recusa. */}
+            {permissions?.execute && agent.supportsSchedule ? <button type="button" className={styles.secondaryButton}
+              disabled={busy === agent.key || !agent.canRunNow}
+              title={agent.canRunNow ? undefined : agent.state.detail}
               onClick={() => setConfirmation({ agent, kind: "run" })}>
               <Play aria-hidden="true" />Executar agora
             </button> : null}

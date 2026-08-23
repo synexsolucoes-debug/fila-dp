@@ -149,8 +149,16 @@ test("payload que não é objeto devolve lista vazia em vez de quebrar", () => {
  * -------------------------------------------------------------------------- */
 
 test("origem e ação aparecem em português", () => {
-  assert.equal(originLabel("sankhya_browser"), "Sankhya (navegador)");
-  assert.equal(originLabel("teams"), "Microsoft Teams");
+  /* O rótulo é o nome de produto, e não o mecanismo: quem tria precisa saber
+     **quem** trouxe o item, não que o Sankhya é lido por navegador. As duas
+     chaves antigas continuam traduzidas porque estão gravadas em propostas que
+     já existem. */
+  assert.equal(originLabel("sankhya_browser"), "Agente Sankhya");
+  assert.equal(originLabel("sankhya"), "Agente Sankhya");
+  assert.equal(originLabel("tangerino_browser"), "Agente Tangerino");
+  assert.equal(originLabel("teams"), "Agente Teams");
+  // Conector aposentado: o rótulo fica porque as propostas dele seguem na fila.
+  assert.match(originLabel("solides"), /Sólides/u);
   assert.equal(proposalLabel("process.advance"), "Avançar a etapa da demanda");
   // O que não está no catálogo aparece como veio: inventar tradução seria pior.
   assert.equal(proposalLabel("algo.novo"), "algo.novo");

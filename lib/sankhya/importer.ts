@@ -2,6 +2,7 @@ import type { getD1 } from "../../db/index.ts";
 import { prepareAuditEvent } from "../fila-dp-db.ts";
 import { prepareDomainEvent } from "../outbox.ts";
 import { protectCpf } from "../registrations.ts";
+import { CHANGE_PROPOSAL_CONFIDENCE, decideSankhyaChange, proposedActionFor, type EmployeeChangeProposal } from "./change-policy.ts";
 import { normalizeSankhyaEmployee, normalizedEmployeeHash, persistedSankhyaEmployee } from "./normalization.ts";
 import type { SankhyaRawData, VinculatoNormalizedEmployee } from "./types.ts";
 
@@ -68,7 +69,10 @@ export async function importSankhyaEmployees(d1: Database, input: {
   companyId: string;
   records: SankhyaRawData[];
 }) {
-  const totals = { found: input.records.length, imported: 0, created: 0, updated: 0, unchanged: 0, ignored: 0, failed: 0 };
+  /* Propostas acumuladas para gravar de uma vez ao fim: uma proposta por
+     colaborador incerto, e nenhuma escrita no domínio. */
+  const propostas: EmployeeChangeProposal[] = [];
+  const totals = { found: input.records.length, imported: 0, created: 0, updated: 0, unchanged: 0, ignored: 0, failed: 0, proposed: 0 };
   for (let index = 0; index < input.records.length; index += 1) {
     const { normalized, errors } = normalizeSankhyaEmployee(input.records[index]);
     const itemId = crypto.randomUUID();
@@ -107,7 +111,30 @@ export async function importSankhyaEmployees(d1: Database, input: {
     const fields = changedFields(beforeSnapshot, snapshot);
     const classification = !employee ? "new" : reference?.normalized_hash === hash ? "unchanged" : "changed";
 
-    if (!employee) {
+    /* O que é transcrição o agente grava; o que é decisão vira proposta.
+       Antes daqui tudo era gravado — inclusive criação de colaborador e
+       mudança de salário, cargo e desligamento —, e o agente alterava o
+       domínio sem passar por decisão de ninguém. */
+    const policy = decideSankhyaChange({ classification, changedFields: fields });
+
+    if (policy.outcome === "proposal") {
+      /* A proposta nasce em triagem e nada é gravado no colaborador. O motivo
+         vem da política, e não de um texto montado aqui: é ele que a triagem
+         mostra para quem vai decidir, e duas redações da mesma regra
+         divergiriam. A chave de idempotência amarra a leitura ao hash, então
+         reprocessar a mesma extração não gera uma segunda proposta. */
+      propostas.push({
+        employeeId,
+        classification,
+        reason: policy.reason,
+        sensitiveFields: policy.sensitiveFields,
+        idempotencyKey: `sankhya:${input.integrationId}:${normalized.externalEmployeeId}:${hash}`,
+        before: beforeSnapshot,
+        after: snapshot,
+      });
+      totals.proposed += 1;
+      totals.ignored += 1;
+    } else if (!employee) {
       await d1.prepare(`INSERT INTO fdp_employees (id, workspace_id, company_id, department_id, position_id, cost_center_id, work_schedule_id,
         registration_number, full_name, cpf_hash, cpf_last4, email, phone, admission_date, termination_date, employment_status,
         employment_type, work_model, source_system, external_id, notes, created_by, updated_by)
@@ -117,7 +144,7 @@ export async function importSankhyaEmployees(d1: Database, input: {
           normalized.admissionDate, normalized.terminationDate || null, normalized.employmentStatus, normalized.externalEmployeeId).run();
       totals.created += 1;
       totals.imported += 1;
-    } else if (classification === "changed") {
+    } else if (policy.outcome === "direct") {
       await d1.prepare(`UPDATE fdp_employees SET department_id = ?, position_id = ?, cost_center_id = ?, work_schedule_id = ?,
         registration_number = ?, full_name = ?, cpf_hash = CASE WHEN ? = '' THEN cpf_hash ELSE ? END,
         cpf_last4 = CASE WHEN ? = '' THEN cpf_last4 ELSE ? END, email = ?, phone = ?, admission_date = ?::date,
@@ -158,6 +185,31 @@ export async function importSankhyaEmployees(d1: Database, input: {
         eventType: classification === "new" ? "sankhya.employee.created" : "sankhya.employee.updated", entityType: "employee", entityId: employeeId,
         payload: { integrationId: input.integrationId, runId: input.runId, status: classification, occurredAt: new Date().toISOString() } })] : []),
     ]);
+  }
+
+  /* As propostas entram depois do laço, em lote: uma por colaborador incerto.
+     Nenhuma delas alterou o colaborador — o que elas carregam é o antes e o
+     depois, para que a triagem mostre exatamente o que mudaria se alguém
+     confirmasse.
+
+     `pending_triage` é o estado inicial e não passa pelo motor aqui de
+     propósito: quem avalia política, ação sensível e confiança é a rota de
+     propostas, com o kill switch do workspace em mãos. Decidir no importador
+     seria uma segunda régua, e duas réguas divergem. */
+  for (const proposta of propostas) {
+    await d1.prepare(`INSERT INTO fdp_agent_proposals
+        (id, workspace_id, agent_key, agent_version, event_id, event_name, entity_type, entity_id,
+         process_instance_id, current_step_id, proposed_action, proposed_step_id, reason, confidence,
+         requires_human_approval, evidence_refs_json, status, decision_code, decision_reason, idempotency_key)
+      VALUES (?, ?, 'sankhya_browser', ?, ?, ?, 'employee', ?, NULL, '', ?, '', ?, ?, 1, ?::jsonb,
+              'pending_triage', 'SANKHYA_CHANGE_NEEDS_REVIEW', ?, ?)
+      ON CONFLICT (workspace_id, idempotency_key) WHERE idempotency_key <> '' DO NOTHING`)
+      .bind(crypto.randomUUID(), input.workspaceId, "1", input.runId,
+        proposta.classification === "new" ? "sankhya.employee.created" : "sankhya.employee.updated",
+        proposta.employeeId, proposedActionFor(proposta.classification), proposta.reason,
+        Math.round(CHANGE_PROPOSAL_CONFIDENCE * 100),
+        JSON.stringify(proposta.sensitiveFields), proposta.reason, proposta.idempotencyKey)
+      .run();
   }
   return totals;
 }

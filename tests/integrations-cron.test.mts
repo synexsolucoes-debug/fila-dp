@@ -66,9 +66,12 @@ test("o disparo agendado exige segredo e respeita o isolamento por workspace", a
 
 test("a decisão de quem roda continua sendo por conector, e sem execuções concorrentes", async () => {
   const scheduler = await readFile(new URL("../lib/agent-scheduler.ts", import.meta.url), "utf8");
-  // Os canais que a varredura dispara: o Sankhya tem portão de módulo e worker
-  // próprios, e continua pelo caminho dele.
-  assert.match(scheduler, /i\.channel IN \('tangerino', 'solides'\)/u);
+  /* Os canais que a varredura dispara. Eram os conectores de API do Tangerino e
+     da Sólides; a decisão de produto os aposentou, e mantê-los aqui deixaria
+     automação rodando sobre dado de cliente sem cartão na tela e sem botão de
+     pausa ao alcance de quem opera. O Sankhya tem portão de módulo e worker
+     próprios, e continua pelo caminho dele. */
+  assert.match(scheduler, /i\.channel IN \('tangerino_browser'\)/u);
   // Mapeamento publicado e credencial ativa são pré-requisito: enfileirar sem
   // eles gasta a janela da varredura para produzir uma falha previsível (§87).
   assert.match(scheduler, /m\.status = 'active' AND m\.direction IN \('inbound', 'bidirectional'\)/u);
