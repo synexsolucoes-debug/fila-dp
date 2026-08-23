@@ -7,6 +7,26 @@ import { checkReadiness } from "@/lib/readiness";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * O que o deployment enxerga de um cofre, sem jamais revelar a chave.
+ *
+ * Devolve só presença, forma e tamanho decodificado — nunca o valor, nem um
+ * pedaço dele. Quem administra precisa distinguir três situações que hoje
+ * chegam como o mesmo "não salva": variável ausente, variável presente mas
+ * truncada, e variável correta.
+ */
+function vaultReport(prefix: string) {
+  const raw = String(process.env[`${prefix}_VAULT_KEYS`] ?? process.env[`${prefix}_VAULT_KEY`] ?? "").trim();
+  if (!raw) return { configured: false, keyBytes: 0, variable: `${prefix}_VAULT_KEY` };
+  const single = String(process.env[`${prefix}_VAULT_KEY`] ?? "").trim();
+  // Um conjunto de chaves em JSON não tem um tamanho único a relatar.
+  if (!single) return { configured: true, keyBytes: null, variable: `${prefix}_VAULT_KEYS` };
+  const bytes = /^[0-9a-f]{64}$/iu.test(single)
+    ? Buffer.from(single, "hex").length
+    : Buffer.from(single, "base64").length;
+  return { configured: true, keyBytes: bytes, variable: `${prefix}_VAULT_KEY` };
+}
+
 export async function GET() {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
@@ -45,6 +65,20 @@ export async function GET() {
         services: {
           databaseConfigured: Boolean(String(process.env.DATABASE_URL ?? "").trim()),
           credentialsEncryptionConfigured: Boolean(String(process.env.FDP_CREDENTIALS_ENCRYPTION_KEY ?? "").trim()),
+          /* Os cofres dos agentes de navegador, um a um.
+             Só o do Sankhya aparecia aqui, e a ausência do outro tirava de quem
+             administra a única forma de responder a pergunta que aparece na
+             primeira vez que alguém guarda uma credencial do Tangerino: "eu
+             defini a variável — o deployment está mesmo enxergando?". Sem isso,
+             "não salva" fica indistinguível de "salvei a variável e esqueci de
+             publicar de novo".
+
+             `keyBytes` diz mais que "definida": chave colada com o `=` cortado
+             continua sendo uma variável presente, e é justamente ela que produz
+             a recusa mais confusa — a que fala em cofre malconfigurado sem
+             dizer o que está errado. 32 é o número certo. */
+          sankhyaVault: vaultReport("FDP_SANKHYA"),
+          tangerinoVault: vaultReport("FDP_TANGERINO"),
           sankhyaVaultConfigured: Boolean(String(process.env.FDP_SANKHYA_VAULT_KEYS ?? process.env.FDP_SANKHYA_VAULT_KEY ?? "").trim()),
           authSecretConfigured: Boolean(String(process.env.FDP_AUTH_SECRET ?? "").trim()),
           platformAdminsConfigured: Boolean(String(process.env.FDP_PLATFORM_ADMIN_EMAILS ?? "").trim()),

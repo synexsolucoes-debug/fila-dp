@@ -397,3 +397,27 @@ test("o estado do agente não trava depois da credencial", async () => {
   assert.equal(agentState({ configured: configurado, hasCredential: true }), "test_pending");
   assert.equal(agentState({ configured: configurado, hasCredential: true, testedAt: "2026-01-01" }), "ready");
 });
+
+test("a recusa de cofre diz o que está errado com a chave", async () => {
+  /* "O cofre não está configurado corretamente" mandava conferir se a variável
+     foi definida — que foi. A causa quase sempre é outra: a chave copiada sem o
+     "=" final, ou com um caractere a menos. Variável presente e inútil. */
+  const source = await readFile(new URL("../lib/integrations.ts", import.meta.url), "utf8");
+  assert.match(source, /decodifica para \$\{key\.length\} bytes/u,
+    "a recusa precisa dizer o tamanho encontrado, não só que algo está errado");
+  assert.match(source, /inclusive o '='/u);
+  assert.match(source, /decodeVaultKey\(singleKey, `\$\{prefix\}_VAULT_KEY`\)/u,
+    "a recusa precisa nomear a variável de onde a chave veio");
+});
+
+test("a saúde da plataforma mostra os dois cofres, sem revelar chave", async () => {
+  const source = await readFile(new URL("../app/api/platform/health/route.ts", import.meta.url), "utf8");
+  assert.match(source, /tangerinoVault: vaultReport\("FDP_TANGERINO"\)/u,
+    "sem isto, quem administra não consegue saber se o deployment enxerga a variável");
+  assert.match(source, /sankhyaVault: vaultReport\("FDP_SANKHYA"\)/u);
+  // Presença, forma e tamanho — nunca o valor.
+  const helper = source.slice(source.indexOf("function vaultReport"), source.indexOf("export async function GET"));
+  assert.match(helper, /keyBytes/u);
+  assert.ok(!/return.*raw[,}]/u.test(helper), "o relatório de saúde não pode devolver a chave");
+  assert.ok(!/slice\(/u.test(helper), "nem um pedaço dela");
+});

@@ -46,10 +46,20 @@ function parseChannel(value: unknown): IntegrationChannel {
   return channel as IntegrationChannel;
 }
 
-function decodeVaultKey(raw: string) {
+function decodeVaultKey(raw: string, variable = "") {
   const value = raw.trim();
   const key = /^[0-9a-f]{64}$/iu.test(value) ? Buffer.from(value, "hex") : Buffer.from(value, "base64");
-  if (key.length !== 32) throw new ApiError(500, "VAULT_KEY_INVALID", "O cofre de credenciais não está configurado corretamente.");
+  if (key.length !== 32) {
+    /* Dizer o tamanho encontrado é o que separa esta recusa de um mistério.
+       A causa quase sempre é a mesma: a chave foi copiada sem o `=` final, ou
+       com um caractere a menos, e o resultado é uma variável **presente** e
+       inútil. "Não está configurado corretamente" mandava a pessoa conferir se
+       definiu a variável — que ela definiu —, em vez de olhar para o valor. */
+    const onde = variable ? ` em ${variable}` : "";
+    throw new ApiError(500, "VAULT_KEY_INVALID",
+      `A chave do cofre${onde} decodifica para ${key.length} bytes, e são necessários 32. `
+      + "Gere uma nova chave AES-256 em base64 e copie o valor inteiro, inclusive o '=' final.");
+  }
   return key;
 }
 
@@ -83,14 +93,14 @@ function vaultKeys(channel?: IntegrationChannel) {
       const parsed = JSON.parse(configured) as Record<string, unknown>;
       for (const [version, raw] of Object.entries(parsed)) {
         const numericVersion = Number(version);
-        if (Number.isInteger(numericVersion) && numericVersion > 0 && typeof raw === "string") result.set(numericVersion, decodeVaultKey(raw));
+        if (Number.isInteger(numericVersion) && numericVersion > 0 && typeof raw === "string") result.set(numericVersion, decodeVaultKey(raw, `${prefix}_VAULT_KEYS`));
       }
     } catch {
       throw new ApiError(500, "VAULT_KEYS_INVALID", "O cofre de credenciais não está configurado corretamente.");
     }
   }
   const singleKey = process.env[`${prefix}_VAULT_KEY`];
-  if (!result.size && singleKey) result.set(1, decodeVaultKey(singleKey));
+  if (!result.size && singleKey) result.set(1, decodeVaultKey(singleKey, `${prefix}_VAULT_KEY`));
   // Nomear a variável é o que transforma "não salva" em algo acionável: quem vê
   // esta mensagem administra integrações e precisa saber o que falta no deployment.
   if (!result.size) {
