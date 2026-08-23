@@ -1,7 +1,11 @@
+import { createHash } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { tangerinoErrors, TangerinoAgentError } from "../../lib/tangerino/errors.ts";
-import { assertAllowedTangerinoUrl } from "../../lib/tangerino/navigation-security.ts";
+import { assertAllowedTangerinoChallengeUrl, assertAllowedTangerinoUrl } from "../../lib/tangerino/navigation-security.ts";
+import { log } from "../../lib/observability.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../../lib/tangerino/read-only.ts";
 import { TangerinoSelectors } from "../../lib/tangerino/selectors.ts";
 import type { AdmissionSearchHit, AdmissionSnapshot, TangerinoBrowserSession } from "../../lib/tangerino/types.ts";
@@ -95,6 +99,18 @@ export async function hasCaptchaWidget(page: Page) {
   return false;
 }
 
+/**
+ * Um diretório opaco por workspace. O identificador do cliente não aparece no
+ * disco e, principalmente, dois workspaces nunca compartilham cookies.
+ */
+export function tangerinoProfileDirectory(profileRoot: string, workspaceId: string) {
+  const root = resolve(profileRoot.trim());
+  const tenant = workspaceId.trim();
+  if (!profileRoot.trim() || !tenant) throw new Error("Perfil persistente exige raiz e workspace.");
+  const opaqueId = createHash("sha256").update(tenant).digest("hex").slice(0, 32);
+  return join(root, opaqueId);
+}
+
 /** Lê a tela do processo aberto. É o mesmo código que a sessão usa. */
 export async function readAdmissionFrom(page: Page): Promise<AdmissionSnapshot> {
   return {
@@ -135,39 +151,67 @@ export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
+  private persistentProfile = false;
   private authenticatedAt = 0;
   /** Requisições de alteração que a página tentou. Só método e caminho. */
   readonly blockedWrites: Array<{ method: string; path: string }> = [];
 
-  static async create() {
+  static async create(options: { workspaceId?: string } = {}) {
     const config = tangerinoAgentConfig();
     const session = new PlaywrightTangerinoSession();
-    session.browser = await chromium.launch({
+    const browserOptions = {
       headless: config.headless,
       chromiumSandbox: process.env.FDP_TANGERINO_CHROMIUM_SANDBOX === "true",
       args: ["--disable-dev-shm-usage"],
-    });
-    /* Contexto novo a cada consulta, sempre (§55).
-       Reaproveitar contexto entre consultas guardaria o cookie de sessão de um
-       workspace enquanto o próximo roda — que é como a credencial de um cliente
-       acaba autenticando a consulta de outro. `acceptDownloads: false` porque o
-       agente lê tela e não baixa nada; qualquer download é sinal de que ele saiu
-       do caminho previsto. */
-    session.context = await session.browser.newContext({
+    };
+    const contextOptions = {
       acceptDownloads: false,
       locale: "pt-BR",
       timezoneId: "America/Sao_Paulo",
       serviceWorkers: "block",
-    });
-    session.page = await session.context.newPage();
+    } as const;
+    if (config.profileRoot) {
+      if (!options.workspaceId) {
+        throw tangerinoErrors.unavailable("O worker persistente não recebeu o workspace do perfil.");
+      }
+      const profileDirectory = tangerinoProfileDirectory(config.profileRoot, options.workspaceId);
+      await mkdir(profileDirectory, { recursive: true });
+      session.context = await chromium.launchPersistentContext(profileDirectory, {
+        ...browserOptions,
+        ...contextOptions,
+      });
+      session.browser = session.context.browser();
+      session.persistentProfile = true;
+    } else {
+      session.browser = await chromium.launch(browserOptions);
+      /* O runner efêmero continua com contexto novo por consulta. O modo
+         persistente só existe quando uma raiz foi configurada e então usa um
+         diretório diferente para cada workspace. */
+      session.context = await session.browser.newContext(contextOptions);
+    }
+    session.page = session.context.pages()[0] ?? await session.context.newPage();
     session.page.setDefaultTimeout(Math.min(30_000, config.timeoutMs));
 
     await session.context.route("**/*", async (route) => {
       const request = route.request();
       const url = request.url();
+      let interactiveChallengeResource = false;
       try {
         await assertAllowedTangerinoUrl(url);
       } catch (error) {
+        if (config.interactiveAuth) {
+          interactiveChallengeResource = await assertAllowedTangerinoChallengeUrl(url)
+            .then(() => true).catch(() => false);
+        }
+        if (interactiveChallengeResource && request.isNavigationRequest()
+            && request.frame() === session.page?.mainFrame()) {
+          await route.abort("blockedbyclient").catch(() => undefined);
+          return;
+        }
+        if (interactiveChallengeResource) {
+          await route.continue().catch(() => undefined);
+          return;
+        }
         // Recurso de terceiro (fonte, telemetria) é apenas abortado; o que
         // interrompe a consulta é a *navegação* sair do domínio, tratada abaixo.
         if (request.isNavigationRequest() && error instanceof TangerinoAgentError) throw error;
@@ -203,13 +247,49 @@ export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
     return this.authenticatedAt > 0 && Date.now() - this.authenticatedAt < tangerinoAgentConfig().sessionTtlMs;
   }
 
+  private async currentAuthBarrier() {
+    const page = this.requirePage();
+    const text = await bodyText(page);
+    /* Alguns SPAs mantêm o DOM antigo escondido depois do login. Um iframe de
+       CAPTCHA invisível não pode prender para sempre uma tela que já mostra os
+       marcadores autenticados e não mostra mais o formulário de acesso. */
+    if (hasAny(text, TangerinoSelectors.authenticatedMarkers)
+        && !hasAny(text, [...TangerinoSelectors.loginMarkers, ...TangerinoSelectors.sessionExpiredMarkers])) {
+      return null;
+    }
+    return detectAuthBarrier(text, await hasCaptchaWidget(page));
+  }
+
   /**
-   * Garante sessão — e para na primeira barreira humana.
+   * Aguarda uma pessoa concluir o desafio na janela visível. Não clica, não
+   * preenche e não chama serviço de resolução: a única ação do agente é esperar
+   * a navegação legítima terminar e então reutilizar a sessão resultante.
+   */
+  private async waitForManualAuthentication(barrier: "mfa" | "captcha") {
+    const config = tangerinoAgentConfig();
+    if (!config.interactiveAuth) {
+      const label = barrier === "captcha" ? "um CAPTCHA" : "autenticação em duas etapas";
+      throw tangerinoErrors.authenticationRequired(`O Tangerino pediu ${label}. Renove o acesso manualmente em um worker interativo.`);
+    }
+    log("warn", "tangerino.interactive_auth_waiting", {}, {
+      barrier,
+      timeoutMs: config.interactiveAuthTimeoutMs,
+    });
+    const deadline = Date.now() + config.interactiveAuthTimeoutMs;
+    while (Date.now() < deadline) {
+      await this.requirePage().waitForTimeout(1_000);
+      const current = await this.currentAuthBarrier();
+      if (current !== "mfa" && current !== "captcha") return current;
+    }
+    throw tangerinoErrors.authenticationRequired("O tempo para concluir a autenticação manual terminou. Inicie um novo teste quando puder acompanhar a janela.");
+  }
+
+  /**
+   * Garante sessão — e só aguarda barreira humana no worker visível autorizado.
    *
-   * MFA e CAPTCHA devolvem `AUTHENTICATION_REQUIRED` imediatamente (§16). Não há
-   * tentativa de resolver, contornar ou repetir: são mecanismos de segurança do
-   * Tangerino, e um agente que os contorna é indistinguível de um invasor. Um
-   * único ciclo de login — nunca laço (§15).
+   * No runner efêmero, MFA e CAPTCHA devolvem `AUTHENTICATION_REQUIRED`. No
+   * worker Windows, a pessoa conclui o desafio na própria janela; o agente não
+   * tenta resolver, contornar nem clicar no mecanismo de segurança.
    */
   async ensureAuthenticated(input: { endpoint: string; username: string; password: string; timeoutMs: number }) {
     const page = this.requirePage();
@@ -217,13 +297,8 @@ export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
     const url = await assertAllowedTangerinoUrl(input.endpoint);
     await page.goto(url.toString(), { waitUntil: "domcontentloaded", timeout: input.timeoutMs });
 
-    const barrier = detectAuthBarrier(await bodyText(page), await hasCaptchaWidget(page));
-    if (barrier === "mfa") {
-      throw tangerinoErrors.authenticationRequired("O Tangerino pediu autenticação em duas etapas. Um agente não resolve esse desafio: renove o acesso manualmente.");
-    }
-    if (barrier === "captcha") {
-      throw tangerinoErrors.authenticationRequired("O Tangerino apresentou um CAPTCHA. Um agente não resolve esse desafio: renove o acesso manualmente.");
-    }
+    let barrier = await this.currentAuthBarrier();
+    if (barrier === "mfa" || barrier === "captcha") barrier = await this.waitForManualAuthentication(barrier);
     if (barrier === "denied") {
       throw tangerinoErrors.authenticationRequired("A conta usada pelo agente não tem acesso à Admissão Digital.");
     }
@@ -245,14 +320,18 @@ export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
       await submit.click();
       await page.waitForLoadState("domcontentloaded", { timeout: input.timeoutMs }).catch(() => undefined);
 
+      let afterBarrier = await this.currentAuthBarrier();
+      if (afterBarrier === "mfa" || afterBarrier === "captcha") {
+        afterBarrier = await this.waitForManualAuthentication(afterBarrier);
+      }
       const after = await bodyText(page);
-      if (hasAny(after, TangerinoSelectors.mfaMarkers) || await hasCaptchaWidget(page)) {
-        throw tangerinoErrors.authenticationRequired("O Tangerino pediu verificação adicional após o login.");
+      if (afterBarrier === "denied") {
+        throw tangerinoErrors.authenticationRequired("A conta usada pelo agente não tem acesso à Admissão Digital.");
       }
       // Continuar na tela de login depois de enviar as credenciais significa que
       // elas não servem. Repetir é o caminho mais curto para a conta do cliente
       // ser bloqueada por tentativas sucessivas, então não se repete.
-      if (hasAny(after, TangerinoSelectors.loginMarkers) && !hasAny(after, TangerinoSelectors.authenticatedMarkers)) {
+      if (afterBarrier === "login" && !hasAny(after, TangerinoSelectors.authenticatedMarkers)) {
         throw tangerinoErrors.authenticationRequired("O Tangerino recusou as credenciais do agente.");
       }
     }
@@ -332,10 +411,12 @@ export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
        Tangerino expira sozinha. */
     await this.page?.close().catch(() => undefined);
     await this.context?.close().catch(() => undefined);
-    await this.browser?.close().catch(() => undefined);
+    if (!this.persistentProfile) await this.browser?.close().catch(() => undefined);
     this.page = null;
     this.context = null;
     this.browser = null;
     this.authenticatedAt = 0;
+    this.persistentProfile = false;
   }
 }
+

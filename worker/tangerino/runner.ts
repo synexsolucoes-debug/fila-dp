@@ -28,10 +28,10 @@ async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: 
     /* O teste de conexão vem primeiro: ele é curto, desbloqueia o setup e não
        deve esperar atrás de uma varredura de dezenas de colaboradores. */
     const healthCheck = await processNextTangerinoHealthCheck(
-      d1, workspaceId, async () => PlaywrightTangerinoSession.create(),
+      d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
     );
     const result = healthCheck ?? await runNextConsultation(
-      d1, workspaceId, async () => PlaywrightTangerinoSession.create(),
+      d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
     );
     if (!result) break;
     handled += 1;
@@ -76,3 +76,4 @@ export async function sweepTangerinoQueue(options: {
   }
   return { workspaces: workspaces.results.length, handled };
 }
+

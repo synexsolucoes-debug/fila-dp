@@ -25,6 +25,12 @@ const flag = (raw: string | undefined) => /^(?:1|true|sim|on|yes)$/iu.test(Strin
 export type TangerinoAgentConfig = {
   enabled: boolean;
   headless: boolean;
+  /** Perfil persistente, sempre particionado por workspace no worker. */
+  profileRoot: string;
+  /** Permite que uma pessoa conclua CAPTCHA/MFA no navegador visível. */
+  interactiveAuth: boolean;
+  /** Quanto o worker visível aguarda a conclusão do desafio humano. */
+  interactiveAuthTimeoutMs: number;
   /** Teto de tempo de uma consulta inteira, do login à leitura. */
   timeoutMs: number;
   /** Navegadores simultâneos no worker, somando todos os workspaces. */
@@ -40,14 +46,22 @@ export type TangerinoAgentConfig = {
 };
 
 export function tangerinoAgentConfig(env: Record<string, string | undefined> = process.env): TangerinoAgentConfig {
-  const production = String(env.VERCEL_ENV ?? env.NODE_ENV ?? "").toLowerCase() === "production";
+  const onVercel = Boolean(String(env.VERCEL ?? env.VERCEL_ENV ?? "").trim());
+  const production = onVercel || String(env.NODE_ENV ?? "").toLowerCase() === "production";
+  const profileRoot = String(env.FDP_TANGERINO_PROFILE_ROOT ?? "").trim();
+  /* O modo assistido só existe fora da Vercel e com perfil isolado configurado.
+     Sem estas duas condições, abrir uma janela não preservaria a autenticação e
+     poderia misturar a sessão de workspaces diferentes. */
+  const interactiveAuth = !onVercel && Boolean(profileRoot) && flag(env.FDP_TANGERINO_INTERACTIVE_AUTH);
   return {
     enabled: flag(env.TANGERINO_BROWSER_AGENT_ENABLED),
-    /* Produção é headless e ponto. `headless: false` num runner sem servidor
-       gráfico não abre janela para ninguém ver — só falha de um jeito difícil de
-       ler. A janela serve ao mapeamento da §72, que acontece na máquina de quem
-       está mapeando. */
-    headless: production ? true : !flag(env.TANGERINO_BROWSER_HEADLESS_OFF),
+    /* A Vercel continua sempre headless. O worker Windows assistido é a única
+       exceção de produção: a janela é justamente onde a pessoa resolve o
+       desafio legítimo e a sessão fica no perfil persistente. */
+    headless: onVercel ? true : interactiveAuth ? false : !flag(env.TANGERINO_BROWSER_HEADLESS_OFF),
+    profileRoot,
+    interactiveAuth,
+    interactiveAuthTimeoutMs: number(env.FDP_TANGERINO_INTERACTIVE_AUTH_TIMEOUT_MS, 10 * 60_000, 60_000, 15 * 60_000),
     timeoutMs: number(env.TANGERINO_BROWSER_TIMEOUT_MS, 90_000, 10_000, 300_000),
     concurrency: number(env.TANGERINO_BROWSER_CONCURRENCY, 2, 1, 8),
     sessionTtlMs: number(env.TANGERINO_SESSION_TTL_MS, 10 * 60_000, 60_000, 30 * 60_000),
@@ -72,3 +86,4 @@ export const TANGERINO_AGENT_DISABLED_MESSAGE = "O agente de consulta do Tangeri
 export const TANGERINO_MODULE_DISABLED_MESSAGE = "O agente de consulta do Tangerino ainda não está liberado para este workspace. "
   + "Ele não faz parte de nenhum plano: a liberação é individual e feita pela plataforma, "
   + "em Configuração operacional › Acessos e módulos › Módulos do workspace.";
+
