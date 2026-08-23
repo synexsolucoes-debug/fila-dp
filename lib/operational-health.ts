@@ -1,4 +1,5 @@
 import { getD1, getScopedD1 } from "../db/index.ts";
+import { DEGRADED_AFTER_FAILURES } from "./agent-schedule.ts";
 
 /**
  * Saúde operacional: fila de integrações, conectores e entregas de webhook.
@@ -48,6 +49,22 @@ const RECENT_FAILURE_BUDGET = 10;
 const MAX_WORKSPACES_SCANNED = 200;
 /** Monitores externos batem neste endpoint sem parar; o resultado vale por este tempo. */
 const CACHE_TTL_MS = 15_000;
+/**
+ * Dias que uma triagem pode esperar antes de virar sintoma.
+ *
+ * Três, e não um: entrada que chega na sexta e é olhada na segunda é operação
+ * normal, e acender alarme nela ensina a equipe a ignorar o alarme. Depois de
+ * três dias já não é "vou ver depois" — é ninguém olhando.
+ */
+const STALE_TRIAGE_DAYS = 3;
+/**
+ * Dias sem movimento até uma demanda de processo virar sintoma.
+ *
+ * Quinze cobre a competência inteira: uma demanda de fechamento pode
+ * legitimamente esperar a virada do mês. Além disso, ela não está esperando —
+ * está esquecida.
+ */
+const STALLED_INSTANCE_DAYS = 15;
 
 export type QueueHealth = {
   /** Jobs aguardando execução dentro do prazo. */
@@ -79,6 +96,25 @@ export type WebhookHealth = {
   deliveredLast24h: number;
 };
 
+/**
+ * Sintomas do trabalho, e não só da fila (§52).
+ *
+ * A fila pode estar drenando e a operação continuar parada: um agente que
+ * falhou três vezes seguidas, uma triagem que ninguém abre há uma semana, uma
+ * demanda que não se move há quinze dias. Nenhum desses aparece em contagem de
+ * job — e todos eles significam trabalho de cliente parado.
+ */
+export type OperationsHealth = {
+  /** Agentes com falhas seguidas acima do limite documentado. */
+  degradedAgents: number;
+  /** Entradas esperando classificação humana. */
+  pendingTriage: number;
+  /** Triagem parada além do tolerável: ninguém está olhando. */
+  staleTriage: number;
+  /** Demandas com processo que não se movem há muito tempo. */
+  stalledInstances: number;
+};
+
 export type OperationalHealth = {
   severity: HealthSeverity;
   /** Frase pronta para quem opera, sem detalhe técnico. */
@@ -89,16 +125,20 @@ export type OperationalHealth = {
   queue: QueueHealth;
   connectors: ConnectorHealth;
   webhooks: WebhookHealth;
+  operations: OperationsHealth;
   /** Falhas por tenant, só para quem administra a plataforma. */
   failingWorkspaces?: string[];
 };
 
-type Counters = { queue: QueueHealth; connectors: ConnectorHealth; webhooks: WebhookHealth };
+type Counters = {
+  queue: QueueHealth; connectors: ConnectorHealth; webhooks: WebhookHealth; operations: OperationsHealth;
+};
 
 const emptyCounters = (): Counters => ({
   queue: { pending: 0, delayed: 0, stuck: 0, deadLetter: 0, failuresLast24h: 0, lastCompletedAt: null, lastSuccessAt: null, lastFailureAt: null },
   connectors: { connected: 0, failing: 0, overdue: 0, lastSyncAt: null },
   webhooks: { pending: 0, failed: 0, deadLetter: 0, deliveredLast24h: 0 },
+  operations: { degradedAgents: 0, pendingTriage: 0, staleTriage: 0, stalledInstances: 0 },
 });
 
 const latest = (left: string | null, right: string | null) =>
@@ -112,7 +152,7 @@ const latest = (left: string | null, right: string | null) =>
  * despercebido justamente porque nada classificava isso como grave.
  */
 export function classifyOperationalHealth(counters: Counters): { severity: HealthSeverity; detail: string } {
-  const { queue, connectors, webhooks } = counters;
+  const { queue, connectors, webhooks, operations } = counters;
 
   if (queue.deadLetter > 0) {
     return {
@@ -130,6 +170,12 @@ export function classifyOperationalHealth(counters: Counters): { severity: Healt
     return {
       severity: "degradado",
       detail: `${queue.stuck} ${queue.stuck === 1 ? "execução ficou presa" : "execuções ficaram presas"} com reserva vencida. Elas voltam à fila na próxima varredura.`,
+    };
+  }
+  if (operations.degradedAgents > 0) {
+    return {
+      severity: "degradado",
+      detail: `${operations.degradedAgents} ${operations.degradedAgents === 1 ? "agente acumulou" : "agentes acumularam"} ${DEGRADED_AFTER_FAILURES} falhas seguidas. Eles continuam tentando, com espera crescente, mas o dado que trazem pode estar desatualizado.`,
     };
   }
   if (connectors.failing > 0) {
@@ -150,6 +196,18 @@ export function classifyOperationalHealth(counters: Counters): { severity: Healt
       detail: `${webhooks.deadLetter} ${webhooks.deadLetter === 1 ? "entrega de webhook esgotou" : "entregas de webhook esgotaram"} as tentativas.`,
     };
   }
+  if (operations.staleTriage > 0) {
+    return {
+      severity: "atencao",
+      detail: `${operations.staleTriage} ${operations.staleTriage === 1 ? "entrada aguarda" : "entradas aguardam"} classificação há mais de ${STALE_TRIAGE_DAYS} dias. Ninguém está abrindo a triagem.`,
+    };
+  }
+  if (operations.stalledInstances > 0) {
+    return {
+      severity: "atencao",
+      detail: `${operations.stalledInstances} ${operations.stalledInstances === 1 ? "demanda de processo não se move" : "demandas de processo não se movem"} há mais de ${STALLED_INSTANCE_DAYS} dias.`,
+    };
+  }
   if (connectors.overdue > 0) {
     return {
       severity: "atencao",
@@ -162,7 +220,13 @@ export function classifyOperationalHealth(counters: Counters): { severity: Healt
       detail: `Fila em andamento: ${queue.pending} ${queue.pending === 1 ? "execução pendente" : "execuções pendentes"} e ${webhooks.failed} ${webhooks.failed === 1 ? "entrega aguardando retentativa" : "entregas aguardando retentativa"}.`,
     };
   }
-  return { severity: "saudavel", detail: "Fila de integrações, conectores e entregas sem pendência." };
+  if (operations.pendingTriage > 0) {
+    return {
+      severity: "atencao",
+      detail: `${operations.pendingTriage} ${operations.pendingTriage === 1 ? "entrada aguarda" : "entradas aguardam"} classificação na triagem.`,
+    };
+  }
+  return { severity: "saudavel", detail: "Fila, conectores, entregas e trabalho operacional sem pendência." };
 }
 
 let cached: { at: number; report: OperationalHealth } | null = null;
@@ -238,6 +302,31 @@ async function readWorkspace(workspaceId: string): Promise<Counters> {
     deliveredLast24h: Number(webhooks?.delivered_recent ?? 0),
   };
 
+  /* Sintomas do trabalho (§52). Uma consulta só: a saúde é lida por monitor
+     externo em intervalo curto, e três consultas por tenant multiplicariam o
+     custo pelo número de clientes. */
+  const operations = await scoped.prepare(`SELECT
+      (SELECT COUNT(*) FROM fdp_integrations i
+        WHERE i.workspace_id = $3 AND i.consecutive_failures >= $1)::integer AS degraded_agents,
+      (SELECT COUNT(*) FROM fdp_agent_proposals p
+        WHERE p.workspace_id = $3 AND p.status = 'pending_triage')::integer AS pending_triage,
+      (SELECT COUNT(*) FROM fdp_agent_proposals p
+        WHERE p.workspace_id = $3 AND p.status = 'pending_triage'
+          AND p.created_at < now() - ($2 || ' days')::interval)::integer AS stale_triage,
+      (SELECT COUNT(*) FROM fdp_cards c
+        WHERE c.workspace_id = $3 AND c.archived = 0 AND c.closed_at IS NULL
+          AND COALESCE(c.process_definition_id, '') <> ''
+          AND c.updated_at < now() - ($4 || ' days')::interval)::integer AS stalled_instances`)
+    .bind(String(DEGRADED_AFTER_FAILURES), String(STALE_TRIAGE_DAYS), workspaceId, String(STALLED_INSTANCE_DAYS))
+    .first<Record<string, unknown>>();
+
+  counters.operations = {
+    degradedAgents: Number(operations?.degraded_agents ?? 0),
+    pendingTriage: Number(operations?.pending_triage ?? 0),
+    staleTriage: Number(operations?.stale_triage ?? 0),
+    stalledInstances: Number(operations?.stalled_instances ?? 0),
+  };
+
   return counters;
 }
 
@@ -290,6 +379,10 @@ export async function checkOperationalHealth(includeDetail: boolean): Promise<Op
       total.webhooks.failed += counters.webhooks.failed;
       total.webhooks.deadLetter += counters.webhooks.deadLetter;
       total.webhooks.deliveredLast24h += counters.webhooks.deliveredLast24h;
+      total.operations.degradedAgents += counters.operations.degradedAgents;
+      total.operations.pendingTriage += counters.operations.pendingTriage;
+      total.operations.staleTriage += counters.operations.staleTriage;
+      total.operations.stalledInstances += counters.operations.stalledInstances;
       if (workspaceIsFailing(counters)) failing.push(workspace.id);
     } catch {
       // Sem detalhe do erro aqui: ele já sai no log estruturado de quem chamou,
@@ -307,6 +400,7 @@ export async function checkOperationalHealth(includeDetail: boolean): Promise<Op
     queue: total.queue,
     connectors: total.connectors,
     webhooks: total.webhooks,
+    operations: total.operations,
     failingWorkspaces: failing,
   };
 
@@ -315,6 +409,9 @@ export async function checkOperationalHealth(includeDetail: boolean): Promise<Op
 }
 
 export const OPERATIONAL_HEALTH_THRESHOLDS = {
+  STALE_TRIAGE_DAYS,
+  STALLED_INSTANCE_DAYS,
+  DEGRADED_AFTER_FAILURES,
   CYCLE_MINUTES,
   DELAYED_AFTER_MINUTES,
   STALLED_AFTER_MINUTES,
