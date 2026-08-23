@@ -38,6 +38,7 @@
     "worker:sankhya": "tsx worker/sankhya/index.ts",
     "worker:sankhya:once": "tsx worker/sankhya/once.ts",
     "worker:tangerino:once": "tsx worker/tangerino/once.ts",
+    "worker:tangerino:windows": "node --env-file=.env.tangerino-worker.local --import tsx worker/tangerino/windows.ts",
     "worker:sankhya:check": "node scripts/check-sankhya-worker-env.mjs",
     "og:generate": "node scripts/generate-og-image.mjs",
     "db:rehearse-work": "node --experimental-strip-types scripts/rehearse-work-items.mjs",
@@ -83,3 +84,4 @@
   },
   "type": "module"
 }
+

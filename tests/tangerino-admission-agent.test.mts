@@ -10,7 +10,7 @@ import { tangerinoAgentConfig } from "../lib/tangerino/config.ts";
 import { TangerinoAgentError, safeTangerinoError, tangerinoErrors } from "../lib/tangerino/errors.ts";
 import { tangerinoBrowserLoginUrl } from "../lib/tangerino/hosts.ts";
 import { verifyTangerinoBrowserLogin } from "../lib/tangerino/login.ts";
-import { allowedTangerinoHosts, isAllowedTangerinoHost, isPrivateNetworkAddress } from "../lib/tangerino/navigation-security.ts";
+import { allowedTangerinoHosts, isAllowedTangerinoChallengeUrl, isAllowedTangerinoHost, isPrivateNetworkAddress } from "../lib/tangerino/navigation-security.ts";
 import { admissionChanged, admissionSearchTerm, chooseAdmission, isContractDataStage, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../lib/tangerino/read-only.ts";
 import { TangerinoSelectors, TANGERINO_SELECTORS_ARE_PROVISIONAL } from "../lib/tangerino/selectors.ts";
@@ -538,7 +538,7 @@ test("o disparo do worker não leva contexto de cliente ao GitHub", async () => 
 
 /* ── Configuração e portões ────────────────────────────────────────────────── */
 
-test("o agente nasce desligado e produção é sempre headless", () => {
+test("o agente nasce desligado e a Vercel é sempre headless", () => {
   assert.equal(tangerinoAgentConfig({}).enabled, false, "um agente que navega no sistema do cliente não liga por omissão");
   assert.equal(tangerinoAgentConfig({ TANGERINO_BROWSER_AGENT_ENABLED: "true" }).enabled, true);
   /* `headless: false` num runner sem servidor gráfico não abre janela para
@@ -550,17 +550,42 @@ test("o agente nasce desligado e produção é sempre headless", () => {
   assert.equal(tangerinoAgentConfig({ VERCEL_ENV: "production", DEBUG_TANGERINO_SCREENSHOTS: "true" }).screenshots, false);
 });
 
+test("o modo assistido exige perfil persistente e nunca liga na Vercel", () => {
+  const semPerfil = tangerinoAgentConfig({ FDP_TANGERINO_INTERACTIVE_AUTH: "true" });
+  assert.equal(semPerfil.interactiveAuth, false);
+  assert.equal(semPerfil.profileRoot, "");
+
+  const windows = tangerinoAgentConfig({
+    NODE_ENV: "production",
+    FDP_TANGERINO_PROFILE_ROOT: "C:\\ProgramData\\Vinculato\\TangerinoProfiles",
+    FDP_TANGERINO_INTERACTIVE_AUTH: "true",
+  });
+  assert.equal(windows.interactiveAuth, true);
+  assert.equal(windows.headless, false, "o desafio humano precisa de janela visível");
+
+  const vercel = tangerinoAgentConfig({
+    VERCEL: "1",
+    FDP_TANGERINO_PROFILE_ROOT: "C:\\perfil",
+    FDP_TANGERINO_INTERACTIVE_AUTH: "true",
+    TANGERINO_BROWSER_HEADLESS_OFF: "true",
+  });
+  assert.equal(vercel.interactiveAuth, false);
+  assert.equal(vercel.headless, true);
+});
+
 test("os limites são presos em faixa, e variável ausente cai no padrão", () => {
   const absurdo = tangerinoAgentConfig({
     TANGERINO_BROWSER_TIMEOUT_MS: "999999999",
     TANGERINO_BROWSER_CONCURRENCY: "500",
     TANGERINO_CONSULTATION_RATE_PER_MINUTE: "0",
     TANGERINO_SESSION_TTL_MS: "1",
+    FDP_TANGERINO_INTERACTIVE_AUTH_TIMEOUT_MS: "999999999",
   });
   assert.equal(absurdo.timeoutMs, 300_000, "sem teto, um job fica infinito (§42)");
   assert.equal(absurdo.concurrency, 8, "sem teto, dezenas de navegadores simultâneos (§38)");
   assert.equal(absurdo.rateLimitPerMinute, 1, "limite zero desligaria a consulta para todo mundo");
   assert.equal(absurdo.sessionTtlMs, 60_000);
+  assert.equal(absurdo.interactiveAuthTimeoutMs, 15 * 60_000);
   /* `Number("")` é 0, que é finito: sem o recorte de texto vazio, toda variável
      não definida seria presa no mínimo da faixa em vez de usar o padrão — e o
      agente rodaria com concorrência 1 e cache 0 sem ninguém ter pedido. */
@@ -623,9 +648,11 @@ test("nenhum comando do cliente de navegador encosta numa ação de alteração"
   assert.ok(cliques.length > 0 && cliques.length <= 4, `${cliques.length} cliques: um agente de leitura clica em navegação e mais nada`);
   assert.doesNotMatch(cliente, /forbiddenActions/u, "o cliente encostou na lista de ações proibidas");
   assert.doesNotMatch(cliente, /getByRole\("button", \{ name: \/(?:salvar|aprovar|admitir|excluir)/iu);
-  // Contexto novo por consulta: reaproveitá-lo guardaria o cookie de um
-  // workspace enquanto o próximo roda (§55).
+  // O runner efêmero mantém contexto novo. O persistente usa diretório opaco
+  // por workspace, sem compartilhar cookies entre clientes.
   assert.match(cliente, /newContext\(/u);
+  assert.match(cliente, /launchPersistentContext\(/u);
+  assert.match(cliente, /createHash\("sha256"\)\.update\(tenant\)/u);
   assert.match(cliente, /acceptDownloads: false/u);
 });
 
@@ -640,5 +667,26 @@ test("o CAPTCHA é detectado pelo widget, e não só pela palavra", () => {
       `o seletor de "${marca}" saiu da lista`);
   }
   const cliente = source("worker/tangerino/playwright-session.ts");
-  assert.match(cliente, /detectAuthBarrier\(await bodyText\(page\), await hasCaptchaWidget\(page\)\)/u);
+  assert.match(cliente, /detectAuthBarrier\(text, await hasCaptchaWidget\(page\)\)/u);
+  assert.match(cliente, /waitForManualAuthentication/u);
+  assert.doesNotMatch(cliente, /frameLocator[\s\S]*?\.click\(/u, "o worker tentou clicar dentro do CAPTCHA");
 });
+
+test("o modo assistido libera só recursos do desafio e nunca a navegação principal", () => {
+  for (const url of [
+    "https://www.google.com/recaptcha/api2/anchor",
+    "https://www.gstatic.com/recaptcha/releases/abc/script.js",
+    "https://newassets.hcaptcha.com/captcha/v1.js",
+    "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/g/orchestrate",
+  ]) assert.equal(isAllowedTangerinoChallengeUrl(url), true, url);
+  for (const url of [
+    "http://www.google.com/recaptcha/api2/anchor",
+    "https://www.google.com/search?q=recaptcha",
+    "https://google.com.evil.test/recaptcha/api2/anchor",
+    "https://usuario:senha@www.google.com/recaptcha/api2/anchor",
+    "https://evil.test/captcha",
+  ]) assert.equal(isAllowedTangerinoChallengeUrl(url), false, url);
+  const cliente = source("worker/tangerino/playwright-session.ts");
+  assert.match(cliente, /interactiveChallengeResource && request\.isNavigationRequest\(\)[\s\S]*?mainFrame\(\)[\s\S]*?route\.abort/u);
+});
+

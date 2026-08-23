@@ -111,3 +111,36 @@ export async function assertAllowedTangerinoUrl(rawUrl: string, env?: Record<str
   }
   return url;
 }
+
+/**
+ * Recursos estritamente necessários para uma pessoa concluir o desafio na
+ * janela assistida. A regra inclui host e caminho; ela não transforma Google ou
+ * hCaptcha em destinos gerais do navegador autenticado.
+ */
+const challengeUrlRules: readonly { host: RegExp; path: RegExp }[] = Object.freeze([
+  { host: /^(?:www\.)?google\.com$/u, path: /^\/recaptcha\//u },
+  { host: /^www\.gstatic\.com$/u, path: /^\/recaptcha\//u },
+  { host: /^(?:www\.)?recaptcha\.net$/u, path: /^\/recaptcha\//u },
+  { host: /^(?:[a-z0-9-]+\.)*hcaptcha\.com$/u, path: /^\//u },
+  { host: /^challenges\.cloudflare\.com$/u, path: /^\//u },
+]);
+
+export function isAllowedTangerinoChallengeUrl(rawUrl: string) {
+  let url: URL;
+  try { url = new URL(rawUrl); } catch { return false; }
+  const host = url.hostname.toLowerCase().replace(/\.$/u, "");
+  return url.protocol === "https:" && !url.username && !url.password
+    && challengeUrlRules.some((rule) => rule.host.test(host) && rule.path.test(url.pathname));
+}
+
+export async function assertAllowedTangerinoChallengeUrl(rawUrl: string) {
+  let url: URL;
+  try { url = new URL(rawUrl); } catch { throw tangerinoErrors.unauthorizedNavigation("invalid"); }
+  const host = url.hostname.toLowerCase().replace(/\.$/u, "");
+  if (!isAllowedTangerinoChallengeUrl(rawUrl)) throw tangerinoErrors.unauthorizedNavigation(host || "invalid");
+  /* Reutiliza a verificação de HTTPS, DNS público e bloqueio de rede privada,
+     mas amplia a allowlist somente para o host que já passou pelas regras
+     fixas acima. */
+  return assertAllowedTangerinoUrl(rawUrl, { FDP_TANGERINO_BROWSER_ALLOWED_HOSTS: host });
+}
+
