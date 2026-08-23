@@ -134,7 +134,28 @@ export function admissionSearchTerm(target: { externalAdmissionId: string; regis
  * que sai a evidência para completar o mapa de `status.ts`. Comparar o
  * normalizado esconderia toda alteração dentro de `UNKNOWN`.
  */
-export function admissionChanged(previous: { rawStatus: string; normalizedStatus: string } | null, current: ParsedAdmission) {
+export function admissionChanged(previous: { rawStatus: string; normalizedStatus: string; stage?: string } | null, current: ParsedAdmission) {
   if (!previous) return true;
-  return previous.rawStatus !== current.rawStatus || previous.normalizedStatus !== current.normalizedStatus;
+  return previous.rawStatus !== current.rawStatus
+    || previous.normalizedStatus !== current.normalizedStatus
+    || (previous.stage ?? "") !== current.stage;
+}
+
+/**
+ * Gatilho operacional pedido pelo DP.
+ *
+ * A demanda do ERP não nasce de `rawStatus`: o Tangerino pode manter a situação
+ * como "Em andamento" durante várias etapas. O dado inequívoco é a etapa que a
+ * tela separa como `stage`. Normalizar acentos, caixa e pontuação evita que uma
+ * alteração puramente visual ("DADOS CONTRATUAIS", por exemplo) desligue o
+ * gatilho, sem aceitar sinônimos que nunca foram confirmados na tela real.
+ */
+export function isContractDataStage(stage: string) {
+  const normalized = clean(stage, 120)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/gu, " ")
+    .trim();
+  return /(?:^|\s)dados contratuais(?:\s|$)/u.test(normalized);
 }

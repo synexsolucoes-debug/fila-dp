@@ -117,6 +117,8 @@ const TANGERINO: ProductAgent = {
       hint: "Guardada cifrada em cofre próprio do agente. Nunca volta para esta tela, para a API ou para os registros." },
     { key: "accountReference", label: "Referência da conta", kind: "text", required: false, storage: "config",
       hint: "Opcional. Como este cliente é identificado no Tangerino, para você reconhecer o agente na lista." },
+    { key: "boardId", label: "Quadro das admissões no ERP", kind: "text", required: false, storage: "config",
+      hint: "Quadro onde a demanda nasce ao chegar em Dados contratuais. Vazio usa o primeiro quadro com coluna de entrada." },
   ],
   setupBy: "workspace",
   setupNote: "",

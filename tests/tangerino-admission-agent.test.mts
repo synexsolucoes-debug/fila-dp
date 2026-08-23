@@ -11,7 +11,7 @@ import { TangerinoAgentError, safeTangerinoError, tangerinoErrors } from "../lib
 import { tangerinoBrowserLoginUrl } from "../lib/tangerino/hosts.ts";
 import { verifyTangerinoBrowserLogin } from "../lib/tangerino/login.ts";
 import { allowedTangerinoHosts, isAllowedTangerinoHost, isPrivateNetworkAddress } from "../lib/tangerino/navigation-security.ts";
-import { admissionChanged, admissionSearchTerm, chooseAdmission, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
+import { admissionChanged, admissionSearchTerm, chooseAdmission, isContractDataStage, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../lib/tangerino/read-only.ts";
 import { TangerinoSelectors, TANGERINO_SELECTORS_ARE_PROVISIONAL } from "../lib/tangerino/selectors.ts";
 import { admissionStatusLabels, explainAdmissionStatus, normalizeAdmissionStatus, statusRules, terminalAdmissionStatuses } from "../lib/tangerino/status.ts";
@@ -367,6 +367,33 @@ test("o caminho feliz percorre exatamente os comandos previstos", async () => {
   assert.equal(parsed.rawStatus, "Documentação em análise");
   assert.equal(parsed.pendingReason, "Comprovante de residência ilegível");
   assert.equal(parsed.admissionDate, "2026-09-01");
+});
+
+test("a mudança de etapa é percebida mesmo quando a situação não muda", () => {
+  const atual = parseAdmission({ rawStatus: "Em andamento", stage: "Dados contratuais" });
+  assert.equal(admissionChanged({
+    rawStatus: "Em andamento", normalizedStatus: "IN_PROGRESS", stage: "Documentação",
+  }, atual), true);
+});
+
+test("somente a etapa Dados contratuais libera a demanda do ERP", () => {
+  for (const stage of ["Dados contratuais", "DADOS CONTRATUAIS", "3. Dados Contratuais", "Dados contratuais — preenchimento"]) {
+    assert.equal(isContractDataStage(stage), true, stage);
+  }
+  for (const stage of ["Documentação", "Dados pessoais", "Contrato", "Em andamento", ""]) {
+    assert.equal(isContractDataStage(stage), false, stage);
+  }
+});
+
+test("a demanda do ERP usa a etapa visual e uma chave idempotente", async () => {
+  const demand = await readFile(new URL("../lib/tangerino/demand.ts", import.meta.url), "utf8");
+  assert.match(demand, /isContractDataStage\(input\.admission\.stage\)/u);
+  assert.match(demand, /admission-contract-data:/u);
+  assert.match(demand, /recordIntegrationEvent/u);
+  assert.match(demand, /status = 'processed'[\s\S]*result_type = 'card'/u);
+  assert.match(demand, /INSERT INTO fdp_cards/u);
+  assert.doesNotMatch(demand, /rawStatus.*Dados contratuais/u,
+    "o texto de situação não pode substituir a etapa como gatilho");
 });
 
 test("o teste de conexão autentica e não consulta nenhum colaborador", async () => {
