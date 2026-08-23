@@ -80,7 +80,16 @@ export async function listSchedulableAgents(d1: Database, workspaceId: string): 
           WHERE m.workspace_id = i.workspace_id AND m.integration_id = i.id
             AND m.status = 'active' AND m.direction IN ('inbound', 'bidirectional')) AS has_mapping
       FROM fdp_integrations i
-      WHERE i.workspace_id = ? AND i.channel IN ('tangerino', 'solides')
+      -- A varredura só agenda os agentes que o produto mostra.
+      --
+      -- Ela agendava os conectores de API do Tangerino e da Solides, que a
+      -- decisao de produto aposentou. Deixa-los aqui produziria o pior arranjo
+      -- possivel: automacao rodando a cada 30 minutos sobre dado de cliente,
+      -- sem cartao na tela, sem estado e sem botao de pausa ao alcance de quem
+      -- opera. Automacao invisivel e automacao fora das regras.
+      --
+      -- O Sankhya nao entra porque tem caminho proprio de enfileiramento.
+      WHERE i.workspace_id = ? AND i.channel IN ('tangerino_browser')
       ORDER BY i.channel`)
     .bind(workspaceId).all<Record<string, unknown>>();
 

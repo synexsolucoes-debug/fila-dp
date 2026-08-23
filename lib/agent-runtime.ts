@@ -37,20 +37,7 @@ import { cleanText } from "./registrations.ts";
 type Database = ReturnType<typeof getD1>;
 
 /**
- * Canais que se comportam como agente.
- *
- * `sankhya_browser` é o nome real do canal em `fdp_integrations` — a lista
- * anterior dizia `sankhya`, e o efeito era que o agente de navegador, que é o
- * mais caro e o mais frágil dos três, simplesmente não aparecia na
- * administração. Um agente que não aparece não pode ser pausado pela tela.
- *
- * "Agente" aqui tem sentido estrito: automação que **lê** um sistema de origem
- * e propõe. Teams entra na lista como canal, não como executor: ele produz
- * propostas, mas quem as traz é um webhook. E-mail e WhatsApp alimentam a caixa
- * de entrada e não propõem nada — não estão aqui.
- */
-/**
- * A lista deixou de morar aqui.
+ * A lista de canais deixou de morar aqui.
  *
  * Ela agora é a decisão de produto, em `lib/agent-catalog.ts`: **Teams,
  * Tangerino e Sankhya**, e mais nada. Manter uma segunda lista neste arquivo
@@ -78,6 +65,8 @@ export type AgentRuntimeStatus = {
   state: { key: string; label: string; detail: string };
   /** Os passos do setup deste agente, na ordem (§11, §12, §13). */
   steps: readonly string[];
+  /** Onde o acesso é preparado, e a frase que explica quando não é aqui (§21). */
+  setup: { by: "workspace" | "platform"; note: string };
   /** Este agente tem o que executar periodicamente? */
   supportsSchedule: boolean;
   /** "Executar agora" pode aparecer habilitado? (§25) */
@@ -282,6 +271,7 @@ export async function listAgentRuntime(
         kind: product.reads ? "agent" : "channel",
         state: { key: state, label: stateMeta.label, detail: stateMeta.detail },
         steps: product.steps,
+        setup: { by: product.setupBy, note: product.setupNote },
         supportsSchedule: product.supportsSchedule,
         canRunNow: canRunNow(product, state),
         connectorVersion: text(row.connector_version),

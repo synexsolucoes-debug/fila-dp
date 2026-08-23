@@ -115,6 +115,8 @@ export type AgentStatus = {
   state: { key: string; label: string; detail: string };
   /** Os passos do setup deste agente, na ordem (§11, §12, §13). */
   steps: string[];
+  /** Onde o acesso é preparado, e por quê quando não é aqui (§21). */
+  setup: { by: string; note: string };
   supportsSchedule: boolean;
   canRunNow: boolean;
   connectorVersion: string;

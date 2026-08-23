@@ -484,6 +484,13 @@
       "when": 1787900000009,
       "tag": "0066_tangerino_agent_provisioning",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1787900000010,
+      "tag": "0067_retire_legacy_connectors",
+      "breakpoints": true
     }
   ]
 }

@@ -155,8 +155,72 @@ test("executar agora só existe para quem tem o que executar", () => {
   const tangerino = productAgents.find((agent) => agent.key === "tangerino_agent")!;
   const sankhya = productAgents.find((agent) => agent.key === "sankhya_agent")!;
   assert.equal(canRunNow(teams, "active"), false, "o Teams recebe avisos; não há o que ele vá buscar");
-  assert.equal(canRunNow(tangerino, "active"), false, "a consulta do Tangerino parte da ficha do colaborador");
+  // Tangerino e Sankhya varrem: o primeiro, admissões pendentes de conferência.
+  assert.equal(canRunNow(tangerino, "active"), true);
   assert.equal(canRunNow(sankhya, "active"), true);
+});
+
+test("o Agente Tangerino varre admissões pendentes, e não a base inteira", async () => {
+  const sweep = await readFile(new URL("../lib/tangerino/sweep.ts", import.meta.url), "utf8");
+  // Desfecho não se reconsulta: gastar sessão de navegador para reler algo que
+  // já terminou é o jeito de fazer o cliente ser bloqueado na origem.
+  assert.match(sweep, /NOT IN \('COMPLETED', 'CANCELLED'\)/u);
+  // Sem identificador na origem não há o que consultar.
+  assert.match(sweep, /reference\.source = 'tangerino'/u);
+  // Já em curso não entra de novo.
+  assert.match(sweep, /state IN \('QUEUED', 'RUNNING'\)/u);
+  assert.match(sweep, /SWEEP_BATCH_LIMIT/u, "uma varredura sem teto vira enxurrada de sessões");
+});
+
+test("a varredura só enfileira leitura: ela não decide nem escreve", async () => {
+  const sweep = await readFile(new URL("../lib/tangerino/sweep.ts", import.meta.url), "utf8");
+  for (const proibido of [/UPDATE fdp_employees/u, /DELETE /u, /fdp_agent_proposals/u]) {
+    assert.ok(!proibido.test(sweep), `a varredura passou a alterar domínio: ${proibido}`);
+  }
+  // O único INSERT é o da própria consulta.
+  const inserts = sweep.match(/INSERT INTO (\w+)/gu) ?? [];
+  assert.deepEqual([...new Set(inserts)], ["INSERT INTO fdp_tangerino_admission_consultations"]);
+});
+
+test("a varredura não é atribuída a nenhuma pessoa", async () => {
+  const sweep = await readFile(new URL("../lib/tangerino/sweep.ts", import.meta.url), "utf8");
+  // Atribuí-la a alguém faria a auditoria dizer que um operador pediu o que a
+  // máquina decidiu sozinha.
+  assert.match(sweep, /requested_by_user_id.*\n?.*NULL|NULL, 'QUEUED'/u);
+});
+
+test("o Sankhya é preparado pela plataforma, e a tela diz isso (§21)", () => {
+  const sankhya = productAgents.find((agent) => agent.key === "sankhya_agent")!;
+  assert.equal(sankhya.setupBy, "platform");
+  assert.ok(sankhya.setupNote.length > 60,
+    "card sem formulário e sem explicação é o mesmo beco de antes com outra aparência");
+  for (const key of ["teams_agent", "tangerino_agent"]) {
+    const agent = productAgents.find((item) => item.key === key)!;
+    assert.equal(agent.setupBy, "workspace");
+    assert.equal(agent.setupNote, "");
+  }
+});
+
+test("os conectores aposentados param de executar sozinhos", async () => {
+  const sql = await readFile(
+    new URL("../drizzle/postgres/0067_retire_legacy_connectors.sql", import.meta.url), "utf8");
+  assert.match(sql, /schedule_enabled" = 0/u);
+  assert.match(sql, /'paused'/u);
+  for (const canal of ["tangerino", "solides", "email", "whatsapp", "drive", "onedrive", "erp"]) {
+    assert.ok(sql.includes(`'${canal}'`), `${canal} continuaria executando invisível`);
+  }
+  // Aposentar não é destruir: o caminho de volta continua aberto.
+  for (const destrutivo of [/DELETE FROM/u, /DROP /u, /TRUNCATE/u]) {
+    assert.ok(!destrutivo.test(sql), `a migration destrói em vez de aposentar: ${destrutivo}`);
+  }
+});
+
+test("a varredura agendada não agenda mais os conectores aposentados", async () => {
+  const scheduler = await readFile(new URL("../lib/agent-scheduler.ts", import.meta.url), "utf8");
+  const consulta = scheduler.slice(scheduler.indexOf("FROM fdp_integrations i"), scheduler.indexOf("ORDER BY i.channel"));
+  assert.match(consulta, /'tangerino_browser'/u);
+  assert.ok(!/'solides'/u.test(consulta), "a Sólides voltou a ser agendada, agora sem cartão na tela");
+  assert.ok(!/IN \('tangerino'/u.test(consulta), "o conector de API do Tangerino voltou a ser agendado");
 });
 
 test("executar agora fica bloqueado enquanto o acesso não foi provado", () => {

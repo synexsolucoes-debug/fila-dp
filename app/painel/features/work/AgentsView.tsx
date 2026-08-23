@@ -218,6 +218,11 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
             {agent.steps.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
           </ol> : null}
 
+          {/* Quando o acesso não é preparado aqui, a tela diz **onde** e **por
+              quê**. Um card sem formulário e sem explicação seria o mesmo beco
+              de antes com outra aparência: a pessoa conclui que está quebrado. */}
+          {agent.setup.note ? <p className={styles.agentDetail}>{agent.setup.note}</p> : null}
+
           {agent.lastError ? <div className={styles.errorDetail}>
             <strong>Última falha</strong>
             <span>{agent.lastError}</span>

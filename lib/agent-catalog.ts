@@ -51,6 +51,18 @@ export type ProductAgent = {
   supportsSchedule: boolean;
   /** Campos de configuração, na ordem em que a tela pergunta. */
   fields: readonly AgentSetupField[];
+  /**
+   * Onde o acesso deste agente é preparado.
+   *
+   * Nem sempre é o painel do grupo. O Sankhya é preparado pela Plataforma
+   * Global por decisão de segurança anterior — credencial de ERP não é dada por
+   * quem opera. A tela precisa **dizer isso**, e não apenas não oferecer o
+   * formulário: um card sem campos e sem explicação é o mesmo beco de antes,
+   * com outra aparência.
+   */
+  setupBy: "workspace" | "platform";
+  /** A frase que a tela mostra quando o setup não é do grupo. Vazia quando é. */
+  setupNote: string;
   /** Os passos do setup, na ordem (§11, §12, §13). */
   steps: readonly string[];
 };
@@ -80,16 +92,13 @@ const TANGERINO: ProductAgent = {
   channel: "tangerino_browser",
   mechanism: "browser",
   testKind: "browser_login",
-  summary: "Entra no Tangerino pelo navegador com usuário e senha, lê a situação da admissão e devolve como evento. Não altera nada na origem.",
+  summary: "Entra no Tangerino pelo navegador com usuário e senha e confere a situação das admissões pendentes. Só lê: não altera nada na origem.",
   reads: true,
-  /* Falso por decisão explícita, não por esquecimento: o agente de navegador
-     hoje consulta a admissão **de um colaborador por vez, sob demanda**, a
-     partir da ficha dele. Não existe varredura periódica definida, e oferecer
-     "frequência" e "executar agora" sem ter o que varrer seria um botão que
-     enfileira nada — exatamente o tipo de promessa que a tela não deve fazer.
-     Quando o escopo da varredura for definido, isto vira `true` e o resto da
-     tela já sabe o que fazer. */
-  supportsSchedule: false,
+  /* A varredura tem escopo definido: admissões pendentes de conferência —
+     colaborador com vínculo no Tangerino cuja última leitura não terminou em
+     desfecho e já passou da validade. A cadência é a mesma máquina dos demais
+     agentes; o que muda é o que ela enfileira (`lib/tangerino/sweep.ts`). */
+  supportsSchedule: true,
   fields: [
     { key: "username", label: "Usuário do Tangerino", kind: "text", required: true,
       hint: "A conta dedicada ao Vinculato. Use uma conta de leitura, não a de quem administra." },
@@ -98,11 +107,15 @@ const TANGERINO: ProductAgent = {
     { key: "accountReference", label: "Referência da conta", kind: "text", required: false,
       hint: "Opcional. Como este cliente é identificado no Tangerino, para você reconhecer o agente na lista." },
   ],
+  setupBy: "workspace",
+  setupNote: "",
   steps: [
     "Configurar acesso",
     "Usuário e senha",
     "Testar login",
+    "Definir frequência",
     "Ativar agente",
+    "Executar agora",
   ],
 };
 
@@ -127,6 +140,8 @@ const SANKHYA: ProductAgent = {
     { key: "companyContext", label: "Empresa no Sankhya", kind: "text", required: false,
       hint: "Opcional. O código ou nome que aparece na tela de login, quando o ambiente pede." },
   ],
+  setupBy: "platform",
+  setupNote: "O acesso ao Sankhya é preparado pela Plataforma Global, e não aqui: credencial de ERP dá entrada no sistema onde a folha é fechada, e quem a grava responde por ela. Você continua acompanhando, testando, pausando e reprocessando este agente por esta tela.",
   steps: [
     "Configurar acesso",
     "Credenciais",
@@ -165,6 +180,8 @@ const TEAMS: ProductAgent = {
     { key: "companyId", label: "Empresa de destino", kind: "select", required: false,
       hint: "A empresa a que os avisos recebidos pertencem." },
   ],
+  setupBy: "workspace",
+  setupNote: "",
   steps: [
     "Configurar canal",
     "Gerar webhook",

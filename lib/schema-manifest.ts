@@ -74,6 +74,7 @@ export const expectedMigrations = [
   "0064_agent_schedule.sql",
   "0065_triage_assignment.sql",
   "0066_tangerino_agent_provisioning.sql",
+  "0067_retire_legacy_connectors.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

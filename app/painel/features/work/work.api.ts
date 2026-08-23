@@ -182,6 +182,10 @@ export function normalizeAgent(row: Row): AgentStatus {
     },
     // `rows` só deixa passar objeto; os passos são texto puro.
     steps: (Array.isArray(row.steps) ? row.steps : []).map((step) => text(step)).filter(Boolean),
+    setup: {
+      by: text((row.setup as Row | undefined)?.by) || "workspace",
+      note: text((row.setup as Row | undefined)?.note),
+    },
     supportsSchedule: bool(row.supportsSchedule),
     canRunNow: bool(row.canRunNow),
     connectorVersion: text(row.connectorVersion),
