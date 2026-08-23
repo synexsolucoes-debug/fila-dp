@@ -536,6 +536,24 @@ test("o disparo do worker não leva contexto de cliente ao GitHub", async () => 
   assert.equal((await dispatchTangerinoWorker({ env: {} })).status, "not_configured");
 });
 
+test("o modo persistente não dispara GitHub Actions nem pelo token de fallback", async () => {
+  let chamouGitHub = false;
+  const resultado = await dispatchTangerinoWorker({
+    env: {
+      FDP_TANGERINO_WORKER_MODE: "persistent",
+      FDP_TANGERINO_ACTIONS_TOKEN: "token-tangerino",
+      FDP_SANKHYA_ACTIONS_TOKEN: "token-sankhya",
+    },
+    fetcher: (async () => {
+      chamouGitHub = true;
+      return new Response(null, { status: 204 });
+    }) as typeof fetch,
+  });
+
+  assert.equal(resultado.status, "persistent");
+  assert.equal(chamouGitHub, false);
+});
+
 /* ── Configuração e portões ────────────────────────────────────────────────── */
 
 test("o agente nasce desligado e a Vercel é sempre headless", () => {
@@ -689,4 +707,5 @@ test("o modo assistido libera só recursos do desafio e nunca a navegação prin
   const cliente = source("worker/tangerino/playwright-session.ts");
   assert.match(cliente, /interactiveChallengeResource && request\.isNavigationRequest\(\)[\s\S]*?mainFrame\(\)[\s\S]*?route\.abort/u);
 });
+
 
