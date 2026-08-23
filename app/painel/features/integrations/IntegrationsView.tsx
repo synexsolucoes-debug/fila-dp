@@ -18,7 +18,7 @@ const empty: IntegrationsOverview = {
 const date = (value: string) => value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
 const tone = (status: string) => status === "connected" || status === "succeeded" ? "safe" : status === "error" || status === "failed" ? "danger" : "warning";
 const field = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
-const credentialNames = ["token", "apiKey", "clientId", "clientSecret", "tenantId", "refreshToken", "phoneNumberId", "serviceAccount", "xToken"];
+const credentialNames = ["username", "password", "token", "apiKey", "clientId", "clientSecret", "tenantId", "refreshToken", "phoneNumberId", "serviceAccount", "xToken"];
 type WebhookSetup = { secret: string; webhookUrl: string; header: string; notice: string };
 
 export function IntegrationsView({ role }: { role: WorkspaceRole }) {
