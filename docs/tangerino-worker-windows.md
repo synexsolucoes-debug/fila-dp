@@ -59,5 +59,3 @@ conta Windows dedicada. Para produção, registre esse comando em uma tarefa do
 Agendador do Windows disparada **ao entrar na conta**, pois o navegador precisa
 de uma sessão gráfica quando houver desafio humano. Não configure a tarefa para
 “Executar independentemente de o usuário estar conectado”.
-
-
