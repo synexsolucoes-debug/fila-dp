@@ -356,6 +356,13 @@ test("o botão testa o Agente Tangerino sem exigir endpoint", async () => {
     "o worker não drena a fila de testes de login");
 });
 
+test("um teste Tangerino já enfileirado pode reacordar o worker", async () => {
+  const healthSource = await readFile(new URL("../lib/tangerino/health-check.ts", import.meta.url), "utf8");
+  assert.match(healthSource, /activeTangerinoHealthCheck/u);
+  assert.match(healthSource, /if \(activeRun\) return activeRun/u);
+  assert.match(healthSource, /if \(concurrentRun\) return concurrentRun/u);
+});
+
 test("o servidor recusa endpoint no agente de navegador, e não só a tela", async () => {
   const { buildConnectorConfig } = await import("../lib/connector-config.ts");
   // Esconder o campo impede o formulário, não a requisição. Aceitar aqui
