@@ -19,7 +19,10 @@ if (!databaseUrl?.startsWith("postgres")) {
   throw new Error("Defina DATABASE_URL com uma conexão PostgreSQL com as migrations aplicadas.");
 }
 
-const { workItemSources, buildWorkItemQuery } = await import("../lib/work-items.ts");
+const {
+  workItemSources, buildWorkItemQuery, buildWorkCenterQuery, buildWorkCountsQuery,
+  buildWorkGroupQuery, emptyWorkItemFilters, workItemGroups, workItemSorts,
+} = await import("../lib/work-items.ts");
 const { namedQueries, buildNamedQuery } = await import("../lib/assistant/named-queries.ts");
 const { toPostgresParameters } = await import("../lib/postgres-parameters.ts");
 const { Client } = await import("pg");
@@ -30,6 +33,28 @@ await client.query("BEGIN");
 
 const failures = [];
 let prepared = 0;
+let savepoint = 0;
+
+/**
+ * Um SAVEPOINT por preparação.
+ *
+ * Sem ele, a primeira consulta inválida aborta a transação e todas as seguintes
+ * reportam `25P02` — o relatório passaria a acusar cem defeitos inexistentes e
+ * esconderia o único verdadeiro. É o mesmo cuidado do verificador de SQL inline.
+ */
+async function tryPrepare(sql, label) {
+  const mark = `rehearse_${savepoint += 1}`;
+  await client.query(`SAVEPOINT ${mark}`);
+  try {
+    await client.query(`PREPARE ${mark} AS ${toPostgresParameters(sql)}`);
+    await client.query(`RELEASE SAVEPOINT ${mark}`);
+    return true;
+  } catch (error) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${mark}`);
+    failures.push(`${label}: ${String(error.message).split("\n")[0]}`);
+    return false;
+  }
+}
 
 const variants = [
   { scope: "mine", companyIds: ["empresa-1", "empresa-2"], label: "meu trabalho, escopo por empresa" },
@@ -46,15 +71,8 @@ for (const variant of variants) {
       userId: "usuario-ensaio",
       scope: variant.scope,
       companyIds: variant.companyIds,
-      limit: 50,
     });
-    const name = `work_item_${prepared}`;
-    try {
-      await client.query(`PREPARE ${name} AS ${toPostgresParameters(sql)}`);
-      prepared += 1;
-    } catch (error) {
-      failures.push(`${source.key} (${variant.label}): ${String(error.message).split("\n")[0]}`);
-    }
+    if (await tryPrepare(sql, `${source.key} (${variant.label})`)) prepared += 1;
   }
 }
 
@@ -68,13 +86,60 @@ for (const companyIds of [["empresa-1", "empresa-2"], null, []]) {
     const { sql } = buildNamedQuery({
       query, workspaceId: "workspace-ensaio", userId: "usuario-ensaio", companyIds,
     });
-    const name = `named_query_${namedPrepared}`;
-    try {
-      await client.query(`PREPARE ${name} AS ${toPostgresParameters(sql)}`);
-      namedPrepared += 1;
-    } catch (error) {
-      failures.push(`consulta nomeada ${query.key}: ${String(error.message).split("\n")[0]}`);
+    if (await tryPrepare(sql, `consulta nomeada ${query.key}`)) namedPrepared += 1;
+  }
+}
+
+/* A consulta que a Central realmente executa é a **união** das fontes, com
+   filtro, ordenação, cursor e contadores. Preparar as fontes uma a uma não
+   prova que a união casa: basta uma coluna fora de ordem em uma delas para o
+   `UNION ALL` inteiro deixar de compilar — e o sintoma em produção seria "a
+   Central não abre", sem dizer qual fonte. */
+let unionPrepared = 0;
+const cursorSamples = {
+  urgency: ["0", "2026-01-05T12:00:00.000Z", "2026-01-01T00:00:00.000Z", "card-1"],
+  due: ["2026-01-05T12:00:00.000Z", "0", "2026-01-01T00:00:00.000Z", "card-1"],
+  priority: ["1", "2026-01-05T12:00:00.000Z", "2026-01-01T00:00:00.000Z", "card-1"],
+  created: ["2026-01-01T00:00:00.000Z", "card-1"],
+  updated: ["2026-01-09T00:00:00.000Z", "card-1"],
+};
+
+for (const variant of variants) {
+  for (const sort of workItemSorts) {
+    for (const cursor of [[], cursorSamples[sort.key]]) {
+      const built = buildWorkCenterQuery({
+        sources: workItemSources,
+        workspaceId: "workspace-ensaio",
+        userId: "usuario-ensaio",
+        companyIds: variant.companyIds,
+        filters: {
+          ...emptyWorkItemFilters, scope: variant.scope, due: "week",
+          companyId: "empresa-1", processId: "processo-1",
+          priority: "urgent", status: "open", origin: "teams",
+        },
+        sort: sort.key,
+        cursor,
+        limit: 25,
+      });
+      if (!built) continue;
+      if (await tryPrepare(built.sql, `união ${variant.label} / ${sort.key} / cursor ${cursor.length}`)) unionPrepared += 1;
     }
+  }
+
+  const counts = buildWorkCountsQuery({
+    sources: workItemSources, workspaceId: "workspace-ensaio", userId: "usuario-ensaio",
+    companyIds: variant.companyIds, scope: variant.scope,
+  });
+  if (counts && await tryPrepare(counts.sql, `contadores ${variant.label}`)) unionPrepared += 1;
+
+  for (const group of workItemGroups) {
+    if (!group.key) continue;
+    const grouped = buildWorkGroupQuery({
+      sources: workItemSources, workspaceId: "workspace-ensaio", userId: "usuario-ensaio",
+      companyIds: variant.companyIds, scope: variant.scope, group: group.key,
+    });
+    if (!grouped) continue;
+    if (await tryPrepare(grouped.sql, `agrupamento ${group.key} / ${variant.label}`)) unionPrepared += 1;
   }
 }
 
@@ -82,7 +147,8 @@ await client.query("ROLLBACK");
 await client.end();
 
 for (const failure of failures) console.error(`FALHA  ${failure}`);
-console.log(`Central de Trabalho: ${prepared} consultas preparadas.`);
+console.log(`Central de Trabalho: ${prepared} consultas de fonte preparadas.`);
+console.log(`Central de Trabalho: ${unionPrepared} consultas de união, contagem e agrupamento preparadas.`);
 console.log(`Consultas nomeadas da IA: ${namedPrepared} preparadas.`);
 console.log(`Total de falhas: ${failures.length}.`);
 if (failures.length) process.exitCode = 1;

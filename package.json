@@ -41,7 +41,9 @@
     "worker:sankhya:check": "node scripts/check-sankhya-worker-env.mjs",
     "og:generate": "node scripts/generate-og-image.mjs",
     "db:rehearse-work": "node --experimental-strip-types scripts/rehearse-work-items.mjs",
-    "db:rehearse-concurrency": "node --experimental-strip-types scripts/rehearse-concurrency.mjs"
+    "db:rehearse-concurrency": "node --experimental-strip-types scripts/rehearse-concurrency.mjs",
+    "db:rehearse-scheduler": "node scripts/rehearse-scheduler.mjs",
+    "db:measure-work": "node --experimental-strip-types scripts/measure-work-center.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",

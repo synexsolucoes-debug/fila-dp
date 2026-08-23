@@ -152,7 +152,11 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
     sql: `SELECT 'approval' AS source_type, s.id AS source_id,
         m.title, '' AS description, 'high' AS priority, m.company_id,
         COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
-        m.employee_id, m.effective_date::timestamptz AS due_at, s.created_at, s.updated_at,
+        m.employee_id, m.effective_date::timestamptz AS due_at, s.created_at,
+        -- A etapa de aprovação não tem coluna de atualização: o que ela
+        -- registra é a decisão. Enquanto ninguém decide, a última mudança é a
+        -- criação, e é isso que a ordenação por atualização precisa enxergar.
+        COALESCE(s.decided_at, s.created_at) AS updated_at,
         s.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
         'operacao' AS origin
       FROM fdp_movement_approval_steps s
