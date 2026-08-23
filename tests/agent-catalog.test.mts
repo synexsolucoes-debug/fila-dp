@@ -333,6 +333,11 @@ test("a tela conhece o canal do Agente Tangerino", async () => {
     "sem entrada no mapa de credenciais, o agente fica sem usuário e senha");
   assert.match(drawer, /CANAIS_DE_NAVEGADOR\.has\(connector\.channel\)/u,
     "agente de navegador não pode receber campo de endpoint");
+
+  const view = await readFile(
+    new URL("../app/painel/features/integrations/IntegrationsView.tsx", import.meta.url), "utf8");
+  assert.match(view, /const credentialNames = \["username", "password"/u,
+    "a tela mostra usuário e senha, mas precisa também enviá-los ao cofre");
 });
 
 test("o servidor recusa endpoint no agente de navegador, e não só a tela", async () => {
