@@ -340,6 +340,22 @@ test("a tela conhece o canal do Agente Tangerino", async () => {
     "a tela mostra usuário e senha, mas precisa também enviá-los ao cofre");
 });
 
+test("o botão testa o Agente Tangerino sem exigir endpoint", async () => {
+  const [view, route, worker] = await Promise.all([
+    readFile(new URL("../app/painel/features/integrations/IntegrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/integrations/[id]/verify/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../worker/tangerino/runner.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(view, /isTangerino \|\| Boolean\(config\.endpoint\)/u,
+    "o botão voltou a exigir endpoint de um agente que não possui esse campo");
+  assert.match(route, /queueTangerinoHealthCheck/u,
+    "a rota voltou a enviar o Tangerino ao verificador genérico");
+  assert.match(route, /wakeTangerinoWorker/u,
+    "o teste foi enfileirado, mas o worker não é acordado");
+  assert.match(worker, /processNextTangerinoHealthCheck/u,
+    "o worker não drena a fila de testes de login");
+});
+
 test("o servidor recusa endpoint no agente de navegador, e não só a tela", async () => {
   const { buildConnectorConfig } = await import("../lib/connector-config.ts");
   // Esconder o campo impede o formulário, não a requisição. Aceitar aqui

@@ -211,6 +211,9 @@ export const domainEventCatalog = [
   definition("tangerino.consultation.failed", "admission", ["tangerino"], "routine", "Consulta de admissão falhou."),
   definition("tangerino.authentication.required", "integration", ["tangerino"], "routine", "Tangerino pediu autenticação."),
   definition("tangerino.admission.status_changed", "admission", ["tangerino"], "routine", "Situação da admissão mudou no Tangerino."),
+  definition("tangerino.connection_test.started", "integration", ["tangerino"], "routine", "Teste de conexão Tangerino iniciado."),
+  definition("tangerino.connection_test.completed", "integration", ["tangerino"], "routine", "Teste de conexão Tangerino concluído."),
+  definition("tangerino.connection_test.failed", "integration", ["tangerino"], "routine", "Teste de conexão Tangerino falhou."),
 ] as const satisfies readonly DomainEventDefinition[];
 
 /** União derivada do catálogo: um nome fora dele não compila. */

@@ -111,7 +111,11 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
   }
 
   async function verify(connector: Connector) {
-    await mutate(() => requestJson(`/api/integrations/${connector.id}/verify`, { method: "POST" }), "Conexão testada e verificada pelo provedor.");
+    const asynchronous = connector.channel === "tangerino_browser";
+    await mutate(
+      () => requestJson(`/api/integrations/${connector.id}/verify`, { method: "POST" }),
+      asynchronous ? "Teste de login enfileirado. Atualize em instantes para ver o resultado." : "Conexão testada e verificada pelo provedor.",
+    );
   }
 
   if (loading) return <section className={styles.workspace}><PageSkeleton label="Carregando o estado das integrações" metrics={3} rows={4} /></section>;
@@ -133,19 +137,20 @@ export function IntegrationsView({ role }: { role: WorkspaceRole }) {
 
     {sankhya && <SankhyaConnectorPanel connector={sankhya} runs={overview.runs} companies={overview.companies} permissions={overview.permissions} refresh={refresh} />}
 
-    <section className={styles.tabPanel}><PanelHeader eyebrow="OUTRAS CONEXÕES" title="Configuração e teste do piloto" description="Em cada conector: salve o endpoint oficial, guarde a credencial no cofre e faça uma verificação real antes de sincronizar." />
+    <section className={styles.tabPanel}><PanelHeader eyebrow="OUTRAS CONEXÕES" title="Configuração e teste do piloto" description="Em cada conector: salve a configuração necessária, guarde a credencial no cofre e faça uma verificação real antes de sincronizar." />
       {standardConnectors.length ? <div className={styles.connectorRack}>{standardConnectors.map((connector) => {
         const config = (connector.config ?? {}) as StandardConnectorConfig;
         const isTeams = connector.channel === "teams";
-        const configured = isTeams ? Boolean(config.teamId && config.channelId) : Boolean(config.endpoint);
+        const isTangerino = connector.channel === "tangerino_browser";
+        const configured = isTeams ? Boolean(config.teamId && config.channelId) : isTangerino || Boolean(config.endpoint);
         const credentialReady = isTeams ? connector.hasWebhookSecret : connector.hasCredentials;
         const canManage = overview.permissions.manage;
         const permissionTitle = canManage ? undefined : "Seu perfil não possui permissão para gerenciar integrações.";
         return <article key={connector.id} data-status={connector.status}><header><span className={styles.connectorIcon}><Cable /></span><div><small>{connector.channel.toUpperCase()}</small><strong>{connector.displayName}</strong></div><StatusPill status={connector.status} tone={tone(connector.status)} label={connector.status.replaceAll("_", " ")} /></header>
           <div className={styles.pilotFlow} aria-label="Etapas do piloto"><span data-done={configured}><b>1</b>Configurar</span><span data-done={credentialReady}><b>2</b>{isTeams ? "Webhook" : "Credencial"}</span><span data-done={connector.status === "connected"}><b>3</b>{isTeams ? "Receber evento" : "Testar"}</span></div>
-          <dl><div><dt>Configuração</dt><dd><Settings2 />{configured ? (isTeams ? "canal salvo" : "endpoint salvo") : "pendente"}</dd></div><div><dt>{isTeams ? "Webhook" : "Credencial"}</dt><dd><KeyRound />{credentialReady ? "configurado" : "não configurado"}</dd></div><div><dt>{isTeams ? "Último evento" : "Última verificação"}</dt><dd><ShieldCheck />{date(isTeams ? connector.lastSyncAt : connector.verifiedAt)}</dd></div><div><dt>Última sincronização</dt><dd><Clock3 />{date(connector.lastSyncAt)}</dd></div></dl>
+          <dl><div><dt>Configuração</dt><dd><Settings2 />{configured ? (isTeams ? "canal salvo" : isTangerino ? "agente preparado" : "endpoint salvo") : "pendente"}</dd></div><div><dt>{isTeams ? "Webhook" : "Credencial"}</dt><dd><KeyRound />{credentialReady ? "configurado" : "não configurado"}</dd></div><div><dt>{isTeams ? "Último evento" : "Última verificação"}</dt><dd><ShieldCheck />{date(isTeams ? connector.lastSyncAt : connector.verifiedAt)}</dd></div><div><dt>Última sincronização</dt><dd><Clock3 />{date(connector.lastSyncAt)}</dd></div></dl>
           {connector.lastError && <div className={styles.safeError}><AlertTriangle />{connector.lastError}</div>}
-          <footer><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "configure", connector })}><Settings2 />Configurar</button><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "credentials", connector })}><RotateCw />{isTeams ? (credentialReady ? "Rotacionar webhook" : "Gerar webhook") : (connector.hasCredentials ? "Rotacionar" : "Credencial")}</button>{!isTeams && connector.hasCredentials && <button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "revoke", connector })}><Unplug />Revogar</button>}{isTeams ? <span className={styles.managedBadge}><ShieldCheck />{connector.status === "connected" ? "Evento autenticado recebido" : "Aguardando evento do fluxo"}</span> : <button className={styles.verifyButton} type="button" disabled={!canManage || !configured || !connector.hasCredentials || busy} title={!canManage ? permissionTitle : !configured ? "Salve a configuração antes de testar." : !connector.hasCredentials ? "Guarde a credencial antes de testar." : "Faz uma requisição real ao provedor."} onClick={() => void verify(connector)}><ShieldCheck />Testar conexão</button>}</footer>
+          <footer><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "configure", connector })}><Settings2 />Configurar</button><button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "credentials", connector })}><RotateCw />{isTeams ? (credentialReady ? "Rotacionar webhook" : "Gerar webhook") : (connector.hasCredentials ? "Rotacionar" : "Credencial")}</button>{!isTeams && connector.hasCredentials && <button type="button" disabled={!canManage || busy} title={permissionTitle} onClick={() => setEditor({ kind: "revoke", connector })}><Unplug />Revogar</button>}{isTeams ? <span className={styles.managedBadge}><ShieldCheck />{connector.status === "connected" ? "Evento autenticado recebido" : "Aguardando evento do fluxo"}</span> : <button className={styles.verifyButton} type="button" disabled={!canManage || !configured || !connector.hasCredentials || busy} title={!canManage ? permissionTitle : !configured ? "Salve a configuração antes de testar." : !connector.hasCredentials ? "Guarde a credencial antes de testar." : isTangerino ? "Abre o navegador do agente e testa somente o login." : "Faz uma requisição real ao provedor."} onClick={() => void verify(connector)}><ShieldCheck />Testar conexão</button>}</footer>
         </article>;
       })}</div> : <EmptyState icon={Cable} title="Nenhuma outra integração configurada" text="O conector Sankhya, quando habilitado, aparece acima." />}
     </section>

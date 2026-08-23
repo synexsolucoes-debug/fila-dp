@@ -107,7 +107,7 @@ test("a tela de configuração recebe a frase do servidor, não uma versão pró
 
 test("o cartão do console decide pelo estado que veio do servidor", async () => {
   const fonte = await ler("app/plataforma/features/IntegrationsFeature.tsx");
-  assert.match(fonte, /moduleBlocked = isSankhya && row\.moduleEnabled === false/u);
+  assert.match(fonte, /moduleBlocked = isBrowserAgent && row\.moduleEnabled === false/u);
   assert.match(fonte, /onEnableModule/u, "informar sem levar até a liberação é o beco de novo");
 });
 
@@ -233,13 +233,14 @@ test("o cartão do console não oferece executar sobre configuração que não e
 });
 
 test("o cartão oferece o degrau seguinte da escada, não o último", async () => {
-  // A escada do servidor em `queueSankhyaRun`: módulo liberado → configuração
-  // gravada → credencial ativa → conector em `connected`. O cartão oferecia
+  // A escada dos agentes de navegador: módulo liberado → configuração exigida
+  // pelo agente → credencial ativa → conector em `connected`. O cartão oferecia
   // "Executar" em todos os degraus, e a recusa mandava testar a conexão — cujo
   // botão vivia dentro de outro painel, acima do formulário recém-preenchido.
   const fonte = await ler("app/plataforma/features/IntegrationsFeature.tsx");
-  assert.match(fonte, /needsCredential = isSankhya && !moduleBlocked && !needsSetup && row\.hasCredential === false/u);
-  assert.match(fonte, /needsTest = isSankhya && !moduleBlocked && !needsSetup && row\.hasCredential === true\s*\n?\s*&& !\["connected", "paused"\]\.includes\(text\(row\.status\)\)/u);
+  assert.match(fonte, /isBrowserAgent = isSankhya \|\| isTangerino/u);
+  assert.match(fonte, /needsCredential = isBrowserAgent && !moduleBlocked && !needsSetup && row\.hasCredential === false/u);
+  assert.match(fonte, /needsTest = isBrowserAgent && !moduleBlocked && !needsSetup && row\.hasCredential === true\s*\n?\s*&& !\["connected", "paused"\]\.includes\(text\(row\.status\)\)/u);
   assert.match(fonte, /cannotRun = moduleBlocked \|\| needsSetup \|\| needsCredential \|\| needsTest/u);
   // E o degrau seguinte precisa ser oferecível: sem esta ação o cartão apenas
   // explicaria o bloqueio, que é o mesmo beco de antes com outra frase.

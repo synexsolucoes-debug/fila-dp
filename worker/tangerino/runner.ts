@@ -1,6 +1,7 @@
 import { getD1, getScopedD1 } from "../../db/index.ts";
 import { runNextConsultation } from "../../lib/tangerino/agent.ts";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
+import { processNextTangerinoHealthCheck } from "../../lib/tangerino/health-check.ts";
 import { PlaywrightTangerinoSession } from "./playwright-session.ts";
 
 export type TangerinoSweepSummary = {
@@ -24,7 +25,14 @@ async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: 
   const d1 = getScopedD1({ workspaceId, userId: null });
   let handled = 0;
   while (!shouldStop() && handled < maxJobs) {
-    const result = await runNextConsultation(d1, workspaceId, async () => PlaywrightTangerinoSession.create());
+    /* O teste de conexão vem primeiro: ele é curto, desbloqueia o setup e não
+       deve esperar atrás de uma varredura de dezenas de colaboradores. */
+    const healthCheck = await processNextTangerinoHealthCheck(
+      d1, workspaceId, async () => PlaywrightTangerinoSession.create(),
+    );
+    const result = healthCheck ?? await runNextConsultation(
+      d1, workspaceId, async () => PlaywrightTangerinoSession.create(),
+    );
     if (!result) break;
     handled += 1;
   }
