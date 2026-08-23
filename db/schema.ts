@@ -540,6 +540,16 @@ export const integrations = pgTable("fdp_integrations", {
   lastSuccessfulSyncAt: timestamp("last_successful_sync_at", { withTimezone: true, mode: "string" }),
   nextSyncAt: timestamp("next_sync_at", { withTimezone: true, mode: "string" }),
   scheduleEnabled: integer("schedule_enabled").notNull().default(0),
+  /* Cadência da execução automática (§29). O padrão é `manual`: nenhum conector
+     passa a rodar sozinho por ter ganhado a coluna. */
+  scheduleCadence: text("schedule_cadence").notNull().default("manual"),
+  /* Fuso do grupo (§84). A persistência segue em UTC; isto existe para "no
+     expediente" significar o expediente de quem opera. */
+  scheduleTimezone: text("schedule_timezone").notNull().default("America/Sao_Paulo"),
+  /* Falhas seguidas: sustenta a espera crescente (§33) e a degradação (§34)
+     sem inferir estado a partir do relógio. */
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  degradedSince: timestamp("degraded_since", { withTimezone: true, mode: "string" }),
   connectorVersion: text("connector_version").notNull().default(""),
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -547,6 +557,12 @@ export const integrations = pgTable("fdp_integrations", {
 }, (table) => [
   uniqueIndex("fdp_integrations_workspace_channel_uq").on(table.workspaceId, table.channel),
   uniqueIndex("fdp_integrations_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_integrations_due_idx").on(table.workspaceId, table.nextSyncAt)
+    .where(sql`${table.scheduleEnabled} = 1`),
+  check("fdp_integrations_schedule_cadence_check", sql`${table.scheduleCadence} IN ('manual', 'every_15_minutes', 'every_30_minutes', 'hourly', 'business_hours', 'daily')`),
+  check("fdp_integrations_failures_check", sql`${table.consecutiveFailures} >= 0`),
+  check("fdp_integrations_timezone_check", sql`length(${table.scheduleTimezone}) BETWEEN 3 AND 60`),
+  check("fdp_integrations_degraded_check", sql`(${table.degradedSince} IS NULL) OR (${table.consecutiveFailures} > 0)`),
 ]);
 
 export const plannerBlocks = pgTable("fdp_planner_blocks", {
@@ -1408,6 +1424,12 @@ export const integrationJobs = pgTable("fdp_integration_jobs", {
   foreignKey({ name: "fdp_integration_jobs_ws_integration_id_fk", columns: [table.workspaceId, table.integrationId], foreignColumns: [integrations.workspaceId, integrations.id] }),
   uniqueIndex("fdp_integration_jobs_workspace_id_uq").on(table.workspaceId, table.id),
   uniqueIndex("fdp_integration_jobs_idempotency_uq").on(table.workspaceId, table.integrationId, table.idempotencyKey),
+  /* Um agente por vez, por grupo (§31). A reserva por `lease_token` já impede
+     dois runners de pegarem o mesmo job; ela não impede que existam dois jobs
+     para o mesmo conector. Isto impede — no banco, não por cuidado de quem
+     escreve a próxima rota. */
+  uniqueIndex("fdp_integration_jobs_active_uq").on(table.workspaceId, table.integrationId)
+    .where(sql`${table.status} IN ('queued', 'leased')`),
   index("fdp_integration_jobs_claim_idx").on(table.workspaceId, table.status, table.availableAt, table.leaseExpiresAt),
   foreignKey({ name: "fdp_integration_jobs_workspace_run_fk", columns: [table.workspaceId, table.integrationId, table.runId], foreignColumns: [integrationSyncRuns.workspaceId, integrationSyncRuns.integrationId, integrationSyncRuns.id] }).onDelete("cascade"),
   check("fdp_integration_jobs_type_check", sql`${table.jobType} IN ('sync', 'retry', 'reconcile', 'health_check')`),
@@ -2498,6 +2520,10 @@ export const integrationEvents = pgTable("fdp_integration_events", {
   errorCode: text("error_code").notNull().default(""),
   errorMessage: text("error_message").notNull().default(""),
   retryCount: integer("retry_count").notNull().default(0),
+  /* Quantas vezes a origem reentregou este mesmo evento (§37). Distinto de
+     `retryCount`, que conta retentativa de processamento: um evento pode ser
+     reentregue sem nunca ter falhado. */
+  duplicateCount: integer("duplicate_count").notNull().default(0),
   receivedAt: timestamp("received_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   processedAt: timestamp("processed_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -2511,6 +2537,7 @@ export const integrationEvents = pgTable("fdp_integration_events", {
   check("fdp_integration_events_status_check", sql`${table.status} IN ('received', 'processing', 'processed', 'ignored', 'error', 'reprocessed')`),
   check("fdp_integration_events_source_check", sql`${table.source} IN ('webhook', 'polling', 'manual', 'retry')`),
   check("fdp_integration_events_retry_check", sql`${table.retryCount} >= 0 AND ${table.retryCount} <= 100`),
+  check("fdp_integration_events_duplicate_check", sql`${table.duplicateCount} >= 0 AND ${table.duplicateCount} <= 100000`),
 ]);
 
 /**
@@ -3031,10 +3058,19 @@ export const agentProposals = pgTable("fdp_agent_proposals", {
   resultType: text("result_type").notNull().default(""),
   resultId: text("result_id").notNull().default(""),
   idempotencyKey: text("idempotency_key").notNull().default(""),
+  /* Encaminhamento (§16): o item continua na mesma fila e com o mesmo ciclo de
+     vida; o que muda é de quem a operação espera a decisão. */
+  assignedTo: text("assigned_to"),
+  assignedAt: timestamp("assigned_at", { withTimezone: true, mode: "string" }),
+  assignmentNote: text("assignment_note").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_agent_proposals_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_agent_proposals_assignee_idx").on(table.workspaceId, table.assignedTo, table.status)
+    .where(sql`${table.assignedTo} IS NOT NULL`),
+  foreignKey({ name: "fdp_agent_proposals_assignee_fk", columns: [table.workspaceId, table.assignedTo], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }).onDelete("set null"),
+  check("fdp_agent_proposals_assignment_check", sql`(${table.assignedTo} IS NULL AND ${table.assignedAt} IS NULL) OR (${table.assignedTo} IS NOT NULL AND ${table.assignedAt} IS NOT NULL)`),
   uniqueIndex("fdp_agent_proposals_idempotency_uq").on(table.workspaceId, table.idempotencyKey)
     .where(sql`${table.idempotencyKey} <> ''`),
   index("fdp_agent_proposals_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),

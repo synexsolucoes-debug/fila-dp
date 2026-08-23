@@ -95,3 +95,15 @@
   .header { flex-direction: column; align-items: stretch; }
   .refresh { justify-content: center; }
 }
+
+/* A porta para a Central de Trabalho (§46). Fica ao lado de Atualizar porque as
+   duas são ações do cabeçalho, e em tela estreita elas empilham em vez de
+   espremer o título. */
+.headerActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.openWork {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px;
+  border: 1px solid var(--ui-border, #d8e0e7); border-radius: 8px;
+  color: var(--ui-accent-text, #087a63); font-size: .74rem; font-weight: 720; text-decoration: none;
+}
+.openWork:hover { border-color: var(--ui-accent, #087a63); }
+.openWork svg { width: 15px; height: 15px; }

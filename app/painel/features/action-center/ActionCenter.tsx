@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AlertOctagon, ArrowRight, CheckCircle2, LoaderCircle, RefreshCw } from "lucide-react";
 import type { ActionItem, ActionTarget } from "@/lib/action-center";
@@ -86,10 +87,19 @@ export function ActionCenter({ onNavigate, companyId = "" }: {
                 : `${pendingTotal === 1 ? "1 pendência em aberto" : `${pendingTotal} pendências em aberto`}${criticalTotal ? `, ${criticalTotal === 1 ? "1 crítica" : `${criticalTotal} críticas`}` : ""}.`}
           </p>
         </div>
-        <button className={styles.refresh} type="button" onClick={() => void load(true)} disabled={refreshing || loading}>
-          <RefreshCw aria-hidden="true" className={refreshing ? styles.spin : undefined} />
-          {refreshing ? "Atualizando…" : "Atualizar"}
-        </button>
+        <div className={styles.headerActions}>
+          {/* A porta para a lista inteira (§46). A central de ação responde
+              "quanta coisa há" por módulo; a Central de Trabalho responde "o
+              que exatamente está comigo", item a item. Uma leva à outra em vez
+              de as duas competirem pelo mesmo lugar. */}
+          <Link className={styles.openWork} href="/painel/trabalho">
+            Ver item a item<ArrowRight aria-hidden="true" />
+          </Link>
+          <button className={styles.refresh} type="button" onClick={() => void load(true)} disabled={refreshing || loading}>
+            <RefreshCw aria-hidden="true" className={refreshing ? styles.spin : undefined} />
+            {refreshing ? "Atualizando…" : "Atualizar"}
+          </button>
+        </div>
       </header>
 
       {error && <p className={styles.error} role="alert"><AlertOctagon aria-hidden="true" /> {error}</p>}

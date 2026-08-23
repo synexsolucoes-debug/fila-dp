@@ -27,11 +27,11 @@
  */
 
 export const panelViews = [
-  "overview", "board", "inbox", "planner", "processManagement", "processes",
+  "overview", "work", "board", "inbox", "planner", "processManagement", "processes",
   "auxiliary", "psychologistPayments", "contractorPayments", "contractorProviders",
   "contractorCycles", "contractorClosings", "contractorAdjustments", "contractorLimits",
   "contractorCaju", "contractorArchive", "timeTracking", "epi", "integrations",
-  "registrations", "payroll", "indicators",
+  "agents", "triage", "registrations", "payroll", "indicators",
 ] as const;
 export type PanelView = typeof panelViews[number];
 
@@ -43,6 +43,7 @@ export type PanelView = typeof panelViews[number];
  */
 const VIEW_PATHS: Record<PanelView, string> = {
   overview: "",
+  work: "trabalho",
   board: "demandas",
   inbox: "entradas",
   planner: "planner",
@@ -61,10 +62,21 @@ const VIEW_PATHS: Record<PanelView, string> = {
   timeTracking: "ponto",
   epi: "epi",
   integrations: "integracoes",
+  agents: "agentes",
+  triage: "triagem",
   registrations: "cadastros",
   payroll: "folha",
   indicators: "indicadores",
 };
+
+/**
+ * Visões que abrem um registro pelo endereço.
+ *
+ * A demanda é o link que se manda para o colega; o item de triagem é o link que
+ * se manda para quem sabe de quem ele é. As demais visões não abrem registro, e
+ * um identificador pendurado nelas seria um endereço que promete e não entrega.
+ */
+const VIEWS_WITH_RECORD = new Set<PanelView>(["board", "triage"]);
 
 /* Do endereço para a visão. Ordenado do caminho mais longo para o mais curto:
    sem isso `pj/fechamentos` casaria com `pj` e a pessoa cairia na tela errada. */
@@ -130,7 +142,7 @@ export function panelPath(location: Partial<PanelLocation>): string {
     const path = VIEW_PATHS[view];
     if (path) segments.push(...path.split("/"));
     // O registro só faz sentido dentro da visão que sabe abri-lo.
-    if (recordId && view === "board") segments.push(encodeURIComponent(recordId));
+    if (recordId && VIEWS_WITH_RECORD.has(view)) segments.push(encodeURIComponent(recordId));
   }
 
   const companyId = clean(location.companyId);
@@ -164,7 +176,7 @@ export function parsePanelPath(pathname: string, search = ""): PanelLocation {
     const expected = path.split("/");
     if (expected.every((segment, index) => rest[index] === segment)) {
       const extra = rest.slice(expected.length);
-      const recordId = view === "board" ? clean(extra[0]) : "";
+      const recordId = VIEWS_WITH_RECORD.has(view) ? clean(extra[0]) : "";
       return { view, recordId, settings: null, companyId };
     }
   }
@@ -174,6 +186,11 @@ export function parsePanelPath(pathname: string, search = ""): PanelLocation {
 /** Endereço de uma demanda — o link que se manda para o colega. */
 export function demandPath(cardId: string, companyId = "") {
   return panelPath({ view: "board", recordId: cardId, companyId });
+}
+
+/** Endereço de um item de triagem — o link que se manda para quem sabe resolvê-lo. */
+export function triagePath(itemId: string) {
+  return panelPath({ view: "triage", recordId: itemId });
 }
 
 /** Os endereços que o produto promete; usado pela verificação de navegador. */

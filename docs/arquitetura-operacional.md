@@ -193,6 +193,35 @@ resolve.
 Funcionalidade nova que produza trabalho **registra uma fonte em
 `lib/work-items.ts`**. Ela não cria o quinto objeto paralelo com a quinta tela.
 
+### 4.2 A tela
+
+`/painel/trabalho` responde "o que está comigo hoje?" item a item. Ela não
+substitui Demandas nem nenhuma outra: cada linha leva à tela do módulo que
+resolve aquele item, e nada é editado ali dentro.
+
+**O servidor decide tudo o que muda o conjunto** — escopo, filtros, ordenação,
+agrupamento, contadores e página. A tela decide só a apresentação. Filtrar no
+navegador exigiria baixar a fila inteira para esconder metade dela, e é assim
+que uma lista de trabalho fica lenta justamente para quem tem mais trabalho.
+
+Sete fontes entram em um `UNION ALL` único. Consultar fonte a fonte obriga a
+trazer `limite` linhas de **cada** uma para escolher as `limite` primeiras do
+conjunto: o custo cresce com o número de fontes, não com o tamanho da página.
+
+A paginação é por **cursor**, e o cursor carrega a tupla inteira da ordenação —
+urgência, prazo, criação e identificador. Página numerada devolveria item
+repetido e pularia outro, porque a fila muda enquanto a pessoa lê; e um cursor
+por uma coluna só pularia itens empatados.
+
+Uma das sete fontes é a **falha de execução que esgotou as tentativas**. Ela não
+segue sozinha e exige decisão humana; se existisse apenas na tela de
+integrações, ficaria esperando alguém abrir aquela tela por acaso.
+
+| Verificação | Onde |
+| --- | --- |
+| A união prepara contra o schema real | `npm run db:rehearse-work` |
+| O plano e o tempo com volume de cliente grande | `npm run db:measure-work` |
+
 ---
 
 ## 5. Agentes
@@ -238,6 +267,41 @@ processo, a categoria, o responsável, a ação ou o contexto, a entrada **vira 
 de triagem** — nunca um palpite. Quem classifica é uma pessoa, e a classificação
 entra no histórico.
 
+`/painel/triagem` é a leitura única sobre as **duas** filas de incerteza que
+existem: `fdp_agent_proposals` (o que um agente propôs e o motor não autorizou) e
+`fdp_movement_suggestions` (o que a leitura do Teams reconheceu sem os dados
+obrigatórios). Elas não foram fundidas — guardam regras diferentes — e cada uma
+continua sendo resolvida pela rota que a governa:
+
+| Origem | Rota que resolve |
+| --- | --- |
+| Proposta de agente | `POST /api/agents/proposals/:id/resolve` |
+| Sugestão do Teams | `POST /api/integrations/movements/:id` |
+
+A Central de Triagem **não tem porta de escrita própria**: há teste que reprova
+se ela ganhar uma. Confirmar ali chama a rota do módulo, que reavalia versão,
+etapa, destino autorizado, checklist, evidência, responsável, aprovador e
+concorrência do zero.
+
+O que a tela mostra, e por quê:
+
+- **o motivo da incerteza**, com o que resolve — cada código do motor tem uma
+  frase própria, e há teste que reprova quando um código novo chega sem
+  tradução. O pior desfecho possível é alguém confirmar um vínculo por
+  eliminação porque a tela não explicou o que estava em dúvida;
+- **confiança em palavra**, com o número junto, usando os mesmos limiares do
+  motor — importados, não copiados, porque duas réguas divergem;
+- **o payload em frases rotuladas**, com no máximo doze campos e sem objeto
+  aninhado. Documento, e-mail e telefone aparecem redigidos: esconder tudo
+  tornaria a conferência impossível, mostrar tudo distribuiria dado sensível sem
+  necessidade;
+- **o histórico**: quem resolveu, quando, com que decisão, com que nota e com
+  que resultado.
+
+Encaminhar um item para outra pessoa não é resolver: ele continua na mesma fila,
+com o mesmo estado, e o que muda é de quem a operação espera a decisão
+(`assigned_to` na própria proposta, e não uma fila de encaminhamento ao lado).
+
 ### 5.3 Kill switch
 
 Todo agente pode ser desativado por workspace, sem deploy:
@@ -246,6 +310,73 @@ Todo agente pode ser desativado por workspace, sem deploy:
 O interruptor é `fdp_integrations.status`, o mesmo que o webhook já respeita —
 não existe um segundo lugar por onde a automação continue rodando depois de
 pausada.
+
+### 5.4 Agente e integração não são a mesma coisa
+
+**Integração** é a conexão: para onde apontar, com que credencial, com que
+mapeamento. **Agente** é o executor que lê aquela origem, interpreta e propõe.
+
+| Canal | Integração | Agente executor |
+| --- | --- | --- |
+| `sankhya_browser` | sim | sim — navegador |
+| `tangerino` | sim | sim — API |
+| `solides` | sim | sim — API |
+| `teams` | sim | **não** — a entrada é webhook; não há nada a buscar |
+
+Por isso a Central de Agentes mostra o Teams com execução vazia em vez de fingir
+que ele tem uma.
+
+### 5.5 Execução automática
+
+A execução recorrente **não criou runner nem tabela**. A conferência exigida
+antes de criar devolveu tudo já em produção: `fdp_integration_jobs` (reserva,
+espera, dead-letter), `fdp_integration_sync_runs` (contadores e erro),
+`fdp_integration_run_logs` (log por execução) e a varredura agendada que já
+drena essa fila. O que faltava era **quando** enfileirar.
+
+Nenhum agente roda dentro da requisição de quem abriu a tela: o botão "Executar
+agora" **enfileira**, e a varredura executa.
+
+| Cadência | Intervalo | Expediente |
+| --- | --- | --- |
+| Somente manual | — | — |
+| A cada 15 minutos | 15 min | não |
+| A cada 30 minutos | 30 min | não |
+| De hora em hora | 60 min | não |
+| De hora em hora, no expediente | 60 min | sim |
+| Uma vez por dia | 24 h | sim |
+
+Quinze minutos é o piso: abaixo disso a varredura de meia em meia hora deixa de
+fazer sentido e um provedor com limite de requisições vira um incidente nosso.
+Cadência abaixo do piso é **recusada na entrada**, não corrigida em silêncio.
+
+"No expediente" significa o expediente **do grupo**: segunda a sexta, das 8h às
+18h, no fuso configurado no conector. A persistência segue em UTC.
+
+Onde mora cada garantia:
+
+| Garantia | Onde |
+| --- | --- |
+| Dois runners não pegam o mesmo job | `lease_token` + `FOR UPDATE SKIP LOCKED` |
+| Dois jobs não existem para o mesmo conector | índice único parcial `fdp_integration_jobs_active_uq` |
+| Execução longa não perde a reserva | `renewAgentLease`, chamado a cada fase pelo worker de navegador |
+| Reserva abandonada volta à fila | a consulta de reserva aceita `leased` com prazo vencido |
+| Não se martela origem fora do ar | espera de 1, 5, 15 e 60 minutos em `consecutive_failures` |
+| Falha repetida não passa despercebida | `degraded_since` a partir da terceira falha seguida |
+| Item irrecuperável não some | `dead_letter`, visível e reprocessável |
+
+**Custo**: agente pausado, sem credencial, sem mapeamento publicado, com cadência
+manual ou fora do expediente nem chega a ser enfileirado, e o motivo de cada
+recusa é nomeado na resposta da varredura.
+
+**Reprocessar** devolve o **mesmo** job à fila, com o mesmo `run_id` e, portanto,
+as mesmas chaves de idempotência dos itens. O que já entrou não entra de novo —
+um job novo com chave nova reabriria a porta que a idempotência fecha.
+
+| Verificação | Onde |
+| --- | --- |
+| Dois runners, lease, timeout, backoff, dead-letter, idempotência | `npm run db:rehearse-scheduler` |
+| Cadência, expediente, fuso e estado do agente | `tests/agent-schedule.test.mts` |
 
 ---
 
@@ -382,3 +513,4 @@ O objetivo é impedir que o próximo módulo seja o quinto objeto paralelo.
 - `docs/pagamentos-psicologos-e-pj.md` — o motor de pagamento PJ.
 - `docs/conferencia-de-ponto.md` — a fronteira do ponto.
 - `docs/controle-de-epi.md` — a fronteira do EPI.
+- `docs/operacao-de-agentes.md` — como operar os agentes no dia a dia.

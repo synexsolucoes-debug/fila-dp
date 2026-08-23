@@ -38,8 +38,27 @@ const context = await browser.newContext({ viewport: { width: 1440, height: 900 
 const page = await context.newPage();
 
 const consoleErrors = [];
-page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text().slice(0, 160)); });
+/* O console do Chromium relata falha de rede sem dizer qual pedido falhou: a
+   mensagem é sempre "Failed to load resource…". Sem o endereço, a verificação
+   acusa um defeito que ninguém consegue procurar — foi o que aconteceu aqui.
+   `message.location()` carrega a URL do recurso; quando ela vem vazia, o
+   registro das respostas ruins abaixo diz qual pedido estava em curso. */
+const formatConsole = (message) => {
+  const url = message.location()?.url ?? "";
+  const texto = message.text().slice(0, 160);
+  return url && !texto.includes(url) ? `${texto} [${url.replace(base, "")}]` : texto;
+};
+page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(formatConsole(message)); });
 page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error).slice(0, 160)}`));
+
+// Respostas de erro que o navegador recebeu, na ordem: é o rastro que
+// transforma "algo deu 400" em "este pedido deu 400".
+const respostasRuins = [];
+page.on("response", (resposta) => {
+  if (resposta.status() >= 400) {
+    respostasRuins.push(`${resposta.status()} ${resposta.request().method()} ${resposta.url().replace(base, "")}`);
+  }
+});
 
 /**
  * Abre um módulo do painel pelo menu de dois níveis (§25, §65).
@@ -174,6 +193,95 @@ if (password && await emailField.count()) {
   record("voltar e avançar navegam dentro do produto",
     voltou === "/painel" && new URL(page.url()).pathname === "/painel/demandas",
     `voltar=${voltou} avançar=${new URL(page.url()).pathname}`);
+
+  /* As três centrais operacionais (§66, §90).
+     A pergunta que estas conferências respondem é a da §92: uma pessoa abre o
+     Vinculato, vê o que precisa fazer, e chega ao item certo. Se a Central
+     abrir vazia por erro de consulta, ou se o filtro não recortar, isso só
+     aparece no navegador — a rota devolveria 200 nos dois casos. */
+  for (const [rota, titulo] of [
+    ["/painel/trabalho", /está comigo hoje/iu],
+    ["/painel/triagem", /não teve certeza/iu],
+    ["/painel/agentes", /Automação sob controle/iu],
+  ]) {
+    await page.goto(`${base}${rota}`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1500);
+    const cabecalho = await page.locator("h2, h1").allInnerTexts().catch(() => []);
+    record(`${rota} abre com o próprio cabeçalho`,
+      new URL(page.url()).pathname === rota && cabecalho.some((texto) => titulo.test(texto)),
+      `${new URL(page.url()).pathname} · ${cabecalho.slice(0, 3).join(" | ").slice(0, 80)}`);
+  }
+
+  await page.goto(`${base}/painel/trabalho`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  record("a Central de Trabalho oferece escopo, tipo, prazo e ordenação (§6, §7)",
+    await page.getByRole("button", { name: /^Meus itens$/u }).count() > 0
+      && await page.getByRole("button", { name: /^Equipe$/u }).count() > 0
+      && await page.locator("select").count() >= 4,
+    `${await page.locator("select").count()} seletores`);
+
+  record("os contadores da Central são clicáveis e filtram (§11)",
+    await page.locator("button[aria-pressed]").count() >= 2,
+    `${await page.locator("button[aria-pressed]").count()} indicadores`);
+
+  // Trocar o escopo precisa recarregar do servidor, e não filtrar no navegador.
+  // O que se mede é o **contrato**: a rota responde 200 e devolve a forma que a
+  // tela consome. Contar erro de console mediria também o que aconteceu antes,
+  // em outra tela — e acusaria a Central por defeito alheio.
+  const antesDoEscopo = consoleErrors.length;
+  await page.getByRole("button", { name: /^Equipe$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(1500);
+  const respostaDoTrabalho = await page.evaluate(async () => {
+    const resposta = await fetch("/api/work?escopo=equipe", { cache: "no-store" });
+    const dados = await resposta.json().catch(() => ({}));
+    return {
+      status: resposta.status,
+      temItens: Array.isArray(dados.items),
+      temContadores: Boolean(dados.counts) && typeof dados.counts.total === "number",
+      erro: String(dados.error ?? dados.message ?? "").slice(0, 120),
+    };
+  }).catch(() => ({ status: 0, temItens: false, temContadores: false, erro: "sem resposta" }));
+  record("a Central de Trabalho responde com itens e contadores (§11, §12)",
+    respostaDoTrabalho.status === 200 && respostaDoTrabalho.temItens && respostaDoTrabalho.temContadores,
+    `${respostaDoTrabalho.status} ${respostaDoTrabalho.erro}`);
+  record("trocar o escopo não produz erro de JavaScript",
+    consoleErrors.length === antesDoEscopo,
+    consoleErrors.slice(antesDoEscopo, antesDoEscopo + 2).join(" | "));
+
+  /* Fluxo completo: demanda → aba Processo (§66).
+     A aba Processo é onde a consolidação inteira aparece para quem opera. Se ela
+     abrir vazia, o vínculo existe no banco e não existe na tela — que é
+     exatamente o estado que esta etapa veio corrigir.
+
+     A demanda é aberta pelo **endereço dela**, e não por um clique no quadro:
+     é o mesmo link que se manda para um colega, e abre a demanda certa em vez
+     da primeira que o seletor encontrar. */
+  const demanda = await page.evaluate(async () => {
+    const resposta = await fetch("/api/workspace", { cache: "no-store" });
+    const dados = await resposta.json().catch(() => ({}));
+    const cartoes = (dados.lists ?? []).flatMap((lista) => lista.cards ?? []);
+    return cartoes[0]?.id ?? "";
+  }).catch(() => "");
+  record("a semente tem demanda para abrir", Boolean(demanda), demanda || "nenhuma demanda");
+
+  if (demanda) {
+    await page.goto(`${base}/painel/demandas/${encodeURIComponent(demanda)}`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(2000);
+    const temAbaProcesso = await page.getByRole("button", { name: /^Processo$/u }).count() > 0;
+    record("a demanda tem aba de Processo (§42)", temAbaProcesso);
+    if (temAbaProcesso) {
+      await page.getByRole("button", { name: /^Processo$/u }).first().click();
+      await page.waitForTimeout(2000);
+      const texto = await page.locator("[role=dialog]").first().innerText().catch(() => "");
+      record("a aba de Processo diz a etapa ou explica por que não há processo (§42, §43)",
+        /Etapa atual|não nasceu de um processo publicado/iu.test(texto),
+        texto.replace(/\s+/gu, " ").slice(0, 100));
+      record("a aba de Processo não exige leitura de BPMN (§43)",
+        !/\bBPMN\b/u.test(texto), texto.replace(/\s+/gu, " ").slice(0, 60));
+    }
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await page.waitForTimeout(600);
+  }
 
   await page.goto(`${base}/painel/configuracoes/seguranca`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1200);
@@ -774,7 +882,9 @@ record("o site usa o logotipo oficial colorido",
   siteSources.some((src) => src.includes("vinculato-logo")),
   siteSources.join(" ").slice(0, 120));
 
-record("nenhum erro de JavaScript no console do navegador", consoleErrors.length === 0, consoleErrors.slice(0, 2).join(" | "));
+record("nenhum erro de JavaScript no console do navegador", consoleErrors.length === 0,
+  [consoleErrors.slice(0, 2).join(" | "), respostasRuins.length ? `respostas: ${[...new Set(respostasRuins)].slice(0, 4).join(" | ")}` : ""]
+    .filter(Boolean).join(" — "));
 
 await browser.close();
 

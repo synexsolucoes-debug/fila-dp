@@ -12,6 +12,7 @@ import {
   AnimatedDrawer, AnimatedModal, AnimatedTabs, ConfirmDialog, EmptyState, ErrorBanner, FadeIn,
   MotionCard, PageSkeleton, StaggerContainer, StaggerItem, StatusPill, type AnimatedTab,
 } from "../shared";
+import { ProcessOperationPanel } from "../work";
 import { ProcessModeler } from "./ProcessModeler";
 import { processRequest, processStatusLabel, processVersionLabel } from "./processes.api";
 import type {
@@ -658,6 +659,13 @@ function ProcessDetail({ process, permissions, busy, close, openModeler, edit, c
         </dl>
       </section>
     </div>
+
+    {/* A leitura operacional do processo publicado (§39, §40, §43): etapas em
+        texto, quem responde por cada uma, o que ela exige, e o que o processo
+        produziu. O diagrama continua no modelador, para quem desenha. */}
+    {process.currentVersionId ? <section>
+      <ProcessOperationPanel processId={process.id} />
+    </section> : null}
 
     {(process.tags.length > 0 || process.notes) && <section className={styles.detailNotes}>
       {process.tags.length > 0 && <div><strong>Etiquetas</strong><span>{process.tags.map((tag) => <b key={tag}>{tag}</b>)}</span></div>}

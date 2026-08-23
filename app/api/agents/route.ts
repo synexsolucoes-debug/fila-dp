@@ -3,7 +3,8 @@ import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { agentAutomationPolicies, type AgentAutomationPolicy } from "@/lib/agent-proposals";
-import { isAgentChannel, listAgentRuntime, readAgentAutomationPolicy } from "@/lib/agent-runtime";
+import { listAgentRuntime, readAgentAutomationPolicy, resolveAgentChannel } from "@/lib/agent-runtime";
+import { agentCadences, isAgentCadence, nextRunAt } from "@/lib/agent-schedule";
 
 /**
  * Administração de agentes (§65) e kill switch (§66).
@@ -20,6 +21,22 @@ import { isAgentChannel, listAgentRuntime, readAgentAutomationPolicy } from "@/l
  * exatamente o requisito.
  */
 
+/**
+ * O fuso existe de verdade?
+ *
+ * `Intl` é a única fonte que já conhece a base de fusos, com horário de verão
+ * incluído. Testar convertendo é mais barato e mais correto do que manter uma
+ * lista à mão, que envelhece toda vez que um país muda de regra.
+ */
+function isSupportedTimeZone(value: string) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET() {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
@@ -34,6 +51,12 @@ export async function GET() {
 
     return Response.json({
       agents,
+      /* O catálogo vai junto com o estado: a tela precisa oferecer as cadências
+         possíveis com o que cada uma significa, e não um `select` de enums. */
+      cadences: agentCadences.map((cadence) => ({
+        key: cadence.key, label: cadence.label, description: cadence.description,
+        intervalMinutes: cadence.intervalMinutes, businessHoursOnly: cadence.businessHoursOnly,
+      })),
       automation: {
         policy,
         /* O rótulo diz o que a política faz, não o nome dela: "suggest_only"
@@ -46,6 +69,9 @@ export async function GET() {
       },
       permissions: {
         manage: hasCapability(workspace, "integrations.manage"),
+        execute: hasCapability(workspace, "integrations.execute"),
+        reprocess: hasCapability(workspace, "integrations.run"),
+        viewLogs: hasCapability(workspace, "integrations.logs.view"),
         resolveTriage: hasCapability(workspace, "integrations.reconcile"),
       },
     }, { headers: { "Cache-Control": "no-store" } });
@@ -83,18 +109,76 @@ export async function PATCH(request: Request) {
       return Response.json({ automation: { policy } });
     }
 
-    const agentKey = text(body.agentKey, 60);
+    const agentKey = resolveAgentChannel(body.agentKey);
     const enabled = body.enabled;
-    if (!isAgentChannel(agentKey) || typeof enabled !== "boolean") {
+    const cadence = text(body.cadence, 30);
+    const timeZone = text(body.timeZone, 60);
+    if (!agentKey) {
       throw ApiError.badRequest(
         "Informe o agente e se ele deve ficar ativo, ou a política de automação do grupo.",
         "AGENT_TOGGLE_INVALID",
       );
     }
+    if (typeof enabled !== "boolean" && !cadence && !timeZone) {
+      throw ApiError.badRequest(
+        "Informe o que muda: se o agente fica ativo, com que cadência ou em que fuso.",
+        "AGENT_TOGGLE_INVALID",
+      );
+    }
 
-    const current = await d1.prepare("SELECT id, status FROM fdp_integrations WHERE workspace_id = ? AND channel = ?")
-      .bind(workspace.id, agentKey).first<{ id: string; status: string }>();
+    const current = await d1.prepare(`SELECT id, status, schedule_enabled, schedule_cadence, schedule_timezone
+        FROM fdp_integrations WHERE workspace_id = ? AND channel = ?`)
+      .bind(workspace.id, agentKey)
+      .first<{ id: string; status: string; schedule_enabled: number; schedule_cadence: string; schedule_timezone: string }>();
     if (!current) throw ApiError.notFound("Este agente não está configurado neste grupo.", "AGENT_NOT_CONFIGURED");
+
+    /* Cadência e fuso mudam sem passar pelo interruptor: pausar um agente e
+       reagendá-lo são decisões diferentes, e juntá-las na mesma chamada faria
+       um ajuste de horário reativar o que alguém desligou de propósito. */
+    if (cadence || timeZone) {
+      if (cadence && !isAgentCadence(cadence)) {
+        throw ApiError.badRequest(
+          "Cadência desconhecida. Escolha uma das oferecidas — frequências menores que 15 minutos não são aceitas.",
+          "AGENT_CADENCE_INVALID",
+        );
+      }
+      if (timeZone && !isSupportedTimeZone(timeZone)) {
+        throw ApiError.badRequest(
+          "Fuso horário desconhecido. Use um identificador como America/Sao_Paulo.",
+          "AGENT_TIMEZONE_INVALID",
+        );
+      }
+      const nextCadence = cadence || current.schedule_cadence;
+      const nextTimeZone = timeZone || current.schedule_timezone;
+      const scheduleEnabled = nextCadence === "manual" ? 0 : 1;
+      const next = scheduleEnabled
+        ? nextRunAt({ cadence: nextCadence, from: new Date(), timeZone: nextTimeZone })
+        : null;
+
+      await d1.batch([
+        d1.prepare(`UPDATE fdp_integrations
+            SET schedule_cadence = ?, schedule_timezone = ?, schedule_enabled = ?,
+                next_sync_at = ?::timestamptz, updated_at = CURRENT_TIMESTAMP
+          WHERE workspace_id = ? AND id = ?`)
+          .bind(nextCadence, nextTimeZone, scheduleEnabled, next ? next.toISOString() : null, workspace.id, current.id),
+        prepareAuditEvent({
+          workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
+          action: "agent.schedule_changed", entityType: "integration", entityId: current.id,
+          before: { cadence: current.schedule_cadence, timeZone: current.schedule_timezone, scheduleEnabled: current.schedule_enabled },
+          after: { cadence: nextCadence, timeZone: nextTimeZone, scheduleEnabled },
+          metadata: { agentKey }, requestId,
+        }),
+      ]);
+
+      if (typeof enabled !== "boolean") {
+        return Response.json({
+          agent: {
+            key: agentKey, cadence: nextCadence, timeZone: nextTimeZone,
+            scheduleEnabled: scheduleEnabled === 1, nextRunAt: next ? next.toISOString() : null,
+          },
+        });
+      }
+    }
 
     /* Reativar devolve o conector a `connected` só quando ele estava pausado.
        Um conector em `needs_credentials` não vira `connected` por um clique —

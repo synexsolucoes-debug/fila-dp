@@ -1,6 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { getScopedD1 } from "@/db";
 import { apiError } from "@/lib/fila-dp-api";
+import {
+  asAgentQueueConflict, decideAgentSchedule, listSchedulableAgents, prepareNextRun,
+} from "@/lib/agent-scheduler";
 import { processNextIntegrationJob, queueIntegrationRun } from "@/lib/integration-engine";
 import { log } from "@/lib/observability";
 import { nextSankhyaRunAt, parseSankhyaConfig } from "@/lib/sankhya/config";
@@ -17,9 +20,14 @@ export const maxDuration = 60;
  * O que motivou isto: `/api/integrations/worker` só processa um job e exige que
  * quem chama informe o workspace. Nada chamava esse endpoint, então sincronizar
  * enfileirava trabalho que nunca saía da fila — o sintoma era "a sincronização
- * não anda", sem erro em lugar nenhum. A varredura agora também cria uma
- * execução para cada conector Tangerino pronto, de modo que novas fichas não
- * dependam do botão de sincronização.
+ * não anda", sem erro em lugar nenhum. A varredura passou a também **criar**
+ * execução, de modo que novas fichas não dependam do botão de sincronização.
+ *
+ * Quem entra em cada ciclo é decidido pela cadência declarada no conector (§29)
+ * — antes era uma regra escrita aqui dentro, que valia só para o Tangerino e
+ * não podia ser mudada sem deploy. Este é também o runner da execução
+ * automática dos agentes (§28): nenhum agente roda dentro da requisição de
+ * quem abriu a tela.
  *
  * Este endpoint existe para a Vercel Cron, que só faz GET e não envia cabeçalho
  * próprio nem corpo: ela manda `Authorization: Bearer <CRON_SECRET>`. Por isso a
@@ -30,13 +38,6 @@ const MINIMUM_SECRET_LENGTH = 32;
 const TIME_BUDGET_MS = 45_000;
 /** Teto por workspace: um tenant com fila grande não pode consumir a janela inteira. */
 const MAX_JOBS_PER_WORKSPACE = 25;
-/** Mesma cadência do workflow; a chave torna duas chamadas no mesmo intervalo idempotentes. */
-const SCHEDULE_INTERVAL_MS = 30 * 60 * 1000;
-
-function scheduledRunKey(now = Date.now()) {
-  const intervalStart = Math.floor(now / SCHEDULE_INTERVAL_MS) * SCHEDULE_INTERVAL_MS;
-  return `scheduled:${new Date(intervalStart).toISOString()}`;
-}
 
 function matchesSecret(received: string, expected: string) {
   if (received.length < MINIMUM_SECRET_LENGTH || expected.length < MINIMUM_SECRET_LENGTH) return false;
@@ -75,7 +76,11 @@ export async function GET(request: Request) {
     let sankhyaPending = 0;
     let workspacesFailed = 0;
     const touched: string[] = [];
-    const idempotencyKey = scheduledRunKey();
+    /* Recusas que valem ser ditas: agente sem credencial ou sem mapeamento não
+       roda, e quem configurou precisa saber disso sem abrir log de servidor
+       (§56). "Manual", "ainda não venceu" e "já enfileirado" não entram: são o
+       funcionamento normal, e listá-los afogaria o que importa. */
+    const skipped: string[] = [];
     for (const workspace of workspaces.results) {
       if (Date.now() >= deadline) break;
       const scoped = getScopedD1({ workspaceId: workspace.id, userId: null });
@@ -88,38 +93,46 @@ export async function GET(request: Request) {
       // segue; a contagem `workspacesFailed` é o que denuncia a falha.
       try {
         // O cron também inicia a consulta: antes ele apenas drenava jobs criados
-        // manualmente. Só entra o conector Tangerino conectado, com mapeamento de
-        // admissões ativo e sem outra execução pendente, evitando acúmulo de fila.
-        const integrations = await scoped.prepare(`SELECT integration.id, mapping.id AS mapping_id
-          FROM fdp_integrations integration
-          JOIN LATERAL (
-            SELECT candidate.id FROM fdp_integration_mappings candidate
-            WHERE candidate.workspace_id = integration.workspace_id AND candidate.integration_id = integration.id
-              AND candidate.status = 'active' AND candidate.resource_type = 'admissions'
-              AND candidate.direction IN ('inbound', 'bidirectional')
-            ORDER BY candidate.published_at DESC NULLS LAST, candidate.created_at DESC LIMIT 1
-          ) mapping ON TRUE
-          WHERE integration.workspace_id = ? AND integration.channel = 'tangerino' AND integration.status = 'connected'
-            AND NOT EXISTS (
-              SELECT 1 FROM fdp_integration_jobs pending
-              WHERE pending.workspace_id = integration.workspace_id AND pending.integration_id = integration.id
-                AND pending.status IN ('queued', 'leased')
-            ) ORDER BY integration.created_at`).bind(workspace.id).all<{ id: string; mapping_id: string }>();
-        for (const integration of integrations.results) {
+        // manualmente. A regra de quem entra deixou de ser "o Tangerino, sempre"
+        // e passou a ser a cadência declarada em cada conector (§29): o motivo
+        // de cada recusa fica nomeado, e um agente pausado, sem credencial, sem
+        // mapeamento publicado ou fora do expediente nem chega a gastar vaga da
+        // varredura (§87).
+        const agents = await listSchedulableAgents(scoped, workspace.id);
+        for (const decision of decideAgentSchedule(agents, new Date())) {
           if (Date.now() >= deadline) break;
+          if (!decision.due) {
+            if (decision.reason !== "manual_only" && decision.reason !== "not_due"
+              && decision.reason !== "schedule_disabled" && decision.reason !== "already_queued") {
+              skipped.push(`${decision.agent.channel}:${decision.reason}`);
+            }
+            continue;
+          }
           try {
             await queueIntegrationRun(scoped, {
               workspaceId: workspace.id,
-              integrationId: integration.id,
-              mappingId: integration.mapping_id,
+              integrationId: decision.agent.integrationId,
               triggerType: "scheduled",
               requestedBy: null,
-              idempotencyKey,
+              idempotencyKey: decision.idempotencyKey,
             });
+            // O próximo horário é gravado ao enfileirar, e não ao concluir: uma
+            // execução que trava não pode deixar o conector sem horário previsto
+            // e, com isso, fora da varredura para sempre.
+            await prepareNextRun(scoped, {
+              workspaceId: workspace.id,
+              integrationId: decision.agent.integrationId,
+              cadence: decision.agent.cadence,
+              timeZone: decision.agent.timeZone,
+              from: new Date(),
+            }).run();
             scheduled += 1;
           } catch (error) {
+            // Colisão com o índice de execução ativa não é falha: significa que
+            // outro runner já enfileirou este agente neste ciclo.
+            if (asAgentQueueConflict(error)) continue;
             scheduleFailed += 1;
-            log("warn", "integrations.cron_schedule_failed", { workspaceId: workspace.id, connectorId: integration.id }, {
+            log("warn", "integrations.cron_schedule_failed", { workspaceId: workspace.id, connectorId: decision.agent.integrationId }, {
               errorName: error instanceof Error ? error.name : "UnknownError",
               errorCode: error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code).slice(0, 60) : undefined,
             });
@@ -189,11 +202,14 @@ export async function GET(request: Request) {
 
     const workerDispatch = sankhyaPending ? await wakeSankhyaWorker({ route: "/api/cron/integrations" }) : null;
     log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed, workspacesFailed,
-      workerDispatched: workerDispatch?.status === "dispatched" });
+      skipped: skipped.length, workerDispatched: workerDispatch?.status === "dispatched" });
     // A varredura responde 500 quando algum tenant falhou. O workflow do GitHub
     // trata != 200 como falha, então o alerta chega em vez de a fila parar em
     // silêncio; os contadores continuam no corpo para dizer o que passou.
-    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed, workspacesFailed },
+    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed, workspacesFailed,
+      // Até vinte recusas nomeadas: o suficiente para diagnosticar sem transformar
+      // a resposta do cron em despejo da base.
+      skipped: skipped.slice(0, 20) },
       { status: workspacesFailed ? 500 : 200, headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
 }

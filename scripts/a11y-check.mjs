@@ -204,10 +204,15 @@ let screensAudited = 0;
  * primeira passagem com elas dentro acusou 122 violações de contraste, todas
  * reais, todas em rótulos que existiam há meses.
  *
- * O número continua folgado de propósito — 55 contra 64 medidas — para acusar
+ * Subiu de novo, de 55 para 64, quando a Central de Trabalho, a Triagem e a
+ * Central de Agentes entraram no menu: um piso que não acompanha o produto
+ * volta a tolerar exatamente o colapso que ele existe para acusar — as três
+ * telas novas poderiam sumir da varredura inteira sem baixar de 55.
+ *
+ * O número continua folgado de propósito — 64 contra 74 medidas — para acusar
  * um colapso de cobertura sem quebrar quando um módulo sai do plano.
  */
-const MINIMO_DE_TELAS = 55;
+const MINIMO_DE_TELAS = 64;
 
 /** `path === null` audita a tela já aberta, sem recarregar — usado nas visões do painel. */
 async function audit(label, path, setup) {
@@ -342,13 +347,22 @@ async function auditPanelViews(theme = "") {
   for (const rotulo of rotulos) {
     await processos.filter({ hasText: rotulo }).first().click().catch(() => undefined);
     await page.waitForTimeout(900);
-    await audit(`Painel › ${rotulo}${sufixo}`, null);
-    await auditModuleTabs(`Painel › ${rotulo}${sufixo}`);
 
     // Segundo nível: os módulos do processo recém-aberto. Eles nascem com a
     // abertura, então precisam ser lidos agora, não antes.
     const modulos = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process-view');
     const nomes = (await modulos.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+
+    /* Abrir o processo já leva ao primeiro módulo dele — e o relatório vinha
+       chamando essa tela pelo nome do *processo*, não pelo do módulo. O módulo
+       de entrada ficava então sem linha própria: procurar "Meu trabalho" no
+       relatório não achava nada, e a única leitura possível era a errada — que
+       a Central de Trabalho não tinha sido auditada. Cobertura que não dá para
+       conferir por nome não serve para dizer que algo foi coberto. */
+    const entrada = `Painel › ${rotulo}${nomes[0] ? ` › ${nomes[0]}` : ""}${sufixo}`;
+    await audit(entrada, null);
+    await auditModuleTabs(entrada);
+
     for (const nome of nomes.slice(1)) {
       await modulos.filter({ hasText: nome }).first().click().catch(() => undefined);
       await page.waitForTimeout(900);

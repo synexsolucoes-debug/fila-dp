@@ -17,10 +17,12 @@ const counters = (over: Partial<{
   queue: Partial<ReturnType<typeof baseQueue>>;
   connectors: Partial<ReturnType<typeof baseConnectors>>;
   webhooks: Partial<ReturnType<typeof baseWebhooks>>;
+  operations: Partial<ReturnType<typeof baseOperations>>;
 }> = {}) => ({
   queue: { ...baseQueue(), ...over.queue },
   connectors: { ...baseConnectors(), ...over.connectors },
   webhooks: { ...baseWebhooks(), ...over.webhooks },
+  operations: { ...baseOperations(), ...over.operations },
 });
 
 const baseQueue = () => ({
@@ -29,6 +31,7 @@ const baseQueue = () => ({
 });
 const baseConnectors = () => ({ connected: 0, failing: 0, overdue: 0, lastSyncAt: null as string | null });
 const baseWebhooks = () => ({ pending: 0, failed: 0, deadLetter: 0, deliveredLast24h: 0 });
+const baseOperations = () => ({ degradedAgents: 0, pendingTriage: 0, staleTriage: 0, stalledInstances: 0 });
 
 test("sem pendência a operação é saudável", () => {
   const verdict = classifyOperationalHealth(counters());
@@ -113,4 +116,50 @@ test("o relatório operacional só entrega detalhe por workspace a quem administ
   assert.match(source, /getScopedD1\(\{ workspaceId, userId: null \}\)/u);
   // Um tenant ilegível não pode apagar o retrato dos demais.
   assert.match(source, /catch \{/u);
+});
+
+/* -------------------------------------------------------------------------- *
+ * Sintomas do trabalho, e não só da fila (§52)
+ * -------------------------------------------------------------------------- */
+
+test("a fila pode estar drenando e a operação continuar parada", () => {
+  // Este é o ponto do bloco novo: nenhum dos sintomas abaixo aparece em
+  // contagem de job, e todos significam trabalho de cliente parado.
+  const agente = classifyOperationalHealth(counters({ operations: { degradedAgents: 1 } }));
+  assert.equal(agente.severity, "degradado");
+  assert.match(agente.detail, /falhas seguidas/u);
+  assert.match(agente.detail, /desatualizado/u, "precisa dizer a consequência, não só o estado");
+});
+
+test("triagem esquecida acende antes de virar prejuízo", () => {
+  const parada = classifyOperationalHealth(counters({ operations: { pendingTriage: 4, staleTriage: 2 } }));
+  assert.equal(parada.severity, "atencao");
+  assert.match(parada.detail, new RegExp(`${OPERATIONAL_HEALTH_THRESHOLDS.STALE_TRIAGE_DAYS} dias`, "u"));
+
+  // Entrada que chegou hoje é operação normal: acender alarme nela ensina a
+  // equipe a ignorar o alarme.
+  const recente = classifyOperationalHealth(counters({ operations: { pendingTriage: 4 } }));
+  assert.equal(recente.severity, "atencao");
+  assert.match(recente.detail, /aguardam classificação na triagem/u);
+});
+
+test("demanda de processo esquecida é sintoma, e o prazo está documentado", () => {
+  const verdict = classifyOperationalHealth(counters({ operations: { stalledInstances: 3 } }));
+  assert.equal(verdict.severity, "atencao");
+  assert.match(verdict.detail, new RegExp(`${OPERATIONAL_HEALTH_THRESHOLDS.STALLED_INSTANCE_DAYS} dias`, "u"));
+});
+
+test("fila parada continua vencendo qualquer sintoma de trabalho", () => {
+  // A ordem importa: quem atende precisa ver primeiro o que trava tudo.
+  const verdict = classifyOperationalHealth(counters({
+    queue: { delayed: 1 }, operations: { degradedAgents: 5, staleTriage: 9 },
+  }));
+  assert.equal(verdict.severity, "critico");
+  assert.match(verdict.detail, /não está sendo drenada/u);
+});
+
+test("todo limite novo está declarado, e não escondido no meio da consulta", () => {
+  for (const key of ["STALE_TRIAGE_DAYS", "STALLED_INSTANCE_DAYS", "DEGRADED_AFTER_FAILURES"] as const) {
+    assert.ok(OPERATIONAL_HEALTH_THRESHOLDS[key] > 0, `${key} sem valor declarado`);
+  }
 });

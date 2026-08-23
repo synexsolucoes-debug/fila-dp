@@ -76,6 +76,13 @@ export async function queueSankhyaRun(d1: Database, input: {
       ), inserted_job AS (
         INSERT INTO fdp_integration_jobs (id, workspace_id, integration_id, run_id, job_type, idempotency_key, payload_json, max_attempts)
         SELECT ?, ?, ?, chosen_run.id, ?, 'run:' || chosen_run.id, jsonb_build_object('runId', chosen_run.id), ? FROM chosen_run
+        -- Um agente por vez (§31): o índice único parcial impõe a invariante, e
+        -- esta condição evita que reenviar vire erro de restrição.
+        WHERE NOT EXISTS (
+          SELECT 1 FROM fdp_integration_jobs active
+          WHERE active.workspace_id = chosen_run.workspace_id AND active.integration_id = chosen_run.integration_id
+            AND active.status IN ('queued', 'leased')
+        )
         ON CONFLICT (workspace_id, integration_id, idempotency_key) DO NOTHING
       ) SELECT id, integration_id, trigger_type, status, idempotency_key, created_at FROM chosen_run`)
       .bind(runId, input.workspaceId, input.integrationId, input.triggerType, key, input.requestedBy ?? null,
