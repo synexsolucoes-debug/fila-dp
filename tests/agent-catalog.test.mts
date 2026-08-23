@@ -371,3 +371,29 @@ test("canal desconhecido não é rebatizado como outro canal real", async () => 
   assert.ok(!/channels\.has\(rawChannel\) \? rawChannel : "erp"/u.test(api),
     "canal desconhecido voltou a virar erp, e a tela volta a mentir sobre qual conector é");
 });
+
+test("configurado é ter o que o agente exige, não ter algo gravado", async () => {
+  const { agentIsConfigured } = await import("../lib/agent-catalog.ts");
+  /* O Agente Tangerino não exige campo nenhum: o único que ele tem é opcional.
+     Medir por "config_json vazio" o deixava em "Não configurado" para sempre,
+     e o setup travava logo depois de a credencial ser guardada — o caminho
+     inteiro ficava inalcançável por causa de um campo que ninguém precisa
+     preencher. */
+  assert.equal(agentIsConfigured("tangerino_browser", {}), true);
+  // O Sankhya exige endereço e empresa: sem eles, não está configurado.
+  assert.equal(agentIsConfigured("sankhya_browser", {}), false);
+  assert.equal(agentIsConfigured("sankhya_browser", { endpoint: "https://x.sankhya.com.br/" }), false);
+  assert.equal(agentIsConfigured("sankhya_browser", { endpoint: "https://x.sankhya.com.br/", companyId: "co-1" }), true);
+  // Campo em branco não conta como preenchido.
+  assert.equal(agentIsConfigured("sankhya_browser", { endpoint: "  ", companyId: "co-1" }), false);
+  // Canal fora do catálogo nunca é "configurado".
+  assert.equal(agentIsConfigured("erp", { endpoint: "x" }), false);
+});
+
+test("o estado do agente não trava depois da credencial", async () => {
+  const { agentIsConfigured, agentState } = await import("../lib/agent-catalog.ts");
+  const configurado = agentIsConfigured("tangerino_browser", {});
+  assert.equal(agentState({ configured: configurado }), "credential_pending");
+  assert.equal(agentState({ configured: configurado, hasCredential: true }), "test_pending");
+  assert.equal(agentState({ configured: configurado, hasCredential: true, testedAt: "2026-01-01" }), "ready");
+});
