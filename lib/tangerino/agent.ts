@@ -4,6 +4,7 @@ import { openCredentials } from "../integrations.ts";
 import { log } from "../observability.ts";
 import { prepareDomainEvent } from "../outbox.ts";
 import { tangerinoAgentConfig } from "./config.ts";
+import { ensureTangerinoErpDemand, type TangerinoDemandResult } from "./demand.ts";
 import { safeTangerinoError, tangerinoErrors } from "./errors.ts";
 import { tangerinoBrowserLoginUrl } from "./hosts.ts";
 import { admissionChanged, admissionSearchTerm, chooseAdmission, parseAdmission } from "./parser.ts";
@@ -106,10 +107,10 @@ async function saveExternalReference(d1: Database, input: {
 
 /** A leitura bem-sucedida anterior, para saber se algo mudou (§48). */
 async function previousSuccess(d1: Database, workspaceId: string, employeeId: string, exceptId: string) {
-  return d1.prepare(`SELECT raw_status, normalized_status FROM fdp_tangerino_admission_consultations
+  return d1.prepare(`SELECT raw_status, normalized_status, stage FROM fdp_tangerino_admission_consultations
     WHERE workspace_id = ? AND employee_id = ? AND state = 'SUCCESS' AND id <> ?
     ORDER BY consulted_at DESC LIMIT 1`)
-    .bind(workspaceId, employeeId, exceptId).first<{ raw_status: string; normalized_status: string }>();
+    .bind(workspaceId, employeeId, exceptId).first<{ raw_status: string; normalized_status: string; stage: string }>();
 }
 
 /** Quantos processos a pesquisa achou, para a tela dizer "encontrei 3" em vez de "erro". */
@@ -183,7 +184,11 @@ export async function runNextConsultation(
     const externalId = admission.externalAdmissionId || hit.id;
     const previousRow = await previousSuccess(d1, workspaceId, claimed.employee_id, claimed.id);
     const previous = previousRow
-      ? { rawStatus: String(previousRow.raw_status ?? ""), normalizedStatus: String(previousRow.normalized_status ?? "") }
+      ? {
+          rawStatus: String(previousRow.raw_status ?? ""),
+          normalizedStatus: String(previousRow.normalized_status ?? ""),
+          stage: String(previousRow.stage ?? ""),
+        }
       : null;
     const changed = admissionChanged(previous, admission);
     const durationMs = Date.now() - startedAt;
@@ -214,25 +219,70 @@ export async function runNextConsultation(
       }),
     ];
 
-    /* Mudança de status vira evento, e para por aí (§50).
-       O evento existe para ser visto, não para disparar automação: nesta versão
-       o Vinculato detecta, registra e mostra. Avançar a demanda sozinho a partir
-       de um texto lido de tela — cuja tradução ainda está sendo mapeada — seria
-       deixar o processo do cliente andar por conta de uma regex. */
+    /* A mudança continua sendo registrada separadamente. A automação não usa a
+       tradução de `rawStatus`: o único gatilho aceito é a etapa literal "Dados
+       contratuais", validada depois que esta consulta já foi persistida. */
     if (changed) {
       statements.push(prepareDomainEvent(d1, {
         workspaceId, eventType: "tangerino.admission.status_changed", entityType: "employee", entityId: claimed.employee_id,
         payload: {
           consultationId: claimed.id, employeeId: claimed.employee_id,
           previousStatus: previous?.normalizedStatus ?? null, normalizedStatus: admission.normalizedStatus,
+          previousStage: previous?.stage ?? null, stage: admission.stage,
           occurredAt: new Date().toISOString(),
         },
       }));
     }
     await d1.batch(statements);
 
+    let demand: TangerinoDemandResult = { status: "not_target_stage", cardId: null };
+    try {
+      demand = await ensureTangerinoErpDemand(d1, {
+        workspaceId,
+        integrationId: claimed.integration_id,
+        employeeId: claimed.employee_id,
+        consultationId: claimed.id,
+        externalAdmissionId: externalId,
+        admission,
+      });
+    } catch {
+      // A leitura já foi gravada com sucesso. Uma falha ao abrir a demanda não
+      // apaga essa evidência nem transforma a consulta em erro de navegador;
+      // a próxima varredura tentará novamente e o evento idempotente impede
+      // duplicidade caso a primeira tentativa tenha chegado ao banco.
+      log("error", "tangerino.erp_demand_failed", { workspaceId }, {
+        consultationId: claimed.id, integrationId: claimed.integration_id,
+      });
+      await d1.batch([
+        prepareDomainEvent(d1, {
+          workspaceId,
+          eventType: "integration.failed",
+          entityType: "integration",
+          entityId: claimed.integration_id,
+          payload: {
+            integrationId: claimed.integration_id,
+            runId: claimed.id,
+            errorCode: "TANGERINO_ERP_DEMAND_FAILED",
+            reason: "Não foi possível abrir a demanda após a etapa Dados contratuais.",
+            occurredAt: new Date().toISOString(),
+          },
+        }),
+        prepareAuditEvent({
+          workspaceId,
+          actorType: "system",
+          actorEmail: "SYSTEM",
+          action: "tangerino.admission.erp_demand_failed",
+          outcome: "failure",
+          entityType: "employee",
+          entityId: claimed.employee_id,
+          after: { consultationId: claimed.id, stage: admission.stage },
+        }),
+      ]).catch(() => undefined);
+    }
+
     log("info", "tangerino.consultation_completed", { workspaceId }, {
       durationMs, normalizedStatus: admission.normalizedStatus, changed, attempt: claimed.attempt,
+      demandStatus: demand.status, demandCardId: demand.cardId ?? "",
     });
     return {
       consultationId: claimed.id, state: "SUCCESS", source: "BROWSER", errorCode: "",
