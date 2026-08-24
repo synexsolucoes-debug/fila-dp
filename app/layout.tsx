@@ -4,6 +4,9 @@ import { headers } from "next/headers";
 import "./globals.css";
 import "./access.css";
 import "./dashboard-modern.css";
+// Carregada por último de propósito: é a camada que corrige e refina o que as
+// três folhas anteriores acumularam. Ver o cabeçalho do arquivo.
+import "./interface-refresh.css";
 
 /**
  * Tipografia do produto (§15): Manrope nos títulos, Inter na interface e nos

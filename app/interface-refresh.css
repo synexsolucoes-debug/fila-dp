@@ -1,0 +1,517 @@
+/*
+ * Camada de refinamento da interface operacional.
+ *
+ * Este arquivo é carregado por último, depois de globals.css, access.css e
+ * dashboard-modern.css. Ele existe por um motivo prático: as três folhas
+ * anteriores foram escritas em gerações diferentes e já se sobrescrevem entre
+ * si. Reabrir cada uma para ajustar cor e movimento espalharia a decisão por
+ * quatro mil linhas. Aqui as decisões novas ficam juntas, comentadas e fáceis
+ * de reverter — quem quiser saber por que um tom mudou lê um arquivo só.
+ *
+ * O que está aqui:
+ *   1. tokens de movimento e as animações compartilhadas;
+ *   2. a barra lateral que acompanha a rolagem;
+ *   3. a entrada de módulos, modais, gavetas e listas;
+ *   4. as correções de contraste medidas nos dois temas;
+ *   5. o polimento de superfície (elevação, raio, foco, estados).
+ *
+ * Toda cor daqui foi **medida** contra o fundo real em que ela aparece, com a
+ * mesma fórmula da WCAG 2.2 usada em scripts/a11y-check.mjs. As razões estão
+ * anotadas em cada bloco: elas são o argumento, não um comentário decorativo.
+ */
+
+/* ========================================================================== */
+/* 1. Movimento                                                               */
+/* ========================================================================== */
+
+:root {
+  /* Três durações bastam. Mais que isso vira ruído e cada tela escolhe a sua. */
+  --motion-fast: 130ms;   /* estados: hover, foco, pressionar */
+  --motion-base: 220ms;   /* entrada de elemento: cartão, linha, painel */
+  --motion-slow: 340ms;   /* superfície grande: modal, gaveta, módulo */
+
+  /* Saída rápida e chegada lenta. É o que faz a interface parecer que
+   * desacelera ao chegar, em vez de parar de repente. */
+  --motion-enter: cubic-bezier(.16, 1, .3, 1);
+  --motion-exit: cubic-bezier(.4, 0, 1, 1);
+  --motion-standard: cubic-bezier(.2, .6, .3, 1);
+
+  /* Elevação em três degraus, coerente entre painel e console. */
+  --elevation-1: 0 1px 2px rgba(6, 43, 96, .06), 0 1px 3px rgba(6, 43, 96, .04);
+  --elevation-2: 0 2px 4px rgba(6, 43, 96, .05), 0 8px 20px rgba(6, 43, 96, .07);
+  --elevation-3: 0 24px 60px rgba(4, 27, 69, .22), 0 2px 8px rgba(4, 27, 69, .10);
+}
+
+@keyframes vin-fade { from { opacity: 0; } to { opacity: 1; } }
+
+@keyframes vin-rise {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes vin-pop {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes vin-slide-right {
+  from { opacity: 0; transform: translate3d(28px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes vin-slide-left {
+  from { opacity: 0; transform: translate3d(-18px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Faixa de brilho para estados de carregamento. */
+@keyframes vin-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/*
+ * Quem pediu menos movimento recebe menos movimento — e ainda assim recebe a
+ * interface inteira. As animações viram um corte curto de opacidade em vez de
+ * sumirem: sem nenhuma transição, uma modal que aparece do nada é mais confusa
+ * que uma que aparece rápido.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 1ms;
+    --motion-base: 1ms;
+    --motion-slow: 1ms;
+  }
+
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========================================================================== */
+/* 2. Barra lateral que acompanha a rolagem                                   */
+/* ========================================================================== */
+
+/*
+ * O sintoma era a barra esquerda subindo junto com o conteúdo. A causa não
+ * estava na barra: ela já era `position: sticky`. Estava em `overflow-x: hidden`
+ * no `body` e no `.dashboard-shell` — um elemento com overflow diferente de
+ * `visible` vira contêiner de rolagem, e o sticky passa a se prender a ele em
+ * vez de à janela. Como esse contêiner não rola (quem rola é a página), o
+ * sticky nunca era acionado. A troca por `overflow-x: clip` está em access.css,
+ * junto das declarações originais; aqui fica só o que a barra precisa para se
+ * comportar bem depois disso.
+ */
+/*
+ * Vale só a partir de 761px, que é onde a barra ainda é uma coluna. Abaixo
+ * disso ela vira uma faixa de 60px no topo, e as regras que fazem isso já estão
+ * em dashboard-modern.css — como esta folha é carregada depois, uma altura
+ * global aqui venceria aquelas e devolveria a coluna no celular.
+ */
+@media (min-width: 761px) {
+  .dashboard-sidebar {
+    position: sticky;
+    top: 0;
+    /* `dvh` acompanha a barra de endereço que aparece e some no navegador. */
+    height: 100dvh;
+    /* Com muitos módulos liberados a lista passa da altura da tela. Sem isto o
+     * fim do menu ficava inalcançável — a página rolava, mas a barra não. */
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* Chegar ao fim do menu não pode continuar rolando a página atrás dele. */
+    overscroll-behavior: contain;
+  }
+}
+
+.dashboard-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, .22) transparent;
+  transition: width var(--motion-base) var(--motion-standard);
+}
+
+.dashboard-sidebar::-webkit-scrollbar { width: 8px; }
+.dashboard-sidebar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .18);
+  background-clip: content-box;
+}
+.dashboard-sidebar:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .3); background-clip: content-box; }
+
+/* O cabeçalho do conteúdo gruda logo abaixo do topo, para que o contexto
+ * ("Grupo / Demandas") não desapareça quando a lista é longa. */
+.dashboard-header {
+  position: sticky;
+  z-index: 25;
+  top: 0;
+  backdrop-filter: blur(14px);
+  transition: box-shadow var(--motion-base) var(--motion-standard);
+}
+
+
+/* ========================================================================== */
+/* 3. Entrada de módulos, modais e listas                                     */
+/* ========================================================================== */
+
+/*
+ * Cada módulo é remontado com `key={view}` no WorkspaceApp, então a animação
+ * roda de novo a cada troca — é isso que dá a sensação de "o módulo carregou"
+ * em vez de "o conteúdo trocou no lugar".
+ */
+.dashboard-view {
+  animation: vin-rise var(--motion-slow) var(--motion-enter) both;
+}
+
+.dashboard-heading {
+  animation: vin-slide-left var(--motion-base) var(--motion-enter) both;
+}
+
+/* Escalonamento curto nas primeiras faixas do módulo: o olho acompanha a ordem
+ * de leitura em vez de receber tudo de uma vez. O limite de seis existe para
+ * que a última faixa nunca espere mais que ~180ms. */
+.dashboard-view > * { animation: vin-rise var(--motion-base) var(--motion-enter) both; }
+.dashboard-view > *:nth-child(1) { animation-delay: 20ms; }
+.dashboard-view > *:nth-child(2) { animation-delay: 50ms; }
+.dashboard-view > *:nth-child(3) { animation-delay: 80ms; }
+.dashboard-view > *:nth-child(4) { animation-delay: 110ms; }
+.dashboard-view > *:nth-child(5) { animation-delay: 140ms; }
+.dashboard-view > *:nth-child(n + 6) { animation-delay: 170ms; }
+
+/* Fundo escurece; a janela sobe e se assenta. */
+.workspace-modal-backdrop {
+  animation: vin-fade var(--motion-base) var(--motion-standard) both;
+}
+
+.workspace-modal {
+  animation: vin-pop var(--motion-slow) var(--motion-enter) both;
+  box-shadow: var(--elevation-3);
+}
+
+/* A gaveta lateral entra pela borda de onde ela vem. */
+.notification-drawer {
+  animation: vin-slide-right var(--motion-slow) var(--motion-enter) both;
+}
+
+/* A paleta de busca desce do topo, que é de onde ela é invocada. */
+.search-palette {
+  animation: vin-pop var(--motion-base) var(--motion-enter) both;
+}
+
+.workspace-toast {
+  animation: vin-pop var(--motion-base) var(--motion-enter) both;
+  box-shadow: var(--elevation-3);
+}
+
+/* Listas operacionais: uma entrada curta o bastante para não atrasar leitura. */
+.dashboard-card-list > article,
+.overview-attention-list > article,
+.inbox-list > .inbox-item,
+.workspace-member-list > article {
+  animation: vin-fade var(--motion-base) var(--motion-standard) both;
+}
+
+/* ========================================================================== */
+/* 4. Estados e micro-interações                                              */
+/* ========================================================================== */
+
+/*
+ * Uma regra por família de controle, sempre com propriedade nomeada: `transition:
+ * all` obriga o navegador a animar layout junto e é o caminho mais curto para
+ * uma interface que engasga.
+ */
+.dashboard-sidebar nav button,
+.dashboard-header-actions button,
+.primary-button,
+.secondary-button,
+.danger-button,
+.filter-chip,
+.dashboard-tabs button,
+.settings-nav button {
+  transition:
+    background-color var(--motion-fast) var(--motion-standard),
+    border-color var(--motion-fast) var(--motion-standard),
+    color var(--motion-fast) var(--motion-standard),
+    box-shadow var(--motion-fast) var(--motion-standard),
+    transform var(--motion-fast) var(--motion-standard);
+}
+
+.primary-button:hover:not(:disabled),
+.secondary-button:hover:not(:disabled),
+.dashboard-header-actions .new-demand:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-2);
+}
+
+/* O clique precisa devolver alguma coisa na hora: 60ms de afundamento fazem o
+ * botão parecer respondendo mesmo quando a requisição demora. */
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.danger-button:active:not(:disabled),
+.dashboard-header-actions button:active:not(:disabled) {
+  transform: translateY(0) scale(.985);
+  box-shadow: none;
+  transition-duration: 60ms;
+}
+
+.dashboard-task,
+.overview-panel,
+.overview-metrics article,
+.dashboard-column {
+  transition:
+    border-color var(--motion-base) var(--motion-standard),
+    box-shadow var(--motion-base) var(--motion-standard),
+    transform var(--motion-base) var(--motion-standard);
+}
+
+.dashboard-task:hover {
+  transform: translateY(-2px);
+  border-color: var(--ui-border-strong);
+  box-shadow: var(--elevation-2);
+}
+
+/* A marca do item ativo entra da esquerda em vez de piscar no lugar. */
+.dashboard-sidebar nav button::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand-accent-on-dark);
+  transform: translateY(-50%);
+  transition: height var(--motion-base) var(--motion-enter);
+}
+
+.dashboard-sidebar nav button.active::before { height: 22px; }
+
+/* O anel de foco é o mesmo em toda a interface e nunca fica escondido atrás do
+ * vizinho: sem o z-index ele some sob o cartão seguinte em listas densas. */
+.dashboard-shell :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  position: relative;
+  z-index: 3;
+  outline: 3px solid color-mix(in srgb, var(--brand-accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* ========================================================================== */
+/* 5. Contraste — modo claro                                                  */
+/* ========================================================================== */
+
+/*
+ * Os valores abaixo saíram de medição em navegador, não de estimativa. Cada
+ * comentário traz a razão antiga e a nova, para que uma revisão futura saiba o
+ * que estava sendo consertado antes de mexer no tom.
+ */
+
+.dashboard-shell {
+  /* Tons de estado, um par por tema. O CSS antigo repetia HEX claro direto na
+   * regra do chip, o que deixava o mesmo chip legível no claro e ofuscante no
+   * escuro. Com par nomeado, o tema troca os dois lados juntos. */
+  --tone-safe-surface: #E0F6ED;
+  --tone-safe-text: #10614A;
+  --tone-warn-surface: #FFF0DF;
+  --tone-warn-text: #8A4E08;
+  --tone-danger-surface: #FCE9E7;
+  --tone-danger-text: #A3271D;
+
+  /* Crachá de contagem: branco sobre #ef5b5b dava 3.32:1. Sobre #C5342E dá
+   * 5.38:1 e o vermelho continua lendo como alerta. */
+  --ui-badge-surface: #C5342E;
+  --ui-badge-text: #FFFFFF;
+
+  /* Texto de apoio sobre o azul-marinho da barra lateral. #71869a dava 4.47:1
+   * — reprovado por pouco, que é o pior tipo de reprovação porque parece certo.
+   * #9FB3C9 dá 7.83:1. */
+  --on-sidebar-text: #C3D4E8;
+  --on-sidebar-muted: #9FB3C9;
+  --on-sidebar-section: #8FA6BE;
+}
+
+.dashboard-shell.theme-dark {
+  /* No escuro o chip é um véu da cor sobre a superfície, não um bloco claro:
+   * um retângulo #FFF0DF no meio de uma tela escura ofusca e ainda por cima
+   * chama mais atenção que o conteúdo. */
+  --tone-safe-surface: color-mix(in srgb, #34D399 14%, var(--ui-surface));
+  --tone-safe-text: #7DE0BC;
+  --tone-warn-surface: color-mix(in srgb, #F4A261 16%, var(--ui-surface));
+  --tone-warn-text: #F6C88A;
+  --tone-danger-surface: color-mix(in srgb, #FF6B5E 16%, var(--ui-surface));
+  --tone-danger-text: #FFA79E;
+
+  --ui-badge-surface: #D9534B;
+  --ui-badge-text: #1A0705;
+
+  --on-sidebar-text: #C3D4E8;
+  --on-sidebar-muted: #9FB3C9;
+  --on-sidebar-section: #8FA6BE;
+}
+
+/* -- Barra lateral -------------------------------------------------------- */
+
+/* O ícone do item ativo usava --ui-mint (#168CFD) sobre o realce do item:
+ * 3.55:1 no claro e 4.02:1 no escuro. #6FB4FF dá 6:1 e 6.73:1. */
+.dashboard-sidebar nav button.active > span,
+.dashboard-sidebar nav a.active > span {
+  color: var(--brand-accent-on-dark);
+}
+
+/* O realce do item ativo ainda era o verde-menta da marca anterior
+ * (rgba(98,213,178,.16)), o que puxava o azul-marinho para um tom esverdeado. */
+.dashboard-sidebar nav button.active,
+.dashboard-sidebar nav button:hover,
+.dashboard-sidebar nav a.active,
+.dashboard-sidebar nav a:hover {
+  background: color-mix(in srgb, var(--brand-accent) 18%, transparent);
+  color: #fff;
+}
+
+.dashboard-sidebar nav button:not(.active),
+.dashboard-sidebar nav a:not(.active) { color: var(--on-sidebar-text); }
+.dashboard-sidebar nav button:not(.active) > span,
+.dashboard-sidebar nav a:not(.active) > span { color: var(--on-sidebar-muted); }
+.sidebar-nav-section, .sidebar-workspace > span { color: var(--on-sidebar-section); }
+.sidebar-account small, .sidebar-workspace button span { color: var(--on-sidebar-muted); }
+.sidebar-group-context small { color: var(--on-sidebar-muted); }
+
+.dashboard-sidebar nav button b,
+.dashboard-sidebar nav a b {
+  background: var(--ui-badge-surface);
+  color: var(--ui-badge-text);
+}
+
+/*
+ * "Entrar em outra conta" nunca teve reset: sem `background` e `border`
+ * próprios, o botão herdava o desenho padrão do navegador — um retângulo cinza
+ * claro com borda, no meio do azul-marinho — e o ícone branco dentro dele ficava
+ * em 1.15:1. É o caso mais visível do relato "não dá para ver os elementos".
+ */
+.sidebar-account .switch-account-button,
+.sidebar-account form {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-account :is(.switch-account-button, .sign-out-button) {
+  color: var(--on-sidebar-muted);
+  opacity: 1;
+  transition: background-color var(--motion-fast) var(--motion-standard), color var(--motion-fast) var(--motion-standard);
+}
+
+.sidebar-account :is(.switch-account-button, .sign-out-button):hover {
+  background: color-mix(in srgb, var(--brand-accent) 22%, transparent);
+  color: #fff;
+}
+
+/* -- Texto de apoio em superfície clara ----------------------------------- */
+
+/* #758294 sobre branco dava 3.91:1; --ui-text-soft dá 6.15:1 e já acompanha o
+ * tema, então o mesmo seletor serve para claro e escuro. */
+.dashboard-check,
+.dashboard-comments,
+.workspace-member-list article > div small { color: var(--ui-text-soft); }
+
+/* O papel do integrante (#647284 sobre #EEF2F8, 4.37:1) fica em 5.47:1. */
+.workspace-member-list article > b { color: var(--ui-text-soft); }
+
+/* -- Chips de estado ------------------------------------------------------ */
+
+.dashboard-sla.safe,
+.dashboard-sla.completed,
+.member-activation-status.active,
+.company-profile-card header em {
+  background: var(--tone-safe-surface);
+  color: var(--tone-safe-text);
+}
+
+.dashboard-sla.warning,
+.member-activation-status.pending {
+  background: var(--tone-warn-surface);
+  color: var(--tone-warn-text);
+}
+
+.dashboard-sla.overdue {
+  background: var(--tone-danger-surface);
+  color: var(--tone-danger-text);
+}
+
+.overview-metrics .requires-attention {
+  border-color: color-mix(in srgb, var(--ui-warning) 55%, var(--ui-border));
+  background: var(--tone-warn-surface);
+}
+.overview-metrics .requires-attention strong { color: var(--tone-warn-text); }
+
+/* ========================================================================== */
+/* 6. Contraste — modo escuro                                                 */
+/* ========================================================================== */
+
+/* As iniciais do avatar usavam --ui-mint (#168CFD) sobre a superfície suave:
+ * 4.2:1. Sobre #182b48, #9CCBFF dá 8.39:1. */
+.theme-dark :is(.user-avatar, .header-profile > span, .workspace-switcher button > i, .workspace-member-list article > i, .sidebar-workspace button i) {
+  background: color-mix(in srgb, var(--brand-accent) 20%, var(--ui-surface-muted));
+  color: #9CCBFF;
+}
+
+/*
+ * O rótulo do cabeçalho das modais herdava --brand (#0857B2), que é um azul de
+ * superfície clara: 2.44:1 sobre a modal escura. O par legível já existe em
+ * --ui-mint-text, que o tema escuro define como o acento sobre fundo escuro.
+ */
+.theme-dark :is(.workspace-modal, .notification-drawer, .search-palette) header span,
+.theme-dark .confirmation-modal header span,
+.theme-dark .notification-actions button {
+  color: var(--brand-accent-on-dark);
+}
+
+/* Fundo de superfícies que ficaram brancas por HEX fixo na folha antiga. */
+.theme-dark .search-palette { background: var(--ui-surface); border-color: var(--ui-border); }
+.theme-dark .search-palette > header { background: var(--ui-surface); border-color: var(--ui-border); }
+.theme-dark .search-palette > header input { color: var(--ui-text); }
+.theme-dark .search-results > button { color: var(--ui-text); }
+.theme-dark .search-results > button small { color: var(--ui-text-soft); }
+.theme-dark .search-results > button em { background: var(--tone-safe-surface); color: var(--tone-safe-text); }
+.theme-dark .search-results > button em.overdue { background: var(--tone-danger-surface); color: var(--tone-danger-text); }
+.theme-dark .search-results > button em.warning { background: var(--tone-warn-surface); color: var(--tone-warn-text); }
+.theme-dark .search-palette > footer { border-color: var(--ui-border); color: var(--ui-text-soft); }
+
+.theme-dark .workspace-toast {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.theme-dark .workspace-toast > span { background: color-mix(in srgb, var(--brand-accent) 24%, var(--ui-surface-muted)); color: #9CCBFF; }
+.theme-dark .workspace-toast.error > span { background: var(--tone-danger-surface); color: var(--tone-danger-text); }
+.theme-dark .workspace-toast button { color: var(--ui-text-soft); }
+
+.theme-dark .notification-list > button { color: var(--ui-text); }
+.theme-dark .notification-list > button p { color: var(--ui-text-soft); }
+.theme-dark .notification-list > button time { color: var(--ui-text-soft); }
+
+/* ========================================================================== */
+/* 7. Superfície                                                              */
+/* ========================================================================== */
+
+/* Elevação coerente: o cartão descansa em 1, o painel em 2, a modal em 3. */
+.overview-metrics article,
+.dashboard-stats article,
+.dashboard-task { box-shadow: var(--elevation-1); }
+
+.overview-panel,
+.dashboard-column,
+.workspace-team,
+.security-sessions { box-shadow: var(--elevation-2); }
+
+/*
+ * O `body` tem fundo branco fixo em globals.css. Enquanto o painel cobre a
+ * janela inteira isso não aparece — mas basta o repique da rolagem no celular
+ * ou uma janela mais alta que o conteúdo para o branco piscar por trás de uma
+ * tela escura. `:has()` deixa o `body` seguir o tema escolhido no painel sem
+ * precisar de classe no `<html>` nem de mais um efeito no cliente.
+ */
+body:has(.dashboard-shell.theme-dark) { background: #0b1626; }
+body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
+
+/* O separador da barra lateral acompanha o tema em vez de ser branco fixo. */
+.sidebar-workspace, .sidebar-account { border-color: color-mix(in srgb, var(--brand-accent) 22%, transparent); }

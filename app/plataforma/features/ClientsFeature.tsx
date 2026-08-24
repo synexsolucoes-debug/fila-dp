@@ -1,9 +1,47 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Ban, Building2, CheckCircle2, ChevronRight, Plus, Search, Settings2, Trash2, UserRoundCheck } from "lucide-react";
+import { AlertTriangle, Archive, Ban, Building2, CheckCircle2, ChevronRight, Plus, Search, Settings2, Trash2, UserRoundCheck } from "lucide-react";
 import styles from "../platform.module.css";
 import { AdminAction, AdminActionDialog, Empty, ErrorState, FeatureHeader, FeatureProps, Loading, Notice, Panel, Row, Status, date, number, platformRequest, text, usePlatformResource } from "./core";
+
+/** Estados em que a exclusão definitiva é aceita pelo servidor. */
+const DELETABLE = new Set(["archived", "canceled"]);
+
+type DeletionResult = { deleted: { workspaceName: string; rows: number; tables: number; orphanUsers: number } };
+
+/**
+ * A ação de excluir vive aqui, e não dentro de um dos dois lugares que a usam,
+ * porque a listagem e o painel de detalhe precisam abrir exatamente a mesma
+ * confirmação. Duas cópias divergiriam na primeira vez que alguém ajustasse o
+ * texto de impacto — e é justamente o texto de impacto que segura o clique.
+ */
+function deleteWorkspaceAction(
+  workspace: { id: string; name: string; slug: string },
+  onDeleted: (summary: string) => void,
+): AdminAction {
+  return {
+    title: `Excluir definitivamente ${workspace.name}`,
+    consequence: "Esta operação é irreversível. Todos os dados do grupo, a trilha de auditoria dele e as identidades que só existiam aqui serão removidos. Sobra apenas o registro da exclusão, com a contagem por tabela feita antes de apagar.",
+    confirmLabel: "Excluir definitivamente",
+    reasonMinLength: 10,
+    typedConfirmation: text(workspace.slug),
+    run: async ({ reason, confirmation }) => {
+      const payload = await platformRequest<DeletionResult>(
+        `/api/platform/workspaces/${encodeURIComponent(workspace.id)}/delete`,
+        { method: "POST", body: JSON.stringify({ reason, confirmation, confirmed: true }) },
+      );
+      // O servidor conta antes de apagar; repetir o número aqui é o que
+      // transforma "excluído" em algo que a pessoa consegue conferir depois.
+      const { rows, tables, orphanUsers } = payload.deleted;
+      onDeleted(
+        `${workspace.name} foi excluído: ${rows} registro(s) em ${tables} tabela(s)`
+        + `${orphanUsers > 0 ? ` e ${orphanUsers} identidade(s) sem outro vínculo` : ""}.`
+        + " O registro da exclusão permanece na auditoria global.",
+      );
+    },
+  };
+}
 
 export function ClientsFeature({ params, updateQuery }: FeatureProps) {
   const query = params.get("q") ?? ""; const status = params.get("status") ?? ""; const cursor = params.get("cursor") ?? ""; const selected = params.get("workspace") ?? "";
@@ -18,32 +56,55 @@ export function ClientsFeature({ params, updateQuery }: FeatureProps) {
   return <><FeatureHeader eyebrow="CADASTRO E CONTRATO" title="Clientes" description="Workspaces, proprietários, plano, capacidade, configuração e ciclo de vida." loading={resource.loading} onRefresh={refresh} actions={<button type="button" className={styles.headerAction} onClick={() => setCreating(true)}><Plus aria-hidden="true" />Novo workspace</button>} />
     {notice && <Notice>{notice}</Notice>}
     <form key={query} className={styles.filterBar} onSubmit={search}><label><Search aria-hidden="true" /><input name="q" defaultValue={query} placeholder="Nome, slug ou CNPJ" aria-label="Buscar clientes" /></label><select value={status} onChange={(event) => updateQuery({ status: event.target.value || null, cursor: null })} aria-label="Filtrar situação"><option value="">Todos os status</option><option value="active">Ativos</option><option value="suspended">Suspensos</option><option value="canceled">Cancelados</option><option value="archived">Arquivados</option></select><button type="submit">Buscar</button></form>
-    {resource.loading && !resource.data ? <Loading /> : resource.error ? <ErrorState message={resource.error} retry={refresh} /> : <Panel title="Workspaces" subtitle="Lista paginada por cursor, ordenada por criação."><div className={styles.tableWrap}><table><thead><tr><th>Cliente</th><th>Proprietário</th><th>Plano</th><th>Uso</th><th>Status</th><th>Ações</th></tr></thead><tbody>{(resource.data?.workspaces ?? []).map((row) => <tr key={text(row.id)}><td><button className={styles.rowLink} onClick={() => updateQuery({ workspace: text(row.id) })}><Building2 aria-hidden="true" /><span><strong>{text(row.name)}</strong><small>{text(row.slug)}</small></span><ChevronRight aria-hidden="true" /></button></td><td><strong>{text(row.owner_name)}</strong><small>{text(row.owner_email)}</small></td><td><strong>{text(row.plan_name) || "Sem plano"}</strong><small>{text(row.subscription_status)}</small></td><td>{number(row.seats_used)}/{Math.max(number(row.seat_quantity), number(row.included_seats))} assentos<br />{number(row.companies)} empresas</td><td><Status value={text(row.status) || "active"} /></td><td><button className={styles.smallAction} onClick={() => statusAction(row)}>{text(row.status) === "active" ? <Ban aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}{text(row.status) === "active" ? "Suspender" : "Reativar"}</button></td></tr>)}</tbody></table></div>{!(resource.data?.workspaces?.length) && <Empty />}
+    {resource.loading && !resource.data ? <Loading /> : resource.error ? <ErrorState message={resource.error} retry={refresh} /> : <Panel title="Workspaces" subtitle="Lista paginada por cursor, ordenada por criação."><div className={styles.tableWrap}><table><thead><tr><th>Cliente</th><th>Proprietário</th><th>Plano</th><th>Uso</th><th>Status</th><th>Ações</th></tr></thead><tbody>{(resource.data?.workspaces ?? []).map((row) => <tr key={text(row.id)}><td><button className={styles.rowLink} onClick={() => updateQuery({ workspace: text(row.id) })}><Building2 aria-hidden="true" /><span><strong>{text(row.name)}</strong><small>{text(row.slug)}</small></span><ChevronRight aria-hidden="true" /></button></td><td><strong>{text(row.owner_name)}</strong><small>{text(row.owner_email)}</small></td><td><strong>{text(row.plan_name) || "Sem plano"}</strong><small>{text(row.subscription_status)}</small></td><td>{number(row.seats_used)}/{Math.max(number(row.seat_quantity), number(row.included_seats))} assentos<br />{number(row.companies)} empresas</td><td><Status value={text(row.status) || "active"} /></td><td><div className={styles.rowActions}><button className={styles.smallAction} onClick={() => statusAction(row)}>{text(row.status) === "active" ? <Ban aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}{text(row.status) === "active" ? "Suspender" : "Reativar"}</button>
+      {/* Só para grupo já fora de operação: é a mesma porta que o servidor
+          exige, trazida para a listagem para que a opção seja encontrável sem
+          precisar abrir o detalhe e descobrir por tentativa. */}
+      {DELETABLE.has(text(row.status)) && <button className={`${styles.smallAction} ${styles.dangerAction}`} onClick={() => setAction(deleteWorkspaceAction({ id: text(row.id), name: text(row.name), slug: text(row.slug) }, (summary) => { setNotice(summary); updateQuery({ workspace: null }); refresh(); }))}><Trash2 aria-hidden="true" />Excluir</button>}</div></td></tr>)}</tbody></table></div>{!(resource.data?.workspaces?.length) && <Empty />}
       <div className={styles.pagination}><button type="button" disabled={!cursor} onClick={() => updateQuery({ cursor: null })}>Primeira página</button><button type="button" disabled={!resource.data?.nextCursor} onClick={() => updateQuery({ cursor: resource.data?.nextCursor ?? null })}>Próxima página</button></div></Panel>}
     <Panel title="Catálogo de planos" subtitle="Capacidade e preços publicados; identificadores de provedor são públicos."><div className={styles.cardGrid}>{plans.map((plan) => <article key={text(plan.id)}><header><strong>{text(plan.name)}</strong><Status value={text(plan.status)} /></header><p>{text(plan.description)}</p><dl><div><dt>Mensal</dt><dd>{number(plan.monthlyPriceCents) / 100} BRL</dd></div><div><dt>Assentos</dt><dd>{number(plan.includedSeats)}</dd></div><div><dt>Integrações</dt><dd>{number(plan.integrationLimit)}</dd></div></dl></article>)}</div></Panel>
-    {selected && <WorkspaceDetail id={selected} plans={plans} onClose={() => updateQuery({ workspace: null })} onConfigure={() => updateQuery({ area: "operations", workspace: selected })} onChanged={() => { setNotice("Workspace atualizado e evento de auditoria registrado."); refresh(); }} />}
+    {selected && <WorkspaceDetail id={selected} plans={plans} onClose={() => updateQuery({ workspace: null })} onConfigure={() => updateQuery({ area: "operations", workspace: selected })} onChanged={() => { setNotice("Workspace atualizado e evento de auditoria registrado."); refresh(); }} onDeleted={(summary) => { setNotice(summary); updateQuery({ workspace: null }); refresh(); }} />}
     {creating && <CreateWorkspaceDialog plans={plans} onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); setNotice("Workspace, proprietário, assinatura e padrões criados em uma transação."); refresh(); updateQuery({ workspace: id }); }} />}
     <AdminActionDialog action={action} onClose={() => setAction(null)} />
   </>;
 }
 
-function WorkspaceDetail({ id, plans, onClose, onConfigure, onChanged }: { id: string; plans: Row[]; onClose: () => void; onConfigure: () => void; onChanged: () => void }) {
+function WorkspaceDetail({ id, plans, onClose, onConfigure, onChanged, onDeleted }: { id: string; plans: Row[]; onClose: () => void; onConfigure: () => void; onChanged: () => void; onDeleted: (summary: string) => void }) {
   const resource = usePlatformResource<Row>(`/api/platform/workspaces/${encodeURIComponent(id)}/detail`); const [action, setAction] = useState<AdminAction | null>(null); const [planCode, setPlanCode] = useState("");
   const workspace = (resource.data?.workspace ?? {}) as Row; const plan = (workspace.plan ?? {}) as Row; const owner = (workspace.owner ?? {}) as Row; const subscription = (workspace.subscription ?? {}) as Row;
   const mutate = (title: string, consequence: string, body: Row, confirmLabel: string, options: Partial<AdminAction> = {}) => setAction({ title, consequence, confirmLabel, ...options, run: async ({ reason, confirmation, value }) => { const payload = { ...body, reason, confirmed: true, ...(confirmation ? { confirmation } : {}), ...(value ? { ownerEmail: value } : {}) }; await platformRequest(`/api/platform/workspaces/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) }); resource.refresh(); onChanged(); } });
   const currentPlan = planCode || text(plan.code);
   const status = text(workspace.status);
-  // A exclusão definitiva só é liberada fora de operação. Antes, quando isto era
-  // falso, o bloco inteiro sumia — e "não vejo o botão de excluir" virava um
-  // chamado. Agora o bloco aparece sempre; o que muda é o botão estar habilitado
-  // ou não, com a dica dizendo o que falta. A regra continua sendo do backend.
   const canPurge = ["archived", "canceled"].includes(status);
   return <><div className={styles.detailOverlay}><aside className={styles.detailPane} role="dialog" aria-modal="true" aria-labelledby="workspace-detail"><header><div><span>CLIENTE</span><h2 id="workspace-detail">{text(workspace.name) || "Carregando…"}</h2></div><button onClick={onClose}>Fechar</button></header>{resource.loading ? <Loading /> : resource.error ? <ErrorState message={resource.error} retry={resource.refresh} /> : <div className={styles.detailBody}>
     <dl className={styles.detailGrid}><div><dt>Status</dt><dd><Status value={status} /></dd></div><div><dt>Slug</dt><dd>{text(workspace.slug)}</dd></div><div><dt>Proprietário</dt><dd>{text(owner.name)}<small>{text(owner.email)}</small></dd></div><div><dt>Plano</dt><dd>{text(plan.name)}</dd></div><div><dt>Assinatura</dt><dd>{text(subscription.status)}<small>{text(subscription.provider)}</small></dd></div><div><dt>Criado</dt><dd>{date(workspace.createdAt)}</dd></div><div><dt>Razão social</dt><dd>{text(workspace.legalName) || "—"}<small>{text(workspace.taxId) || "Sem CNPJ"}</small></dd></div><div><dt>Contato</dt><dd>{text(workspace.contactEmail) || "—"}</dd></div></dl>
     <section className={styles.detailActions}><h3><Settings2 aria-hidden="true" />Configuração operacional</h3><p>Administre empresas, fluxo, campos, templates, SLA, automações, acessos, módulos, chaves e webhooks no contexto deste cliente.</p><button type="button" className={styles.smallAction} onClick={onConfigure}><Settings2 aria-hidden="true" />Administrar configuração</button></section>
     <section className={styles.detailActions}><h3>Plano e limites</h3><p>O servidor recusa downgrade abaixo do consumo atual e cria trilha antes/depois.</p><div className={styles.rowActions}><select value={currentPlan} onChange={(event) => setPlanCode(event.target.value)} aria-label="Novo plano">{plans.map((item) => <option key={text(item.code)} value={text(item.code)}>{text(item.name)}</option>)}</select><button type="button" disabled={!currentPlan || currentPlan === text(plan.code)} onClick={() => mutate(`Alterar plano de ${text(workspace.name)}`, "A assinatura passará a usar os limites e o preço publicado do plano selecionado. Nenhum usuário será removido automaticamente.", { planCode: currentPlan }, "Aplicar plano")}>Aplicar plano</button></div></section>
     <section className={styles.detailActions}><h3><UserRoundCheck aria-hidden="true" />Propriedade</h3><p>O novo proprietário precisa ter uma identidade ativa e receberá papel administrativo neste workspace.</p><button type="button" className={styles.smallAction} onClick={() => mutate(`Transferir ${text(workspace.name)}`, "A propriedade do cliente e a responsabilidade administrativa serão transferidas. O proprietário anterior não é removido automaticamente.", {}, "Transferir propriedade", { extraInput: { label: "E-mail do novo proprietário", type: "email", placeholder: "pessoa@empresa.com" } })}>Transferir propriedade</button></section>
-    <section className={styles.detailActions}><h3>Ciclo de vida</h3><p>Suspender, cancelar e arquivar preservam os dados. Exclusão definitiva fica separada e nunca é automática.</p><div className={styles.rowActions}>{["active", "suspended", "canceled", "archived"].filter((next) => next !== status).map((next) => <button type="button" key={next} data-danger={next === "active" ? undefined : "true"} onClick={() => mutate(`${next === "active" ? "Reativar" : next === "suspended" ? "Suspender" : next === "canceled" ? "Cancelar" : "Arquivar"} ${text(workspace.name)}`, next === "active" ? "O acesso e a operação voltarão a ser permitidos." : "O estado do cliente mudará, mas dados, auditoria e histórico serão preservados.", { status: next }, "Confirmar alteração")}>{next}</button>)}</div><div className={styles.dangerZone}><strong>Exclusão definitiva</strong><p>Apaga os dados do workspace e registra previamente as contagens removidas. Use apenas por solicitação formal.</p>{!canPurge && <p className={styles.dangerHint} role="note">Arquive ou cancele o cliente antes de excluir: a exclusão definitiva só é liberada quando ele está fora de operação.</p>}<button type="button" disabled={!canPurge} title={canPurge ? undefined : "Arquive ou cancele o cliente para liberar a exclusão."} onClick={() => setAction({ title: `Excluir definitivamente ${text(workspace.name)}`, consequence: "Esta operação é irreversível. Todos os dados do workspace e identidades órfãs elegíveis serão removidos; somente o registro de exclusão permanecerá.", confirmLabel: "Excluir definitivamente", reasonMinLength: 10, typedConfirmation: text(workspace.slug), run: async ({ reason, confirmation }) => { await platformRequest(`/api/platform/workspaces/${encodeURIComponent(id)}/delete`, { method: "POST", body: JSON.stringify({ reason, confirmation, confirmed: true }) }); onChanged(); onClose(); } })}><Trash2 aria-hidden="true" />Excluir definitivamente</button></div></section>
+    <section className={styles.detailActions}><h3>Ciclo de vida</h3><p>Suspender, cancelar e arquivar preservam os dados. Exclusão definitiva fica separada e nunca é automática.</p><div className={styles.rowActions}>{["active", "suspended", "canceled", "archived"].filter((next) => next !== status).map((next) => <button type="button" key={next} data-danger={next === "active" ? undefined : "true"} onClick={() => mutate(`${next === "active" ? "Reativar" : next === "suspended" ? "Suspender" : next === "canceled" ? "Cancelar" : "Arquivar"} ${text(workspace.name)}`, next === "active" ? "O acesso e a operação voltarão a ser permitidos." : "O estado do cliente mudará, mas dados, auditoria e histórico serão preservados.", { status: next }, "Confirmar alteração")}>{next}</button>)}</div></section>
+    {/*
+      A zona de risco fica sempre visível. Antes ela só existia depois que o
+      grupo já estava arquivado ou cancelado — quem procurava "excluir workspace"
+      num grupo ativo não achava nada e não tinha como saber que faltava
+      arquivar primeiro. A porta continua a mesma; o que mudou é que ela agora
+      é visível e diz o que falta para ser aberta.
+    */}
+    <section className={`${styles.detailActions} ${styles.dangerZone}`}>
+      <strong>Exclusão definitiva do workspace</strong>
+      <p>Remove o grupo e tudo que pertence a ele. Antes de apagar, o servidor conta as linhas de cada tabela e grava esse número no registro de exclusão — é o que permite conferir a operação depois, quando o dado que serviria de prova já não existe.</p>
+      <ul>
+        <li>Empresas, demandas, documentos, integrações e a trilha de auditoria do grupo são removidos.</li>
+        <li>Identidades que só tinham vínculo com este grupo também saem; quem participa de outro grupo permanece.</li>
+        <li>Não há desfazer. Só o registro da exclusão, com motivo e responsável, permanece.</li>
+      </ul>
+      {canPurge
+        ? <button type="button" onClick={() => setAction(deleteWorkspaceAction({ id, name: text(workspace.name), slug: text(workspace.slug) }, (summary) => { onDeleted(summary); onClose(); }))}><Trash2 aria-hidden="true" />Excluir definitivamente</button>
+        : <><p className={styles.dangerGate}><AlertTriangle aria-hidden="true" /><span>Arquive ou cancele o cliente antes de excluir. <strong>{text(workspace.name)}</strong> está {status === "active" ? "ativo" : "suspenso"}; tirar o grupo de operação interrompe o acesso sem perder dados.</span></p>
+          <div className={styles.rowActions}>
+            <button type="button" disabled={!canPurge} title="Arquive ou cancele o grupo antes de excluir"><Trash2 aria-hidden="true" />Excluir definitivamente</button>
+            <button type="button" data-danger="true" onClick={() => mutate(`Arquivar ${text(workspace.name)}`, "O acesso ao grupo é interrompido para todos os membros. Dados, auditoria e histórico continuam preservados, e o grupo passa a poder ser excluído definitivamente.", { status: "archived" }, "Arquivar workspace")}><Archive aria-hidden="true" />Arquivar agora</button>
+          </div></>}
+    </section>
     <DetailRows title="Membros" rows={resource.data?.members} /><DetailRows title="Empresas" rows={resource.data?.companies} /><DetailRows title="Módulos" rows={resource.data?.modules} /><DetailRows title="Auditoria" rows={resource.data?.audit} />
   </div>}</aside></div><AdminActionDialog action={action} onClose={() => setAction(null)} /></>;
 }
