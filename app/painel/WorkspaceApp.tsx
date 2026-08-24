@@ -442,6 +442,7 @@ function normalizeWorkspaceSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnaps
     assignees: Array.isArray(card.assignees) ? card.assignees : [],
     labels: Array.isArray(card.labels) ? card.labels : [],
     attachments: Array.isArray(card.attachments) ? card.attachments : [],
+    solidesAttachments: card.solidesAttachments ?? null,
     customValues: card.customValues && typeof card.customValues === "object" && !Array.isArray(card.customValues) ? card.customValues : {},
   });
 
@@ -590,6 +591,47 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function SolidesAttachmentSyncPanel({ card, busy, canAuthorize, onAuthorize }: {
+  card: Card;
+  busy: boolean;
+  canAuthorize: boolean;
+  onAuthorize: () => void;
+}) {
+  const sync = card.solidesAttachments;
+  if (!sync) return null;
+  const content = {
+    AWAITING_AUTHORIZATION: {
+      tone: "waiting", title: "Aguardando sua autorização",
+      description: "O agente só pode trazer os documentos desta pessoa depois de uma confirmação específica para esta demanda.",
+    },
+    QUEUED: {
+      tone: "working", title: "Transferência autorizada",
+      description: "O pedido está na fila do worker local. Mantenha o worker aberto e conectado.",
+    },
+    RUNNING: {
+      tone: "working", title: "Baixando e conferindo anexos",
+      description: "O worker está trazendo os documentos e a ficha cadastral para esta demanda.",
+    },
+    COMPLETED: {
+      tone: "success", title: "Anexos da Sólides concluídos",
+      description: `${sync.uploadedCount} ${sync.uploadedCount === 1 ? "arquivo foi anexado" : "arquivos foram anexados"} e as cópias temporárias foram apagadas.`,
+    },
+    FAILED: {
+      tone: "error", title: "A transferência precisa de atenção",
+      description: sync.errorCode === "AUTHENTICATION_REQUIRED"
+        ? "A sessão da Sólides precisa ser renovada no worker local. Depois, autorize novamente."
+        : "Nada será reutilizado para outra pessoa. Confira o worker e autorize uma nova tentativa.",
+    },
+  }[sync.state];
+  const showButton = sync.state === "AWAITING_AUTHORIZATION" || sync.state === "FAILED";
+  return <section className={`solides-attachment-sync ${content.tone}`}>
+    <div><span>SÓLIDES</span><strong>{content.title}</strong><p>{content.description}</p></div>
+    {showButton && canAuthorize && <button type="button" disabled={busy} onClick={onAuthorize}>
+      {sync.state === "FAILED" ? "Autorizar novamente" : "Autorizar anexos da Sólides"}
+    </button>}
+  </section>;
+}
+
 function activityLabel(activity: ActivityEvent) {
   const labels: Record<string, string> = {
     "card.created": "criou a demanda",
@@ -602,6 +644,8 @@ function activityLabel(activity: ActivityEvent) {
     "inbox.item_converted": "converteu a solicitação da Inbox",
     "attachment.uploaded": "enviou um anexo",
     "attachment.deleted": "removeu um anexo",
+    "tangerino.attachments.authorized": "autorizou os anexos da Sólides",
+    "tangerino.attachments.completed": "trouxe os anexos da Sólides",
     "card.restored": "restaurou a demanda",
     "automation.executed": "executou uma automação",
     /* Processo e automação na mesma linha do tempo (§45). Sem estas entradas, o
@@ -1525,6 +1569,17 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     }
   }
 
+  function authorizeSolidesAttachments() {
+    if (!selectedCardId) return;
+    requestConfirmation({
+      title: "Autorizar anexos da Sólides?",
+      description: "Os documentos desta pessoa e a ficha cadastral serão baixados da Sólides e anexados somente a esta demanda. As cópias temporárias do worker serão apagadas após a verificação.",
+      confirmLabel: "Autorizar anexos da Sólides",
+      action: () => mutate(`/api/cards/${selectedCardId}/solides-attachments/authorize`, { method: "POST" },
+        "Autorização registrada. O worker iniciará a transferência."),
+    });
+  }
+
   function removeAttachment(id: string) {
     requestConfirmation({
       title: "Excluir anexo?",
@@ -2179,7 +2234,11 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 </section>
               )}
 
-              {selectedCard && cardTab === "attachments" && <section className="card-tab-panel attachments-panel"><header><div><span>DOCUMENTOS</span><h3>Anexos da demanda</h3><p>PDF, imagem, TXT, CSV, DOCX ou XLSX, com até 20 MB.</p></div>{canEdit && !selectedCard.archived && <label className="upload-button">＋ Enviar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.target.value = ""; }} /></label>}</header><div className="attachment-list">{selectedCard.attachments.length === 0 && <div className="empty-view"><span>↥</span><strong>Nenhum anexo</strong><p>Envie documentos para manter todo o processo no mesmo lugar.</p></div>}{selectedCard.attachments.map((attachment) => <article key={attachment.id}><i>{attachment.filename.split(".").pop()?.toUpperCase()}</i><div><strong>{attachment.filename}</strong><span>{formatFileSize(attachment.sizeBytes)} • {attachment.uploadedBy} • {formatMoment(attachment.createdAt)}</span></div>{canPreviewAttachment(attachment) && <button className="attachment-preview-button" onClick={() => setAttachmentPreview(attachment)}>Visualizar</button>}<a href={attachment.downloadUrl}>Baixar</a>{canEdit && !selectedCard.archived && <button onClick={() => void removeAttachment(attachment.id)} aria-label={`Excluir ${attachment.filename}`}>×</button>}</article>)}</div></section>}
+              {selectedCard && cardTab === "attachments" && <section className="card-tab-panel attachments-panel">
+                <header><div><span>DOCUMENTOS</span><h3>Anexos da demanda</h3><p>PDF, imagem, TXT, CSV, DOCX ou XLSX, com até 20 MB.</p></div>{canEdit && !selectedCard.archived && <label className="upload-button">＋ Enviar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadAttachment(file); event.target.value = ""; }} /></label>}</header>
+                <SolidesAttachmentSyncPanel card={selectedCard} busy={busy} canAuthorize={canEdit && !selectedCard.archived} onAuthorize={authorizeSolidesAttachments} />
+                <div className="attachment-list">{selectedCard.attachments.length === 0 && <div className="empty-view"><span>↥</span><strong>Nenhum anexo</strong><p>Envie documentos para manter todo o processo no mesmo lugar.</p></div>}{selectedCard.attachments.map((attachment) => <article key={attachment.id}><i>{attachment.filename.split(".").pop()?.toUpperCase()}</i><div><strong>{attachment.filename}</strong><span>{formatFileSize(attachment.sizeBytes)} • {attachment.uploadedBy} • {formatMoment(attachment.createdAt)}</span></div>{canPreviewAttachment(attachment) && <button className="attachment-preview-button" onClick={() => setAttachmentPreview(attachment)}>Visualizar</button>}<a href={attachment.downloadUrl}>Baixar</a>{canEdit && !selectedCard.archived && <button onClick={() => void removeAttachment(attachment.id)} aria-label={`Excluir ${attachment.filename}`}>×</button>}</article>)}</div>
+              </section>}
 
               {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
             </div>

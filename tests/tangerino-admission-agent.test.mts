@@ -16,6 +16,7 @@ import { readOnlyDecision, readOnlyViolationDetail } from "../lib/tangerino/read
 import { TangerinoSelectors, TANGERINO_SELECTORS_ARE_PROVISIONAL } from "../lib/tangerino/selectors.ts";
 import { admissionStatusLabels, explainAdmissionStatus, normalizeAdmissionStatus, statusRules, terminalAdmissionStatuses } from "../lib/tangerino/status.ts";
 import { admissionStatuses, consultationStates } from "../lib/tangerino/types.ts";
+import { signTangerinoWorkerRequest, verifyTangerinoWorkerRequest } from "../lib/tangerino/worker-auth.ts";
 import { MockTangerinoSession } from "../worker/tangerino/mock-session.ts";
 
 /**
@@ -249,6 +250,8 @@ test("métodos de alteração são bloqueados, e leitura por POST continua passa
     "https://app.tangerino.com.br/api/auth/login",
     "https://app.tangerino.com.br/api/admissao/pesquisar",
     "https://app.tangerino.com.br/graphql",
+    "https://apis.tangerino.com.br/admissao-demissao-api/api/v1/documentos/admissao/download-zip",
+    "https://apis.tangerino.com.br/admissao-demissao-api/api/v1/ficha-cadastral/report/194851",
   ]) {
     assert.equal(readOnlyDecision({ method: "POST", url }), "allow", `${url} deveria passar`);
   }
@@ -286,6 +289,39 @@ test("a sessão do agente não expõe nenhum comando de escrita", () => {
   }
   const metodos = [...corpo.matchAll(/^ {2}(\w+)\(/gmu)].map((match) => match[1]).sort();
   assert.deepEqual(metodos, ["back", "close", "ensureAuthenticated", "openAdmission", "openAdmissions", "readAdmission", "searchAdmission"]);
+});
+
+test("a autorização do worker é assinada por workspace, job e prazo curto", () => {
+  const previousKey = process.env.FDP_TANGERINO_VAULT_KEY;
+  const previousKeys = process.env.FDP_TANGERINO_VAULT_KEYS;
+  const previousVersion = process.env.FDP_TANGERINO_VAULT_KEY_VERSION;
+  process.env.FDP_TANGERINO_VAULT_KEY = Buffer.alloc(32, 31).toString("base64");
+  delete process.env.FDP_TANGERINO_VAULT_KEYS;
+  process.env.FDP_TANGERINO_VAULT_KEY_VERSION = "1";
+  try {
+    const now = new Date("2026-08-24T15:00:00.000Z");
+    const signed = signTangerinoWorkerRequest({
+      workspaceId: "workspace-1", authorizationId: "authorization-1", action: "UPLOAD", value: "abc:123", now,
+    });
+    const headers = new Headers(signed);
+    assert.equal(verifyTangerinoWorkerRequest({
+      headers, workspaceId: "workspace-1", authorizationId: "authorization-1", action: "UPLOAD", value: "abc:123", now,
+    }), true);
+    assert.equal(verifyTangerinoWorkerRequest({
+      headers, workspaceId: "workspace-2", authorizationId: "authorization-1", action: "UPLOAD", value: "abc:123", now,
+    }), false, "a assinatura foi reutilizada em outro workspace");
+    assert.equal(verifyTangerinoWorkerRequest({
+      headers, workspaceId: "workspace-1", authorizationId: "authorization-1", action: "UPLOAD", value: "abc:123",
+      now: new Date("2026-08-24T15:06:00.000Z"),
+    }), false, "a assinatura vencida continuou válida");
+  } finally {
+    if (previousKey === undefined) delete process.env.FDP_TANGERINO_VAULT_KEY;
+    else process.env.FDP_TANGERINO_VAULT_KEY = previousKey;
+    if (previousKeys === undefined) delete process.env.FDP_TANGERINO_VAULT_KEYS;
+    else process.env.FDP_TANGERINO_VAULT_KEYS = previousKeys;
+    if (previousVersion === undefined) delete process.env.FDP_TANGERINO_VAULT_KEY_VERSION;
+    else process.env.FDP_TANGERINO_VAULT_KEY_VERSION = previousVersion;
+  }
 });
 
 /* ── Navegação ─────────────────────────────────────────────────────────────── */
@@ -684,7 +720,7 @@ test("nenhum comando do cliente de navegador encosta numa ação de alteração"
      navegador não referencia `forbiddenActions` em nenhum clique. */
   const cliente = source("worker/tangerino/playwright-session.ts");
   const cliques = [...cliente.matchAll(/\.click\(\)/gu)];
-  assert.ok(cliques.length > 0 && cliques.length <= 4, `${cliques.length} cliques: um agente de leitura clica em navegação e mais nada`);
+  assert.ok(cliques.length > 0 && cliques.length <= 7, `${cliques.length} cliques: um agente de leitura clica em navegação e downloads autorizados`);
   assert.doesNotMatch(cliente, /forbiddenActions/u, "o cliente encostou na lista de ações proibidas");
   assert.doesNotMatch(cliente, /getByRole\("button", \{ name: \/(?:salvar|aprovar|admitir|excluir)/iu);
   // O runner efêmero mantém contexto novo. O persistente usa diretório opaco
@@ -692,7 +728,9 @@ test("nenhum comando do cliente de navegador encosta numa ação de alteração"
   assert.match(cliente, /newContext\(/u);
   assert.match(cliente, /launchPersistentContext\(/u);
   assert.match(cliente, /createHash\("sha256"\)\.update\(tenant\)/u);
-  assert.match(cliente, /acceptDownloads: false/u);
+  assert.match(cliente, /acceptDownloads: true/u);
+  assert.match(cliente, /downloadAllDocumentsButtons/u);
+  assert.match(cliente, /exportRegistrationFormButtons/u);
 });
 
 test("o CAPTCHA é detectado pelo widget, e não só pela palavra", () => {

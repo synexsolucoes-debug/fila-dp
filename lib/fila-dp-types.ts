@@ -40,6 +40,15 @@ export type CardAttachment = {
   downloadUrl: string;
 };
 
+export type SolidesAttachmentSync = {
+  state: "AWAITING_AUTHORIZATION" | "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+  authorizedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  uploadedCount: number;
+  errorCode: string;
+};
+
 export type CustomFieldDefinition = {
   id: string;
   name: string;
@@ -178,6 +187,8 @@ export type Card = {
   labels: CardLabel[];
   customValues: Record<string, string>;
   attachments: CardAttachment[];
+  /** Presente somente em demandas criadas pelo Agente Tangerino. */
+  solidesAttachments: SolidesAttachmentSync | null;
   slaPausedReason: string;
   slaTargetMinutes: number;
   slaPausedMinutes: number;

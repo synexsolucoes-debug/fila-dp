@@ -150,6 +150,15 @@ export interface TangerinoBrowserSession {
   close(): Promise<void>;
 }
 
+/** Extensão usada somente pelo job que já possui autorização explícita. */
+export interface TangerinoArtifactSession extends TangerinoBrowserSession {
+  /** Baixa os documentos e a ficha da admissão selecionada, sem aprovar nada. */
+  downloadAdmissionArtifacts(input: { externalAdmissionId: string; targetDirectory: string }): Promise<{
+    documentArchivePath: string;
+    registrationFormPath: string;
+  }>;
+}
+
 export type TangerinoSessionFactory = (input: {
   workspaceId: string;
   integrationId: string;

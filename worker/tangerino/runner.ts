@@ -2,6 +2,7 @@ import { getD1, getScopedD1 } from "../../db/index.ts";
 import { runNextConsultation } from "../../lib/tangerino/agent.ts";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { processNextTangerinoHealthCheck } from "../../lib/tangerino/health-check.ts";
+import { runNextAttachmentAuthorization } from "../../lib/tangerino/attachments-worker.ts";
 import { PlaywrightTangerinoSession } from "./playwright-session.ts";
 
 export type TangerinoSweepSummary = {
@@ -30,7 +31,10 @@ async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: 
     const healthCheck = await processNextTangerinoHealthCheck(
       d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
     );
-    const result = healthCheck ?? await runNextConsultation(
+    const attachmentTransfer = healthCheck ? null : await runNextAttachmentAuthorization(
+      d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
+    );
+    const result = healthCheck ?? attachmentTransfer ?? await runNextConsultation(
       d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
     );
     if (!result) break;

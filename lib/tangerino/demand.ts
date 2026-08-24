@@ -133,13 +133,14 @@ function demandDescription(target: DemandTarget, admission: ParsedAdmission, ext
     `Empresa: ${target.company_name}.`,
     `Processo Tangerino: ${externalAdmissionId}.`,
     `Etapa confirmada pelo agente: ${admission.stage}.`,
-    "Os arquivos e demais dados sensíveis permanecem no Tangerino e devem ser conferidos diretamente na origem.",
+    "Os documentos e a ficha cadastral podem ser trazidos da Sólides pela aba Anexos, somente após autorização específica nesta demanda.",
   ].join("\n").slice(0, 4000);
 }
 
 const checklist = [
   "Conferir os dados contratuais no Tangerino",
   "Conferir empresa, cargo, salário, jornada e data de admissão",
+  "Autorizar e conferir os documentos e a ficha cadastral da Sólides nos anexos",
   "Realizar a admissão no ERP",
   "Registrar no cartão a matrícula ou o código gerado pelo ERP",
   "Tratar eventuais divergências cadastrais",

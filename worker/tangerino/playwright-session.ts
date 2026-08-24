@@ -8,7 +8,7 @@ import { assertAllowedTangerinoChallengeUrl, assertAllowedTangerinoUrl } from ".
 import { log } from "../../lib/observability.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../../lib/tangerino/read-only.ts";
 import { TangerinoSelectors } from "../../lib/tangerino/selectors.ts";
-import type { AdmissionSearchHit, AdmissionSnapshot, TangerinoBrowserSession } from "../../lib/tangerino/types.ts";
+import type { AdmissionSearchHit, AdmissionSnapshot, TangerinoArtifactSession } from "../../lib/tangerino/types.ts";
 
 /**
  * O cliente de navegador do Tangerino.
@@ -189,7 +189,7 @@ export async function collectSearchHits(page: TangerinoLocatorScope): Promise<Ad
   return hits;
 }
 
-export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
+export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
@@ -209,7 +209,7 @@ export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
       args: ["--disable-dev-shm-usage"],
     };
     const contextOptions = {
-      acceptDownloads: false,
+      acceptDownloads: true,
       locale: "pt-BR",
       timezoneId: "America/Sao_Paulo",
       serviceWorkers: "block",
@@ -483,6 +483,61 @@ export class PlaywrightTangerinoSession implements TangerinoBrowserSession {
     const violation = this.blockedWrites[0];
     if (violation) throw tangerinoErrors.readOnlyViolation(violation.method, violation.path);
     return snapshot;
+  }
+
+  /**
+   * Executa somente os dois downloads autorizados pelo cartão.
+   *
+   * Abrir o cartão é navegação. Os únicos botões aceitos têm nomes exatos de
+   * download; nenhum seletor genérico de ação entra neste caminho.
+   */
+  async downloadAdmissionArtifacts(input: { externalAdmissionId: string; targetDirectory: string }) {
+    const admissionId = input.externalAdmissionId.trim();
+    if (!/^\d{1,20}$/u.test(admissionId)) {
+      throw tangerinoErrors.uiChanged("download dos anexos", "identificador numérico da admissão");
+    }
+    if (!this.selectedAdmissionCard) {
+      throw tangerinoErrors.uiChanged("download dos anexos", "cartão selecionado");
+    }
+    await mkdir(input.targetDirectory, { recursive: true });
+    const page = this.requirePage();
+    const frame = this.requireAdmissionsFrame();
+    await this.selectedAdmissionCard.click();
+    const section = await firstVisible(TangerinoSelectors.documentApprovalSection.map((name) => frame.getByText(name)));
+    if (!section) throw tangerinoErrors.uiChanged("download dos anexos", "seção Aprovar documentos");
+    const downloadAll = await firstVisible(TangerinoSelectors.downloadAllDocumentsButtons.map((name) =>
+      frame.getByRole("button", { name })));
+    if (!downloadAll) throw tangerinoErrors.uiChanged("download dos anexos", "botão Baixar todos os documentos");
+
+    const archiveDownload = page.waitForEvent("download", { timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs) });
+    await downloadAll.click();
+    const archive = await archiveDownload;
+    const archiveFailure = await archive.failure();
+    if (archiveFailure) throw tangerinoErrors.unavailable("A Sólides não concluiu o download dos documentos.");
+    const documentArchivePath = join(input.targetDirectory, "documentos-solides.zip");
+    await archive.saveAs(documentArchivePath);
+
+    const formPage = await this.context?.newPage();
+    if (!formPage) throw tangerinoErrors.unavailable("Não foi possível abrir a ficha cadastral.");
+    try {
+      formPage.setDefaultTimeout(Math.min(30_000, tangerinoAgentConfig().timeoutMs));
+      const formUrl = `https://admissao-demissao.tangerino.com.br/ficha-colaborador/${encodeURIComponent(admissionId)}`;
+      await assertAllowedTangerinoUrl(formUrl);
+      await formPage.goto(formUrl, { waitUntil: "domcontentloaded", timeout: tangerinoAgentConfig().timeoutMs });
+      const exportButton = await firstVisible(TangerinoSelectors.exportRegistrationFormButtons.map((name) =>
+        formPage.getByRole("button", { name })));
+      if (!exportButton) throw tangerinoErrors.uiChanged("download da ficha cadastral", "botão Exportar ficha do colaborador");
+      const formDownload = formPage.waitForEvent("download", { timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs) });
+      await exportButton.click();
+      const form = await formDownload;
+      const formFailure = await form.failure();
+      if (formFailure) throw tangerinoErrors.unavailable("A Sólides não concluiu o download da ficha cadastral.");
+      const registrationFormPath = join(input.targetDirectory, "ficha-cadastral-solides.pdf");
+      await form.saveAs(registrationFormPath);
+      return { documentArchivePath, registrationFormPath };
+    } finally {
+      await formPage.close().catch(() => undefined);
+    }
   }
 
   async back() {
