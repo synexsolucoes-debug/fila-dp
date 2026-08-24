@@ -11,11 +11,6 @@
 name: Executor de integrações
 
 on:
-  # Gatilho temporário e restrito ao próprio workflow: dispara a correção agora.
-  push:
-    branches: ["main"]
-    paths:
-      - ".github/workflows/integrations-cron.yml"
   schedule:
     # Duas vezes por hora preserva a franquia gratuita de Actions. O disparo
     # manual do Sankhya continua imediato pela API do GitHub.
@@ -65,5 +60,5 @@ jobs:
           despacho=$(jq -r '.workerDispatch // "not_configured"' resposta.json)
           if [ "${pendentes}" -gt 0 ] && [ "${despacho}" != "dispatched" ]; then
             echo "Disparando o worker Sankhya pelo token efêmero do workflow."
-            gh workflow run sankhya-worker.yml --ref main
+            gh workflow run sankhya-worker.yml --repo "${GITHUB_REPOSITORY}" --ref main
           fi
