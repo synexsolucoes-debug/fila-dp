@@ -5,6 +5,18 @@ em uma máquina controlada pela empresa. Ele **não resolve nem contorna CAPTCHA
 quando o Tangerino pedir uma confirmação, uma pessoa conclui o login na janela e
 o perfil guarda a sessão para as próximas consultas.
 
+## Interface validada
+
+O caminho de leitura foi confirmado em uma sessão real e autorizada em
+24/08/2026: **Admissão → Visão geral**, com a aplicação de admissões carregada
+do host oficial `admissao-demissao.tangerino.com.br` dentro de um iframe.
+
+O worker usa somente a busca **Digite o nome** e lê, no cartão retornado,
+**Status da admissão** e **Status da etapa**. Ele não abre ficha, documentos,
+calendário, lembrete nem menu de ações. A tela não expõe protocolo nem data
+efetiva de admissão no cartão; esses campos ficam vazios em vez de usar a
+posição visual ou a "Data limite para a admissão" como substituto.
+
 ## Segurança antes de começar
 
 - Use uma conta Windows dedicada e uma máquina com disco criptografado.

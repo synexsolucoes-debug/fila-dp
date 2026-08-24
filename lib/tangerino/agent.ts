@@ -7,7 +7,7 @@ import { tangerinoAgentConfig } from "./config.ts";
 import { ensureTangerinoErpDemand, type TangerinoDemandResult } from "./demand.ts";
 import { safeTangerinoError, tangerinoErrors } from "./errors.ts";
 import { tangerinoBrowserLoginUrl } from "./hosts.ts";
-import { admissionChanged, admissionSearchTerm, chooseAdmission, parseAdmission } from "./parser.ts";
+import { admissionChanged, admissionSearchTerm, chooseAdmission, isStableExternalAdmissionId, parseAdmission } from "./parser.ts";
 import type { AdmissionConsultationTarget, ConsultationResult, TangerinoSessionFactory } from "./types.ts";
 
 type Database = ReturnType<typeof getD1>;
@@ -180,8 +180,10 @@ export async function runNextConsultation(
     await session.back();
 
     const admission = parseAdmission(snapshot);
-    // O identificador da linha vale quando a tela do processo não traz o seu.
-    const externalId = admission.externalAdmissionId || hit.id;
+    // Índices como `card:0` existem só para selecionar o cartão nesta leitura.
+    // Persisti-los faria a consulta seguinte pesquisar literalmente por "card:0".
+    const externalIdCandidate = admission.externalAdmissionId || hit.id;
+    const externalId = isStableExternalAdmissionId(externalIdCandidate) ? externalIdCandidate : "";
     const previousRow = await previousSuccess(d1, workspaceId, claimed.employee_id, claimed.id);
     const previous = previousRow
       ? {
@@ -193,10 +195,12 @@ export async function runNextConsultation(
     const changed = admissionChanged(previous, admission);
     const durationMs = Date.now() - startedAt;
 
-    await saveExternalReference(d1, {
-      workspaceId, integrationId: claimed.integration_id, employeeId: claimed.employee_id,
-      externalId, registrationNumber: target.registrationNumber,
-    });
+    if (externalId) {
+      await saveExternalReference(d1, {
+        workspaceId, integrationId: claimed.integration_id, employeeId: claimed.employee_id,
+        externalId, registrationNumber: target.registrationNumber,
+      });
+    }
 
     const statements = [
       d1.prepare(`UPDATE fdp_tangerino_admission_consultations SET state = 'SUCCESS', error_code = '',

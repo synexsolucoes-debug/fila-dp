@@ -138,13 +138,13 @@ export interface TangerinoBrowserSession {
   ensureAuthenticated(input: { endpoint: string; username: string; password: string; timeoutMs: number }): Promise<void>;
   /** Abre a área de Admissão. */
   openAdmissions(): Promise<void>;
-  /** Pesquisa e devolve as linhas encontradas, sem escolher nenhuma. */
+  /** Pesquisa e devolve os cartões encontrados, sem escolher nenhum. */
   searchAdmission(term: string): Promise<AdmissionSearchHit[]>;
-  /** Abre um processo já identificado. */
+  /** Seleciona em memória um cartão já identificado, sem abrir ações da ficha. */
   openAdmission(hit: AdmissionSearchHit): Promise<void>;
-  /** Lê a tela do processo aberto. */
+  /** Lê situação e etapa do cartão selecionado. */
   readAdmission(): Promise<AdmissionSnapshot>;
-  /** Volta à listagem sem alterar nada. */
+  /** Limpa a seleção sem alterar nem navegar pelo processo. */
   back(): Promise<void>;
   /** Encerra a sessão e destrói o contexto. */
   close(): Promise<void>;

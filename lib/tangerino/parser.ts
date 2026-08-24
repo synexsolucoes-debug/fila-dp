@@ -21,6 +21,12 @@ function clean(value: string | undefined, max = MAX_TEXT) {
   return value.replace(/[\s ]+/gu, " ").trim().slice(0, max);
 }
 
+/** Índice visual serve para selecionar nesta leitura, nunca para criar vínculo. */
+export function isStableExternalAdmissionId(value: string | undefined) {
+  const id = clean(value, 120);
+  return Boolean(id) && !/^(?:card|row):\d+$/u.test(id);
+}
+
 /**
  * Datas de tela brasileira viram ISO; o resto é devolvido como veio.
  *
@@ -97,7 +103,7 @@ export function parseAdmission(snapshot: AdmissionSnapshot): ParsedAdmission {
  * cara e as seguintes são determinísticas (§18).
  */
 export function chooseAdmission(hits: readonly AdmissionSearchHit[], knownExternalId: string): AdmissionSearchHit {
-  if (knownExternalId) {
+  if (isStableExternalAdmissionId(knownExternalId)) {
     const exact = hits.filter((hit) => hit.id === knownExternalId);
     if (exact.length === 1) return exact[0];
   }
@@ -119,7 +125,10 @@ export function chooseAdmission(hits: readonly AdmissionSearchHit[], knownExtern
  * manda o `employeeId` e nada mais (§17).
  */
 export function admissionSearchTerm(target: { externalAdmissionId: string; registrationNumber: string; fullName: string }) {
-  const term = clean(target.externalAdmissionId, 120) || clean(target.registrationNumber, 60) || clean(target.fullName, 160);
+  const externalId = isStableExternalAdmissionId(target.externalAdmissionId)
+    ? clean(target.externalAdmissionId, 120)
+    : "";
+  const term = externalId || clean(target.registrationNumber, 60) || clean(target.fullName, 160);
   if (!term) {
     throw tangerinoErrors.uiChanged("preparação da pesquisa", "identificador do colaborador no cadastro do Vinculato");
   }

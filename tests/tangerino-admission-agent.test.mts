@@ -11,7 +11,7 @@ import { TangerinoAgentError, safeTangerinoError, tangerinoErrors } from "../lib
 import { tangerinoBrowserLoginUrl } from "../lib/tangerino/hosts.ts";
 import { verifyTangerinoBrowserLogin } from "../lib/tangerino/login.ts";
 import { allowedTangerinoHosts, isAllowedTangerinoChallengeUrl, isAllowedTangerinoHost, isPrivateNetworkAddress } from "../lib/tangerino/navigation-security.ts";
-import { admissionChanged, admissionSearchTerm, chooseAdmission, isContractDataStage, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
+import { admissionChanged, admissionSearchTerm, chooseAdmission, isContractDataStage, isStableExternalAdmissionId, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../lib/tangerino/read-only.ts";
 import { TangerinoSelectors, TANGERINO_SELECTORS_ARE_PROVISIONAL } from "../lib/tangerino/selectors.ts";
 import { admissionStatusLabels, explainAdmissionStatus, normalizeAdmissionStatus, statusRules, terminalAdmissionStatuses } from "../lib/tangerino/status.ts";
@@ -29,11 +29,9 @@ import { MockTangerinoSession } from "../worker/tangerino/mock-session.ts";
  * tenant no formato das consultas, o RBAC, e que o caminho do agente é o caminho
  * fechado que ele declara ter.
  *
- * NÃO PROVAM — que os seletores encontram alguma coisa na tela real do
- * Tangerino. Isso nenhum teste daqui pode provar, porque o mapeamento (§72)
- * depende de acesso autorizado que este ambiente não tem. Contra o Tangerino de
- * verdade o resultado esperado hoje é `UI_CHANGED`, e há um teste abaixo que
- * cobra que essa pendência continue declarada em voz alta no código.
+ * Os seletores críticos foram mapeados em sessão real e autorizada em
+ * 24/08/2026. As fixtures preservam a estrutura mínima observada sem copiar
+ * dados da conta; estes testes cobram que o código continue alinhado a ela.
  */
 
 /** Leitura síncrona relativa à raiz, para as asserções de código-fonte. */
@@ -78,6 +76,14 @@ test("a regra específica ganha da regra larga", () => {
   assert.equal(normalizeAdmissionStatus("Aguardando documentação do colaborador"), "WAITING_DOCUMENTS");
   assert.equal(normalizeAdmissionStatus("Processo cancelado na etapa de documentação"), "CANCELLED");
   assert.equal(normalizeAdmissionStatus("Admissão concluída"), "COMPLETED");
+});
+
+test("situações observadas em tela carregam evidência sem inventar vencimento", () => {
+  assert.equal(explainAdmissionStatus("Concluído").evidence, "tela");
+  assert.equal(explainAdmissionStatus("Em andamento").evidence, "tela");
+  // "Vencida" foi observada, mas o vocabulário interno não possui OVERDUE.
+  // Até uma decisão de produto explícita, preservar UNKNOWN é mais seguro.
+  assert.equal(normalizeAdmissionStatus("Vencida"), "UNKNOWN");
 });
 
 test("toda regra declara de onde veio, e nenhuma foi inventada", () => {
@@ -187,6 +193,19 @@ test("o vínculo já salvo desfaz o empate sem adivinhação", () => {
   // duplicidade continua sendo duplicidade.
   assert.throws(() => chooseAdmission(hits, "ADM-9"), (error: unknown) =>
     error instanceof TangerinoAgentError && error.state === "MULTIPLE_MATCHES");
+});
+
+test("posição visual de cartão nunca vira vínculo externo", () => {
+  assert.equal(isStableExternalAdmissionId("ADM-4711"), true);
+  assert.equal(isStableExternalAdmissionId("card:0"), false);
+  assert.equal(isStableExternalAdmissionId("row:12"), false);
+  assert.equal(admissionSearchTerm({ externalAdmissionId: "card:0", registrationNumber: "0042", fullName: "Maria" }), "0042");
+  const hits = [{ id: "card:0", label: "Maria" }, { id: "card:1", label: "Maria" }];
+  assert.throws(() => chooseAdmission(hits, "card:0"), (error: unknown) =>
+    error instanceof TangerinoAgentError && error.state === "MULTIPLE_MATCHES");
+  const agente = source("lib/tangerino/agent.ts");
+  assert.match(agente, /isStableExternalAdmissionId\(externalIdCandidate\)/u);
+  assert.match(agente, /if \(externalId\)[\s\S]*?saveExternalReference/u);
 });
 
 test("o termo de busca segue a prioridade da §18 e nunca é CPF", () => {
@@ -639,18 +658,20 @@ test("todos os doze estados de consulta existem no tipo e no banco", async () =>
   }
 });
 
-/* ── A pendência real, mantida em voz alta ─────────────────────────────────── */
+/* ── Evidência do mapeamento real ──────────────────────────────────────────── */
 
-test("os seletores continuam declarados como não verificados", () => {
-  /* Este teste protege uma honestidade, não um comportamento.
-     Enquanto ninguém tiver aberto a tela real do Tangerino, dizer que o agente
-     "funciona" seria falso — e o jeito de isso virar mentira sem má-fé é alguém
-     apagar o aviso do arquivo por achá-lo desatualizado. Quando o mapeamento da
-     §72 acontecer, este teste é atualizado junto, de propósito e no mesmo diff. */
-  assert.equal(TANGERINO_SELECTORS_ARE_PROVISIONAL, true);
+test("os seletores críticos refletem a estrutura confirmada em tela", () => {
+  assert.equal(TANGERINO_SELECTORS_ARE_PROVISIONAL, false);
   const fonte = source("lib/tangerino/selectors.ts");
-  assert.match(fonte, /não foram verificados contra a interface real/u);
-  assert.match(fonte, /UI_CHANGED/u);
+  assert.match(fonte, /24\/08\/2026/u);
+  assert.equal(TangerinoSelectors.admissionsMenuCss, "a.item-menu.item-modulo-menu-pricing");
+  assert.match(TangerinoSelectors.admissionsFrameCss, /admissao-demissao\.tangerino\.com\.br/u);
+  assert.equal(TangerinoSelectors.searchCss[0], 'input[placeholder="Digite o nome"]');
+  assert.equal(TangerinoSelectors.resultCardCss, ".cards-scroll > .s-card");
+  assert.equal(TangerinoSelectors.resultNameCss, "strong.s-title");
+  assert.ok(TangerinoSelectors.statusLabels.some((pattern) => pattern.test("Status da admissão")));
+  assert.ok(TangerinoSelectors.stageLabels.some((pattern) => pattern.test("Status da etapa")));
+  assert.ok(!TangerinoSelectors.admissionDateLabels.some((pattern) => pattern.test("Data limite para a admissão")));
   // A lista de ações proibidas existe para o agente ignorá-las de propósito.
   assert.ok(TangerinoSelectors.forbiddenActions.length >= 8);
   for (const acao of ["Salvar", "Excluir", "Admitir", "Aprovar", "Rejeitar", "Assinar", "Finalizar"]) {
@@ -687,7 +708,8 @@ test("o CAPTCHA é detectado pelo widget, e não só pela palavra", () => {
   const cliente = source("worker/tangerino/playwright-session.ts");
   assert.match(cliente, /detectAuthBarrier\(text, await hasCaptchaWidget\(page\)\)/u);
   assert.match(cliente, /waitForManualAuthentication/u);
-  assert.doesNotMatch(cliente, /frameLocator[\s\S]*?\.click\(/u, "o worker tentou clicar dentro do CAPTCHA");
+  const helperCaptcha = cliente.slice(cliente.indexOf("export async function hasCaptchaWidget"), cliente.indexOf("export function tangerinoProfileDirectory"));
+  assert.doesNotMatch(helperCaptcha, /\.click\(/u, "o worker tentou clicar dentro do CAPTCHA");
 });
 
 test("o modo assistido libera só recursos do desafio e nunca a navegação principal", () => {

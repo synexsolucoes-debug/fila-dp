@@ -1,13 +1,17 @@
-<nav><a href="./admissoes.html" id="menu-admissao">Admissão Digital</a></nav>
 <main>
-  <h1>Processos admissionais</h1>
-  <label for="busca">Pesquisar</label>
-  <input id="busca" name="search" type="search" />
-  <table>
-    <thead><tr><th scope="col">Colaborador</th><th scope="col">Admissão</th><th scope="col">Situação</th></tr></thead>
-    <tbody>
-      <tr data-id="ADM-4711"><td><a href="./processo.html">Maria de Souza</a></td><td>01/09/2026</td><td>Documentação em análise</td></tr>
-      <tr data-id="ADM-5002"><td><a href="./processo.html">João Alves</a></td><td>05/09/2026</td><td>Aguardando assinatura</td></tr>
-    </tbody>
-  </table>
+  <h4>Admissão</h4>
+  <label for="busca">Buscar por nome</label>
+  <input class="ant-input" id="busca" placeholder="Digite o nome" type="text" />
+  <section class="cards-scroll">
+    <div class="s-card" data-id="ADM-4711">
+      <strong class="s-title" title="Maria de Souza">Maria de Souza</strong>
+      <div><label class="info-text">Status da admissão</label><p class="info-status">Documentação em análise</p></div>
+      <div><label class="info-text">Status da etapa</label><p class="info-status">Documentação</p></div>
+    </div>
+    <div class="s-card" data-id="ADM-5002">
+      <strong class="s-title" title="João Alves">João Alves</strong>
+      <div><label class="info-text">Status da admissão</label><p class="info-status">Em andamento</p></div>
+      <div><label class="info-text">Status da etapa</label><p class="info-status">Aguardando assinatura</p></div>
+    </div>
+  </section>
 </main>
