@@ -22,6 +22,7 @@ type ListRow = {
   company_id: string; company_name: string; contract_reference: string; role_title: string;
   contract_type: string; contract_start: string | null; contract_end: string | null;
   contract_total_amount: string | number | null; base_amount: string | number;
+  fixed_caju_difference: string | number;
   complement_method: string; status: string; consumed: string | number; fixed_items: number;
 };
 
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
     const rows = await d1.prepare(`SELECT p.provider_id, a.code, a.legal_name, a.trade_name, a.tax_id,
         p.company_id, COALESCE(c.trade_name, c.legal_name) AS company_name,
         p.contract_reference, p.role_title, p.contract_type, p.contract_start, p.contract_end,
-        p.contract_total_amount, p.base_amount, p.complement_method, p.status,
+        p.contract_total_amount, p.base_amount, p.fixed_caju_difference, p.complement_method, p.status,
         COALESCE((SELECT SUM(cl.net_amount) FROM fdp_contractor_closings cl
           WHERE cl.workspace_id = p.workspace_id AND cl.provider_id = p.provider_id
             AND cl.status IN ('approved', 'invoice_pending', 'ready_to_pay', 'paid', 'closed')), 0) AS consumed,
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
           contractStart: dateFromDatabase(row.contract_start, "Início do contrato"),
           contractEnd: dateFromDatabase(row.contract_end, "Término do contrato"),
           baseAmountCents: centsFromDatabase(row.base_amount, "Valor fixo"),
+          fixedCajuDifferenceCents: centsFromDatabase(row.fixed_caju_difference, "Diferença fixa no Caju"),
           complementMethod: row.complement_method,
           status: row.status,
           fixedItemCount: Number(row.fixed_items ?? 0),
@@ -102,8 +104,12 @@ export async function POST(request: Request) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "contractors.manage");
 
-    const input = readContractorInput(body, { requireCompany: true });
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, input.companyId);
+    /* A empresa virou opcional: o prestador é do grupo (migração 0054), e
+       obrigá-la aqui faria inventar uma resposta para quem atende várias.
+       Quando vem, continua sendo conferida — sugerir uma empresa que a pessoa
+       não pode ver seria vazar o nome dela. */
+    const input = readContractorInput(body, { requireCompany: false });
+    if (input.companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, input.companyId);
 
     const code = sanitizeProviderCode(body.code ?? input.legalName);
     const duplicate = await d1.prepare("SELECT id FROM fdp_auxiliary_providers WHERE workspace_id = ? AND code = ?")
@@ -119,13 +125,13 @@ export async function POST(request: Request) {
         .bind(providerId, workspace.id, code, input.legalName, input.tradeName, input.taxId,
           input.email, input.phone, input.status === "inactive" ? "inactive" : "active"),
       d1.prepare(`INSERT INTO fdp_contractor_profiles (provider_id, workspace_id, company_id, contract_reference, role_title,
-          contract_type, contract_start, contract_end, contract_total_amount, contract_signed_at, base_amount,
+          contract_type, contract_start, contract_end, contract_total_amount, contract_signed_at, base_amount, fixed_caju_difference,
           invoice_limit_override, complement_method, payment_day, status, notes, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(providerId, workspace.id, input.companyId, input.contractReference, input.roleTitle,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(providerId, workspace.id, input.companyId || null, input.contractReference, input.roleTitle,
           input.contractType, input.contractStart, input.contractEnd,
           input.contractTotalCents === null ? null : fromCents(input.contractTotalCents),
-          input.contractSignedAt, fromCents(input.baseAmountCents),
+          input.contractSignedAt, fromCents(input.baseAmountCents), fromCents(input.fixedCajuDifferenceCents),
           input.invoiceLimitCents === null ? null : fromCents(input.invoiceLimitCents),
           input.complementMethod, input.paymentDay, input.status, input.notes, user.id),
       prepareAuditEvent({
@@ -136,7 +142,8 @@ export async function POST(request: Request) {
         // repetir CNPJ ou CPF no histórico.
         after: {
           code, legalName: input.legalName, companyId: input.companyId, contractType: input.contractType,
-          baseAmountCents: input.baseAmountCents, contractTotalCents: input.contractTotalCents,
+          baseAmountCents: input.baseAmountCents, fixedCajuDifferenceCents: input.fixedCajuDifferenceCents,
+          contractTotalCents: input.contractTotalCents,
         },
         metadata: { contractStart: input.contractStart, contractEnd: input.contractEnd },
         requestId: request.headers.get("x-fila-dp-request-id"),

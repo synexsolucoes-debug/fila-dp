@@ -1,5 +1,6 @@
 import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -12,6 +13,7 @@ export async function POST(_request: Request, context: RouteContext) {
     // A triagem precisa definir a empresa antes de gerar uma demanda. Sem isso,
     // um membro poderia criar uma demanda sem escopo empresarial visível.
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "cards.write");
     const item = await d1.prepare("SELECT * FROM fdp_workspace_inbox_items WHERE id = ? AND workspace_id = ? AND status = 'new'").bind(id, workspace.id).first<Record<string, unknown>>();
     if (!item) throw ApiError.notFound("Solicitação não encontrada ou já convertida.", "INBOX_ITEM_NOT_FOUND");
     const list = await d1.prepare("SELECT id FROM fdp_lists WHERE board_id = ? AND kind = 'new'").bind(board.id).first<{ id: string }>();

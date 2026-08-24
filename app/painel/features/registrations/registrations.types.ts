@@ -1,5 +1,5 @@
 export type RegistrationTab = "companies" | "employees" | "contractors" | "catalogs";
-export type EmployeeDetailTab = "personal" | "employment" | "contact" | "history";
+export type EmployeeDetailTab = "personal" | "employment" | "contact" | "epi" | "tangerino" | "history";
 export type CatalogResource = "departments" | "positions" | "cost-centers" | "work-schedules";
 export type RecordStatus = "active" | "inactive";
 
@@ -52,7 +52,7 @@ export type Employee = {
   employmentStatus: "active" | "on_leave" | "terminated";
   employmentType: "clt" | "intern" | "apprentice" | "temporary";
   workModel: "onsite" | "hybrid" | "remote";
-  sourceSystem: "manual" | "solides";
+  sourceSystem: "manual" | "solides" | "sankhya";
   externalId: string;
   notes: string;
   createdAt: string;

@@ -117,6 +117,19 @@ const AUDIT = () => {
     const ownText = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
     const style = getComputedStyle(el);
     const cls = (el.className || "").toString().split(" ")[0];
+    /* Um elemento sem classe própria — `<th>`, `<strong>`, `<span>` solto — era
+       reportado como "STRONG. 1.31:1" e não dava para achar no código. A cadeia
+       de ancestrais com classe transforma o relatório em endereço. */
+    const trail = (() => {
+      const parts = [];
+      let node = el.parentElement;
+      while (node && parts.length < 3 && node !== document.body) {
+        const name = (node.className || "").toString().trim().split(/\s+/u)[0];
+        if (name) parts.unshift(name);
+        node = node.parentElement;
+      }
+      return parts.join(" > ");
+    })();
 
     if (ownText && text) {
       const fg = parseColor(style.color);
@@ -132,7 +145,7 @@ const AUDIT = () => {
           // Pior parada do gradiente: aprovar pela média esconderia a borda ruim.
           const value = Math.min(...surfaces.map((bg) => ratio(fg.rgb, bg)));
           if (value < need) {
-            contrastIssues.push({ tag: el.tagName, cls, text: text.slice(0, 40), value, need, size });
+            contrastIssues.push({ tag: el.tagName, cls, trail, text: text.slice(0, 40), value, need, size });
           }
         }
       }
@@ -170,6 +183,36 @@ const VIEWPORTS = [
 ];
 
 let failures = 0;
+let screensAudited = 0;
+
+/**
+ * Piso de cobertura.
+ *
+ * A varredura completa mede 64 telas — o painel, os dois níveis do menu, as
+ * abas de dentro de cada módulo, o assistente e o console global, num tema só.
+ *
+ * O piso existe porque este script já falhou do jeito mais perigoso que um
+ * verificador pode falhar: passando. Um seletor de navegação que deixou de
+ * casar tirou 32 telas da varredura, e a conclusão impressa continuou sendo
+ * "OK: 0 violações" — 0 violações em nada.
+ *
+ * Ele subiu de 40 para 55 quando as abas de dentro dos módulos entraram na
+ * varredura. Vale registrar o que aquela entrada revelou, porque é a medida do
+ * que um piso baixo esconde: as dez abas do Controle de EPI, as nove da gestão
+ * de Processos e as quatro do quadro **nunca tinham sido medidas** — a
+ * varredura visitava o módulo, auditava a primeira aba e seguia adiante. A
+ * primeira passagem com elas dentro acusou 122 violações de contraste, todas
+ * reais, todas em rótulos que existiam há meses.
+ *
+ * Subiu de novo, de 55 para 64, quando a Central de Trabalho, a Triagem e a
+ * Central de Agentes entraram no menu: um piso que não acompanha o produto
+ * volta a tolerar exatamente o colapso que ele existe para acusar — as três
+ * telas novas poderiam sumir da varredura inteira sem baixar de 55.
+ *
+ * O número continua folgado de propósito — 64 contra 74 medidas — para acusar
+ * um colapso de cobertura sem quebrar quando um módulo sai do plano.
+ */
+const MINIMO_DE_TELAS = 64;
 
 /** `path === null` audita a tela já aberta, sem recarregar — usado nas visões do painel. */
 async function audit(label, path, setup) {
@@ -179,13 +222,14 @@ async function audit(label, path, setup) {
     await page.waitForTimeout(1800);
   }
   console.log(`\n### ${label}${path === null ? "" : ` (${path})`}`);
+  screensAudited += 1;
 
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.waitForTimeout(500);
     const result = await page.evaluate(AUDIT);
     const uniq = (list, key) => [...new Map(list.map((item) => [key(item), item])).values()];
-    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.value}`);
+    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.trail}:${i.value}`);
     const names = uniq(result.nameIssues, (i) => `${i.tag}.${i.cls}`);
     const targets = uniq(result.targetIssues, (i) => `${i.tag}.${i.cls}:${i.name}`);
     const blind = uniq(result.unmeasurable, (i) => `${i.tag}.${i.cls}`);
@@ -195,7 +239,7 @@ async function audit(label, path, setup) {
     const total = contrast.length + names.length + targets.length;
     console.log(`  ${viewport.label}: ${total === 0 ? "sem violações" : `${total} violação(ões)`}`);
     for (const i of contrast.slice(0, 8)) {
-      console.log(`     contraste ${i.tag}.${i.cls} ${i.value}:1 (precisa ${i.need}) "${i.text}"`);
+      console.log(`     contraste ${i.tag}.${i.cls || "—"} ${i.value}:1 (precisa ${i.need}) "${i.text}" ← ${i.trail}`);
     }
     for (const i of names.slice(0, 5)) console.log(`     sem nome ${i.tag}.${i.cls} → ${i.html}`);
     for (const i of targets.slice(0, 5)) console.log(`     alvo ${i.tag}.${i.cls} ${i.w}x${i.h} "${i.name}"`);
@@ -209,18 +253,39 @@ async function audit(label, path, setup) {
 }
 
 /**
- * Sub-abas de uma tela do painel.
+ * As abas do módulo — os destinos que a barra lateral não alcança.
  *
- * Auditar a visão de Cadastros cobria só a primeira aba. Prestadores PJ,
- * Colaboradores e Cadastros auxiliares são telas diferentes com formulários
- * diferentes — cada uma precisa passar por si.
+ * Controle de EPI tem dez destinos próprios, a gestão de Processos tem nove, e
+ * até aqui **nenhum deles era medido**: a varredura visitava o módulo, auditava
+ * a primeira aba e ia para o módulo seguinte. Trinta e poucas telas de produto
+ * ficavam de fora, e o relatório dizia "0 violações" sobre o que não tinha
+ * olhado — a mesma classe de ponto cego que o piso de cobertura existe para
+ * acusar.
+ *
+ * O que fica de fora não é um lugar da tela, é uma repetição: as abas que
+ * levam ao mesmo destino que o segundo nível do menu, já percorrido. Medir de
+ * novo infla o número sem medir nada novo, e um piso inflado é pior que um
+ * piso baixo.
+ *
+ * Antes o filtro era por contêiner — tudo que estivesse no cabeçalho do
+ * processo era descartado. Isso valia enquanto o cabeçalho só mostrava módulos.
+ * Desde que ele passou a emprestar o lugar ao módulo (§70), o Controle de EPI
+ * entrega os seus dez destinos ali, e o filtro por contêiner os apagava da
+ * varredura: dez telas reais somem do relatório por estarem no lugar certo.
+ * Por isso a comparação agora é com os rótulos do menu, que é o que de fato
+ * define a duplicata.
  */
-async function auditSubTabs(prefix, selector) {
-  const tabs = page.locator(selector);
-  const labels = (await tabs.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
-  for (const label of labels) {
+async function auditModuleTabs(prefix) {
+  const dentro = '.process-context [role="tab"], .dashboard-content [role="tab"], .dashboard-content [class*="tabs"] > button';
+  const menu = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process-view');
+  const menuLabels = new Set((await menu.allInnerTexts()).map((text) => text.trim().split("\n")[0]));
+  const tabs = page.locator(dentro);
+  const labels = [...new Set((await tabs.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean))]
+    .filter((label) => !menuLabels.has(label));
+  // A primeira já foi auditada com o módulo: ela é o destino de entrada.
+  for (const label of labels.slice(1)) {
     await tabs.filter({ hasText: label }).first().click().catch(() => undefined);
-    await page.waitForTimeout(1100);
+    await page.waitForTimeout(1000);
     await audit(`${prefix} › ${label}`, null);
   }
 }
@@ -230,7 +295,7 @@ async function auditSubTabs(prefix, selector) {
  * junto com a tela que o hospeda. Aqui ele é aberto de propósito: um painel que
  * só aparece quando chamado ainda precisa ser legível quando aparece.
  */
-async function auditAssistant() {
+async function auditAssistant(theme = "") {
   const launcher = page.locator('button[class*="launcher"]').filter({ hasText: /Assistente/u }).first();
   if (await launcher.count() === 0) {
     console.log("\n### Assistente — lançador não encontrado");
@@ -240,7 +305,7 @@ async function auditAssistant() {
   await launcher.click();
   await page.locator('aside[aria-label="Assistente do Vinculato"]').waitFor({ state: "visible", timeout: 10000 });
   await page.waitForTimeout(1200);
-  await audit("Painel › Assistente", null);
+  await audit(`Painel › Assistente${theme ? ` [${theme}]` : ""}`, null);
   await page.keyboard.press("Escape").catch(() => undefined);
   await page.waitForTimeout(300);
 }
@@ -258,20 +323,129 @@ async function signIn() {
 /**
  * O painel troca de tela por estado, não por rota: auditar só `/painel` cobriria
  * a visão geral e mais nada. Aqui a navegação lateral é percorrida de verdade.
+ *
+ * O menu tem dois níveis desde que passou a agrupar por processo (§25): o
+ * primeiro é o processo e o segundo são os módulos dele, que só existem no DOM
+ * enquanto aquele processo está aberto. Ler os rótulos uma vez no começo, como
+ * a versão anterior fazia, mediria os processos e os módulos de um só deles —
+ * e imprimiria "0 violações" sobre a maior parte do produto não visitada. É a
+ * mesma falha que já tirou 32 telas desta varredura sem ninguém notar.
  */
-async function auditPanelViews() {
-  const nav = page.locator('nav[aria-label="Navegação do painel"] > button');
-  const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]);
-  for (const label of labels) {
-    // "Configurações" abre modal em vez de trocar a visão; entra na mesma varredura.
-    const button = nav.filter({ hasText: label }).first();
-    await button.click().catch(() => undefined);
+async function auditPanelViews(theme = "") {
+  const sufixo = theme ? ` [${theme}]` : "";
+  // Descendente, não filho direto. O menu agrupou os itens por contexto e o
+  // seletor `> button` deixou de casar — sem erro nenhum: a varredura passou a
+  // visitar zero telas do painel e a imprimir "0 violações".
+  const processos = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process > button, nav[aria-label="Navegação do painel"] > .sidebar-nav-home');
+  const rotulos = (await processos.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+  if (rotulos.length === 0) {
+    console.log("\n### Painel — nenhum item de menu encontrado; a varredura das visões não rodou");
+    failures += 1;
+    return;
+  }
+
+  for (const rotulo of rotulos) {
+    await processos.filter({ hasText: rotulo }).first().click().catch(() => undefined);
     await page.waitForTimeout(900);
-    await audit(`Painel › ${label}`, null);
-    if (/Cadastros/u.test(label)) {
-      await auditSubTabs(`Painel › ${label}`, 'main [class*="tabs"] > button, [class*="__tabs"] > button');
+
+    // Segundo nível: os módulos do processo recém-aberto. Eles nascem com a
+    // abertura, então precisam ser lidos agora, não antes.
+    const modulos = page.locator('nav[aria-label="Navegação do painel"] .sidebar-process-view');
+    const nomes = (await modulos.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+
+    /* Abrir o processo já leva ao primeiro módulo dele — e o relatório vinha
+       chamando essa tela pelo nome do *processo*, não pelo do módulo. O módulo
+       de entrada ficava então sem linha própria: procurar "Meu trabalho" no
+       relatório não achava nada, e a única leitura possível era a errada — que
+       a Central de Trabalho não tinha sido auditada. Cobertura que não dá para
+       conferir por nome não serve para dizer que algo foi coberto. */
+    const entrada = `Painel › ${rotulo}${nomes[0] ? ` › ${nomes[0]}` : ""}${sufixo}`;
+    await audit(entrada, null);
+    await auditModuleTabs(entrada);
+
+    for (const nome of nomes.slice(1)) {
+      await modulos.filter({ hasText: nome }).first().click().catch(() => undefined);
+      await page.waitForTimeout(900);
+      await audit(`Painel › ${rotulo} › ${nome}${sufixo}`, null);
+      await auditModuleTabs(`Painel › ${nome}${sufixo}`);
     }
     await page.keyboard.press("Escape").catch(() => undefined);
+  }
+}
+
+/**
+ * Troca o tema pelo botão do cabeçalho — o mesmo caminho da pessoa.
+ *
+ * Este bloco já foi uma sentinela: quando a interface virou exclusivamente
+ * escura, a troca foi retirada e no lugar dela ficou uma conferência que
+ * reprovava se um alternador voltasse, justamente para o segundo tema não
+ * ficar sem auditoria em silêncio. O alternador voltou (§6, §12) e a sentinela
+ * cumpriu o papel: a varredura cobre os dois temas de novo.
+ *
+ * A regra que ela protege continua sendo a mesma — nunca audite metade. "Zero
+ * violações" precisa querer dizer zero no produto inteiro, não zero na metade
+ * que o script olhou.
+ */
+/**
+ * O produto voltou a ter um tema só.
+ *
+ * Esta função já foi três coisas, e o histórico importa para não repetir
+ * nenhuma delas. Primeiro ela trocava de tema pelo botão do cabeçalho e a
+ * varredura cobria os dois. Quando a interface virou exclusivamente escura, o
+ * botão sumiu e no lugar da troca ficou uma sentinela: reprovar se um
+ * alternador reaparecesse, para o segundo tema nunca ficar sem auditoria em
+ * silêncio. Ele reapareceu, a sentinela acusou, e a varredura voltou a cobrir
+ * os dois — de um jeito que, na primeira tentativa, media o mesmo tema duas
+ * vezes com rótulos trocados.
+ *
+ * O produto agora tem um tema só de novo, por decisão registrada. A regra que
+ * atravessou as três versões é sempre a mesma: **nunca audite metade**. Então
+ * a sentinela volta ao posto. Ela não mede tema nenhum; ela vigia o retorno do
+ * segundo, que é a única coisa capaz de tornar esta varredura parcial sem que
+ * ninguém perceba.
+ */
+async function themeToggleExists() {
+  return await page.locator(".theme-toggle").count() > 0;
+}
+
+async function auditEverything() {
+  console.log("\n\n═══════════ INTERFACE ═══════════");
+  await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1500);
+  if (await themeToggleExists()) {
+    console.log("um alternador de tema voltou à interface: a varredura precisa cobrir os dois temas de novo");
+    failures += 1;
+    return;
+  }
+  await audit("Painel", null);
+  await auditPanelViews();
+  await auditAssistant();
+  await audit("Console da plataforma", "/plataforma");
+  await auditPlatformAreas();
+}
+
+/**
+ * Áreas do console global.
+ *
+ * O console troca de área por estado, como o painel: auditar só `/plataforma`
+ * cobriria a visão geral e mais nada. Foi exatamente esse tipo de ponto cego
+ * que fez a varredura anterior declarar "zero violações" enquanto oito módulos
+ * do painel nunca haviam sido visitados.
+ */
+async function auditPlatformAreas(theme = "") {
+  const nav = page.locator('aside[aria-label="Áreas da administração global"] nav button');
+  const labels = (await nav.allInnerTexts()).map((text) => text.trim().split("\n")[0]).filter(Boolean);
+  if (labels.length === 0) {
+    // Antes isto era só um aviso. Não pode ser: sem as áreas do console, a
+    // varredura devolve "OK" tendo medido uma tela de onze.
+    console.log("\n### Console da plataforma — nenhuma área visível; a varredura não rodou");
+    failures += 1;
+    return;
+  }
+  for (const label of labels) {
+    await nav.filter({ hasText: label }).first().click().catch(() => undefined);
+    await page.waitForTimeout(1100);
+    await audit(`Plataforma › ${label}${theme ? ` [${theme}]` : ""}`, null);
   }
 }
 
@@ -282,12 +456,17 @@ try {
     await signIn();
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   });
-  await auditPanelViews();
-  await auditAssistant();
-  await audit("Console da plataforma", "/plataforma");
+  await auditEverything();
 } finally {
   await browser.close();
 }
 
-console.log(`\n${failures === 0 ? "OK" : "FALHOU"}: ${failures} violação(ões) WCAG 2.2 AA.`);
+if (screensAudited < MINIMO_DE_TELAS) {
+  console.log(`\nCOBERTURA INSUFICIENTE: ${screensAudited} tela(s) auditada(s), mínimo ${MINIMO_DE_TELAS}.`);
+  console.log("Uma varredura que não alcança as telas não prova nada sobre elas.");
+  failures += 1;
+} else {
+  console.log(`\n${screensAudited} tela(s) auditada(s).`);
+}
+console.log(`${failures === 0 ? "OK" : "FALHOU"}: ${failures} violação(ões) WCAG 2.2 AA.`);
 process.exit(failures === 0 ? 0 : 1);

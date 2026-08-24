@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertOctagon, Briefcase, CalendarClock, CircleDollarSign, History, LoaderCircle, Plus, RefreshCw, X,
+  Briefcase, CalendarClock, CircleDollarSign, History, LoaderCircle, Plus, RefreshCw, X,
 } from "lucide-react";
+import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import styles from "./registrations.module.css";
 
 /**
@@ -28,7 +29,8 @@ type ContractorSummary = {
   id: string; code: string; legalName: string; tradeName: string; taxIdLast4: string;
   companyId: string; companyName: string; contractReference: string; roleTitle: string;
   contractType: "determinado" | "indeterminado"; contractStart: string | null; contractEnd: string | null;
-  baseAmountCents: number; complementMethod: string; status: string; fixedItemCount: number; balance: Balance;
+  baseAmountCents: number; fixedCajuDifferenceCents: number;
+  complementMethod: string; status: string; fixedItemCount: number; balance: Balance;
 };
 
 type FixedItem = {
@@ -42,8 +44,8 @@ type Movement = {
 };
 
 type Closing = {
-  competence: string; status: string; netCents: number; invoiceCents: number;
-  complementCents: number; cajuCents: number;
+  id: string; companyId: string; competence: string; status: string; netCents: number; invoiceCents: number;
+  complementCents: number; fixedCajuCents: number; cajuCents: number;
 };
 
 type Detail = {
@@ -55,7 +57,7 @@ type Detail = {
   fixedItems: FixedItem[];
   movements: Movement[];
   closings: Closing[];
-  permissions: { manage: boolean };
+  permissions: { manage: boolean; readPayments: boolean };
 };
 
 const money = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -110,7 +112,11 @@ function BalanceBar({ balance }: { balance: Balance }) {
   );
 }
 
-export function ContractorsPanel({ canManage, createSignal }: { canManage: boolean; createSignal: number }) {
+export function ContractorsPanel({ canManage, createSignal, onOpenPayment }: {
+  canManage: boolean;
+  createSignal: number;
+  onOpenPayment: (target: { companyId: string; competence: string; closingId: string }) => void;
+}) {
   const [list, setList] = useState<ContractorSummary[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -119,7 +125,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [editor, setEditor] = useState<"none" | "new" | "edit">("none");
-  const [drawer, setDrawer] = useState<"none" | "fixed" | "movement">("none");
+  const [drawer, setDrawer] = useState<"none" | "fixed" | "movement" | "termination">("none");
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const loadList = useCallback(async () => {
@@ -200,7 +206,8 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
       // Valor global só existe no prazo determinado; mandar no outro caso seria
       // recusado pela API, e com razão.
       contractTotalAmount: contractType === "determinado" ? form.get("contractTotalAmount") : "",
-      baseAmount: form.get("baseAmount"), invoiceLimitOverride: form.get("invoiceLimitOverride"),
+      baseAmount: form.get("baseAmount"), fixedCajuDifference: form.get("fixedCajuDifference"),
+      invoiceLimitOverride: form.get("invoiceLimitOverride"),
       complementMethod: form.get("complementMethod"), paymentDay: form.get("paymentDay"),
       status: form.get("status"), notes: form.get("notes"),
     };
@@ -224,11 +231,10 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
           </button>
         </header>
         {loading ? (
-          <p className={styles.loadingState}><LoaderCircle className={styles.spin} aria-hidden="true" /> Carregando…</p>
+          <LoadingState size="compact" title="Carregando prestadores" />
         ) : list.length === 0 ? (
-          <p className={styles.emptyState}>
-            Nenhum prestador PJ cadastrado. Cadastre para que ele entre na apuração e na exportação do complemento.
-          </p>
+          <EmptyState size="compact" icon={Briefcase} title="Nenhum prestador PJ cadastrado"
+            text="Cadastre para que ele entre na apuração e na exportação do complemento." />
         ) : (
           <div className={styles.companyList}>
             {list.map((row) => (
@@ -246,7 +252,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                   <strong>{row.tradeName || row.legalName}</strong>
                   <small>{row.companyName} · {money(row.baseAmountCents)}/mês</small>
                 </span>
-                <span className={styles.statusPill} data-status={row.status}>{statusLabels[row.status] ?? row.status}</span>
+                <StatusPill status={row.status} label={statusLabels[row.status] ?? row.status} />
               </button>
             ))}
           </div>
@@ -254,7 +260,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
       </aside>
 
       <section className={styles.detailPane}>
-        {error && <p className={styles.errorBanner} role="alert"><AlertOctagon aria-hidden="true" /> {error}</p>}
+        {error && <ErrorBanner message={error} />}
 
         <header>
           <div className={styles.companyIdentity}>
@@ -262,7 +268,12 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
             <div>
               <small>{contractor ? (contractor.contractType === "determinado" ? "PRAZO DETERMINADO" : "PRAZO INDETERMINADO") : "PRESTADOR PJ"}</small>
               <h2>{contractor?.tradeName || contractor?.legalName || "Selecione um prestador"}</h2>
-              <p>{contractor ? `${contractor.companyName} · ${contractor.contractReference || "sem contrato de referência"}` : ""}</p>
+              {/* Sem empresa sugerida a linha não fica começando por um separador
+                  solto, que se lê como campo que não carregou. */}
+              <p>{contractor
+                ? [contractor.companyName, contractor.contractReference || "sem contrato de referência"]
+                  .filter(Boolean).join(" · ")
+                : ""}</p>
             </div>
           </div>
           {canManage && (
@@ -272,12 +283,17 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                   Editar contrato
                 </button>
               )}
+              {contractor && contractor.status !== "inactive" && (
+                <button type="button" className={styles.secondaryButton} onClick={() => setDrawer("termination")} disabled={busy}>
+                  Demitir / Encerrar PJ
+                </button>
+              )}
             </div>
           )}
         </header>
 
         {!contractor ? (
-          <p className={styles.emptyState}>Escolha um prestador na lista para ver contrato, saldo e movimentação.</p>
+          <EmptyState icon={Briefcase} title="Nenhum prestador selecionado" text="Escolha um prestador na lista para ver contrato, saldo e movimentação." />
         ) : (
           <>
             <section className={styles.detailSection}>
@@ -285,6 +301,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
               <BalanceBar balance={detail.balance} />
               <dl>
                 <div><dt>Valor fixo mensal</dt><dd>{money(contractor.baseAmountCents)}</dd></div>
+                <div><dt>Diferença fixa no Caju</dt><dd>{money(contractor.fixedCajuDifferenceCents)}</dd></div>
                 <div><dt>Vigência</dt><dd>{day(contractor.contractStart)} → {contractor.contractEnd ? day(contractor.contractEnd) : "sem término"}</dd></div>
                 <div><dt>Complemento</dt><dd>{complementLabels[contractor.complementMethod] ?? contractor.complementMethod}</dd></div>
                 <div><dt>Limite da nota</dt><dd>{contractor.invoiceLimitCents === null ? "pela política" : money(contractor.invoiceLimitCents)}</dd></div>
@@ -317,7 +334,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                           <td>{item.direction === "credit" ? "Crédito" : "Desconto"}</td>
                           <td className={item.direction === "debit" ? styles.textDanger : undefined}>{money(item.amountCents)}</td>
                           <td>{item.effectiveFrom} → {item.effectiveTo ?? "sem fim"}</td>
-                          <td><span className={styles.statusPill} data-status={item.status}>{statusLabels[item.status] ?? item.status}</span></td>
+                          <td><StatusPill status={item.status} label={statusLabels[item.status] ?? item.status} /></td>
                           {canManage && (
                             <td>
                               {item.status === "active" && (
@@ -370,9 +387,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                         <small>{movement.movementLabel} · vigência {day(movement.effectiveDate)}</small>
                         {movement.reason && <p>{movement.reason}</p>}
                       </div>
-                      <span className={styles.statusPill} data-status={movement.status}>
-                        {statusLabels[movement.status] ?? movement.status}
-                      </span>
+                      <StatusPill status={movement.status} label={statusLabels[movement.status] ?? movement.status} />
                       {canManage && movement.status !== "applied" && movement.status !== "canceled" && (
                         <div className={styles.filters}>
                           {movement.status === "draft" && (
@@ -418,7 +433,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                     <thead>
                       <tr>
                         <th scope="col">Competência</th><th scope="col">Líquido</th><th scope="col">Nota</th>
-                        <th scope="col">Complemento</th><th scope="col">Situação</th>
+                        <th scope="col">Complemento</th><th scope="col">Situação</th><th scope="col">Pagamento</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -427,8 +442,17 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
                           <th scope="row">{row.competence}</th>
                           <td>{money(row.netCents)}</td>
                           <td>{money(row.invoiceCents)}</td>
-                          <td>{money(row.complementCents)}{row.cajuCents > 0 && <small>Caju {money(row.cajuCents)}</small>}</td>
-                          <td><span className={styles.statusPill} data-status={row.status}>{row.status}</span></td>
+                          <td>
+                            {money(row.complementCents)}
+                            {row.cajuCents > 0 && <small>Caju {money(row.cajuCents)}{row.fixedCajuCents > 0 ? ` · fixa ${money(row.fixedCajuCents)}` : ""}</small>}
+                          </td>
+                          <td><StatusPill status={row.status} label={row.status} /></td>
+                          <td>
+                            <button type="button" className={styles.secondaryButton}
+                              onClick={() => onOpenPayment({ companyId: row.companyId, competence: row.competence, closingId: row.id })}>
+                              Consultar
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -468,9 +492,10 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
         />
       )}
 
-      {drawer === "movement" && selectedId && (
+      {(drawer === "movement" || drawer === "termination") && selectedId && (
         <MovementDrawer
           busy={busy}
+          initialType={drawer === "termination" ? "termination" : undefined}
           onClose={() => setDrawer("none")}
           onSubmit={(form) => {
             const movementType = String(form.get("movementType") ?? "other");
@@ -478,6 +503,7 @@ export function ContractorsPanel({ canManage, createSignal }: { canManage: boole
             if (form.get("baseAmount")) effect.baseAmount = form.get("baseAmount");
             if (form.get("contractEnd")) effect.contractEnd = form.get("contractEnd");
             if (form.get("contractTotalAmount")) effect.contractTotalAmount = form.get("contractTotalAmount");
+            if (movementType === "termination") effect.contractEnd = form.get("effectiveDate");
             void mutate(
               () => send(`/api/registrations/contractors/${selectedId}/movements`, {
                 method: "POST",
@@ -534,9 +560,9 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
                     : "O CPF é obrigatório para exportar o complemento ao cartão de benefício."}
                 </small>
               </label>
-              <label>Empresa contratante
-                <input name="companyId" defaultValue={current?.companyId ?? ""} required={mode === "new"} />
-                <small>Identificador da empresa do grupo.</small>
+              <label>Empresa sugerida
+                <input name="companyId" defaultValue={current?.companyId ?? ""} />
+                <small>Opcional. O prestador é do grupo — quem paga é a empresa que apurar a competência.</small>
               </label>
               <label>E-mail<input name="email" type="email" defaultValue={current?.email ?? ""} maxLength={180} /></label>
               <label>Telefone<input name="phone" defaultValue={current?.phone ?? ""} maxLength={40} /></label>
@@ -565,6 +591,10 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
               )}
 
               <label>Valor fixo mensal<input name="baseAmount" inputMode="decimal" defaultValue={reais(current?.baseAmountCents)} /></label>
+              <label>Diferença fixa paga no Caju
+                <input name="fixedCajuDifference" inputMode="decimal" defaultValue={reais(current?.fixedCajuDifferenceCents)} />
+                <small>Valor recorrente adicional pago no Caju e fora da nota fiscal.</small>
+              </label>
               <label>Limite da nota
                 <input name="invoiceLimitOverride" inputMode="decimal" defaultValue={reais(current?.invoiceLimitCents)} />
                 <small>Em branco usa a política vigente.</small>
@@ -582,9 +612,12 @@ function ContractorEditor({ mode, current, busy, onClose, onSubmit, dialogRef }:
                 <select name="status" defaultValue={current?.status ?? "active"}>
                   <option value="active">Ativo</option>
                   <option value="suspended">Suspenso</option>
-                  <option value="inactive">Encerrado</option>
+                  <option value="inactive" disabled={current?.status !== "inactive"}>Encerrado</option>
                 </select>
-                <small>Suspenso e encerrado não entram na apuração.</small>
+                <small>
+                  Suspenso não entra na apuração. Para encerrar um contrato ativo, use “Demitir / Encerrar PJ”.
+                  Contratos encerrados continuam recalculáveis até a competência do término.
+                </small>
               </label>
               <label className={styles.spanTwo}>Observações
                 <textarea name="notes" rows={3} defaultValue={current?.notes ?? ""} maxLength={600} />
@@ -667,15 +700,16 @@ function FixedItemDrawer({ busy, onClose, onSubmit }: {
   );
 }
 
-function MovementDrawer({ busy, onClose, onSubmit }: {
-  busy: boolean; onClose: () => void; onSubmit: (form: FormData) => void;
+function MovementDrawer({ busy, initialType, onClose, onSubmit }: {
+  busy: boolean; initialType?: string; onClose: () => void; onSubmit: (form: FormData) => void;
 }) {
-  const [movementType, setMovementType] = useState("base_change");
+  const [movementType, setMovementType] = useState(initialType ?? "base_change");
+  const isTermination = movementType === "termination";
   return (
-    <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label="Registrar movimentação">
+    <div className={styles.drawerOverlay} role="dialog" aria-modal="true" aria-label={isTermination ? "Demitir ou encerrar PJ" : "Registrar movimentação"}>
       <div className={styles.employeeDrawer}>
         <header className={styles.drawerHeader}>
-          <div><span>MOVIMENTAÇÃO</span><h2>Registrar movimentação</h2></div>
+          <div><span>MOVIMENTAÇÃO</span><h2>{isTermination ? "Demitir / Encerrar PJ" : "Registrar movimentação"}</h2></div>
           <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X aria-hidden="true" /></button>
         </header>
         <form className={styles.drawerForm} onSubmit={(event) => { event.preventDefault(); onSubmit(new FormData(event.currentTarget)); }}>
@@ -692,12 +726,15 @@ function MovementDrawer({ busy, onClose, onSubmit }: {
                   <option value="contract_value_change">Mudança no valor do contrato</option>
                   <option value="suspension">Suspensão</option>
                   <option value="reactivation">Reativação</option>
-                  <option value="termination">Encerramento</option>
+                  <option value="termination">Demissão / encerramento</option>
                   <option value="other">Outra</option>
                 </select>
               </label>
-              <label>Vigência a partir de<input name="effectiveDate" type="date" required /></label>
-              <label className={styles.spanTwo}>Resumo<input name="title" required maxLength={180} placeholder="Reajuste anual de 5%" /></label>
+              <label>{isTermination ? "Data do encerramento" : "Vigência a partir de"}<input name="effectiveDate" type="date" required /></label>
+              <label className={styles.spanTwo}>Resumo
+                <input name="title" required maxLength={180} placeholder="Reajuste anual de 5%"
+                  defaultValue={initialType === "termination" ? "Encerramento do contrato PJ" : ""} />
+              </label>
               {movementType === "base_change" && (
                 <label>Novo valor fixo mensal<input name="baseAmount" inputMode="decimal" required /></label>
               )}
@@ -707,7 +744,10 @@ function MovementDrawer({ busy, onClose, onSubmit }: {
               {movementType === "contract_value_change" && (
                 <label>Novo valor global<input name="contractTotalAmount" inputMode="decimal" required /></label>
               )}
-              <label className={styles.spanTwo}>Motivo<textarea name="reason" rows={3} maxLength={400} /></label>
+              <label className={styles.spanTwo}>Motivo
+                <textarea name="reason" rows={3} maxLength={400} required={isTermination} />
+                {isTermination && <small>Obrigatório. O histórico do prestador será mantido após o encerramento.</small>}
+              </label>
             </div>
           </div>
           <footer className={styles.drawerFooter}>

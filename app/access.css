@@ -342,8 +342,11 @@
 .dashboard-task-labels .blue { color: #286c9f; background: #e1f2fc; }
 .dashboard-task-labels .purple { color: #7750a3; background: #f0e8fa; }
 .dashboard-task-labels .green { color: #24785c; background: #ddf6ed; }
-.dashboard-task-labels .orange { color: #a75f16; background: #fff0dc; }
-.dashboard-task-labels .gray { color: #657083; background: #edf0f2; }
+/* #a75f16 dava 4.37:1 sobre #fff0dc e reprovava o mínimo 4.5 da WCAG 2.2 AA.
+   O defeito só aparecia com demanda de verdade na tela: com o quadro vazio, o
+   rótulo de processo nunca era pintado. */
+.dashboard-task-labels .orange { color: #a25c15; background: #fff0dc; }
+.dashboard-task-labels .gray { color: #545e6e; background: #edf0f2; }
 .dashboard-task h2 { margin: 10px 0 4px; font-size: 11px; line-height: 1.4; letter-spacing: -.01em; }
 .dashboard-task > p { margin: 0; color: #6b7789; font-size: 8px; }
 .dashboard-task-bottom { margin-top: 15px; display: flex; align-items: center; gap: 5px; }
@@ -351,7 +354,7 @@
 .dashboard-sla.warning { color: #9a591b; background: #fff0dc; }
 .dashboard-sla.safe { color: #167354; background: #dff7ee; }
 .dashboard-sla.paused { color: #596779; background: #edf0f2; }
-.dashboard-check { color: #758294; font-size: 7px; }
+.dashboard-check { color: #5d6a7c; font-size: 7px; }
 .dashboard-comments { color: #5f6f81; font-size: 7px; }
 .dashboard-mini-avatar { width: 20px; height: 20px; margin-left: auto; display: grid; place-items: center; border-radius: 50%; background: #d9f6ed; color: var(--brand); font-size: 6px; font-weight: 800; }
 .dashboard-add-card { width: 100%; min-height: 30px; padding: 0 4px; border: 1px dashed transparent; border-radius: 6px; background: transparent; color: #788696; text-align: left; cursor: pointer; font-size: 8px; }
@@ -760,13 +763,7 @@
 }
 
 /* Responsive workspace controls */
-/* `overflow-x: hidden` transforma o elemento em contêiner de rolagem. Aplicado
- * ao `body`, ele passa a ser o contêiner do `position: sticky` da barra lateral
- * — e, como quem rola é a página e não o `body`, o sticky nunca prende e a
- * barra sobe junto com o conteúdo. `clip` corta o transbordo horizontal do
- * mesmo jeito **sem** criar contêiner de rolagem. A declaração antiga fica
- * antes como fallback para navegador sem suporte a `clip`. */
-html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
+html, body { max-width: 100%; overflow-x: hidden; }
 .dashboard-shell { min-height: 100dvh; }
 .dashboard-main, .dashboard-content, .dashboard-heading, .dashboard-board-head { min-width: 0; }
 .dashboard-sidebar button, .dashboard-header button, .dashboard-tabs button, .dashboard-add-card, .inbox-item button, .planner-day button, .primary-button, .secondary-button, .danger-link { touch-action: manipulation; }
@@ -787,7 +784,7 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 .workspace-account-summary > div { min-width: 0; }
 .workspace-account-summary strong, .workspace-account-summary small, .workspace-account-summary em { display: block; }
 .workspace-account-summary strong { font-size: 11px; }
-.workspace-account-summary small { margin-top: 3px; overflow: hidden; color: #626c7a; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-account-summary small { margin-top: 3px; overflow: hidden; color: var(--ui-text-soft, #545e6e); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-account-summary em { width: max-content; margin-top: 7px; padding: 4px 6px; border-radius: 4px; background: #dcf7ee; color: var(--brand); font-size: 7px; font-style: normal; font-weight: 800; text-transform: uppercase; }
 .workspace-settings-note { margin: -2px 0 0; color: #758396; font-size: 9px; line-height: 1.5; }
 .workspace-switcher, .workspace-team, .workspace-invite-form { overflow: hidden; border: 1px solid #dfe5e5; border-radius: 9px; background: white; }
@@ -1060,7 +1057,7 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 .demand-table-view td strong { color: #243349; font-size: 9px; }
 .demand-table-view td small { margin-top: 4px; color: #8a96a2; font-size: 7px; }
 .table-process { padding: 4px 6px; border-radius: 4px; font-size: 7px; font-weight: 750; }
-.table-process.blue { color: #286c9f; background: #e1f2fc; }.table-process.purple { color: #7750a3; background: #f0e8fa; }.table-process.green { color: #24785c; background: #ddf6ed; }.table-process.orange { color: #a75f16; background: #fff0dc; }.table-process.gray { color: #657083; background: #edf0f2; }
+.table-process.blue { color: #286c9f; background: #e1f2fc; }.table-process.purple { color: #7750a3; background: #f0e8fa; }.table-process.green { color: #24785c; background: #ddf6ed; }.table-process.orange { color: #a25c15; background: #fff0dc; }.table-process.gray { color: #657083; background: #edf0f2; }
 .demand-table-view td em, .demand-calendar-view button { font-style: normal; }
 .demand-table-view td em { padding: 5px 6px; border-radius: 4px; font-size: 7px; font-weight: 750; }.demand-table-view td em.safe { color: #167354; background: #dff7ee; }.demand-table-view td em.warning { color: #9a591b; background: #fff0dc; }.demand-table-view td em.overdue { color: #a33b3b; background: #fee9e7; }.demand-table-view td em.paused, .demand-table-view td em.completed { color: #596779; background: #edf0f2; }
 .demand-calendar-view > header { justify-content: center; }.demand-calendar-view > header > button { width: 32px; height: 32px; border: 1px solid #dfe5e5; border-radius: 6px; background: #fff; color: #526176; cursor: pointer; }.demand-calendar-view > header > div { min-width: 180px; text-align: center; }
@@ -1089,23 +1086,26 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
   --ui-text-soft: #5d6b80;
   width: 100%;
   max-width: 100vw;
-  /* Mesmo motivo do `html, body` acima, e aqui o efeito era ainda mais direto:
-   * este é o pai imediato da barra lateral. */
-  overflow-x: hidden;
-  overflow-x: clip;
+  /* `overflow-x: hidden` aqui transformava o shell em contêiner de rolagem e,
+     com isso, anulava o `position: sticky` da barra lateral — quem rolava a
+     página via a barra subir junto e o fundo escuro acabar no meio da tela,
+     deixando os últimos itens do menu em texto claro sobre fundo claro.
+     O recorte horizontal agora vem do `overflow: hidden` do shell travado na
+     viewport, mais abaixo, que não tem esse efeito colateral. */
   background: var(--ui-bg);
   color: var(--ui-text);
   color-scheme: light;
 }
 
+/* Terceira paleta, agora removida.
+ *
+ * Este bloco redeclarava `--ui-bg`, `--ui-surface`, `--ui-border` e os tons de
+ * texto com valores *diferentes* dos de `dashboard-modern.css` — que já
+ * ganhava por vir depois no `layout.tsx`. O efeito prático era que estas sete
+ * linhas nunca pintaram nada, mas apareciam em toda busca por "onde está a cor
+ * do tema escuro" e mandavam quem procurava para o lugar errado. A escala do
+ * tema mora num arquivo só; aqui fica apenas o que não é cor. */
 .dashboard-shell.theme-dark {
-  --ui-bg: #0c1521;
-  --ui-surface: #111d2b;
-  --ui-surface-muted: #162536;
-  --ui-border: #2b3c50;
-  --ui-border-strong: #3a4e64;
-  --ui-text: #eef5f4;
-  --ui-text-soft: #9aabbc;
   color-scheme: dark;
   background: var(--ui-bg);
 }
@@ -1485,4 +1485,107 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 }
 @media (min-width: 1500px) {
   .sidebar-workspace-switcher summary > span, .sidebar-workspace-switcher summary > svg { display: initial; }
+}
+
+/* ============================================================
+   Abertura do sistema (pós-login)
+   ============================================================
+   A geometria abaixo não é estimada: foi medida no canal alfa de
+   `public/brand/vinculato-logo-light.png` (960x178). O símbolo ocupa as colunas
+   0–222, o vão vazio vai de 223 a 275 e o logotipo começa em 276. Daí saem os
+   dois números que a animação usa:
+
+   - corte do primeiro momento: 249,5 / 960 = 25,99% da largura (meio do vão),
+     que deixa o símbolo inteiro visível sem encostar na primeira letra;
+   - deslocamento que centraliza o símbolo: o centro dele está a 11,5625% da
+     largura, então 50% − 11,5625% = 38,4375%.
+
+   Com isso a peça inteira é o arquivo oficial recortado e reposicionado — os
+   dois quadros do vídeo antigo, sem quadro comprimido nenhum. */
+.vin-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #09131f;
+}
+
+.vin-intro-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--brand-accent, #168CFD) 13%, transparent), transparent 46%),
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--brand-accent, #168CFD) 7%, transparent), transparent 68%);
+  opacity: 0;
+  animation: vin-intro-glow 2400ms ease-out both;
+}
+
+.vin-intro-lockup {
+  /* Teto de ampliação. O arquivo tem 960px de largura, e a regra é não pedir a
+     ele mais pixel do que ele tem: 520px de exibição consomem pouco mais da
+     metade da origem. Era justamente o oposto do que o vídeo fazia — ele
+     esticava a mesma arte para perto de 1570px num ecrã de 1920 e ainda a
+     entregava comprimida. */
+  position: relative;
+  width: min(70vw, 520px);
+  opacity: 0;
+  /* A origem fica no centro do símbolo (11,5625% da largura do arquivo), então
+     a ampliação do primeiro momento acontece em torno dele e não desloca nada. */
+  transform-origin: 11.5625% 50%;
+}
+
+.vin-intro-lockup.is-playing {
+  animation: vin-intro-reveal 2400ms cubic-bezier(.22, .61, .36, 1) both;
+}
+
+.vin-intro-art {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.vin-intro-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* O símbolo abre ampliado em 1,55 e assenta em 1 enquanto o logotipo é
+   revelado — o mesmo encadeamento do vídeo antigo, agora sem quadro
+   comprimido. A ampliação tem teto próprio: 1,55 põe o símbolo em cerca de
+   188px de tela contra 223px de origem, ou seja, ele nunca é esticado além do
+   que o arquivo tem para dar. */
+@keyframes vin-intro-reveal {
+  0% { opacity: 0; transform: translate3d(38.4375%, 0, 0) scale(1.43); clip-path: inset(0 74.01% 0 0); }
+  16% { opacity: 1; transform: translate3d(38.4375%, 0, 0) scale(1.55); clip-path: inset(0 74.01% 0 0); }
+  34% { opacity: 1; transform: translate3d(38.4375%, 0, 0) scale(1.55); clip-path: inset(0 74.01% 0 0); }
+  76% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); clip-path: inset(0 0 0 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); clip-path: inset(0 0 0 0); }
+}
+
+@keyframes vin-intro-glow {
+  0% { opacity: 0; transform: scale(.82); }
+  40% { opacity: 1; transform: scale(1); }
+  100% { opacity: .72; transform: scale(1.06); }
+}
+
+/* Quem pediu menos movimento não passa pela abertura — `LoginForm` navega
+   direto. A regra abaixo cobre o caso de a preferência mudar com a tela já
+   montada: o logotipo aparece inteiro e parado, e o encerramento fica por conta
+   do temporizador do componente. */
+@media (prefers-reduced-motion: reduce) {
+  .vin-intro-glow,
+  .vin-intro-lockup.is-playing {
+    animation: none;
+  }
+  .vin-intro-glow { opacity: .72; }
+  .vin-intro-lockup { opacity: 1; transform: none; clip-path: none; }
 }

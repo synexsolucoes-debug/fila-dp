@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import ExcelJS from "exceljs";
 import { hasCapability } from "../lib/authorization.ts";
 import { protectCpf } from "../lib/registrations.ts";
+import { readSankhyaEmployeeWorkbook } from "../lib/sankhya-xlsx.ts";
 
 test("phase 3 registration tables are tenant-scoped and forced through RLS", async () => {
   const [schema, migration] = await Promise.all([
@@ -79,5 +81,60 @@ test("registration UI uses server search, async refresh and role-aware navigatio
   assert.match(view, /onRefresh=\{loadCompanies\}/);
   assert.doesNotMatch(view, /window\.location\.reload/);
   assert.match(view, /item\.isPrincipal/);
-  assert.match(workspace, /workspace\.role !== "guest"/);
+  // Convidado não vê Cadastros. A regra virou dado no catálogo de telas.
+  assert.match(workspace, /module: "registrations", hiddenFor: \["guest"\]/u);
+});
+
+test("ficha do contrato abre qualquer competência apurada no pagamento PJ", async () => {
+  const [route, contractors, registrations, workspace, payments] = await Promise.all([
+    readFile(new URL("../app/api/registrations/contractors/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/ContractorsPanel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(route, /SELECT id, company_id, competence/u);
+  assert.match(route, /contractors\.payments\.read/u);
+  assert.match(route, /excluded_at IS NULL/u);
+  assert.match(contractors, /onOpenPayment\(\{ companyId: row\.companyId, competence: row\.competence, closingId: row\.id \}\)/u);
+  assert.match(registrations, /onOpenPayment=\{onOpenContractorPayment\}/u);
+  assert.match(workspace, /setView\("contractorClosings"\)/u);
+  assert.match(payments, /void openContractorDetail\(focus\.closingId\)/u);
+});
+
+test("Sankhya workbook reader maps the minimal employee connector fields", async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Resultado da Query");
+  sheet.addRow(["Relatório Sankhya"]);
+  sheet.addRow([]);
+  sheet.addRow(["CODEMP", "CODFUNC", "NOMEFUNC", "CPF", "DTADM", "MATRICULA", "DTNASC", "DTDEM", "EMAILCORP", "CELULAR"]);
+  sheet.addRow([40, 123, "Colaborador Exemplo", "52998224725", "01/08/2026", "MAT-123", "10/05/1990", "", "pessoa@empresa.test", "11999999999"]);
+  const buffer = await workbook.xlsx.writeBuffer();
+  const records = await readSankhyaEmployeeWorkbook(buffer as unknown as ArrayBuffer);
+  assert.deepEqual(records, [{
+    companyCode: "40", employeeCode: "123", registrationNumber: "MAT-123", fullName: "Colaborador Exemplo",
+    cpf: "52998224725", birthDate: "1990-05-10", admissionDate: "2026-08-01", terminationDate: "",
+    email: "pessoa@empresa.test", phone: "11999999999", externalId: "40:123",
+  }]);
+});
+
+test("Sankhya import, dismissal and guarded deletion are exposed in the employee workflow", async () => {
+  const [importRoute, terminateRoute, employeeRoute, view, dialog] = await Promise.all([
+    readFile(new URL("../app/api/employees/import/sankhya/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/employees/[id]/terminate/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/employees/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/SankhyaImportDialog.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(importRoute, /classification: "conflict"/u);
+  assert.match(importRoute, /source_system, external_id/u);
+  assert.match(importRoute, /employees\.sankhya_imported/u);
+  assert.match(terminateRoute, /employment_status = 'terminated'/u);
+  assert.match(terminateRoute, /employee\.terminated/u);
+  assert.match(employeeRoute, /EMPLOYEE_HAS_HISTORY/u);
+  assert.match(employeeRoute, /fdp_epi_discount_requests/u);
+  assert.match(view, /Importar Sankhya/u);
+  assert.match(view, /Confirmar demissão/u);
+  assert.match(dialog, /Nenhuma alteração foi gravada ainda/u);
+  assert.doesNotMatch(dialog, /record\.cpf[^L]/u);
 });

@@ -25,7 +25,7 @@ function deleteWorkspaceAction(
     consequence: "Esta operação é irreversível. Todos os dados do grupo, a trilha de auditoria dele e as identidades que só existiam aqui serão removidos. Sobra apenas o registro da exclusão, com a contagem por tabela feita antes de apagar.",
     confirmLabel: "Excluir definitivamente",
     reasonMinLength: 10,
-    typedConfirmation: workspace.slug,
+    typedConfirmation: text(workspace.slug),
     run: async ({ reason, confirmation }) => {
       const payload = await platformRequest<DeletionResult>(
         `/api/platform/workspaces/${encodeURIComponent(workspace.id)}/delete`,
@@ -75,6 +75,7 @@ function WorkspaceDetail({ id, plans, onClose, onConfigure, onChanged, onDeleted
   const mutate = (title: string, consequence: string, body: Row, confirmLabel: string, options: Partial<AdminAction> = {}) => setAction({ title, consequence, confirmLabel, ...options, run: async ({ reason, confirmation, value }) => { const payload = { ...body, reason, confirmed: true, ...(confirmation ? { confirmation } : {}), ...(value ? { ownerEmail: value } : {}) }; await platformRequest(`/api/platform/workspaces/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) }); resource.refresh(); onChanged(); } });
   const currentPlan = planCode || text(plan.code);
   const status = text(workspace.status);
+  const canPurge = ["archived", "canceled"].includes(status);
   return <><div className={styles.detailOverlay}><aside className={styles.detailPane} role="dialog" aria-modal="true" aria-labelledby="workspace-detail"><header><div><span>CLIENTE</span><h2 id="workspace-detail">{text(workspace.name) || "Carregando…"}</h2></div><button onClick={onClose}>Fechar</button></header>{resource.loading ? <Loading /> : resource.error ? <ErrorState message={resource.error} retry={resource.refresh} /> : <div className={styles.detailBody}>
     <dl className={styles.detailGrid}><div><dt>Status</dt><dd><Status value={status} /></dd></div><div><dt>Slug</dt><dd>{text(workspace.slug)}</dd></div><div><dt>Proprietário</dt><dd>{text(owner.name)}<small>{text(owner.email)}</small></dd></div><div><dt>Plano</dt><dd>{text(plan.name)}</dd></div><div><dt>Assinatura</dt><dd>{text(subscription.status)}<small>{text(subscription.provider)}</small></dd></div><div><dt>Criado</dt><dd>{date(workspace.createdAt)}</dd></div><div><dt>Razão social</dt><dd>{text(workspace.legalName) || "—"}<small>{text(workspace.taxId) || "Sem CNPJ"}</small></dd></div><div><dt>Contato</dt><dd>{text(workspace.contactEmail) || "—"}</dd></div></dl>
     <section className={styles.detailActions}><h3><Settings2 aria-hidden="true" />Configuração operacional</h3><p>Administre empresas, fluxo, campos, templates, SLA, automações, acessos, módulos, chaves e webhooks no contexto deste cliente.</p><button type="button" className={styles.smallAction} onClick={onConfigure}><Settings2 aria-hidden="true" />Administrar configuração</button></section>
@@ -96,11 +97,11 @@ function WorkspaceDetail({ id, plans, onClose, onConfigure, onChanged, onDeleted
         <li>Identidades que só tinham vínculo com este grupo também saem; quem participa de outro grupo permanece.</li>
         <li>Não há desfazer. Só o registro da exclusão, com motivo e responsável, permanece.</li>
       </ul>
-      {DELETABLE.has(status)
+      {canPurge
         ? <button type="button" onClick={() => setAction(deleteWorkspaceAction({ id, name: text(workspace.name), slug: text(workspace.slug) }, (summary) => { onDeleted(summary); onClose(); }))}><Trash2 aria-hidden="true" />Excluir definitivamente</button>
-        : <><p className={styles.dangerGate}><AlertTriangle aria-hidden="true" /><span>Só é possível excluir um grupo que já saiu de operação. <strong>{text(workspace.name)}</strong> está {status === "active" ? "ativo" : "suspenso"} — arquive ou cancele antes, e o acesso é interrompido sem que nenhum dado seja perdido.</span></p>
+        : <><p className={styles.dangerGate}><AlertTriangle aria-hidden="true" /><span>Arquive ou cancele o cliente antes de excluir. <strong>{text(workspace.name)}</strong> está {status === "active" ? "ativo" : "suspenso"}; tirar o grupo de operação interrompe o acesso sem perder dados.</span></p>
           <div className={styles.rowActions}>
-            <button type="button" disabled title="Arquive ou cancele o grupo antes de excluir"><Trash2 aria-hidden="true" />Excluir definitivamente</button>
+            <button type="button" disabled={!canPurge} title="Arquive ou cancele o grupo antes de excluir"><Trash2 aria-hidden="true" />Excluir definitivamente</button>
             <button type="button" data-danger="true" onClick={() => mutate(`Arquivar ${text(workspace.name)}`, "O acesso ao grupo é interrompido para todos os membros. Dados, auditoria e histórico continuam preservados, e o grupo passa a poder ser excluído definitivamente.", { status: "archived" }, "Arquivar workspace")}><Archive aria-hidden="true" />Arquivar agora</button>
           </div></>}
     </section>
@@ -108,7 +109,22 @@ function WorkspaceDetail({ id, plans, onClose, onConfigure, onChanged, onDeleted
   </div>}</aside></div><AdminActionDialog action={action} onClose={() => setAction(null)} /></>;
 }
 
-function DetailRows({ title, rows }: { title: string; rows: unknown }) { const list = Array.isArray(rows) ? rows as Row[] : []; return <section className={styles.detailSection}><h3>{title}</h3>{list.length ? list.slice(0, 20).map((row, index) => <article key={text(row.id ?? row.userId ?? row.key) || index}><strong>{text(row.name ?? row.email ?? row.legalName ?? row.action ?? row.key)}</strong><small>{text(row.role ?? row.status ?? row.category ?? row.createdAt)}</small></article>) : <Empty />}</section>; }
+function DetailRows({ title, rows }: { title: string; rows: unknown }) {
+  const list = Array.isArray(rows) ? rows as Row[] : [];
+  return (
+    <section className={styles.detailSection}>
+      <h3>{title}</h3>
+      {list.length
+        ? list.slice(0, 20).map((row, index) => (
+          <article key={text(row.id ?? row.userId ?? row.key) || index}>
+            <strong>{text(row.name ?? row.email ?? row.legalName ?? row.action ?? row.key)}</strong>
+            <small>{text(row.role ?? row.status ?? row.category ?? row.createdAt)}</small>
+          </article>
+        ))
+        : <Empty />}
+    </section>
+  );
+}
 
 function CreateWorkspaceDialog({ plans, onClose, onCreated }: { plans: Row[]; onClose: () => void; onCreated: (id: string) => void }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");

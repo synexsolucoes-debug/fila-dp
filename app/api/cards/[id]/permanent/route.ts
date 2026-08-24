@@ -1,6 +1,7 @@
 import { getAttachmentsBucket } from "@/db";
 import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +12,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "cards.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const card = await d1.prepare("SELECT title FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 1").bind(id, board.id).first<{ title: string }>();
     if (!card) throw ApiError.notFound("Demanda arquivada não encontrada.", "CARD_NOT_FOUND");

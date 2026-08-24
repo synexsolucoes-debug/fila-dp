@@ -55,7 +55,7 @@ export function normalizeClosingItem(row: Row): ClosingItem {
 }
 export function normalizeObligation(row: Row): Obligation {
   const raw = text(row.status);
-  return { id: text(row.id), obligationType: text(value(row, "obligationType", "obligation_type")), title: text(row.title), dueDate: text(value(row, "dueDate", "due_date")), status: (["open", "in_progress", "blocked", "completed"].includes(raw) ? raw : "open") as Obligation["status"], ownerUserId: text(value(row, "ownerUserId", "owner_user_id")), cardId: text(value(row, "cardId", "card_id")), notes: text(row.notes) };
+  return { id: text(row.id), obligationType: text(value(row, "obligationType", "obligation_type")), title: text(row.title), dueDate: text(value(row, "dueDate", "due_date")), status: (["open", "in_progress", "blocked", "completed"].includes(raw) ? raw : "open") as Obligation["status"], ownerUserId: text(value(row, "ownerUserId", "owner_user_id")), cardId: text(value(row, "cardId", "card_id")), notes: text(row.notes), protocol: text(row.protocol), evidenceUrl: text(value(row, "evidenceUrl", "evidence_url")) };
 }
 export function normalizePending(row: Row): PendingItem {
   const severity = text(row.severity); const status = text(row.status);
@@ -78,6 +78,15 @@ export function normalizeOverview(payload: Row): OverviewPayload {
     pendingItems: Array.isArray(payload.pendingItems) ? payload.pendingItems.map((row) => normalizePending(row as Row)) : [], processes: Array.isArray(payload.processes) ? payload.processes.map((row) => normalizeProcess(row as Row)) : [],
     movements: Array.isArray(payload.movements) ? payload.movements.map((row) => normalizeMovement(row as Row)) : [], approvals: Array.isArray(payload.approvals) ? payload.approvals.map((row) => normalizeApproval(row as Row)) : [],
     approvers: Array.isArray(payload.approvers) ? payload.approvers.map((row) => ({ id: text((row as Row).id), name: text((row as Row).name), email: text((row as Row).email), role: text((row as Row).role) })) : [],
-    permissions: { manageCompetences: bool(permissions.manageCompetences), transitionCompetences: bool(permissions.transitionCompetences), manageMovements: bool(permissions.manageMovements), decideApprovals: bool(permissions.decideApprovals), manageObligations: bool(permissions.manageObligations), managePending: bool(permissions.managePending), manageProcesses: bool(permissions.manageProcesses), publishProcesses: bool(permissions.publishProcesses) } as OperationPermissions,
+    permissions: {
+      manageCompetences: bool(permissions.manageCompetences),
+      transitionCompetences: bool(permissions.transitionCompetences),
+      manageMovements: bool(permissions.manageMovements),
+      decideApprovals: bool(permissions.decideApprovals),
+      manageObligations: bool(permissions.manageObligations),
+      managePending: bool(permissions.managePending),
+      manageProcesses: bool(permissions.manageProcesses),
+      publishProcesses: bool(permissions.publishProcesses),
+    } as OperationPermissions,
   };
 }

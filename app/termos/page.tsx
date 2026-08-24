@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/termos" },
   title: "Termos de uso | Vinculato",
   description: "Condições de uso da plataforma Vinculato, incluindo escopo do serviço, responsabilidades e limites do produto.",
 };

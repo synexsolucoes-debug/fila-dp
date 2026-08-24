@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -11,6 +12,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "workspace.manage");
     const current = await d1.prepare(`SELECT l.board_id, l.name, l.position, l.sla_behavior
       FROM fdp_lists l
       JOIN fdp_boards b ON b.id = l.board_id
@@ -50,6 +52,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "workspace.manage");
     const current = await d1.prepare(`SELECT l.board_id, l.name
       FROM fdp_lists l
       JOIN fdp_boards b ON b.id = l.board_id

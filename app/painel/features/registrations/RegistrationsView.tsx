@@ -11,6 +11,7 @@ import {
   CircleAlert,
   Edit3,
   Factory,
+  FileSpreadsheet,
   History,
   LoaderCircle,
   MapPin,
@@ -19,11 +20,18 @@ import {
   Search,
   SlidersHorizontal,
   UserRound,
+  UserMinus,
   UsersRound,
+  Trash2,
   X,
 } from "lucide-react";
+import { hasCapability } from "@/lib/authorization";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
+import { EmptyState, ErrorBanner, LoadingState, PageSkeleton, StatusPill } from "../shared";
 import { ContractorsPanel } from "./ContractorsPanel";
+import { EmployeeEpiPanel } from "../epi";
+import { TangerinoAdmissionPanel } from "./TangerinoAdmissionPanel";
+import { SankhyaImportDialog } from "./SankhyaImportDialog";
 import styles from "./registrations.module.css";
 import type {
   CatalogItem,
@@ -92,7 +100,8 @@ function normalizeEmployee(raw: JsonRecord): Employee {
     email: text(raw.email), phone: text(raw.phone), birthDate: text(key(raw, "birthDate", "birth_date")), admissionDate: text(key(raw, "admissionDate", "admission_date")),
     terminationDate: text(key(raw, "terminationDate", "termination_date")), employmentStatus: status === "on_leave" || status === "terminated" ? status : "active",
     employmentType: employmentType === "intern" || employmentType === "apprentice" || employmentType === "temporary" ? employmentType : "clt",
-    workModel: workModel === "hybrid" || workModel === "remote" ? workModel : "onsite", sourceSystem: key(raw, "sourceSystem", "source_system") === "solides" ? "solides" : "manual",
+    workModel: workModel === "hybrid" || workModel === "remote" ? workModel : "onsite",
+    sourceSystem: key(raw, "sourceSystem", "source_system") === "solides" ? "solides" : key(raw, "sourceSystem", "source_system") === "sankhya" ? "sankhya" : "manual",
     externalId: text(key(raw, "externalId", "external_id")), notes: text(raw.notes), createdAt: text(key(raw, "createdAt", "created_at")), updatedAt: text(key(raw, "updatedAt", "updated_at")),
   };
 }
@@ -117,7 +126,9 @@ function normalizeHistory(raw: JsonRecord): HistoryEvent {
 }
 
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...options, cache: "no-store", headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) } });
+  const headers = new Headers(options?.headers);
+  if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const response = await fetch(url, { ...options, cache: "no-store", headers });
   const payload = await response.json().catch(() => ({})) as T & { error?: string; message?: string };
   if (!response.ok) throw new Error(payload.error || payload.message || "Não foi possível concluir a operação.");
   return payload;
@@ -129,9 +140,15 @@ function initials(value: string) { return value.split(/\s+/).filter(Boolean).sli
 function statusLabel(status: Employee["employmentStatus"]) { return status === "on_leave" ? "Afastado" : status === "terminated" ? "Desligado" : "Ativo"; }
 function historyLabel(action: string) { return action.endsWith(".created") ? "Cadastro criado" : action.endsWith(".updated") ? "Dados atualizados" : action.endsWith(".inactivated") ? "Cadastro inativado" : action.replaceAll(".", " · "); }
 
-export function RegistrationsView({ role }: { role: WorkspaceRole }) {
+export function RegistrationsView({ role, onOpenContractorPayment }: {
+  role: WorkspaceRole;
+  onOpenContractorPayment: (target: { companyId: string; competence: string; closingId: string }) => void;
+}) {
   const canManageCompanies = false;
   const canManageRegistrations = role === "admin" || role === "member";
+  /* Vem da tabela de permissões, e não de um `role === "admin"` repetido aqui:
+     duas listas de quem pode o quê divergem no dia em que alguém muda uma só. */
+  const canConsultTangerino = hasCapability(role, "integrations.tangerino.admission.read");
   const [tab, setTab] = useState<RegistrationTab>("employees");
   // Contador, não booleano: dois cliques seguidos no mesmo botão precisam
   // reabrir o formulário, e um booleano já ligado não avisaria a segunda vez.
@@ -153,6 +170,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
   const [catalogEditor, setCatalogEditor] = useState<CatalogItem | "new" | null>(null);
   const [companyEditor, setCompanyEditor] = useState<Company | "new" | null>(null);
   const [employeeEditor, setEmployeeEditor] = useState<Employee | "new" | null>(null);
+  const [employeeImportOpen, setEmployeeImportOpen] = useState(false);
   const [employeeEditing, setEmployeeEditing] = useState(false);
   const [employeeDetailTab, setEmployeeDetailTab] = useState<EmployeeDetailTab>("personal");
   const [history, setHistory] = useState<HistoryEvent[]>([]);
@@ -160,7 +178,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; run: () => Promise<void> } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; confirmLabel?: string; run: () => Promise<void> } | null>(null);
 
   const selectedCompany = companies.find((company) => company.id === selectedCompanyId) ?? companies[0] ?? null;
   const visibleEmployees = useMemo(() => {
@@ -221,7 +239,7 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
     return () => window.clearTimeout(timeout);
   }, [employeeSearch]);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { setCompanyEditor(null); setCatalogEditor(null); setEmployeeEditor(null); setConfirmAction(null); } };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { setCompanyEditor(null); setCatalogEditor(null); setEmployeeEditor(null); setEmployeeImportOpen(false); setConfirmAction(null); } };
     window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
   }, []);
 
@@ -279,6 +297,24 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
     finally { setBusy(false); setConfirmAction(null); }
   }
 
+  async function terminateEmployee(employee: Employee, terminationDate: string) {
+    setBusy(true);
+    try {
+      await requestJson(`/api/employees/${employee.id}/terminate`, { method: "POST", body: JSON.stringify({ terminationDate }) });
+      setToast("Demissão registrada e histórico preservado."); setEmployeeEditor(null); await loadEmployees();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível registrar a demissão."); }
+    finally { setBusy(false); setConfirmAction(null); }
+  }
+
+  async function deleteEmployee(employee: Employee) {
+    setBusy(true);
+    try {
+      await requestJson(`/api/employees/${employee.id}`, { method: "DELETE" });
+      setToast("Colaborador excluído."); setEmployeeEditor(null); await loadEmployees();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível excluir o colaborador."); }
+    finally { setBusy(false); setConfirmAction(null); }
+  }
+
   function goNext() { if (!nextCursor) return; setCursorHistory((items) => [...items, cursor]); setCursor(nextCursor); }
   function goBack() { const previous = cursorHistory.at(-1); if (previous === undefined) return; setCursorHistory((items) => items.slice(0, -1)); setCursor(previous); }
 
@@ -290,10 +326,10 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
           <button className={tab === "contractors" ? styles.activeTab : ""} onClick={() => setTab("contractors")}><Briefcase aria-hidden="true" /> Prestadores PJ</button>
           <button className={tab === "catalogs" ? styles.activeTab : ""} onClick={() => setTab("catalogs")}><SlidersHorizontal aria-hidden="true" /> Cadastros auxiliares</button>
         </nav>
-        <button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button>
+        <div className={styles.commandActions}>{tab === "employees" && canManageRegistrations && <button className={styles.secondaryButton} onClick={() => setEmployeeImportOpen(true)} disabled={companiesLoading || !companies.length}><FileSpreadsheet aria-hidden="true" /> Importar Sankhya</button>}<button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button></div>
       </header>
 
-      {error && <div className={styles.errorBanner} role="alert"><CircleAlert aria-hidden="true" /><span>{error}</span><button onClick={() => setError("")} aria-label="Fechar aviso"><X /></button></div>}
+      {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
 
       {tab === "companies" && (
         <CompaniesPanel companies={companies} loading={companiesLoading} selected={selectedCompany} onSelect={selectCompany} onEdit={(company) => setCompanyEditor(company)} onCreate={contextualCreate} onRefresh={loadCompanies} canManage={canManageCompanies} />
@@ -306,7 +342,8 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
       )}
 
       {tab === "contractors" && (
-        <ContractorsPanel canManage={canManageRegistrations} createSignal={contractorCreateSignal} />
+        <ContractorsPanel canManage={canManageRegistrations} createSignal={contractorCreateSignal}
+          onOpenPayment={onOpenContractorPayment} />
       )}
 
       {tab === "catalogs" && (
@@ -319,31 +356,35 @@ export function RegistrationsView({ role }: { role: WorkspaceRole }) {
       {catalogEditor && selectedCompany && <CatalogEditor resource={catalogResource} item={catalogEditor === "new" ? null : catalogEditor} company={selectedCompany} busy={busy} onClose={() => setCatalogEditor(null)} onBusy={setBusy} onError={setError} onSaved={async () => { setCatalogEditor(null); setToast(`${catalogMeta[catalogResource].singular} salvo.`); await loadCatalog(catalogResource, selectedCompanyId); }} onInactivate={(item) => setConfirmAction({ title: `Inativar ${catalogMeta[catalogResource].singular.toLowerCase()}?`, description: "O item deixa de estar disponível para novas alocações, sem apagar vínculos existentes.", run: () => inactivateCatalog(item) })} />}
 
       {employeeEditor && <EmployeeDrawer employee={employeeEditor === "new" ? null : employeeEditor} companies={companies} catalogs={catalogs} busy={busy} editing={employeeEditing} activeTab={employeeDetailTab}
-        history={history} historyLoading={historyLoading} canManage={canManageRegistrations} onTab={(next) => { if (next === "history" && employeeEditor !== "new") void openHistory(employeeEditor); else setEmployeeDetailTab(next); }}
+        history={history} historyLoading={historyLoading} canManage={canManageRegistrations} canConsultTangerino={canConsultTangerino} onTab={(next) => { if (next === "history" && employeeEditor !== "new") void openHistory(employeeEditor); else setEmployeeDetailTab(next); }}
         onCompanyCatalogs={loadEmployeeCatalogs} onEdit={() => setEmployeeEditing(true)} onClose={() => setEmployeeEditor(null)} onBusy={setBusy} onError={setError}
+        onTerminate={(employee, terminationDate) => setConfirmAction({ title: "Confirmar demissão?", description: `${employee.fullName} será marcado como desligado em ${dateLabel(terminationDate)}. O histórico e os vínculos de EPI serão preservados.`, confirmLabel: "Confirmar demissão", run: () => terminateEmployee(employee, terminationDate) })}
+        onDelete={(employee) => setConfirmAction({ title: "Excluir colaborador?", description: `${employee.fullName} será removido definitivamente apenas se não possuir histórico operacional. Se houver vínculos, o sistema bloqueará a exclusão.`, confirmLabel: "Excluir", run: () => deleteEmployee(employee) })}
         onSaved={async (saved) => { setEmployeeEditor(saved); setEmployeeEditing(false); setToast(employeeEditor === "new" ? "Colaborador cadastrado." : "Colaborador atualizado."); await loadEmployees(); }} />}
 
-      {confirmAction && <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}><section className={styles.confirm} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><span className={styles.confirmIcon}><CircleAlert /></span><h2 id="confirm-title">{confirmAction.title}</h2><p>{confirmAction.description}</p><div><button className={styles.secondaryButton} onClick={() => setConfirmAction(null)}>Cancelar</button><button className={styles.dangerButton} disabled={busy} onClick={() => void confirmAction.run()}>{busy ? <LoaderCircle className={styles.spin} /> : null} Inativar</button></div></section></div>}
+      {employeeImportOpen && <SankhyaImportDialog companies={companies} initialCompanyId={selectedCompanyId} onClose={() => setEmployeeImportOpen(false)} onImported={async (message) => { setEmployeeImportOpen(false); setToast(message); await loadEmployees(); }} />}
+
+      {confirmAction && <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}><section className={styles.confirm} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><span className={styles.confirmIcon}><CircleAlert /></span><h2 id="confirm-title">{confirmAction.title}</h2><p>{confirmAction.description}</p><div><button className={styles.secondaryButton} onClick={() => setConfirmAction(null)}>Cancelar</button><button className={styles.dangerButton} disabled={busy} onClick={() => void confirmAction.run()}>{busy ? <LoaderCircle className={styles.spin} /> : null} {confirmAction.confirmLabel ?? "Inativar"}</button></div></section></div>}
       {toast && <div className={styles.toast} role="status"><Check aria-hidden="true" /> {toast}</div>}
     </section>
   );
 }
 
 function CompaniesPanel({ companies, loading, selected, onSelect, onEdit, onCreate, onRefresh, canManage }: { companies: Company[]; loading: boolean; selected: Company | null; onSelect: (id: string) => void; onEdit: (company: Company) => void; onCreate: () => void; onRefresh: () => Promise<void>; canManage: boolean }) {
-  if (loading) return <LoadingState label="Organizando a estrutura empresarial" />;
-  if (!companies.length) return <EmptyState icon={<Building2 />} title="Sua estrutura começa aqui" description="Cadastre a empresa principal e, depois, seus estabelecimentos e filiais." action="Cadastrar empresa" onAction={onCreate} />;
+  if (loading) return <PageSkeleton label="Organizando a estrutura empresarial" metrics={0} rows={6} />;
+  if (!companies.length) return <EmptyState icon={Building2} title="Sua estrutura começa aqui" text="Cadastre a empresa principal e, depois, seus estabelecimentos e filiais." action={<button className={styles.secondaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Cadastrar empresa</button>} />;
   return <div className={styles.masterDetail}>
     <section className={styles.masterPane} aria-label="Empresas e estabelecimentos">
       <header><div><span>ESTRUTURA DO GRUPO</span><strong>{companies.filter((item) => item.status === "active").length} ativos</strong></div><button aria-label="Atualizar lista" onClick={() => void onRefresh()}><RefreshCw /></button></header>
       <div className={styles.companyList}>{companies.map((company) => <button key={company.id} className={`${styles.companyRow} ${selected?.id === company.id ? styles.selectedRow : ""}`} onClick={() => onSelect(company.id)}>
         <span className={company.isPrincipal ? styles.principalMark : styles.branchMark}>{company.isPrincipal ? <Building2 /> : <Factory />}</span>
         <span><strong>{displayCompany(company)}</strong><small>{company.isPrincipal ? "Empresa principal" : "Estabelecimento / filial"} · {company.taxId || "CNPJ não informado"}</small></span>
-        <StatusPill active={company.status === "active"} /><ChevronRight aria-hidden="true" />
+        {activePill(company.status === "active")}<ChevronRight aria-hidden="true" />
       </button>)}</div>
     </section>
     {selected && <article className={styles.detailPane}>
       <header><div className={styles.companyIdentity}><span>{initials(displayCompany(selected))}</span><div><small>{selected.isPrincipal ? "EMPRESA PRINCIPAL" : "ESTABELECIMENTO"}</small><h2>{displayCompany(selected)}</h2><p>{selected.legalName}</p></div></div>{canManage && <button className={styles.secondaryButton} onClick={() => onEdit(selected)}><Edit3 /> Editar</button>}</header>
-      <div className={styles.detailBand}><div><span>Situação</span><StatusPill active={selected.status === "active"} /></div><div><span>CNPJ</span><strong>{selected.taxId || "Não informado"}</strong></div><div><span>Código externo</span><strong>{selected.externalCode || "—"}</strong></div></div>
+      <div className={styles.detailBand}><div><span>Situação</span>{activePill(selected.status === "active")}</div><div><span>CNPJ</span><strong>{selected.taxId || "Não informado"}</strong></div><div><span>Código externo</span><strong>{selected.externalCode || "—"}</strong></div></div>
       <section className={styles.detailSection}><h3><BadgeCheck /> Dados fiscais</h3><dl><div><dt>Regime tributário</dt><dd>{selected.taxRegime || "Não informado"}</dd></div><div><dt>Inscrição estadual</dt><dd>{selected.stateRegistration || "Não informado"}</dd></div><div><dt>Inscrição municipal</dt><dd>{selected.municipalRegistration || "Não informado"}</dd></div></dl></section>
       <section className={styles.detailSection}><h3><MapPin /> Endereço e contato</h3><dl><div><dt>Localidade</dt><dd>{[selected.city, selected.state].filter(Boolean).join(" / ") || "Não informado"}</dd></div><div><dt>Endereço</dt><dd>{[selected.street, selected.streetNumber, selected.district].filter(Boolean).join(", ") || "Não informado"}</dd></div><div><dt>Contato</dt><dd>{selected.email || selected.phone || "Não informado"}</dd></div></dl></section>
     </article>}
@@ -353,12 +394,28 @@ function CompaniesPanel({ companies, loading, selected, onSelect, onEdit, onCrea
 function EmployeesPanel({ companies, companyId, onCompanyChange, status, onStatusChange, query, onQueryChange, employees, loading, onOpen, onCreate, canManage, canBack, canNext, onBack, onNext }: { companies: Company[]; companyId: string; onCompanyChange: (id: string) => void; status: string; onStatusChange: (status: string) => void; query: string; onQueryChange: (query: string) => void; employees: Employee[]; loading: boolean; onOpen: (employee: Employee | "new") => void; onCreate: () => void; canManage: boolean; canBack: boolean; canNext: boolean; onBack: () => void; onNext: () => void }) {
   return <section className={styles.dataPanel}>
     <header className={styles.filters}><label className={styles.searchField}><Search /><span className={styles.srOnly}>Buscar colaborador</span><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Buscar por nome ou matrícula" /></label><label><span>Empresa</span><select value={companyId} onChange={(event) => onCompanyChange(event.target.value)}>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{displayCompany(company)}</option>)}</select></label><label><span>Status</span><select value={status} onChange={(event) => onStatusChange(event.target.value)}><option value="all">Todos</option><option value="active">Ativos</option><option value="on_leave">Afastados</option><option value="terminated">Desligados</option></select></label></header>
-    {loading ? <LoadingState label="Carregando colaboradores" /> : employees.length ? <><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Colaborador</th><th>Matrícula</th><th>Lotação</th><th>Admissão</th><th>Status</th><th><span className={styles.srOnly}>Abrir</span></th></tr></thead><tbody>{employees.map((employee) => <tr key={employee.id} onClick={() => onOpen(employee)}><td data-label="Colaborador"><div className={styles.personCell}><span>{initials(employee.socialName || employee.fullName)}</span><div><strong>{employee.socialName || employee.fullName}</strong><small>{employee.positionName || "Cargo não informado"}</small></div></div></td><td data-label="Matrícula"><strong className={styles.mono}>{employee.registrationNumber}</strong></td><td data-label="Lotação"><span>{employee.departmentName || "Sem departamento"}</span><small>{employee.companyName}</small></td><td data-label="Admissão">{dateLabel(employee.admissionDate)}</td><td data-label="Status"><EmployeeStatus status={employee.employmentStatus} /></td><td><button aria-label={`Abrir ${employee.fullName}`}><ChevronRight /></button></td></tr>)}</tbody></table></div><footer className={styles.pagination}><span>{employees.length} registro(s) nesta página</span><div><button onClick={onBack} disabled={!canBack}><ArrowLeft /> Anterior</button><button onClick={onNext} disabled={!canNext}>Próxima <ArrowRight /></button></div></footer></> : <EmptyState icon={<UsersRound />} title={query ? "Nenhum colaborador encontrado" : "Nenhum colaborador nesta seleção"} description={query ? "Revise o termo buscado nesta página." : "Cadastre manualmente apenas admissões já concluídas na origem."} action={canManage ? "Novo colaborador" : undefined} onAction={onCreate} />}
+    {loading ? <LoadingState title="Carregando colaboradores" /> : employees.length ? <><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Colaborador</th><th>Matrícula</th><th>Lotação</th><th>Admissão</th><th>Status</th><th><span className={styles.srOnly}>Abrir</span></th></tr></thead><tbody>{employees.map((employee) => <tr key={employee.id} onClick={() => onOpen(employee)}><td data-label="Colaborador"><div className={styles.personCell}><span>{initials(employee.socialName || employee.fullName)}</span><div><strong>{employee.socialName || employee.fullName}</strong><small>{employee.positionName || "Cargo não informado"}</small></div></div></td><td data-label="Matrícula"><strong className={styles.mono}>{employee.registrationNumber}</strong></td><td data-label="Lotação"><span>{employee.departmentName || "Sem departamento"}</span><small>{employee.companyName}</small></td><td data-label="Admissão">{dateLabel(employee.admissionDate)}</td><td data-label="Status">{employeePill(employee.employmentStatus)}</td><td><button aria-label={`Abrir ${employee.fullName}`}><ChevronRight /></button></td></tr>)}</tbody></table></div><footer className={styles.pagination}><span>{employees.length} registro(s) nesta página</span><div><button onClick={onBack} disabled={!canBack}><ArrowLeft /> Anterior</button><button onClick={onNext} disabled={!canNext}>Próxima <ArrowRight /></button></div></footer></> : <EmptyState icon={UsersRound} title={query ? "Nenhum colaborador encontrado" : "Nenhum colaborador nesta seleção"} text={query ? "Revise o termo buscado nesta página." : "Cadastre manualmente apenas admissões já concluídas na origem."} action={canManage ? <button className={styles.secondaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Novo colaborador</button> : undefined} />}
   </section>;
 }
 
-function CatalogsPanel({ companies, companyId, onCompanyChange, resource, onResourceChange, items, loading, onEdit, onCreate, canManage }: { companies: Company[]; companyId: string; onCompanyChange: (id: string) => void; resource: CatalogResource; onResourceChange: (resource: CatalogResource) => void; items: CatalogItem[]; loading: boolean; onEdit: (item: CatalogItem) => void; onCreate: () => void; canManage: boolean }) {
-  return <div className={styles.catalogLayout}><aside className={styles.catalogNav}><label><span>EMPRESA</span><select value={companyId} onChange={(event) => onCompanyChange(event.target.value)}>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{displayCompany(company)}</option>)}</select></label>{(Object.keys(catalogMeta) as CatalogResource[]).map((keyName) => <button key={keyName} className={resource === keyName ? styles.catalogActive : ""} onClick={() => onResourceChange(keyName)}><span><strong>{catalogMeta[keyName].label}</strong><small>{catalogMeta[keyName].description}</small></span><ChevronRight /></button>)}</aside><section className={styles.dataPanel}><header className={styles.catalogHeader}><div><span>CADASTRO AUXILIAR</span><h2>{catalogMeta[resource].label}</h2><p>{catalogMeta[resource].description}.</p></div>{canManage && <button className={styles.secondaryButton} onClick={onCreate}><Plus /> Adicionar</button>}</header>{loading ? <LoadingState label={`Carregando ${catalogMeta[resource].label.toLowerCase()}`} /> : items.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Código</th><th>Nome</th>{resource === "positions" && <th>CBO</th>}{resource === "work-schedules" && <th>Carga semanal</th>}<th>Status</th><th /></tr></thead><tbody>{items.map((item) => <tr key={item.id} onClick={() => canManage && onEdit(item)}><td data-label="Código"><strong className={styles.mono}>{item.code}</strong></td><td data-label="Nome"><strong>{item.name}</strong>{item.description && <small>{item.description}</small>}</td>{resource === "positions" && <td data-label="CBO">{item.cboCode || "—"}</td>}{resource === "work-schedules" && <td data-label="Carga semanal">{item.weeklyHours ? `${item.weeklyHours}h` : "—"}</td>}<td data-label="Status"><StatusPill active={item.status === "active"} /></td><td><button aria-label={`Editar ${item.name}`} disabled={!canManage}><ChevronRight /></button></td></tr>)}</tbody></table></div> : <EmptyState icon={<SlidersHorizontal />} title={`Nenhum ${catalogMeta[resource].singular.toLowerCase()} cadastrado`} description="Crie o primeiro item para organizar a lotação dos colaboradores." action={canManage ? "Adicionar cadastro" : undefined} onAction={onCreate} />}</section></div>;
+type CatalogsPanelProps = {
+  companies: Company[];
+  companyId: string;
+  onCompanyChange: (id: string) => void;
+  resource: CatalogResource;
+  onResourceChange: (resource: CatalogResource) => void;
+  items: CatalogItem[];
+  loading: boolean;
+  onEdit: (item: CatalogItem) => void;
+  onCreate: () => void;
+  canManage: boolean;
+};
+
+function CatalogsPanel({
+  companies, companyId, onCompanyChange, resource, onResourceChange,
+  items, loading, onEdit, onCreate, canManage,
+}: CatalogsPanelProps) {
+  return <div className={styles.catalogLayout}><aside className={styles.catalogNav}><label><span>EMPRESA</span><select value={companyId} onChange={(event) => onCompanyChange(event.target.value)}>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{displayCompany(company)}</option>)}</select></label>{(Object.keys(catalogMeta) as CatalogResource[]).map((keyName) => <button key={keyName} className={resource === keyName ? styles.catalogActive : ""} onClick={() => onResourceChange(keyName)}><span><strong>{catalogMeta[keyName].label}</strong><small>{catalogMeta[keyName].description}</small></span><ChevronRight /></button>)}</aside><section className={styles.dataPanel}><header className={styles.catalogHeader}><div><span>CADASTRO AUXILIAR</span><h2>{catalogMeta[resource].label}</h2><p>{catalogMeta[resource].description}.</p></div>{canManage && <button className={styles.secondaryButton} onClick={onCreate}><Plus /> Adicionar</button>}</header>{loading ? <LoadingState title={`Carregando ${catalogMeta[resource].label.toLowerCase()}`} /> : items.length ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Código</th><th>Nome</th>{resource === "positions" && <th>CBO</th>}{resource === "work-schedules" && <th>Carga semanal</th>}<th>Status</th><th /></tr></thead><tbody>{items.map((item) => <tr key={item.id} onClick={() => canManage && onEdit(item)}><td data-label="Código"><strong className={styles.mono}>{item.code}</strong></td><td data-label="Nome"><strong>{item.name}</strong>{item.description && <small>{item.description}</small>}</td>{resource === "positions" && <td data-label="CBO">{item.cboCode || "—"}</td>}{resource === "work-schedules" && <td data-label="Carga semanal">{item.weeklyHours ? `${item.weeklyHours}h` : "—"}</td>}<td data-label="Status">{activePill(item.status === "active")}</td><td><button aria-label={`Editar ${item.name}`} disabled={!canManage}><ChevronRight /></button></td></tr>)}</tbody></table></div> : <EmptyState icon={SlidersHorizontal} title={`Nenhum ${catalogMeta[resource].singular.toLowerCase()} cadastrado`} text="Crie o primeiro item para organizar a lotação dos colaboradores." action={canManage ? <button className={styles.secondaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Adicionar cadastro</button> : undefined} />}</section></div>;
 }
 
 function CompanyEditor({ company, companies, busy, onClose, onSaved, onBusy, onError, onInactivate }: { company: Company | null; companies: Company[]; busy: boolean; onClose: () => void; onSaved: () => Promise<void>; onBusy: (value: boolean) => void; onError: (value: string) => void; onInactivate: (company: Company) => void }) {
@@ -374,28 +431,59 @@ function CatalogEditor({ resource, item, company, busy, onClose, onBusy, onError
   return <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><form className={styles.compactEditor} onSubmit={submit}><header><div><span>{displayCompany(company)}</span><h2>{item ? "Editar" : "Novo"} {catalogMeta[resource].singular.toLowerCase()}</h2></div><button type="button" onClick={onClose}><X /></button></header><div className={styles.editorBody}><label><span>Código *</span><input required value={code} onChange={(event) => setCode(event.target.value)} /></label><label><span>Nome *</span><input required value={name} onChange={(event) => setName(event.target.value)} /></label>{resource === "positions" && <label><span>Código CBO</span><input value={cboCode} onChange={(event) => setCboCode(event.target.value)} /></label>}{resource === "work-schedules" && <><label><span>Carga semanal</span><input type="number" min="1" max="60" value={weeklyHours} onChange={(event) => setWeeklyHours(event.target.value)} /></label><label><span>Descrição da jornada</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} /></label></>}</div><footer>{item?.status === "active" && <button type="button" className={styles.textDanger} onClick={() => onInactivate(item)}>Inativar</button>}<span /><button type="button" className={styles.secondaryButton} onClick={onClose}>Cancelar</button><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} /> : <Check />} Salvar</button></footer></form></div>;
 }
 
-function EmployeeDrawer({ employee, companies, catalogs, busy, editing, activeTab, history, historyLoading, canManage, onTab, onCompanyCatalogs, onEdit, onClose, onBusy, onError, onSaved }: { employee: Employee | null; companies: Company[]; catalogs: CatalogMap; busy: boolean; editing: boolean; activeTab: EmployeeDetailTab; history: HistoryEvent[]; historyLoading: boolean; canManage: boolean; onTab: (tab: EmployeeDetailTab) => void; onCompanyCatalogs: (companyId: string) => Promise<void>; onEdit: () => void; onClose: () => void; onBusy: (value: boolean) => void; onError: (value: string) => void; onSaved: (employee: Employee) => Promise<void> }) {
+type EmployeeDrawerProps = {
+  employee: Employee | null;
+  companies: Company[];
+  catalogs: CatalogMap;
+  busy: boolean;
+  editing: boolean;
+  activeTab: EmployeeDetailTab;
+  history: HistoryEvent[];
+  historyLoading: boolean;
+  canManage: boolean;
+  canConsultTangerino: boolean;
+  onTab: (tab: EmployeeDetailTab) => void;
+  onCompanyCatalogs: (companyId: string) => Promise<void>;
+  onEdit: () => void;
+  onClose: () => void;
+  onBusy: (value: boolean) => void;
+  onError: (value: string) => void;
+  onSaved: (employee: Employee) => Promise<void>;
+  onTerminate: (employee: Employee, terminationDate: string) => void;
+  onDelete: (employee: Employee) => void;
+};
+
+function EmployeeDrawer({
+  employee, companies, catalogs, busy, editing, activeTab, history, historyLoading,
+  canManage, canConsultTangerino, onTab, onCompanyCatalogs, onEdit, onClose,
+  onBusy, onError, onSaved, onTerminate, onDelete,
+}: EmployeeDrawerProps) {
   const [draft, setDraft] = useState<EmployeeDraft>(() => employee ? { companyId: employee.companyId, registrationNumber: employee.registrationNumber, fullName: employee.fullName, socialName: employee.socialName, cpf: "", departmentId: employee.departmentId ?? "", positionId: employee.positionId ?? "", costCenterId: employee.costCenterId ?? "", workScheduleId: employee.workScheduleId ?? "", admissionDate: employee.admissionDate, birthDate: employee.birthDate, terminationDate: employee.terminationDate, employmentStatus: employee.employmentStatus, employmentType: employee.employmentType, workModel: employee.workModel, email: employee.email, phone: employee.phone, notes: employee.notes } : { ...emptyEmployee, companyId: companies.find((item) => item.status === "active")?.id ?? "" });
+  const [terminationDate, setTerminationDate] = useState(() => new Date().toISOString().slice(0, 10));
   function update<K extends keyof EmployeeDraft>(field: K, value: EmployeeDraft[K]) { setDraft((current) => ({ ...current, [field]: value })); }
   async function submit(event: FormEvent) { event.preventDefault(); onBusy(true); try { const body: JsonRecord = { ...draft }; if (!draft.cpf) delete body.cpf; const payload = await requestJson<{ employee: JsonRecord }>(employee ? `/api/employees/${employee.id}` : "/api/employees", { method: employee ? "PATCH" : "POST", body: JSON.stringify(body) }); await onSaved(normalizeEmployee(payload.employee)); } catch (cause) { onError(cause instanceof Error ? cause.message : "Não foi possível salvar o colaborador."); } finally { onBusy(false); } }
   const readOnly = !editing;
-  return <div className={styles.drawerOverlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside className={styles.employeeDrawer} role="dialog" aria-modal="true" aria-labelledby="employee-title"><header className={styles.drawerHeader}><div className={styles.employeeHero}><span>{employee ? initials(employee.socialName || employee.fullName) : <UserRound />}</span><div><small>{employee ? `MATRÍCULA ${employee.registrationNumber}` : "NOVO CADASTRO MANUAL"}</small><h2 id="employee-title">{employee ? employee.socialName || employee.fullName : "Novo colaborador"}</h2><p>{employee ? `${employee.positionName || "Sem cargo"} · ${employee.companyName}` : "Registre uma admissão já concluída na origem."}</p></div></div><div>{employee && canManage && !editing && <button className={styles.secondaryButton} onClick={onEdit}><Edit3 /> Editar</button>}<button className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X /></button></div></header><nav className={styles.drawerTabs}>{(["personal", "employment", "contact", "history"] as EmployeeDetailTab[]).map((item) => <button key={item} className={activeTab === item ? styles.drawerTabActive : ""} onClick={() => onTab(item)} disabled={!employee && item === "history"}>{item === "personal" ? "Dados pessoais" : item === "employment" ? "Vínculo e lotação" : item === "contact" ? "Contato" : "Histórico"}</button>)}</nav>
+  return <div className={styles.drawerOverlay} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><aside className={styles.employeeDrawer} role="dialog" aria-modal="true" aria-labelledby="employee-title"><header className={styles.drawerHeader}><div className={styles.employeeHero}><span>{employee ? initials(employee.socialName || employee.fullName) : <UserRound />}</span><div><small>{employee ? `MATRÍCULA ${employee.registrationNumber}` : "NOVO CADASTRO MANUAL"}</small><h2 id="employee-title">{employee ? employee.socialName || employee.fullName : "Novo colaborador"}</h2><p>{employee ? `${employee.positionName || "Sem cargo"} · ${employee.companyName}` : "Registre uma admissão já concluída na origem."}</p></div></div><div>{employee && canManage && !editing && <button className={styles.secondaryButton} onClick={onEdit}><Edit3 /> Editar</button>}<button className={styles.closeButton} onClick={onClose} aria-label="Fechar"><X /></button></div></header><nav className={styles.drawerTabs}>{(["personal", "employment", "contact", "epi", "tangerino", "history"] as EmployeeDetailTab[]).map((item) => <button key={item} className={activeTab === item ? styles.drawerTabActive : ""} onClick={() => onTab(item)} disabled={!employee && item !== "personal" && item !== "employment" && item !== "contact"}>{item === "personal" ? "Dados pessoais" : item === "employment" ? "Vínculo e lotação" : item === "contact" ? "Contato" : item === "epi" ? "EPIs" : item === "tangerino" ? "Tangerino" : "Histórico"}</button>)}</nav>
       <form onSubmit={submit} className={styles.drawerForm}><div className={styles.drawerBody}>
         {activeTab === "personal" && <div className={styles.formGrid}><label className={styles.spanTwo}><span>Nome completo *</span><input required readOnly={readOnly} value={draft.fullName} onChange={(event) => update("fullName", event.target.value)} /></label><label className={styles.spanTwo}><span>Nome social</span><input readOnly={readOnly} value={draft.socialName} onChange={(event) => update("socialName", event.target.value)} /></label><label><span>CPF</span><input readOnly={readOnly} inputMode="numeric" autoComplete="off" value={readOnly && employee?.cpfLast4 ? `•••.•••.•••-${employee.cpfLast4}` : draft.cpf} onChange={(event) => update("cpf", event.target.value)} placeholder={employee?.cpfLast4 ? "Preencha apenas para alterar" : "000.000.000-00"} /></label><label><span>Data de nascimento</span><input readOnly={readOnly} type="date" value={draft.birthDate} onChange={(event) => update("birthDate", event.target.value)} /></label><label className={styles.spanTwo}><span>Observações</span><textarea readOnly={readOnly} value={draft.notes} onChange={(event) => update("notes", event.target.value)} /></label></div>}
-        {activeTab === "employment" && <div className={styles.formGrid}><label><span>Empresa *</span><select disabled={readOnly} required value={draft.companyId} onChange={(event) => { update("companyId", event.target.value); void onCompanyCatalogs(event.target.value); }}><option value="">Selecione</option>{companies.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{displayCompany(item)}</option>)}</select></label><label><span>Matrícula *</span><input readOnly={readOnly} required value={draft.registrationNumber} onChange={(event) => update("registrationNumber", event.target.value)} /></label><label><span>Admissão *</span><input readOnly={readOnly} required type="date" value={draft.admissionDate} onChange={(event) => update("admissionDate", event.target.value)} /></label><label><span>Status</span><select disabled={readOnly} value={draft.employmentStatus} onChange={(event) => update("employmentStatus", event.target.value as EmployeeDraft["employmentStatus"])}><option value="active">Ativo</option><option value="on_leave">Afastado</option><option value="terminated">Desligado</option></select></label><label><span>Departamento</span><select disabled={readOnly} value={draft.departmentId} onChange={(event) => update("departmentId", event.target.value)}><option value="">Não informado</option>{catalogs.departments.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Cargo</span><select disabled={readOnly} value={draft.positionId} onChange={(event) => update("positionId", event.target.value)}><option value="">Não informado</option>{catalogs.positions.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Centro de custo</span><select disabled={readOnly} value={draft.costCenterId} onChange={(event) => update("costCenterId", event.target.value)}><option value="">Não informado</option>{catalogs["cost-centers"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Jornada</span><select disabled={readOnly} value={draft.workScheduleId} onChange={(event) => update("workScheduleId", event.target.value)}><option value="">Não informada</option>{catalogs["work-schedules"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Tipo de vínculo</span><select disabled={readOnly} value={draft.employmentType} onChange={(event) => update("employmentType", event.target.value as EmployeeDraft["employmentType"])}><option value="clt">CLT</option><option value="intern">Estágio</option><option value="apprentice">Aprendiz</option><option value="temporary">Temporário</option></select></label><label><span>Modelo de trabalho</span><select disabled={readOnly} value={draft.workModel} onChange={(event) => update("workModel", event.target.value as EmployeeDraft["workModel"])}><option value="onsite">Presencial</option><option value="hybrid">Híbrido</option><option value="remote">Remoto</option></select></label><label><span>Desligamento</span><input readOnly={readOnly} type="date" value={draft.terminationDate} onChange={(event) => update("terminationDate", event.target.value)} /></label></div>}
+        {activeTab === "employment" && <><div className={styles.formGrid}><label><span>Empresa *</span><select disabled={readOnly} required value={draft.companyId} onChange={(event) => { update("companyId", event.target.value); void onCompanyCatalogs(event.target.value); }}><option value="">Selecione</option>{companies.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{displayCompany(item)}</option>)}</select></label><label><span>Matrícula *</span><input readOnly={readOnly} required value={draft.registrationNumber} onChange={(event) => update("registrationNumber", event.target.value)} /></label><label><span>Admissão *</span><input readOnly={readOnly} required type="date" value={draft.admissionDate} onChange={(event) => update("admissionDate", event.target.value)} /></label><label><span>Status</span><select disabled={readOnly} value={draft.employmentStatus} onChange={(event) => update("employmentStatus", event.target.value as EmployeeDraft["employmentStatus"])}><option value="active">Ativo</option><option value="on_leave">Afastado</option><option value="terminated">Desligado</option></select></label><label><span>Departamento</span><select disabled={readOnly} value={draft.departmentId} onChange={(event) => update("departmentId", event.target.value)}><option value="">Não informado</option>{catalogs.departments.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Cargo</span><select disabled={readOnly} value={draft.positionId} onChange={(event) => update("positionId", event.target.value)}><option value="">Não informado</option>{catalogs.positions.filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Centro de custo</span><select disabled={readOnly} value={draft.costCenterId} onChange={(event) => update("costCenterId", event.target.value)}><option value="">Não informado</option>{catalogs["cost-centers"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Jornada</span><select disabled={readOnly} value={draft.workScheduleId} onChange={(event) => update("workScheduleId", event.target.value)}><option value="">Não informada</option>{catalogs["work-schedules"].filter((item) => item.companyId === draft.companyId && item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label><span>Tipo de vínculo</span><select disabled={readOnly} value={draft.employmentType} onChange={(event) => update("employmentType", event.target.value as EmployeeDraft["employmentType"])}><option value="clt">CLT</option><option value="intern">Estágio</option><option value="apprentice">Aprendiz</option><option value="temporary">Temporário</option></select></label><label><span>Modelo de trabalho</span><select disabled={readOnly} value={draft.workModel} onChange={(event) => update("workModel", event.target.value as EmployeeDraft["workModel"])}><option value="onsite">Presencial</option><option value="hybrid">Híbrido</option><option value="remote">Remoto</option></select></label><label><span>Desligamento</span><input readOnly={readOnly} type="date" value={draft.terminationDate} onChange={(event) => update("terminationDate", event.target.value)} /></label></div>{employee && canManage && readOnly && <section className={styles.employeeActions}><div><strong>Encerramento do vínculo</strong><p>Demissão preserva todo o histórico. Exclusão só é liberada para cadastros sem movimentações.</p></div>{employee.employmentStatus !== "terminated" && <label><span>Data da demissão</span><input type="date" value={terminationDate} min={employee.admissionDate} onChange={(event) => setTerminationDate(event.target.value)} /><button type="button" className={styles.secondaryButton} disabled={!terminationDate} onClick={() => onTerminate(employee, terminationDate)}><UserMinus /> Demitir</button></label>}<button type="button" className={styles.textDangerButton} onClick={() => onDelete(employee)}><Trash2 /> Excluir cadastro</button></section>}</>}
         {activeTab === "contact" && <div className={styles.formGrid}><label className={styles.spanTwo}><span>E-mail</span><input readOnly={readOnly} type="email" value={draft.email} onChange={(event) => update("email", event.target.value)} /></label><label className={styles.spanTwo}><span>Telefone</span><input readOnly={readOnly} value={draft.phone} onChange={(event) => update("phone", event.target.value)} /></label><div className={`${styles.infoNote} ${styles.spanTwo}`}><BadgeCheck /><span><strong>Dados protegidos</strong><small>Informações pessoais ficam apenas no cadastro e não entram no snapshot operacional, URLs ou armazenamento local.</small></span></div></div>}
+        {activeTab === "epi" && employee && <EmployeeEpiPanel employeeId={employee.id} />}
+        {/* O agente é somente leitura, então a aba aparece para quem já enxerga
+            o cadastro; quem não tem a permissão de consultar vê o histórico e o
+            botão desligado, em vez de uma aba que some sem explicação. */}
+        {activeTab === "tangerino" && employee && <TangerinoAdmissionPanel employeeId={employee.id} canConsult={canConsultTangerino} />}
         {activeTab === "history" && <HistoryTrail events={history} loading={historyLoading} />}
-      </div>{editing && activeTab !== "history" && <footer className={styles.drawerFooter}><button type="button" className={styles.secondaryButton} onClick={onClose}>Cancelar</button><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} /> : <Check />} Salvar colaborador</button></footer>}</form>
+      </div>{editing && activeTab !== "history" && activeTab !== "epi" && <footer className={styles.drawerFooter}><button type="button" className={styles.secondaryButton} onClick={onClose}>Cancelar</button><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} /> : <Check />} Salvar colaborador</button></footer>}</form>
     </aside></div>;
 }
 
 function HistoryTrail({ events, loading }: { events: HistoryEvent[]; loading: boolean }) {
-  if (loading) return <LoadingState label="Reconstruindo a trilha do colaborador" />;
-  if (!events.length) return <EmptyState icon={<History />} title="Histórico ainda vazio" description="As alterações auditadas deste colaborador aparecerão aqui em ordem cronológica." />;
+  if (loading) return <LoadingState title="Reconstruindo a trilha do colaborador" />;
+  if (!events.length) return <EmptyState icon={History} title="Histórico ainda vazio" text="As alterações auditadas deste colaborador aparecerão aqui em ordem cronológica." />;
   return <section className={styles.historyTrail} aria-label="Histórico do colaborador"><header><span><History /></span><div><small>TRILHA AUDITÁVEL</small><h3>Histórico do colaborador</h3><p>{events.length} evento(s) preservado(s)</p></div></header><ol>{events.map((event, index) => <li key={event.id}><span className={index === 0 ? styles.latestDot : ""}>{index === 0 ? <Check /> : null}</span><article><header><strong>{historyLabel(event.action)}</strong>{index === 0 && <em>Mais recente</em>}</header><p>{event.actorEmail || "Sistema Vinculato"}</p><time>{dateLabel(event.createdAt)}</time>{event.metadata?.sourceSystem === "manual" && <small>Origem: cadastro manual</small>}</article></li>)}</ol></section>;
 }
 
-function StatusPill({ active }: { active: boolean }) { return <span className={`${styles.statusPill} ${active ? styles.statusActive : styles.statusInactive}`}><i />{active ? "Ativo" : "Inativo"}</span>; }
-function EmployeeStatus({ status }: { status: Employee["employmentStatus"] }) { return <span className={`${styles.employeeStatus} ${styles[`employee_${status}`]}`}><i />{statusLabel(status)}</span>; }
-function LoadingState({ label }: { label: string }) { return <div className={styles.loadingState} role="status"><LoaderCircle className={styles.spin} /><strong>{label}</strong><span>Isso leva só um instante.</span></div>; }
-function EmptyState({ icon, title, description, action, onAction }: { icon: React.ReactNode; title: string; description: string; action?: string; onAction?: () => void }) { return <div className={styles.emptyState}><span>{icon}</span><strong>{title}</strong><p>{description}</p>{action && onAction && <button className={styles.secondaryButton} onClick={onAction}><Plus /> {action}</button>}</div>; }
+/** Ativo/inativo é o vocabulário de cadastro; o selo é o mesmo do resto do painel. */
+const activePill = (active: boolean) => <StatusPill status={active ? "active" : "inactive"} label={active ? "Ativo" : "Inativo"} />;
+const employeePill = (status: Employee["employmentStatus"]) => <StatusPill status={status} label={statusLabel(status)} />;

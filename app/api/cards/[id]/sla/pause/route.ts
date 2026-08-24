@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 import { businessMinutesBetween } from "@/lib/fila-dp-sla";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -14,6 +15,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!reason) return Response.json({ error: "Informe o motivo da pausa." }, { status: 400 });
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const card = await d1.prepare("SELECT id FROM fdp_cards WHERE id = ? AND board_id IN (SELECT id FROM fdp_boards WHERE workspace_id = ?) AND archived = 0").bind(id, workspace.id).first();
     if (!card) return Response.json({ error: "Demanda não encontrada." }, { status: 404 });
@@ -34,6 +36,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const active = await d1.prepare("SELECT id, started_at, reason FROM fdp_card_sla_pauses WHERE card_id = ? AND workspace_id = ? AND ended_at IS NULL").bind(id, workspace.id).first<{ id: string; started_at: string; reason: string }>();
     if (!active) return Response.json({ error: "Esta demanda não está pausada." }, { status: 400 });

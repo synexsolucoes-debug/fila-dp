@@ -2,7 +2,13 @@ import { getD1, getPlatformScopedD1 } from "@/db";
 import { ApiError } from "@/lib/api-errors";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { queueIntegrationRun } from "@/lib/integration-engine";
-import { mappingDirection, mappingResource, publicCredentialFingerprint, sanitizeMapping, sealCredentials } from "@/lib/integrations";
+import { credentialPublicHint, mappingDirection, mappingResource, publicCredentialFingerprint, sanitizeMapping, sealCredentials } from "@/lib/integrations";
+import { queueSankhyaRun, requireSankhyaWorkspaceEnabled } from "@/lib/sankhya/queue";
+import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
+import { nextSankhyaRunAt, parseSankhyaConfig, sanitizeSankhyaConfig } from "@/lib/sankhya/config";
+import { queueTangerinoHealthCheck } from "@/lib/tangerino/health-check";
+import { wakeTangerinoWorker } from "@/lib/tangerino/actions-dispatch";
+import { assertConnectorTargets, buildConnectorConfig, PLATFORM_ONLY_CHANNEL } from "@/lib/connector-config";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
 import { requiredPlatformReason, sanitizePlatformValue } from "@/lib/platform-console";
@@ -10,7 +16,7 @@ import { cleanText } from "@/lib/registrations";
 
 type Params = { params: Promise<{ id: string }> };
 type Row = Record<string, unknown>;
-const actions = new Set(["run", "retry", "pause", "resume", "revoke_credential", "rotate_credential", "create_mapping", "publish_mapping", "resolve_reconciliation"]);
+const actions = new Set(["run", "retry", "pause", "resume", "revoke_credential", "rotate_credential", "configure_sankhya", "configure_connector", "test_connection", "create_mapping", "publish_mapping", "resolve_reconciliation"]);
 const truthy = (value: unknown) => value === true || value === 1 || value === "1" || value === "t" || value === "true";
 
 export async function POST(request: Request, { params }: Params) {
@@ -32,7 +38,7 @@ export async function POST(request: Request, { params }: Params) {
         .bind(workspaceId).first<{ id: string; name: string; owner_user_id: string }>();
       if (!workspace) throw ApiError.badRequest("Workspace informado não existe.", "WORKSPACE_NOT_FOUND");
       const scoped = getPlatformScopedD1({ workspaceId, userId: platform.userId });
-      const integration = await scoped.prepare("SELECT id, channel, display_name, status FROM fdp_integrations WHERE workspace_id = ? AND id = ?")
+      const integration = await scoped.prepare("SELECT id, channel, display_name, status, config_json FROM fdp_integrations WHERE workspace_id = ? AND id = ?")
         .bind(workspaceId, id).first<Row>();
       if (!integration) throw ApiError.notFound("Integração não encontrada neste workspace.", "INTEGRATION_NOT_FOUND");
       if (["revoke_credential", "rotate_credential"].includes(action) && cleanText(body.confirmation, 160) !== String(integration.display_name)) {
@@ -44,26 +50,102 @@ export async function POST(request: Request, { params }: Params) {
       let result: Record<string, unknown> = {};
       let auditEntityType = "integration";
       let auditEntityId = id;
+      let shouldWakeSankhya = false;
+      let shouldWakeTangerino = false;
 
       if (action === "run") {
-        const run = await queueIntegrationRun(scoped, {
-          workspaceId, integrationId: id, mappingId: cleanText(body.mappingId, 120) || undefined,
-          triggerType: "manual", requestedBy: null,
-          idempotencyKey: cleanText(request.headers.get("idempotency-key"), 180) || `platform:${crypto.randomUUID()}`,
-        });
+        const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `platform:${crypto.randomUUID()}`;
+        const run = integration.channel === "sankhya_browser"
+          ? await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "manual", requestedBy: null, idempotencyKey })
+          : await queueIntegrationRun(scoped, { workspaceId, integrationId: id, mappingId: cleanText(body.mappingId, 120) || undefined,
+            triggerType: "manual", requestedBy: null, idempotencyKey });
         result = { runId: run.id, status: run.status };
+        shouldWakeSankhya = integration.channel === "sankhya_browser";
       } else if (action === "retry") {
         const runId = cleanText(body.runId, 120);
         const failed = await scoped.prepare(`SELECT id, mapping_id, status FROM fdp_integration_sync_runs
           WHERE workspace_id = ? AND integration_id = ? AND id = ? AND status IN ('failed', 'partial', 'canceled')`)
           .bind(workspaceId, id, runId).first<Row>();
         if (!failed) throw new ApiError(409, "RUN_NOT_RETRYABLE", "A execução não está em um estado que permita retry controlado.");
-        const retry = await queueIntegrationRun(scoped, {
-          workspaceId, integrationId: id, mappingId: String(failed.mapping_id ?? "") || undefined,
-          triggerType: "retry", requestedBy: null,
-          idempotencyKey: cleanText(request.headers.get("idempotency-key"), 180) || `retry:${runId}:${crypto.randomUUID()}`,
-        });
+        const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `retry:${runId}:${crypto.randomUUID()}`;
+        const retry = integration.channel === "sankhya_browser"
+          ? await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "retry", requestedBy: null, idempotencyKey })
+          : await queueIntegrationRun(scoped, { workspaceId, integrationId: id, mappingId: String(failed.mapping_id ?? "") || undefined,
+            triggerType: "retry", requestedBy: null, idempotencyKey });
         result = { runId: retry.id, retryOf: runId, status: retry.status };
+        shouldWakeSankhya = integration.channel === "sankhya_browser";
+      } else if (action === "configure_sankhya") {
+        if (integration.channel !== "sankhya_browser") {
+          throw ApiError.badRequest("Esta configuração é exclusiva do conector Sankhya.", "SANKHYA_INTEGRATION_REQUIRED");
+        }
+        await requireSankhyaWorkspaceEnabled(scoped, workspaceId);
+        const config = sanitizeSankhyaConfig(body.config);
+        if (config.companyId) {
+          const company = await scoped.prepare("SELECT 1 FROM fdp_companies WHERE workspace_id = ? AND id = ? AND status = 'active'")
+            .bind(workspaceId, config.companyId).first();
+          if (!company) throw ApiError.badRequest("A empresa selecionada não pertence a este workspace.", "SANKHYA_COMPANY_INVALID");
+        }
+        const displayName = cleanText(body.displayName, 120) || String(integration.display_name);
+        const nextSyncAt = config.automaticEnabled ? nextSankhyaRunAt(config) : null;
+        const activeCredential = await scoped.prepare(`SELECT 1 FROM fdp_integration_credentials
+          WHERE workspace_id = ? AND integration_id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > now())`)
+          .bind(workspaceId, id).first();
+        const status = integration.status === "paused" ? "paused" : activeCredential ? "connected" : "needs_credentials";
+        before = { workspaceId, displayName: integration.display_name, status: integration.status, configuration: parseSankhyaConfig(integration.config_json) };
+        await scoped.prepare(`UPDATE fdp_integrations SET display_name = ?, status = ?, config_json = ?,
+            schedule_enabled = ?, next_sync_at = ?::timestamptz, connector_version = '1', last_error = NULL, updated_at = now()
+          WHERE workspace_id = ? AND id = ?`)
+          .bind(displayName, status, JSON.stringify(config), config.automaticEnabled ? 1 : 0, nextSyncAt, workspaceId, id).run();
+        result = { displayName, status, configuration: config, nextSyncAt };
+      } else if (action === "configure_connector") {
+        /* A configuração dos demais conectores existia só no console do
+           workspace. Quem administra a plataforma via os nove cartões com um
+           botão "Detalhes" que abria um painel somente leitura — e nada na tela
+           dizia onde a configuração morava. Agora ela também mora aqui.
+
+           As regras não são escritas de novo: `buildConnectorConfig` é a mesma
+           função que a rota do workspace usa. O que esta porta acrescenta é o
+           que a plataforma exige de qualquer escrita sobre dado de cliente —
+           administrador da plataforma, motivo obrigatório, confirmação
+           explícita e auditoria nos dois livros. */
+        if (integration.channel === PLATFORM_ONLY_CHANNEL) {
+          throw ApiError.badRequest(
+            "O conector Sankhya tem configuração própria: use a ação dedicada.",
+            "SANKHYA_CONFIG_SEPARATE",
+          );
+        }
+        const built = buildConnectorConfig({
+          channel: String(integration.channel),
+          currentDisplayName: String(integration.display_name),
+          body,
+        });
+        await assertConnectorTargets(scoped, workspaceId, built.config);
+        before = {
+          workspaceId, displayName: integration.display_name, status: integration.status,
+          // O conteúdo gravado não entra na auditoria: `config_json` carrega
+          // endpoint e identificadores do cliente. Os nomes dos campos bastam
+          // para reconstruir o que mudou sem republicar o que estava lá.
+          configuredFields: Object.keys(
+            (() => { try { return JSON.parse(String(integration.config_json ?? "{}")) as Row; } catch { return {}; } })(),
+          ),
+        };
+        await scoped.prepare(`UPDATE fdp_integrations
+            SET display_name = ?, status = ?, config_json = ?, last_error = NULL, updated_at = now()
+          WHERE workspace_id = ? AND id = ?`)
+          .bind(built.displayName, built.status, JSON.stringify(built.config), workspaceId, id).run();
+        result = { displayName: built.displayName, status: built.status, configuredFields: built.configuredFields };
+      } else if (action === "test_connection") {
+        if (!["sankhya_browser", "tangerino_browser"].includes(String(integration.channel))) {
+          throw ApiError.badRequest("O teste RPA é exclusivo dos agentes de navegador.", "BROWSER_INTEGRATION_REQUIRED");
+        }
+        const idempotencyKey = cleanText(request.headers.get("idempotency-key"), 180) || `platform-health:${crypto.randomUUID()}`;
+        const isTangerino = integration.channel === "tangerino_browser";
+        const run = isTangerino
+          ? await queueTangerinoHealthCheck(scoped, { workspaceId, integrationId: id, requestedBy: null, idempotencyKey })
+          : await queueSankhyaRun(scoped, { workspaceId, integrationId: id, triggerType: "health_check", requestedBy: null, idempotencyKey });
+        result = { runId: run.id, status: run.status, healthCheck: true };
+        shouldWakeTangerino = isTangerino;
+        shouldWakeSankhya = !isTangerino;
       } else if (action === "pause") {
         await scoped.prepare("UPDATE fdp_integrations SET status = 'paused', updated_at = now() WHERE workspace_id = ? AND id = ?")
           .bind(workspaceId, id).run();
@@ -73,7 +155,9 @@ export async function POST(request: Request, { params }: Params) {
             EXISTS (SELECT 1 FROM fdp_integration_credentials WHERE workspace_id = ? AND integration_id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at > now())) AS credential,
             EXISTS (SELECT 1 FROM fdp_integration_mappings WHERE workspace_id = ? AND integration_id = ? AND status = 'active') AS mapping`)
           .bind(workspaceId, id, workspaceId, id).first<{ credential: boolean; mapping: boolean }>();
-        if (!truthy(ready?.credential) || !truthy(ready?.mapping)) throw new ApiError(409, "INTEGRATION_NOT_READY", "Credencial ativa e mapeamento publicado são obrigatórios para reativar.");
+        if (!truthy(ready?.credential) || (integration.channel !== "sankhya_browser" && !truthy(ready?.mapping))) {
+          throw new ApiError(409, "INTEGRATION_NOT_READY", "Credencial ativa e configuração válida são obrigatórias para reativar.");
+        }
         await scoped.prepare("UPDATE fdp_integrations SET status = 'connected', last_error = NULL, updated_at = now() WHERE workspace_id = ? AND id = ?")
           .bind(workspaceId, id).run();
         result = { status: "connected" };
@@ -84,7 +168,9 @@ export async function POST(request: Request, { params }: Params) {
         ]);
         result = { status: "needs_credentials", credential: "revoked" };
       } else if (action === "rotate_credential") {
+        if (integration.channel === "sankhya_browser") await requireSankhyaWorkspaceEnabled(scoped, workspaceId);
         const sealed = sealCredentials(integration.channel, body.credentials);
+        const publicHint = credentialPublicHint(String(integration.channel), body.credentials);
         const expiresAt = typeof body.expiresAt === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?Z$/u.test(body.expiresAt) ? body.expiresAt : null;
         const credentialId = crypto.randomUUID();
         // A FK composta é preservada: o proprietário é o custodiante do envelope;
@@ -92,9 +178,9 @@ export async function POST(request: Request, { params }: Params) {
         await scoped.batch([
           scoped.prepare("UPDATE fdp_integration_credentials SET status = 'revoked', revoked_at = now(), rotated_at = now(), updated_at = now() WHERE workspace_id = ? AND integration_id = ? AND status = 'active'").bind(workspaceId, id),
           scoped.prepare(`INSERT INTO fdp_integration_credentials
-            (id, workspace_id, integration_id, credential_type, encrypted_value, initialization_vector, auth_tag, key_version, fingerprint, expires_at, created_by)
-            VALUES (?, ?, ?, 'provider_auth', ?, ?, ?, ?, ?, ?, ?)`)
-            .bind(credentialId, workspaceId, id, sealed.encryptedValue, sealed.initializationVector, sealed.authTag, sealed.keyVersion, sealed.fingerprint, expiresAt, workspace.owner_user_id),
+            (id, workspace_id, integration_id, credential_type, encrypted_value, initialization_vector, auth_tag, key_version, fingerprint, public_hint, expires_at, created_by)
+            VALUES (?, ?, ?, 'provider_auth', ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .bind(credentialId, workspaceId, id, sealed.encryptedValue, sealed.initializationVector, sealed.authTag, sealed.keyVersion, sealed.fingerprint, publicHint, expiresAt, workspace.owner_user_id),
           scoped.prepare("UPDATE fdp_integrations SET status = 'needs_credentials', last_error = NULL, updated_at = now() WHERE workspace_id = ? AND id = ?").bind(workspaceId, id),
         ]);
         result = { credentialId, status: "needs_credentials", verified: false, keyVersion: sealed.keyVersion, fingerprint: publicCredentialFingerprint(sealed.fingerprint), expiresAt };
@@ -120,7 +206,7 @@ export async function POST(request: Request, { params }: Params) {
         if (!mappingId) throw ApiError.badRequest("Informe o mapeamento em rascunho.", "MAPPING_ID_REQUIRED");
         const draft = await scoped.prepare(`SELECT id, resource_type, direction, version, status, checksum FROM fdp_integration_mappings
           WHERE workspace_id = ? AND integration_id = ? AND id = ?`).bind(workspaceId, id, mappingId).first<Row>();
-        if (!draft || draft.status !== "draft") throw ApiError.notFound("Mapeamento em rascunho nÃ£o encontrado.", "MAPPING_DRAFT_NOT_FOUND");
+        if (!draft || draft.status !== "draft") throw ApiError.notFound("Mapeamento em rascunho não encontrado.", "MAPPING_DRAFT_NOT_FOUND");
         const published = await scoped.prepare(`WITH target AS (
             SELECT id, resource_type, direction FROM fdp_integration_mappings
             WHERE workspace_id = ? AND integration_id = ? AND id = ? AND status = 'draft'
@@ -133,7 +219,7 @@ export async function POST(request: Request, { params }: Params) {
             FROM target WHERE mapping.id = target.id AND (SELECT COUNT(*) FROM archived) >= 0
             RETURNING mapping.id, mapping.resource_type, mapping.direction, mapping.version, mapping.status, mapping.checksum, mapping.published_at`)
           .bind(workspaceId, id, mappingId, workspaceId, id, workspace.owner_user_id).first<Row>();
-        if (!published) throw ApiError.notFound("Mapeamento em rascunho nÃ£o encontrado.", "MAPPING_DRAFT_NOT_FOUND");
+        if (!published) throw ApiError.notFound("Mapeamento em rascunho não encontrado.", "MAPPING_DRAFT_NOT_FOUND");
         before = sanitizePlatformValue({ workspaceId, integrationId: id, ...draft }) as Record<string, unknown>;
         result = sanitizePlatformValue(published) as Record<string, unknown>;
         auditEntityType = "integration_mapping";
@@ -144,14 +230,14 @@ export async function POST(request: Request, { params }: Params) {
         const note = cleanText(body.note, 500);
         const internalId = resolution === "link" ? cleanText(body.internalId, 160) : "";
         if (!reconciliationId || !["link", "accept_external", "keep_internal", "ignore"].includes(resolution)) {
-          throw ApiError.badRequest("ResoluÃ§Ã£o de conciliaÃ§Ã£o invÃ¡lida.", "RECONCILIATION_RESOLUTION_INVALID");
+          throw ApiError.badRequest("Resolução de conciliação inválida.", "RECONCILIATION_RESOLUTION_INVALID");
         }
-        if (!note) throw ApiError.badRequest("Registre uma justificativa para a conciliaÃ§Ã£o.", "RECONCILIATION_NOTE_REQUIRED");
-        if (resolution === "link" && !internalId) throw ApiError.badRequest("Informe o registro interno que serÃ¡ vinculado.", "RECONCILIATION_INTERNAL_ID_REQUIRED");
+        if (!note) throw ApiError.badRequest("Registre uma justificativa para a conciliação.", "RECONCILIATION_NOTE_REQUIRED");
+        if (resolution === "link" && !internalId) throw ApiError.badRequest("Informe o registro interno que será vinculado.", "RECONCILIATION_INTERNAL_ID_REQUIRED");
         const pending = await scoped.prepare(`SELECT id, status, entity_type, run_id FROM fdp_integration_reconciliations
           WHERE workspace_id = ? AND integration_id = ? AND id = ?`).bind(workspaceId, id, reconciliationId).first<Row>();
         if (!pending || !["unmatched", "conflict"].includes(String(pending.status))) {
-          throw ApiError.notFound("ConciliaÃ§Ã£o pendente nÃ£o encontrada.", "RECONCILIATION_NOT_FOUND");
+          throw ApiError.notFound("Conciliação pendente não encontrada.", "RECONCILIATION_NOT_FOUND");
         }
         const resolved = await scoped.prepare(`WITH updated AS (
             UPDATE fdp_integration_reconciliations
@@ -167,13 +253,21 @@ export async function POST(request: Request, { params }: Params) {
             FROM updated WHERE item.workspace_id = updated.workspace_id AND item.id = updated.item_id RETURNING item.id
           ) SELECT id, status, resolution, resolved_at, (internal_id <> '') AS internal_id_provided FROM updated`)
           .bind(resolution, resolution, note, internalId, internalId, workspace.owner_user_id, workspaceId, id, reconciliationId).first<Row>();
-        if (!resolved) throw ApiError.notFound("ConciliaÃ§Ã£o pendente nÃ£o encontrada.", "RECONCILIATION_NOT_FOUND");
+        if (!resolved) throw ApiError.notFound("Conciliação pendente não encontrada.", "RECONCILIATION_NOT_FOUND");
         before = sanitizePlatformValue({ workspaceId, integrationId: id, ...pending }) as Record<string, unknown>;
         result = sanitizePlatformValue({ ...resolved, noteProvided: true, differencesOmitted: true }) as Record<string, unknown>;
         auditEntityType = "integration_reconciliation";
         auditEntityId = reconciliationId;
       }
 
+      if (shouldWakeSankhya) {
+        const workerDispatch = await wakeSankhyaWorker({ workspaceId, connectorId: id, syncRunId: String(result.runId ?? "") });
+        result.workerDispatch = workerDispatch.status;
+      }
+      if (shouldWakeTangerino) {
+        const workerDispatch = await wakeTangerinoWorker({ workspaceId, connectorId: id, syncRunId: String(result.runId ?? "") });
+        result.workerDispatch = workerDispatch.status;
+      }
       const after = sanitizePlatformValue({ workspaceId, workspaceName: workspace.name, action, reason, ...result });
       await scoped.batch([
         scoped.prepare(`INSERT INTO fdp_audit_events
@@ -187,7 +281,7 @@ export async function POST(request: Request, { params }: Params) {
           .bind(crypto.randomUUID(), platform.userId, platform.email, `platform.integration.${action}`, auditEntityType, auditEntityId,
             JSON.stringify(before), JSON.stringify(after), requestId),
       ]);
-      return Response.json({ action, integrationId: id, workspaceId, result }, { status: action === "run" || action === "retry" ? 202 : 200 });
+      return Response.json({ action, integrationId: id, workspaceId, result }, { status: ["run", "retry", "test_connection"].includes(action) ? 202 : 200 });
     });
   } catch (error) { return apiError(error); }
 }

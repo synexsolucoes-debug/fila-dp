@@ -1,8 +1,14 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceModules } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext, getWorkspaceModules } from "@/lib/fila-dp-db";
+import { hasCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
+import { log } from "@/lib/observability";
 import { cleanText } from "@/lib/registrations";
 import { redact } from "@/lib/assistant/redaction";
+import {
+  buildNamedQuery, formatNamedQueryContext, matchNamedQueries, toNamedQueryResult,
+  type NamedQueryResult,
+} from "@/lib/assistant/named-queries";
 import {
   askAssistant, assertConfigured, buildSystemPrompt, readAssistantConfig, type AssistantMessage,
 } from "@/lib/assistant/provider";
@@ -74,7 +80,41 @@ export async function POST(request: Request) {
     // exceções individuais já aplicadas, porque é isso que ela vê na tela.
     const modules = await getWorkspaceModules(d1, workspace.id, workspace.role,
       String((workspace as Record<string, unknown>).status ?? "active"),
-      (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants);
+      (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
+      (workspace as { departmentModules?: ReadonlySet<string> }).departmentModules);
+
+    /* Consultas operacionais nomeadas (§61).
+       Quem escolhe a consulta é o casamento determinístico por termo, nunca o
+       modelo: deixar a IA escolher seria dar a ela a decisão de qual dado sai
+       do ambiente. O resultado é agregado no servidor e entra como fato — a IA
+       só redige. */
+    const matched = matchNamedQueries(question)
+      .filter((query) => hasCapability(workspace, query.capability));
+    const access = matched.length
+      ? await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role)
+      : null;
+    const companyIds = access && !access.unrestricted ? [...access.companyIds] : null;
+    const queryResults: NamedQueryResult[] = [];
+    for (const query of matched) {
+      const { sql, parameters } = buildNamedQuery({
+        query, workspaceId: workspace.id, userId: user.id, companyIds,
+      });
+      const started = Date.now();
+      try {
+        const row = await d1.prepare(sql).bind(...parameters).first<Record<string, unknown>>();
+        const result = toNamedQueryResult(query, row);
+        queryResults.push(result);
+        log("info", "assistant.named_query", { workspaceId: workspace.id, userId: user.id }, {
+          query: query.key, durationMs: Date.now() - started, values: result.values, origin: "chat",
+        });
+      } catch {
+        // Uma consulta que falha não derruba a conversa: o assistente responde
+        // sem ela, e o log registra. Fingir um número seria pior.
+        log("error", "assistant.named_query", { workspaceId: workspace.id, userId: user.id }, {
+          query: query.key, durationMs: Date.now() - started, origin: "chat", errorType: "QueryError",
+        });
+      }
+    }
 
     const system = buildSystemPrompt({
       workspaceName: workspace.name,
@@ -84,6 +124,7 @@ export async function POST(request: Request) {
       allowedModules: modules.filter((item) => item.allowed).map((item) => ({ key: item.key, name: item.name })),
       blockedModules: modules.filter((item) => !item.allowed)
         .map((item) => ({ key: item.key, name: item.name, reason: item.message })),
+      operationalFacts: formatNamedQueryContext(queryResults),
     });
 
     let conversationId = cleanText(body.conversationId, 60);

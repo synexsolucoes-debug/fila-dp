@@ -48,7 +48,8 @@ export type Contractor = {
 
 export type ContractorClosing = {
   id: string; providerId: string; contractorName: string; contractorCode: string; contractReference: string; competence: string;
-  baseAmount: number; creditsAmount: number; debitsAmount: number; netAmount: number;
+  baseAmount: number; contractBaseAmount: number; prorationDays: number | null; prorationTotalDays: number | null;
+  prorationEndDate: string; creditsAmount: number; debitsAmount: number; netAmount: number;
   invoiceLimitAmount: number | null; invoiceLimitSource: string; invoiceExpectedAmount: number;
   complementAmount: number; complementMethod: string; cajuAmount: number;
   status: string; invoiceNumber: string; invoiceReceivedAmount: number; invoiceStatus: string;
@@ -62,12 +63,49 @@ export type InvoiceLimitPolicy = {
 
 export type ContractorComponent = {
   id: string; providerId: string; direction: string; componentType: string; description: string;
-  amount: number; origin: string; documentReference: string; status: string;
+  quantity: number; amount: number; origin: string; documentReference: string; status: string;
+};
+
+export type ContractorFixedItem = {
+  id: string; providerId: string; contractorName: string; direction: "credit" | "debit";
+  componentType: string; description: string; amount: number; effectiveFrom: string;
+  effectiveTo: string | null; status: string; note: string;
+};
+
+export type ContractorPaymentDetail = {
+  closing: ContractorClosing;
+  provider: {
+    id: string; code: string; legalName: string; tradeName: string; taxId: string;
+    contractReference: string; roleTitle: string;
+  };
+  components: ContractorComponent[];
+  permissions: { manage: boolean; reopen: boolean };
+};
+
+export type ContractorDocument = {
+  id: string;
+  closingId: string;
+  documentKind: string;
+  competence: string;
+  invoiceNumber: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+};
+
+/** Lançamento avulso da competência — a natureza "mensal". */
+export type ContractorMonthlyEntry = {
+  id: string; providerId: string; contractorName: string; direction: "credit" | "debit";
+  componentType: string; description: string; amount: number; quantity: number;
+  origin: string; documentReference: string; status: string;
 };
 
 export type ContractorOverview = {
   module: "contractors"; competence: string; cycle: CycleOption | null; cycles: CycleOption[];
-  closings: ContractorClosing[]; contractors: Contractor[]; invoiceLimitPolicies: InvoiceLimitPolicy[];
+  closings: ContractorClosing[]; contractors: Contractor[]; fixedItems: ContractorFixedItem[];
+  monthlyEntries: ContractorMonthlyEntry[];
+  invoiceLimitPolicies: InvoiceLimitPolicy[];
   totals: { netAmount: number; invoiceExpectedAmount: number; complementAmount: number; cajuAmount: number; divergentCount: number };
   permissions: PaymentPermissions;
 };
@@ -80,6 +118,7 @@ export type PaymentDialog =
   | { kind: "psychology-payment"; closing: PsychologyClosing }
   | { kind: "contractor" }
   | { kind: "component"; contractors: Contractor[] }
+  | { kind: "fixed-item"; contractors: Contractor[]; competence: string }
   | { kind: "invoice"; closing: ContractorClosing }
   | { kind: "complement"; closing: ContractorClosing }
   | { kind: "limit"; contractors: Contractor[] }

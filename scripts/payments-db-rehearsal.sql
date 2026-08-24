@@ -54,6 +54,34 @@ SELECT expect_error($$INSERT INTO fdp_contractor_closings (id, workspace_id, com
     base_amount, net_amount, invoice_limit_amount, invoice_expected_amount, complement_amount, calc_version, created_by)
   VALUES ('ccl-bad2','ws-a','co-a','pj-a','cy-a','2026-08',8200,8200,6000,6500,1700,'v','u1')$$, 'fdp_contractor_closings_limit_cap_check');
 
+-- O prestador é do grupo: um fechamento por competência, mesmo com outra
+-- empresa e outro ciclo. Sem isto, apurar agosto em duas empresas pagaria a
+-- mesma pessoa duas vezes, e o segundo pagamento pareceria tão correto quanto
+-- o primeiro.
+INSERT INTO fdp_companies (id, workspace_id, legal_name, trade_name, tax_id) VALUES ('co-a2','ws-a','Empresa A2','A2','2');
+INSERT INTO fdp_payroll_cycles (id, workspace_id, company_id, competence, status, created_by)
+  VALUES ('cy-a2','ws-a','co-a2','2026-08','open','u1');
+SELECT expect_error($$INSERT INTO fdp_contractor_closings (id, workspace_id, company_id, provider_id, payroll_cycle_id, competence,
+    base_amount, net_amount, invoice_expected_amount, complement_amount, calc_version, created_by)
+  VALUES ('ccl-dup','ws-a','co-a2','pj-a','cy-a2','2026-08',6500,6500,6500,0,'v','u1')$$,
+  'fdp_contractor_closings_workspace_provider_competence_uq');
+
+-- E o prestador pode não ter empresa nenhuma no contrato: é o caso de quem
+-- atende várias e não pertence a uma. O que nasce do contrato acompanha.
+INSERT INTO fdp_auxiliary_providers (id, workspace_id, provider_type, code, legal_name)
+  VALUES ('pj-grupo','ws-a','contractor','GRUPO','Prestador do Grupo');
+INSERT INTO fdp_contractor_profiles (provider_id, workspace_id, company_id, base_amount, complement_method, updated_by)
+  VALUES ('pj-grupo','ws-a',NULL,4000,'none','u1');
+INSERT INTO fdp_contractor_fixed_items (id, workspace_id, company_id, provider_id, direction, component_type,
+    description, amount, effective_from, created_by)
+  VALUES ('fi-grupo','ws-a',NULL,'pj-grupo','debit','health_plan','Plano',300,'2026-08','u1');
+-- Departamento é da empresa: sem empresa no contrato, não há departamento a
+-- apontar. A chave composta para de conferir quando uma coluna é nula, então
+-- quem cobra a regra é o CHECK.
+SELECT expect_error($$UPDATE fdp_contractor_profiles SET department_id = 'dep-qualquer'
+  WHERE workspace_id = 'ws-a' AND provider_id = 'pj-grupo'$$,
+  'fdp_contractor_profiles_department_needs_company_check');
+
 -- Ajustes são append-only.
 INSERT INTO fdp_psychology_adjustments (id, workspace_id, closing_id, kind, amount, reason, previous_amount, new_amount, created_by)
   VALUES ('adj-1','ws-a','pcl-a','discount',50,'Consulta nao realizada',300,250,'u1');

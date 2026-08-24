@@ -129,6 +129,12 @@ test("o bloqueio de apuração explica em linguagem de quem opera", () => {
   assert.equal(apurationBlock("suspended", "2026-03", "2026-01-01", null), "contrato suspenso");
   assert.equal(apurationBlock("inactive", "2026-03", "2026-01-01", null), "contrato encerrado");
   assert.equal(apurationBlock("active", "2026-04", "2026-01-01", "2026-03-15"), "competência fora da vigência do contrato");
+
+  // Encerramento com data não apaga o passado: março e meses anteriores ainda
+  // podem ser recalculados; abril em diante continua bloqueado.
+  assert.equal(apurationBlock("inactive", "2026-02", "2026-01-01", "2026-03-15"), null);
+  assert.equal(apurationBlock("inactive", "2026-03", "2026-01-01", "2026-03-15"), null);
+  assert.equal(apurationBlock("inactive", "2026-04", "2026-01-01", "2026-03-15"), "contrato encerrado");
 });
 
 /* -------------------------------------------------------------------------- */
@@ -203,11 +209,14 @@ test("movimentação sem efeito não é aceita", () => {
     (error: { code: string }) => error.code === "MOVEMENT_EFFECT_INVALID");
   assert.throws(() => assertMovementEffect("termination", { status: "suspended" }),
     (error: { code: string }) => error.code === "MOVEMENT_EFFECT_INVALID");
+  assert.throws(() => assertMovementEffect("termination", { status: "inactive" }),
+    (error: { code: string }) => error.code === "MOVEMENT_EFFECT_REQUIRED");
   assert.throws(() => assertMovementEffect("base_change", { baseAmountCents: -1 }),
     (error: { code: string }) => error.code === "NEGATIVE_MONEY");
 
   assertMovementEffect("base_change", { baseAmountCents: 800_000 });
   assertMovementEffect("suspension", { status: "suspended" });
+  assertMovementEffect("termination", { status: "inactive", contractEnd: "2026-08-19" });
   assertMovementEffect("other", {});
 });
 
@@ -226,6 +235,13 @@ test("as tabelas novas isolam por workspace e trancam movimentação aplicada", 
   assert.match(migration, /fdp_contractor_profiles_determinado_check/u);
   assert.match(migration, /applied contractor movements are immutable/u);
   // Histórico não se apaga como atalho.
+  assert.doesNotMatch(migration, /DROP TABLE/u);
+});
+
+test("migration da diferença fixa mantém o valor no perfil e no fechamento", async () => {
+  const migration = await readFile(new URL("../drizzle/postgres/0049_contractors_fixed_caju_and_termination.sql", import.meta.url), "utf8");
+  assert.match(migration, /fixed_caju_difference/u);
+  assert.match(migration, /fixed_caju_amount/u);
   assert.doesNotMatch(migration, /DROP TABLE/u);
 });
 

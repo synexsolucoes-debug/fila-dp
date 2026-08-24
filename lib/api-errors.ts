@@ -39,6 +39,17 @@ export function apiErrorResponse(error: unknown) {
       { status: error.status, headers: { "Cache-Control": "no-store" } },
     );
   }
+  const databaseMessage = error instanceof Error ? error.message : String(error ?? "");
+  if (databaseMessage.includes("EPI_INSUFFICIENT_STOCK")) {
+    return Response.json({
+      error: "O local de estoque não possui saldo suficiente. Registre uma entrada ou escolha outro local.",
+      code: "EPI_INSUFFICIENT_STOCK",
+    }, { status: 409, headers: { "Cache-Control": "no-store" } });
+  }
+  if (databaseMessage.includes("EPI_STOCK_LOCATION_NOT_FOUND")) {
+    return Response.json({ error: "O local de estoque não existe ou está inativo.", code: "EPI_STOCK_LOCATION_NOT_FOUND" },
+      { status: 400, headers: { "Cache-Control": "no-store" } });
+  }
   const requestId = crypto.randomUUID();
 
   // Falha operacional conhecida (banco desatualizado, banco fora do ar) recebe

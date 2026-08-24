@@ -1,7 +1,9 @@
 import { ApiError, apiError, computeSlaStatus, getApiUser, text, validDueAt, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 import { replaceCardRelations } from "@/lib/fila-dp-relations";
 import { validCompetence } from "@/lib/operations";
+import { validateActiveAreaIds } from "@/lib/areas";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,6 +15,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     const current = await d1.prepare("SELECT * FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).first<Record<string, unknown>>();
     if (!current) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
 
@@ -25,7 +28,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     let companyName = body.company === undefined ? String(current.company ?? "") : text(body.company, 160);
     if (companyId) {
       const company = await d1.prepare("SELECT legal_name, trade_name FROM fdp_companies WHERE id = ? AND workspace_id = ? AND status = 'active'").bind(companyId, workspace.id).first<{ legal_name: string; trade_name: string }>();
-      if (!company) return Response.json({ error: "Empresa selecionada nÃ£o encontrada." }, { status: 400 });
+      if (!company) return Response.json({ error: "Empresa selecionada não encontrada." }, { status: 400 });
       companyName = company.trade_name || company.legal_name;
     }
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
@@ -40,9 +43,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     const competence = body.competence === undefined ? String(current.competence ?? "") : (body.competence ? validCompetence(body.competence) : "");
     const legalDueAt = body.legalDueAt === undefined ? (current.legal_due_at ? String(current.legal_due_at) : null) : validDueAt(body.legalDueAt);
     const processTemplateId = body.templateId === undefined ? (current.process_template_id ? String(current.process_template_id) : null) : (text(body.templateId, 120) || null);
+    const requesterAreaId = body.requesterAreaId === undefined ? (current.requester_area_id ? String(current.requester_area_id) : null) : (text(body.requesterAreaId, 120) || null);
+    const responsibleAreaId = body.responsibleAreaId === undefined ? (current.responsible_area_id ? String(current.responsible_area_id) : null) : (text(body.responsibleAreaId, 120) || null);
+    await validateActiveAreaIds(d1, workspace.id, [requesterAreaId, responsibleAreaId]);
     if (processTemplateId && !await d1.prepare("SELECT id FROM fdp_process_templates WHERE workspace_id = ? AND id = ? AND active = 1").bind(workspace.id, processTemplateId).first()) throw ApiError.badRequest("Template inválido.", "INVALID_PROCESS_TEMPLATE");
     await d1.prepare(`UPDATE fdp_cards SET
-      list_id = ?, title = ?, description = ?, company_id = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, competence = ?, legal_due_at = ?, process_template_id = ?, updated_at = CURRENT_TIMESTAMP
+      list_id = ?, title = ?, description = ?, company_id = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, competence = ?, legal_due_at = ?, process_template_id = ?, requester_area_id = ?, responsible_area_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND board_id = ?`)
       .bind(
         listId,
@@ -58,6 +64,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         competence,
         legalDueAt,
         processTemplateId,
+        requesterAreaId,
+        responsibleAreaId,
         id,
         board.id,
       ).run();
@@ -75,6 +83,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       dueAt: [current.due_at ? String(current.due_at) : "", dueAt ?? ""],
       competence: [String(current.competence ?? ""), competence],
       legalDueAt: [current.legal_due_at ? String(current.legal_due_at) : "", legalDueAt ?? ""],
+      requesterAreaId: [current.requester_area_id ? String(current.requester_area_id) : "", requesterAreaId ?? ""],
+      responsibleAreaId: [current.responsible_area_id ? String(current.responsible_area_id) : "", responsibleAreaId ?? ""],
     }).filter(([, [from, to]]) => from !== to).map(([field, [from, to]]) => [field, { from, to }]));
     await recordActivity(workspace.id, id, auth.user.email, "card.updated", { title, changes, automationApplied: listId !== current.list_id });
     return Response.json(await getWorkspaceSnapshot(auth.user));
@@ -90,6 +100,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
     if (!result.meta.changes) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");

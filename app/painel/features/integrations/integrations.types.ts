@@ -1,10 +1,56 @@
-export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "tangerino" | "erp";
+/* Espelho dos canais que o servidor pode devolver.
+   `tangerino_browser` faltava aqui, e a ausência não era cosmética: sem o canal
+   no tipo, o mapa de credenciais não podia ter entrada para ele, o formulário
+   caía no ramo genérico e pedia "Endpoint oficial" obrigatório ao único agente
+   que a decisão de produto proíbe de ter configuração de API — sem nunca
+   oferecer usuário e senha, que é o acesso dele. */
+export type IntegrationChannel = "email" | "whatsapp" | "teams" | "drive" | "onedrive" | "solides" | "tangerino" | "erp" | "sankhya_browser" | "tangerino_browser";
 export type IntegrationTab = "connectors" | "mappings" | "runs" | "reconciliations";
-export type ConnectorStatus = "connected" | "needs_credentials" | "paused" | "error";
+export type ConnectorStatus = "connected" | "needs_credentials" | "paused" | "error" | "requires_user_action";
 export type MappingStatus = "draft" | "active" | "archived";
-export type RunStatus = "queued" | "running" | "succeeded" | "partial" | "failed";
+export type RunStatus = "queued" | "running" | "authenticating" | "navigating" | "processing" | "extracting" | "importing" | "succeeded" | "partial" | "failed" | "requires_user_action" | "canceled";
 
-export type IntegrationPermissions = { manage: boolean; run: boolean; reconcile: boolean };
+export type IntegrationPermissions = {
+  manage: boolean;
+  run: boolean;
+  reconcile: boolean;
+  view: boolean;
+  credentialsManage: boolean;
+  execute: boolean;
+  logsView: boolean;
+};
+
+export type SankhyaConfig = {
+  endpoint: string;
+  companyId: string;
+  companyContext: string;
+  routine: "employees";
+  routineName: string;
+  automaticEnabled: boolean;
+  frequency: "hourly" | "daily" | "weekly";
+  scheduleTime: string;
+  scheduleWeekday: number;
+  timezone: string;
+  timeoutMs: number;
+  maxAttempts: number;
+  downloadLimitBytes: number;
+  diagnosticRetentionHours: number;
+};
+
+export type StandardConnectorConfig = {
+  endpoint?: string;
+  accountReference?: string;
+  admissionsSince?: string;
+  pageSize?: number;
+  boardId?: string;
+  companyId?: string;
+  tenantId?: string;
+  teamId?: string;
+  teamName?: string;
+  channelId?: string;
+  channelName?: string;
+  automations?: Partial<Record<"admission" | "termination" | "warning" | "role_change" | "salary_change", boolean>>;
+};
 
 export type Connector = {
   id: string;
@@ -15,11 +61,19 @@ export type Connector = {
   lastError: string;
   updatedAt: string;
   hasCredentials: boolean;
+  hasWebhookSecret: boolean;
   credentialId: string;
   fingerprint: string;
   keyVersion: number;
   verifiedAt: string;
   expiresAt: string;
+  publicHint: string;
+  config: SankhyaConfig | StandardConnectorConfig | null;
+  lastConnectionAt: string;
+  lastSuccessfulSyncAt: string;
+  nextSyncAt: string;
+  scheduleEnabled: boolean;
+  connectorVersion: string;
 };
 
 export type Mapping = {
@@ -47,6 +101,10 @@ export type IntegrationRun = {
   skippedCount: number;
   conflictCount: number;
   failedCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  durationMs: number;
+  summary: string;
   errorCode: string;
   errorMessage: string;
   startedAt: string;
@@ -76,6 +134,8 @@ export type IntegrationsOverview = {
   reconciliations: Reconciliation[];
   queue: QueueState[];
   permissions: IntegrationPermissions;
+  sankhyaEnabled: boolean;
+  companies: Array<{ id: string; legalName: string; tradeName: string }>;
   solidesBoundary: string;
 };
 

@@ -79,7 +79,11 @@ export async function DELETE(request: Request, { params }: Params) {
 
     const session = await loadSession(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, session.company_id);
+    // O motivo do cancelamento é texto livre e fica gravado na consulta. Sem a
+    // mesma guarda usada na criação e na edição, ele era a porta aberta para
+    // dado clínico entrar num módulo que é só administrativo e financeiro.
     const reason = requiredReason(body.reason, "CANCELLATION_REASON_REQUIRED");
+    assertNoClinicalData("psychology", reason);
 
     await d1.batch([
       d1.prepare(`UPDATE fdp_psychology_sessions SET status = 'canceled', canceled_reason = ?, canceled_by = ?, canceled_at = now()

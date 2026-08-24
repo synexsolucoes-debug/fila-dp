@@ -5,7 +5,8 @@ import {
   AlertTriangle, ArrowRight, Cable, CircleDot, GitCompareArrows, KeyRound, ListRestart,
   LoaderCircle, Plus, Trash2, Vault, X,
 } from "lucide-react";
-import type { Connector, IntegrationEditor, Mapping, RunDetail } from "./integrations.types";
+import type { Connector, IntegrationEditor, Mapping, RunDetail, StandardConnectorConfig } from "./integrations.types";
+import { StatusPill } from "../shared";
 import styles from "./integrations.module.css";
 
 type Props = {
@@ -15,6 +16,7 @@ type Props = {
   detail: RunDetail | null;
   detailLoading: boolean;
   detailError: string;
+  companies: Array<{ id: string; legalName: string; tradeName: string }>;
   busy: boolean;
   onClose: () => void;
   onSubmit: (editor: NonNullable<IntegrationEditor>, data: FormData) => Promise<void>;
@@ -29,17 +31,27 @@ const titles: Record<NonNullable<IntegrationEditor>["kind"], string> = {
 const credentialFields: Record<Connector["channel"], Array<{ name: string; label: string }>> = {
   email: [{ name: "apiKey", label: "Chave da API" }],
   whatsapp: [{ name: "token", label: "Token de acesso" }, { name: "phoneNumberId", label: "ID do número" }],
-  teams: [{ name: "clientId", label: "Client ID" }, { name: "clientSecret", label: "Client secret" }, { name: "tenantId", label: "Tenant ID" }],
+  teams: [],
   drive: [{ name: "token", label: "Token de acesso" }],
   onedrive: [{ name: "clientId", label: "Client ID" }, { name: "clientSecret", label: "Client secret" }, { name: "tenantId", label: "Tenant ID" }],
   solides: [{ name: "token", label: "Token oficial" }],
   tangerino: [{ name: "token", label: "Token de integração (Empregador → Integrações)" }],
   erp: [{ name: "apiKey", label: "Chave da API" }, { name: "xToken", label: "X-Token" }],
+  sankhya_browser: [{ name: "username", label: "Usuário dedicado" }, { name: "password", label: "Senha" }],
+  /* O Agente Tangerino faltava neste mapa, e a ausência não deixava o
+     formulário vazio: deixava-o **errado**. Sem entrada aqui ele não oferecia
+     usuário nem senha — o único acesso que ele tem —, e caía no ramo genérico
+     que pede "Endpoint oficial" obrigatório, que é justamente a configuração de
+     API que a decisão de produto proíbe para ele. */
+  tangerino_browser: [{ name: "username", label: "Usuário dedicado" }, { name: "password", label: "Senha" }],
 };
+
+/** Agentes de navegador entram por usuário e senha; endereço não é o acesso deles. */
+const CANAIS_DE_NAVEGADOR = new Set(["sankhya_browser", "tangerino_browser"]);
 
 const formatDate = (value: string) => value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
 
-export function IntegrationDrawer({ editor, connectors, mappings, detail, detailLoading, detailError, busy, onClose, onSubmit }: Props) {
+export function IntegrationDrawer({ editor, connectors, mappings, detail, detailLoading, detailError, companies, busy, onClose, onSubmit }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(busy);
   const closeRef = useRef(onClose);
@@ -78,7 +90,7 @@ export function IntegrationDrawer({ editor, connectors, mappings, detail, detail
         {editor.kind === "detail" ? <RunDetailPanel detail={detail} loading={detailLoading} error={detailError} /> : (
           <form onSubmit={submit}>
             <div className={styles.drawerBody}>
-              {editor.kind === "configure" && <ConfigureFields connector={editor.connector} />}
+              {editor.kind === "configure" && <ConfigureFields connector={editor.connector} companies={companies} />}
               {editor.kind === "credentials" && <CredentialFields connector={editor.connector} />}
               {editor.kind === "revoke" && <RevokeFields connector={editor.connector} />}
               {editor.kind === "mapping" && <MappingFields connectors={connectors} initialConnectorId={editor.connectorId} />}
@@ -118,22 +130,25 @@ function submitLabel(editor: NonNullable<IntegrationEditor>) {
   return "Registrar resolução";
 }
 
-function ConfigureFields({ connector }: { connector: Connector }) {
+function ConfigureFields({ connector, companies }: { connector: Connector; companies: Props["companies"] }) {
+  const config = (connector.config ?? {}) as StandardConnectorConfig;
+  const endpoint = config.endpoint ?? "";
   return <>
     <ContextStrip icon={Cable} label="CONECTOR" value={`${connector.displayName} · ${connector.channel}`} />
     <section className={styles.formSection}><header><strong>Identificação e operação</strong><span>Salvar configurações nunca comprova uma conexão.</span></header><div className={styles.formGrid}>
       <label className={styles.fieldWide}><span>Nome de exibição</span><input name="displayName" defaultValue={connector.displayName} maxLength={120} required /></label>
-      {!isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" placeholder="https://api.fornecedor.com/v1/recurso" required /></label>}
-      {connector.channel === "solides" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides</span><input name="endpoint" type="url" inputMode="url" defaultValue="https://app.solides.com/pt-BR/api/v1/colaboradores" pattern="https://app\.solides\.com/(pt-BR|es|en)/api/v1/colaboradores" required /></label>}
-      {connector.channel === "tangerino" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides DP</span><input name="endpoint" type="url" inputMode="url" defaultValue="https://employer.tangerino.com.br/employee/find-all" pattern="https://(employer|api)\.tangerino\.com\.br(/api/employer)?/employee/find-all" required /></label>}
-      {isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Referência da conta</span><input name="accountReference" maxLength={160} placeholder="Referência administrativa da conta" /></label>}
+      {!isAdmissionSource(connector.channel) && connector.channel !== "teams" && !CANAIS_DE_NAVEGADOR.has(connector.channel) && <label className={styles.fieldWide}><span>Endpoint oficial</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint} placeholder="https://api.fornecedor.com/v1/recurso" required /><small>Use um recurso HTTPS oficial do provedor. O teste fará uma requisição real a este endereço.</small></label>}
+      {connector.channel === "solides" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint || "https://app.solides.com/pt-BR/api/v1/colaboradores"} pattern="https://app\.solides\.com/(pt-BR|es|en)/api/v1/colaboradores" required /></label>}
+      {connector.channel === "tangerino" && <label className={styles.fieldWide}><span>Recurso oficial da Sólides DP</span><input name="endpoint" type="url" inputMode="url" defaultValue={endpoint || "https://employer.tangerino.com.br/employee/find-all"} pattern="https://(employer|api)\.tangerino\.com\.br(/api/employer)?/employee/find-all" required /></label>}
+      {isAdmissionSource(connector.channel) && <label className={styles.fieldWide}><span>Referência da conta</span><input name="accountReference" defaultValue={config.accountReference ?? ""} maxLength={160} placeholder="Referência administrativa da conta" /></label>}
       <label><span>Estado operacional</span><select name="status" defaultValue={connector.status === "paused" ? "paused" : "needs_credentials"}><option value="needs_credentials">Aguardando verificação</option><option value="paused">Pausado</option></select></label>
     </div></section>
+    {connector.channel === "teams" && <TeamsConfigureFields config={config} companies={companies} />}
     {isAdmissionSource(connector.channel) && <section className={styles.formSection}><header><strong>Destino das conciliações</strong><span>Onde as admissões concluídas na Sólides viram tarefa.</span></header><div className={styles.formGrid}>
-      <label><span>Admitidos a partir de</span><input name="admissionsSince" type="date" required /></label>
-      <label><span>Colaboradores por página</span><input name="pageSize" type="number" min={1} max={150} defaultValue={150} /></label>
-      <label className={styles.fieldWide}><span>Quadro de destino</span><input name="boardId" maxLength={80} placeholder="Vazio usa o primeiro quadro com coluna de entrada" /></label>
-      <label className={styles.fieldWide}><span>Empresa</span><input name="companyId" maxLength={80} placeholder="Vazio usa a unidade informada pela Sólides" /></label>
+      <label><span>Admitidos a partir de</span><input name="admissionsSince" type="date" defaultValue={config.admissionsSince?.slice(0, 10) ?? ""} required /></label>
+      <label><span>Colaboradores por página</span><input name="pageSize" type="number" min={1} max={150} defaultValue={config.pageSize ?? 150} /></label>
+      <label className={styles.fieldWide}><span>Quadro de destino</span><input name="boardId" defaultValue={config.boardId ?? ""} maxLength={80} placeholder="Vazio usa o primeiro quadro com coluna de entrada" /></label>
+      <label className={styles.fieldWide}><span>Empresa</span><input name="companyId" defaultValue={config.companyId ?? ""} maxLength={80} placeholder="Vazio usa a unidade informada pela Sólides" /></label>
     </div></section>}
     {isAdmissionSource(connector.channel) && <SolidesNotice channel={connector.channel} />}
   </>;
@@ -141,6 +156,13 @@ function ConfigureFields({ connector }: { connector: Connector }) {
 
 function CredentialFields({ connector }: { connector: Connector }) {
   const fields = credentialFields[connector.channel];
+  if (connector.channel === "teams") return <>
+    <ContextStrip icon={Vault} label="WEBHOOK SEGURO" value={`${connector.displayName} · ${connector.hasWebhookSecret ? "segredo ativo" : "ainda não gerado"}`} />
+    <aside className={styles.securityNotice}><KeyRound aria-hidden="true" /><div><strong>Power Automate</strong><span>Será gerado um endereço e um segredo exclusivos deste workspace. O segredo aparece uma única vez para ser copiado ao fluxo.</span></div></aside>
+    <section className={styles.formSection}><header><strong>Gerar credencial de entrada</strong><span>O segredo anterior será revogado automaticamente.</span></header>
+      <label className={styles.confirmCheck}><input name="confirmWebhook" type="checkbox" required /> Confirmo a geração e vou copiar o segredo antes de fechar a próxima tela.</label>
+    </section>
+  </>;
   return <>
     <ContextStrip icon={Vault} label="COFRE" value={`${connector.displayName} · ${connector.hasCredentials ? `chave v${connector.keyVersion}` : "sem credencial"}`} />
     <aside className={styles.securityNotice}><KeyRound aria-hidden="true" /><div><strong>Entrada protegida</strong><span>Nenhum valor é pré-preenchido, pré-visualizado ou mantido após fechar este painel.</span></div></aside>
@@ -148,6 +170,30 @@ function CredentialFields({ connector }: { connector: Connector }) {
       {fields.map((field, index) => <label className={styles.fieldWide} key={field.name}><span>{field.label}</span><input name={field.name} type="password" autoComplete="new-password" minLength={8} maxLength={16000} required={index === 0} /></label>)}
     </div></section>
     {isAdmissionSource(connector.channel) && <SolidesNotice channel={connector.channel} />}
+  </>;
+}
+
+function TeamsConfigureFields({ config, companies }: { config: StandardConnectorConfig; companies: Props["companies"] }) {
+  const enabled = (key: "admission" | "termination" | "warning" | "role_change" | "salary_change") => config.automations?.[key] !== false;
+  return <>
+    <section className={styles.formSection}><header><strong>Canal monitorado</strong><span>Copie os IDs do time e do canal usados no gatilho do Power Automate.</span></header><div className={styles.formGrid}>
+      <label><span>Tenant ID</span><input name="tenantId" defaultValue={config.tenantId ?? ""} maxLength={100} /></label>
+      <label><span>Team ID</span><input name="teamId" defaultValue={config.teamId ?? ""} maxLength={200} required /></label>
+      <label><span>Nome do time</span><input name="teamName" defaultValue={config.teamName ?? ""} maxLength={160} placeholder="Departamento Pessoal" /></label>
+      <label><span>Channel ID</span><input name="channelId" defaultValue={config.channelId ?? ""} maxLength={200} required /></label>
+      <label className={styles.fieldWide}><span>Nome do canal</span><input name="channelName" defaultValue={config.channelName ?? ""} maxLength={160} placeholder="Movimentações" /></label>
+    </div></section>
+    <section className={styles.formSection}><header><strong>Destino no Vinculato</strong><span>A demanda nasce na coluna de entrada do quadro escolhido.</span></header><div className={styles.formGrid}>
+      <label className={styles.fieldWide}><span>Quadro de destino</span><input name="boardId" defaultValue={config.boardId ?? ""} maxLength={80} placeholder="Vazio usa o primeiro quadro com coluna de entrada" /></label>
+      <label className={styles.fieldWide}><span>Empresa padrão</span><select name="companyId" defaultValue={config.companyId ?? ""}><option value="">Sem empresa padrão</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
+    </div></section>
+    <section className={styles.formSection}><header><strong>Demandas automáticas</strong><span>Escolha os tipos aceitos neste canal.</span></header><div className={styles.formGrid}>
+      <label className={styles.confirmCheck}><input name="automationAdmission" type="checkbox" defaultChecked={enabled("admission")} /> Admissões e cards de aprovação</label>
+      <label className={styles.confirmCheck}><input name="automationTermination" type="checkbox" defaultChecked={enabled("termination")} /> Desligamentos</label>
+      <label className={styles.confirmCheck}><input name="automationWarning" type="checkbox" defaultChecked={enabled("warning")} /> Advertências</label>
+      <label className={styles.confirmCheck}><input name="automationRole" type="checkbox" defaultChecked={enabled("role_change")} /> Mudanças de função</label>
+      <label className={styles.confirmCheck}><input name="automationSalary" type="checkbox" defaultChecked={enabled("salary_change")} /> Alterações salariais</label>
+    </div></section>
   </>;
 }
 
@@ -231,6 +277,8 @@ function SolidesNotice({ channel }: { channel: Connector["channel"] }) {
 }
 
 function StatusMark({ status }: { status: string }) {
+  // Vocabulário de conector: o desconhecido aqui pede atenção, não neutralidade
+  // — um estado que o painel não reconhece num canal externo é sinal, não ruído.
   const tone = ["connected", "completed", "processed", "succeeded"].includes(status) ? "safe" : ["failed", "dead_letter", "conflict"].includes(status) ? "danger" : "warning";
-  return <span className={styles.statusPill} data-tone={tone}><CircleDot aria-hidden="true" />{status.replaceAll("_", " ")}</span>;
+  return <StatusPill status={status} tone={tone} label={status.replaceAll("_", " ")} />;
 }

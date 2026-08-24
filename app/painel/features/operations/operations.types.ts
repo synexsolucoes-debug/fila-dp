@@ -26,6 +26,10 @@ export type ClosingItem = {
 export type Obligation = {
   id: string; obligationType: string; title: string; dueDate: string; status: "open" | "in_progress" | "blocked" | "completed";
   ownerUserId: string; cardId: string; notes: string;
+  /** Recibo devolvido pelo portal. O produto não transmite, então ele vem de fora. */
+  protocol: string;
+  /** Link para o comprovante, que vive no ambiente do cliente. */
+  evidenceUrl: string;
 };
 export type PendingItem = {
   id: string; sourceType: string; sourceId: string; severity: "info" | "warning" | "critical"; blocking: boolean;

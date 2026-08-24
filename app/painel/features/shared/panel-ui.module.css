@@ -1,0 +1,276 @@
+/* Componentes de painel (§16).
+ *
+ * Antes deste arquivo o mesmo conceito existia várias vezes. O estado vazio
+ * era definido em três módulos com `min-height` 280px, 330px e 310px, padding
+ * 30px, 36px e 34px, e layout `grid` em um e `flex` nos outros dois — mesma
+ * ideia, três aparências. O selo de status tinha duas gramáticas incompatíveis
+ * (`data-tone` em dois módulos, `data-status` em outro) e três tamanhos de
+ * fonte. O aviso de erro aparecia dez vezes com cinco ícones diferentes, e em
+ * duas delas sem `role="alert"` — um erro que o leitor de tela não anunciava.
+ *
+ * Os valores abaixo não são uma quarta invenção: são a mediana dos que já
+ * existiam, escolhida para que a mudança visual seja a menor possível em cada
+ * módulo. As cores vêm dos pares `--ui-state-*`, que já têm contrapartida no
+ * tema escuro — os módulos que usavam `--ui-success` cru dependiam de o token
+ * virar junto com o tema, o que é verdade hoje e é uma coincidência a menos
+ * para manter. */
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 78px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.panelHeader > div { min-width: 0; }
+.panelHeader h2 { margin: 4px 0 3px; font-size: 1rem; letter-spacing: -.015em; }
+.panelHeader p { margin: 0; color: var(--ui-text-soft); font-size: .67rem; line-height: 1.45; }
+.eyebrow {
+  color: var(--ui-accent-text, var(--brand));
+  font-size: .59rem;
+  font-weight: 820;
+  letter-spacing: .11em;
+  line-height: 1.2;
+}
+
+.emptyState,
+.loadingState {
+  display: flex;
+  min-height: 250px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 34px;
+  text-align: center;
+}
+/* O carregamento da tela inteira ocupava 450px no módulo auxiliar. Sem isso, a
+   página encolhe no instante entre a requisição e a resposta e o conteúdo
+   pula quando chega. */
+.loadingState[data-size="page"] { min-height: 380px; }
+/* Colunas estreitas — a lista lateral de prestadores, por exemplo. A altura
+   cheia ali empurraria a seleção para fora da dobra. */
+.emptyState[data-size="compact"],
+.loadingState[data-size="compact"] { min-height: 168px; padding: 22px 16px; }
+.emptyState[data-size="compact"] > span { width: 40px; height: 40px; }
+.emptyState[data-size="compact"] > span svg { width: 19px; height: 19px; }
+.emptyState > span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 3px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent, var(--brand)) 25%, var(--ui-border));
+  border-radius: 12px;
+  background: var(--ui-accent-soft, var(--brand-soft));
+  color: var(--ui-accent-text, var(--brand));
+}
+.emptyState > span svg { width: 22px; height: 22px; }
+.emptyState > strong,
+.loadingState > strong { font-size: .79rem; }
+.emptyState > p,
+.loadingState > span { max-width: 390px; margin: 0; color: var(--ui-text-soft); font-size: .67rem; line-height: 1.5; }
+.emptyState > .action { margin-top: 7px; }
+.loadingState > svg { width: 28px; height: 28px; color: var(--ui-accent-text, var(--brand)); }
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: max-content;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  /* Totalmente arredondado (Modelo 2). Com 5px o selo lia como campo de
+     formulário; a forma redonda é o que separa "estado" de "entrada". */
+  border-radius: 999px;
+  font-size: .62rem;
+  font-weight: 730;
+  white-space: nowrap;
+}
+.statusPill > i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+/* O padrão vem primeiro e de propósito: um estado sem regra própria fica sem
+   cor característica, nunca sem contraste. */
+.statusPill,
+.statusPill[data-tone="neutral"] {
+  border-color: color-mix(in srgb, var(--ui-state-neutral-text, #414b5a) 20%, transparent);
+  background: var(--ui-state-neutral-bg, #eef1f4);
+  color: var(--ui-state-neutral-text, #414b5a);
+}
+.statusPill[data-tone="safe"] {
+  border-color: color-mix(in srgb, var(--ui-state-ok-text, #06563c) 20%, transparent);
+  background: var(--ui-state-ok-bg, #e3f5ed);
+  color: var(--ui-state-ok-text, #06563c);
+}
+.statusPill[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--ui-state-warn-text, #7d4708) 20%, transparent);
+  background: var(--ui-state-warn-bg, #fdf2e2);
+  color: var(--ui-state-warn-text, #7d4708);
+}
+.statusPill[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--ui-state-danger-text, #96201a) 20%, transparent);
+  background: var(--ui-state-danger-bg, #fdeceb);
+  color: var(--ui-state-danger-text, #96201a);
+}
+.statusPill[data-tone="info"] {
+  border-color: color-mix(in srgb, var(--ui-accent-text, #08529f) 20%, transparent);
+  background: var(--ui-accent-soft, #e7f0fe);
+  color: var(--ui-accent-text, #08529f);
+}
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--ui-state-danger-text, #96201a) 28%, transparent);
+  border-radius: 9px;
+  background: var(--ui-state-danger-bg, #fdeceb);
+  color: var(--ui-state-danger-text, #96201a);
+  font-size: .7rem;
+  line-height: 1.5;
+}
+.errorBanner > svg { flex: none; width: 17px; height: 17px; margin-top: 1px; }
+.errorBanner > span { display: block; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.errorBanner > span > strong { display: block; font-size: .73rem; }
+.errorBanner > button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.errorBanner > button:hover { background: color-mix(in srgb, var(--ui-state-danger-text, #96201a) 12%, transparent); }
+.errorBanner > button svg { width: 15px; height: 15px; }
+
+.headerAction { display: flex; flex: none; align-items: center; gap: 8px; }
+
+.spin { animation: panel-ui-spin .8s linear infinite; }
+@keyframes panel-ui-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 1.8s; } }
+
+/* Tela estreita: título, descrição e ação empilham. Cada módulo tinha esta
+   regra com um limite próprio — 640px, 680px, 760px — para o mesmo cabeçalho.
+   Fica o mais generoso: empilhar cedo custa altura, não empilhar a tempo custa
+   o botão espremido contra o texto. */
+@media (max-width: 760px) {
+  .panelHeader { align-items: stretch; flex-direction: column; gap: 12px; min-height: 0; padding: 15px; }
+  .headerAction { flex-wrap: wrap; }
+  .headerAction > * { flex: 1; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Esqueleto de carregamento (§51)                                             */
+/* -------------------------------------------------------------------------- */
+/* "Carregando…" com um rodopio diz que algo está acontecendo e nada sobre o
+ * quê. O esqueleto diz a forma do que vem: um cabeçalho, uma fila de
+ * indicadores, uma tabela. Quem já conhece a tela reconhece o destino antes de
+ * o dado chegar, e o salto de layout na chegada é menor porque o espaço já
+ * estava reservado.
+ *
+ * O pulso anima só `opacity` — a §21 pede isso, e um esqueleto que recalcula
+ * layout a cada quadro custaria mais que a espera que ele disfarça. */
+.pageSkeleton {
+  display: grid;
+  gap: var(--layout-page-gap, 20px);
+}
+
+/* O que o esqueleto diz a quem não o vê. `clip-path` além de `clip` porque o
+   segundo está obsoleto e alguns navegadores já o ignoram. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skeletonBlock {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg, 14px);
+  background: var(--ui-surface);
+  padding: var(--layout-card-padding, 20px);
+  display: grid;
+  gap: 12px;
+}
+
+.skeletonRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+
+.skeletonBar {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--ui-surface-muted);
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+  animation-delay: calc(var(--skeleton-index, 0) * 90ms);
+}
+
+.skeletonBar[data-size="title"] { height: 22px; max-width: 280px; }
+.skeletonBar[data-size="line"] { max-width: 460px; }
+.skeletonBar[data-size="tall"] { height: 58px; border-radius: var(--ui-radius-md, 10px); }
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .48; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Confirmação de ação destrutiva (§53)                                        */
+/* -------------------------------------------------------------------------- */
+
+.confirmDialog {
+  width: min(100%, 460px);
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg, 14px);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-modal);
+  animation: confirmEnter var(--motion-modal, 250ms) var(--ease-enter) both;
+}
+
+.confirmDialog[data-state="closing"] {
+  animation: confirmEnter var(--motion-modal, 250ms) var(--ease-exit) reverse both;
+}
+
+@keyframes confirmEnter {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.confirmDialog > header { padding: 18px 20px 0; display: grid; gap: 4px; }
+.confirmDialog > header span { color: var(--ui-state-warn-text); font-size: .59rem; font-weight: 820; letter-spacing: .11em; }
+.confirmDialog h2 { margin: 0; color: var(--ui-text); font-size: 1.05rem; letter-spacing: -.02em; }
+
+/* O ícone fica ao lado do texto, não acima: a §53 mostra a consequência como
+   frase, e um símbolo grande centralizado transforma um aviso operacional em
+   alarme. */
+.confirmBody { padding: 14px 20px 4px; display: flex; align-items: flex-start; gap: 12px; }
+.confirmBody > svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--ui-danger); }
+.confirmBody p { margin: 0; color: var(--ui-text-soft); font-size: .78rem; line-height: 1.55; }
+
+.confirmDialog > footer { padding: 18px 20px 20px; display: flex; justify-content: flex-end; gap: 8px; }
+
+.confirmDialog > footer button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: var(--ui-radius-sm, 7px);
+  cursor: pointer;
+  font: inherit;
+  font-size: .74rem;
+  font-weight: 700;
+}
+
+.confirmCancel { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text); }
+.confirmCancel:hover { border-color: var(--ui-border-strong); background: var(--ui-surface-muted); }
+.confirmAction { border: 1px solid var(--ui-danger); background: var(--ui-danger); color: var(--ui-on-danger); }
+.confirmAction:disabled { opacity: .6; cursor: wait; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonBar, .confirmDialog { animation: none; }
+}

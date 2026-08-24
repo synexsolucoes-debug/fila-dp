@@ -1,9 +1,8 @@
 # Publicacao do Vinculato na Vercel
 
-O runtime de producao e o Next.js nativo. O banco recomendado agora e o Neon
-Postgres pelo Marketplace da Vercel; o app mantem uma camada de compatibilidade
-D1 para que as rotas existentes continuem funcionando durante a migracao. Os
-anexos usam Vercel Blob privado.
+O runtime de producao e o Next.js nativo. O banco e o Neon Postgres pelo
+Marketplace da Vercel, acessado por um adaptador proprio (`SqlDatabase`, em
+`types/database-adapter.d.ts`). Os anexos usam Vercel Blob privado.
 
 ## Configuracao com Neon
 

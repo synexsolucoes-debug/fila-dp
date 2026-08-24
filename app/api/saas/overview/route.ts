@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { requireCapability } from "@/lib/authorization";
+import { hasCapability, requireCapability } from "@/lib/authorization";
 import { getWorkspaceContext } from "@/lib/fila-dp-db";
 import { isPlatformAdmin } from "@/lib/platform-authorization";
 import { parseStringArray, publicPlan } from "@/lib/saas";
@@ -35,7 +35,10 @@ export async function GET() {
           (SELECT COUNT(*)::integer FROM fdp_workspace_members WHERE workspace_id = ?) AS members,
           (SELECT COUNT(*)::integer FROM fdp_companies WHERE workspace_id = ? AND status = 'active') AS companies,
           (SELECT COUNT(*)::integer FROM fdp_integrations WHERE workspace_id = ? AND status = 'connected') AS integrations,
-          CEIL(COALESCE((SELECT SUM(size_bytes) FROM fdp_card_attachments WHERE workspace_id = ?), 0) / 1048576.0)::integer AS storage_mb`).bind(workspace.id, workspace.id, workspace.id, workspace.id).first<Record<string, unknown>>(),
+          CEIL((COALESCE((SELECT SUM(size_bytes) FROM fdp_card_attachments WHERE workspace_id = ?), 0)
+            + COALESCE((SELECT SUM(size_bytes) FROM fdp_epi_attachments WHERE workspace_id = ?), 0)
+            + COALESCE((SELECT SUM(size_bytes) FROM fdp_contractor_documents WHERE workspace_id = ?), 0)) / 1048576.0)::integer AS storage_mb`)
+          .bind(workspace.id, workspace.id, workspace.id, workspace.id, workspace.id, workspace.id).first<Record<string, unknown>>(),
     ]);
     return Response.json({
       workspace: { id: workspace.id, name: workspace.name },
@@ -58,7 +61,16 @@ export async function GET() {
         members: Number(usage?.members ?? 0), companies: Number(usage?.companies ?? 0),
         integrations: Number(usage?.integrations ?? 0), storageMb: Number(usage?.storage_mb ?? 0),
       },
-      permissions: { manage: true, platform: isPlatformAdmin(auth.user) },
+      // `manage: true` fixo dizia que qualquer um que abre a tela pode
+      // administrar a assinatura. A rota exige `saas.read`, que observador tem;
+      // administrar exige `saas.manage`, que ele não tem. A tela mostrava a
+      // ação e o servidor recusava — a permissão precisa vir da mesma fonte
+      // que decide de verdade.
+      permissions: {
+        manage: hasCapability(workspace, "saas.manage"),
+        exportData: hasCapability(workspace, "workspace.manage"),
+        platform: isPlatformAdmin(auth.user),
+      },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return apiError(error); }
 }

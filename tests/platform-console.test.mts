@@ -35,9 +35,19 @@ test("agregações tenant-aware usam contexto RLS explícito", async () => {
   const paths = ["integrations", "operations", "security", "health"];
   const routes = await Promise.all(paths.map((path) => source(`app/api/platform/${path}/route.ts`)));
   for (const [index, route] of routes.entries()) assert.match(route, /getPlatformScopedD1/u, `${paths[index]} não carrega o tenant na conexão`);
-  const [workspaceDetail, userDetail] = await Promise.all([source("app/api/platform/workspaces/[id]/detail/route.ts"), source("app/api/platform/users/[id]/detail/route.ts")]);
+  // O detalhe do workspace lê `fdp_companies`, que tem RLS por workspace: sem
+  // o tenant na conexão a consulta volta vazia.
+  const workspaceDetail = await source("app/api/platform/workspaces/[id]/detail/route.ts");
   assert.match(workspaceDetail, /getPlatformScopedD1/u);
-  assert.match(userDetail, /getPlatformScopedD1/u);
+
+  // O detalhe do usuário deixou de precisar. Ele lê `fdp_workspace_members` e
+  // `fdp_workspaces` (globais por desenho — o seletor de grupo depende disso),
+  // `fdp_auth_sessions` (sem RLS) e `fdp_platform_audit_events`, cuja política
+  // é por `app.platform_admin` e não por workspace. Abrir contexto de tenant
+  // por cliente ali era uma ida ao banco por cliente sem nada a proteger.
+  const userDetail = await source("app/api/platform/users/[id]/detail/route.ts");
+  assert.doesNotMatch(userDetail, /getPlatformScopedD1/u);
+  assert.match(userDetail, /FROM fdp_platform_audit_events/u);
 });
 
 test("listas globais usam cursor estável e índices correspondentes", async () => {
@@ -84,14 +94,32 @@ test("ações críticas de integração exigem motivo, confirmação e auditoria
   assert.doesNotMatch(route, /return Response\.json\([^\n]*encryptedValue/u);
 });
 
-test("o painel é operacional e integrações ficam somente leitura", async () => {
-  const [panel, integrations, registrations] = await Promise.all([
-    source("app/painel/WorkspaceApp.tsx"), source("app/painel/features/integrations/IntegrationsView.tsx"), source("app/painel/features/registrations/RegistrationsView.tsx"),
+test("o painel é operacional e recebe o conector Sankhya pronto da Plataforma Global", async () => {
+  const [panel, integrations, sankhya, integrationRoute, credentialsRoute, registrations] = await Promise.all([
+    source("app/painel/WorkspaceApp.tsx"), source("app/painel/features/integrations/IntegrationsView.tsx"),
+    source("app/painel/features/integrations/SankhyaConnectorPanel.tsx"), source("app/api/integrations/[id]/route.ts"),
+    source("app/api/integrations/[id]/credentials/route.ts"), source("app/painel/features/registrations/RegistrationsView.tsx"),
   ]);
   assert.doesNotMatch(panel, /AccessView|SaasView|view === "access"|view === "saas"/u);
-  assert.doesNotMatch(panel, /title="Configurações"/u);
-  assert.match(integrations, /SOMENTE LEITURA/u);
-  assert.doesNotMatch(integrations, /IntegrationDrawer|type="password"|method: "(?:POST|PATCH|DELETE)"/u);
+  /* A fronteira é o **conteúdo**, não a palavra.
+     Esta asserção proibia o texto "Configurações" no painel, como atalho para
+     dizer "o painel não administra a plataforma". O atalho deixou de servir
+     quando o §46 exigiu que as configurações **do grupo** tivessem porta na
+     navegação — o que é outra coisa, e é exatamente o que o botão abaixo abre.
+     O que continua proibido, e é o que importa, são as superfícies da
+     plataforma dentro do painel do cliente: elas estão na linha acima. */
+  assert.match(panel, /title="Configurações"[\s\S]{0,80}Settings aria-hidden/u,
+    "a porta de configurações do painel precisa abrir as configurações do grupo");
+  assert.match(panel, /onClick=\{openWorkspaceSettings\}/u);
+  assert.match(integrations, /INTEGRAÇÕES DO WORKSPACE/u);
+  assert.match(integrations, /SankhyaConnectorPanel/u);
+  assert.match(integrations, /IntegrationDrawer/u);
+  assert.match(integrations, /Configurar[\s\S]+Credencial[\s\S]+Testar conexão/u);
+  assert.doesNotMatch(integrations, /type="password"/u);
+  assert.match(sankhya, /Gerenciada pela Plataforma Global/u);
+  assert.doesNotMatch(sankhya, /Alterar credenciais Sankhya|type="password"|Salvar configuração/u);
+  assert.match(integrationRoute, /SANKHYA_PLATFORM_ADMIN_REQUIRED/u);
+  assert.match(credentialsRoute, /SANKHYA_PLATFORM_ADMIN_REQUIRED/u);
   assert.match(registrations, /useState<RegistrationTab>\("employees"\)/u);
   assert.doesNotMatch(registrations, /onClick=\{\(\) => setTab\("companies"\)\}/u);
 });
@@ -126,6 +154,26 @@ test("clientes e usuários expõem as mutações globais existentes sem diálogo
   assert.doesNotMatch(`${clients}\n${users}`, /window\.(prompt|confirm)/u);
 });
 
+test("administrador global consegue gerar link de ativação auditado sem expor senha", async () => {
+  const [feature, route] = await Promise.all([
+    source("app/plataforma/features/UsersFeature.tsx"),
+    source("app/api/platform/users/[id]/activation/route.ts"),
+  ]);
+  assert.match(feature, /Gerar link de ativação/u);
+  assert.match(feature, /Link único de ativação/u);
+  assert.match(feature, /\/api\/platform\/users\/\$\{encodeURIComponent\(id\)\}\/activation/u);
+  assert.match(route, /requirePlatformAdmin\(auth\.user\)/u);
+  assert.match(route, /body\.confirmed !== true/u);
+  assert.match(route, /requiredPlatformReason/u);
+  assert.match(route, /createRecoveryToken/u);
+  assert.match(route, /fdp_access_recovery_tokens/u);
+  assert.match(route, /platform\.user_activation_link_created/u);
+  assert.match(route, /fdp_platform_audit_events/u);
+  assert.match(route, /USER_ALREADY_ACTIVATED/u);
+  assert.doesNotMatch(route, /SELECT[^\n]*password_hash(?![^\n]*IS NOT NULL)/u);
+  assert.doesNotMatch(`${feature}\n${route}`, /senha provisória|passwordHash|token_hash:/iu);
+});
+
 test("financeiro liga planos e leads a APIs reais e auditadas", async () => {
   const [feature, plans, leads] = await Promise.all([
     source("app/plataforma/features/BillingFeature.tsx"), source("app/api/platform/plans/[id]/route.ts"), source("app/api/platform/leads/route.ts"),
@@ -144,9 +192,10 @@ test("integrações globais oferecem todos os filtros operacionais solicitados",
   for (const label of ["Filtrar workspace", "Filtrar empresa", "Credenciais vencendo", "Filas paradas"]) assert.match(feature, new RegExp(label));
 });
 
-test("detalhe global de integração mantém segredos omitidos e expõe fluxos auditados de mapeamento e conciliação", async () => {
-  const [feature, detail, actions, core] = await Promise.all([
+test("detalhe global de integração mantém segredos omitidos e expõe configuração Sankhya auditada", async () => {
+  const [feature, sankhya, detail, actions, core] = await Promise.all([
     source("app/plataforma/features/IntegrationsFeature.tsx"),
+    source("app/plataforma/features/SankhyaPlatformConfiguration.tsx"),
     source("app/api/platform/integrations/[id]/detail/route.ts"),
     source("app/api/platform/integrations/[id]/actions/route.ts"),
     source("app/plataforma/features/core.tsx"),
@@ -154,8 +203,22 @@ test("detalhe global de integração mantém segredos omitidos e expõe fluxos a
   assert.match(detail, /requirePlatformAdmin\(auth\.user\)/u);
   assert.match(detail, /getPlatformScopedD1/u);
   assert.match(detail, /publicCredentialFingerprint/u);
+  assert.match(detail, /public_hint/u);
+  assert.match(detail, /parseSankhyaConfig/u);
+  assert.match(detail, /delete publicIntegration\.config_json/u);
+  assert.match(detail, /FROM fdp_companies/u);
   assert.match(detail, /differences_json/u);
+  assert.match(detail, /NULLIF\(integration\.config_json, ''\)::jsonb->>'companyId'/u);
+  assert.doesNotMatch(detail, /integration\.company_id/u);
   assert.doesNotMatch(detail, /SELECT[^\n]*(?:encrypted_value|initialization_vector|auth_tag|mapping_json|resolution_note)/iu);
+  for (const action of ["configure_sankhya", "test_connection"]) assert.match(actions, new RegExp(action));
+  assert.match(actions, /sanitizeSankhyaConfig/u);
+  assert.match(actions, /triggerType: "health_check"/u);
+  assert.match(actions, /requireSankhyaWorkspaceEnabled/u);
+  assert.match(feature, /SankhyaPlatformConfiguration/u);
+  for (const label of ["Configuração Sankhya do workspace", "Criptografar e salvar", "Testar conexão", "Motivo administrativo"]) assert.match(sankhya, new RegExp(label));
+  assert.match(sankhya, /type="password"/u);
+  assert.doesNotMatch(sankhya, /password[^\n]*public_hint/iu);
   for (const action of ["create_mapping", "publish_mapping", "resolve_reconciliation"]) {
     assert.match(actions, new RegExp(action));
     assert.match(feature, new RegExp(action));
@@ -184,11 +247,17 @@ test("configuração operacional global é tenant-scoped, auditada e ligada à i
   assert.match(route, /fdp_platform_audit_events/u);
   assert.match(route, /request_id/u);
   assert.match(route, /OWNER_MUST_REMAIN_ADMIN/u);
-  for (const action of ["workspace.update", "company.save", "board.save", "list.save", "label.save", "field.save", "template.save", "calendar.update", "holiday.save", "sla.save", "rule.save", "module.set", "member.scope", "member.module.set", "api_key.revoke", "webhook.status"]) {
+  for (const action of ["workspace.update", "company.save", "board.save", "list.save", "label.save", "field.save", "template.save", "calendar.update", "holiday.save", "sla.save", "rule.save", "area.save", "area.archive", "module.set", "member.scope", "api_key.revoke", "webhook.status"]) {
     const pattern = new RegExp(action.replace(".", "\\."));
     assert.match(route, pattern, `ação ${action} ausente no servidor`);
     assert.match(feature, pattern, `ação ${action} sem interface`);
   }
+  assert.match(route, /member\.module\.set/u);
+  assert.match(route, /FROM fdp_areas/u);
+  assert.match(route, /resolveMemberDepartmentAccess/u);
+  assert.match(feature, /Áreas operacionais e módulos/u);
+  assert.match(feature, /Departamento principal/u);
+  assert.match(feature, /Módulos liberados neste departamento/u);
   assert.match(operations, /WorkspaceConfiguration/u);
   assert.match(operations, /params\.get\("workspace"\)/u);
   assert.match(feature, /AdminActionDialog/u);

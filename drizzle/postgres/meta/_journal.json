@@ -274,6 +274,223 @@
       "when": 1786478400000,
       "tag": "0036_platform_console_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786953600000,
+      "tag": "0037_integration_events_and_workspace_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1787040000000,
+      "tag": "0038_sankhya_browser_connector",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1787126400000,
+      "tag": "0039_attachment_storage_quota_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1787212800000,
+      "tag": "0040_auth_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1787299200000,
+      "tag": "0041_obligation_protocol_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787299201000,
+      "tag": "0042_member_company_access_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1787299202000,
+      "tag": "0043_lead_privacy_interest",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1787299203000,
+      "tag": "0044_epi_control",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1787299204000,
+      "tag": "0045_workspace_areas_shared_stock",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1787299205000,
+      "tag": "0046_department_module_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1787299206000,
+      "tag": "0047_group_owned_epi_products",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1787299207000,
+      "tag": "0048_epi_compliance",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1787299208000,
+      "tag": "0049_contractors_fixed_caju_and_termination",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1787299209000,
+      "tag": "0050_contractor_payment_exclusions",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1787299210000,
+      "tag": "0051_process_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1787299211000,
+      "tag": "0052_user_module_shortcuts",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1787299212000,
+      "tag": "0053_contractor_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1787299213000,
+      "tag": "0054_contractor_belongs_to_group",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1787335000000,
+      "tag": "0055_contractor_termination_proration",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1787335000001,
+      "tag": "0056_tangerino_admission_agent",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1787900000000,
+      "tag": "0057_domain_event_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1787900000001,
+      "tag": "0058_process_instances",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1787900000002,
+      "tag": "0059_agent_proposals",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1787900000003,
+      "tag": "0060_foreign_key_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1787900000004,
+      "tag": "0061_optimistic_concurrency",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1787900000005,
+      "tag": "0062_epi_catalog_status_and_adoption_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1787900000006,
+      "tag": "0063_composite_tenant_foreign_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1787900000007,
+      "tag": "0064_agent_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1787900000008,
+      "tag": "0065_triage_assignment",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1787900000009,
+      "tag": "0066_tangerino_agent_provisioning",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1787900000010,
+      "tag": "0067_retire_legacy_connectors",
+      "breakpoints": true
     }
   ]
 }

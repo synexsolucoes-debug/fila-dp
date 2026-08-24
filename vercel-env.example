@@ -15,15 +15,27 @@ FDP_INTEGRATION_VAULT_KEY=chave-aes-256-em-base64
 FDP_INTEGRATION_VAULT_KEY_VERSION=1
 # Rotacao sem indisponibilidade: JSON {"1":"base64","2":"base64"} no lugar da chave unica.
 FDP_INTEGRATION_VAULT_KEYS=
+FDP_SANKHYA_VAULT_KEY=chave-aes-256-exclusiva-do-sankhya-em-base64
+FDP_SANKHYA_VAULT_KEY_VERSION=1
+FDP_SANKHYA_VAULT_KEYS=
 
 # Segredo do executor assincrono de integracoes e webhooks.
 # Sem ele /api/integrations/worker e /api/webhooks/worker recusam a chamada.
 FDP_INTEGRATION_WORKER_SECRET=gere-um-segredo-para-o-executor
 
 # Segredo que a Vercel Cron envia em Authorization: Bearer ao chamar
-# /api/cron/integrations a cada 5 minutos. SEM ELE A FILA NAO ANDA:
+# /api/cron/integrations duas vezes por hora. SEM ELE A FILA NAO ANDA:
 # sincronizar enfileira e nada executa. Pode ser o mesmo valor do executor.
 CRON_SECRET=gere-um-segredo-com-32-caracteres-ou-mais
+
+# Sankhya Browser Connector executado sob demanda no GitHub Actions.
+# Crie um fine-grained PAT limitado a synexsolucoes-debug/fila-dp, com somente
+# Actions: Read and write. O PAT dispara o workflow; ele não recebe workspaceId.
+FDP_SANKHYA_ACTIONS_TOKEN=
+FDP_SANKHYA_ACTIONS_REPOSITORY=synexsolucoes-debug/fila-dp
+FDP_SANKHYA_ACTIONS_WORKFLOW=sankhya-worker.yml
+FDP_SANKHYA_ACTIONS_REF=main
+FDP_SANKHYA_BROWSER_ALLOWED_HOSTS=*.sankhya.com.br
 
 # Opcionais: webhooks e sincronizacoes externas
 FDP_EMAIL_TOKEN=

@@ -20,16 +20,46 @@ async function walk(directory: string, extensions: string[]): Promise<string[]> 
   return files;
 }
 
+/**
+ * Remove comentários antes de medir.
+ *
+ * O teste procura o nome antigo em *texto de interface*, e comentário não é
+ * interface. A distinção passou a importar quando o cartão de compartilhamento
+ * foi corrigido: o comentário que explica por que o endereço da imagem mudou
+ * precisa dizer que o arquivo anterior estampava a marca antiga — e nomear o
+ * defeito é a única forma de documentá-lo. Sem esta separação, o repositório
+ * fica proibido de contar a própria história.
+ *
+ * O `//` só conta como comentário quando não vem depois de `:`, para não comer
+ * o resto de uma linha que contenha `https://`.
+ */
+function interfaceTextOf(source: string) {
+  return source.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/(^|[^:])\/\/[^\n]*/gu, "$1");
+}
+
 test("nenhum texto de interface ainda diz o nome antigo", async () => {
   const files = await walk(root, [".ts", ".tsx", ".css"]);
   const offenders: string[] = [];
   for (const file of files) {
-    const source = await readFile(file, "utf8");
+    const source = interfaceTextOf(await readFile(file, "utf8"));
     // A marca também aparecia partida entre elementos ("Fila <strong>DP</strong>"),
     // que a busca por texto corrido não pegava. O padrão abaixo cobre os dois casos.
     if (/Fila DP|FilaDP|Fila\s*<(?:strong|b)>\s*DP/u.test(source)) offenders.push(file.replace(root, ""));
   }
   assert.deepEqual(offenders, [], `arquivos com o nome antigo: ${offenders.join(", ")}`);
+});
+
+test("a varredura continua vendo o nome antigo onde ele importa", () => {
+  // Contraprova: se tirar comentários tivesse cegado a busca, ela pararia de
+  // acusar o texto renderizado — e o teste viraria enfeite verde.
+  assert.match(interfaceTextOf(`<h1>Fila DP</h1>`), /Fila DP/u);
+  assert.match(interfaceTextOf(`const t = "Fila DP"; // marca`), /Fila DP/u);
+  assert.match(interfaceTextOf(`<p>Fila <strong>DP</strong></p>`), /Fila\s*<strong>\s*DP/u);
+  // E o comentário deixa de contar, que é o ponto.
+  assert.doesNotMatch(interfaceTextOf(`// o arquivo anterior dizia Fila DP`), /Fila DP/u);
+  assert.doesNotMatch(interfaceTextOf(`/* dizia Fila DP */`), /Fila DP/u);
+  // Sem comer o que vem depois de uma URL na mesma linha.
+  assert.match(interfaceTextOf(`const u = "https://exemplo.test"; const n = "Fila DP";`), /Fila DP/u);
 });
 
 test("identificadores técnicos foram preservados na renomeação", async () => {
@@ -45,14 +75,44 @@ test("identificadores técnicos foram preservados na renomeação", async () => 
 
 test("a identidade visual vive em tokens, não espalhada em HEX", async () => {
   const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  // Os dois azuis vêm dos pixels do símbolo oficial, não de estimativa.
-  for (const token of ["--vin-navy: #062B60", "--vin-blue-vivid: #168CFD",
-    "--vin-bg: #F6F8FC", "--vin-border: #DCE3ED"]) {
+  // Os dois azuis vêm dos pixels do símbolo oficial, não de estimativa. Eles não
+  // acompanham a paleta de referência de propósito: adotá-la faria a interface
+  // deixar de combinar com o próprio logo.
+  for (const token of ["--vin-navy: #062B60", "--vin-blue-vivid: #168CFD"]) {
     assert.ok(globals.includes(token), `token ausente: ${token}`);
   }
+  // Os neutros, ao contrário, seguem a paleta de referência (§14).
+  for (const token of ["--vin-bg: #F6F8FC", "--vin-text: #172033", "--vin-border: #E2E8F0", "--vin-teal: #16A394"]) {
+    assert.ok(globals.includes(token), `token ausente: ${token}`);
+  }
+  // Exceção medida: a referência pede #64748B para texto secundário, que rende
+  // 4.48:1 sobre o fundo #F6F8FC — abaixo do mínimo 4.5 da WCAG 2.2 AA. O tom
+  // adotado rende 5.78:1. Adotar o pedido criaria a violação que a auditoria de
+  // acessibilidade acusaria nas 59 telas.
+  assert.ok(globals.includes("--vin-text-soft: #55627A"), "o texto secundário precisa passar no contraste");
+  // A conferência é sobre uso como valor, não sobre a palavra: o comentário que
+  // explica a exceção cita o tom, e casar com ele acusaria o contrário.
+  assert.ok(!/:\s*#64748B/u.test(globals), "o tom que reprova no contraste não pode virar valor de token");
   for (const semantic of ["--brand:", "--brand-strong:", "--brand-accent:", "--ui-surface:", "--ui-text:"]) {
     assert.ok(globals.includes(semantic), `token semântico ausente: ${semantic}`);
   }
+});
+
+test("a tipografia carrega de verdade: Manrope nos títulos, Inter na interface", async () => {
+  // O CSS nomeava as duas famílias sem carregar nenhuma, então a interface caía
+  // para a fonte do sistema — que muda de máquina para máquina e derruba a
+  // densidade que uma tela operacional precisa.
+  const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
+  assert.match(layout, /from "next\/font\/google"/u, "sem carregamento, a família é só um nome no CSS");
+  assert.match(layout, /Manrope\(\{[^}]*variable: "--font-titles"/u);
+  assert.match(layout, /Inter\(\{[^}]*variable: "--font-interface"/u);
+  // `next/font` hospeda no próprio deploy: nenhuma requisição a terceiros em
+  // runtime, o que mantém o CSP fechado.
+  assert.doesNotMatch(layout, /fonts\.googleapis\.com|fonts\.gstatic\.com/u);
+
+  const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(globals, /--font-title: var\(--font-titles\)/u);
+  assert.match(globals, /h1, h2, h3, h4, h5, h6 \{ font-family: var\(--font-title\)/u);
 });
 
 test("a marca usa os arquivos oficiais, não um redesenho", async () => {
@@ -107,6 +167,58 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.match(script, /process\.exit\(failures === 0 \? 0 : 1\)/u);
   // As duas larguras: alvo de 24px muda com o layout.
   assert.match(script, /width: 390/u);
+
+  // Piso de cobertura. Este script já falhou do jeito mais perigoso que um
+  // verificador pode falhar: passando. Um seletor de navegação que deixou de
+  // casar tirou 32 telas da varredura e a conclusão continuou "OK: 0
+  // violações" — 0 violações em nada. Sem o piso, a próxima mudança de menu
+  // repete o silêncio.
+  assert.match(script, /const MINIMO_DE_TELAS = \d+;/u);
+  assert.match(script, /if \(screensAudited < MINIMO_DE_TELAS\)/u);
+  assert.match(script, /COBERTURA INSUFICIENTE/u);
+
+  /* E a varredura precisa entrar nas abas de dentro de cada módulo.
+     Sem isto ela visitava o módulo, media a primeira aba e seguia adiante: as
+     dez abas do Controle de EPI, as nove da gestão de Processos e as quatro do
+     quadro nunca eram medidas, e o relatório dizia "0 violações" sobre o que
+     não tinha olhado. A primeira passagem com elas dentro acusou 122 violações
+     de contraste reais. */
+  assert.match(script, /async function auditModuleTabs/u);
+  assert.match(script, /await auditModuleTabs\(/u);
+  // As abas do cabeçalho de processo ficam de fora: elas levam às mesmas telas
+  // que o segundo nível do menu, e medi-las de novo infla o piso sem medir nada.
+  assert.match(script, /\.process-context \[role="tab"\]/u);
+  assert.ok(Number(script.match(/const MINIMO_DE_TELAS = (\d+);/u)?.[1]) >= 55,
+    "o piso precisa acompanhar o alcance da varredura, senão vira folga acumulada");
+
+  // E a varredura precisa alcançar o menu mesmo com os itens agrupados: o
+  // seletor de filho direto era exatamente o que quebrou.
+  assert.match(script, /nav\[aria-label="Navegação do painel"\] /u);
+  assert.doesNotMatch(script, /Navegação do painel"\] > button/u);
+  // Console sem áreas visíveis passou a ser falha, não aviso.
+  assert.match(script, /nenhuma área visível; a varredura não rodou/u);
+
+  /* O menu tem dois níveis desde que passou a agrupar por processo (§25), e os
+     módulos do segundo só existem no DOM enquanto o processo está aberto. Ler
+     os rótulos uma vez no começo mediria os processos e os módulos de um só
+     deles — a mesma classe de ponto cego que já tirou 32 telas desta varredura
+     imprimindo "0 violações". Os dois níveis são percorridos em sequência. */
+  assert.match(script, /\.sidebar-process > button/u);
+  assert.match(script, /\.sidebar-process-view/u);
+
+  /* O produto voltou a ter um tema só, por decisão de produto registrada — e a
+     varredura volta ao posto de sentinela.
+
+     Esta trava já mudou de lado três vezes, e é justamente por isso que ela
+     existe: a regra que atravessou as três versões é sempre a mesma, **nunca
+     audite metade**. Quando havia dois temas, ela cobrava que os dois fossem
+     medidos. Com um só, ela cobra que a volta do segundo seja acusada em vez
+     de passar em silêncio — que é a única coisa capaz de tornar esta varredura
+     parcial sem ninguém perceber. */
+  assert.doesNotMatch(script, /async function switchTheme/u);
+  assert.match(script, /async function themeToggleExists/u);
+  assert.match(script, /um alternador de tema voltou à interface/u);
+  assert.match(script, /await auditEverything\(\);/u);
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts["a11y-check"], "node scripts/a11y-check.mjs");
 });

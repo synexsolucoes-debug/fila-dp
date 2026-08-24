@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
 import { getD1 } from "@/db";
+import { prepareAgentOutcome } from "./agent-scheduler";
+import { prepareActivity } from "./fila-dp-db";
 import { ApiError } from "./api-errors";
 import { computeSlaStatus } from "./fila-dp-api";
 import { addBusinessDays } from "./fila-dp-relations";
 import { workingDayMinutes } from "./fila-dp-sla";
 import { admissionIsComplete } from "./admissions";
+import { completeIntegrationEvent, recordIntegrationEvent } from "./integration-events";
+import { log } from "./observability";
 import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
 import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoErpReadiness, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
 import {
@@ -185,6 +189,14 @@ export async function queueIntegrationRun(d1: Database, input: {
     ), inserted_job AS (
       INSERT INTO fdp_integration_jobs (id, workspace_id, integration_id, run_id, idempotency_key, payload_json)
       SELECT ?, ?, chosen_run.integration_id, chosen_run.id, 'run:' || chosen_run.id, jsonb_build_object('runId', chosen_run.id) FROM chosen_run
+      -- Um agente por vez (§31). O índice único parcial garante a invariante no
+      -- banco; esta condição faz com que a segunda chamada simplesmente não
+      -- insira, em vez de estourar erro de restrição em quem só reenviou.
+      WHERE NOT EXISTS (
+        SELECT 1 FROM fdp_integration_jobs active
+        WHERE active.workspace_id = chosen_run.workspace_id AND active.integration_id = chosen_run.integration_id
+          AND active.status IN ('queued', 'leased')
+      )
       ON CONFLICT (workspace_id, integration_id, idempotency_key) DO NOTHING
     ) SELECT id, integration_id, mapping_id, trigger_type, status, idempotency_key, created_at FROM chosen_run`)
     .bind(input.mappingId || null, input.workspaceId, input.integrationId, runId, input.workspaceId, input.triggerType ?? "manual", key, input.requestedBy ?? null, input.workspaceId, key, jobId, input.workspaceId)
@@ -348,6 +360,34 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
   // reconhecidos pelo admissionDate guardado no metadata para não duplicar cartão.
   const demandExternalId = tangerino ? `${admission.externalId}:${admission.admissionDate}` : input.externalId;
   const demandItemKey = `${demandExternalId}:${input.payloadHash.slice(0, 16)}`;
+
+  // A admissão entra na central de eventos antes de virar demanda. É a mesma
+  // porta que o Teams atravessa, e é ela que dá a garantia de idempotência no
+  // banco: a chave (workspace, integração, evento externo) é única, então uma
+  // segunda execução do sincronizador não consegue sequer registrar o evento de
+  // novo — e portanto não chega a abrir a segunda demanda.
+  //
+  // A conferência por cartão logo abaixo continua existindo: ela cobre as bases
+  // que já sincronizavam antes desta central passar a existir.
+  const event = await recordIntegrationEvent(d1, {
+    workspaceId: input.workspaceId,
+    integrationId: input.integrationId,
+    connector: input.channel,
+    eventType: "admission",
+    externalEventId: `admission:${demandExternalId}`,
+    source: "polling",
+    payloadHash: input.payloadHash,
+    payload: { admissionDate: admission.admissionDate, externalId: admission.externalId },
+  });
+  if (event.kind === "duplicate" && event.event.status === "processed" && event.event.result_id) {
+    await d1.prepare(`INSERT INTO fdp_integration_sync_items (id, workspace_id, integration_id, run_id, mapping_id, item_key, external_id, status, payload_hash, target_type, target_id, metadata_json, processed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
+      ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
+      .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, demandItemKey, demandExternalId, input.payloadHash,
+        event.event.result_id, JSON.stringify({ source: input.channel, skipped: "admissão já processada", eventId: event.event.id })).run();
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
+
   const previous = await d1.prepare(`SELECT target_id FROM fdp_integration_sync_items
     WHERE workspace_id = ? AND integration_id = ? AND target_type = 'card' AND COALESCE(target_id, '') <> ''
       AND (external_id = ? OR (external_id = ? AND COALESCE(metadata_json->>'admissionDate', '') = ?))
@@ -369,6 +409,11 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
       VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', ?, 'card', ?, ?::jsonb, CURRENT_TIMESTAMP)
       ON CONFLICT (workspace_id, integration_id, mapping_id, external_id, payload_hash) DO NOTHING`)
       .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId, input.mappingId, demandItemKey, demandExternalId, input.payloadHash, cardId, metadata).run();
+    // Demanda que já existia de uma sincronização anterior a esta central:
+    // o evento fecha apontando para ela, e a próxima execução para na porta.
+    await completeIntegrationEvent(d1, input.workspaceId, event.event.id, {
+      status: "processed", resultType: "card", resultId: cardId,
+    });
     return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
   }
 
@@ -390,10 +435,31 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
       admissionProcessType, context.dueAt, computeSlaStatus(context.dueAt, context.slaBehavior), context.listId, `integracao:${input.channel}`, context.slaTargetMinutes, context.templateId,
     )
     .first<{ id: string }>();
-  if (!created) return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  if (!created) {
+    await completeIntegrationEvent(d1, input.workspaceId, event.event.id, {
+      status: "ignored", reason: "item já registrado nesta execução",
+    });
+    return { processed: 0, skipped: 1, conflict: 0, failed: 0 };
+  }
 
-  await d1.batch(draft.checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
-    .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)));
+  await completeIntegrationEvent(d1, input.workspaceId, event.event.id, {
+    status: "processed", resultType: "card", resultId: cardId,
+  });
+  log("info", "integration.demand_created", { workspaceId: input.workspaceId, connectorId: input.integrationId }, {
+    source: input.channel, eventId: event.event.id, cardId, processType: admissionProcessType,
+  });
+
+  await d1.batch([
+    ...draft.checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
+      .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)),
+    /* A demanda nasceu de uma leitura automática, e a linha do tempo dela
+       precisa dizer isso (§45). Sem este registro, o histórico começava com a
+       primeira ação humana e ninguém conseguia responder "de onde veio esta
+       demanda?" sem abrir o log do servidor. */
+    prepareActivity(input.workspaceId, cardId, "SYSTEM", "integration.demand_created", {
+      source: input.channel, externalId: admission.externalId, admissionDate: admission.admissionDate,
+    }),
+  ]);
   return { processed: 1, skipped: 0, conflict: 0, failed: 0 };
 }
 
@@ -449,6 +515,10 @@ async function executeRun(d1: Database, workspaceId: string, job: JobRow) {
     d1.prepare("UPDATE fdp_integration_credentials SET verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?").bind(workspaceId, credential.id),
     d1.prepare("UPDATE fdp_integrations SET status = 'connected', last_sync_at = CURRENT_TIMESTAMP, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?").bind(workspaceId, integration.id),
     d1.prepare("UPDATE fdp_integration_jobs SET status = 'succeeded', completed_at = CURRENT_TIMESTAMP, lease_token = '', lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ? AND lease_token = ?").bind(workspaceId, job.id, job.lease_token),
+    /* Zera a contagem de falhas e marca a última leitura bem-sucedida (§34).
+       Sem isto, um conector que se recuperou continuaria "degradado" na tela
+       até alguém mexer nele à mão. */
+    prepareAgentOutcome(d1, { workspaceId, integrationId: integration.id, succeeded: true }),
   ]);
   return { runId: job.run_id, status: finalStatus, received: records.length, ...totals };
 }
@@ -456,8 +526,11 @@ async function executeRun(d1: Database, workspaceId: string, job: JobRow) {
 export async function processNextIntegrationJob(d1: Database, workspaceId: string) {
   const leaseToken = crypto.randomUUID();
   const job = await d1.prepare(`WITH candidate AS (
-      SELECT id FROM fdp_integration_jobs WHERE workspace_id = ? AND status IN ('queued', 'leased') AND available_at <= CURRENT_TIMESTAMP
-        AND (status = 'queued' OR lease_expires_at < CURRENT_TIMESTAMP) ORDER BY available_at, created_at FOR UPDATE SKIP LOCKED LIMIT 1
+      SELECT job.id FROM fdp_integration_jobs job
+      WHERE job.workspace_id = ? AND job.status IN ('queued', 'leased') AND job.available_at <= CURRENT_TIMESTAMP
+        AND EXISTS (SELECT 1 FROM fdp_integrations integration WHERE integration.workspace_id = job.workspace_id
+          AND integration.id = job.integration_id AND integration.channel <> 'sankhya_browser')
+        AND (job.status = 'queued' OR job.lease_expires_at < CURRENT_TIMESTAMP) ORDER BY job.available_at, job.created_at FOR UPDATE SKIP LOCKED LIMIT 1
     ) UPDATE fdp_integration_jobs job SET status = 'leased', lease_token = ?, lease_expires_at = CURRENT_TIMESTAMP + INTERVAL '2 minutes',
       attempt = job.attempt + 1, updated_at = CURRENT_TIMESTAMP FROM candidate WHERE job.id = candidate.id
     RETURNING job.id, job.integration_id, job.run_id, job.attempt, job.max_attempts, job.lease_token`)
@@ -478,6 +551,11 @@ export async function processNextIntegrationJob(d1: Database, workspaceId: strin
         .bind(exhausted ? "failed" : "queued", job.attempt, safe.code, safe.message, exhausted ? "failed" : "queued", workspaceId, job.run_id),
       d1.prepare("UPDATE fdp_integrations SET status = CASE WHEN channel = 'solides' THEN 'needs_credentials' ELSE 'error' END, last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
         .bind(safe.message, workspaceId, job.integration_id),
+      /* Espera crescente até a próxima leitura da origem (§33) e marcação de
+         degradado depois de falhas seguidas (§34). É distinto da retentativa do
+         job: aquela tenta de novo o mesmo trabalho, esta afasta a próxima ida ao
+         sistema externo que já se sabe indisponível. */
+      prepareAgentOutcome(d1, { workspaceId, integrationId: job.integration_id, succeeded: false }),
     ]);
     return { runId: job.run_id, status: nextStatus, attempt: job.attempt, retryInSeconds: exhausted ? null : delay, error: safe.message };
   }

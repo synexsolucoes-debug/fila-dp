@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const competence = cleanText(url.searchParams.get("competence"), 7);
     const status = cleanText(url.searchParams.get("status"), 30);
 
-    const where = ["k.workspace_id = ?"];
+    const where = ["k.workspace_id = ?", "k.excluded_at IS NULL"];
     const values: unknown[] = [context.workspaceId];
     if (companyId) { where.push("k.company_id = ?"); values.push(companyId); }
     if (/^\d{4}-\d{2}$/u.test(competence)) { where.push("k.competence = ?"); values.push(competence); }

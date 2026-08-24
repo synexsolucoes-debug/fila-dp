@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 
 export async function GET(request: Request) {
@@ -12,6 +12,13 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const to = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("to") ?? "") ? url.searchParams.get("to")! : new Date().toISOString().slice(0, 10);
     const from = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("from") ?? "") ? url.searchParams.get("from")! : new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    // Recorte de empresa da barra superior (§34).
+    //
+    // O escopo de acesso do membro sempre foi respeitado — é segurança. O que
+    // faltava era o *filtro*: quem escolhia uma empresa no alto da tela via os
+    // números do grupo inteiro em Relatórios, sem nada dizendo isso.
+    const companyId = (url.searchParams.get("companyId") ?? "").trim().slice(0, 120);
+    if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const [cards, hrMetrics] = await Promise.all([
       d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.archived, c.company_id,
       COALESCE(c.assignee_name, '') AS assignee_name
@@ -21,11 +28,16 @@ export async function GET(request: Request) {
         FROM fdp_hr_metrics m LEFT JOIN fdp_companies c ON c.id = m.company_id
         WHERE m.workspace_id = ? AND m.period BETWEEN ? AND ? ORDER BY m.period`).bind(workspace.id, from.slice(0, 7), to.slice(0, 7)).all<Record<string, unknown>>(),
     ]);
-    const visibleCards = companyAccess.unrestricted ? cards.results : cards.results.filter((card) => companyAccess.companyIds.has(String(card.company_id)));
-    const metricRows = companyAccess.unrestricted ? hrMetrics.results : hrMetrics.results.filter((metric) => companyAccess.companyIds.has(String(metric.company_id)));
+    const noEscopo = (row: Record<string, unknown>) => {
+      const empresa = String(row.company_id ?? "");
+      if (companyId && empresa !== companyId) return false;
+      return companyAccess.unrestricted || companyAccess.companyIds.has(empresa);
+    };
+    const visibleCards = cards.results.filter(noEscopo);
+    const metricRows = hrMetrics.results.filter(noEscopo);
     const activity = await d1.prepare(`SELECT ae.event_type, ae.actor_email, ae.created_at, c.company_id FROM fdp_activity_events ae
       JOIN fdp_cards c ON c.id = ae.card_id WHERE ae.workspace_id = ? AND date(ae.created_at) BETWEEN date(?) AND date(?)`).bind(workspace.id, from, to).all<Record<string, unknown>>();
-    const visibleActivity = companyAccess.unrestricted ? activity.results : activity.results.filter((item) => companyAccess.companyIds.has(String(item.company_id)));
+    const visibleActivity = activity.results.filter(noEscopo);
     const byProcess: Record<string, number> = {};
     const byMember: Record<string, number> = {};
     let completed = 0;
@@ -46,6 +58,32 @@ export async function GET(request: Request) {
       accumulator[key] = Math.round(((accumulator[key] ?? 0) + Number(row.payroll_cost ?? 0)) * 100) / 100;
       return accumulator;
     }, {});
-    return Response.json({ from, to, total: visibleCards.length, completed, completionRate: visibleCards.length ? Math.round((completed / visibleCards.length) * 100) : 100, averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0, byProcess, byMember, activityCount: visibleActivity.length, activityByType: visibleActivity.reduce<Record<string, number>>((accumulator, item) => { const key = String(item.event_type); accumulator[key] = (accumulator[key] ?? 0) + 1; return accumulator; }, {}), hrMetrics: { periods: metricRows.length, admissions, terminations, averageHeadcount: Math.round(averageHeadcount * 10) / 10, payrollCostTotal: Math.round(payrollCostTotal * 100) / 100, turnoverRate, payrollByCompany } });
+    const activityByType = visibleActivity.reduce<Record<string, number>>((accumulator, item) => {
+      const key = String(item.event_type);
+      accumulator[key] = (accumulator[key] ?? 0) + 1;
+      return accumulator;
+    }, {});
+    return Response.json({
+      from,
+      to,
+      companyId: companyId || null,
+      total: visibleCards.length,
+      completed,
+      completionRate: visibleCards.length ? Math.round((completed / visibleCards.length) * 100) : 100,
+      averageCompletionHours: completed ? Math.round((totalHours / completed) * 10) / 10 : 0,
+      byProcess,
+      byMember,
+      activityCount: visibleActivity.length,
+      activityByType,
+      hrMetrics: {
+        periods: metricRows.length,
+        admissions,
+        terminations,
+        averageHeadcount: Math.round(averageHeadcount * 10) / 10,
+        payrollCostTotal: Math.round(payrollCostTotal * 100) / 100,
+        turnoverRate,
+        payrollByCompany,
+      },
+    });
   } catch (error) { return apiError(error); }
 }

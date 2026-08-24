@@ -101,7 +101,11 @@ test("o catálogo semeado aponta só para telas que existem no painel", async ()
   const valuesBlock = migration.split('INSERT INTO "fdp_modules"')[1]?.split("ON CONFLICT")[0] ?? "";
   const routes = [...valuesBlock.matchAll(/\('[a-z_]+', '[^']+', '[^']*', '[a-z]+', '([A-Za-z]+)'/gu)].map((match) => match[1]);
   assert.ok(routes.length >= 12, `catálogo com poucos módulos: ${routes.length}`);
-  const platformOnly = new Set(["access", "saas"]);
+  /* `access` e `saas` continuam existindo como módulos de capacidade, e só
+   deles: as pastas de interface no painel foram removidas — a de acessos por
+   duplicar a gestão de membros que já vive lá, e a de assinatura porque
+   administrar plano é da plataforma por desenho. */
+const platformOnly = new Set(["access", "saas"]);
   for (const route of routes.filter((route) => !platformOnly.has(route))) {
     assert.ok(workspaceApp.includes(`"${route}"`), `rota ${route} não existe no painel`);
   }
@@ -125,8 +129,12 @@ test("o menu do painel respeita o plano, e o servidor continua sendo a proteçã
     readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8"),
   ]);
   assert.match(workspaceApp, /const hasModule = useCallback/);
+  // O filtro deixou de estar escrito treze vezes no JSX e passou a ser uma
+  // regra só sobre o catálogo. O que este teste garante continua sendo o
+  // mesmo: cada tela paga declara a rota que a libera.
+  assert.match(workspaceApp, /if \(entry\.module && !hasModule\(entry\.module\)\) return false;/u);
   for (const route of ["timeTracking", "contractorPayments", "integrations", "registrations", "payroll", "processes"]) {
-    assert.ok(workspaceApp.includes(`hasModule("${route}")`), `menu não filtra ${route}`);
+    assert.ok(workspaceApp.includes(`module: "${route}"`), `menu não filtra ${route}`);
   }
   assert.match(database, /export async function getWorkspaceModules/);
   assert.match(database, /modules: resolvedModules/);

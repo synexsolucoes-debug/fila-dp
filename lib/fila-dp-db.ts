@@ -4,7 +4,7 @@ import type { WorkspaceRole, WorkspaceSnapshot } from "./fila-dp-types";
 import { businessMinutesBetween, workingDayMinutes } from "./fila-dp-sla";
 import { getTenantContext, setTenantContext } from "./tenant-context";
 import { hasCapability } from "./authorization";
-import { resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
+import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules, type ModuleCategory, type ModuleDefinition } from "./modules";
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
@@ -26,6 +26,34 @@ function safeArray(value: string): string[] {
     return [];
   }
 }
+
+/**
+ * Janela do histórico carregado no snapshot de abertura (§37, §39).
+ *
+ * O painel abria trazendo todo o histórico de comentários e toda a caixa de
+ * entrada, sem teto. São coleções que crescem para sempre: o cliente com um ano
+ * de operação pagava, em todo carregamento, por conversas que ninguém vai
+ * reabrir.
+ *
+ * Noventa dias é a janela e não um corte: o que fica de fora continua existindo
+ * e o snapshot **diz quantos são** em `history`. Esconder sem avisar é o que
+ * faria o cliente achar que perdeu dado.
+ *
+ * Medido contra PostgreSQL 16 real, com 20.000 demandas, 60.000 comentários e
+ * 15.000 itens de caixa de entrada em dois anos de histórico:
+ *
+ *   comentários  antes: 60.000 linhas, 59,9 ms, ordenação em disco (3,8 MB)
+ *                depois:    500 linhas, 27,5 ms, ordenação em memória (109 kB)
+ *   caixa        antes: 15.000 linhas,  7,1 ms
+ *                depois:    200 linhas,  3,1 ms
+ *
+ * O ganho maior não está no tempo: está nas 74.300 linhas que deixaram de ser
+ * serializadas e enviadas ao navegador em **todo** carregamento do painel.
+ */
+export const SNAPSHOT_HISTORY_DAYS = 90;
+export const SNAPSHOT_COMMENT_LIMIT = 500;
+export const SNAPSHOT_INBOX_LIMIT = 200;
+export const SNAPSHOT_ACTIVITY_LIMIT = 150;
 
 export type CompanyAccessScope = {
   unrestricted: boolean;
@@ -119,7 +147,17 @@ export async function provisionWorkspaceDefaults(
     ["CONCILIAÇÃO CADASTRAL", 2, 1], ["RESCISÃO", 2, 1], ["FÉRIAS", 5, 2], ["BENEFÍCIOS", 3, 1], ["FOLHA", 2, 1], ["OUTROS", 3, 1],
   ] as const;
   const integrationRows = [
-    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["teams", "Microsoft Teams"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["solides", "Sólides"], ["tangerino", "Sólides DP (Tangerino)"], ["erp", "ERP / Folha"],
+    /* Os três agentes que o produto mostra vêm primeiro e com o nome de
+       produto. `tangerino_browser` faltava nesta lista, e essa ausência tornava
+       o agente de navegador do Tangerino inalcançável: a consulta o procura por
+       canal, não achava, e recusava mandando configurar numa tela onde ele não
+       existia (ver a migration 0066). */
+    ["teams", "Agente Teams"], ["tangerino_browser", "Agente Tangerino"], ["sankhya_browser", "Agente Sankhya"],
+    /* Conectores anteriores à decisão de produto. Continuam provisionados
+       porque workspaces existentes têm histórico neles e o console da
+       plataforma continua administrando-os; o que mudou é que a experiência
+       operacional não os lista mais (§16, §17). */
+    ["email", "E-mail corporativo"], ["whatsapp", "WhatsApp Business"], ["drive", "Google Drive"], ["onedrive", "Microsoft OneDrive"], ["solides", "Sólides"], ["tangerino", "Sólides DP (Tangerino)"], ["erp", "ERP / Folha"],
   ] as const;
 
   await d1.batch([
@@ -130,6 +168,23 @@ export async function provisionWorkspaceDefaults(
     ...nativeTemplates.map((template, index) => d1.prepare("INSERT INTO fdp_process_templates (id, workspace_id, name, process_type, description, checklist_json, default_sla_days, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:template:${template.key}`, workspaceId, template.name, template.process, `Fluxo padrão de ${template.name.toLowerCase()} do Vinculato.`, JSON.stringify(template.checklist), template.days, (index + 1) * 1000)),
     ...policies.map(([processType, target, warning]) => d1.prepare("INSERT INTO fdp_sla_policies (id, workspace_id, process_type, target_business_days, warning_business_days) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:sla:${processType}`, workspaceId, processType, target, warning)),
     ...integrationRows.map(([channel, displayName]) => d1.prepare("INSERT INTO fdp_integrations (id, workspace_id, channel, display_name) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(`${workspaceId}:integration:${channel}`, workspaceId, channel, displayName)),
+    // Local de estoque padrão do Controle de EPI.
+    //
+    // A migration `0045` criou este local para todo workspace que já existia, e
+    // o provisionamento não acompanhou: grupo novo nascia sem nenhum local, e
+    // toda movimentação de EPI é recusada com "Configure um local de estoque
+    // padrão antes de movimentar EPI." — inclusive o primeiro cadastro, que é a
+    // primeira coisa que alguém faz no módulo.
+    //
+    // O efeito era um beco: a tela oferecia "Cadastrar EPI", a pessoa preenchia
+    // o formulário inteiro e o servidor recusava. Criar o local aqui faz o
+    // caminho do grupo novo coincidir com o do grupo migrado, que é o que a
+    // 0045 já tinha decidido ser o certo.
+    d1.prepare(`INSERT INTO fdp_stock_locations (id, workspace_id, code, name, description, status, is_default, created_by, updated_by)
+      SELECT ?, ?, 'PRINCIPAL', 'Estoque principal', 'Local padrão criado junto com o grupo.', 'active', 1, w.owner_user_id, w.owner_user_id
+      FROM fdp_workspaces w WHERE w.id = ?
+      ON CONFLICT (workspace_id, code) DO NOTHING`)
+      .bind(`${workspaceId}:stock:default`, workspaceId, workspaceId),
   ]);
 }
 
@@ -186,6 +241,8 @@ export async function getWorkspaceContext(user: ChatGPTUser) {
   const memberGrants = await loadMemberModuleGrants(scopedD1, workspace.id, userRow.id);
   const authorized = Object.assign(workspace, {
     memberGrants: memberGrants.byModule,
+    departmentModules: memberGrants.departmentModules,
+    primaryDepartment: memberGrants.department,
     extraCapabilities: memberGrants.extraCapabilities,
     deniedCapabilities: memberGrants.deniedCapabilities,
   });
@@ -205,6 +262,7 @@ export async function getWorkspaceModules(
   role: WorkspaceRole,
   workspaceStatus: string,
   memberGrants?: ReadonlyMap<string, boolean>,
+  departmentModules?: ReadonlySet<string>,
 ) {
   const [catalog, planModules, grants, subscription] = await Promise.all([
     d1.prepare(`SELECT key, name, description, category, route, required_capability, depends_on, status, position
@@ -230,6 +288,7 @@ export async function getWorkspaceModules(
     planModules: new Set(planModules.results.map((row) => String(row.module_key))),
     workspaceGrants: new Map(grants.results.map((row) => [String(row.module_key), Number(row.granted) === 1])),
     memberGrants,
+    departmentModules,
     role,
     workspaceStatus,
     subscriptionStatus: String(subscription?.status ?? "inactive"),
@@ -250,62 +309,145 @@ export async function getWorkspaceModules(
  * ajuste de visibilidade em promoção silenciosa.
  */
 export async function loadMemberModuleGrants(d1: ReturnType<typeof getD1>, workspaceId: string, userId: string) {
-  const rows = await d1.prepare(`SELECT g.module_key, g.granted, m.required_capability
-    FROM fdp_member_module_grants g
-    JOIN fdp_modules m ON m.key = g.module_key
-    WHERE g.workspace_id = ? AND g.user_id = ?`)
-    .bind(workspaceId, userId)
-    .all<{ module_key: string; granted: boolean | number; required_capability: string }>();
+  const [catalog, rows, primary] = await Promise.all([
+    d1.prepare("SELECT key AS module_key, required_capability FROM fdp_modules WHERE status = 'active'")
+      .all<{ module_key: string; required_capability: string }>(),
+    d1.prepare(`SELECT g.module_key, g.granted
+      FROM fdp_member_module_grants g
+      WHERE g.workspace_id = ? AND g.user_id = ?`)
+      .bind(workspaceId, userId)
+      .all<{ module_key: string; granted: boolean | number }>(),
+    d1.prepare(`SELECT a.id AS area_id, a.name AS area_name, a.code AS area_code,
+        (w.owner_user_id = wm.user_id) AS is_owner
+      FROM fdp_workspace_members wm
+      JOIN fdp_workspaces w ON w.id = wm.workspace_id
+      LEFT JOIN fdp_area_members am ON am.workspace_id = wm.workspace_id
+        AND am.user_id = wm.user_id AND am.is_primary = 1
+      LEFT JOIN fdp_areas a ON a.workspace_id = am.workspace_id
+        AND a.id = am.area_id AND a.status = 'active'
+      WHERE wm.workspace_id = ? AND wm.user_id = ?`)
+      .bind(workspaceId, userId)
+      .first<{ area_id: string | null; area_name: string | null; area_code: string | null; is_owner: boolean | number }>(),
+  ]);
+
+  const department = primary?.area_id
+    ? { id: String(primary.area_id), name: String(primary.area_name), code: String(primary.area_code) }
+    : null;
+  const isOwner = primary?.is_owner === true || Number(primary?.is_owner) === 1;
+  const departmentRows = department && !isOwner
+    ? await d1.prepare(`SELECT assignment.module_key
+        FROM fdp_area_module_assignments assignment
+        JOIN fdp_modules module ON module.key = assignment.module_key AND module.status = 'active'
+        WHERE assignment.workspace_id = ? AND assignment.area_id = ?`)
+      .bind(workspaceId, department.id).all<{ module_key: string }>()
+    : null;
+  // O proprietário preserva o acesso de recuperação do Workspace. Para todos os
+  // demais, um departamento principal ativo define o padrão de acesso — o que a
+  // pessoa recebe sem que ninguém decida nada para ela.
+  const departmentModules = departmentRows
+    ? new Set(departmentRows.results.map((row) => String(row.module_key)))
+    : undefined;
 
   const byModule = new Map<string, boolean>();
+  for (const row of rows.results) {
+    byModule.set(String(row.module_key), row.granted === true || Number(row.granted) === 1);
+  }
+
+  // A autorização recebe o mapa efetivo; o mapa individual separado continua
+  // sendo devolvido para a tela explicar o que foi decidido para a pessoa.
+  const effectiveByModule = mergeDepartmentAndMemberGrants(
+    catalog.results.map((row) => String(row.module_key)), byModule, departmentModules,
+  );
+
   const extraCapabilities = new Set<string>();
   const deniedCapabilities = new Set<string>();
-  for (const row of rows.results) {
-    const granted = row.granted === true || Number(row.granted) === 1;
-    byModule.set(String(row.module_key), granted);
-    const capability = String(row.required_capability ?? "");
+  const capabilityByModule = new Map(catalog.results.map((row) => [String(row.module_key), String(row.required_capability ?? "")]));
+  for (const [moduleKey, granted] of effectiveByModule) {
+    const capability = capabilityByModule.get(moduleKey) ?? "";
     if (!capability) continue;
     if (granted) extraCapabilities.add(capability);
     else deniedCapabilities.add(capability);
   }
-  return { byModule, extraCapabilities, deniedCapabilities };
+  // Negar um módulo negava só a capacidade de leitura dele — a que decide se o
+  // módulo aparece. As de escrita continuavam valendo pelo papel, e quem tinha
+  // Demandas, Inbox e Planner negados criava demandas pela API sem ver o quadro.
+  for (const capability of deniedWriteCapabilities(effectiveByModule)) deniedCapabilities.add(capability);
+  return {
+    byModule, effectiveByModule, departmentModules, department, isOwner,
+    departmentScoped: Boolean(departmentModules), extraCapabilities, deniedCapabilities,
+  };
 }
 
 export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<WorkspaceSnapshot> {
   const { d1, workspace, board, user: userRow, accessible, switchedFrom } = await getWorkspaceContext(user);
   const companyAccess = await getCompanyAccessScope(d1, workspace.id, userRow.id, workspace.role);
-  const canManageMembers = hasCapability(workspace.role, "members.manage");
-  const canReadHr = hasCapability(workspace.role, "hr.read");
-  const canManageIntegrations = hasCapability(workspace.role, "integrations.manage");
+  const canManageMembers = hasCapability(workspace, "members.manage");
+  const canReadHr = hasCapability(workspace, "hr.read");
+  const canManageIntegrations = hasCapability(workspace, "integrations.manage");
   const resolvedModules = await getWorkspaceModules(d1, workspace.id, workspace.role,
     String((workspace as Record<string, unknown>).status ?? "active"),
-    (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants);
-  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult, rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult, assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult, settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult, companiesResult, hrMetricsResult, pausesResult] = await Promise.all([
+    (workspace as { memberGrants?: ReadonlyMap<string, boolean> }).memberGrants,
+    (workspace as { departmentModules?: ReadonlySet<string> }).departmentModules);
+  const [boardsResult, listsResult, allBoardListsResult, cardsResult, checklistResult, inboxResult,
+    rulesResult, commentsResult, activitiesResult, membersResult, labelsResult, cardLabelsResult,
+    assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult,
+    settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult,
+    companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult, historyTotals,
+  ] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
     d1.prepare("SELECT l.id, l.board_id, l.name, l.kind, l.position, l.sla_behavior FROM fdp_lists l JOIN fdp_boards b ON b.id = l.board_id WHERE b.workspace_id = ? ORDER BY l.position").bind(workspace.id).all(),
     d1.prepare("SELECT * FROM fdp_cards WHERE board_id = ? ORDER BY archived, list_id, position, created_at").bind(board.id).all(),
-    d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? ORDER BY ci.position").bind(board.id).all(),
-    d1.prepare("SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id FROM fdp_workspace_inbox_items WHERE workspace_id = ? ORDER BY received_at DESC").bind(workspace.id).all(),
+    // `c.archived = 0` nas coleções por cartão.
+    //
+    // O arquivo é a maior parte de um quadro com um ano de operação, e nada
+    // dele é exibido: a gaveta de arquivados mostra processo, título, empresa e
+    // data, e só. Medido com 2.400 demandas (500 ativas, 1.900 arquivadas), o
+    // que vinha das arquivadas eram 3,49 MB dos 4,01 MB da resposta — 87% do
+    // payload, com 7.600 itens de checklist e 3.800 comentários que ninguém
+    // abre. O cartão arquivado continua vindo inteiro no que a gaveta usa; o
+    // que deixou de vir é o conteúdo que só o detalhe da demanda mostraria.
+    d1.prepare("SELECT ci.* FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY ci.position").bind(board.id).all(),
+    d1.prepare(`SELECT id, channel, sender_name, subject, body, status, received_at, converted_card_id
+      FROM fdp_workspace_inbox_items
+      WHERE workspace_id = ? AND received_at >= now() - make_interval(days => ?)
+      ORDER BY received_at DESC
+      LIMIT ?`).bind(workspace.id, SNAPSHOT_HISTORY_DAYS, SNAPSHOT_INBOX_LIMIT).all(),
     d1.prepare("SELECT id, name, trigger, condition_json, action_json, enabled, position FROM fdp_automation_rules WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
+    /* Janela temporal no histórico (§39).
+       Comentário e caixa de entrada crescem para sempre e vinham inteiros no
+       carregamento do painel. A janela corta o que ninguém abre no dia a dia; o
+       que ficou de fora **não é escondido**: o snapshot devolve, em `history`,
+       quantos existem no total, e a tela busca o restante sob demanda. */
     d1.prepare(`SELECT cc.id, cc.card_id, cc.body, cc.created_at, u.name AS author_name, u.email AS author_email
       FROM fdp_card_comments cc
       JOIN fdp_users u ON u.id = cc.author_user_id
       JOIN fdp_cards c ON c.id = cc.card_id
-      WHERE c.board_id = ?
-      ORDER BY cc.created_at`).bind(board.id).all(),
+      WHERE c.board_id = ? AND c.archived = 0
+        AND cc.created_at >= now() - make_interval(days => ?)
+      ORDER BY cc.created_at DESC
+      LIMIT ?`).bind(board.id, SNAPSHOT_HISTORY_DAYS, SNAPSHOT_COMMENT_LIMIT).all(),
     d1.prepare(`SELECT ae.id, ae.card_id, ae.actor_email, ae.event_type, ae.payload_json, ae.created_at,
         COALESCE(u.name, ae.actor_email) AS actor_name
       FROM fdp_activity_events ae
       LEFT JOIN fdp_users u ON u.email = ae.actor_email
       WHERE ae.workspace_id = ?
-      ORDER BY ae.created_at DESC LIMIT 150`).bind(workspace.id).all(),
+      ORDER BY ae.created_at DESC LIMIT ?`).bind(workspace.id, SNAPSHOT_ACTIVITY_LIMIT).all(),
     d1.prepare(`SELECT u.id AS user_id, u.email, u.name, wm.role, wm.joined_at,
         CASE WHEN w.owner_user_id = u.id THEN 1 ELSE 0 END AS is_owner,
-        CASE WHEN u.password_hash IS NULL THEN 0 ELSE 1 END AS is_activated
+        CASE WHEN u.password_hash IS NULL THEN 0 ELSE 1 END AS is_activated,
+        primary_area.area_id AS department_id, primary_area.area_name AS department_name
       FROM fdp_workspace_members wm
       JOIN fdp_users u ON u.id = wm.user_id
       JOIN fdp_workspaces w ON w.id = wm.workspace_id
+      LEFT JOIN LATERAL (
+        SELECT am.area_id, a.name AS area_name
+        FROM fdp_area_members am
+        JOIN fdp_areas a ON a.workspace_id = am.workspace_id AND a.id = am.area_id
+        WHERE am.workspace_id = wm.workspace_id AND am.user_id = wm.user_id
+          AND am.is_primary = 1 AND a.status = 'active'
+        LIMIT 1
+      ) primary_area ON true
       WHERE wm.workspace_id = ?
       ORDER BY is_owner DESC, u.name`).bind(workspace.id).all(),
     d1.prepare("SELECT id, name, color, position FROM fdp_labels WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
@@ -314,13 +456,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       WHERE l.workspace_id = ? ORDER BY l.position`).bind(workspace.id).all(),
     d1.prepare(`SELECT ca.card_id, u.id AS user_id, u.name, u.email
       FROM fdp_card_assignees ca JOIN fdp_users u ON u.id = ca.user_id
-      JOIN fdp_cards c ON c.id = ca.card_id WHERE c.board_id = ? ORDER BY u.name`).bind(board.id).all(),
+      JOIN fdp_cards c ON c.id = ca.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY u.name`).bind(board.id).all(),
     d1.prepare("SELECT id, name, field_key, field_type, options_json, required, position FROM fdp_custom_fields WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare(`SELECT cfv.card_id, cf.field_key, cfv.value_text
       FROM fdp_custom_field_values cfv JOIN fdp_custom_fields cf ON cf.id = cfv.field_id
       WHERE cf.workspace_id = ?`).bind(workspace.id).all(),
     d1.prepare(`SELECT a.id, a.card_id, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at
-      FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? ORDER BY a.created_at DESC`).bind(board.id).all(),
+      FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY a.created_at DESC`).bind(board.id).all(),
     d1.prepare("SELECT id, name, process_type, description, checklist_json, default_sla_days, active, position FROM fdp_process_templates WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare("SELECT business_days_json, day_start, day_end, realtime_seconds FROM fdp_workspace_settings WHERE workspace_id = ?").bind(workspace.id).first<Record<string, unknown>>(),
     d1.prepare("SELECT holiday_date, name FROM fdp_business_holidays WHERE workspace_id = ? ORDER BY holiday_date").bind(workspace.id).all(),
@@ -331,6 +473,31 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare("SELECT id, parent_company_id, is_principal, legal_name, trade_name, tax_id, external_code, email, phone, status FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name").bind(workspace.id).all(),
     d1.prepare("SELECT id, company_id, period, headcount, headcount_start, headcount_end, leaves_count, admissions, terminations, voluntary_terminations, involuntary_terminations, base_salary, variable_pay, overtime_pay, additional_pay, vacation_pay, thirteenth_pay, termination_pay, gross_payroll, employee_inss, employee_irrf, employee_other_deductions, net_pay, employer_inss, rat_contribution, third_party_contributions, fgts, fgts_penalty, employer_charges, benefits_cost, provisions_cost, other_costs, payroll_cost, source, external_id, notes FROM fdp_hr_metrics WHERE workspace_id = ? ORDER BY period DESC, company_id").bind(workspace.id).all(),
     d1.prepare("SELECT p.card_id, p.reason FROM fdp_card_sla_pauses p JOIN fdp_cards c ON c.id = p.card_id WHERE p.workspace_id = ? AND p.ended_at IS NULL AND c.board_id = ?").bind(workspace.id, board.id).all(),
+    /* Ciclos da competência mais recente do grupo.
+       O fechamento é o fato mais estruturante do DP — a operação é cíclica e
+       fecha todo mês — e a interface não dizia isso em lugar nenhum. Limitado
+       à competência corrente: o histórico inteiro não cabe no payload e não é
+       o que a Visão geral responde. */
+    d1.prepare(`SELECT id, company_id, competence, status, closed_at
+      FROM fdp_payroll_cycles
+      WHERE workspace_id = ?
+        AND competence = (SELECT MAX(competence) FROM fdp_payroll_cycles WHERE workspace_id = ?)
+      ORDER BY company_id`).bind(workspace.id, workspace.id).all(),
+    d1.prepare(`SELECT a.*,
+      COALESCE((SELECT COUNT(*) FROM fdp_area_members am WHERE am.workspace_id = a.workspace_id AND am.area_id = a.id), 0) AS members_count,
+      COALESCE((SELECT jsonb_agg(ma.module_key ORDER BY ma.module_key) FROM fdp_area_module_assignments ma
+        WHERE ma.workspace_id = a.workspace_id AND ma.area_id = a.id), '[]'::jsonb) AS module_keys
+      FROM fdp_areas a WHERE a.workspace_id = ? ORDER BY (a.status = 'active') DESC, a.name`).bind(workspace.id).all(),
+    /* Quantos existem no total, para que a janela do §39 nunca esconda que há
+       registro mais antigo. Três contagens agregadas custam menos que trazer o
+       histórico inteiro, e são o que permite a tela dizer "há mais". */
+    d1.prepare(`SELECT
+        (SELECT count(*)::int FROM fdp_card_comments cc
+           JOIN fdp_cards c ON c.id = cc.card_id
+          WHERE c.board_id = ? AND c.archived = 0) AS comments_total,
+        (SELECT count(*)::int FROM fdp_workspace_inbox_items WHERE workspace_id = ?) AS inbox_total,
+        (SELECT count(*)::int FROM fdp_activity_events WHERE workspace_id = ?) AS activity_total`)
+      .bind(board.id, workspace.id, workspace.id).first<Record<string, unknown>>(),
   ]);
 
   const checklistRows = checklistResult.results as Array<Record<string, unknown>>;
@@ -405,6 +572,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,
     company: String(row.company ?? ""),
+    requesterAreaId: row.requester_area_id ? String(row.requester_area_id) : null,
+    responsibleAreaId: row.responsible_area_id ? String(row.responsible_area_id) : null,
     processType: String(row.process_type ?? "OUTROS"),
     priority: String(row.priority ?? "normal") as "low" | "normal" | "high" | "urgent",
     assigneeName: String(row.assignee_name ?? ""),
@@ -516,6 +685,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       isOwner: Boolean(row.is_owner),
       isActivated: canManageMembers ? Boolean(row.is_activated) : false,
       companyIds: canManageMembers ? (memberCompanyIds.get(String(row.user_id)) ?? []) : [],
+      departmentId: row.department_id ? String(row.department_id) : null,
+      departmentName: row.department_name ? String(row.department_name) : "",
     })),
     // A lista vem do serviço central, não de uma consulta paralela: inclui o
     // status para o seletor poder dizer por que um grupo não está disponível.
@@ -542,13 +713,53 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     slaPolicies: policyRows.map((row) => ({ id: String(row.id), processType: String(row.process_type), targetBusinessDays: Number(row.target_business_days), warningBusinessDays: Number(row.warning_business_days), active: Boolean(row.active) })),
     holidays: (holidaysResult.results as Array<Record<string, unknown>>).map((row) => ({ date: String(row.holiday_date), name: String(row.name) })),
     settings: { businessDays: businessDays.length ? businessDays : [1, 2, 3, 4, 5], dayStart: String(settingsRow?.day_start ?? "08:00"), dayEnd: String(settingsRow?.day_end ?? "18:00"), realtimeSeconds: Number(settingsRow?.realtime_seconds ?? 30) },
-    notifications: (notificationsResult.results as Array<Record<string, unknown>>).filter((row) => companyAccess.unrestricted || Boolean(row.card_id && visibleCardIds.has(String(row.card_id)))).map((row) => ({ id: String(row.id), type: String(row.notification_type), title: String(row.title), body: String(row.body), cardId: row.card_id ? String(row.card_id) : null, readAt: row.read_at ? String(row.read_at) : null, createdAt: String(row.created_at) })),
+    notifications: (notificationsResult.results as Array<Record<string, unknown>>)
+      .filter((row) => companyAccess.unrestricted || Boolean(row.card_id && visibleCardIds.has(String(row.card_id))))
+      .map((row) => ({
+        id: String(row.id),
+        type: String(row.notification_type),
+        title: String(row.title),
+        body: String(row.body),
+        cardId: row.card_id ? String(row.card_id) : null,
+        readAt: row.read_at ? String(row.read_at) : null,
+        createdAt: String(row.created_at),
+      })),
     integrations: (integrationsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), channel: String(row.channel), displayName: String(row.display_name), status: String(row.status) as "connected" | "needs_credentials" | "paused" | "error", config: canManageIntegrations ? publicIntegrationConfig(String(row.config_json)) : {}, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: canManageIntegrations && row.last_error ? safeIntegrationError(new Error(String(row.last_error))).message : null })),
     plannerBlocks: (plannerResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), userId: String(row.user_id), cardId: row.card_id ? String(row.card_id) : null, title: String(row.title), startAt: String(row.start_at), endAt: String(row.end_at), blockType: String(row.block_type), notes: String(row.notes ?? "") })),
-    calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id), provider: String(row.provider), status: String(row.status), config: safeJson(String(row.config_json)), externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null, lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null, lastError: row.last_error ? String(row.last_error) : null })),
+    calendarConnections: (calendarsResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      provider: String(row.provider),
+      status: String(row.status),
+      config: safeJson(String(row.config_json)),
+      externalCalendarId: row.external_calendar_id ? String(row.external_calendar_id) : null,
+      lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null,
+      lastError: row.last_error ? String(row.last_error) : null,
+    })),
     companies: visibleCompanyRows.map((row) => ({ id: String(row.id), parentCompanyId: row.parent_company_id ? String(row.parent_company_id) : null, isPrincipal: Boolean(row.is_principal), legalName: String(row.legal_name), tradeName: String(row.trade_name ?? ""), taxId: String(row.tax_id ?? ""), externalCode: String(row.external_code ?? ""), email: String(row.email ?? ""), phone: String(row.phone ?? ""), status: String(row.status) as "active" | "inactive" })),
+    areas: (areasResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id), name: String(row.name), code: String(row.code), description: String(row.description ?? ""),
+      status: String(row.status), managerUserId: row.manager_user_id ? String(row.manager_user_id) : null,
+      color: String(row.color ?? "#475569"), icon: String(row.icon ?? "building-2"),
+      defaultSlaDays: Number(row.default_sla_days ?? 3), membersCount: Number(row.members_count ?? 0),
+      moduleKeys: Array.isArray(row.module_keys) ? row.module_keys.map(String) : safeArray(String(row.module_keys ?? "[]")),
+    })),
     hrMetrics: canReadHr ? visibleMetricRows.map((row) => ({ id: String(row.id), companyId: String(row.company_id), period: String(row.period), headcount: Number(row.headcount ?? 0), headcountStart: Number(row.headcount_start ?? row.headcount ?? 0), headcountEnd: Number(row.headcount_end ?? row.headcount ?? 0), leavesCount: Number(row.leaves_count ?? 0), admissions: Number(row.admissions ?? 0), terminations: Number(row.terminations ?? 0), voluntaryTerminations: Number(row.voluntary_terminations ?? 0), involuntaryTerminations: Number(row.involuntary_terminations ?? 0), baseSalary: Number(row.base_salary ?? 0), variablePay: Number(row.variable_pay ?? 0), overtimePay: Number(row.overtime_pay ?? 0), additionalPay: Number(row.additional_pay ?? 0), vacationPay: Number(row.vacation_pay ?? 0), thirteenthPay: Number(row.thirteenth_pay ?? 0), terminationPay: Number(row.termination_pay ?? 0), grossPayroll: Number(row.gross_payroll ?? 0), employeeInss: Number(row.employee_inss ?? 0), employeeIrrf: Number(row.employee_irrf ?? 0), employeeOtherDeductions: Number(row.employee_other_deductions ?? 0), netPay: Number(row.net_pay ?? 0), employerInss: Number(row.employer_inss ?? 0), ratContribution: Number(row.rat_contribution ?? 0), thirdPartyContributions: Number(row.third_party_contributions ?? 0), fgts: Number(row.fgts ?? 0), fgtsPenalty: Number(row.fgts_penalty ?? 0), employerCharges: Number(row.employer_charges ?? 0), benefitsCost: Number(row.benefits_cost ?? 0), provisionsCost: Number(row.provisions_cost ?? 0), otherCosts: Number(row.other_costs ?? 0), payrollCost: Number(row.payroll_cost ?? 0), source: String(row.source ?? "manual"), externalId: String(row.external_id ?? ""), notes: String(row.notes ?? "") })) : [],
     recentActivity: activityRows.slice(0, 50).map(mapActivity),
+    /* O que a janela deixou de fora (§39). A tela usa isto para oferecer "ver
+       histórico completo" em vez de dar a impressão de que o registro sumiu. */
+    history: {
+      windowDays: SNAPSHOT_HISTORY_DAYS,
+      comments: { loaded: commentRows.length, total: Number(historyTotals?.comments_total ?? commentRows.length) },
+      inbox: { loaded: inboxRows.length, total: Number(historyTotals?.inbox_total ?? inboxRows.length) },
+      activity: { loaded: Math.min(activityRows.length, 50), total: Number(historyTotals?.activity_total ?? activityRows.length) },
+    },
+    payrollCycles: (cyclesResult.results as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      companyId: String(row.company_id),
+      competence: String(row.competence),
+      status: String(row.status),
+      closedAt: row.closed_at ? String(row.closed_at) : null,
+    })),
   };
 }
 

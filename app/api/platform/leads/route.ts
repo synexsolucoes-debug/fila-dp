@@ -1,5 +1,6 @@
 import { getD1 } from "@/db";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { PRIVACY_REQUEST_DEADLINE_DAYS } from "@/lib/marketing";
 import { ApiError } from "@/lib/api-errors";
 import { requirePlatformAdmin } from "@/lib/platform-authorization";
 import { withPlatformContext } from "@/lib/platform-context";
@@ -26,10 +27,24 @@ export async function GET(request: Request) {
       const values: unknown[] = [];
       if (status && statuses.includes(status as typeof statuses[number])) { filters.push("status = ?"); values.push(status); }
       if (cursor) { filters.push("(created_at < ?::timestamptz OR (created_at = ?::timestamptz AND id < ?))"); values.push(cursor.createdAt, cursor.createdAt, cursor.id); }
-      const [leads, totals] = await Promise.all([
+      const [leads, totals, privacidade] = await Promise.all([
         d1.prepare(`SELECT id, name, email, company, phone, headcount, interest, message, status, source_path, handled_at, created_at
           FROM fdp_marketing_leads WHERE ${filters.join(" AND ")} ORDER BY created_at DESC, id DESC LIMIT ?`).bind(...values, limit + 1).all<Record<string, unknown>>(),
         d1.prepare("SELECT status, count(*)::int AS total FROM fdp_marketing_leads GROUP BY status").all<{ status: string; total: number }>(),
+        // Pedidos de titular em aberto, com o mais antigo.
+        //
+        // A página de privacidade promete resposta em até 15 dias e manda o
+        // titular usar este formulário. Sem esta conta, o pedido ficava
+        // indistinguível de um contato comercial numa lista chamada "Leads
+        // comerciais", e o prazo corria sem nada marcá-lo.
+        // A idade sai calculada do banco, não do relógio do navegador: o
+        // servidor é quem sabe a hora de referência, e contar dias durante a
+        // renderização torna o componente impuro.
+        d1.prepare(`SELECT count(*)::int AS abertos,
+            COALESCE(EXTRACT(DAY FROM now() - min(created_at))::int, 0) AS dias_do_mais_antigo
+          FROM fdp_marketing_leads
+          WHERE interest = 'privacidade' AND status IN ('new', 'contacted')`)
+          .all<{ abertos: number; dias_do_mais_antigo: number }>(),
       ]);
       const page = leads.results.slice(0, limit);
       const next = leads.results.length > limit ? page.at(-1) : null;
@@ -37,6 +52,11 @@ export async function GET(request: Request) {
         leads: page,
         nextCursor: encodePlatformCursor(next ? { createdAt: String(next.created_at), id: String(next.id) } : null),
         totals: Object.fromEntries(totals.results.map((row) => [String(row.status), Number(row.total)])),
+        privacyRequests: {
+          open: Number(privacidade.results[0]?.abertos ?? 0),
+          oldestDays: Number(privacidade.results[0]?.dias_do_mais_antigo ?? 0),
+          deadlineDays: PRIVACY_REQUEST_DEADLINE_DAYS,
+        },
       });
     });
   } catch (error) {

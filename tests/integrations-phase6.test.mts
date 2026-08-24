@@ -86,8 +86,12 @@ test("resource APIs expose no plaintext secret and reconciliation is audited ato
   assert.match(credentials, /secretStored: true/);
   assert.doesNotMatch(credentials, /after: \{[^}]*credentials/u);
   assert.match(reconciliation, /WITH updated AS[\s\S]+item_updated AS[\s\S]+audited AS/);
-  assert.match(webhook, /fdp_integration_sync_runs/);
-  assert.match(webhook, /idempotencyKey/);
+  // A idempotência do webhook saiu das execuções de sincronização e passou para
+  // a central de eventos: um registro por evento externo, com o índice único do
+  // banco garantindo que a reentrega não gere um segundo efeito.
+  assert.match(webhook, /recordIntegrationEvent/);
+  assert.match(webhook, /externalEventId/);
+  assert.match(webhook, /recorded\.kind === "duplicate"/);
   assert.doesNotMatch(webhook, /body LIKE/);
 });
 
@@ -99,16 +103,37 @@ test("phase 6 capabilities keep management and reconciliation admin-only", async
 });
 
 test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessible", async () => {
-  const [view, platform, core, api, types, workspace] = await Promise.all([
+  const [view, drawer, overview, sankhyaPanel, platform, platformSankhya, core, api, types, workspace] = await Promise.all([
     readFile(new URL("../app/painel/features/integrations/IntegrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/integrations/IntegrationDrawers.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/integrations/overview/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/integrations/SankhyaConnectorPanel.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/features/IntegrationsFeature.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/plataforma/features/SankhyaPlatformConfiguration.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/plataforma/features/core.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/integrations/integrations.api.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/integrations/integrations.types.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(view, /SOMENTE LEITURA/u);
-  assert.doesNotMatch(view, /IntegrationDrawer|type="password"|Rotacionar|Revogar/u);
+  assert.match(view, /INTEGRAÇÕES DO WORKSPACE/u);
+  assert.match(view, /SankhyaConnectorPanel/u);
+  assert.match(view, /IntegrationDrawer/u);
+  assert.match(view, /Configurar[\s\S]+Credencial[\s\S]+Testar conexão/u);
+  assert.match(view, /\/api\/integrations\/\$\{nextEditor\.connector\.id\}\/credentials/u);
+  assert.match(view, /\/api\/integrations\/\$\{connector\.id\}\/verify/u);
+  assert.match(view, /Rotacionar|Revogar/u);
+  assert.match(drawer, /type="password"/u);
+  assert.match(drawer, /autoComplete="new-password"/u);
+  const credentialForm = drawer.slice(drawer.indexOf("function CredentialFields"), drawer.indexOf("function TeamsConfigureFields"));
+  assert.doesNotMatch(credentialForm, /<input[^>]*(?:defaultValue|value)=/iu);
+  assert.match(overview, /publicConnectorConfig/u);
+  assert.match(overview, /config_json: undefined/u);
+  assert.match(sankhyaPanel, /Testar conexão/u);
+  assert.match(sankhyaPanel, /Gerenciada pela Plataforma Global/u);
+  assert.doesNotMatch(sankhyaPanel, /type="password"|Alterar credenciais/u);
+  assert.match(sankhyaPanel, /••••••••••••/u);
+  assert.match(platformSankhya, /type="password"/u);
+  assert.match(platformSankhya, /Criptografar e salvar/u);
   assert.match(platform, /Executar sincronização[\s\S]+Retry[\s\S]+Pausar[\s\S]+Rotacionar[\s\S]+Revogar/u);
   assert.match(core, /role="dialog"/u);
   assert.match(core, /Motivo obrigatório/u);
@@ -118,7 +143,7 @@ test("phase 6 UI is modular, secret-safe, resource-driven and keyboard accessibl
   assert.match(types, /"succeeded"/);
   assert.match(workspace, /<IntegrationsView role=/);
   assert.doesNotMatch(workspace, /function IntegrationsSettings|syncIntegration\(/);
-  const featureSource = `${view}\n${platform}\n${core}\n${api}`;
+  const featureSource = `${view}\n${sankhyaPanel}\n${platform}\n${platformSankhya}\n${core}\n${api}`;
   assert.doesNotMatch(featureSource, /localStorage|sessionStorage|location\.reload|encrypted_value|initialization_vector|auth_tag/);
   assert.doesNotMatch(featureSource, /window\.(prompt|confirm)/u);
 });

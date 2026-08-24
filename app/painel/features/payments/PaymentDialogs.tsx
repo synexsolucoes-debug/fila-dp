@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowRight, ShieldCheck, X } from "lucide-react";
 import type { PaymentDialog } from "./payments.types";
 import styles from "./payments.module.css";
@@ -19,6 +19,7 @@ const titles: Record<NonNullable<PaymentDialog>["kind"], string> = {
   "psychology-payment": "Pagamento ao psicólogo",
   contractor: "Cadastro do prestador PJ",
   component: "Crédito ou desconto da competência",
+  "fixed-item": "Lançamento fixo do prestador",
   invoice: "Nota fiscal recebida",
   complement: "Valor complementar (cartão de benefício)",
   limit: "Política de limite da nota",
@@ -29,6 +30,7 @@ const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "curren
 
 export function PaymentDialog({ dialog, busy, onClose, onSubmit }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [fixedTerm, setFixedTerm] = useState<"indefinite" | "determined">("indefinite");
   const busyRef = useRef(busy);
   const closeRef = useRef(onClose);
   useEffect(() => { busyRef.current = busy; closeRef.current = onClose; }, [busy, onClose]);
@@ -253,6 +255,66 @@ export function PaymentDialog({ dialog, busy, onClose, onSubmit }: Props) {
               </>
             )}
 
+            {dialog.kind === "fixed-item" && (
+              <>
+                <p className={styles.dialogSummary}>
+                  Cadastre uma vez e o lançamento entrará automaticamente em cada competência dentro da vigência.
+                </p>
+                <label>Prestador
+                  <select name="providerId" required defaultValue="">
+                    <option value="" disabled>Selecione</option>
+                    {dialog.contractors.filter((item) => item.status === "active").map((item) => (
+                      <option key={item.id} value={item.id}>{item.legalName}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>Rubrica
+                  <select name="componentType" required defaultValue="health_plan">
+                    <optgroup label="Proventos">
+                      <option value="commission">Comissão</option>
+                      <option value="bonus">Bônus</option>
+                      <option value="award">Prêmio</option>
+                      <option value="reimbursement">Reembolso</option>
+                      <option value="additional">Adicional</option>
+                      <option value="positive_adjustment">Ajuste positivo</option>
+                      <option value="other_credit">Outro provento</option>
+                    </optgroup>
+                    <optgroup label="Descontos">
+                      <option value="health_plan">Plano de saúde</option>
+                      <option value="dental_plan">Plano odontológico</option>
+                      <option value="benefit">Convênio ou benefício</option>
+                      <option value="coparticipation">Coparticipação</option>
+                      <option value="equipment">Equipamento</option>
+                      <option value="advance">Adiantamento</option>
+                      <option value="absence">Falta</option>
+                      <option value="loan">Empréstimo</option>
+                      <option value="negative_adjustment">Ajuste negativo</option>
+                      <option value="other_debit">Outro desconto</option>
+                    </optgroup>
+                  </select>
+                </label>
+                <label>Descrição<input name="description" required maxLength={180} placeholder="Ex.: Plano de saúde mensal" /></label>
+                <div className={styles.fieldRow}>
+                  <label>Valor mensal (R$)<input name="amount" type="number" min="0.01" step="0.01" required /></label>
+                  <label>Primeira competência<input name="effectiveFrom" type="month" required defaultValue={dialog.competence} /></label>
+                </div>
+                <label>Vigência
+                  <select value={fixedTerm} onChange={(event) => setFixedTerm(event.target.value as "indefinite" | "determined")}>
+                    <option value="indefinite">Sem término</option>
+                    <option value="determined">Com término determinado</option>
+                  </select>
+                </label>
+                {fixedTerm === "determined" ? (
+                  <label>Última competência
+                    <input name="effectiveTo" type="month" min={dialog.competence} required />
+                    <span className={styles.hint}>O lançamento ainda será aplicado nessa competência e sairá automaticamente no mês seguinte.</span>
+                  </label>
+                ) : null}
+                <label>Observação<textarea name="note" rows={2} maxLength={300} /></label>
+                <p className={styles.hint}>Plano de saúde, convênios e demais descontos reduzem o líquido antes do cálculo da nota e da Caju.</p>
+              </>
+            )}
+
             {dialog.kind === "invoice" && (
               <>
                 <p className={styles.dialogSummary}>
@@ -263,7 +325,10 @@ export function PaymentDialog({ dialog, busy, onClose, onSubmit }: Props) {
                   <label>Valor recebido (R$)<input name="receivedAmount" type="number" min="0" step="0.01" defaultValue={dialog.closing.invoiceExpectedAmount} required /></label>
                   <label>Emissão<input name="issueDate" type="date" /></label>
                 </div>
-                <label>Arquivo/referência<input name="attachmentReference" maxLength={200} /></label>
+                <label>Arquivo da nota fiscal
+                  <input name="invoiceFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+                  <span className={styles.hint}>Opcional. PDF, JPG, PNG ou WEBP, até 20 MB. O arquivo ficará na pasta deste contrato.</span>
+                </label>
                 <p className={styles.hint}>Valor diferente do esperado gera divergência e bloqueia o pagamento até a conferência.</p>
               </>
             )}

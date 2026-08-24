@@ -10,9 +10,19 @@
   --vin-blue-vivid: #168CFD;
   --vin-bg: #F6F8FC;
   --vin-surface: #FFFFFF;
-  --vin-text: #0F172A;
+  /* Neutros alinhados à paleta de referência (§14). Fundo e branco já eram
+     idênticos; texto principal e bordas passam a ser exatamente os pedidos. */
+  --vin-text: #172033;
+  /* Exceção deliberada: a referência pede #64748B para texto secundário, que
+     rende 4.48:1 sobre o fundo #F6F8FC — abaixo do mínimo 4.5 da WCAG 2.2 AA.
+     Este tom rende 5.78:1 com a mesma leitura visual. Adotar o pedido
+     introduziria a violação que a auditoria de acessibilidade acusaria. */
   --vin-text-soft: #55627A;
-  --vin-border: #DCE3ED;
+  --vin-border: #E2E8F0;
+  /* Turquesa da referência, para o que a marca chama de "conectado". Rende
+     3.13:1 sobre branco, então serve como preenchimento e indicador — nunca
+     como texto pequeno sobre fundo claro. */
+  --vin-teal: #16A394;
 
   /* Tokens semânticos: é por aqui que a interface consome a marca. */
   --brand: var(--vin-blue);
@@ -22,6 +32,8 @@
   --brand-contrast: #FFFFFF;
   --brand-soft: #E7F0FE;
   --brand-soft-border: #C3DBFB;
+  --accent-teal: var(--vin-teal);
+  --accent-teal-soft: #E3F5F2;
   --ui-bg: var(--vin-bg);
   --ui-surface: var(--vin-surface);
   --ui-surface-muted: #EEF2F8;
@@ -40,7 +52,12 @@
   --brand-accent-on-dark: #6FB4FF;
   --on-brand-line: rgba(255, 255, 255, .16);
 
-  --font-geist-sans: Inter, Manrope, "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Interface e dados: Inter, carregada pelo layout. A pilha de reserva existe
+     para o intervalo entre o HTML e a fonte, e para ambientes sem ela. */
+  --font-geist-sans: var(--font-interface), Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Títulos: Manrope. §15 pede a distinção porque a tela operacional é densa —
+     o título precisa separar seções sem virar enfeite. */
+  --font-title: var(--font-titles), Manrope, var(--font-geist-sans);
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --shadow-soft: 0 12px 32px rgba(6, 43, 96, .10);
   --shadow-strong: 0 28px 70px rgba(4, 27, 69, .22);
@@ -67,6 +84,10 @@ body {
   font-family: var(--font-geist-sans), Arial, sans-serif;
   text-rendering: optimizeLegibility;
 }
+/* Títulos em Manrope; o resto da interface fica em Inter. A separação vale para
+   todos os níveis, senão o painel usa uma família e o site outra. */
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-title), Arial, sans-serif; letter-spacing: -.02em; }
+
 a { color: inherit; text-decoration: none; }
 button, summary { font: inherit; }
 :focus-visible { outline: 3px solid color-mix(in srgb, var(--brand-accent) 45%, transparent); outline-offset: 3px; }
@@ -234,6 +255,10 @@ button, summary { font: inherit; }
 .integration-state { padding: 4px 9px; border-radius: 99px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .integration-state.state-available { background: color-mix(in srgb, var(--ui-success) 14%, transparent); color: var(--ui-success); }
 .integration-state.state-partial { background: color-mix(in srgb, var(--ui-warning) 16%, transparent); color: var(--ui-warning); }
+/* Implantação assistida: existe e funciona, com a ponta do fornecedor
+   configurada junto ao cliente. Azul de andamento — nem o verde de pronto, nem
+   o cinza de apenas preparado. */
+.integration-state.state-assisted { background: var(--brand-soft); color: var(--brand); }
 .integration-state.state-planned { background: var(--ui-surface-muted); color: var(--ui-text-soft); }
 .integration-category { margin: 10px 0 8px; font-family: var(--font-geist-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--ui-text-muted); }
 .integration-card p { margin: 0; color: var(--ui-text-soft); font-size: 13px; line-height: 1.62; }

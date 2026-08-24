@@ -1,5 +1,13 @@
 # Aplicar as migrações pendentes em produção
 
+> **O deploy de produção já aplica sozinho.** O build da Vercel roda as
+> migrações pendentes antes de publicar, e **não publica** se alguma falhar —
+> a versão nova não vai ao ar apontando para um banco que ela não entende.
+>
+> Este roteiro continua valendo para as vezes em que você aplica **fora do
+> deploy**: para conferir o estado, para adiantar uma migração antes de
+> publicar, ou quando o passo automático está desligado.
+
 Procedimento para colocar o banco de produção na mesma versão do aplicativo
 publicado. É o passo que faz o painel voltar quando ele responde
 `SCHEMA_OUTDATED`.
@@ -7,6 +15,34 @@ publicado. É o passo que faz o painel voltar quando ele responde
 Leva poucos minutos. Cada migração roda dentro de **uma transação** com trava
 exclusiva: ou ela aplica inteira, ou não aplica nada. Não existe estado pela
 metade.
+
+---
+
+## O que o deploy faz sozinho
+
+| Onde | O que acontece |
+| --- | --- |
+| Deploy de **produção** | Aplica as pendentes e só publica se der certo |
+| Deploy de **preview** | Não toca no banco |
+| `npm run build` local ou na integração | Não toca no banco |
+
+O preview é o caso que mais importa: se a `DATABASE_URL` de preview apontar
+para produção, migrar ali aplicaria no banco de verdade uma migração vinda de
+um branch qualquer. Por isso só o ambiente de produção migra, e isso é
+conferido por teste.
+
+**Para desligar**, sem mexer em código: defina `FDP_MIGRATE_ON_DEPLOY=off` nas
+variáveis de ambiente da Vercel. O deploy volta a publicar sem migrar, e o
+banco passa a ser sua responsabilidade — pelo roteiro abaixo.
+
+**Se o deploy falhar com `DATABASE_URL não está disponível no build`**, a
+variável existe mas não está marcada como disponível em *Build*. Marque em
+*Project → Settings → Environment Variables*, ou desligue o passo e aplique à
+mão.
+
+O ponto de restauração continua sendo decisão humana: o deploy não cria branch
+no Neon. Antes de publicar uma versão com migração que mexe em dado, faça o
+Passo 1 abaixo.
 
 ---
 
@@ -45,17 +81,44 @@ errado, você volta apontando a aplicação para ele.
 
 ## Passo 2 — Veja o que está pendente
 
+**Sem credencial nenhuma**, o próprio sistema responde. Abra
+`‹seu-domínio›/api/health`:
+
+```json
+{ "status": "degraded", "database": "outdated", "pendingMigrations": 2 }
+```
+
+`pendingMigrations` maior que zero é a resposta: há o que aplicar.
+
+**Com a connection string**, dá para ver *quais* são, pelo nome:
+
 ```bash
 export DATABASE_URL="postgresql://…sua-conexao-neon…"
-npm run db:check
+npm run db:status
 ```
 
-Isso valida os arquivos de migração do seu clone (não toca no banco). A saída
-esperada termina com algo como:
+```
+Aplicadas : 55
+Última    : 0052_user_module_shortcuts.sql em 20/08/2026, 23:41:02
+No clone  : 57
+Esperadas : 57 (pelo manifesto desta versão do aplicativo)
 
+PENDENTES (2) — aplique com: npm run db:migrate
+  · 0053_contractor_documents.sql
+  · 0054_contractor_belongs_to_group.sql
 ```
-28 migrations e 11 metadados PostgreSQL validados; nenhum DDL foi encontrado no caminho HTTP.
-```
+
+Este comando **não altera nada** — pode rodar a qualquer hora, inclusive só
+para conferir. Ele também acusa duas situações que o executor só descobriria
+no meio do caminho:
+
+- **arquivo alterado depois de aplicado**, que o executor recusa — e recusaria
+  com metade da fila já aplicada;
+- **migração aplicada que não existe no seu clone**, sinal de que o clone está
+  atrás do que foi publicado. Nesse caso, atualize o clone antes de aplicar.
+
+> `npm run db:check` é outra coisa: valida os arquivos do clone e não fala com
+> banco nenhum. Serve para conferir o repositório, não o estado de produção.
 
 ---
 
@@ -79,17 +142,33 @@ Se a saída terminar em `Migrations PostgreSQL concluídas.`, acabou.
 
 ---
 
-## Passo 4 — Confirme pelo próprio sistema
+## Passo 4 — Confirme
 
-Abra `‹seu-domínio›/api/health` no navegador (logado, se o deployment estiver
-protegido pela Vercel). O esperado:
+```bash
+npm run db:status
+```
+
+```
+Nada pendente: o banco está na versão que o clone descreve.
+```
+
+E pelo próprio sistema — que é o que confirma que a aplicação **publicada**
+enxerga o banco novo, e não só o seu terminal. Abra `‹seu-domínio›/api/health`
+no navegador (logado, se o deployment estiver protegido pela Vercel):
 
 ```json
 { "status": "ok", "database": "ok", "pendingMigrations": 0 }
 ```
 
-Depois entre no painel: ele deve abrir normalmente, e **Usuários e permissões**
-aparece no menu lateral.
+Por último, abra no painel a tela que a migração destravou e faça o gesto que
+ela permite. É a única conferência que prova o caminho inteiro — schema,
+privilégio e aplicação:
+
+| Migração | O que conferir |
+| --- | --- |
+| `0052_user_module_shortcuts` | Favorite um módulo, saia e volte: o favorito continua lá. |
+| `0053_contractor_documents` | Abra **Documentos** na ficha de um prestador. |
+| `0054_contractor_belongs_to_group` | Cadastre um PJ **sem preencher a empresa**: precisa salvar. |
 
 ---
 

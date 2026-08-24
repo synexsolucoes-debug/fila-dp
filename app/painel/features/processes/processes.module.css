@@ -1,0 +1,738 @@
+/*
+ * Gestão e modelagem de processos (§36, §39, §73).
+ *
+ * O arquivo anterior tinha 8,8 kB em duas linhas e três defeitos de fundo que
+ * a §73 descreve como "visualmente estranho":
+ *
+ *  1. consumia `--ui-backdrop` e `--ui-on-danger`, que não existem em lugar
+ *     nenhum do projeto. O fundo do diálogo ficava transparente e o texto do
+ *     botão de arquivar herdava a cor do pai — vermelho sobre vermelho no tema
+ *     escuro. Uma variável indefinida não avisa: a declaração cai no valor
+ *     computado e a regra some;
+ *  2. tipografia entre `.5rem` e `.68rem` — 8 a 11px. A §55 pede hierarquia, e
+ *     ali tudo era pequeno demais para ter hierarquia alguma;
+ *  3. uma barra de navegação de 220px *dentro* da página, criando um terceiro
+ *     nível de menu que nenhuma outra tela tem. A §41 pede o contrário: todo o
+ *     Vinculato obedecendo ao mesmo shell.
+ *
+ * Recuo, raio e intervalo agora vêm dos tokens de layout (§42), e o alias local
+ * deriva do acento semântico como o resto do painel.
+ */
+
+.workspace {
+  --p: var(--ui-accent);
+  --p-text: var(--ui-accent-text);
+  --s: var(--ui-surface);
+  --elevated: var(--ui-surface-elevated);
+  --m: var(--ui-surface-muted);
+  --b: var(--ui-border);
+  --b-strong: var(--ui-border-strong);
+  --t: var(--ui-text);
+  --soft: var(--ui-text-soft);
+  --muted: var(--ui-text-muted);
+  --danger: var(--ui-danger);
+  min-width: 0;
+  color: var(--t);
+}
+
+/* Modais e gavetas são portados para `main.dashboard-shell`, portanto deixam
+   de ser descendentes de `.workspace`. Esta classe viaja no próprio conteúdo
+   portado e recompõe os aliases locais nos dois temas. */
+.processPortal {
+  --p: var(--ui-accent);
+  --p-text: var(--ui-accent-text);
+  --s: var(--ui-surface);
+  --elevated: var(--ui-surface-elevated);
+  --m: var(--ui-surface-muted);
+  --b: var(--ui-border);
+  --b-strong: var(--ui-border-strong);
+  --t: var(--ui-text);
+  --soft: var(--ui-text-soft);
+  --muted: var(--ui-text-muted);
+  --danger: var(--ui-danger);
+  color: var(--t);
+}
+
+.workspace button,
+.workspace input,
+.workspace select,
+.workspace textarea,
+.processPortal button,
+.processPortal input,
+.processPortal select,
+.processPortal textarea { font: inherit; }
+
+.processPortal :is(input, select, textarea) {
+  border-color: var(--b);
+  background: var(--s);
+  color: var(--t);
+}
+
+.processPortal :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
+.workspace :is(input, select, textarea, button):focus-visible,
+.processPortal :is(input, select, textarea, button):focus-visible {
+  outline: 2px solid var(--p);
+  outline-offset: 2px;
+}
+/* Mira os ícones, não todo `<svg>`.
+ *
+ * `.workspace svg` alcançava também o `<svg>` raiz que o bpmn-js cria para o
+ * canvas, e o modelador desenhava dentro de um selo de 17px — 25 elementos
+ * importados, um fragmento de rótulo na tela. Duas correções chegaram a este
+ * arquivo pelo mesmo defeito, uma em cada ramo; esta é a de origem, porque a
+ * exceção deixa de precisar existir. Todos os ícones do painel vêm do
+ * lucide-react, que marca cada um com a classe `lucide`. */
+.workspace :global(.lucide) { width: 17px; height: 17px; }
+
+/* -------------------------------------------------------------------------- */
+/* Cabeçalho e comandos                                                        */
+/* -------------------------------------------------------------------------- */
+
+.pageHeader {
+  margin-bottom: var(--layout-section-gap);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow { color: var(--p-text); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+.pageHeader h2 { margin: 4px 0 0; color: var(--t); font-size: 22px; letter-spacing: -.03em; }
+.pageHeader p { max-width: 680px; margin: 6px 0 0; color: var(--soft); font-size: 13px; line-height: 1.5; }
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--ui-radius-sm);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton { border: 1px solid var(--p); background: var(--p); color: var(--ui-on-accent); }
+.secondaryButton { border: 1px solid var(--b); background: var(--s); color: var(--t); }
+.secondaryButton:hover { border-color: var(--b-strong); background: var(--m); }
+.dangerButton { border: 1px solid var(--danger); background: var(--danger); color: var(--ui-on-danger); }
+.dangerText { color: var(--danger); }
+
+/* -------------------------------------------------------------------------- */
+/* Corpo do módulo                                                             */
+/* -------------------------------------------------------------------------- */
+/* Sem a barra lateral de 220px: as seções viram abas horizontais, iguais às do
+   cabeçalho de processo, e a tabela recupera a largura que a barra comia. */
+
+.moduleBody {
+  display: grid;
+  gap: var(--layout-section-gap);
+  min-height: 0;
+}
+
+/* `min-width: 0` porque este é um item de grade: o valor inicial `auto` impede
+   que ele encolha abaixo do conteúdo, e a barra de nove abas empurrava a
+   página inteira para além da janela em vez de rolar dentro de si mesma. */
+.sectionTabsRow {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.moduleContent {
+  min-width: 0;
+  padding: var(--layout-card-padding);
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-lg);
+  background: var(--s);
+  box-shadow: var(--ui-shadow-card);
+}
+
+.maturityStrip {
+  margin-bottom: var(--layout-section-gap);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-md);
+  background: var(--b);
+  overflow: hidden;
+  gap: 1px;
+}
+
+.maturityStrip button {
+  min-width: 0;
+  min-height: 82px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: center;
+  gap: 2px 10px;
+  border: 0;
+  border-top: 3px solid var(--p);
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  text-align: left;
+}
+
+.maturityStrip button[data-tone="review"] { border-top-color: var(--ui-warning); }
+.maturityStrip button[data-tone="published"] { border-top-color: var(--ui-done); }
+.maturityStrip button[data-tone="archived"] { border-top-color: var(--muted); }
+.maturityStrip button:hover { background: var(--m); }
+.maturityStrip span { color: var(--soft); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .045em; }
+.maturityStrip strong { grid-row: 1 / 3; grid-column: 2; align-self: center; color: var(--t); font-size: 24px; line-height: 1; }
+.maturityStrip small { overflow: hidden; color: var(--muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* -------------------------------------------------------------------------- */
+/* Barra de filtros (§45, §46)                                                 */
+/* -------------------------------------------------------------------------- */
+/* Busca e os dois recortes mais usados ficam na tela; o resto abre em gaveta,
+   que é o que a §46 pede para reduzir a poluição. Antes eram seis controles
+   lado a lado, cada um com 120px, e nenhum cabia no rótulo. */
+
+.filterBar {
+  margin-bottom: var(--layout-section-gap);
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-md);
+  background: var(--m);
+}
+
+.searchField {
+  flex: 1 1 240px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+  color: var(--muted);
+}
+
+/* O campo tem 36px, mas o alvo que a WCAG 2.5.8 mede é o do controle, não o do
+   rótulo que o envolve: sem altura própria o `input` ficava com 20px e
+   reprovava na conferência do navegador. */
+.searchField input {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--t);
+  outline: 0;
+  font-size: 13px;
+}
+
+.filterBar select,
+.formGrid input,
+.formGrid select,
+.formGrid textarea,
+.filterDrawer input,
+.filterDrawer select,
+.propertySections input,
+.propertySections select,
+.propertySections textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+  color: var(--t);
+  font-size: 13px;
+}
+
+.filterBar select { flex: 0 1 170px; min-height: 36px; padding: 0 8px; }
+.formGrid input, .formGrid select,
+.filterDrawer input, .filterDrawer select,
+.propertySections input, .propertySections select { min-height: 36px; padding: 0 9px; }
+.formGrid textarea, .propertySections textarea { padding: 8px 9px; resize: vertical; }
+
+.filterButton {
+  min-height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.filterButton:hover { border-color: var(--b-strong); }
+.filterButton b {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--p);
+  color: var(--ui-on-accent);
+  font-size: 10px;
+}
+
+.filterDrawer { padding: var(--layout-card-padding); display: grid; gap: 14px; }
+.filterDrawer > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.filterDrawer > header strong { color: var(--t); font-size: 15px; }
+.filterDrawer label { display: grid; gap: 5px; color: var(--soft); font-size: 12px; font-weight: 650; }
+.filterDrawer footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* -------------------------------------------------------------------------- */
+/* Tabela (§44)                                                                */
+/* -------------------------------------------------------------------------- */
+
+.processTableWrap { overflow: auto; border: 1px solid var(--b); border-radius: var(--ui-radius-md); }
+
+.processTable,
+.historyPanel table { width: 100%; border-collapse: collapse; }
+
+.processTable th,
+.historyPanel th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--b);
+  background: var(--m);
+  color: var(--soft);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.processTable td,
+.historyPanel td {
+  padding: 12px;
+  border-bottom: 1px solid var(--b);
+  font-size: 12.5px;
+  vertical-align: top;
+}
+
+.processTable tbody tr { transition: background-color var(--motion-hover) var(--ease-standard); }
+.processTable tbody tr:hover { background: var(--m); }
+.processTable tbody tr:last-child td, .historyPanel tbody tr:last-child td { border-bottom: 0; }
+.processTable td strong { display: block; color: var(--t); font-size: 13px; }
+.processTable td small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.processTable td p { max-width: 340px; margin: 5px 0 0; color: var(--soft); font-size: 11.5px; line-height: 1.45; }
+
+.rowActions { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.rowActions button,
+.historyPanel td button {
+  min-height: 30px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.rowActions button:hover, .historyPanel td button:hover { border-color: var(--b-strong); background: var(--m); }
+.rowActions svg, .historyPanel td svg { width: 13px; height: 13px; }
+
+.historyPanel { display: grid; gap: 12px; }
+.historyPanel h3 { margin: 0; color: var(--t); font-size: 16px; letter-spacing: -.02em; }
+.historyPanel > div { overflow: auto; border: 1px solid var(--b); border-radius: var(--ui-radius-md); }
+
+/* -------------------------------------------------------------------------- */
+/* Galeria de modelagens iniciais (§37)                                        */
+/* -------------------------------------------------------------------------- */
+
+.templateGallery { display: grid; gap: 12px; }
+.templateGallery > p { margin: 0; color: var(--soft); font-size: 13px; line-height: 1.55; }
+.templateGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 11px; }
+.templateGrid > * { display: flex; }
+.templateGrid > * > * { flex: 1 1 auto; }
+.templateShape { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.templateShape span {
+  padding: 2px 8px;
+  border: 1px solid var(--b);
+  border-radius: 999px;
+  background: var(--m);
+  color: var(--soft);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modelador (§36, §39, §40)                                                   */
+/* -------------------------------------------------------------------------- */
+
+.modelerCommand {
+  margin-bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.modelerCommand > div { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.modelerShell {
+  overflow: hidden;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-md);
+  background: var(--s);
+}
+
+.modelerToolbar {
+  padding: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--b);
+  background: var(--m);
+}
+
+.modelerToolbar > div:first-child { display: grid; min-width: 0; }
+.modelerToolbar strong { color: var(--t); font-size: 13.5px; }
+.modelerToolbar span { color: var(--soft); font-size: 11px; }
+.toolActions { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.toolActions button {
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.toolActions button:hover { border-color: var(--b-strong); background: var(--m); }
+.toolActions svg { width: 14px; height: 14px; }
+
+.saveIndicator { color: var(--muted); font-size: 11.5px; font-weight: 650; }
+.saveIndicator[data-state="dirty"], .saveIndicator[data-state="error"] { color: var(--ui-warning); }
+.saveIndicator[data-state="saved"] { color: var(--ui-done); }
+
+/* O canvas ocupa a altura útil e o painel de propriedades acompanha. Antes o
+   `min-height: 560px` fixo empurrava a página para fora da dobra em 1366×768,
+   que é a menor resolução alvo da §43. */
+.modelerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  /* Acompanha a janela, com piso e teto. A versão do outro ramo fixava
+     `min-height: 600px`, o que em 1280×720 punha o rodapé do canvas 250px
+     abaixo da dobra — e 1280×720 é resolução alvo da §43. */
+  height: clamp(380px, calc(100dvh - 320px), 720px);
+}
+
+.canvasPanel { min-width: 0; min-height: 0; border-right: 1px solid var(--b); background: var(--s); }
+.bpmnCanvas { width: 100%; height: 100%; min-height: 0; }
+
+/* O modelador estava desenhando num selo de 17 pixels.
+ *
+ * `.workspace svg { width: 17px; height: 17px }`, no topo deste arquivo, dá a
+ * medida dos ícones do módulo — e alcançava também o `<svg>` raiz que o
+ * bpmn-js cria para o canvas. O diagrama era importado inteiro (25 elementos,
+ * conferido no navegador), enquadrado corretamente pelo `fit-viewport` e então
+ * recortado a um quadrado de 17px no canto superior esquerdo. Na tela sobrava
+ * um fragmento de rótulo, e a impressão era de um modelador que "não abre".
+ *
+ * Nenhum teste veria isto: o DOM está completo, a importação não falha e não
+ * há erro no console. Só a medição no navegador acusa.
+ *
+ * O seletor precisa de `:global` porque `.djs-container` é uma classe da
+ * biblioteca — dentro de um CSS Module ela viraria um nome com hash e não
+ * casaria com nada. E mira o filho direto de propósito: os ícones da paleta
+ * também são `<svg>` e continuam com a medida que a biblioteca lhes dá.
+ *
+ * Com a regra dos ícones mirando `.lucide`, esta virou cinto e suspensório —
+ * e fica: é ela que segura o canvas se alguém trocar a biblioteca de ícones
+ * por uma que não marque as suas. */
+.bpmnCanvas :global(.djs-container) > svg { width: 100%; height: 100%; }
+
+.propertiesPanel { overflow-y: auto; background: var(--m); }
+
+/* Tela cheia. Sem isto o botão abre o modo, e o canvas continua do tamanho do
+   cartão no meio de uma tela preta. */
+.modelerShell:fullscreen {
+  width: 100vw;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 0;
+}
+
+.modelerShell:fullscreen .modelerGrid { flex: 1 1 auto; height: auto; min-height: 0; }
+
+.modelerShell:fullscreen :is(.canvasPanel, .bpmnCanvas, .propertiesPanel) {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+.propertiesEmpty { min-height: 250px; padding: 24px; display: grid; place-items: center; text-align: center; }
+.propertiesEmpty strong { color: var(--t); font-size: 13.5px; }
+.propertiesEmpty p { margin: 8px 0 0; color: var(--soft); font-size: 12px; line-height: 1.5; }
+
+.propertiesHeader {
+  padding: 13px;
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid var(--b);
+  background: var(--s);
+}
+
+.propertiesHeader span { color: var(--p-text); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; }
+.propertiesHeader strong { color: var(--t); font-size: 14px; }
+.propertiesHeader small { color: var(--muted); font-size: 11px; }
+
+.propertySections { padding: 10px; }
+
+.propertySections fieldset {
+  margin: 0 0 10px;
+  padding: 11px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+}
+
+.propertySections legend { color: var(--p-text); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.propertySections label, .formGrid label { display: grid; gap: 4px; color: var(--soft); font-size: 12px; font-weight: 650; }
+.checkLabel { display: flex; align-items: center; gap: 7px; }
+.checkLabel input { width: 16px; min-height: 16px; }
+.inlineFields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+.settingsPanel { padding: 24px; display: grid; gap: 10px; justify-items: start; border: 1px solid var(--b); border-radius: var(--ui-radius-md); background: var(--m); }
+.settingsPanel svg { width: 26px; height: 26px; color: var(--p-text); }
+.settingsPanel h3 { margin: 0; color: var(--t); font-size: 16px; }
+.settingsPanel p { max-width: 620px; margin: 0; color: var(--soft); font-size: 13px; line-height: 1.55; }
+.settingsPanel small { color: var(--muted); font-size: 11.5px; }
+
+/* -------------------------------------------------------------------------- */
+/* Diálogos                                                                    */
+/* -------------------------------------------------------------------------- */
+/* O fundo e a animação vêm de `AnimatedModal`/`AnimatedDrawer` (§15, §16). O
+   que sobra aqui é só o conteúdo — antes cada diálogo trazia o próprio
+   `position: fixed` com um `--ui-backdrop` que não existia. */
+
+.dialogHeader {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--b);
+}
+
+.dialogHeader strong, .dialogHeader h3 { margin: 0; color: var(--t); font-size: 16px; letter-spacing: -.02em; }
+.dialogHeader > div { display: grid; gap: 3px; }
+
+.dialogHeader button,
+.processForm footer button,
+.confirmBody button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--s);
+  color: var(--t);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.processForm { padding: 16px; display: grid; gap: 12px; }
+.formSection {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--s);
+}
+
+.formSection > legend {
+  max-width: calc(100% - 8px);
+  padding: 0 8px 0 0;
+  display: grid;
+  grid-template-columns: 26px auto 1fr;
+  align-items: baseline;
+  gap: 7px;
+  color: var(--t);
+}
+
+.formSection > legend span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--ui-accent-soft);
+  color: var(--p-text);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.formSection > legend strong { font-size: 12.5px; }
+.formSection > legend small { color: var(--muted); font-size: 10.5px; font-weight: 500; }
+.formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wideField { grid-column: 1 / -1; }
+.toggleGrid { margin-top: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.toggleGrid label, .companyPicker label { display: flex; align-items: center; gap: 7px; color: var(--t); font-size: 12.5px; }
+.toggleGrid label {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--b);
+  border-radius: 7px;
+  background: var(--m);
+}
+.toggleGrid input, .companyPicker input { width: 16px; height: 16px; accent-color: var(--p); }
+
+.companyPicker {
+  margin-top: 10px;
+  padding: 11px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-sm);
+  background: var(--m);
+}
+
+.companyPicker > strong { grid-column: 1 / -1; color: var(--soft); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+
+.processForm footer { position: sticky; bottom: -16px; margin: 0 -16px -16px; padding: 12px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--b); background: var(--elevated); }
+
+/* Ficha operacional: a abertura do cadastro mostra contexto e decisões antes
+   de levar o usuário ao canvas BPMN. */
+.detailSheet { color: var(--t); }
+.detailHeader {
+  padding: 18px 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--b);
+  background: var(--m);
+}
+.detailHeader h3 { margin: 4px 0 0; color: var(--t); font-size: 21px; letter-spacing: -.03em; }
+.detailStatus { margin-top: 9px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.detailStatus > span:not(:first-child) { color: var(--soft); font-size: 11px; }
+.detailPurpose { padding: 18px 20px; border-bottom: 1px solid var(--b); }
+.detailPurpose > span { color: var(--p-text); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.detailPurpose p { max-width: 760px; margin: 6px 0 0; color: var(--t); font-size: 14px; font-weight: 650; line-height: 1.55; }
+.detailPurpose small { display: block; max-width: 760px; margin-top: 6px; color: var(--soft); font-size: 12px; line-height: 1.5; }
+.detailGrid { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.detailGrid > section { min-width: 0; border: 1px solid var(--b); border-radius: var(--ui-radius-sm); background: var(--s); }
+.detailGrid > section > header { padding: 10px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--b); background: var(--m); }
+.detailGrid > section > header svg { color: var(--p-text); }
+.detailGrid > section > header strong { color: var(--t); font-size: 12px; }
+.detailGrid dl { margin: 0; }
+.detailGrid dl > div { padding: 8px 12px; display: grid; grid-template-columns: 112px 1fr; gap: 10px; border-bottom: 1px solid var(--b); }
+.detailGrid dl > div:last-child { border-bottom: 0; }
+.detailGrid dt { color: var(--muted); font-size: 10.5px; }
+.detailGrid dd { min-width: 0; margin: 0; color: var(--t); font-size: 11.5px; font-weight: 650; overflow-wrap: anywhere; }
+.detailNotes { margin: 0 20px 16px; padding: 12px; display: grid; gap: 10px; border: 1px solid var(--b); border-radius: var(--ui-radius-sm); background: var(--m); }
+.detailNotes > div { display: grid; grid-template-columns: 100px 1fr; gap: 10px; }
+.detailNotes strong { color: var(--soft); font-size: 11px; }
+.detailNotes p { margin: 0; color: var(--t); font-size: 11.5px; line-height: 1.5; }
+.detailNotes span { display: flex; flex-wrap: wrap; gap: 5px; }
+.detailNotes b { padding: 3px 7px; border: 1px solid var(--b); border-radius: 6px; background: var(--s); color: var(--soft); font-size: 10px; }
+.detailActions { padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--b); background: var(--m); }
+.detailActions > div { color: var(--muted); font-size: 10.5px; line-height: 1.4; }
+.detailActions > span { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+
+.confirmBody { padding: 24px; display: grid; gap: 10px; justify-items: center; text-align: center; }
+.confirmBody svg { width: 32px; height: 32px; color: var(--danger); }
+.confirmBody h3 { margin: 0; color: var(--t); font-size: 16px; }
+.confirmBody p { margin: 0; color: var(--soft); font-size: 13px; line-height: 1.5; }
+.confirmBody > div { margin-top: 6px; display: flex; gap: 8px; }
+
+.previewBody { padding: 16px; }
+.previewBody img { display: block; width: 100%; min-height: 320px; max-height: 66dvh; object-fit: contain; }
+.previewBody p { padding: 32px; color: var(--soft); text-align: center; }
+
+.toast {
+  position: fixed;
+  z-index: 180;
+  right: 20px;
+  bottom: 20px;
+  padding: 12px 15px;
+  border: 1px solid var(--ui-done);
+  border-radius: var(--ui-radius-sm);
+  background: var(--elevated);
+  box-shadow: var(--ui-shadow-card);
+  color: var(--t);
+  font-size: 12.5px;
+  animation: toastIn var(--motion-base) var(--ease-enter) both;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Larguras menores (§43)                                                      */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .modelerGrid { grid-template-columns: minmax(0, 1fr) 300px; }
+}
+
+@media (max-width: 850px) {
+  .pageHeader { align-items: stretch; flex-direction: column; }
+  .maturityStrip { grid-template-columns: 1fr 1fr; }
+  .filterBar select { flex: 1 1 140px; }
+  .modelerGrid { display: block; height: auto; }
+  .canvasPanel { height: 56dvh; border-right: 0; border-bottom: 1px solid var(--b); }
+  .propertiesPanel { max-height: 60dvh; }
+  .formGrid, .toggleGrid, .companyPicker { grid-template-columns: 1fr; }
+  .wideField { grid-column: auto; }
+  .companyPicker > strong { grid-column: auto; }
+  .detailGrid { grid-template-columns: 1fr; }
+  .detailActions { align-items: stretch; flex-direction: column; }
+  .detailActions > span { justify-content: flex-start; }
+}
+
+@media (max-width: 560px) {
+  .maturityStrip { grid-template-columns: 1fr; }
+  .formSection > legend { grid-template-columns: 26px 1fr; }
+  .formSection > legend small { grid-column: 2; }
+  .detailHeader { flex-direction: column; }
+  .detailGrid dl > div { grid-template-columns: 96px 1fr; }
+  .detailNotes > div { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+  .processTable tbody tr { transition: none; }
+}

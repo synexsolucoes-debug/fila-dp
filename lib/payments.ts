@@ -11,7 +11,7 @@ import { cleanText } from "./registrations.ts";
  * isoladamente, e os fechamentos guardam a versão usada no cálculo.
  */
 export const PSYCHOLOGY_CALC_VERSION = "psychology-payment-1.0.0";
-export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.0.0";
+export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.2.0";
 
 const MAX_MONEY = 1_000_000_000;
 
@@ -234,6 +234,47 @@ export const contractorDebitTypes = [
 ] as const;
 export type ContractorComponentType = typeof contractorCreditTypes[number] | typeof contractorDebitTypes[number];
 
+/**
+ * O nome de cada rubrica em português, ao lado da lista que a define.
+ *
+ * Ficava copiado em cada tela que precisava dele, e o relatório — que não é
+ * tela — não tinha cópia nenhuma: o extrato caía no identificador cru e
+ * imprimia "health_plan" e "advance" num documento entregue para conferência.
+ * A lista e os nomes andam juntos daqui em diante, e o teste cobra que nenhum
+ * tipo fique sem nome.
+ */
+export const contractorComponentLabels: Record<ContractorComponentType, string> = {
+  base: "Valor contratual",
+  commission: "Comissão",
+  bonus: "Bônus",
+  award: "Prêmio",
+  reimbursement: "Reembolso",
+  additional: "Adicional",
+  positive_adjustment: "Ajuste positivo",
+  other_credit: "Outro provento",
+  health_plan: "Plano de saúde",
+  dental_plan: "Plano odontológico",
+  benefit: "Convênio ou benefício",
+  coparticipation: "Coparticipação",
+  equipment: "Equipamento",
+  advance: "Adiantamento",
+  absence: "Falta",
+  loan: "Empréstimo",
+  negative_adjustment: "Ajuste negativo",
+  other_debit: "Outro desconto",
+};
+
+/**
+ * O nome da rubrica para quem lê.
+ *
+ * Um identificador desconhecido volta como veio: inventar um nome bonito para
+ * um valor que o sistema não conhece esconderia justamente o caso que precisa
+ * ser visto — um tipo novo no banco que ninguém batizou.
+ */
+export function contractorComponentLabel(type: string) {
+  return contractorComponentLabels[type as ContractorComponentType] ?? type;
+}
+
 export const contractorComponentDirections = ["credit", "debit"] as const;
 export type ContractorComponentDirection = typeof contractorComponentDirections[number];
 
@@ -273,19 +314,95 @@ export type ContractorClosingCalculation = {
   invoiceExpectedAmount: number;
   complementAmount: number;
   complementMethod: ComplementMethod;
+  fixedCajuAmount: number;
   cajuAmount: number;
   requiresComplementMethod: boolean;
   negativeNet: boolean;
   calcVersion: string;
 };
 
+export type ContractorBaseProration = {
+  /** Valor mensal contratado antes de qualquer proporcionalidade. */
+  contractBaseAmount: number;
+  /** Valor base que efetivamente entra no fechamento da competência. */
+  baseAmount: number;
+  prorationApplied: boolean;
+  prorationDays: number | null;
+  prorationTotalDays: number | null;
+  prorationEndDate: string | null;
+};
+
+/**
+ * Proporcionaliza o valor mensal na competência em que o contrato termina.
+ *
+ * A contagem usa dias corridos do próprio mês e inclui o último dia do
+ * contrato. Assim, um encerramento em 15/03 paga 15 de 31 dias. Créditos,
+ * descontos e valores recorrentes continuam explícitos e não são alterados por
+ * esta regra: só o valor-base contratual é proporcionalizado.
+ */
+export function calculateContractorBaseProration(input: {
+  baseAmount: number;
+  competence: string;
+  contractEnd: string | Date | null;
+}): ContractorBaseProration {
+  const contractBaseCents = toCents(input.baseAmount, "Valor base");
+  if (contractBaseCents < 0) throw ApiError.badRequest("Valor base não pode ser negativo.", "NEGATIVE_MONEY");
+
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/u.exec(input.competence);
+  if (!match) throw ApiError.badRequest("Competência inválida.", "INVALID_COMPETENCE");
+
+  const endDate = input.contractEnd instanceof Date
+    ? input.contractEnd.toISOString().slice(0, 10)
+    : String(input.contractEnd ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(endDate) || endDate.slice(0, 7) !== input.competence) {
+    return {
+      contractBaseAmount: fromCents(contractBaseCents),
+      baseAmount: fromCents(contractBaseCents),
+      prorationApplied: false,
+      prorationDays: null,
+      prorationTotalDays: null,
+      prorationEndDate: null,
+    };
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const endDay = Number(endDate.slice(8, 10));
+  if (!Number.isInteger(endDay) || endDay < 1 || endDay > totalDays) {
+    throw ApiError.badRequest("Data de encerramento inválida.", "INVALID_DATE");
+  }
+
+  // Encerrar no último dia mantém a mensalidade integral e não precisa gerar
+  // uma marca de proporcionalidade na memória do fechamento.
+  if (endDay === totalDays) {
+    return {
+      contractBaseAmount: fromCents(contractBaseCents),
+      baseAmount: fromCents(contractBaseCents),
+      prorationApplied: false,
+      prorationDays: null,
+      prorationTotalDays: null,
+      prorationEndDate: null,
+    };
+  }
+
+  return {
+    contractBaseAmount: fromCents(contractBaseCents),
+    baseAmount: fromCents(Math.round((contractBaseCents * endDay) / totalDays)),
+    prorationApplied: true,
+    prorationDays: endDay,
+    prorationTotalDays: totalDays,
+    prorationEndDate: endDate,
+  };
+}
+
 /**
  * Ordem obrigatória do cálculo PJ:
  *
- *   1. líquido devido = base + créditos - descontos
- *   2. nota fiscal    = mínimo(líquido devido, limite configurado)
- *   3. complemento    = máximo(líquido devido - nota fiscal, 0)
- *   4. Caju           = complemento, quando o meio complementar for Caju Saldo Livre
+ *   1. líquido regular = base + créditos - descontos
+ *   2. nota fiscal     = mínimo(líquido regular, limite configurado)
+ *   3. complemento     = líquido regular - nota + diferença fixa do Caju
+ *   4. Caju            = diferença fixa + complemento regular quando o meio for Caju
  *
  * Inverter os passos 1 e 2 produz nota e complemento errados; os testes
  * cobrem explicitamente os exemplos da especificação do produto.
@@ -295,9 +412,13 @@ export function calculateContractorClosing(input: {
   components: readonly ContractorComponentInput[];
   invoiceLimit: ResolvedInvoiceLimit;
   complementMethod: ComplementMethod;
+  /** Valor recorrente adicional, sempre pago via Caju e fora da nota fiscal. */
+  fixedCajuAmount?: number;
 }): ContractorClosingCalculation {
   const baseCents = toCents(input.baseAmount, "Valor base");
   if (baseCents < 0) throw ApiError.badRequest("Valor base não pode ser negativo.", "NEGATIVE_MONEY");
+  const fixedCajuCents = toCents(input.fixedCajuAmount ?? 0, "Diferença fixa no Caju");
+  if (fixedCajuCents < 0) throw ApiError.badRequest("Diferença fixa no Caju não pode ser negativa.", "NEGATIVE_MONEY");
 
   const active = input.components.filter((component) => (component.status ?? "active") === "active");
   const creditsCents = active
@@ -307,17 +428,22 @@ export function calculateContractorClosing(input: {
     .filter((component) => component.direction === "debit")
     .reduce((total, component) => total + Math.abs(toCents(component.amount, "Valor do desconto")), 0);
 
-  // 1. líquido devido — créditos e descontos SEMPRE antes do limite da nota.
-  const netCents = baseCents + creditsCents - debitsCents;
-  const payableCents = Math.max(netCents, 0);
+  // 1. líquido regular — créditos e descontos SEMPRE antes do limite da nota.
+  // A diferença fixa do Caju é uma obrigação adicional e não participa da nota.
+  const regularNetCents = baseCents + creditsCents - debitsCents;
+  const regularPayableCents = Math.max(regularNetCents, 0);
 
-  // 2. nota fiscal esperada.
+  // 2. nota fiscal esperada, calculada apenas sobre o líquido regular.
   const limitCents = input.invoiceLimit.amount === null ? null : toCents(input.invoiceLimit.amount, "Limite da nota");
-  const invoiceCents = limitCents === null ? payableCents : Math.min(payableCents, limitCents);
+  const invoiceCents = limitCents === null ? regularPayableCents : Math.min(regularPayableCents, limitCents);
 
-  // 3. complemento e 4. Caju.
-  const complementCents = Math.max(payableCents - invoiceCents, 0);
-  const cajuCents = input.complementMethod === "caju_saldo_livre" ? complementCents : 0;
+  // 3. complemento total e 4. Caju. A diferença fixa sempre vai para o Caju;
+  // o excedente regular só vai para lá quando essa for a forma configurada.
+  const regularComplementCents = Math.max(regularPayableCents - invoiceCents, 0);
+  const payableCents = regularPayableCents + fixedCajuCents;
+  const complementCents = regularComplementCents + fixedCajuCents;
+  const cajuCents = fixedCajuCents
+    + (input.complementMethod === "caju_saldo_livre" ? regularComplementCents : 0);
 
   return {
     baseAmount: fromCents(baseCents),
@@ -329,9 +455,10 @@ export function calculateContractorClosing(input: {
     invoiceExpectedAmount: fromCents(invoiceCents),
     complementAmount: fromCents(complementCents),
     complementMethod: input.complementMethod,
+    fixedCajuAmount: fromCents(fixedCajuCents),
     cajuAmount: fromCents(cajuCents),
-    requiresComplementMethod: complementCents > 0 && input.complementMethod === "none",
-    negativeNet: netCents < 0,
+    requiresComplementMethod: regularComplementCents > 0 && input.complementMethod === "none",
+    negativeNet: regularNetCents < 0,
     calcVersion: CONTRACTOR_CALC_VERSION,
   };
 }

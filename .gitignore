@@ -31,6 +31,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.tangerino-worker.example
 
 # vercel
 .vercel
@@ -47,3 +48,4 @@ next-env.d.ts
 
 # Ambiente local (nao versionar)
 .env.local
+

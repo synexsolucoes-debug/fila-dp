@@ -42,7 +42,12 @@ test("toda capacidade do sistema é explicada em linguagem de cliente", () => {
 
 test("a matriz mostrada é a autorização real do sistema", () => {
   const granted = Object.fromEntries(workspaceRoles.map((role) => [role, new Set(capabilitiesForRole(role))]));
-  assert.equal(granted.admin.size, capabilities.length, "administrador precisa ter todas as capacidades");
+  // O papel de administrador concede tudo menos a exclusão do grupo, que é
+  // restrita ao proprietário. A matriz da tela precisa mostrar exatamente essa
+  // regra — se ela mostrasse a exclusão como concedida, o administrador veria
+  // um botão que o backend nega.
+  assert.equal(granted.admin.size, capabilities.length - 1, "administrador precisa ter todas as capacidades exceto a exclusão do grupo");
+  assert.ok(!granted.admin.has("workspace.delete"), "exclusão do grupo não vem do papel, e sim da propriedade");
 
   // Administrador e membro formam a escada esperada.
   for (const [wider, narrower] of [["admin", "member"], ["member", "observer"], ["admin", "guest"]] as const) {
@@ -77,28 +82,36 @@ test("a tela global de usuários existe na plataforma e não no painel operacion
   assert.match(users, /AdminActionDialog/u);
 });
 
-test("a tela cobre o que uma revisão de acesso exige", async () => {
-  const view = await source("../app/painel/features/access/AccessView.tsx");
-  // Assentos do plano, para o administrador saber se ainda pode convidar.
-  assert.match(view, /seatsFull/u);
-  assert.match(view, /limite atingido/u);
-  // Quem nunca entrou e quem está com ativação pendente.
-  assert.match(view, /Nunca acessou/u);
+test("a revisão de acesso do grupo cobre papel, empresa, ativação e módulo", async () => {
+  /* `features/access/AccessView.tsx` foi removida: a gestão de membros dela
+     duplicava a que já vive em WorkspaceApp.tsx. O que este teste exige passou
+     a ser exigido de onde a gestão acontece de fato.
+
+     `MemberModules`, que estava dentro daquela pasta, era a única interface de
+     /api/members/[id]/modules — migrou para `features/shared` e entrou na
+     ficha do membro antes de a pasta ser apagada. */
+  const view = await source("../app/painel/WorkspaceApp.tsx");
+  // Quem está com ativação pendente.
   assert.match(view, /Ativação pendente/u);
-  // Escopo por empresa e papel, as duas dimensões do acesso.
-  assert.match(view, /updateMemberAccess\(member\.userId, \{ role:/u);
-  assert.match(view, /updateMemberAccess\(selected\.userId, \{ companyIds: companyDraft \}\)/u);
+  // Papel e escopo por empresa, as duas dimensões do acesso pelo cargo.
+  assert.match(view, /updateMemberRole\(member\.userId/u);
+  assert.match(view, /onSave=\{updateMemberCompanies\}/u);
+  // E a terceira dimensão: exceção de módulo por pessoa.
+  assert.match(view, /<MemberModules memberId=\{member\.userId\}/u);
   // Remoção pede confirmação: perder acesso não pode ser um clique distraído.
-  assert.match(view, /window\.confirm\(/u);
-  // A matriz de permissões vem da autorização, não de texto paralelo.
-  assert.match(view, /capabilitiesForRole/u);
+  assert.match(view, /function removeMember\(/u);
+
+  /* Duas coisas que a cópia removida tinha e a viva não tem, ditas por escrito
+     para não sumirem sem decisão: aviso de limite de assentos e a matriz de
+     permissões por papel. A primeira dependia da tela de assinatura, que é da
+     plataforma por desenho; a segunda continua sem lugar no painel. */
 });
 
 test("a tela de usuários nunca cria, exibe ou envia senha", async () => {
-  const view = await source("../app/painel/features/access/AccessView.tsx");
-  const api = await source("../app/painel/features/access/access.api.ts");
+  const view = await source("../app/painel/WorkspaceApp.tsx");
+  const modulos = await source("../app/painel/features/shared/MemberModules.tsx");
   const route = await source("../app/api/members/access/route.ts");
-  for (const [name, code] of [["tela", view], ["api", api]] as const) {
+  for (const [name, code] of [["tela", view], ["módulos", modulos]] as const) {
     assert.doesNotMatch(code, /password|senha_provisoria|generatePassword/iu, `${name} não pode tocar em senha`);
   }
   // A rota consulta o hash apenas para saber se a conta já foi ativada — e
@@ -107,9 +120,9 @@ test("a tela de usuários nunca cria, exibe ou envia senha", async () => {
   assert.match(route, /\(u\.password_hash IS NOT NULL\) AS is_activated/u);
   assert.doesNotMatch(route, /SELECT[^;]*\bu\.password_hash\b(?![^;]*IS NOT NULL)/u);
   assert.doesNotMatch(route, /password_hash:|passwordHash/u, "o hash nunca entra na resposta");
-  // O caminho é sempre o link único de ativação, definido pela própria pessoa.
-  assert.match(view, /LINK ÚNICO DE ATIVAÇÃO/u);
-  assert.match(view, /a senha é definida pela própria pessoa e nunca fica visível aqui/u);
+  // O caminho é sempre o link de ativação, e a senha é definida pela pessoa.
+  assert.match(view, /Compartilhe o link de ativação/u);
+  assert.match(view, /Gerar link de ativação/u);
   assert.match(route, /is_activated/u);
 });
 

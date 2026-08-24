@@ -1,5 +1,7 @@
 import type {
-  CompanyOption, Contractor, ContractorClosing, ContractorComponent, ContractorOverview, CycleOption,
+  CompanyOption, Contractor, ContractorClosing, ContractorComponent, ContractorFixedItem,
+  ContractorMonthlyEntry,
+  ContractorOverview, ContractorPaymentDetail, CycleOption,
   InvoiceLimitPolicy, PaymentPermissions, Psychologist, PsychologyAdjustment, PsychologyClosing,
   PsychologyOverview, PsychologySession, UnassignedSessions,
 } from "./payments.types";
@@ -13,10 +15,13 @@ const nullableNumber = (input: unknown) => (input === null || input === undefine
 const bool = (input: unknown) => input === true || input === "true";
 
 export async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  if (!isForm && init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(url, {
     ...init,
     cache: "no-store",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers,
   });
   const payload = await response.json().catch(() => ({})) as T & { error?: string; message?: string };
   if (!response.ok) throw new Error(payload.message || payload.error || "Não foi possível concluir a operação.");
@@ -137,6 +142,11 @@ export function normalizeContractorClosing(row: Row): ContractorClosing {
     contractReference: text(pick(row, "contractReference", "contract_reference")),
     competence: text(row.competence),
     baseAmount: number(pick(row, "baseAmount", "base_amount")),
+    contractBaseAmount: number(pick(row, "contractBaseAmount", "contract_base_amount"))
+      || number(pick(row, "baseAmount", "base_amount")),
+    prorationDays: nullableNumber(pick(row, "prorationDays", "proration_days")),
+    prorationTotalDays: nullableNumber(pick(row, "prorationTotalDays", "proration_total_days")),
+    prorationEndDate: text(pick(row, "prorationEndDate", "proration_end_date")),
     creditsAmount: number(pick(row, "creditsAmount", "credits_amount")),
     debitsAmount: number(pick(row, "debitsAmount", "debits_amount")),
     netAmount: number(pick(row, "netAmount", "net_amount")),
@@ -164,8 +174,60 @@ export function normalizeComponent(row: Row): ContractorComponent {
   return {
     id: text(row.id), providerId: text(pick(row, "providerId", "provider_id")), direction: text(row.direction),
     componentType: text(pick(row, "componentType", "component_type")), description: text(row.description),
+    quantity: number(pick(row, "quantity", "component_quantity")) || 1,
     amount: number(row.amount), origin: text(row.origin),
     documentReference: text(pick(row, "documentReference", "document_reference")), status: text(row.status),
+  };
+}
+
+export function normalizeFixedItem(row: Row): ContractorFixedItem {
+  return {
+    id: text(row.id), providerId: text(pick(row, "providerId", "provider_id")),
+    contractorName: text(pick(row, "contractorName", "contractor_name")),
+    direction: text(row.direction) === "credit" ? "credit" : "debit",
+    componentType: text(pick(row, "componentType", "component_type")), description: text(row.description),
+    amount: number(row.amount), effectiveFrom: text(pick(row, "effectiveFrom", "effective_from")),
+    effectiveTo: text(pick(row, "effectiveTo", "effective_to")) || null,
+    status: text(row.status), note: text(row.note),
+  };
+}
+
+export function normalizeMonthlyEntry(row: Row): ContractorMonthlyEntry {
+  return {
+    id: text(row.id), providerId: text(pick(row, "providerId", "provider_id")),
+    contractorName: text(pick(row, "contractorName", "contractor_name")),
+    direction: text(row.direction) === "credit" ? "credit" : "debit",
+    componentType: text(pick(row, "componentType", "component_type")),
+    description: text(row.description), amount: number(row.amount),
+    quantity: number(pick(row, "quantity", "component_quantity")) || 1,
+    origin: text(row.origin), documentReference: text(pick(row, "documentReference", "document_reference")),
+    status: text(row.status),
+  };
+}
+
+export function normalizeContractorPaymentDetail(payload: Row): ContractorPaymentDetail {
+  const provider = (payload.provider ?? {}) as Row;
+  const rawClosing = (payload.closing ?? {}) as Row;
+  return {
+    closing: normalizeContractorClosing({
+      ...rawClosing,
+      contractorName: pick(provider, "legalName", "legal_name"),
+      contractorCode: provider.code,
+      contractReference: pick(provider, "contractReference", "contract_reference"),
+    }),
+    provider: {
+      id: text(provider.id), code: text(provider.code),
+      legalName: text(pick(provider, "legalName", "legal_name")),
+      tradeName: text(pick(provider, "tradeName", "trade_name")),
+      taxId: text(pick(provider, "taxId", "tax_id")),
+      contractReference: text(pick(provider, "contractReference", "contract_reference")),
+      roleTitle: text(pick(provider, "roleTitle", "role_title")),
+    },
+    components: ((payload.components ?? []) as Row[]).map(normalizeComponent),
+    permissions: {
+      manage: (payload.permissions as Row | undefined)?.manage === true,
+      reopen: (payload.permissions as Row | undefined)?.reopen === true,
+    },
   };
 }
 
@@ -178,6 +240,8 @@ export function normalizeContractorOverview(payload: Row): ContractorOverview {
     cycles: ((payload.cycles ?? []) as Row[]).map(normalizeCycle),
     closings: ((payload.closings ?? []) as Row[]).map(normalizeContractorClosing),
     contractors: ((payload.contractors ?? []) as Row[]).map(normalizeContractor),
+    fixedItems: ((payload.fixedItems ?? []) as Row[]).map(normalizeFixedItem),
+    monthlyEntries: ((payload.monthlyEntries ?? []) as Row[]).map(normalizeMonthlyEntry),
     invoiceLimitPolicies: ((payload.invoiceLimitPolicies ?? []) as Row[]).map((row): InvoiceLimitPolicy => ({
       id: text(row.id), scope: text(row.scope), companyId: text(pick(row, "companyId", "company_id")),
       providerId: text(pick(row, "providerId", "provider_id")),

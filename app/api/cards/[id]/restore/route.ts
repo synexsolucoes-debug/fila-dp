@@ -1,5 +1,6 @@
 import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -10,6 +11,7 @@ export async function POST(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "cards.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const result = await d1.prepare("UPDATE fdp_cards SET archived = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 1").bind(id, board.id).run();
     if (!result.meta.changes) throw ApiError.notFound("Demanda arquivada não encontrada.", "CARD_NOT_FOUND");

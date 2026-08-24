@@ -34,6 +34,99 @@ export type ModuleDefinition = {
   position: number;
 };
 
+/**
+ * Capacidades de **escrita** que cada módulo governa.
+ *
+ * A tabela `fdp_modules` guarda uma capacidade por módulo: a de leitura, que é
+ * a que decide se o módulo aparece. Negar um módulo para uma pessoa retirava
+ * só essa — e o resto continuava valendo pelo papel.
+ *
+ * Verificado contra o produto de pé: um membro com Demandas, Inbox e Planner
+ * todos negados criava demandas por `POST /api/cards` e recebia 201. Ele não
+ * via o quadro e escrevia nele.
+ *
+ * A negação é por família, e só quando **todos** os módulos que governam a
+ * capacidade estão negados: `cards.write` pertence a Demandas, Inbox e Planner
+ * ao mesmo tempo, e negar só o Inbox não pode calar o quadro de quem continua
+ * com ele liberado.
+ *
+ * A concessão continua sendo só de leitura, como a tela diz por escrito:
+ * liberar um módulo mostra o módulo; escrever continua vindo do papel. A
+ * assimetria é deliberada — liberar não pode promover ninguém.
+ */
+export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
+  board: ["cards.write", "comments.write", "attachments.write"],
+  inbox: ["cards.write"],
+  planner: ["cards.write"],
+  processes: [
+    "processes.manage", "processes.publish", "competences.manage", "competences.transition",
+    "competences.reopen", "movements.manage", "approvals.request", "approvals.decide",
+    "obligations.manage", "pending_items.manage",
+  ],
+  time_tracking: ["time.manage", "time.approve", "time.export", "time.mappings.manage"],
+  auxiliary: [
+    "benefits.manage", "psychology.manage", "contractors.manage",
+    "auxiliary.approvals.request", "auxiliary.approvals.decide", "auxiliary.close",
+  ],
+  psychologist_payments: ["psychology.payments.manage", "psychology.payments.close", "payments.reopen"],
+  contractor_payments: [
+    "contractors.payments.manage", "contractors.payments.close", "contractors.limits.manage",
+    "contractors.export_caju", "payments.reopen",
+  ],
+  registrations: [
+    "companies.manage", "employees.manage", "registrations.catalogs.manage",
+    "departments.create", "departments.edit", "departments.manage_members", "departments.archive",
+  ],
+  epi: [
+    "epi.create", "epi.edit", "epi.delete", "epi.deliver", "epi.return",
+    "epi.damage", "epi.dispose", "epi.discount.analyze", "epi.export",
+    // `epi.audit.view` é leitura, e entra aqui de propósito: a capacidade de
+    // leitura que o módulo já governa é `epi.view`, a do catálogo. Negar o
+    // módulo a uma pessoa precisa fechar as duas portas — sem esta linha, quem
+    // perdesse a tela continuaria lendo a trilha do EPI pela auditoria.
+    "epi.audit.view", "epi.stock.adjust",
+  ],
+  integrations: ["integrations.manage", "integrations.run", "integrations.reconcile"],
+  sankhya_browser: ["integrations.credentials.manage", "integrations.execute", "integrations.logs.view"],
+  payroll: ["hr.write"],
+  access: ["members.manage"],
+  saas: ["saas.manage"],
+  // Relatórios são leitura; não há escrita a negar além da própria visão.
+  indicators: [],
+};
+
+/** Módulos que governam cada capacidade de escrita, derivado do mapa acima. */
+export const capabilityOwners = (() => {
+  const owners = new Map<string, Set<string>>();
+  for (const [module_, caps] of Object.entries(moduleWriteCapabilities)) {
+    for (const capability of caps) {
+      const set = owners.get(capability) ?? new Set<string>();
+      set.add(module_);
+      owners.set(capability, set);
+    }
+  }
+  return owners;
+})();
+
+/**
+ * Capacidades de escrita a negar, dadas as exceções individuais da pessoa.
+ *
+ * Só entra a capacidade cujos módulos donos estejam **todos** negados. Módulo
+ * sem exceção não conta como negado: ele segue o papel e o plano.
+ */
+export function deniedWriteCapabilities(byModule: ReadonlyMap<string, boolean>): Set<string> {
+  const denied = new Set<string>();
+  for (const [capability, owners] of capabilityOwners) {
+    if (owners.size === 0) continue;
+    let todosNegados = true;
+    for (const module_ of owners) {
+      if (byModule.get(module_) !== false) { todosNegados = false; break; }
+    }
+    if (todosNegados) denied.add(capability);
+  }
+  return denied;
+}
+
 export type ModuleAccessInput = {
   module: ModuleDefinition;
   /** Módulos incluídos no plano contratado. */
@@ -42,6 +135,13 @@ export type ModuleAccessInput = {
   workspaceGrants: ReadonlyMap<string, boolean>;
   /** Exceções individuais do usuário dentro do grupo. */
   memberGrants?: ReadonlyMap<string, boolean>;
+  /**
+   * Módulos do departamento principal do usuário. `undefined` preserva o
+   * acesso legado de proprietários e pessoas ainda sem lotação; quando existe,
+   * é o **padrão** do acesso: decide todo módulo que ninguém decidiu à mão para
+   * esta pessoa, e cede para a exceção individual quando ela existe.
+   */
+  departmentModules?: ReadonlySet<string>;
   role: string;
   workspaceStatus: string;
   subscriptionStatus: string;
@@ -58,6 +158,7 @@ export type ModuleAccessReason =
   | "revoked_by_platform"
   | "dependency_missing"
   | "missing_capability"
+  | "not_in_department"
   | "denied_for_member";
 
 export type ModuleAccess = { allowed: boolean; reason: ModuleAccessReason; upgradeable: boolean };
@@ -72,6 +173,7 @@ export const moduleAccessMessages: Record<ModuleAccessReason, string> = {
   revoked_by_platform: "O acesso a este módulo foi bloqueado pela administração da plataforma.",
   dependency_missing: "Este módulo depende de outro que não está liberado.",
   missing_capability: "Seu perfil não tem permissão para este módulo. Peça ao administrador do grupo.",
+  not_in_department: "Este módulo não pertence ao seu departamento principal.",
   denied_for_member: "O administrador do grupo bloqueou este módulo para o seu acesso.",
 };
 
@@ -107,6 +209,19 @@ export function resolveModuleAccess(input: ModuleAccessInput): ModuleAccess {
   const memberGrant = input.memberGrants?.get(definition.key);
   if (memberGrant === false) return { allowed: false, reason: "denied_for_member", upgradeable: false };
 
+  /* O departamento é o **padrão** do acesso, não o teto: ele decide todo módulo
+     que ninguém decidiu à mão para esta pessoa, e só esses. Por isso a checagem
+     vem depois da exceção individual e só vale quando não há exceção.
+
+     Antes vinha antes, e o efeito era não existir como dar a uma pessoa o
+     acesso que a área dela não tem — que é o pedido mais comum de quem
+     administra, e a razão de a tela de módulos por usuário existir. O que
+     continua acima da exceção é o plano, porque isso é contrato, e essa recusa
+     já foi dada algumas linhas acima. */
+  if (memberGrant === undefined && input.departmentModules && !input.departmentModules.has(definition.key)) {
+    return { allowed: false, reason: "not_in_department", upgradeable: false };
+  }
+
   if (definition.dependsOn && !input.enabledKeys.has(definition.dependsOn)) {
     return { allowed: false, reason: "dependency_missing", upgradeable: true };
   }
@@ -118,6 +233,32 @@ export function resolveModuleAccess(input: ModuleAccessInput): ModuleAccess {
     return { allowed: false, reason: "missing_capability", upgradeable: false };
   }
   return { allowed: true, reason: "ok", upgradeable: false };
+}
+
+/**
+ * Junta a decisão individual com o padrão do departamento.
+ *
+ * A mesma regra de `resolveModuleAccess`, aplicada ao mapa que vira capacidade
+ * em vez de item de menu. São dois consumidores da mesma decisão: um monta o
+ * menu, o outro decide se a rota responde. Divergirem é como um módulo aparece
+ * no menu e devolve 403 ao ser aberto — por isso a regra mora ao lado, e não
+ * junto do SQL que a alimenta.
+ *
+ * Quem tem exceção segue a exceção, nas duas direções; quem não tem segue o
+ * departamento. O departamento é o padrão, não o teto.
+ */
+export function mergeDepartmentAndMemberGrants(
+  moduleKeys: Iterable<string>,
+  memberGrants: ReadonlyMap<string, boolean>,
+  departmentModules: ReadonlySet<string> | undefined,
+) {
+  const effective = new Map(memberGrants);
+  if (!departmentModules) return effective;
+  for (const key of moduleKeys) {
+    if (memberGrants.has(key)) continue;
+    if (!departmentModules.has(key)) effective.set(key, false);
+  }
+  return effective;
 }
 
 export type ResolvedModule = ModuleDefinition & {
@@ -139,6 +280,7 @@ export function resolveModules(input: {
   planModules: ReadonlySet<string>;
   workspaceGrants: ReadonlyMap<string, boolean>;
   memberGrants?: ReadonlyMap<string, boolean>;
+  departmentModules?: ReadonlySet<string>;
   role: string;
   workspaceStatus: string;
   subscriptionStatus: string;
@@ -152,6 +294,7 @@ export function resolveModules(input: {
       planModules: input.planModules,
       workspaceGrants: input.workspaceGrants,
       memberGrants: input.memberGrants,
+      departmentModules: input.departmentModules,
       role: input.role,
       workspaceStatus: input.workspaceStatus,
       subscriptionStatus: input.subscriptionStatus,

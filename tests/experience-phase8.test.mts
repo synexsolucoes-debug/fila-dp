@@ -15,7 +15,8 @@ test("todo indicador da central de ação tem consulta real, destino e capabilit
     assert.ok(definition.description.length > 3, `${definition.key} precisa de descrição`);
     assert.ok(["critical", "warning", "neutral"].includes(definition.tone));
     // Destino real: cada indicador leva a uma tela existente do painel.
-    assert.ok(["processes", "auxiliary", "psychologistPayments", "contractorPayments", "timeTracking", "integrations", "board"].includes(definition.target));
+    assert.ok(["processes", "auxiliary", "psychologistPayments", "contractorPayments", "contractorClosings",
+      "contractorCaju", "timeTracking", "integrations", "board"].includes(definition.target));
     // Capability existente e sempre escopada ao workspace da sessão.
     assert.equal(hasCapability("admin", definition.capability as Capability), true, `${definition.key} usa capability inexistente`);
     assert.match(definition.sql, /workspace_id = \?/u, `${definition.key} não filtra por workspace`);
@@ -105,7 +106,11 @@ test("a central de ação é clicável, acessível e não inventa números", asy
     readFile(new URL("../app/painel/features/action-center/ActionCenter.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(workspace, /<ActionCenter onNavigate=\{onNavigate\} \/>/);
+  // A central recebe o recorte de empresa da barra superior. A rota já aceitava
+  // `companyId` e conferia o acesso; era o painel que nunca enviava, e o
+  // seletor ficava aparente em toda tela sem mexer em número nenhum.
+  assert.match(workspace, /<ActionCenter onNavigate=\{onNavigate\} companyId=\{companyId\} \/>/);
+  assert.match(component, /\/api\/dashboard\/action-center\$\{query\}/u);
   assert.match(workspace, /onNavigate=\{\(target\) => setView\(target\)\}/);
   // Cada indicador é um botão que navega para o módulo responsável.
   assert.match(component, /onClick=\{\(\) => onNavigate\(item\.target\)\}/);

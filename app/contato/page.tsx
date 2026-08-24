@@ -5,6 +5,7 @@ import { leadInterests, type LeadInterest } from "@/lib/marketing";
 import { ContactForm } from "./ContactForm";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/contato" },
   title: "Contato | Vinculato",
   description: "Fale com a equipe do Vinculato sobre demonstração, planos, integrações ou suporte.",
 };

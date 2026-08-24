@@ -4,6 +4,7 @@ const DEFAULT_PROVIDER_HOSTS: Record<string, string[]> = {
   teams: ["graph.microsoft.com"],
   drive: ["www.googleapis.com", "graph.microsoft.com"],
   onedrive: ["graph.microsoft.com"],
+  sankhya_browser: ["*.sankhya.com.br"],
   erp: ["api.sankhya.com.br", "service.sankhya.com.br", "*.sankhya.com.br"],
 };
 
@@ -55,6 +56,27 @@ function endpointOrigin(value: string | undefined) {
 }
 
 /**
+ * Por que a URL foi recusada.
+ *
+ * Sem isto, quem apresenta o erro ao usuário só tem a frase para se orientar — e
+ * uma frase não diz qual é o remédio. Foi o que aconteceu ao anexarmos ao erro
+ * de endpoint uma dica sobre a lista de hosts autorizados: para uma URL em HTTP,
+ * a dica mandava liberar o host, o que não resolveria nada, porque o bloqueio
+ * era o protocolo. Mensagem que aponta o remédio errado é pior que a que não
+ * aponta nenhum.
+ */
+export type IntegrationEndpointReason = "unparseable" | "insecure" | "host_not_allowed" | "inline_secret";
+
+export class IntegrationEndpointError extends Error {
+  readonly reason: IntegrationEndpointReason;
+  constructor(reason: IntegrationEndpointReason, message: string) {
+    super(message);
+    this.name = "IntegrationEndpointError";
+    this.reason = reason;
+  }
+}
+
+/**
  * Returns a canonical HTTPS endpoint only when it points to a known provider,
  * an explicitly configured endpoint origin, or an operations allowlist.
  */
@@ -68,11 +90,11 @@ export function validateIntegrationEndpoint(
   try {
     url = new URL(endpoint);
   } catch {
-    throw new Error("Endpoint de integração inválido.");
+    throw new IntegrationEndpointError("unparseable", "Endpoint de integração inválido.");
   }
 
   if (url.protocol !== "https:" || url.username || url.password || url.hash || isPrivateHost(url.hostname)) {
-    throw new Error("Endpoint de integração inválido ou não seguro.");
+    throw new IntegrationEndpointError("insecure", "Endpoint de integração inválido ou não seguro.");
   }
 
   const configuredOrigin = endpointOrigin(configuredEndpoint);
@@ -84,12 +106,13 @@ export function validateIntegrationEndpoint(
   const isAllowedHost = allowedHosts.some((rule) => matchesHostRule(url.hostname, rule));
 
   if (!isConfiguredOrigin && !isAllowedHost) {
-    throw new Error(`O domínio ${url.hostname} não está autorizado para a integração ${channel}.`);
+    throw new IntegrationEndpointError("host_not_allowed",
+      `O domínio ${url.hostname} não está autorizado para a integração ${channel}.`);
   }
 
   const hasInlineSecret = Array.from(url.searchParams.keys()).some((key) => /^(access_token|api_?key|client_secret|code|sig|token)$/i.test(key));
   if (hasInlineSecret && !isConfiguredOrigin) {
-    throw new Error("Credenciais não podem ser armazenadas na URL da integração.");
+    throw new IntegrationEndpointError("inline_secret", "Credenciais não podem ser armazenadas na URL da integração.");
   }
 
   return url.toString();

@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { hasCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { sanitizeProviderCode } from "@/lib/auxiliary";
@@ -17,15 +17,15 @@ export async function GET(request: Request) {
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
 
-    const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
-    if (!access.unrestricted && access.companyIds.size === 0) return Response.json({ contractors: [] });
+    /* A lista é do grupo.
+       O prestador PJ não pertence a uma empresa — é ele quem presta serviço
+       para as empresas do grupo. Recortar a lista por empresa esconderia
+       justamente quem atende mais de uma, e quem estivesse conferindo não teria
+       como perceber a falta: uma lista menor parece igualmente correta.
+       A empresa continua valendo como sugestão do contrato, e por isso ainda dá
+       para filtrar por ela quando se quer olhar só uma frente. */
     const where = ["p.workspace_id = ?"];
     const values: unknown[] = [workspace.id];
-    if (!access.unrestricted) {
-      const ids = [...access.companyIds];
-      where.push(`p.company_id IN (${ids.map(() => "?").join(",")})`);
-      values.push(...ids);
-    }
     if (companyId) { where.push("p.company_id = ?"); values.push(companyId); }
 
     const rows = await d1.prepare(`SELECT p.provider_id, p.company_id, p.contract_reference, p.role_title, p.department_id, p.cost_center_id,
@@ -65,10 +65,15 @@ export async function POST(request: Request) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "contractors.payments.manage");
 
+    /* A empresa deixou de ser obrigatória: o prestador é do grupo, e exigir uma
+       empresa no cadastro obrigaria a inventar uma resposta para quem atende
+       várias. Quando ela vem, continua sendo conferida — é sugestão de qual
+       empresa costuma apurar aquele prestador, e sugerir uma empresa que a
+       pessoa não pode ver seria vazar o nome dela. */
     const companyId = cleanText(body.companyId, 120);
     const legalName = cleanText(body.legalName, 180);
-    if (!companyId || !legalName) throw ApiError.badRequest("Empresa e razão social são obrigatórias.", "CONTRACTOR_REQUIRED_FIELDS");
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
+    if (!legalName) throw ApiError.badRequest("A razão social é obrigatória.", "CONTRACTOR_REQUIRED_FIELDS");
+    if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
 
     const code = sanitizeProviderCode(body.code ?? legalName);
     const baseAmount = positiveMoney(body.baseAmount, "Valor base");
@@ -90,7 +95,7 @@ export async function POST(request: Request) {
           responsible_user_id, contract_start, contract_end, base_amount, invoice_limit_override, complement_method, complement_platform,
           complement_external_id, payout_encrypted, payout_iv, payout_tag, payout_key_version, status, notes, updated_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`)
-        .bind(providerId, workspace.id, companyId, cleanText(body.contractReference, 80), cleanText(body.roleTitle, 120),
+        .bind(providerId, workspace.id, companyId || null, cleanText(body.contractReference, 80), cleanText(body.roleTitle, 120),
           cleanText(body.departmentId, 120) || null, cleanText(body.costCenterId, 120) || null, cleanText(body.responsibleUserId, 120) || null,
           optionalDate(body.contractStart), optionalDate(body.contractEnd), baseAmount, invoiceLimitOverride, complementMethod,
           cleanText(body.complementPlatform, 80), cleanText(body.complementExternalId, 160),

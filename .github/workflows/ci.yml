@@ -21,3 +21,172 @@ jobs:
       - run: npm ci
       - run: npm run ci
       - run: npm audit --omit=dev --audit-level=high
+
+  # Portão de banco. Ele existe por um motivo concreto: o SQL do produto é
+  # escrito à mão dentro de strings, e nada o verificava. `JOIN
+  # fdp_workspace_module_grants grant` passou por lint, typecheck, testes e
+  # revisão — `grant` é palavra reservada do PostgreSQL, e a varredura agendada
+  # das integrações morria em produção a cada meia hora com `syntax error at or
+  # near "grant"`, parando a fila de todos os clientes.
+  #
+  # Nenhum teste podia ter pego isso, porque nenhum teste falava com um banco.
+  # Aqui as migrations rodam de verdade e cada consulta é preparada contra o
+  # schema resultante.
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vinculato
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vinculato"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vinculato
+      FDP_DB_DRIVER: pg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # As migrations precisam aplicar em um banco vazio. Se esta etapa falhar,
+      # o deploy levaria um schema que não sobe do zero.
+      - name: Aplicar migrations em banco limpo
+        run: npm run db:migrate
+
+      # Aplicar duas vezes precisa ser inofensivo: é o que acontece em qualquer
+      # redeploy. Uma migration não idempotente aparece aqui, não em produção.
+      - name: Reaplicar migrations (idempotência)
+        run: npm run db:migrate
+
+      - name: Preparar cada consulta do produto contra o schema real
+        run: npm run verify:sql
+
+      # O extrato analítico PJ existe para conferência, e conferência tem uma
+      # exigência dura: as linhas precisam somar o número do fechamento. A soma
+      # acontece em SQL, sobre uma união, com um lançamento cancelado que
+      # aparece sem entrar na conta — nenhum teste de unidade alcança isso. O
+      # ensaio roda a consulta que a rota executa, importada e não copiada.
+      - name: Provar que o extrato analítico fecha com a apuração
+        run: npm run db:rehearse-statement
+
+      # Isolamento multi-tenant provado, não afirmado. O ensaio usa o mesmo
+      # adaptador da aplicação e um papel SEM superusuário — superusuário ignora
+      # RLS e faria tudo passar sem provar nada, por isso o próprio ensaio
+      # reprova se o papel puder burlar as políticas.
+      - name: Semear dois clientes e criar o papel da aplicação
+        run: |
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/dr-seed.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "
+            DROP ROLE IF EXISTS vinculato_app;
+            CREATE ROLE vinculato_app LOGIN PASSWORD 'app';
+            GRANT USAGE ON SCHEMA public TO vinculato_app;
+            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO vinculato_app;"
+
+      - name: Provar que um workspace não alcança o outro
+        env:
+          DATABASE_URL: postgresql://vinculato_app:app@localhost:5432/vinculato
+        run: npm run verify:isolation
+
+      # Backup só vale quando a restauração é provada, e uma prova que só roda
+      # quando alguém lembra de rodar apodrece. O ensaio faz o ciclo inteiro —
+      # migrations pelo executor de produção, dump, restore em banco vazio — e
+      # confere contagem por tabela, políticas de RLS, FORCE ROW LEVEL SECURITY,
+      # triggers, constraints, isolamento entre clientes no banco restaurado e
+      # imutabilidade de fechamento concluído. Leva segundos.
+      - name: Ensaiar backup e restauração
+        env:
+          FDP_DR_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          FDP_ALLOW_EPHEMERAL_SCHEMA_TEST: "true"
+        run: npm run db:rehearse-restore
+
+  # Conferência WCAG 2.2 AA contra o produto rodando de verdade: contraste
+  # medido pixel a pixel (inclusive sobre gradiente), nome acessível de cada
+  # controle e tamanho de alvo. Roda nos dois temas e em duas larguras, o que
+  # também cobre a responsividade a 390 px.
+  #
+  # O ensaio já existia e nunca rodava, porque não havia como criar a conta que
+  # ele usa — cada execução dependia de alguém montar o ambiente à mão.
+  # `scripts/seed-ui-fixture.mjs` resolve isso, e a semente é deliberadamente
+  # quase vazia: assim a auditoria passa pelos estados vazios, que são os mais
+  # fáceis de quebrar sem ninguém perceber.
+  interface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vinculato
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vinculato"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vinculato
+      FDP_DB_DRIVER: pg
+      FDP_AUTH_SECRET: ensaio-de-interface-em-ci-com-mais-de-32-caracteres
+      FDP_PLATFORM_ADMIN_EMAILS: admin@vinculato.test
+      # Credencial de ensaio de um banco efêmero que nasce e morre com o job.
+      # Não é segredo e não deve virar um: o ensaio precisa entrar pela tela de
+      # login como uma pessoa entra, e um segredo de repositório aqui daria a
+      # impressão errada de que existe uma conta real por trás.
+      FIXTURE_PASSWORD: ensaio-de-interface-em-ci-2026
+      # Mesma natureza da senha acima: chave de cofre de um banco efêmero, fixa
+      # e pública de propósito. Ela precisa ser a mesma na semente e no app —
+      # chaves diferentes gravariam uma credencial que ninguém abre, e a
+      # conferência mediria um estado que o produto não produz.
+      FDP_SANKHYA_VAULT_KEY: ExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTExM=
+      FDP_SANKHYA_VAULT_KEY_VERSION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Preparar banco e conta do ensaio
+        run: |
+          npm run db:migrate
+          A11Y_PASSWORD="$FIXTURE_PASSWORD" node scripts/seed-ui-fixture.mjs
+
+      - run: npm run build
+
+      # `npm start` não termina sozinho: sobe em segundo plano e o passo espera
+      # a porta responder antes de auditar, em vez de dormir um tempo fixo.
+      - name: Subir o produto e auditar interface
+        run: |
+          set -euo pipefail
+          npm start -- -p 3000 > /tmp/next.log 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/login; then break; fi
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:3000/login || { echo "o produto não subiu:"; tail -30 /tmp/next.log; exit 1; }
+          export VINCULATO_ADMIN_EMAIL=admin@vinculato.test
+          export VINCULATO_ADMIN_PASSWORD="$FIXTURE_PASSWORD"
+          export A11Y_PASSWORD="$FIXTURE_PASSWORD"
+          npm run a11y-check
+          # A verificação de navegador existia e a CI não a rodava — o mesmo
+          # padrão que já escondeu defeito neste repositório mais de uma vez.
+          # São 64 conferências contra o produto de pé, incluindo a criação de
+          # demanda pela interface e a prova de que o seletor de empresa
+          # recorta de verdade a visão geral.
+          npm run browser-check

@@ -8,6 +8,7 @@ import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { TimeDialog as TimeDialogView } from "./TimeDialogs";
 import { duration, normalizeCompany, normalizeOverview, requestJson, type Row } from "./time.api";
 import type { CompanyOption, TimeDialog, TimeOverview } from "./time.types";
+import { ErrorBanner } from "../shared";
 import styles from "./time.module.css";
 
 const statusLabels: Record<string, string> = {
@@ -179,7 +180,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
   }
 
   if (role === "guest") {
-    return <section className={styles.workspace}><p className={styles.emptyState}>Seu perfil não tem acesso à conferência de ponto.</p></section>;
+    return <section className={styles.workspace}><p className={styles.noteLine}>Seu perfil não tem acesso à conferência de ponto.</p></section>;
   }
 
   const summary = overview?.summary;
@@ -239,13 +240,13 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
         <p className={styles.privacyNotice}><ShieldCheck aria-hidden="true" /><span>{overview.boundary}</span></p>
       )}
 
-      {error && <p className={styles.errorState} role="alert"><AlertOctagon aria-hidden="true" /> {error}</p>}
-      {loading && <p className={styles.loadingState}><LoaderCircle aria-hidden="true" className={styles.spin} /> Carregando a conferência de ponto…</p>}
+      {error && <ErrorBanner message={error} />}
+      {loading && <p className={styles.loadingLine}><LoaderCircle aria-hidden="true" className={styles.spin} /> Carregando a conferência de ponto…</p>}
 
-      {!loading && !companies.length && <p className={styles.emptyState}>Cadastre uma empresa para conferir ponto.</p>}
+      {!loading && !companies.length && <p className={styles.noteLine}>Cadastre uma empresa para conferir ponto.</p>}
 
       {!loading && companies.length > 0 && !cycle && (
-        <p className={styles.emptyState}>
+        <p className={styles.noteLine}>
           A competência {competenceLabel(competence)} ainda não foi aberta para esta empresa. Abra-a em Operação DP para conferir o ponto.
         </p>
       )}
@@ -275,7 +276,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
           )}
 
           {overview.sheets.length === 0 ? (
-            <p className={styles.emptyState}>
+            <p className={styles.noteLine}>
               Nenhuma folha de ponto nesta competência. Importe as marcações pela API de importação ou abra a folha de um colaborador.
             </p>
           ) : (

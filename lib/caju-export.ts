@@ -13,6 +13,7 @@ import { ApiError } from "./api-errors.ts";
  */
 
 export type CajuCandidate = {
+  closingId: string;
   contractorId: string;
   contractorName: string;
   /** Apenas dígitos. Vazio quando o cadastro não tem CPF. */
@@ -32,10 +33,23 @@ export type CajuBlockReason =
   | "invalid_tax_id"
   | "duplicated_tax_id";
 
+export type CajuBlockDiagnostic = {
+  category: "workflow" | "data" | "configuration";
+  title: string;
+  detail: string;
+  action: string;
+};
+
 export type CajuPreview = {
   eligible: CajuCandidate[];
   /** Registros que não podem ir para o arquivo, com o motivo de cada um. */
-  blocked: Array<{ contractorId: string; contractorName: string; reason: CajuBlockReason }>;
+  blocked: Array<{
+    closingId: string;
+    contractorId: string;
+    contractorName: string;
+    closingStatus: string;
+    reason: CajuBlockReason;
+  }>;
   /** Excluídos por regra de negócio, não por erro: Caju zerada. */
   skippedZero: number;
   totalCents: number;
@@ -44,6 +58,68 @@ export type CajuPreview = {
 
 /** Situações em que o fechamento PJ já pode virar pagamento. */
 const EXPORTABLE_STATUSES = new Set(["approved", "invoice_pending", "ready_to_pay", "paid", "closed"]);
+
+/**
+ * Traduz um bloqueio técnico em diagnóstico operacional. Em especial,
+ * `not_approved` não significa necessariamente valor inconsistente: na maior
+ * parte dos casos o cálculo só ainda não percorreu Conferência → Aprovação.
+ */
+export function describeCajuBlock(reason: CajuBlockReason, closingStatus: string): CajuBlockDiagnostic {
+  if (reason === "invalid_tax_id") {
+    return {
+      category: "data",
+      title: "CPF ausente ou inválido",
+      detail: "O CPF do prestador não tem 11 dígitos válidos ou está preenchido com uma sequência recusada pela Caju.",
+      action: "Corrija o CPF no cadastro do prestador e clique em Reconferir.",
+    };
+  }
+  if (reason === "duplicated_tax_id") {
+    return {
+      category: "data",
+      title: "CPF repetido nesta competência",
+      detail: "Outro fechamento da mesma empresa e competência usa o mesmo CPF. A Caju pode duplicar ou recusar o crédito.",
+      action: "Confira os cadastros dos prestadores, mantenha o CPF na pessoa correta e clique em Reconferir.",
+    };
+  }
+  if (reason === "template_missing") {
+    return {
+      category: "configuration",
+      title: "Modelo oficial não configurado",
+      detail: "A estrutura do arquivo de importação da Caju ainda não foi cadastrada.",
+      action: "Cadastre o modelo oficial da Caju e clique em Reconferir.",
+    };
+  }
+
+  const workflow: Record<string, Omit<CajuBlockDiagnostic, "category">> = {
+    open: {
+      title: "Aguardando conferência",
+      detail: "O cálculo está na etapa Aberto. A exportação não encontrou uma inconsistência de valor; o fluxo de aprovação ainda não foi iniciado.",
+      action: "Na tabela Fechamento PJ, avance para Conferência, depois Aprovação e Aprovado.",
+    },
+    review: {
+      title: "Conferência ainda não concluída",
+      detail: "O cálculo está em Conferência e ainda não foi enviado para a etapa de aprovação.",
+      action: "Na tabela Fechamento PJ, avance para Aprovação e depois Aprovado.",
+    },
+    approval: {
+      title: "Aguardando aprovação",
+      detail: "O cálculo já passou pela conferência e aguarda a decisão final. A exportação não identificou outra inconsistência neste registro.",
+      action: "Na tabela Fechamento PJ, revise os valores e clique em Aprovado.",
+    },
+    reopened: {
+      title: "Fechamento reaberto para correção",
+      detail: "O fechamento foi reaberto e a aprovação anterior deixou de valer para esta exportação.",
+      action: "Conclua a correção e avance novamente por Conferência, Aprovação e Aprovado.",
+    },
+  };
+  const current = workflow[closingStatus];
+  return {
+    category: "workflow",
+    title: current?.title ?? "Etapa do cálculo não permite exportar",
+    detail: current?.detail ?? `A situação atual do fechamento é “${closingStatus || "não informada"}” e ainda não libera a exportação.`,
+    action: current?.action ?? "Abra o fechamento PJ, conclua a conferência e a aprovação e clique em Reconferir.",
+  };
+}
 
 /** CPF só com dígitos, 11 posições, sem sequência repetida. */
 export function normalizeTaxId(value: string) {
@@ -87,16 +163,25 @@ export function buildCajuPreview(
     if (candidate.cajuAmountCents <= 0) { skippedZero += 1; continue; }
 
     if (!EXPORTABLE_STATUSES.has(candidate.closingStatus)) {
-      blocked.push({ contractorId: candidate.contractorId, contractorName: candidate.contractorName, reason: "not_approved" });
+      blocked.push({
+        closingId: candidate.closingId, contractorId: candidate.contractorId,
+        contractorName: candidate.contractorName, closingStatus: candidate.closingStatus, reason: "not_approved",
+      });
       continue;
     }
     if (!isValidTaxId(candidate.taxId)) {
-      blocked.push({ contractorId: candidate.contractorId, contractorName: candidate.contractorName, reason: "invalid_tax_id" });
+      blocked.push({
+        closingId: candidate.closingId, contractorId: candidate.contractorId,
+        contractorName: candidate.contractorName, closingStatus: candidate.closingStatus, reason: "invalid_tax_id",
+      });
       continue;
     }
     const key = `${candidate.companyId}:${candidate.competenceId}:${normalizeTaxId(candidate.taxId)}`;
     if (seen.has(key)) {
-      blocked.push({ contractorId: candidate.contractorId, contractorName: candidate.contractorName, reason: "duplicated_tax_id" });
+      blocked.push({
+        closingId: candidate.closingId, contractorId: candidate.contractorId,
+        contractorName: candidate.contractorName, closingStatus: candidate.closingStatus, reason: "duplicated_tax_id",
+      });
       continue;
     }
     seen.set(key, candidate.contractorId);
@@ -122,14 +207,8 @@ export function assertExportable(preview: CajuPreview, templateVersion: number |
       "Nenhum modelo oficial da Caju está configurado. Baixe a planilha de importação no portal da Caju e cadastre-a em Integrações › Caju › Modelos de importação antes de exportar.");
   }
   if (preview.blocked.length > 0) {
-    const labels: Record<CajuBlockReason, string> = {
-      template_missing: "sem modelo oficial",
-      not_approved: "cálculo ainda não aprovado",
-      invalid_tax_id: "CPF ausente ou inválido",
-      duplicated_tax_id: "CPF repetido na mesma competência",
-    };
     const detail = preview.blocked
-      .map((item) => `${item.contractorName} (${labels[item.reason]})`)
+      .map((item) => `${item.contractorName} (${describeCajuBlock(item.reason, item.closingStatus).title})`)
       .slice(0, 8).join("; ");
     throw new ApiError(409, "CAJU_EXPORT_INVALID",
       `A exportação foi interrompida: ${preview.blocked.length} registro(s) impedem o arquivo. ${detail}. Corrija e tente de novo.`,

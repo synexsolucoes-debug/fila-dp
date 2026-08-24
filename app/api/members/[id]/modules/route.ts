@@ -79,15 +79,20 @@ export async function GET(_request: Request, { params }: Params) {
     // fato. A diferença entre as duas é exatamente o que a exceção fez — sem
     // isso a tela mostraria o resultado sem mostrar a causa.
     const byRole = resolveModules({
-      modules: catalog, ...plan, role: member.role, workspaceStatus,
+      modules: catalog, ...plan, departmentModules: grants.departmentModules, role: member.role, workspaceStatus,
     });
     const effective = resolveModules({
-      modules: catalog, ...plan, memberGrants: grants.byModule, role: member.role, workspaceStatus,
+      modules: catalog, ...plan, memberGrants: grants.byModule,
+      departmentModules: grants.departmentModules, role: member.role, workspaceStatus,
     });
     const roleByKey = new Map(byRole.map((item) => [item.key, item]));
 
     return Response.json({
-      member: { id: member.user_id, name: member.name, email: member.email, role: member.role },
+      member: {
+        id: member.user_id, name: member.name, email: member.email, role: member.role,
+        department: grants.department,
+        departmentRequired: !grants.isOwner && !grants.department,
+      },
       modules: effective.map((item) => {
         const base = roleByKey.get(item.key);
         const override = grants.byModule.get(item.key);
@@ -103,6 +108,8 @@ export async function GET(_request: Request, { params }: Params) {
           // `null` quando não há exceção: a tela distingue "segue o papel" de
           // "foi decidido individualmente".
           override: override === undefined ? null : override,
+          inDepartment: grants.isOwner || Boolean(grants.departmentModules?.has(item.key)),
+          lockedByDepartment: Boolean(grants.departmentModules && !grants.departmentModules.has(item.key)),
           // Fora do plano, nem o administrador do grupo pode liberar.
           lockedByPlan: base?.reason === "not_in_plan" || base?.reason === "revoked_by_platform",
         };
@@ -132,7 +139,21 @@ export async function PUT(request: Request, { params }: Params) {
     const definition = catalog.find((item) => item.key === moduleKey);
     if (!definition) throw ApiError.notFound("Módulo não encontrado.", "MODULE_NOT_FOUND");
 
-    // `null` remove a exceção e devolve a pessoa ao que o papel dela decide.
+    /* Três recusas saíram daqui, todas pelo mesmo motivo: elas faziam do
+       departamento um teto, e não um padrão.
+
+       Recusava-se alterar módulos de quem não tinha departamento; recusava-se
+       liberar módulo fora do departamento; e recusava-se remover a exceção de
+       quem tinha departamento. Juntas, tornavam impossível dar a uma pessoa o
+       acesso que a área dela não tem — que é o pedido mais comum de quem
+       administra, e a razão de esta tela existir.
+
+       O que continua acima da exceção é o plano: liberar para uma pessoa o que
+       o grupo não contratou seria vender por dentro da tela. Essa recusa está
+       logo abaixo e não mudou. */
+
+    // `null` remove a exceção e devolve a pessoa ao que o papel e o
+    // departamento dela decidem.
     const raw = body.granted;
     const granted = raw === null || raw === undefined || raw === "" ? null : raw === true || raw === "true";
 

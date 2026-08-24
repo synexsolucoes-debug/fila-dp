@@ -1,6 +1,7 @@
 import { getAttachmentsBucket } from "@/db";
 import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -15,6 +16,7 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member", "observer"]);
+    requireCapability(workspace, "attachments.read");
     const attachment = await d1.prepare(`SELECT a.object_key, a.filename, a.content_type, a.card_id
       FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id
       WHERE a.id = ? AND c.board_id = ?`).bind(id, board.id).first<{ object_key: string; filename: string; content_type: string; card_id: string }>();
@@ -46,6 +48,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "attachments.write");
     const attachment = await d1.prepare(`SELECT a.object_key, a.card_id, a.filename
       FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id
       WHERE a.id = ? AND c.board_id = ?`).bind(id, board.id).first<{ object_key: string; card_id: string; filename: string }>();

@@ -1,5 +1,6 @@
 import { ApiError, apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,6 +14,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!comment) return Response.json({ error: "Escreva um comentário." }, { status: 400 });
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member", "guest"]);
+    requireCapability(workspace, "comments.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const card = await d1.prepare("SELECT id, title FROM fdp_cards WHERE id = ? AND board_id = ? AND archived = 0")
       .bind(id, board.id)
@@ -60,6 +62,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!commentId || !comment) return Response.json({ error: "Informe o comentário." }, { status: 400 });
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member", "guest"]);
+    requireCapability(workspace, "comments.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const current = await d1.prepare(`SELECT cc.id, cc.author_user_id FROM fdp_card_comments cc JOIN fdp_cards c ON c.id = cc.card_id WHERE cc.id = ? AND cc.card_id = ? AND c.board_id = ? AND c.archived = 0`).bind(commentId, id, board.id).first<{ id: string; author_user_id: string }>();
     if (!current) return Response.json({ error: "Comentário não encontrado." }, { status: 404 });
@@ -82,6 +85,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     if (!commentId) return Response.json({ error: "Informe o comentário." }, { status: 400 });
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member", "guest"]);
+    requireCapability(workspace, "comments.write");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const current = await d1.prepare(`SELECT cc.id, cc.author_user_id FROM fdp_card_comments cc JOIN fdp_cards c ON c.id = cc.card_id WHERE cc.id = ? AND cc.card_id = ? AND c.board_id = ? AND c.archived = 0`).bind(commentId, id, board.id).first<{ id: string; author_user_id: string }>();
     if (!current) return Response.json({ error: "Comentário não encontrado." }, { status: 404 });

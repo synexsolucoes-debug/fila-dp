@@ -159,6 +159,8 @@ export type Card = {
   description: string;
   companyId: string | null;
   company: string;
+  requesterAreaId: string | null;
+  responsibleAreaId: string | null;
   processType: string;
   priority: "low" | "normal" | "high" | "urgent";
   assigneeName: string;
@@ -184,6 +186,12 @@ export type Card = {
   legalDueAt: string | null;
   processTemplateId: string | null;
   closedAt: string | null;
+};
+
+export type OperationalArea = {
+  id: string; name: string; code: string; description: string; status: string;
+  managerUserId: string | null; color: string; icon: string; defaultSlaDays: number;
+  membersCount: number; moduleKeys: string[];
 };
 
 export type BoardList = {
@@ -234,6 +242,9 @@ export type WorkspaceMember = {
   isOwner: boolean;
   isActivated: boolean;
   companyIds: string[];
+  /** Departamento principal no Workspace; dá os módulos padrão da pessoa. */
+  departmentId: string | null;
+  departmentName: string;
 };
 
 export type AvailableWorkspace = {
@@ -275,6 +286,39 @@ export type WorkspaceSnapshot = {
   plannerBlocks: PlannerBlock[];
   calendarConnections: CalendarConnection[];
   companies: Company[];
+  areas: OperationalArea[];
   hrMetrics: HrMetric[];
   recentActivity: ActivityEvent[];
+  /**
+   * Ciclos de folha da competência mais recente do grupo.
+   *
+   * O fechamento é o fato mais estruturante do DP: a operação inteira é
+   * cíclica e a interface não dizia isso em lugar nenhum. Vem no mesmo lote do
+   * snapshot — uma consulta a mais, nenhuma ida extra ao banco.
+   */
+  payrollCycles: PayrollCycleSummary[];
+  /**
+   * Janela do histórico carregado (§39).
+   *
+   * O snapshot de abertura traz uma janela de comentários, caixa de entrada e
+   * atividade — não o histórico inteiro. `total` existe para que a interface
+   * possa dizer que há mais: janela sem aviso vira "o sistema perdeu meus
+   * dados".
+   */
+  history: {
+    windowDays: number;
+    comments: { loaded: number; total: number };
+    inbox: { loaded: number; total: number };
+    activity: { loaded: number; total: number };
+  };
+};
+
+/** Um ciclo de folha, do jeito que a Visão geral precisa dele. */
+export type PayrollCycleSummary = {
+  id: string;
+  companyId: string;
+  competence: string;
+  /** `open` | `pre_closing` | `processing` | `post_closing` | `closed`. */
+  status: string;
+  closedAt: string | null;
 };

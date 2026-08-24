@@ -1,20 +1,20 @@
 import { ApiError } from "../api-errors.ts";
 import { assertNoForbiddenFields, redact, redactDeep, type RedactionHit } from "./redaction.ts";
+import { createGateway, generateText } from "ai";
 
 /**
  * Adaptador do provedor de modelo.
  *
- * O produto não decide qual provedor você usa nem embute chave de ninguém. Sem
- * configuração, o assistente **diz o que falta** em vez de fingir que funciona
- * — o mesmo padrão do modelo oficial da Caju, e pelo mesmo motivo: uma resposta
- * inventada num sistema de DP é pior que resposta nenhuma.
+ * Na Vercel, o produto usa automaticamente o AI Gateway com a identidade OIDC
+ * temporária do deployment. Fora dela, o provedor continua explícito e, sem
+ * configuração, o assistente **diz o que falta** em vez de fingir que funciona.
  *
  * Toda saída passa pela redação antes de deixar o processo. Isso não é opcional
  * e não tem chave de ambiente que desligue: um limite de privacidade que pode
  * ser desligado por variável não é um limite.
  */
 
-export type AssistantProviderName = "anthropic" | "openai";
+export type AssistantProviderName = "anthropic" | "openai" | "gateway";
 
 export type AssistantConfig = {
   provider: AssistantProviderName;
@@ -34,7 +34,12 @@ export type AssistantReply = {
   provider: AssistantProviderName;
 };
 
-const PROVIDERS: Record<AssistantProviderName, { baseUrl: string; defaultModel: string; keyEnv: string }> = {
+const PROVIDERS: Record<AssistantProviderName, {
+  baseUrl: string;
+  defaultModel: string;
+  keyEnv: string;
+  acceptsVercelOidc?: boolean;
+}> = {
   anthropic: {
     baseUrl: "https://api.anthropic.com/v1/messages",
     defaultModel: "claude-sonnet-5",
@@ -44,6 +49,12 @@ const PROVIDERS: Record<AssistantProviderName, { baseUrl: string; defaultModel: 
     baseUrl: "https://api.openai.com/v1/chat/completions",
     defaultModel: "gpt-4o-mini",
     keyEnv: "OPENAI_API_KEY",
+  },
+  gateway: {
+    baseUrl: "",
+    defaultModel: "openai/gpt-5.5",
+    keyEnv: "AI_GATEWAY_API_KEY",
+    acceptsVercelOidc: true,
   },
 };
 
@@ -58,26 +69,28 @@ export type ConfigurationStatus =
  * não é serializado em resposta nenhuma.
  */
 export function readAssistantConfig(env: Readonly<Record<string, string | undefined>> = process.env): ConfigurationStatus {
-  const raw = String(env.FDP_ASSISTANT_PROVIDER ?? "").trim().toLowerCase();
+  const isVercel = env.VERCEL === "1" || Boolean(String(env.VERCEL_OIDC_TOKEN ?? "").trim());
+  const raw = String(env.FDP_ASSISTANT_PROVIDER ?? (isVercel ? "gateway" : "")).trim().toLowerCase();
   if (!raw) {
     return {
       configured: false,
       missing: ["FDP_ASSISTANT_PROVIDER"],
       detail: "O assistente ainda não foi configurado neste ambiente. "
-        + "Defina FDP_ASSISTANT_PROVIDER (anthropic ou openai) e a chave do provedor escolhido.",
+        + "Defina FDP_ASSISTANT_PROVIDER (gateway, anthropic ou openai) e a autenticação do provedor escolhido.",
     };
   }
   if (!Object.hasOwn(PROVIDERS, raw)) {
     return {
       configured: false,
       missing: ["FDP_ASSISTANT_PROVIDER"],
-      detail: `Provedor "${raw}" não é reconhecido. Use anthropic ou openai.`,
+      detail: `Provedor "${raw}" não é reconhecido. Use gateway, anthropic ou openai.`,
     };
   }
   const provider = raw as AssistantProviderName;
   const definition = PROVIDERS[provider];
   const apiKey = String(env.FDP_ASSISTANT_API_KEY ?? env[definition.keyEnv] ?? "").trim();
-  if (!apiKey) {
+  const hasVercelOidc = Boolean(definition.acceptsVercelOidc && isVercel);
+  if (!apiKey && !hasVercelOidc) {
     return {
       configured: false,
       missing: [definition.keyEnv],
@@ -118,10 +131,17 @@ export function buildSystemPrompt(context: {
   screen: string;
   allowedModules: Array<{ key: string; name: string }>;
   blockedModules: Array<{ key: string; name: string; reason: string }>;
+  /**
+   * Resultado das consultas operacionais nomeadas (§61), já apurado e agregado
+   * pelo servidor. São **fatos**, não permissão para procurar mais: o modelo
+   * continua sem SQL, sem tabela e sem dado pessoal.
+   */
+  operationalFacts?: string;
 }) {
   assertNoForbiddenFields(context, "systemPrompt");
   const allowed = context.allowedModules.map((item) => item.name).join(", ") || "nenhum";
   const blocked = context.blockedModules.map((item) => `${item.name} (${item.reason})`).join("; ") || "nenhum";
+  const facts = (context.operationalFacts ?? "").trim();
 
   return [
     "Você é o assistente do Vinculato, um sistema de Departamento Pessoal.",
@@ -130,6 +150,7 @@ export function buildSystemPrompt(context: {
     `Grupo: ${context.workspaceName}. Usuário: ${context.userName}, papel ${context.role}. Tela atual: ${context.screen}.`,
     `Módulos liberados para esta pessoa: ${allowed}.`,
     `Módulos bloqueados para esta pessoa: ${blocked}.`,
+    ...(facts ? ["", facts] : []),
     "",
     "Regras que você não pode quebrar:",
     "- Você NÃO tem acesso a dados de colaboradores, prestadores, folha, CPF, conta bancária ou valores.",
@@ -137,6 +158,9 @@ export function buildSystemPrompt(context: {
     "- Você NÃO executa ações. Você explica o caminho e, quando existir, indica a tela e o botão.",
     "- Se a pessoa pedir algo que o papel dela não permite, diga isso e diga quem pode fazer.",
     "- Se você não souber, diga que não sabe. Não descreva telas ou campos que você não viu na lista acima.",
+    ...(facts
+      ? ["- Os números acima já vieram apurados. Use exatamente eles, e diga que não sabe quando a pergunta pedir um número que não está ali."]
+      : []),
   ].join("\n");
 }
 
@@ -159,6 +183,29 @@ export async function askAssistant(input: {
     content: message.content,
   })));
   const redactions = [...systemSafe.hits, ...hits];
+
+  if (config.provider === "gateway") {
+    try {
+      const result = await generateText({
+        model: config.apiKey ? createGateway({ apiKey: config.apiKey })(config.model) : config.model,
+        instructions: systemSafe.text,
+        messages: messagesSafe,
+        maxOutputTokens: config.maxOutputTokens,
+        abortSignal: input.signal,
+      });
+      const text = result.text.trim();
+      if (!text) {
+        throw new ApiError(502, "ASSISTANT_EMPTY_REPLY", "O assistente não conseguiu responder agora. Tente de novo em instantes.");
+      }
+      return { text, redactions, model: config.model, provider: config.provider };
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      // O erro do Gateway pode trazer detalhes de autenticação e da requisição;
+      // a interface recebe somente uma orientação operacional segura.
+      throw new ApiError(502, "ASSISTANT_PROVIDER_ERROR",
+        "O assistente não conseguiu responder agora. Tente de novo em instantes.");
+    }
+  }
 
   const response = await fetch(config.baseUrl, {
     method: "POST",

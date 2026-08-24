@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/subprocessadores" },
   title: "Subprocessadores e DPA | Vinculato",
   description: "Subprocessadores utilizados pela plataforma e as condições de tratamento de dados entre controlador e operador.",
 };

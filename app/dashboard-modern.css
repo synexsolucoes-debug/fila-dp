@@ -3,54 +3,156 @@
  * Isolated from the legacy marketing/auth styles so the operational UI can
  * evolve without introducing another set of conflicting global overrides.
  */
+/* ==========================================================================
+   Escala de superfície do tema claro (§5, §6)
+   ==========================================================================
+   O tema claro anterior era `#ffffff` de superfície sobre `#f5f7f9` de fundo:
+   1,03:1 entre os dois. Numa tela cheia de cartões isso não é hierarquia, é
+   uma folha de papel com texto — não dá para ver onde um cartão começa nem
+   onde uma área termina, que é exatamente a queixa da §6.
+
+   A escala agora tem quatro degraus e todos derivam do matiz da marca (o navy
+   #062B60, ~215°), não de cinza neutro. O fundo é o degrau mais escuro e a
+   superfície flutua acima dele; a superfície elevada — modal, popover, menu —
+   sobe mais um. Nenhum deles é `#ffffff`: o branco puro sobrou apenas como
+   texto sobre preenchimento escuro.
+
+     --ui-bg               #edf1f7   fundo da página
+     --ui-surface          #f7f9fc   cartão, painel, tabela
+     --ui-surface-elevated #fcfdff   modal, gaveta, menu suspenso
+     --ui-surface-muted    #e7ecf4   recuo: cabeçalho de tabela, campo, faixa
+
+   Os pares de texto foram medidos contra os quatro degraus, não só contra a
+   superfície: `--ui-text-muted` sobre `--ui-surface-muted` é o pior par do
+   conjunto e rende 4,85:1. */
 .dashboard-shell {
   /* A identidade vem dos tokens da marca definidos em globals.css: o painel não
      mantém uma paleta própria concorrente. */
   --ui-brand: var(--vin-navy-deep);
   --ui-brand-soft: var(--vin-navy);
   --ui-primary: var(--vin-blue);
-  --ui-primary-hover: var(--vin-navy);
-  --ui-primary-soft: #e7f0fe;
-  --ui-bg: #f5f7f9;
-  --ui-surface: #ffffff;
-  --ui-surface-muted: #f0f4f6;
-  --ui-border: #d8e0e7;
-  --ui-border-strong: #bac7d2;
-  --ui-text: #172235;
-  --ui-text-soft: #5e6d7f;
-  --ui-info: #175cd3;
-  --ui-success: #137a4f;
-  --ui-warning: #a15c07;
-  --ui-danger: #b42318;
+  --ui-primary-hover: #0a4a94;
+  --ui-primary-active: var(--vin-navy);
+  --ui-primary-soft: #e2ecfb;
+  --ui-bg: #edf1f7;
+  --ui-surface: #f7f9fc;
+  --ui-surface-elevated: #fcfdff;
+  --ui-surface-muted: #e7ecf4;
+  --ui-border: #cbd6e6;
+  --ui-border-strong: #a9bad1;
+  --ui-text: #131c2e;
+  --ui-text-soft: #4e5c72;
+  --ui-text-muted: #5a6779;
+  --ui-info: #0f52c4;
+  --ui-success: #0b6b45;
+  --ui-warning: #8a4e06;
+  --ui-danger: #b0201a;
+  /* Casca clara — Modelo 2 "Flow".
+     A barra lateral deixa de ser um bloco escuro e passa a ser superfície,
+     separada do conteúdo por um fio. Antes disso, ~20 cores fixas espalhadas
+     pelo arquivo assumiam fundo escuro — inclusive um verde da marca antiga,
+     `rgba(98,213,178,.16)`, ainda vivo no hover. Agora a barra tem tokens
+     próprios e a mesma regra vale nos dois temas. */
+  /* A barra lateral é superfície, não bloco escuro: ela usa o degrau elevado
+     para se separar do fundo da página sem virar uma parede branca. */
+  --ui-rail: var(--ui-surface-elevated);
+  /* Avatar: texto sobre fundo suave. Par com dono porque já regrediu duas
+     vezes — a segunda quando esta casca clara chegou. No claro rende 6,06:1;
+     no escuro, o azul vivo sobre o suave rendia 4,30:1 e precisa do tom
+     legível sobre fundo escuro. */
+  --ui-avatar-bg: var(--ui-primary-soft);
+  --ui-avatar-text: var(--ui-primary);
+  --ui-rail-border: var(--ui-border);
+  --ui-rail-text: #4e5c72;
+  --ui-rail-icon: #7a879a;
+  --ui-rail-hover: #e9eff8;
+  --ui-rail-active: #e0eafb;
+  --ui-rail-active-text: var(--vin-blue);
+  --ui-rail-section: #5a6779;
+  --ui-rail-context: #e7ecf4;
+  /* Concluído/conectado. No Modelo 2 o verde é estado, nunca marca. */
+  --ui-done: var(--ui-success);
+  --ui-done-soft: #dcf2e7;
+  --ui-on-done: #ffffff;
   --ui-radius-sm: 7px;
   --ui-radius-md: 10px;
   --ui-radius-lg: 14px;
   --ui-shadow-card: 0 1px 2px rgba(11, 31, 51, .05), 0 5px 16px rgba(11, 31, 51, .035);
   --ui-shadow-modal: 0 22px 70px rgba(5, 18, 33, .25);
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: var(--layout-sidebar-width) minmax(0, 1fr);
   background: var(--ui-bg);
   color: var(--ui-text);
 }
 
+/* ==========================================================================
+   Tema escuro (§7)
+   ==========================================================================
+   O escuro tinha o mesmo defeito do claro pelo avesso: `#09131f` de fundo e
+   `#111e2c` de superfície separados por 1,10:1, e nada acima disso — modal e
+   menu suspenso caíam na mesma superfície do cartão que os abriu. Aqui a
+   escala tem os mesmos quatro degraus do claro, todos derivados do navy da
+   marca em vez de cinza-carvão, e a superfície elevada existe para o que
+   flutua. */
 .dashboard-shell.theme-dark {
   --ui-brand: #03122c;
   --ui-brand-soft: var(--vin-navy);
   --ui-primary: var(--vin-blue-vivid);
   --ui-primary-hover: #57adff;
+  --ui-primary-active: #8cc6ff;
   --ui-primary-soft: #12294a;
-  --ui-bg: #09131f;
-  --ui-surface: #111e2c;
-  --ui-surface-muted: #182838;
-  --ui-border: #2b3e51;
-  --ui-border-strong: #41576c;
-  --ui-text: #eef5f7;
-  --ui-text-soft: #a7b5c4;
-  --ui-info: #84adff;
-  --ui-success: #70e1b9;
-  --ui-warning: #ffd089;
-  --ui-danger: #ff9c96;
+  --ui-bg: #071527;
+  --ui-surface: #0e1f33;
+  --ui-surface-elevated: #16293f;
+  --ui-surface-muted: #132539;
+  --ui-border: #263b52;
+  --ui-border-strong: #3d566f;
+  --ui-text: #eaf1f8;
+  --ui-text-soft: #a6b7c9;
+  --ui-text-muted: #8496a9;
+  --ui-info: #7cc0ff;
+  --ui-success: #5fd9ac;
+  --ui-warning: #f5c069;
+  --ui-danger: #ff9089;
+  --ui-rail: #0a1a2c;
+  --ui-avatar-bg: #12294a;
+  --ui-avatar-text: var(--brand-accent-on-dark);
+  --ui-rail-border: var(--ui-border);
+  --ui-rail-text: #a6b7c9;
+  --ui-rail-icon: #7d8fa3;
+  --ui-rail-hover: #142740;
+  --ui-rail-active: #143154;
+  --ui-rail-active-text: var(--brand-accent-on-dark);
+  --ui-rail-section: #8496a9;
+  --ui-rail-context: #112132;
+  --ui-done: var(--ui-success);
+  --ui-done-soft: #0f2f20;
+  /* No escuro o verde clareia; branco em cima dele reprova. */
+  --ui-on-done: #06251a;
   --ui-shadow-card: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 20px rgba(0, 0, 0, .14);
   --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .48);
+}
+
+/* ==========================================================================
+   Tokens de layout (§41, §42)
+   ==========================================================================
+   Cada módulo escolhia o próprio recuo, o próprio intervalo entre seções e a
+   própria largura máxima de conteúdo — daí a sensação da §2 de que as telas
+   foram construídas separadamente. Os valores abaixo são a medida única; um
+   módulo que precise de outra tem que dizer por quê no diff.
+
+   O recuo da página acompanha a largura da janela pelo `clamp`: 1366×768 é a
+   menor resolução alvo da §43 e ali 20px de recuo devolvem a coluna útil que
+   os 32px do desktop grande comiam. */
+.dashboard-shell {
+  --layout-sidebar-width: 268px;
+  --layout-sidebar-collapsed: 76px;
+  --layout-header-height: 64px;
+  --layout-page-padding: clamp(20px, 2.1vw, 32px);
+  --layout-page-gap: 20px;
+  --layout-section-gap: 16px;
+  --layout-card-padding: 20px;
+  --layout-card-padding-compact: 14px;
+  --layout-content-max: 1560px;
 }
 
 .dashboard-shell,
@@ -62,15 +164,24 @@
 }
 
 .dashboard-shell.sidebar-collapsed {
-  grid-template-columns: 80px minmax(0, 1fr);
+  grid-template-columns: var(--layout-sidebar-collapsed) minmax(0, 1fr);
+}
+
+/* A largura da coluna anima em vez de saltar (§18). É a única exceção à regra
+   de animar só `transform` e `opacity`: a coluna do grid não tem como encolher
+   por transform sem arrastar o conteúdo junto, e a alternativa — largura fixa
+   com o conteúdo deslizando para fora — reintroduz o "pulo" que a §18 proíbe.
+   O custo é um relayout por quadro durante 260ms, uma vez por clique. */
+.dashboard-shell {
+  transition: grid-template-columns var(--motion-slow) var(--ease-standard);
 }
 
 .dashboard-sidebar {
   z-index: 30;
   height: 100dvh;
   padding: 22px 16px 16px;
-  background: var(--ui-brand);
-  box-shadow: inset -1px 0 rgba(255, 255, 255, .04);
+  background: var(--ui-rail);
+  border-right: 1px solid var(--ui-rail-border);
 }
 
 .sidebar-toggle {
@@ -95,6 +206,11 @@
   padding-inline: 8px;
 }
 
+.dashboard-brand-logo { display: inline-flex; }
+.dashboard-brand-logo-mark { display: none; }
+.sidebar-collapsed .dashboard-brand-logo-full { display: none; }
+.sidebar-collapsed .dashboard-brand-logo-mark { display: inline-flex; }
+
 .dashboard-sidebar nav {
   gap: 6px;
   margin-top: 38px;
@@ -108,7 +224,7 @@
   align-items: center;
   gap: 12px;
   border-radius: 9px;
-  color: #aebdcc;
+  color: var(--ui-rail-text);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
@@ -119,7 +235,7 @@
   height: 20px;
   display: grid;
   place-items: center;
-  color: #8399ac;
+  color: var(--ui-rail-icon);
 }
 
 .dashboard-sidebar nav button > span svg {
@@ -135,15 +251,27 @@
   font-size: 10px;
 }
 
-.dashboard-sidebar nav button.active,
 .dashboard-sidebar nav button:hover {
-  background: rgba(255, 255, 255, .09);
-  color: #fff;
+  background: var(--ui-rail-hover);
+  color: var(--ui-text);
+}
+
+/* O item ativo ganha barra à esquerda além da cor: o Modelo 2 marca o lugar
+   pela forma, e forma continua legível para quem não distingue matiz. */
+.dashboard-sidebar nav button.active {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--ui-rail-active-text);
 }
 
 .dashboard-sidebar nav button.active > span {
-  color: var(--brand-accent-on-dark);
+  color: var(--ui-rail-active-text);
 }
+
+/* O seletor completo só participa da navegação compacta. No desktop o menu
+   lateral já tem altura rolável e mostra todos os módulos no próprio contexto. */
+.sidebar-mobile-more { display: none; }
 
 .sidebar-collapsed .dashboard-sidebar nav button {
   padding-inline: 0;
@@ -164,6 +292,29 @@
   height: 17px;
   margin: 0;
   font-size: 8px;
+}
+
+/* A barra compacta continua rolavel por mouse, toque e teclado, mas o trilho
+   visivel rouba quase um quarto dos 76px e faz os icones parecerem fora do
+   centro. As marcas de favorito/recente tambem precisam sair: sem o rotulo que
+   explicava cada uma, elas viravam um segundo icone solto ao lado do destino. */
+.sidebar-collapsed .dashboard-sidebar nav {
+  scrollbar-width: none;
+}
+
+.sidebar-collapsed .dashboard-sidebar nav::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-shortcut-mark {
+  display: none;
+}
+
+/* Os dois comandos da conta somam mais que a largura util da coluna recolhida.
+   Empilha-los preserva as duas acoes sem cortar o botao de sair. */
+.sidebar-collapsed .sidebar-account-actions {
+  flex-direction: column;
+  gap: 2px;
 }
 
 .sidebar-workspace {
@@ -289,7 +440,7 @@
 .dashboard-content {
   width: 100%;
   max-width: none;
-  padding: 30px clamp(18px, 2vw, 34px) 42px;
+  padding: 24px clamp(18px, 2vw, 34px) 42px;
 }
 
 .dashboard-heading {
@@ -302,10 +453,13 @@
   letter-spacing: .11em;
 }
 
+/* 38px era manchete. O Modelo 2 abre com saudação discreta e devolve a dobra
+   ao conteúdo — a tela existe para mostrar a operação, não para se apresentar. */
 .dashboard-heading h1 {
-  margin: 9px 0 6px;
+  margin: 7px 0 5px;
   color: var(--ui-text);
-  font-size: clamp(29px, 2vw, 38px);
+  font-size: clamp(24px, 1.7vw, 30px);
+  letter-spacing: -.025em;
 }
 
 .dashboard-heading p {
@@ -351,15 +505,20 @@
   font-size: 12px;
 }
 
+/* Tira compacta, no lugar de quatro fichas de 104px.
+   No quadro de demandas, título, subtítulo, estas fichas e duas fileiras de
+   filtro consumiam cerca de 470 dos 900 pixels antes do primeiro cartão —
+   metade da tela antes da primeira demanda, na tela onde a operação passa o
+   dia. O número continua legível; o que sai é o ar em volta dele. */
 .dashboard-stats {
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 24px;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .dashboard-stats article {
-  min-height: 104px;
-  padding: 16px 17px;
+  min-height: 74px;
+  padding: 11px 14px;
   border-color: var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface);
@@ -374,7 +533,8 @@
 
 .dashboard-stats strong {
   color: var(--ui-text);
-  font-size: clamp(26px, 1.8vw, 32px);
+  font-size: clamp(21px, 1.4vw, 25px);
+  letter-spacing: -.02em;
 }
 
 .dashboard-stats small {
@@ -944,6 +1104,13 @@
     font-size: 17px;
   }
 
+  /* No celular a barra lateral vira cabeçalho. O estado salvo de recolhimento
+     não pode trocar a assinatura horizontal pelo símbolo nesse outro layout. */
+  .dashboard-brand-logo-full,
+  .sidebar-collapsed .dashboard-brand-logo-full { display: inline-flex; }
+  .dashboard-brand-logo-mark,
+  .sidebar-collapsed .dashboard-brand-logo-mark { display: none; }
+
   .dashboard-sidebar nav {
     position: fixed;
     z-index: 90;
@@ -955,9 +1122,9 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 3px;
     overflow: visible;
-    border-top: 1px solid rgba(255, 255, 255, .1);
-    background: color-mix(in srgb, var(--ui-brand) 96%, transparent);
-    box-shadow: 0 -10px 30px rgba(5, 18, 33, .2);
+    border-top: 1px solid var(--ui-rail-border);
+    background: color-mix(in srgb, var(--ui-rail) 96%, transparent);
+    box-shadow: 0 -10px 30px rgba(5, 18, 33, .09);
     backdrop-filter: blur(14px);
   }
 
@@ -984,6 +1151,134 @@
   .sidebar-collapsed .dashboard-sidebar nav button b {
     top: 4px;
     right: calc(50% - 24px);
+  }
+
+  /* A grade de cinco colunas mostrava somente a primeira linha e deixava os
+     outros módulos abaixo de uma barra com altura fixa. Quatro atalhos ficam
+     sempre visíveis; o quinto abre todos os demais sem exigir gesto oculto. */
+  .dashboard-sidebar nav .mobile-secondary { display: none; }
+
+  .sidebar-mobile-more {
+    position: static;
+    min-width: 0;
+    display: block;
+  }
+
+  .sidebar-mobile-more > summary {
+    min-width: 0;
+    min-height: 60px;
+    padding: 5px 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    border-radius: 9px;
+    color: var(--ui-rail-text);
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1;
+    list-style: none;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .sidebar-mobile-more > summary::-webkit-details-marker { display: none; }
+  .sidebar-mobile-more > summary::marker { content: ""; }
+  .sidebar-mobile-more > summary:hover,
+  .sidebar-mobile-more > summary.active,
+  .sidebar-mobile-more[open] > summary {
+    background: var(--ui-rail-active);
+    color: var(--ui-rail-active-text);
+  }
+  .sidebar-mobile-more > summary:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--ui-accent) 42%, transparent);
+    outline-offset: 2px;
+  }
+  .sidebar-mobile-more > summary > span:first-child {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+  }
+  .sidebar-mobile-more > summary svg { width: 19px; height: 19px; }
+
+  .sidebar-mobile-more-panel {
+    position: fixed;
+    z-index: 95;
+    right: 8px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 8px;
+    max-height: min(62dvh, 520px);
+    padding: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--ui-border);
+    border-radius: 16px;
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow-modal);
+  }
+
+  /* Chromium ainda calcula caixas de descendentes posicionados de um
+     <details> fechado. Além de confundir a auditoria de alvos de toque, isso
+     deixa controles invisíveis participarem da geometria da página. */
+  .sidebar-mobile-more:not([open]) > .sidebar-mobile-more-panel { display: none; }
+
+  .sidebar-mobile-more-panel > section + section {
+    margin-top: 13px;
+    padding-top: 13px;
+    border-top: 1px solid var(--ui-border);
+  }
+
+  .sidebar-mobile-more-panel > section > span {
+    display: block;
+    margin: 0 4px 7px;
+    color: var(--ui-text-soft);
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: .08em;
+  }
+
+  .sidebar-mobile-more-panel > section > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button,
+  .sidebar-collapsed .dashboard-sidebar nav .sidebar-mobile-more-panel button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 7px 9px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+    border: 1px solid var(--ui-border);
+    background: var(--ui-surface-muted);
+    color: var(--ui-text);
+    font-size: 11px;
+    line-height: 1.25;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button:hover,
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button.active {
+    border-color: color-mix(in srgb, var(--ui-primary) 38%, var(--ui-border));
+    background: var(--ui-rail-active);
+    color: var(--ui-rail-active-text);
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button > span:first-child {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+  }
+
+  .dashboard-sidebar nav .sidebar-mobile-more-panel button > span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .dashboard-header {
@@ -2664,22 +2959,19 @@
 }
 
 .dashboard-sidebar {
-  background: var(--ui-brand);
+  background: var(--ui-rail);
   padding: 20px 14px 14px;
 }
 
-.dashboard-brand { color: #fff; font-size: 20px; letter-spacing: -.045em; }
-.dashboard-brand strong { color: var(--ui-mint); }
+.dashboard-brand { color: var(--ui-text); font-size: 20px; letter-spacing: -.045em; }
+.dashboard-brand strong { color: var(--ui-primary); }
 .dashboard-sidebar nav { margin-top: 30px; gap: 5px; }
-.dashboard-sidebar nav button { min-height: 45px; border-radius: 12px; color: rgba(255,255,255,.72); font-weight: 650; }
-.dashboard-sidebar nav button > span { color: rgba(255,255,255,.55); }
-.dashboard-sidebar nav button.active,
-.dashboard-sidebar nav button:hover { background: rgba(98,213,178,.16); color: #fff; }
-.dashboard-sidebar nav button.active > span { color: var(--ui-mint); }
-.sidebar-workspace { border-top-color: rgba(255,255,255,.11); }
-.sidebar-workspace button { background: rgba(255,255,255,.07); border-radius: 12px; }
-.sidebar-account { border-top-color: rgba(255,255,255,.11); }
-.user-avatar, .header-profile > span { background: #dff8ee; color: var(--ui-brand); }
+.dashboard-sidebar nav button { min-height: 45px; border-radius: 10px; color: var(--ui-rail-text); font-weight: 600; }
+.dashboard-sidebar nav button > span { color: var(--ui-rail-icon); }
+.sidebar-workspace { border-top-color: var(--ui-rail-border); }
+.sidebar-workspace button { background: var(--ui-rail-context); border-radius: 10px; }
+.sidebar-account { border-top-color: var(--ui-rail-border); }
+.user-avatar, .header-profile > span { background: var(--ui-avatar-bg); color: var(--ui-avatar-text); }
 
 .dashboard-header { height: 72px; background: color-mix(in srgb, var(--ui-surface) 92%, transparent); }
 .dashboard-location { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2705,22 +2997,62 @@
 .dashboard-heading p { max-width: 620px; }
 
 .overview-layout { display: grid; gap: 18px; }
-.overview-hero { min-height: 136px; padding: 24px 26px; display: flex; align-items: center; justify-content: space-between; gap: 22px; overflow: hidden; border: 1px solid #2f6661; border-radius: 16px; background: var(--ui-brand); color: #fff; }
-.overview-hero > div { max-width: 720px; }
-.overview-hero span, .overview-panel header > div > span, .overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+/* A dupla do Modelo 2. Abaixo de 1100px vira empilhado: o diagrama de conexões
+   precisa de largura para o hub caber entre as duas colunas de conectores. */
+.overview-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.overview-pair > * { margin-bottom: 0; }
+@media (max-width: 1100px) { .overview-pair { grid-template-columns: minmax(0, 1fr); } }
 /* No herói o fundo é o navy, então o azul vivo já lê; nos painéis claros, não. */
-.overview-hero span { color: var(--ui-mint); }
+/* Rótulo das seções da visão geral. Estava numa regra compartilhada com
+   `.overview-hero span`, e ao apagar a faixa morta eu levei os dois vivos
+   junto — o seletor compartilhado é justamente o que torna a remoção
+   cega perigosa. */
+.overview-panel header > div > span,
+.overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
 .overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-mint-text); }
-.overview-hero strong { display: block; margin-top: 7px; font-size: clamp(20px, 2vw, 27px); letter-spacing: -.04em; }
-.overview-hero p { margin: 7px 0 0; color: rgba(255,255,255,.73); font-size: 12px; line-height: 1.5; }
-.overview-hero .overview-new-demand { flex: 0 0 auto; border: 0; background: var(--ui-mint); color: var(--ui-on-mint); box-shadow: none; }
-.overview-hero .overview-new-demand:hover { background: #8CC4FF; }
+
+/* ==========================================================================
+   Meus processos (§29)
+   ==========================================================================
+   O cartão vem de `MotionCard`, que já traz borda em repouso, elevação no
+   hover e a seta andando 3px (§9). O que esta seção acrescenta é só a grade e
+   o cabeçalho — repetir o desenho do cartão aqui seria criar a segunda
+   definição dele.
+
+   `auto-fill` com mínimo de 250px em vez de um número fixo de colunas: a
+   quantidade de processos varia com a permissão de cada pessoa, e três colunas
+   fixas deixariam um buraco para quem alcança dois. */
+.workspace-processes { display: grid; gap: 13px; }
+.workspace-processes > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.workspace-processes > header span { display: block; color: var(--ui-mint-text); font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+.workspace-processes > header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 17px; letter-spacing: -.03em; }
+.workspace-processes > header p { margin: 0; color: var(--ui-text-soft); font-size: 12px; }
+.workspace-process-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 13px; }
+/* O item da cascata precisa esticar: sem isto os cartões de uma linha ficam
+   com alturas diferentes conforme o tamanho da descrição. */
+.workspace-process-grid > * { display: flex; }
+.workspace-process-grid > * > * { flex: 1 1 auto; min-height: 158px; }
+.workspace-process-pending {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ui-state-warn-bg);
+  color: var(--ui-state-warn-text);
+  font-size: 10px;
+  font-weight: 800;
+}
 
 .overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
 .overview-metrics article { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 .overview-metrics span { color: var(--ui-text-soft); font-size: 11px; font-weight: 700; }
 .overview-metrics strong { margin-top: 10px; color: var(--ui-text); font-size: clamp(27px, 2.2vw, 36px); letter-spacing: -.06em; line-height: 1; }
 .overview-metrics small { margin-top: auto; color: var(--ui-text-soft); font-size: 10px; }
+/* Nome de empresa no lugar de um número: a escala do dígito (até 36px, com
+   -.06em de espaçamento) deixaria a razão social ilegível e transbordando. */
+.overview-metrics .overview-metric-name {
+  font-size: 15px; letter-spacing: -.01em; line-height: 1.25; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .overview-metrics .requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); background: #fff8f0; }
 .overview-metrics .requires-attention strong { color: #a95e21; }
 .theme-dark .overview-metrics .requires-attention { background: color-mix(in srgb, #F4A261 11%, var(--ui-surface)); }
@@ -2780,7 +3112,16 @@
 .recent-activity-list { padding: 5px 16px 13px; }
 .recent-activity-list article { min-height: 61px; padding: 11px 0; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 9px; align-items: start; border-bottom: 1px solid var(--ui-border); }
 .recent-activity-list article:last-child { border-bottom: 0; }
-.recent-activity-list article > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 8px; font-weight: 850; }
+/* Iniciais do autor sobre o círculo suave. `--ui-primary` é o tom de
+   preenchimento: no tema escuro ele rende 4.3:1 aqui, medido — abaixo do
+   mínimo 4.5. `--ui-accent-text` existe exatamente para este papel e rende
+   7.52:1 sobre a mesma superfície.
+
+   Isto só apareceu quando o ensaio de ponta a ponta passou a criar demandas: a
+   lista de atividades recentes nunca tinha sido pintada com conteúdo, então a
+   conferência nunca a mediu. É o mesmo padrão dos rótulos de processo, que
+   ficaram em 4.37:1 enquanto a semente era inteiramente vazia. */
+.recent-activity-list article > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); font-size: 8px; font-weight: 850; }
 .recent-activity-list strong { display: block; color: var(--ui-text); font-size: 10px; }
 .recent-activity-list strong small { color: var(--ui-text-soft); font-size: 9px; font-weight: 500; }
 .recent-activity-list p { margin: 4px 0 0; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2815,8 +3156,6 @@
   .dashboard-header-actions .header-company-select { min-width: 38px; width: 38px; padding: 0; justify-content: center; }
   .header-company-select select { display: none; }
   .dashboard-header-actions .help-button, .dashboard-header-actions .header-profile { display: none; }
-  .overview-hero { min-height: 0; padding: 20px; align-items: flex-start; flex-direction: column; }
-  .overview-hero .overview-new-demand { width: 100%; }
   .overview-metrics { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
   .overview-metrics article { min-width: min(74vw, 250px); scroll-snap-align: start; }
   .overview-sla-band { grid-template-columns: 1fr; gap: 14px; }
@@ -2924,24 +3263,293 @@
 /* Grupo empresarial and navigation clarity. */
 .dashboard-sidebar { display: flex; flex-direction: column; gap: 0; }
 .dashboard-brand { min-height: 42px; }
-.sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 13px; background: rgba(255,255,255,.055); }
-.sidebar-group-context > span, .sidebar-nav-section { display: block; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
-.sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: #fff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: rgba(255,255,255,.62); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-sidebar nav { margin-top: 20px; gap: 4px; }
-.sidebar-nav-section { margin: 10px 10px 5px; }
-.sidebar-nav-section.management { margin-top: 18px; }
+.sidebar-group-context { margin: 16px 8px 4px; padding: 12px; border: 1px solid var(--ui-rail-border); border-radius: 11px; background: var(--ui-rail-context); }
+.sidebar-group-context > span, .sidebar-nav-section { display: block; color: var(--ui-rail-section); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
+.sidebar-group-context strong { display: block; margin-top: 5px; overflow: hidden; color: var(--ui-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-group-context small { display: block; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+/* O menu passa a ter contextos (§17): antes era um rótulo só, "OPERAÇÃO",
+   sobre treze itens — e Cadastros, Relatórios e Estado das integrações não são
+   operação. O espaço entre grupos é maior que entre itens porque é ele que
+   torna o agrupamento visível; sem isso o rótulo é decoração. */
+.dashboard-sidebar nav { margin-top: 20px; gap: 15px; }
+.sidebar-nav-group { display: flex; flex-direction: column; gap: 4px; }
+.sidebar-nav-section { margin: 0 10px 5px; }
 .sidebar-workspace { margin-top: auto; padding-bottom: 10px; }
-.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; background: rgba(255,255,255,.04); color: #d7e0e8; }
-.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--brand-accent); color: #081a31; font-style: normal; font-size: 9px; font-weight: 800; }
-.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: #71869a; font-size: 9px; }
-.sidebar-workspace > span { margin-left: 8px; color: rgba(202,236,226,.62); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
+.sidebar-structure-summary { width: 100%; min-height: 48px; padding: 0 8px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--ui-rail-border); border-radius: 8px; background: var(--ui-rail-context); color: var(--ui-text); }
+.sidebar-structure-summary > i { width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; background: var(--ui-primary); color: #fff; font-style: normal; font-size: 9px; font-weight: 800; }
+.sidebar-structure-summary > span { display: grid; min-width: 0; }.sidebar-structure-summary strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.sidebar-structure-summary small { color: var(--ui-text-soft); font-size: 9px; }
+.sidebar-workspace > span { margin-left: 8px; color: var(--ui-rail-section); font-size: 8px; font-weight: 850; letter-spacing: .1em; }
 .sidebar-workspace button { min-height: 58px; align-items: center; }
 .sidebar-workspace button > span { min-width: 0; display: grid; gap: 3px; text-align: left; }
 .sidebar-workspace button > span strong, .sidebar-workspace button > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-workspace button > span strong { color: #fff; font-size: 10px; }
-.sidebar-workspace button > span small { color: rgba(255,255,255,.58); font-size: 8px; }
+.sidebar-workspace button > span strong { color: var(--ui-text); font-size: 10px; }
+.sidebar-workspace button > span small { color: var(--ui-text-soft); font-size: 8px; }
 .sidebar-collapsed .sidebar-group-context, .sidebar-collapsed .sidebar-nav-section { display: none; }
+
+/* ==========================================================================
+   Navegação em dois níveis (§25, §64, §65, §66)
+   ==========================================================================
+   O primeiro nível é o processo; o segundo, os módulos dele — e o segundo só
+   existe para o processo aberto. A §66 é o motivo: a barra não precisa conter
+   cada página do sistema, e quinze itens simultâneos sob quatro rótulos de
+   departamento era exatamente isso.
+
+   O item do processo aberto ganha borda e superfície próprias mesmo quando o
+   destino ativo é um submódulo. Sem isso, entrar em "Pagamentos → Psicólogos"
+   apagava a marca do processo e a pessoa perdia de vista em que contexto
+   estava — que é o oposto do que a §69 pede. */
+.sidebar-process { display: flex; flex-direction: column; gap: 2px; }
+
+.sidebar-process-item.open {
+  border: 1px solid var(--ui-rail-border);
+  background: var(--ui-rail-context);
+  color: var(--ui-text);
+}
+
+.sidebar-process-item.open > span { color: var(--ui-rail-active-text); }
+
+/* Os submódulos recuam e ganham um fio à esquerda: o fio é o que os liga
+   visualmente ao processo dono, e o recuo é o que os põe num segundo nível
+   sem precisar de outro ícone. */
+.sidebar-process-views {
+  margin: 2px 0 4px 21px;
+  padding-left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-left: 1px solid var(--ui-rail-border);
+}
+
+.sidebar-process-view {
+  min-height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-rail-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  /* A cascata usa o índice que o React escreve em `--stagger-index`: os
+     submódulos aparecem em sequência quando o processo abre, o que mostra que
+     eles pertencem a ele em vez de surgirem do nada. */
+  animation: subNavEnter var(--motion-micro) var(--ease-enter) backwards;
+  animation-delay: calc(var(--stagger-index, 0) * 30ms);
+}
+
+.sidebar-process-view:hover { background: var(--ui-rail-hover); color: var(--ui-text); }
+
+.sidebar-process-view.active {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+  font-weight: 700;
+}
+
+.sidebar-process-view b {
+  min-width: 19px;
+  height: 19px;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--ui-danger);
+  color: var(--ui-on-accent);
+  font-size: 9px;
+}
+
+@keyframes subNavEnter {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Recolhida, a barra mostra só os ícones dos processos: o segundo nível não
+   cabe em 76px e continua alcançável abrindo a barra ou pelo processo. */
+.sidebar-collapsed .sidebar-process-views { display: none; }
+.sidebar-collapsed .sidebar-process-item.open { border-color: transparent; }
+
+/* ==========================================================================
+   Cabeçalho contextual do processo (§70)
+   ==========================================================================
+   Ícone, nome, uma linha do que o processo faz e as abas dos módulos. É o que
+   diz "você está no Pagamento PJ" sem depender de a pessoa reparar em qual
+   item do menu está aceso. */
+.process-context {
+  margin-bottom: var(--layout-page-gap);
+  padding: var(--layout-card-padding);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-card);
+  animation: fadeInSoft var(--motion-base) var(--ease-enter) backwards;
+}
+
+.process-context-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.process-context-identity > span {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.process-context-identity > span svg { width: 19px; height: 19px; }
+.process-context-identity strong { display: block; color: var(--ui-text); font-size: 16px; letter-spacing: -.02em; }
+.process-context-identity p { margin: 3px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.45; }
+
+/* O lugar que o cabeçalho empresta ao módulo quando o processo tem um módulo
+   só (§70). Ele toma a linha inteira em vez de disputar espaço com o nome do
+   processo: o Controle de EPI entrega dez abas, que em 1366px não caberiam ao
+   lado da identidade sem virar o corte que a §94 proíbe. A barra em si já rola
+   quando precisa, então o que falta aqui é só a linha e a separação.
+
+   `:empty` cobre o primeiro render, antes de o módulo montar o portal: sem
+   isso o cabeçalho abriria com uma faixa vazia de 13px e uma borda solta. */
+/* ==========================================================================
+   Atalhos: favoritos e recentes (§67)
+   ==========================================================================
+   O caminho curto para quem já sabe onde vai. Organizar por processo tornou o
+   menu compreensível e fundo ao mesmo tempo — alcançar um destino custa dois
+   níveis, e quem trabalha em três destinos paga esse preço dezenas de vezes
+   por dia.
+
+   O bloco fica no topo da barra, acima de PROCESSOS, e é deliberadamente mais
+   discreto que eles: o atalho é conveniência, o processo é a estrutura. Se os
+   dois pesassem igual, a barra passaria a ter duas listas concorrendo pelo
+   mesmo olhar. */
+.sidebar-shortcuts { margin-bottom: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--ui-border); }
+
+.sidebar-shortcut { position: relative; font-size: 12.5px; }
+
+/* A marca diz de onde o atalho veio — fixado por escolha ou visitado há pouco.
+   Sem ela, os dois viram a mesma lista e a ordem parece arbitrária. */
+.sidebar-shortcut-mark {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--ui-accent-text);
+  opacity: .72;
+}
+
+.sidebar-shortcut-recent .sidebar-shortcut-mark { color: var(--ui-text-muted); opacity: .6; }
+
+/* O botão que fixa, no cabeçalho do processo: é ali que a pessoa está quando
+   descobre que volta sempre à mesma tela. */
+.process-context-pin {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
+  cursor: pointer;
+  transition: color var(--motion-hover) var(--ease-standard),
+    border-color var(--motion-hover) var(--ease-standard),
+    background var(--motion-hover) var(--ease-standard);
+}
+
+.process-context-pin:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
+.process-context-pin svg { width: 16px; height: 16px; }
+
+/* Marcado é preenchido, não só colorido: cor sozinha não distingue os dois
+   estados para quem não separa bem os tons (§85). */
+.process-context-pin[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, var(--ui-border));
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.process-context-pin[aria-pressed="true"] svg { fill: currentColor; }
+
+/* A faixa da home. Cartões pequenos, em linha, que rolam quando não cabem —
+   é um atalho, não uma seção que merece empurrar o resto da página. */
+.workspace-shortcuts { margin-bottom: var(--layout-section-gap); }
+
+.workspace-shortcuts > header { margin-bottom: 10px; }
+.workspace-shortcuts > header span {
+  display: block;
+  color: var(--ui-accent-text);
+  font-size: 10.5px;
+  font-weight: 820;
+  letter-spacing: .11em;
+}
+.workspace-shortcuts > header h2 { margin: 3px 0 0; font-size: 17px; letter-spacing: -.02em; }
+
+.workspace-shortcut-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.workspace-shortcut {
+  min-width: 168px;
+  min-height: 58px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--motion-hover) var(--ease-standard),
+    border-color var(--motion-hover) var(--ease-standard),
+    background var(--motion-hover) var(--ease-standard);
+}
+
+.workspace-shortcut:hover { transform: translateY(-1px); border-color: var(--ui-border-strong); background: var(--ui-surface-elevated); }
+.workspace-shortcut:active { transform: scale(.985); }
+
+.workspace-shortcut > span {
+  grid-row: 1 / span 2;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-muted);
+  color: var(--ui-accent-text);
+}
+
+.workspace-shortcut > span svg { width: 16px; height: 16px; }
+.workspace-shortcut strong { font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
+.workspace-shortcut small { color: var(--ui-text-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; }
+.workspace-shortcut[data-fixed="true"] > span { background: var(--ui-accent-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shortcut:hover, .workspace-shortcut:active { transform: none; }
+}
+
+.process-context-slot { flex: 1 1 100%; min-width: 0; padding-top: 12px; border-top: 1px solid var(--ui-border); }
+.process-context-slot:empty { display: none; }
+
+@keyframes fadeInSoft { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 760px) {
+  .process-context { padding: var(--layout-card-padding-compact); }
+}
 
 .companies-list article { grid-template-columns: 28px minmax(0, 1fr) minmax(120px, .6fr) auto; }
 .companies-list article > i { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 10px; font-style: normal; font-weight: 850; }
@@ -2973,6 +3581,15 @@
 @media (max-width: 780px) {
   .sidebar-group-context { display: none; }
   .sidebar-nav-section { display: none; }
+  /* Nesta largura o menu vira barra inferior em `grid`. `display: contents`
+     devolve os botões à grade: sem isso a grade posicionaria os quatro grupos,
+     e a barra mostraria quatro colunas com os itens empilhados dentro.
+     O invólucro de processo precisa do mesmo tratamento, senão o segundo nível
+     reintroduz a coluna que o `contents` do grupo acabou de dissolver. */
+  .sidebar-nav-group, .sidebar-process { display: contents; }
+  /* O segundo nível não existe na barra inferior: ela cabe em cinco alvos de
+     toque, e todos os módulos continuam alcançáveis pelo botão "Mais". */
+  .sidebar-process-views { display: none; }
   .companies-list article { grid-template-columns: 24px minmax(0, 1fr) auto; }
   .companies-list article > i { width: 21px; height: 21px; }
   .invite-company-scope { min-width: 100%; }
@@ -3039,7 +3656,7 @@
 .workspace-team > header span, .workspace-invite-form > header span { color: var(--ui-text-soft); font-size: 9px; }
 .workspace-team > header > p { max-width: 350px; color: var(--ui-text-soft); font-size: 9px; line-height: 1.45; }
 .workspace-member-list { padding: 10px; gap: 7px; }
-.workspace-member-list article { min-height: 66px; padding: 10px; grid-template-columns: 34px minmax(140px, 1fr) minmax(112px, .6fr) minmax(135px, .66fr) auto auto; gap: 9px; border: 1px solid var(--ui-border); border-radius: 11px; background: var(--ui-surface-muted); }
+.workspace-member-list article { min-height: 66px; padding: 10px; grid-template-columns: 34px minmax(150px, 1fr) minmax(108px, .55fr) minmax(145px, .7fr) minmax(135px, .66fr) auto 30px; gap: 9px; border: 1px solid var(--ui-border); border-radius: 11px; background: var(--ui-surface-muted); }
 .workspace-member-list article > i { background: color-mix(in srgb, var(--ui-mint) 25%, var(--ui-surface)); color: var(--ui-primary); }
 .workspace-member-list article strong { color: var(--ui-text); font-size: 10px; }
 .workspace-member-list article small { color: var(--ui-text-soft); font-size: 8px; }
@@ -3048,15 +3665,33 @@
 .member-activation-status.active { background: color-mix(in srgb, var(--ui-mint) 28%, var(--ui-surface)); color: var(--ui-success); }
 .member-activation-status.pending { background: #fff2e3; color: #a75d21; }
 .workspace-member-list article > select { border-color: var(--ui-border); border-radius: 8px; background: var(--ui-surface); color: var(--ui-text); font-size: 9px; }
+.member-department-status { display: inline-flex; align-items: center; gap: 4px; width: fit-content; margin-top: 5px; padding: 3px 6px; border-radius: 6px; font-size: 8px; font-weight: 750; }
+.member-department-status svg { width: 11px; height: 11px; }
+.member-department-status.assigned { background: color-mix(in srgb, var(--ui-mint) 22%, var(--ui-surface)); color: var(--ui-primary); }
+.member-department-status.missing { background: var(--ui-state-danger-bg); color: var(--ui-danger); }
+.workspace-member-list article > .member-department-select { border-color: color-mix(in srgb, var(--ui-primary) 28%, var(--ui-border)); }
 .workspace-member-list .member-recovery-button { min-height: 30px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--ui-mint) 58%, var(--ui-border)); border-radius: 8px; background: transparent; color: var(--ui-primary); font-size: 8px; font-weight: 800; white-space: nowrap; }
 
 .workspace-invite-form > header { align-items: flex-start; }
 .workspace-invite-form > header > b { padding: 6px 8px; border-radius: 8px; background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 8px; white-space: nowrap; }
-.workspace-invite-form > div { padding: 17px; gap: 12px; }
+.workspace-invite-form > div { padding: 17px; display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
 .workspace-invite-form .primary-button { min-height: 42px; }
 .invite-company-scope { padding: 9px 10px; border: 1px dashed color-mix(in srgb, var(--ui-primary) 36%, var(--ui-border)); border-radius: 10px; background: var(--ui-surface-muted); }
 .invite-company-scope legend { padding: 0 4px; color: var(--ui-primary); }
 .invite-company-scope label { min-height: 24px; padding: 0 7px; border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface); }
+.invite-company-scope { grid-column: 1 / -1; }
+.invite-module-scope { grid-column: 1 / -1; margin: 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--ui-primary) 30%, var(--ui-border)); border-radius: 11px; background: var(--ui-surface-muted); }
+.invite-module-scope legend { padding: 0 5px; color: var(--ui-primary); font-size: 9px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
+.invite-module-scope > p { margin: 2px 0; color: var(--ui-text-soft); font-size: 9px; }
+.invite-module-scope > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.workspace-invite-form .invite-module-scope label { min-height: 52px; padding: 8px; display: flex; grid-template-columns: none; align-items: flex-start; gap: 8px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; font-size: 9px; letter-spacing: 0; text-transform: none; transition: border-color .18s ease, background-color .18s ease; }
+.workspace-invite-form .invite-module-scope label:hover { border-color: var(--ui-primary); }
+.workspace-invite-form .invite-module-scope label[data-disabled] { cursor: not-allowed; opacity: .58; }
+.invite-module-scope input { flex: 0 0 auto; width: 15px !important; height: 15px !important; margin-top: 2px; accent-color: var(--ui-primary); }
+.invite-module-scope span, .invite-module-scope strong, .invite-module-scope small { display: block; }
+.invite-module-scope strong { color: var(--ui-text); font-size: 10px; }
+.invite-module-scope small { margin-top: 3px; color: var(--ui-text-soft); font-size: 8px; font-weight: 500; line-height: 1.35; }
+.workspace-invite-form > div > .primary-button { grid-column: 4; justify-self: stretch; }
 .member-company-access > div { border-color: var(--ui-border); box-shadow: 0 16px 36px rgba(11, 44, 40, .16); }
 .access-recovery-link { border-radius: 14px; }
 
@@ -3066,6 +3701,9 @@
   .settings-nav button small { display: none; }
   .workspace-member-list article { grid-template-columns: 34px minmax(140px, 1fr) auto auto; }
   .workspace-member-list article > .member-company-access, .workspace-member-list article > .member-company-summary { grid-column: 2 / -1; }
+  .workspace-invite-form > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .invite-module-scope > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-invite-form > div > .primary-button { grid-column: 2; }
 }
 
 @media (max-width: 700px) {
@@ -3087,6 +3725,9 @@
   .workspace-member-list article { grid-template-columns: 34px minmax(0, 1fr) auto; }
   .workspace-member-list article > select, .workspace-member-list article > b, .workspace-member-list article > .member-company-access, .workspace-member-list article > .member-company-summary { grid-column: 2 / -1; }
   .workspace-invite-form > header > b { white-space: normal; }
+  .workspace-invite-form > div { grid-template-columns: 1fr; }
+  .invite-module-scope > div { grid-template-columns: 1fr; }
+  .workspace-invite-form > div > .primary-button { grid-column: 1; }
 }
 
 /* Processos operacionais: cada processo possui as próprias colunas do Kanban. */
@@ -3270,8 +3911,10 @@
 .company-settings-form input, .company-settings-form select, .payroll-entry-panel input, .payroll-entry-panel select { padding: 0 9px; }
 .company-settings-form input:focus, .company-settings-form select:focus, .payroll-entry-panel input:focus, .payroll-entry-panel select:focus, .payroll-entry-panel textarea:focus { border-color: var(--ui-mint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-mint) 18%, transparent); }
 .company-settings-form .primary-button { width: max-content; min-height: 38px; align-self: end; }
+.company-settings-form-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.company-settings-form-actions .primary-button, .company-settings-form-actions .secondary-button { width: max-content; min-height: 38px; }
 .company-settings-list { display: grid; }
-.company-settings-list > article { min-height: 68px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) minmax(85px, .38fr) minmax(100px, .44fr) auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--ui-border); }
+.company-settings-list > article { min-height: 68px; padding: 10px 16px; display: grid; grid-template-columns: 28px minmax(180px, 1fr) minmax(85px, .38fr) minmax(100px, .44fr) auto auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--ui-border); }
 .company-settings-list > article:last-child { border-bottom: 0; }
 .company-settings-list > article > i { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: var(--ui-surface-muted); color: var(--ui-primary); font-size: 9px; font-style: normal; font-weight: 850; }
 .company-settings-list > article.principal { box-shadow: inset 3px 0 0 var(--ui-mint); }
@@ -3282,14 +3925,18 @@
 .company-settings-list article small { margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .company-settings-list article > span small { margin-top: 0; }
 .company-settings-list article > span b { margin-top: 3px; overflow: hidden; color: var(--ui-text); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.company-settings-list article strong em.inactive { background: color-mix(in srgb, var(--ui-text-soft) 20%, transparent); color: var(--ui-text-soft); }
+.company-settings-list .secondary-button { min-height: 30px; padding: 0 11px; justify-self: end; font-size: 8px; white-space: nowrap; }
 .company-settings-list .danger-link { justify-self: end; font-size: 8px; }
 
 .payroll-toolbar { padding: 19px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid color-mix(in srgb, var(--ui-mint) 44%, var(--ui-border)); border-radius: 16px; background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 12%, var(--ui-surface)), var(--ui-surface) 62%); }
 .payroll-toolbar > div > span, .payroll-entry-panel header span { color: var(--ui-primary); font-size: 9px; font-weight: 850; letter-spacing: .1em; }
 .payroll-toolbar h2, .payroll-entry-panel h2 { margin: 5px 0 0; color: var(--ui-text); font-size: 19px; letter-spacing: -.04em; }
 .payroll-toolbar p, .payroll-entry-panel header p { margin: 5px 0 0; color: var(--ui-text-soft); font-size: 10px; line-height: 1.45; }
-.payroll-toolbar > label { min-width: 128px; display: grid; gap: 5px; color: var(--ui-text-soft); font-size: 8px; font-weight: 850; }
+.payroll-toolbar > label, .payroll-toolbar-actions > label { min-width: 128px; display: grid; gap: 5px; color: var(--ui-text-soft); font-size: 8px; font-weight: 850; }
 .payroll-toolbar select { min-height: 37px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text); font: 750 10px inherit; }
+.payroll-toolbar-actions { display: flex; align-items: flex-end; gap: 9px; }
+.payroll-toolbar-actions .secondary-button { min-height: 37px; white-space: nowrap; }
 .payroll-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .payroll-kpi-grid article { min-height: 122px; padding: 15px; position: relative; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 .payroll-kpi-grid article > svg { width: 18px; height: 18px; margin-bottom: 12px; color: var(--ui-primary); }
@@ -3322,9 +3969,46 @@
 .payroll-entry-panel .primary-button { width: max-content; min-height: 39px; }
 .payroll-entry-panel .primary-button svg { width: 15px; height: 15px; }
 
+.payroll-import-overlay { position: fixed; z-index: 140; inset: 0; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(3, 14, 29, .62); animation: modal-backdrop-in .16s ease both; }
+.payroll-import-dialog { display: flex; flex-direction: column; width: min(900px, 100%); max-height: min(780px, 100%); overflow: hidden; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-surface); box-shadow: var(--ui-shadow-modal); animation: modal-content-in .2s ease both; }
+.payroll-import-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 20px 22px; border-bottom: 1px solid var(--ui-border); }
+.payroll-import-dialog > header span { color: var(--ui-accent-text); font-size: 8px; font-weight: 850; letter-spacing: .12em; }
+.payroll-import-dialog > header h2 { margin: 5px 0; color: var(--ui-text); font-size: 19px; letter-spacing: -.035em; }
+.payroll-import-dialog > header p { margin: 0; color: var(--ui-text-soft); font-size: 10px; line-height: 1.45; }
+.payroll-import-dialog > header button { display: grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; }
+.payroll-import-dialog > footer { display: flex; align-items: center; gap: 9px; padding: 12px 18px; border-top: 1px solid var(--ui-border); background: var(--ui-surface-muted); }
+.payroll-import-dialog > footer > span { flex: 1; color: var(--ui-text-soft); font-size: 8px; }
+.payroll-import-setup { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(300px, 1.3fr) auto; align-items: end; gap: 11px; padding: 17px 22px; border-bottom: 1px solid var(--ui-border); }
+.payroll-import-setup > label { display: grid; gap: 5px; min-width: 0; color: var(--ui-text-soft); font-size: 9px; font-weight: 800; }
+.payroll-import-setup select { width: 100%; min-height: 40px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); color: var(--ui-text); font-size: 10px; }
+.payroll-file-picker { position: relative; }
+.payroll-file-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.payroll-file-picker > div { display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 6px 10px; border: 1px dashed color-mix(in srgb, var(--ui-accent) 52%, var(--ui-border)); border-radius: 9px; background: var(--ui-accent-soft); color: var(--ui-accent-text); cursor: pointer; }
+.payroll-file-picker > div > span { display: grid; flex: 1; min-width: 0; }
+.payroll-file-picker strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.payroll-file-picker small { color: var(--ui-text-soft); font-size: 8px; }
+.payroll-import-error { grid-column: 1 / -1; margin: 0; padding: 9px 11px; border-radius: 8px; background: color-mix(in srgb, var(--ui-danger) 10%, var(--ui-surface)); color: var(--ui-danger); font-size: 9px; }
+.payroll-import-preview { flex: 1; min-height: 0; padding: 18px 22px 22px; overflow-y: auto; }
+.payroll-import-identification { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 13px; border: 1px solid color-mix(in srgb, var(--ui-accent) 30%, var(--ui-border)); border-radius: 11px; background: var(--ui-accent-soft); }
+.payroll-import-identification > svg { color: var(--ui-accent-text); }
+.payroll-import-identification > div { display: grid; gap: 3px; }
+.payroll-import-identification strong { color: var(--ui-text); font-size: 10px; }
+.payroll-import-identification span { color: var(--ui-text-soft); font-size: 8px; }
+.payroll-import-identification b { padding: 5px 7px; border-radius: 7px; background: var(--ui-surface); color: var(--ui-accent-text); font-size: 8px; }
+.payroll-import-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 12px; }
+.payroll-import-kpis article { display: grid; gap: 5px; min-height: 104px; padding: 13px; border: 1px solid var(--ui-border); border-radius: 11px; background: var(--ui-surface); }
+.payroll-import-kpis span { color: var(--ui-text-soft); font-size: 8px; font-weight: 750; }
+.payroll-import-kpis strong { color: var(--ui-text); font-size: 15px; letter-spacing: -.035em; }
+.payroll-import-kpis small { align-self: end; color: var(--ui-text-soft); font-size: 7px; line-height: 1.45; }
+.payroll-import-notice { display: grid; gap: 4px; margin-top: 12px; padding: 12px 13px; border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface-muted); }
+.payroll-import-notice strong { color: var(--ui-text); font-size: 9px; }
+.payroll-import-notice span, .payroll-import-notice small { color: var(--ui-text-soft); font-size: 8px; line-height: 1.45; }
+.payroll-import-notice small::before { content: "• "; color: var(--ui-accent-text); }
+
 @media (max-width: 1050px) {
   .payroll-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .payroll-entry-panel form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .payroll-import-kpis { grid-template-columns: repeat(2, 1fr); }
   .company-settings-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .company-settings-list > article { grid-template-columns: 28px minmax(160px, 1fr) minmax(88px, .45fr) auto; }
   .company-settings-list > article > span:nth-of-type(2) { display: none; }
@@ -3336,16 +4020,29 @@
   .company-settings-access { grid-template-columns: 1fr; }
   .company-settings-access .secondary-button { justify-self: start; }
   .company-settings-catalog > header, .payroll-toolbar, .payroll-entry-panel > header { align-items: flex-start; flex-direction: column; }
+  .payroll-toolbar-actions { align-items: stretch; width: 100%; }
+  .payroll-toolbar-actions > label { flex: 1; }
   .company-settings-form, .payroll-entry-panel form { grid-template-columns: 1fr 1fr; }
   .company-settings-list > article { grid-template-columns: 26px minmax(0, 1fr) auto; }
   .company-settings-list > article > span { display: none; }
   .payroll-layout { grid-template-columns: 1fr; }
+  .payroll-import-setup { grid-template-columns: 1fr; padding-inline: 16px; }
+  .payroll-import-preview { padding-inline: 16px; }
 }
 
 @media (max-width: 470px) {
   .payroll-kpi-grid, .company-settings-form, .payroll-entry-panel form { grid-template-columns: 1fr; }
   .payroll-company-breakdown > article { grid-template-columns: minmax(0, 1fr) auto; }
   .payroll-company-breakdown > article > b { display: none; }
+  .payroll-toolbar-actions { flex-direction: column; }
+  .payroll-import-overlay { padding: 0; }
+  .payroll-import-dialog { width: 100%; max-height: 100%; border: 0; border-radius: 0; }
+  .payroll-import-identification { grid-template-columns: auto minmax(0, 1fr); }
+  .payroll-import-identification > b { grid-column: 2; justify-self: start; }
+  .payroll-import-kpis { grid-template-columns: 1fr; }
+  .payroll-import-dialog > footer { align-items: stretch; flex-wrap: wrap; }
+  .payroll-import-dialog > footer > span { flex-basis: 100%; }
+  .payroll-import-dialog > footer button { flex: 1; }
 }
 
 /* Lançamento completo da folha: os totais são derivados de valores já apurados no ERP/folha. */
@@ -3408,6 +4105,625 @@
 
 /* Alvos interativos: mínimo de 24px (WCAG 2.2 AA — 2.5.8). Vários selects e
    botões de apoio do painel mediam 15px de altura, o que é difícil de acertar
-   no toque e reprova na auditoria. */
-.dashboard-shell :is(select, button):not(.dashboard-sidebar button) { min-height: 24px; }
-.dashboard-shell :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
+   no toque e reprova na auditoria.
+
+   O `:where()` é o detalhe que faz isto ser um piso em vez de um teto. Escrita
+   com `.dashboard-shell` valendo especificidade, esta regra ganhava de toda
+   classe de módulo: "Cadastrar EPI" pede 38px de altura no CSS do próprio
+   módulo e era servido com 26px, junto com praticamente todo botão do painel.
+   O resultado era o tamanho irregular que se via na tela — botão grande no
+   desenho, botão apertado no produto — e a causa não estava em nenhum dos
+   módulos, estava aqui. Com `:where()` a regra passa a valer zero de
+   especificidade: quem não pede altura recebe os 24px, quem pede fica com a
+   sua. */
+:where(.dashboard-shell) :is(select, button):not(:where(.dashboard-sidebar button)) { min-height: 24px; }
+:where(.dashboard-shell) :is(a, button).text-action { display: inline-flex; align-items: center; min-height: 24px; }
+
+
+/* ==========================================================================
+   Shell travado na viewport
+   ==========================================================================
+   O painel é um aplicativo, não um documento: a barra lateral e o cabeçalho
+   ficam parados e só o conteúdo rola.
+
+   A versão anterior tentava isso com `position: sticky` na barra, e não
+   funcionava por dois motivos somados. Primeiro, `.dashboard-shell` tinha
+   `overflow-x: hidden`, o que faz do shell um contêiner de rolagem e anula o
+   sticky de quem está dentro. Segundo, a barra tinha `height: 100vh` dentro de
+   uma linha de grid mais alta que a janela — então o fundo escuro terminava no
+   meio da coluna e os últimos itens do menu apareciam em texto claro sobre o
+   fundo claro da página, ilegíveis.
+
+   Aqui o shell tem a altura exata da janela e o recorte acontece nele; a
+   coluna de conteúdo é quem rola. Isso resolve os dois problemas de uma vez e
+   ainda mantém o cabeçalho sempre à vista.
+
+   Só vale do tablet para cima: abaixo de 761px o layout vira uma barra
+   superior com navegação fixa embaixo, que depende da rolagem do documento. */
+@media (min-width: 761px) {
+  .dashboard-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .dashboard-sidebar {
+    position: static;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Com todos os módulos liberados a navegação passa da altura da janela. Quem
+     rola é só ela: a marca e a conta continuam ancoradas, porque perder a
+     identidade do grupo ao procurar um módulo desorienta. */
+  .dashboard-sidebar nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .22) transparent;
+  }
+
+  .dashboard-sidebar > :not(nav) { flex: 0 0 auto; }
+
+  .dashboard-main {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    /* `min-width: auto` é o valor inicial de um item de grade, e ele impede a
+       coluna de encolher abaixo do conteúdo. A coluna do shell é
+       `minmax(0, 1fr)` justamente para poder encolher — mas isso não adianta
+       enquanto o item dentro dela se recusa.
+
+       O efeito medido em 1366×768 e 1280×720, nos dois temas: a coluna do
+       conteúdo ficava 60 a 140px mais larga que a janela e o `overflow: hidden`
+       do shell cortava a diferença. Não havia barra de rolagem porque não havia
+       rolagem: o excesso simplesmente não existia mais para quem estava
+       olhando. É o "conteúdo cortado" da §94, e ele só aparece nas resoluções
+       que a §43 lista como alvo — em 1920 sobra largura e o defeito some. */
+    min-width: 0;
+  }
+
+  .dashboard-header,
+  .dashboard-content { min-width: 0; }
+
+  .dashboard-content {
+    min-height: 0;
+    overflow-y: auto;
+    /* Um módulo pode legitimamente pedir mais largura que a janela — o quadro
+       com seis colunas é o caso. Rolar dentro da coluna de conteúdo é o
+       comportamento certo; cortar não é. */
+    overflow-x: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+
+/* ==========================================================================
+   Destaque com foreground próprio
+   ==========================================================================
+   A auditoria nos dois temas acusou 42 violações distintas, e quase todas
+   vinham da mesma origem: cada módulo declarava a própria cor de destaque
+   (`--saas-indigo`, `--pay-accent`, `--time-accent`, `--int-accent`…) fixa
+   para o tema claro, sem contrapartida no escuro. No modo noturno a mesma cor
+   servia de texto sobre superfície escura e de preenchimento sob texto branco
+   — e falhava nos dois papéis.
+
+   Uma cor não basta. São três papéis diferentes e eles não coincidem:
+
+     --ui-accent       preenchimento (fundo de botão primário)
+     --ui-on-accent    o que se lê EM CIMA desse preenchimento
+     --ui-accent-text  a mesma família, mas legível como TEXTO sobre a página
+
+   No claro, `accent` e `accent-text` quase coincidem e o `on-accent` é branco.
+   No escuro eles se separam: o preenchimento clareia para o azul vivo e o
+   `on-accent` vira navy, porque branco sobre azul vivo dá 2.26:1. */
+.dashboard-shell {
+  --ui-accent: var(--vin-blue, #0857b2);
+  --ui-accent-text: var(--vin-blue, #0857b2);
+  --ui-on-accent: #ffffff;
+  --ui-accent-soft: #e2ecfb;
+  /* O que se lê EM CIMA do preenchimento vermelho, pelo mesmo motivo que
+     `--ui-on-accent` existe. O módulo de Processos já consumia este token —
+     `color: var(--ui-on-danger)` no botão de arquivar — e ele nunca foi
+     declarado em lugar nenhum: a declaração ficava inválida no valor
+     computado, e o texto do botão herdava a cor do pai. No tema escuro isso
+     era vermelho claro sobre vermelho claro. */
+  --ui-on-danger: #ffffff;
+}
+
+.dashboard-shell.theme-dark {
+  --ui-accent: #4da3ff;
+  /* Texto de destaque sobre superfície escura precisa clarear mais que o
+     preenchimento: o mesmo #4da3ff como texto sobre #111e2c dá 6.4:1, e é ele
+     que usamos — mas separado, porque o preenchimento pode escurecer sem
+     arrastar o texto junto. */
+  --ui-accent-text: #7cc0ff;
+  --ui-on-accent: #04121f;
+  --ui-accent-soft: #14304f;
+  /* No escuro o vermelho clareia para ser legível como texto, e branco em cima
+     dele dá 2,3:1. O que se lê sobre o preenchimento escurece junto. */
+  --ui-on-danger: #2b0906;
+}
+
+
+/* ==========================================================================
+   Cores de módulo e de superfície escura (§13)
+   ==========================================================================
+   Estes valores já existiam — repetidos. O violeta de Psicologia estava escrito
+   em três arquivos (`--aux-accent`, `--int-violet`, `--pay-accent`), o âmbar de
+   Prestadores PJ em dois, e o par de superfície escura — traço, véu e o mint da
+   confirmação — em dois ou três cada. Mudar a cor de um módulo significava
+   achar todas as cópias, e a que sobrasse ficaria fora de tom sem avisar.
+
+   O que muda aqui é onde a cor mora, não qual ela é: os valores são idênticos
+   aos que estavam espalhados. */
+.dashboard-shell {
+  /* Acento por módulo auxiliar. O azul da marca continua sendo o acento
+     padrão; estes dois distinguem contextos que convivem na mesma competência.
+     Preenchimento e texto são separados pelo mesmo motivo que `--ui-accent` e
+     `--ui-accent-text`: no tema escuro o texto precisa clarear mais que o
+     preenchimento. Verificado — a primeira versão usava o mesmo violeta nos
+     dois papéis e a conferência acusou 2.49:1 no cabeçalho de Psicologia. */
+  --module-psychology: #6550a1;
+  --module-psychology-text: #6550a1;
+  /* O que se lê EM CIMA do acento do módulo. Violeta e âmbar são escuros nos
+     dois temas, então é branco nos dois — diferente de `--ui-on-accent`, que
+     vira navy no escuro porque lá o preenchimento é azul claro. Sem este par,
+     o botão primário de Psicologia dava 2,89:1 e o de PJ 3,53:1 no tema
+     escuro; nenhum ensaio media, porque a semente não alcançava as telas. */
+  --module-on-accent: #ffffff;
+  --module-psychology-soft: #f0ecfa;
+  --module-contractors: #9a5c20;
+  --module-contractors-text: #9a5c20;
+  --module-contractors-soft: #f8eee2;
+
+  /* Sobre superfície escura — cabeçalho de gaveta, diálogo, toast. Não são o
+     tema escuro: são áreas que já eram escuras nos dois temas. */
+  --on-dark-soft: #b9c9d8;
+  --on-dark-line: #52667a;
+  --on-dark-veil: #ffffff0d;
+  --on-dark-confirm: #70dfb9;
+
+  /* Tinta das sombras profundas, com a opacidade embutida no valor. */
+  --ink-shadow: #06152642;
+  --ink-shadow-soft: #06152630;
+  --ink-scrim: #061526a8;
+}
+
+/* ==========================================================================
+   Cores de estado com contrapartida no escuro
+   ==========================================================================
+   Selos de status, avisos e destaques usavam hex fixo escolhido contra fundo
+   branco (#076848, #4a5563, #a95e21…). Dentro de um cartão que escurece com o
+   tema, esses mesmos valores caíam para 2:1 — legíveis de dia, invisíveis de
+   noite. Aqui cada estado ganha um par: o tom do texto e o tom do fundo, os
+   dois virando junto com o tema. */
+.dashboard-shell {
+  --ui-state-neutral-text: #414b5a;
+  --ui-state-neutral-bg: #eef1f4;
+  --ui-state-ok-text: #06563c;
+  --ui-state-ok-bg: #e3f5ed;
+  --ui-state-warn-text: #7d4708;
+  --ui-state-warn-bg: #fdf2e2;
+  --ui-state-danger-text: #96201a;
+  --ui-state-danger-bg: #fdeceb;
+}
+
+/* Contrapartida escura dos acentos de módulo. Medido contra as três
+   superfícies do tema: 7.73:1 e 9.56:1 na superfície de cartão. */
+.dashboard-shell.theme-dark {
+  --module-psychology-text: #b9a5ea;
+  --module-psychology-soft: #241d3a;
+  --module-contractors-text: #f0b978;
+  --module-contractors-soft: #33260f;
+}
+
+.dashboard-shell.theme-dark {
+  --ui-state-neutral-text: #c3cedb;
+  --ui-state-neutral-bg: #232f3d;
+  --ui-state-ok-text: #6fdcb2;
+  --ui-state-ok-bg: #10362a;
+  --ui-state-warn-text: #f5c37a;
+  --ui-state-warn-bg: #3a2c14;
+  --ui-state-danger-text: #ff9f98;
+  --ui-state-danger-bg: #3d1e1c;
+}
+
+/* O selo âmbar da visão geral: no escuro o marrom original dava 2.76:1. */
+.theme-dark .overview-metrics .requires-attention strong { color: var(--ui-state-warn-text); }
+
+/* Rótulos de apoio da folha ficavam abaixo de 4.5:1 sobre o painel da tela. */
+.payroll-toolbar > label,
+.payroll-toolbar-actions > label,
+.payroll-live-totals > span { color: var(--ui-text-strong-soft, var(--ui-text-soft)); }
+.dashboard-shell { --ui-text-strong-soft: #4d5a6b; }
+.dashboard-shell.theme-dark { --ui-text-strong-soft: #b6c3d1; }
+.payroll-live-totals > span:last-child strong { color: var(--ui-accent-text); }
+
+/* "Arquivados" ficava com fundo branco fixo e borda clara — no tema escuro o
+   texto herdado dava 1.77:1. O botão passa a usar as superfícies do tema. */
+.board-mode-tabs .archive-trigger {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.board-mode-tabs .archive-trigger b { color: var(--ui-accent-text); }
+
+/* O rótulo da competência ficava em 4.08:1 sobre o painel da folha. */
+.payroll-toolbar > label,
+.payroll-toolbar > label > span,
+.payroll-toolbar-actions > label,
+.payroll-toolbar-actions > label > span { color: var(--ui-text-strong-soft); }
+
+/* `--ui-primary` no escuro é o azul vivo, ótimo como preenchimento e fraco
+   como texto sobre o painel translúcido da folha (4.08:1). O token de texto
+   existe exatamente para este caso. */
+.payroll-toolbar > div > span,
+.payroll-entry-panel header span { color: var(--ui-accent-text); }
+
+
+/* ==========================================================================
+   Movimento
+   ==========================================================================
+   Três regras guiaram as escolhas abaixo.
+
+   A primeira: animação existe para explicar, não para enfeitar. A entrada de
+   módulo sobe poucos pixels porque a intenção é dizer "isto é novo", não fazer
+   a pessoa esperar. Nada aqui passa de 260ms — acima disso o movimento deixa
+   de parecer resposta e começa a parecer lentidão.
+
+   A segunda: só se anima o que é barato. `transform` e `opacity` rodam no
+   compositor; animar `height`, `top` ou `width` obriga o navegador a
+   recalcular layout a cada quadro e trava em lista grande.
+
+   A terceira, e a que mais importa: quem pede menos movimento recebe menos
+   movimento. `prefers-reduced-motion` não é um detalhe de acabamento — para
+   quem tem transtorno vestibular, movimento não pedido causa enjoo de
+   verdade. No fim do arquivo tudo isto é desligado, inclusive as animações
+   (o bloco global do globals.css só zerava transições). */
+
+.dashboard-shell {
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 260ms;
+  /* Desacelera no fim: o começo rápido dá a sensação de resposta imediata. */
+  --motion-ease: cubic-bezier(.22, 1, .36, 1);
+
+  /* Escala por papel (§78, §79). Os nomes dizem o que a duração serve, não
+     quanto ela mede: quem escreve um menu suspenso novo pega
+     `--motion-dropdown` e não precisa lembrar se o número era 180 ou 220. Os
+     valores vieram da tabela da §79 e todos ficam dentro dos 180–400ms que a
+     §11 pede para a troca de módulo. */
+  --motion-hover: 150ms;
+  --motion-micro: 180ms;
+  --motion-dropdown: 200ms;
+  --motion-modal: 250ms;
+  --motion-drawer: 300ms;
+  --motion-page: 300ms;
+
+  /* Três curvas, três papéis. `standard` é o que muda de estado sem entrar nem
+     sair; `enter` desacelera no fim porque o elemento está chegando e precisa
+     assentar; `exit` acelera porque o que sai não merece a atenção de quem
+     ficou. */
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-enter: cubic-bezier(.22, 1, .36, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+
+  /* Deslocamento de entrada. Mais que isto e a animação vira espera. */
+  --motion-distance-sm: 6px;
+  --motion-distance-md: 12px;
+}
+
+/* --- Troca de módulo ------------------------------------------------------ */
+/* `backwards`, não `both`: o último quadro é `transform: none`, e mantê-lo
+   como valor animado deixa uma matriz identidade que faz deste elemento o
+   bloco de contenção de todo descendente `position: fixed`. Ver a explicação
+   longa em `features/shared/motion.module.css`. */
+.view-transition { animation: viewEnter var(--motion-slow) var(--motion-ease) backwards; }
+
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- Navegação lateral ---------------------------------------------------- */
+.dashboard-sidebar nav button {
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease);
+}
+.dashboard-sidebar nav button:hover:not(.active) { transform: translateX(2px); }
+.dashboard-sidebar nav button.active {
+  /* O item ativo ganha um traço que cresce a partir do centro, em vez de
+     aparecer pronto: liga visualmente o clique ao destino. */
+  position: relative;
+}
+.dashboard-sidebar nav button.active::before {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 60%;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand-accent-on-dark, #6fb4ff);
+  content: "";
+  animation: navMark var(--motion-base) var(--motion-ease) both;
+}
+
+@keyframes navMark {
+  from { opacity: 0; transform: translateY(-50%) scaleY(0); }
+  to { opacity: 1; transform: translateY(-50%) scaleY(1); }
+}
+
+/* --- Cartões e superfícies ------------------------------------------------ */
+.dashboard-task,
+.overview-metrics > article,
+.dashboard-stats article {
+  transition: transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+.dashboard-task:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(11, 31, 51, .12);
+}
+
+/* --- Botões --------------------------------------------------------------- */
+.dashboard-shell button {
+  transition: background-color var(--motion-fast) ease, border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease, transform var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) ease;
+}
+/* O recuo no clique é o retorno tátil que falta num alvo plano. */
+.dashboard-shell button:active:not(:disabled) { transform: scale(.975); }
+
+/* --- Janelas -------------------------------------------------------------- */
+/* `.workspace-modal-backdrop` é o fundo de todas as janelas do painel — as
+   variantes (busca, confirmação, anexo) só acrescentam uma segunda classe. */
+.workspace-modal-backdrop { animation: backdropIn var(--motion-fast) ease-out both; }
+
+.workspace-modal,
+.card-modal,
+.inbox-modal,
+.archive-modal,
+.confirmation-modal,
+.demand-detail-modal,
+.workspace-settings-modal { animation: modalIn var(--motion-base) var(--motion-ease) both; }
+
+@keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- Carregamento --------------------------------------------------------- */
+/* Um pulso discreto diz "estou trabalhando" sem prometer uma barra de progresso
+   que o sistema não tem como calcular. */
+.dashboard-shell [aria-busy="true"] { animation: workingPulse 1.4s ease-in-out infinite; }
+
+@keyframes workingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .62; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-transition,
+  .dashboard-sidebar nav button.active::before,
+  .workspace-modal-backdrop,
+  .workspace-modal, .card-modal, .inbox-modal, .archive-modal,
+  .confirmation-modal, .demand-detail-modal, .workspace-settings-modal,
+  .dashboard-shell [aria-busy="true"] { animation: none !important; }
+
+  .dashboard-sidebar nav button:hover:not(.active),
+  .dashboard-task:hover,
+  .dashboard-shell button:active:not(:disabled) { transform: none; }
+}
+
+/* Duas exportações lado a lado na tela de relatórios (§50): o CSV das demandas
+   do recorte e o JSON do grupo inteiro. O link precisa parecer botão porque é
+   um download direto — um <button> com fetch guardaria o arquivo na memória do
+   navegador antes de salvar, e o ponto do fluxo no servidor era não fazer isso. */
+.export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.export-actions > a.export-button { text-decoration: none; }
+
+/* ── Fluxo da competência (Modelo 2, "Flow") ──────────────────────────────
+   Substitui a faixa marinho que brigava com a casca clara. As cinco etapas
+   são os estados que o servidor aceita, e o estado de cada uma é marcado por
+   FORMA além de cor — ícone de concluída, anel na atual, contorno vazio no
+   que falta —, para funcionar também para quem não distingue matiz. */
+.competence-flow { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
+.competence-flow > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.competence-flow > header > div:first-child { min-width: 0; }
+.competence-flow > header span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.competence-flow > header strong { display: block; margin-top: 6px; font-size: clamp(20px, 2vw, 26px); font-weight: 800; letter-spacing: -.03em; }
+.competence-flow > header p { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 12.5px; line-height: 1.5; }
+.competence-flow-actions { display: flex; gap: 9px; align-items: center; flex: 0 0 auto; }
+
+.competence-flow-track { margin: 22px 0 0; padding: 0; list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; }
+.competence-flow-track > li { position: relative; padding-top: 30px; text-align: center; }
+/* O fio entre as etapas é o que faz isto ser um fluxo e não cinco selos. Ele
+   nasce depois do círculo de uma e morre antes do da seguinte. */
+.competence-flow-track > li::before { content: ""; position: absolute; top: 10px; left: calc(-50% + 15px); width: calc(100% - 30px); height: 2px; background: var(--ui-border); }
+.competence-flow-track > li:first-child::before { display: none; }
+.competence-flow-track > li[data-state="done"]::before,
+.competence-flow-track > li[data-state="current"]::before { background: var(--ui-done); }
+
+.competence-flow-track > li > i { position: absolute; top: 0; left: 50%; width: 22px; height: 22px; margin-left: -11px; display: grid; place-items: center; border: 2px solid var(--ui-border-strong); border-radius: 50%; background: var(--ui-surface); }
+.competence-flow-track > li > i svg { width: 12px; height: 12px; stroke-width: 3; color: #fff; }
+.competence-flow-track > li[data-state="done"] > i { border-color: var(--ui-done); background: var(--ui-done); }
+/* Anel na etapa atual: o círculo fica vazio e ganha um halo, para se distinguir
+   da concluída sem depender da cor. */
+.competence-flow-track > li[data-state="current"] > i { border-color: var(--ui-primary); box-shadow: 0 0 0 3px var(--ui-primary-soft); }
+.competence-flow-track > li[data-state="current"] > i::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ui-primary); }
+
+.competence-flow-track > li > span { display: block; padding: 0 6px; }
+.competence-flow-track > li strong { display: block; font-size: 12px; font-weight: 650; color: var(--ui-text-soft); }
+.competence-flow-track > li small { display: block; margin-top: 2px; font-size: 10.5px; color: var(--ui-text-soft); }
+.competence-flow-track > li[data-state="current"] strong { color: var(--ui-primary); font-weight: 750; }
+.competence-flow-track > li[data-state="done"] strong { color: var(--ui-text); }
+
+@media (max-width: 760px) {
+  .competence-flow-track { grid-auto-flow: row; grid-auto-columns: auto; gap: 2px; }
+  .competence-flow-track > li { padding: 4px 0 4px 34px; text-align: left; }
+  .competence-flow-track > li::before { top: -8px; left: 10px; width: 2px; height: 16px; }
+  .competence-flow-track > li > i { top: 6px; left: 0; margin-left: 0; }
+  .competence-flow-track > li > span { padding: 0; }
+  .competence-flow > header { flex-direction: column; }
+}
+
+/* ── Diagrama de conexões (Modelo 2, "Flow") ──────────────────────────────
+   A marca no centro e os sistemas em volta. É uma <ul> de verdade: o arranjo
+   em torno do centro é apresentação, e quem usa leitor de tela recebe nome,
+   estado e última sincronização em texto — um SVG de linhas seria ilegível
+   para ele. O estado vem também na forma do traço, não só na cor: contínuo
+   para conectado, tracejado para sem credencial, pontilhado para erro. */
+.connection-map { padding: 20px 24px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); }
+.connection-map > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.connection-map > header span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; color: var(--ui-text-soft); }
+.connection-map > header strong { display: block; margin-top: 5px; font-size: 19px; font-weight: 800; letter-spacing: -.025em; }
+.connection-map > header p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 12px; }
+
+.connection-map-graph { position: relative; margin-top: 18px; }
+.connection-map-hub { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: 13px; background: var(--ui-surface); box-shadow: var(--ui-shadow-card); z-index: 2; }
+.connection-map-graph > ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 88px; }
+.connection-map-graph > ul > li { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 11px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface); }
+
+/* O fio até o centro. Nasce na borda interna do cartão e morre antes do hub. */
+.connection-map-graph > ul > li::after { content: ""; position: absolute; top: 50%; width: 44px; height: 0; border-top: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li:nth-child(odd)::after { right: -46px; }
+.connection-map-graph > ul > li:nth-child(even)::after { left: -46px; }
+.connection-map-graph > ul > li[data-tone="ok"]::after { border-top-color: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"]::after { border-top-style: dashed; border-top-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"]::after { border-top-style: dotted; border-top-color: var(--ui-danger); }
+
+.connection-map-graph > ul > li > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li[data-tone="ok"] > i { border-color: var(--ui-done); background: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"] > i { border-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"] > i { border-color: var(--ui-danger); background: var(--ui-danger); }
+.connection-map-graph > ul > li > span { min-width: 0; }
+.connection-map-graph > ul > li strong { display: block; font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-map-graph > ul > li small { display: block; font-size: 10.5px; color: var(--ui-text-soft); }
+
+.connection-map-empty h3 { font-size: 15px; font-weight: 750; }
+.connection-map-empty p { margin: 6px 0 12px; color: var(--ui-text-soft); font-size: 12.5px; max-width: 60ch; }
+
+@media (max-width: 900px) {
+  /* Sem espaço para o hub no meio, o desenho vira o que ele já é por baixo:
+     uma lista. Melhor lista honesta que diagrama espremido. */
+  .connection-map-hub { display: none; }
+  .connection-map-graph > ul { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .connection-map-graph > ul > li::after { display: none; }
+}
+
+/* Acesso por módulo, dentro da ficha do membro.
+   Fechado por padrão: a maioria das pessoas segue o papel, e abrir a matriz
+   de todos os módulos para todo mundo transformaria a lista de membros numa
+   parede. `details` nativo — teclado e leitor de tela funcionam sem estado. */
+.member-modules-details { grid-column: 1 / -1; margin-top: 8px; }
+.member-modules-details > summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--ui-primary); font-size: 11.5px; font-weight: 650; cursor: pointer; }
+.member-modules-details > summary:hover { text-decoration: underline; }
+
+/* ==========================================================================
+   Diagrama BPMN no tema escuro (§83)
+   ==========================================================================
+   O bpmn-js desenha com traço preto e preenchimento branco, fixos na folha de
+   estilo dele. No tema claro isso convive com a superfície; no escuro o
+   diagrama vira preto sobre azul-marinho — presente no DOM, ilegível na tela.
+   Foi o caso mais literal do que a §83 descreve.
+
+   Os seletores são do próprio bpmn-js e por isso vivem aqui, no CSS global:
+   um CSS Module transformaria `.djs-visual` num nome com hash e não casaria
+   com nada. O `!important` é a contrapartida de a biblioteca declarar as cores
+   como atributo de apresentação no SVG.
+
+   Só o traço, o preenchimento e o texto mudam. Forma, espessura e marcador
+   continuam vindo da biblioteca: reescrevê-los aqui criaria uma segunda
+   definição do BPMN, que sairia de sincronia na primeira atualização. */
+.theme-dark .djs-container {
+  --canvas-fill-color: var(--ui-surface);
+  background: var(--ui-surface);
+}
+
+.theme-dark .djs-visual > :is(path, polyline, polygon, rect, circle) {
+  stroke: var(--ui-text-soft) !important;
+}
+
+.theme-dark .djs-visual > :is(rect, circle, polygon) {
+  fill: var(--ui-surface-elevated) !important;
+}
+
+/* A seta da ligação é preenchida, não traçada: sem esta linha ela some. */
+.theme-dark .djs-connection .djs-visual > :is(path, polyline)[fill]:not([fill="none"]) {
+  fill: var(--ui-text-soft) !important;
+}
+
+.theme-dark .djs-visual > text,
+.theme-dark .djs-visual > text > tspan {
+  fill: var(--ui-text) !important;
+}
+
+/* Seleção e realce continuam sendo a cor de destaque do tema, e não o azul
+   fixo da biblioteca — que sobre o navy escuro fica quase invisível. */
+.theme-dark .djs-element.selected .djs-outline,
+.theme-dark .djs-shape.selected .djs-outline {
+  stroke: var(--ui-accent-text) !important;
+}
+
+/* Paleta, régua de contexto e menus flutuantes do editor. */
+.theme-dark :is(.djs-palette, .djs-context-pad, .djs-popup, .bjs-breadcrumbs) {
+  border-color: var(--ui-border) !important;
+  background: var(--ui-surface-elevated) !important;
+  color: var(--ui-text) !important;
+}
+
+.theme-dark :is(.djs-palette, .djs-context-pad) .entry { color: var(--ui-text-soft) !important; }
+.theme-dark :is(.djs-palette, .djs-context-pad) .entry:hover { background: var(--ui-surface-muted) !important; }
+
+/* ==========================================================================
+   Rótulos que ficaram no azul do tema claro (§82, §83)
+   ==========================================================================
+   Seis rótulos escritos em `access.css` com a cor da marca ou com um cinza
+   fixo, sem contrapartida no escuro. Cinco deles são o mesmo erro: `color:
+   var(--brand)` — o azul-marinho `#0857B2`, escolhido para ler sobre papel — em
+   texto sobre superfície escura. Ali ele rende de 2,21:1 a 2,44:1.
+
+   O sistema já sabia disso: `--ui-accent` e `--ui-accent-text` são separados
+   exatamente porque texto sobre superfície escura precisa clarear mais que
+   preenchimento. Estes rótulos é que tinham ficado fora da regra.
+
+   Eles sobreviveram porque moram em telas que a varredura de acessibilidade
+   não alcançava: ela visitava cada módulo, media a primeira aba e seguia para
+   o módulo seguinte. As abas internas — Tabela, Calendário, Processos,
+   Arquivados, as dez do EPI, as nove de Processos — nunca foram medidas, e o
+   relatório dizia "0 violações" sobre o que não tinha olhado. Com a varredura
+   entrando nelas, os seis apareceram de uma vez.
+
+   Medido depois: 8,59:1 sobre a superfície, 7,62:1 sobre a elevada, 6,93:1
+   sobre o preenchimento suave. */
+/* Descendente, não filho direto: nestes três o rótulo mora dentro de um `div`
+   que agrupa a linha do cabeçalho (`<header><div><span>…`). A primeira versão
+   desta correção usou `> span` e não casou com dois dos três — a varredura
+   continuou acusando 2,21:1 e 2,44:1, que foi como o erro apareceu. */
+.theme-dark :is(.workspace-modal > header, .process-tables-view > section > header, .archive-list > article > div) span {
+  color: var(--ui-accent-text);
+}
+
+.theme-dark :is(.demand-table-view, .demand-calendar-view) > header span {
+  color: var(--ui-text-soft);
+}
+
+/* O selo cinza de processo era o único par do conjunto pensado para papel que
+   não clareia junto — os outros quatro são texto escuro sobre pastilha clara e
+   continuam legíveis por conta própria. */
+.theme-dark .table-process.gray {
+  background: var(--ui-state-neutral-bg);
+  color: var(--ui-state-neutral-text);
+}
+
+/* Ícone do estado vazio: fundo verde-água fixo com a marca por cima. */
+.theme-dark .empty-view > span {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}

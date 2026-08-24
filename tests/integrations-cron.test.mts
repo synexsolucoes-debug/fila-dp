@@ -9,11 +9,13 @@ import test from "node:test";
  */
 test("existe disparo agendado para o executor de integrações", async () => {
   const workflow = await readFile(new URL("../.github/workflows/integrations-cron.yml", import.meta.url), "utf8");
-  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/u, "a fila depende de um agendamento de poucos minutos");
+  assert.match(workflow, /cron: "17,47 \* \* \* \*"/u, "a fila mantém duas varreduras por hora dentro da franquia gratuita");
   assert.match(workflow, /Authorization: Bearer/u);
   assert.match(workflow, /workflow_dispatch/u, "precisa ser disparável à mão para depuração");
   // O passo tem de falhar quando o executor recusa, senão a fila para em silêncio de novo.
   assert.match(workflow, /exit 1/u);
+  assert.match(workflow, /gh workflow run sankhya-worker\.yml/u, "o cron precisa acordar o RPA sem token permanente quando houver fila");
+  assert.match(workflow, /actions: write/u, "o token efêmero recebe somente a permissão necessária para disparar o worker");
 });
 
 test("o vercel.json não declara cron: a conta Hobby recusa o deploy inteiro", async () => {
@@ -45,15 +47,45 @@ test("o disparo agendado exige segredo e respeita o isolamento por workspace", a
   assert.match(route, /Date\.now\(\) < deadline/u);
   assert.match(route, /maxDuration/u);
 
-  // O agendamento precisa iniciar a consulta da Sólides DP; apenas drenar jobs
-  // manuais deixaria novas admissões invisíveis até alguém clicar em sincronizar.
+  // O agendamento precisa iniciar a consulta; apenas drenar jobs manuais
+  // deixaria novas admissões invisíveis até alguém clicar em sincronizar.
   assert.match(route, /queueIntegrationRun/u);
-  assert.match(route, /integration\.channel = 'tangerino'/u);
-  assert.match(route, /candidate\.resource_type = 'admissions'/u);
   assert.match(route, /triggerType: "scheduled"/u);
-  assert.match(route, /SCHEDULE_INTERVAL_MS = 5 \* 60 \* 1000/u);
-  assert.match(route, /pending\.status IN \('queued', 'leased'\)/u, "não pode acumular consultas concorrentes do mesmo conector");
+  assert.match(route, /sankhyaPending/u);
+  assert.match(route, /wakeSankhyaWorker/u);
+  // Quem entra em cada ciclo deixou de ser uma regra escrita aqui dentro e
+  // passou a ser a cadência declarada no conector (§29). A garantia é a mesma:
+  // a varredura cria execução, ela não só drena o que já existe.
+  assert.match(route, /listSchedulableAgents/u);
+  assert.match(route, /decideAgentSchedule/u);
+  assert.match(route, /prepareNextRun/u, "sem gravar o próximo horário, o conector sairia da varredura para sempre");
 
   // Nenhum segredo pode ir para o log.
   assert.doesNotMatch(route, /log\([^)]*SECRET/u);
+});
+
+test("a decisão de quem roda continua sendo por conector, e sem execuções concorrentes", async () => {
+  const scheduler = await readFile(new URL("../lib/agent-scheduler.ts", import.meta.url), "utf8");
+  /* Os canais que a varredura dispara. Eram os conectores de API do Tangerino e
+     da Sólides; a decisão de produto os aposentou, e mantê-los aqui deixaria
+     automação rodando sobre dado de cliente sem cartão na tela e sem botão de
+     pausa ao alcance de quem opera. O Sankhya tem portão de módulo e worker
+     próprios, e continua pelo caminho dele. */
+  assert.match(scheduler, /i\.channel IN \('tangerino_browser'\)/u);
+  // Mapeamento publicado e credencial ativa são pré-requisito: enfileirar sem
+  // eles gasta a janela da varredura para produzir uma falha previsível (§87).
+  assert.match(scheduler, /m\.status = 'active' AND m\.direction IN \('inbound', 'bidirectional'\)/u);
+  assert.match(scheduler, /c\.credential_type = 'provider_auth' AND c\.status = 'active'/u);
+  assert.match(scheduler, /j\.status IN \('queued', 'leased'\)/u, "não pode acumular consultas concorrentes do mesmo conector");
+
+  const engine = await readFile(new URL("../lib/integration-engine.ts", import.meta.url), "utf8");
+  assert.match(engine, /active\.status IN \('queued', 'leased'\)/u,
+    "o enfileiramento precisa recusar o segundo job do mesmo conector, e não estourar restrição");
+
+  // A janela de idempotência do disparo agendado saiu da rota e virou regra
+  // testável, derivada da cadência em vez de um intervalo fixo.
+  const schedule = await readFile(new URL("../lib/agent-schedule.ts", import.meta.url), "utf8");
+  assert.match(schedule, /export function scheduledRunKey/u);
+  assert.match(schedule, /Math\.floor\(input\.at\.getTime\(\) \/ windowMs\) \* windowMs/u,
+    "a chave precisa vir da janela, e não do instante — senão duas varreduras viram duas execuções");
 });

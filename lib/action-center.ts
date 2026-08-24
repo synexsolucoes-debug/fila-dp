@@ -12,6 +12,11 @@ export type ActionTarget =
   | "auxiliary"
   | "psychologistPayments"
   | "contractorPayments"
+  /* O Pagamento PJ virou oito destinos (§74) e um cartão de pendência precisa
+     levar ao destino que resolve a pendência, não à porta do módulo: nota
+     divergente é assunto de "Pagamentos", complemento é assunto de "Caju". */
+  | "contractorClosings"
+  | "contractorCaju"
   | "timeTracking"
   | "integrations"
   | "board";
@@ -152,7 +157,7 @@ export const actionDefinitions: readonly ActionDefinition[] = [
     description: "Competências PJ ainda não concluídas",
     capability: "contractors.payments.read",
     tone: "warning",
-    target: "contractorPayments",
+    target: "contractorClosings",
     showsAmount: true,
     companyColumn: "k.company_id",
     sql: `SELECT count(*)::int AS total, NULL::date AS earliest, coalesce(sum(k.net_amount), 0)::numeric AS amount
@@ -165,7 +170,7 @@ export const actionDefinitions: readonly ActionDefinition[] = [
     description: "Nota recebida não fecha com o valor esperado",
     capability: "contractors.payments.read",
     tone: "critical",
-    target: "contractorPayments",
+    target: "contractorClosings",
     showsAmount: true,
     companyColumn: "k.company_id",
     sql: `SELECT count(*)::int AS total, NULL::date AS earliest, coalesce(sum(abs(k.reconciliation_difference)), 0)::numeric AS amount
@@ -179,7 +184,7 @@ export const actionDefinitions: readonly ActionDefinition[] = [
     description: "Valor fora da nota aguardando o cartão de benefício",
     capability: "contractors.payments.read",
     tone: "warning",
-    target: "contractorPayments",
+    target: "contractorCaju",
     showsAmount: true,
     companyColumn: "k.company_id",
     sql: `SELECT count(*)::int AS total, NULL::date AS earliest, coalesce(sum(k.caju_amount), 0)::numeric AS amount

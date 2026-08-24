@@ -6,24 +6,15 @@ const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), 
 
 test("a barra lateral volta a acompanhar a rolagem", async () => {
   const access = await read("app/access.css");
-  // A causa era `overflow-x: hidden`: um elemento com overflow diferente de
-  // `visible` vira contêiner de rolagem, e o `position: sticky` da barra passa a
-  // se prender a ele em vez de à janela. Como esse contêiner não rola, o sticky
-  // nunca era acionado. `clip` corta igual sem criar contêiner de rolagem.
-  //
-  // Cada regra declara as duas: `hidden` primeiro, como fallback para quem não
-  // suporta `clip`, e `clip` depois, que é o que vale.
-  //
-  // A invariante é do arquivo inteiro, e não de duas regras conhecidas: qualquer
-  // `overflow-x: hidden` num ancestral da barra reintroduz o mesmo defeito, e
-  // ninguém lembraria de conferir isso ao acrescentar uma regra nova.
+  // A causa era `overflow-x: hidden` no pai imediato da barra. A implementação
+  // atual eliminou o overflow do shell; o recorte global do documento não
+  // transforma esse shell no contêiner de rolagem do sticky.
   const rules = access.replace(/\/\*[\s\S]*?\*\//gu, "");
-  const values = [...rules.matchAll(/overflow-x:\s*(hidden|clip)/gu)].map((match) => match[1]);
-  assert.ok(values.length >= 4, "as duas regras precisam declarar hidden e clip");
-  for (let index = 0; index < values.length; index += 1) {
-    if (values[index] !== "hidden") continue;
-    assert.equal(values[index + 1], "clip",
-      "todo `overflow-x: hidden` precisa ser seguido de `overflow-x: clip`, senão o sticky da barra volta a quebrar");
+  const shellRules = [...rules.matchAll(/\.dashboard-shell[^,{]*\{([^}]*)\}/gu)];
+  assert.ok(shellRules.length > 0, "a folha precisa declarar o shell do painel");
+  for (const rule of shellRules) {
+    assert.doesNotMatch(rule[1], /overflow-x:\s*hidden/u,
+      "o shell não pode voltar a ser contêiner de rolagem do sticky");
   }
 
   const refresh = await read("app/interface-refresh.css");
@@ -54,9 +45,10 @@ test("a camada de refinamento é carregada por último", async () => {
 
 test("trocar de módulo remonta o bloco, senão a animação não roda", async () => {
   const workspace = await read("app/painel/WorkspaceApp.tsx");
-  // Sem a chave o React reaproveita os nós, o conteúdo troca no lugar e a
-  // animação de entrada só acontece na primeira carga.
-  assert.match(workspace, /<div className="dashboard-view" key=\{view\}>/u);
+  const motion = await read("app/painel/features/shared/motion.tsx");
+  // O shell atual centraliza a remontagem no componente de transição.
+  assert.match(workspace, /<PageTransition transitionKey=\{view\}/u);
+  assert.match(motion, /<div key=\{transitionKey\}/u);
 
   const platform = await read("app/plataforma/PlatformApp.tsx");
   assert.match(platform, /className=\{styles\.featureStage\} key=\{area\}/u);
@@ -97,7 +89,7 @@ test("excluir um grupo é encontrável antes de ser possível", async () => {
   // primeira vez que alguém ajustasse o texto de impacto, que é o que segura o
   // clique.
   assert.match(clients, /function deleteWorkspaceAction\(/u);
-  assert.match(clients, /typedConfirmation: workspace\.slug/u);
+  assert.match(clients, /typedConfirmation: text\(workspace\.slug\)/u);
   assert.match(clients, /reasonMinLength: 10/u);
 });
 

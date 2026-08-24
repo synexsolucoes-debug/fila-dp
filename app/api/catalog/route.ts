@@ -1,5 +1,6 @@
 import { apiError, getApiUser, text, validDate, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
 
 const colors = new Set(["#dc2626", "#ea580c", "#d97706", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#64748b"]);
 
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
     const id = text(body.id, 160);
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin"]);
+    requireCapability(workspace, "registrations.catalogs.manage");
 
     if (resource === "label") {
       if (operation === "delete") {

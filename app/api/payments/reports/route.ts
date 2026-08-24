@@ -4,61 +4,25 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { validCompetence } from "@/lib/operations";
+import { reports, type PaymentReportKey } from "@/lib/payment-reports";
+import { renderContractorStatement } from "@/lib/contractor-statement-pdf";
+import { buildStatement } from "@/lib/contractor-statement";
+import { buildInvoiceNoticeFile } from "@/lib/contractor-invoice-notice";
+import { contractorComponentLabel } from "@/lib/payments";
 
-const reports = {
-  "psychology-by-psychologist": {
-    capability: "psychology.payments.read",
-    columns: ["psicologo", "competencia", "consultas", "colaboradores", "bruto", "ajustes", "liquido", "status", "pagamento"],
-    query: `SELECT a.legal_name AS psicologo, c.competence AS competencia, c.sessions_count AS consultas, c.employees_count AS colaboradores,
-        c.gross_amount AS bruto, c.adjustments_amount AS ajustes, c.net_amount AS liquido, c.status, coalesce(p.status, 'sem_registro') AS pagamento
-      FROM fdp_psychology_closings c
-      JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
-      LEFT JOIN fdp_psychology_payments p ON p.workspace_id = c.workspace_id AND p.closing_id = c.id
-      WHERE c.workspace_id = ? AND c.competence = ?`,
-    companyColumn: "c.company_id",
-    order: "ORDER BY a.legal_name",
-  },
-  "psychology-by-employee": {
-    capability: "psychology.payments.read",
-    columns: ["colaborador", "matricula", "psicologo", "competencia", "consultas", "valor"],
-    query: `SELECT e.full_name AS colaborador, e.registration_number AS matricula, a.legal_name AS psicologo, s.competence AS competencia,
-        sum(s.session_quantity)::int AS consultas, sum(s.total_amount) AS valor
-      FROM fdp_psychology_sessions s
-      JOIN fdp_employees e ON e.workspace_id = s.workspace_id AND e.id = s.employee_id
-      JOIN fdp_auxiliary_providers a ON a.workspace_id = s.workspace_id AND a.id = s.provider_id
-      WHERE s.workspace_id = ? AND s.competence = ? AND s.status = 'registered'`,
-    companyColumn: "s.company_id",
-    order: "GROUP BY e.full_name, e.registration_number, a.legal_name, s.competence ORDER BY e.full_name",
-  },
-  "contractor-closing": {
-    capability: "contractors.payments.read",
-    columns: ["prestador", "competencia", "base", "creditos", "descontos", "liquido", "limite_nf", "nf_esperada", "complemento", "caju",
-      "nf_recebida", "status_nf", "status_caju", "conciliacao", "diferenca", "status"],
-    query: `SELECT a.legal_name AS prestador, c.competence AS competencia, c.base_amount AS base, c.credits_amount AS creditos,
-        c.debits_amount AS descontos, c.net_amount AS liquido, c.invoice_limit_amount AS limite_nf, c.invoice_expected_amount AS nf_esperada,
-        c.complement_amount AS complemento, c.caju_amount AS caju, c.invoice_received_amount AS nf_recebida, c.invoice_status AS status_nf,
-        c.caju_status AS status_caju, c.reconciliation_status AS conciliacao, c.reconciliation_difference AS diferenca, c.status
-      FROM fdp_contractor_closings c
-      JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
-      WHERE c.workspace_id = ? AND c.competence = ?`,
-    companyColumn: "c.company_id",
-    order: "ORDER BY a.legal_name",
-  },
-  "contractor-divergences": {
-    capability: "contractors.payments.read",
-    columns: ["prestador", "competencia", "liquido", "nf_esperada", "nf_recebida", "complemento", "complemento_pago", "diferenca", "conciliacao"],
-    query: `SELECT a.legal_name AS prestador, c.competence AS competencia, c.net_amount AS liquido, c.invoice_expected_amount AS nf_esperada,
-        c.invoice_received_amount AS nf_recebida, c.complement_amount AS complemento, c.complement_paid_amount AS complemento_pago,
-        c.reconciliation_difference AS diferenca, c.reconciliation_status AS conciliacao
-      FROM fdp_contractor_closings c
-      JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
-      WHERE c.workspace_id = ? AND c.competence = ? AND (c.reconciliation_status = 'divergent' OR c.invoice_status = 'divergent')`,
-    companyColumn: "c.company_id",
-    order: "ORDER BY a.legal_name",
-  },
-} as const;
-
-type ReportKey = keyof typeof reports;
+/** Toda exportação entra na auditoria, em qualquer formato: é ela que responde
+ *  quem levou os valores de uma competência para fora do sistema. */
+function recordExport(
+  request: Request, workspaceId: string, userId: string, email: string,
+  key: string, competence: string, companyId: string, rowCount: number, format: string,
+) {
+  return prepareAuditEvent({
+    workspaceId, actorUserId: userId, actorEmail: email,
+    action: "payment_report.exported", entityType: "payment_report", entityId: key,
+    metadata: { competence, companyId: companyId || "all", rowCount, format },
+    requestId: request.headers.get("x-fila-dp-request-id"),
+  }).run();
+}
 
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
@@ -72,23 +36,54 @@ export async function GET(request: Request) {
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     const url = new URL(request.url);
-    const key = cleanText(url.searchParams.get("report"), 60) as ReportKey;
+    const key = cleanText(url.searchParams.get("report"), 60) as PaymentReportKey;
     const report = reports[key];
     if (!report) throw ApiError.notFound("Relatório não encontrado.", "PAYMENT_REPORT_NOT_FOUND");
     requireCapability(workspace, report.capability);
 
     const competence = validCompetence(url.searchParams.get("competence"));
     const companyId = cleanText(url.searchParams.get("companyId"), 120);
-    const format = url.searchParams.get("format") === "csv" ? "csv" : "json";
+    const requested = url.searchParams.get("format");
+    const format = requested === "csv" ? "csv"
+      : requested === "pdf" ? "pdf"
+        : requested === "txt" ? "txt" : "json";
+    /* O PDF existe para um documento só: o extrato analítico, que é o que se
+       entrega para conferência. Oferecê-lo nos outros seria prometer um
+       desenho que não existe. */
+    if (format === "pdf" && key !== "contractor-analytical") {
+      throw ApiError.badRequest("Este relatório não tem versão em PDF.", "PAYMENT_REPORT_NO_PDF");
+    }
+    /* O texto puro só faz sentido para o aviso de nota: é uma mensagem pronta
+       por prestador, não uma tabela. */
+    if (format === "txt" && key !== "contractor-invoice-notice") {
+      throw ApiError.badRequest("Este relatório não tem versão em texto.", "PAYMENT_REPORT_NO_TXT");
+    }
 
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     if (!access.unrestricted && access.companyIds.size === 0) return Response.json({ report: key, competence, rows: [] });
     const filters: string[] = [];
-    const values: unknown[] = [workspace.id, competence];
+    /* Quase todo relatório cita grupo e competência uma vez. O extrato
+       analítico é uma união — a base da apuração de um lado, os lançamentos do
+       outro — e cita os dois em cada lado. O par repetido vai aqui, e não numa
+       segunda rota, porque o resto do caminho é idêntico: mesma permissão,
+       mesmo recorte por empresa, mesma auditoria de exportação. */
+    const parameterPairs = "paramPairs" in report ? report.paramPairs : 1;
+    const values: unknown[] = Array.from({ length: parameterPairs }, () => [workspace.id, competence]).flat();
+    /* Na maioria dos relatórios a empresa recorta a lista. No aviso de nota ela
+       é a emitente: uma escolha só, que vale para todos os prestadores do
+       grupo. O acesso à empresa é exigido nos dois casos — é ela que aparece
+       no documento —, o que muda é se ela entra no WHERE. */
+    const companyIsIssuer = "companyMeaning" in report && report.companyMeaning === "issuer";
     if (companyId) {
       if (!access.unrestricted && !access.companyIds.has(companyId)) throw ApiError.forbidden("Você não tem acesso a esta empresa.", "COMPANY_ACCESS_REQUIRED");
-      filters.push(`${report.companyColumn} = ?`);
-      values.push(companyId);
+      if (!companyIsIssuer) {
+        filters.push(`${report.companyColumn} = ?`);
+        values.push(companyId);
+      } else if (!access.unrestricted) {
+        const ids = [...access.companyIds];
+        filters.push(`${report.companyColumn} IN (${ids.map(() => "?").join(",")})`);
+        values.push(...ids);
+      }
     } else if (!access.unrestricted) {
       const ids = [...access.companyIds];
       filters.push(`${report.companyColumn} IN (${ids.map(() => "?").join(",")})`);
@@ -98,13 +93,71 @@ export async function GET(request: Request) {
     const sql = `${report.query}${filters.length ? ` AND ${filters.join(" AND ")}` : ""} ${report.order}`;
     const rows = await d1.prepare(sql).bind(...values).all<Record<string, unknown>>();
 
+    /* A rubrica vem do banco: a descrição que alguém escreveu ou, quando ela
+       está em branco, o identificador do tipo. O identificador é do esquema —
+       `health_plan`, `advance` — e num documento de conferência ele aparece
+       exatamente como o que é: um vazamento de nome de coluna para a mão de
+       quem lê. A tradução fica aqui, antes de escolher o formato, para que
+       CSV, JSON e PDF digam a mesma palavra. */
+    for (const row of rows.results) {
+      if (typeof row.rubrica === "string") row.rubrica = contractorComponentLabel(row.rubrica);
+    }
+
+    if (format === "txt") {
+      /* Os dados da emitente vão no texto de cada mensagem: são o que quem
+         recebe precisa digitar na nota, e nada disso ela consegue conferir
+         sozinha — o valor está na tela dela, a empresa e a cidade não.
+         Razão social, e não nome fantasia: é a razão social que a nota exige. */
+      const emitente = companyId
+        ? await d1.prepare("SELECT legal_name, tax_id, city FROM fdp_companies WHERE workspace_id = ? AND id = ?")
+          .bind(workspace.id, companyId).first<{ legal_name: string; tax_id: string; city: string }>()
+        : null;
+      const conteudo = buildInvoiceNoticeFile(rows.results, {
+        razaoSocial: emitente?.legal_name ?? "",
+        cnpj: emitente?.tax_id ?? "",
+        cidade: emitente?.city ?? "",
+      }, competence);
+      /* Arquivo vazio parece defeito. Se ninguém tem valor a emitir, a recusa
+         diz isso — que é uma informação, e não um erro. */
+      if (!conteudo) {
+        throw ApiError.badRequest(
+          "Nenhum prestador do grupo tem valor de nota a emitir nesta competência.",
+          "INVOICE_NOTICE_EMPTY",
+        );
+      }
+      await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "txt");
+      return new Response(`\uFEFF${conteudo}\r\n`, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `attachment; filename="avisos-nf-${competence}.txt"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    if (format === "pdf") {
+      const empresa = companyId
+        ? await d1.prepare("SELECT legal_name, trade_name, tax_id FROM fdp_companies WHERE workspace_id = ? AND id = ?")
+          .bind(workspace.id, companyId).first<{ legal_name: string; trade_name: string; tax_id: string }>()
+        : null;
+      await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "pdf");
+      const pdf = renderContractorStatement(buildStatement(rows.results, {
+        competence,
+        empresa: empresa?.trade_name || empresa?.legal_name || workspace.name || "Todas as empresas do grupo",
+        cnpjEmpresa: empresa?.tax_id ?? "",
+        emitidoPor: user.name || auth.user.email,
+      }));
+      return new Response(new Uint8Array(pdf), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="extrato-analitico-pj-${competence}.pdf"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     if (format === "csv") {
-      await prepareAuditEvent({
-        workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
-        action: "payment_report.exported", entityType: "payment_report", entityId: key,
-        metadata: { competence, companyId: companyId || "all", rowCount: rows.results.length, format },
-        requestId: request.headers.get("x-fila-dp-request-id"),
-      }).run();
+      await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "csv");
       const header = report.columns.join(";");
       const body = rows.results.map((row) => report.columns.map((column) => csvCell(row[column])).join(";")).join("\n");
       return new Response(`${header}\n${body}\n`, {

@@ -77,9 +77,10 @@ export async function GET(request: Request) {
       });
     }
 
-    const [closings, contractors, policies] = await Promise.all([
+    const [closings, contractors, fixedItems, monthlyEntries, policies] = await Promise.all([
       cycleId
-        ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.credits_amount, c.debits_amount, c.net_amount,
+        ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.contract_base_amount,
+            c.proration_days, c.proration_total_days, c.proration_end_date, c.credits_amount, c.debits_amount, c.net_amount,
             c.invoice_limit_amount, c.invoice_limit_source, c.invoice_expected_amount, c.complement_amount, c.complement_method,
             c.caju_amount, c.status, c.invoice_number, c.invoice_received_amount, c.invoice_status, c.caju_status, c.caju_batch_reference,
             c.complement_paid_amount, c.reconciliation_status, c.reconciliation_difference, c.calc_version, c.closed_at,
@@ -87,12 +88,37 @@ export async function GET(request: Request) {
           FROM fdp_contractor_closings c
           JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
           LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = c.workspace_id AND p.provider_id = c.provider_id
-          WHERE c.workspace_id = ? AND c.company_id = ? AND c.payroll_cycle_id = ?
+          WHERE c.workspace_id = ? AND c.company_id = ? AND c.payroll_cycle_id = ? AND c.excluded_at IS NULL
           ORDER BY a.legal_name`).bind(workspace.id, companyId, cycleId).all()
         : Promise.resolve({ results: [] }),
       d1.prepare(`SELECT a.id, a.code, a.legal_name, p.base_amount, p.invoice_limit_override, p.complement_method, p.contract_reference, p.status
         FROM fdp_contractor_profiles p JOIN fdp_auxiliary_providers a ON a.workspace_id = p.workspace_id AND a.id = p.provider_id
-        WHERE p.workspace_id = ? AND p.company_id = ? ORDER BY p.status, a.legal_name`).bind(workspace.id, companyId).all(),
+        WHERE p.workspace_id = ? AND p.company_id = ? AND p.status = 'active' ORDER BY a.legal_name`).bind(workspace.id, companyId).all(),
+      d1.prepare(`SELECT f.id, f.provider_id, f.direction, f.component_type, f.description, f.amount,
+          f.effective_from, f.effective_to, f.status, f.note, a.legal_name AS contractor_name
+        FROM fdp_contractor_fixed_items f
+        JOIN fdp_auxiliary_providers a ON a.workspace_id = f.workspace_id AND a.id = f.provider_id
+        JOIN fdp_contractor_profiles p ON p.workspace_id = f.workspace_id AND p.provider_id = f.provider_id
+        WHERE f.workspace_id = ? AND f.company_id = ? AND p.status = 'active'
+        ORDER BY f.status, a.legal_name, f.effective_from DESC, f.created_at DESC`)
+        .bind(workspace.id, companyId).all(),
+      /* Os lançamentos da competência — a natureza "mensal".
+         A tela de Ajustes mostrava só os recorrentes, e quem lançava um
+         desconto avulso não tinha onde conferir o que já lançou: o valor
+         entrava na apuração e sumia de vista. Vêm daqui, junto dos fixos, para
+         a tela poder mostrar as duas naturezas lado a lado.
+         O lançamento vindo de item fixo é marcado pela origem, e não repetido:
+         ele já aparece na lista dos recorrentes, e mostrá-lo duas vezes faria
+         parecer que foi lançado em dobro. */
+      cycleId
+        ? d1.prepare(`SELECT k.id, k.provider_id, k.direction, k.component_type, k.description, k.amount,
+            k.component_quantity, k.origin, k.document_reference, k.status, k.created_at,
+            a.legal_name AS contractor_name
+          FROM fdp_contractor_components k
+          JOIN fdp_auxiliary_providers a ON a.workspace_id = k.workspace_id AND a.id = k.provider_id
+          WHERE k.workspace_id = ? AND k.company_id = ? AND k.payroll_cycle_id = ? AND k.origin <> 'fixed_item'
+          ORDER BY k.direction, a.legal_name, k.created_at DESC`).bind(workspace.id, companyId, cycleId).all()
+        : Promise.resolve({ results: [] }),
       d1.prepare(`SELECT id, scope, company_id, provider_id, contract_reference, amount, effective_from
         FROM fdp_invoice_limit_policies WHERE workspace_id = ? AND (effective_to IS NULL OR effective_to >= ?)
         ORDER BY scope, effective_from DESC`).bind(workspace.id, `${competence}-01`).all(),
@@ -101,7 +127,9 @@ export async function GET(request: Request) {
     const rows = closings.results as Record<string, unknown>[];
     return Response.json({
       module: moduleType, competence, cycle, cycles: cycles.results,
-      closings: rows, contractors: contractors.results, invoiceLimitPolicies: policies.results,
+      closings: rows, contractors: contractors.results, fixedItems: fixedItems.results,
+      monthlyEntries: monthlyEntries.results,
+      invoiceLimitPolicies: policies.results,
       totals: {
         netAmount: rows.reduce((total, row) => total + Number(row.net_amount ?? 0), 0),
         invoiceExpectedAmount: rows.reduce((total, row) => total + Number(row.invoice_expected_amount ?? 0), 0),

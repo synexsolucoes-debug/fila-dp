@@ -3,7 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { centsFromDatabase } from "@/lib/payments";
-import { assertExportable, buildCajuPreview, cajuFileName, type CajuCandidate } from "@/lib/caju-export";
+import { assertExportable, buildCajuPreview, cajuFileName, describeCajuBlock, type CajuCandidate } from "@/lib/caju-export";
 import { buildCajuFile, type CajuTemplateShape } from "@/lib/caju-template";
 
 /**
@@ -37,13 +37,6 @@ type TemplateRow = {
   category_key: string;
   amount_label: string;
   column_map_json: string;
-};
-
-const blockLabels: Record<string, string> = {
-  template_missing: "sem modelo oficial cadastrado",
-  not_approved: "cálculo ainda não aprovado",
-  invalid_tax_id: "CPF ausente ou inválido",
-  duplicated_tax_id: "CPF repetido na mesma competência",
 };
 
 /** Reconstrói o formato a partir do que foi gravado no cadastro do modelo. */
@@ -89,10 +82,11 @@ async function loadContext(user: NonNullable<Awaited<ReturnType<typeof getApiUse
       p.id AS provider_id, p.legal_name, p.trade_name, p.tax_id
     FROM fdp_contractor_closings c
     JOIN fdp_auxiliary_providers p ON p.workspace_id = c.workspace_id AND p.id = c.provider_id
-    WHERE c.workspace_id = ? AND c.payroll_cycle_id = ?
+    WHERE c.workspace_id = ? AND c.payroll_cycle_id = ? AND c.excluded_at IS NULL
     ORDER BY p.legal_name`).bind(workspace.id, cycleId).all<CandidateRow>();
 
   const candidates: CajuCandidate[] = rows.results.map((row) => ({
+    closingId: row.closing_id,
     contractorId: row.provider_id,
     contractorName: row.trade_name || row.legal_name,
     taxId: row.tax_id,
@@ -124,10 +118,13 @@ export async function GET(request: Request) {
       eligible: preview.eligible.map((item) => ({
         contractorId: item.contractorId, contractorName: item.contractorName, amountCents: item.cajuAmountCents,
       })),
-      blocked: preview.blocked.map((item) => ({
-        contractorId: item.contractorId, contractorName: item.contractorName,
-        reason: item.reason, reasonLabel: blockLabels[item.reason] ?? item.reason,
-      })),
+      blocked: preview.blocked.map((item) => {
+        const diagnostic = describeCajuBlock(item.reason, item.closingStatus);
+        return {
+          closingId: item.closingId, contractorId: item.contractorId, contractorName: item.contractorName,
+          closingStatus: item.closingStatus, reason: item.reason, reasonLabel: diagnostic.title, ...diagnostic,
+        };
+      }),
       skippedZero: preview.skippedZero,
       totalCents: preview.totalCents,
       canExport: preview.canExport,

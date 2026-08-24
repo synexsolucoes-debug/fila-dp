@@ -148,6 +148,11 @@ function ObligationFields({ approvers }: { approvers: Approver[] }) {
     <label className={styles.spanTwo}><span>Título</span><input name="title" required maxLength={180} placeholder="Ex.: Enviar DCTFWeb" /></label>
     <label><span>Responsável</span><select name="ownerUserId"><option value="">Não atribuído</option>{approvers.map((person) => <option key={person.id} value={person.id}>{person.name || person.email}</option>)}</select></label>
     <label><span>ID da demanda (opcional)</span><input name="cardId" /></label>
+    {/* O Vinculato não transmite ao portal: o protocolo vem de fora e é a única
+        prova de que a obrigação foi cumprida. Por isso ele tem campo próprio,
+        em vez de caber numa nota livre que ninguém consegue conferir depois. */}
+    <label><span>Protocolo</span><input name="protocol" maxLength={120} placeholder="Recibo devolvido pelo portal" /></label>
+    <label><span>Evidência (link)</span><input name="evidenceUrl" type="url" maxLength={2000} placeholder="https://..." /></label>
     <label className={styles.spanTwo}><span>Notas</span><textarea name="notes" /></label>
   </div>;
 }
