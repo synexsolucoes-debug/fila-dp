@@ -11,6 +11,11 @@
 name: Executor de integrações
 
 on:
+  # Gatilho temporário e restrito ao próprio workflow: dispara a correção agora.
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/integrations-cron.yml"
   schedule:
     # Duas vezes por hora preserva a franquia gratuita de Actions. O disparo
     # manual do Sankhya continua imediato pela API do GitHub.
@@ -43,9 +48,9 @@ jobs:
             echo "Defina os segredos INTEGRATIONS_CRON_URL e INTEGRATIONS_CRON_SECRET no repositório." >&2
             exit 1
           fi
-          # -sS mantém o erro visível sem despejar corpo binário; o corpo da
-          # resposta é um resumo com contagens, sem dado de cliente.
-          codigo=$(curl -sS -o resposta.json -w "%{http_code}" \
+          # -L segue a URL canônica da Vercel; -sS mantém falhas visíveis sem
+          # despejar corpo binário. A resposta contém só contagens.
+          codigo=$(curl -sSL -o resposta.json -w "%{http_code}" \
             --max-time 120 \
             -H "Authorization: Bearer ${SECRET}" \
             "${ENDPOINT}")
