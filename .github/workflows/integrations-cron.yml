@@ -39,21 +39,21 @@ jobs:
     steps:
       - name: Consultar a Sólides DP e drenar a fila
         env:
-          ENDPOINT: ${{ secrets.INTEGRATIONS_CRON_URL }}
           SECRET: ${{ secrets.INTEGRATIONS_CRON_SECRET }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ -z "${ENDPOINT}" ] || [ -z "${SECRET}" ]; then
-            echo "Defina os segredos INTEGRATIONS_CRON_URL e INTEGRATIONS_CRON_SECRET no repositório." >&2
+          if [ -z "${SECRET}" ]; then
+            echo "Defina o segredo INTEGRATIONS_CRON_SECRET no repositório." >&2
             exit 1
           fi
-          # -L segue a URL canônica da Vercel; -sS mantém falhas visíveis sem
-          # despejar corpo binário. A resposta contém só contagens.
-          codigo=$(curl -sSL -o resposta.json -w "%{http_code}" \
+          # O alias canônico evita redirecionamento entre domínios, que removeria
+          # o cabeçalho Authorization. A resposta contém somente contagens.
+          executor_url="https://vinculato.vercel.app/api/cron/integrations"
+          codigo=$(curl -sS -o resposta.json -w "%{http_code}" \
             --max-time 120 \
             -H "Authorization: Bearer ${SECRET}" \
-            "${ENDPOINT}")
+            "${executor_url}")
           echo "HTTP ${codigo}"
           cat resposta.json
           echo
