@@ -763,7 +763,19 @@
 }
 
 /* Responsive workspace controls */
-html, body { max-width: 100%; overflow-x: hidden; }
+/* `overflow-x: hidden` no `body` faz dele um contêiner de rolagem, e o
+ * `position: sticky` de quem está dentro passa a se prender a ele em vez de à
+ * janela — como quem rola é o documento, o sticky nunca é acionado.
+ *
+ * Do tablet para cima isso não aparece: o shell está travado na altura da
+ * janela e quem rola é a coluna de conteúdo. Abaixo de 761px, porém, o layout
+ * volta a depender da rolagem do documento, e ali a faixa superior do painel
+ * subia junto com o conteúdo. Medido no Chromium a 390px, depois de rolar
+ * 900px: cabeçalho em -13px com `hidden`, em 0 com `clip`.
+ *
+ * `clip` corta o transbordo horizontal do mesmo jeito sem criar contêiner de
+ * rolagem. A declaração antiga fica antes como fallback. */
+html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 .dashboard-shell { min-height: 100dvh; }
 .dashboard-main, .dashboard-content, .dashboard-heading, .dashboard-board-head { min-width: 0; }
 .dashboard-sidebar button, .dashboard-header button, .dashboard-tabs button, .dashboard-add-card, .inbox-item button, .planner-day button, .primary-button, .secondary-button, .danger-link { touch-action: manipulation; }
