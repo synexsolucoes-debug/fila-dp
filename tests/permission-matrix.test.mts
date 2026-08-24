@@ -82,7 +82,10 @@ test("toda rota de escrita passa por alguma autorização", () => {
   for (const [caminho, fonte] of routes) {
     if (!/export async function (POST|PATCH|PUT|DELETE)/u.test(fonte)) continue;
     if (PUBLICAS.has(caminho) || PESSOAIS.has(caminho)) continue;
-    const guarda = /requireCapability|requireNamedCapability|requireWorkspaceRole|requirePlatformAdmin|hasCapability/u.test(fonte);
+    // Rotas internas do worker usam assinatura HMAC curta no lugar de sessão
+    // humana; ela também é uma verificação de autorização e prende workspace,
+    // job, ação, conteúdo e validade temporal.
+    const guarda = /requireCapability|requireNamedCapability|requireWorkspaceRole|requirePlatformAdmin|hasCapability|verifyTangerinoWorkerRequest/u.test(fonte);
     if (!guarda) semGuarda.push(caminho);
   }
   assert.deepEqual(semGuarda, [], "rota de escrita sem nenhuma verificação de autorização");

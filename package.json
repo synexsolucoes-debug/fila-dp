@@ -62,6 +62,7 @@
     "stripe": "^22.4.0",
     "tsx": "^4.23.12",
     "unpdf": "^1.8.1",
+    "unzipper": "^0.10.14",
     "ws": "8.21.1"
   },
   "devDependencies": {
@@ -84,4 +85,3 @@
   },
   "type": "module"
 }
-

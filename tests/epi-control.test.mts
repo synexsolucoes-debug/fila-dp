@@ -504,7 +504,7 @@ test("entrada e transferência devolvem o id real do razão e preservam um local
 
 test("os anexos do EPI contam na mesma cota de armazenamento do plano", async () => {
   const epi = await readFile(new URL("../app/api/epi/attachments/route.ts", import.meta.url), "utf8");
-  const cards = await readFile(new URL("../app/api/cards/[id]/attachments/route.ts", import.meta.url), "utf8");
+  const cards = await readFile(new URL("../lib/card-attachments.ts", import.meta.url), "utf8");
   for (const [nome, fonte] of [["epi", epi], ["cards", cards]] as const) {
     assert.match(fonte, /FROM fdp_card_attachments WHERE workspace_id = \?\)\s*\n?\s*\+ \(SELECT COALESCE\(SUM\(size_bytes\), 0\) FROM fdp_epi_attachments WHERE workspace_id = \?\)/u,
       `${nome} não soma as duas tabelas na cota`);

@@ -72,6 +72,8 @@ const readPostPatterns: readonly RegExp[] = Object.freeze([
   /\/(?:login|signin|sign-in|auth|autenticar|token|session)(?:\/|$|\?)/iu,
   /\/(?:search|buscar|pesquisar|busca|consultar|consulta|filtrar|filter|list|listar)(?:\/|$|\?)/iu,
   /\/graphql(?:\/|$|\?)/iu,
+  /\/documentos\/admissao\/download-zip(?:\/|$|\?)/iu,
+  /\/ficha-cadastral\/report\/(?:[^/?]+)(?:\/|$|\?)/iu,
 ]);
 
 /** `mutation` no corpo de um POST GraphQL é escrita, mesmo com caminho de leitura. */

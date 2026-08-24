@@ -89,6 +89,11 @@ export const TangerinoSelectors = Object.freeze({
   externalIdLabels: [/c[óo]digo do processo/iu, /n[úu]mero do processo/iu, /protocolo/iu],
   displayNameLabels: [/colaborador/iu, /candidato/iu, /nome/iu],
 
+  /** Downloads de leitura, liberados somente depois da autorização no cartão. */
+  documentApprovalSection: [/^aprovar documentos$/iu],
+  downloadAllDocumentsButtons: [/^baixar todos os documentos$/iu],
+  exportRegistrationFormButtons: [/^exportar ficha do colaborador$/iu],
+
   /**
    * Ações de escrita que o agente reconhece **para ignorar**.
    *

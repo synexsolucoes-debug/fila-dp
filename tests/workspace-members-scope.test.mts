@@ -49,7 +49,9 @@ const EXCECOES: Record<string, string> = {
     "console global: administrar o contrato de um cliente",
 };
 
-const queries = collectQueries(process.cwd()).filter((query) => /fdp_workspace_members/u.test(query.sql));
+const queries = collectQueries(process.cwd())
+  .map((query) => ({ ...query, file: query.file.replaceAll("\\", "/") }))
+  .filter((query) => /fdp_workspace_members/u.test(query.sql));
 
 /** A consulta recorta o tenant? Aceita o parâmetro e a coluna correlacionada. */
 function filtraPorWorkspace(sql: string) {

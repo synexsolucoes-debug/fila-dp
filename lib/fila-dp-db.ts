@@ -393,6 +393,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult,
     settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult,
     companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult, historyTotals,
+    tangerinoAttachmentAuthorizationsResult,
   ] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
@@ -498,6 +499,16 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
         (SELECT count(*)::int FROM fdp_workspace_inbox_items WHERE workspace_id = ?) AS inbox_total,
         (SELECT count(*)::int FROM fdp_activity_events WHERE workspace_id = ?) AS activity_total`)
       .bind(board.id, workspace.id, workspace.id).first<Record<string, unknown>>(),
+    d1.prepare(`SELECT DISTINCT ON (auth_row.card_id)
+        auth_row.card_id, auth_row.state, auth_row.error_code,
+        auth_row.authorized_at, auth_row.started_at, auth_row.completed_at,
+        auth_row.uploaded_count
+      FROM fdp_tangerino_attachment_authorizations AS auth_row
+      JOIN fdp_cards card
+        ON card.workspace_id = auth_row.workspace_id AND card.id = auth_row.card_id
+      WHERE auth_row.workspace_id = ? AND card.board_id = ? AND card.archived = 0
+      ORDER BY auth_row.card_id, auth_row.authorized_at DESC`)
+      .bind(workspace.id, board.id).all(),
   ]);
 
   const checklistRows = checklistResult.results as Array<Record<string, unknown>>;
@@ -564,6 +575,10 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   const assigneeRows = assigneesResult.results as Array<Record<string, unknown>>;
   const customValueRows = customValuesResult.results as Array<Record<string, unknown>>;
   const attachmentRows = attachmentsResult.results as Array<Record<string, unknown>>;
+  const tangerinoAttachmentAuthorizationByCard = new Map(
+    (tangerinoAttachmentAuthorizationsResult.results as Array<Record<string, unknown>>)
+      .map((row) => [String(row.card_id), row] as const),
+  );
   const cards = cardRows.map((row) => ({
     id: String(row.id),
     boardId: String(row.board_id),
@@ -619,6 +634,21 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     attachments: attachmentRows.filter((item) => item.card_id === row.id).map((item) => ({
       id: String(item.id), filename: String(item.filename), contentType: String(item.content_type), sizeBytes: Number(item.size_bytes), uploadedBy: String(item.uploaded_by), createdAt: String(item.created_at), downloadUrl: `/api/attachments/${encodeURIComponent(String(item.id))}`,
     })),
+    solidesAttachments: (() => {
+      const authorization = tangerinoAttachmentAuthorizationByCard.get(String(row.id));
+      const eligible = Boolean(authorization)
+        || (String(row.source_type ?? "") === "integration" && String(row.created_by ?? "") === "integracao:tangerino_browser");
+      if (!eligible) return null;
+      return {
+        state: String(authorization?.state ?? "AWAITING_AUTHORIZATION") as
+          "AWAITING_AUTHORIZATION" | "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED",
+        authorizedAt: authorization?.authorized_at ? String(authorization.authorized_at) : null,
+        startedAt: authorization?.started_at ? String(authorization.started_at) : null,
+        completedAt: authorization?.completed_at ? String(authorization.completed_at) : null,
+        uploadedCount: Number(authorization?.uploaded_count ?? 0),
+        errorCode: String(authorization?.error_code ?? ""),
+      };
+    })(),
     slaPausedReason: String(row.sla_pause_reason ?? ""),
     slaTargetMinutes: Number(row.sla_target_minutes ?? 0),
     slaPausedMinutes: Number(row.sla_paused_minutes ?? 0),
