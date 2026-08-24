@@ -49,6 +49,10 @@ export const statusRules: readonly StatusRule[] = Object.freeze([
   { pattern: /\bcancelad[oa]\b|\bprocesso cancelado\b/iu, status: "CANCELLED", evidence: "dp_inequivoco" },
   { pattern: /\bdesistiu\b|\bdesist[êe]ncia\b/iu, status: "CANCELLED", evidence: "dp_inequivoco" },
 
+  // Valores observados literalmente no campo "Status da admissão" em 24/08/2026.
+  { pattern: /^conclu[íi]d[oa]$/iu, status: "COMPLETED", evidence: "tela" },
+  { pattern: /^em andamento$/iu, status: "IN_PROGRESS", evidence: "tela" },
+
   { pattern: /\badmiss[ãa]o (?:conclu[íi]da|finalizada|efetivada)\b/iu, status: "COMPLETED", evidence: "dp_inequivoco" },
   { pattern: /\b(?:processo )?conclu[íi]d[oa]\b|\bfinalizad[oa]\b|\badmitid[oa]\b/iu, status: "COMPLETED", evidence: "dp_inequivoco" },
 

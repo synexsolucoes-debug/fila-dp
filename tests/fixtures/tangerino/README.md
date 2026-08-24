@@ -1,16 +1,14 @@
 # Fixtures do agente Tangerino
 
-Estas páginas **imitam** a Admissão Digital do Tangerino. Elas não foram
-copiadas da tela real — não houve acesso autorizado para isso — e por isso não
-provam que os seletores de `lib/tangerino/selectors.ts` funcionam contra o
-Tangerino de verdade.
+Estas páginas reproduzem somente a **estrutura mínima confirmada** na Admissão
+Digital do Tangerino em uma sessão real e autorizada em 24/08/2026: busca por
+nome, contêiner de cartões, nome do colaborador, Status da admissão e Status da
+etapa. Não contêm dados copiados da conta usada no mapeamento.
 
-O que elas provam é o que dá para provar sem esse acesso: que o cliente de
-navegador percorre o caminho fechado que declara, que ele lê os campos onde eles
-estiverem, e — o mais importante — que **retirar um elemento esperado produz
-`UI_CHANGED`, e nunca um status inferido** (§65).
-
-Quando o mapeamento real acontecer (§72), estas fixtures são reescritas com a
-estrutura observada, e aí passam a valer como regressão de verdade.
+Elas provam que o cliente lê a estrutura mapeada e — o mais importante — que
+**retirar um elemento esperado produz `UI_CHANGED`, e nunca um status
+inferido** (§65). Campos que o cartão real não expõe, como protocolo e data
+efetiva da admissão, continuam opcionais e nunca são substituídos pela posição
+do cartão ou pela data-limite exibida na interface.
 
 Rodar: `npm run tangerino:fixtures`

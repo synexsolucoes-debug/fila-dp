@@ -5,6 +5,18 @@ em uma máquina controlada pela empresa. Ele **não resolve nem contorna CAPTCHA
 quando o Tangerino pedir uma confirmação, uma pessoa conclui o login na janela e
 o perfil guarda a sessão para as próximas consultas.
 
+## Interface validada
+
+O caminho de leitura foi confirmado em uma sessão real e autorizada em
+24/08/2026: **Admissão → Visão geral**, com a aplicação de admissões carregada
+do host oficial `admissao-demissao.tangerino.com.br` dentro de um iframe.
+
+O worker usa somente a busca **Digite o nome** e lê, no cartão retornado,
+**Status da admissão** e **Status da etapa**. Ele não abre ficha, documentos,
+calendário, lembrete nem menu de ações. A tela não expõe protocolo nem data
+efetiva de admissão no cartão; esses campos ficam vazios em vez de usar a
+posição visual ou a "Data limite para a admissão" como substituto.
+
 ## Segurança antes de começar
 
 - Use uma conta Windows dedicada e uma máquina com disco criptografado.
@@ -30,10 +42,9 @@ o perfil guarda a sessão para as próximas consultas.
    chaves `FDP_TANGERINO_VAULT_*` usados pelo Agente Tangerino no deployment.
    Usuário e senha do Tangerino não ficam nesse arquivo; continuam cifrados no
    cofre do Vinculato.
-4. Na Vercel, remova `FDP_TANGERINO_ACTIONS_TOKEN` (e o fallback
-   `FDP_SANKHYA_ACTIONS_TOKEN` do dispatcher Tangerino, se ele estiver sendo
-   compartilhado). Assim o GitHub Actions não disputa a mesma fila com o worker
-   local.
+4. Na Vercel, defina `FDP_TANGERINO_WORKER_MODE=persistent` em produção. Assim o
+   backend mantém a consulta na fila para este worker e não dispara GitHub
+   Actions. Não remova o token compartilhado do Sankhya.
 5. Inicie o processo em uma sessão Windows visível:
 
    ```powershell

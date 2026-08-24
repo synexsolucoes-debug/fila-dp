@@ -1,34 +1,27 @@
 /**
  * Único catálogo de seletores do Tangerino.
  *
- * ATENÇÃO — LEIA ANTES DE CONFIAR NESTE ARQUIVO.
- *
- * Estes padrões **não foram verificados contra a interface real do Tangerino**.
- * Eles não foram copiados de uma tela: são a abstração que a §11 pede quando não
- * há acesso autorizado para conferir. Enquanto a etapa de mapeamento (§72) não
- * acontecer, o comportamento esperado do agente diante de uma tela real é falhar
- * com `UI_CHANGED` — e isso é o resultado correto, não um defeito.
+ * Os seletores de navegação, pesquisa, cartão, situação e etapa foram validados
+ * em 24/08/2026 contra uma sessão real e autorizada da Sólides DP / Tangerino.
+ * O mapeamento confirmou duas camadas: o shell legado em `app.tangerino.com.br`
+ * e a lista de admissões dentro do iframe oficial
+ * `admissao-demissao.tangerino.com.br`.
  *
  * Inventar seletor daria a pior falha possível: o agente encontraria "alguma
  * coisa", leria o campo errado e devolveria um status plausível. `UI_CHANGED`
  * pede conferência; um status errado é acreditado.
  *
- * COMO MAPEAR DE VERDADE (§72)
- *   1. `TANGERINO_BROWSER_HEADLESS_OFF=true` e uma conta autorizada de consulta;
- *   2. abrir Admissão e localizar um processo de teste;
- *   3. preferir, nesta ordem: papel acessível (`getByRole`), rótulo
- *      (`getByLabel`), texto estável (`getByText`), atributo semântico;
- *   4. substituir o padrão daqui — nunca espalhar seletor pelo resto do código;
- *   5. rodar `npm run tangerino:fixtures` e atualizar as fixtures;
- *   6. marcar em `status.ts` as frases confirmadas com `evidence: "tela"`.
+ * A interface não expõe código de processo nem data efetiva de admissão nos
+ * cartões. O agente não substitui esses campos por posição da lista nem pela
+ * "Data limite para a admissão": ausência continua sendo ausência.
  *
  * NUNCA clicar, durante o mapeamento, em Salvar, Excluir, Cancelar, Finalizar,
  * Admitir, Aprovar ou Rejeitar (§73). O agente é somente leitura e a pessoa que
  * o mapeia também precisa ser.
  */
 
-/** Todo padrão daqui ainda espera confirmação em tela real. */
-export const TANGERINO_SELECTORS_ARE_PROVISIONAL = true;
+/** A estrutura crítica abaixo foi confirmada em tela real (§72). */
+export const TANGERINO_SELECTORS_ARE_PROVISIONAL = false;
 
 export const TangerinoSelectors = Object.freeze({
   /** Sinais de que a sessão caiu ou nunca existiu. */
@@ -69,23 +62,29 @@ export const TangerinoSelectors = Object.freeze({
   /** Marca de que a sessão está de pé e o agente pode navegar. */
   authenticatedMarkers: [/admiss[ãa]o/iu, /colaboradores/iu, /menu/iu],
 
-  /** Caminho até a área de admissão. */
-  admissionsNav: [/admiss[ãa]o digital/iu, /^admiss(?:[ãa]o|[õo]es)$/iu, /processos? admissionai?s/iu],
-  admissionsPageMarkers: [/processos? admissionai?s/iu, /admiss[õo]es em andamento/iu, /admiss[ãa]o digital/iu],
+  /** Caminho validado: menu Admissão → Visão geral → iframe do produto. */
+  admissionsMenuCss: "a.item-menu.item-modulo-menu-pricing",
+  admissionsMenuText: [/^admiss[ãa]o$/iu],
+  admissionsOverviewLinks: [/^vis[ãa]o geral$/iu],
+  admissionsFrameCss: 'iframe.embed.embed-page[src^="https://admissao-demissao.tangerino.com.br/"]',
+  admissionsPageMarkers: [/^admiss[ãa]o$/iu, /^todas admiss[õo]es$/iu],
 
   /** Pesquisa do colaborador dentro da área de admissão. */
-  searchLabels: [/pesquisar/iu, /buscar/iu, /nome do colaborador/iu, /filtrar/iu],
-  searchCss: ['input[type="search"]', 'input[name="search"]', 'input[name="busca"]'],
+  searchPlaceholders: [/^digite o nome$/iu],
+  searchCss: ['input[placeholder="Digite o nome"]'],
 
-  /** Linhas do resultado. É o que o parser conta para achar duplicidade. */
-  resultRowRole: "row" as const,
+  /** A interface real entrega cartões, sem papel ARIA de linha. */
+  resultCardCss: ".cards-scroll > .s-card",
+  resultNameCss: "strong.s-title",
   emptyResultMarkers: [/nenhum (?:resultado|registro|processo)/iu, /nada encontrado/iu, /sem resultados/iu],
 
-  /** Campos da tela do processo aberto. */
-  statusLabels: [/situa[çc][ãa]o/iu, /status/iu, /etapa atual/iu],
-  stageLabels: [/etapa/iu, /fase/iu],
+  /** Campos confirmados dentro de cada cartão. */
+  statusLabels: [/^status da admiss[ãa]o$/iu],
+  stageLabels: [/^status da etapa$/iu],
+  cardValueCss: "p.info-status",
   pendingLabels: [/pend[êe]ncia/iu, /o que falta/iu, /motivo/iu],
-  admissionDateLabels: [/data de admiss[ãa]o/iu, /admiss[ãa]o prevista/iu],
+  // Intencionalmente não casa com "Data limite para a admissão".
+  admissionDateLabels: [/^data (?:de|da) admiss[ãa]o$/iu, /^admiss[ãa]o prevista$/iu],
   updatedAtLabels: [/[úu]ltima atualiza[çc][ãa]o/iu, /atualizado em/iu],
   externalIdLabels: [/c[óo]digo do processo/iu, /n[úu]mero do processo/iu, /protocolo/iu],
   displayNameLabels: [/colaborador/iu, /candidato/iu, /nome/iu],

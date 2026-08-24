@@ -12,13 +12,14 @@
  *   leem o que existe na página, e que a ausência de um campo crítico vira
  *   `UI_CHANGED` (§65).
  *
- * O QUE ELA NÃO PROVA
- *   Que a tela real do Tangerino se parece com estas fixtures. Não se parece
- *   necessariamente: elas foram escritas sem acesso autorizado ao sistema. Até o
- *   mapeamento da §72 acontecer, verde aqui significa "a mecânica está certa",
- *   e nada sobre o Tangerino.
+ * LIMITAÇÃO
+ *   As fixtures preservam só a estrutura mínima confirmada em tela real em
+ *   24/08/2026. Não copiam dados da conta, estilos, widgets ou ações que o agente
+ *   não usa; verde aqui prova regressão dos seletores de leitura, não todos os
+ *   comportamentos do produto terceiro.
  */
 import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import {
@@ -50,7 +51,11 @@ function launchOptions() {
   const root = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers";
   if (!existsSync(root)) return {};
   const found = readdirSync(root).find((entry) => /^chromium-\d+$/u.test(entry));
-  return found ? { executablePath: `${root}/${found}/chrome-linux/chrome` } : {};
+  if (!found) return {};
+  const executable = process.platform === "win32"
+    ? join(root, found, "chrome-win64", "chrome.exe")
+    : join(root, found, "chrome-linux", "chrome");
+  return existsSync(executable) ? { executablePath: executable } : {};
 }
 
 const browser = await chromium.launch({ headless: true, ...launchOptions() });
@@ -87,9 +92,9 @@ try {
   /* ── Pesquisa ───────────────────────────────────────────────────────────── */
   await page.goto(fixtureUrl("admissoes.html"), { waitUntil: "domcontentloaded" });
   const hits = await collectSearchHits(page);
-  check("a pesquisa lê as linhas do resultado", hits.length === 2, `${hits.length} linha(s)`);
-  check("o cabeçalho da tabela não vira resultado", !hits.some((hit) => /Colaborador\b.*Admissão/u.test(hit.label)));
-  check("o identificador do processo vem da linha", hits[0]?.id === "ADM-4711", hits[0]?.id);
+  check("a pesquisa lê os cartões do resultado", hits.length === 2, `${hits.length} cartão(ões)`);
+  check("o nome vem do título estável do cartão", hits[0]?.label === "Maria de Souza", hits[0]?.label);
+  check("o identificador do processo vem do cartão quando exposto", hits[0]?.id === "ADM-4711", hits[0]?.id);
 
   await page.goto(fixtureUrl("admissoes-vazio.html"), { waitUntil: "domcontentloaded" });
   const vazio = await collectSearchHits(page);
@@ -102,7 +107,7 @@ try {
 
   await page.goto(fixtureUrl("admissoes-duplicadas.html"), { waitUntil: "domcontentloaded" });
   const duplicadas = await collectSearchHits(page);
-  check("duas linhas homônimas são lidas como duas", duplicadas.length === 2);
+  check("dois cartões homônimos são lidos como dois", duplicadas.length === 2);
   check("duplicidade vira MULTIPLE_MATCHES, e não uma escolha", (() => {
     try { chooseAdmission(duplicadas, ""); return false; } catch (error) {
       return error instanceof TangerinoAgentError && error.state === "MULTIPLE_MATCHES";

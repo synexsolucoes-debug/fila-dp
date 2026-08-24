@@ -14,7 +14,7 @@ import { log, type LogContext } from "../observability.ts";
  * não precisa saber disso e guarda log de webhook por padrão.
  */
 export type TangerinoWorkerDispatch = {
-  status: "dispatched" | "not_configured" | "misconfigured" | "failed";
+  status: "dispatched" | "persistent" | "not_configured" | "misconfigured" | "failed";
   httpStatus?: number;
 };
 
@@ -30,6 +30,9 @@ const refPattern = /^(?!\/)(?!.*\.\.)(?!.*\/\/)[A-Za-z0-9._/-]{1,120}$/u;
 
 export async function dispatchTangerinoWorker(options: DispatchOptions = {}): Promise<TangerinoWorkerDispatch> {
   const env = options.env ?? process.env;
+  const workerMode = String(env.FDP_TANGERINO_WORKER_MODE ?? "actions").trim().toLowerCase();
+  if (workerMode === "persistent") return { status: "persistent" };
+
   const token = String(env.FDP_TANGERINO_ACTIONS_TOKEN ?? env.FDP_SANKHYA_ACTIONS_TOKEN ?? "").trim();
   if (!token) return { status: "not_configured" };
 
