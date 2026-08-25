@@ -6,12 +6,13 @@ import { capabilities, hasCapability } from "../lib/authorization.ts";
 import { capabilityCatalog } from "../lib/capability-catalog.ts";
 import { credentialPublicHint, openCredentials, sealCredentials } from "../lib/integrations.ts";
 import { dispatchTangerinoWorker } from "../lib/tangerino/actions-dispatch.ts";
+import { deduplicateTransferFiles } from "../lib/tangerino/attachments-worker.ts";
 import { tangerinoAgentConfig } from "../lib/tangerino/config.ts";
 import { TangerinoAgentError, safeTangerinoError, tangerinoErrors } from "../lib/tangerino/errors.ts";
-import { tangerinoBrowserLoginUrl } from "../lib/tangerino/hosts.ts";
+import { tangerinoAdmissionsOverviewUrl, tangerinoBrowserLoginUrl } from "../lib/tangerino/hosts.ts";
 import { verifyTangerinoBrowserLogin } from "../lib/tangerino/login.ts";
 import { allowedTangerinoHosts, isAllowedTangerinoChallengeUrl, isAllowedTangerinoHost, isPrivateNetworkAddress } from "../lib/tangerino/navigation-security.ts";
-import { admissionChanged, admissionSearchTerm, chooseAdmission, isContractDataStage, isStableExternalAdmissionId, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
+import { admissionChanged, admissionSearchTerm, chooseAdmission, isContractDataStage, isStableExternalAdmissionId, legacyAdmissionNameFromCard, parseAdmission, parseAdmissionDate, parseSourceUpdatedAt } from "../lib/tangerino/parser.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../lib/tangerino/read-only.ts";
 import { TangerinoSelectors, TANGERINO_SELECTORS_ARE_PROVISIONAL } from "../lib/tangerino/selectors.ts";
 import { admissionStatusLabels, explainAdmissionStatus, normalizeAdmissionStatus, statusRules, terminalAdmissionStatuses } from "../lib/tangerino/status.ts";
@@ -460,6 +461,8 @@ test("o teste de conexão autentica e não consulta nenhum colaborador", async (
   });
   assert.deepEqual(session.calls, ["ensureAuthenticated"]);
   assert.equal(tangerinoBrowserLoginUrl, "https://app.tangerino.com.br/Tangerino/pages/LoginPage");
+  assert.equal(tangerinoAdmissionsOverviewUrl,
+    "https://admissao-demissao.tangerino.com.br/dashboard");
 });
 
 test("MFA e CAPTCHA param o fluxo em vez de serem contornados", async () => {
@@ -703,7 +706,7 @@ test("os seletores críticos refletem a estrutura confirmada em tela", () => {
   assert.equal(TangerinoSelectors.admissionsMenuCss, "a.item-menu.item-modulo-menu-pricing");
   assert.match(TangerinoSelectors.admissionsFrameCss, /admissao-demissao\.tangerino\.com\.br/u);
   assert.equal(TangerinoSelectors.searchCss[0], 'input[placeholder="Digite o nome"]');
-  assert.equal(TangerinoSelectors.resultCardCss, ".cards-scroll > .s-card");
+  assert.equal(TangerinoSelectors.resultCardCss, ".cards-scroll .s-card");
   assert.equal(TangerinoSelectors.resultNameCss, "strong.s-title");
   assert.ok(TangerinoSelectors.statusLabels.some((pattern) => pattern.test("Status da admissão")));
   assert.ok(TangerinoSelectors.stageLabels.some((pattern) => pattern.test("Status da etapa")));
@@ -720,7 +723,7 @@ test("nenhum comando do cliente de navegador encosta numa ação de alteração"
      navegador não referencia `forbiddenActions` em nenhum clique. */
   const cliente = source("worker/tangerino/playwright-session.ts");
   const cliques = [...cliente.matchAll(/\.click\(\)/gu)];
-  assert.ok(cliques.length > 0 && cliques.length <= 7, `${cliques.length} cliques: um agente de leitura clica em navegação e downloads autorizados`);
+  assert.ok(cliques.length > 0 && cliques.length <= 9, `${cliques.length} cliques: um agente de leitura clica em navegação e downloads autorizados`);
   assert.doesNotMatch(cliente, /forbiddenActions/u, "o cliente encostou na lista de ações proibidas");
   assert.doesNotMatch(cliente, /getByRole\("button", \{ name: \/(?:salvar|aprovar|admitir|excluir)/iu);
   // O runner efêmero mantém contexto novo. O persistente usa diretório opaco
@@ -730,7 +733,45 @@ test("nenhum comando do cliente de navegador encosta numa ação de alteração"
   assert.match(cliente, /createHash\("sha256"\)\.update\(tenant\)/u);
   assert.match(cliente, /acceptDownloads: true/u);
   assert.match(cliente, /downloadAllDocumentsButtons/u);
+  assert.match(cliente, /attachments_archive_request_sent/u);
+  assert.match(cliente, /attachments_registration_form_request_sent/u);
+  assert.match(cliente, /HTMLButtonElement\)\.click\(\)/u);
+  assert.match(source("lib/tangerino/attachments-worker.ts"), /origin: new URL\(input\.baseUrl\)\.origin/u);
+  assert.match(cliente, /openAdmissionDetailsButtons/u);
+  assert.match(cliente, /documentApprovalPanelHeaderCss/u);
   assert.match(cliente, /exportRegistrationFormButtons/u);
+  assert.match(cliente, /assertAllowedTangerinoUrl\(tangerinoAdmissionsOverviewUrl\)/u);
+  assert.match(cliente, /page\.goto\(directUrl\.toString\(\)/u);
+  assert.match(cliente, /getByRole\("searchbox"\)/u);
+  assert.match(cliente, /visibleInputs\.length === 1/u);
+  assert.match(cliente, /waitFor\(\{[\s\S]*state: "visible"[\s\S]*15_000/u);
+  assert.match(cliente, /tangerino-search-not-found\.png/u);
+  assert.match(cliente, /ficha-colaborador\/\$\{encodeURIComponent\(hit\.id\)\}/u);
+  assert.match(cliente, /tangerino-artifact-not-found\.png/u);
+});
+
+test("demanda legada recupera somente um nome confiável para a segunda busca", () => {
+  assert.equal(legacyAdmissionNameFromCard(
+    "Admissão ERP — Jéssica Poliana Gomes de Almeida Clemente", "",
+  ), "Jéssica Poliana Gomes de Almeida Clemente");
+  assert.equal(legacyAdmissionNameFromCard("Demanda de admissão",
+    "Colaboradora: Jéssica Poliana Gomes de Almeida Clemente.\nCargo: Assistente."),
+  "Jéssica Poliana Gomes de Almeida Clemente");
+  assert.equal(legacyAdmissionNameFromCard("Admissão ERP — 123.456.789-00", ""), "");
+  assert.equal(legacyAdmissionNameFromCard("Demanda sem nome", "Cargo: Assistente."), "");
+  const worker = source("lib/tangerino/attachments-worker.ts");
+  assert.match(worker, /hits\.length === 0[\s\S]*target\.fullName[\s\S]*session\.searchAdmission\(target\.fullName\)/u);
+});
+
+test("anexos com nomes diferentes e conteúdo idêntico contam uma única vez", async () => {
+  const sameBytes = Buffer.from("documento repetido", "utf8");
+  const files = await deduplicateTransferFiles([
+    { filename: "frente.pdf", contentType: "application/pdf", sizeBytes: sameBytes.length, read: async () => sameBytes },
+    { filename: "copia.pdf", contentType: "application/pdf", sizeBytes: sameBytes.length, read: async () => Buffer.from(sameBytes) },
+    { filename: "verso.pdf", contentType: "application/pdf", sizeBytes: 5, read: async () => Buffer.from("verso", "utf8") },
+  ]);
+  assert.deepEqual(files.map((file) => file.filename), ["frente.pdf", "verso.pdf"]);
+  assert.equal(new Set(files.map((file) => file.digest)).size, 2);
 });
 
 test("o CAPTCHA é detectado pelo widget, e não só pela palavra", () => {
