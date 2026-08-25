@@ -141,6 +141,26 @@ test("quem pede menos movimento recebe menos movimento", async () => {
   }
 });
 
+test("os anexos agrupam ações sem sobreposição e usam o contraste do tema", async () => {
+  const [workspace, css] = await Promise.all([
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    lerCss("app/dashboard-modern.css"),
+  ]);
+  assert.match(workspace, /className="attachment-actions"/u,
+    "visualizar, baixar e excluir precisam ocupar uma única célula de ações");
+  assert.match(workspace, /className="attachment-delete-button"/u);
+  assert.doesNotMatch(css, /grid-template-columns:\s*36px minmax\(0, 1fr\) auto auto 26px/u,
+    "cada ação em uma coluna própria volta a comprimir e sobrepor os rótulos");
+  assert.match(css, /\.attachment-list > article \{[^}]*background: var\(--ui-surface\); color: var\(--ui-text\)/u,
+    "o card não pode manter fundo branco com texto herdado do tema escuro");
+  assert.match(css, /\.attachment-list > article strong \{ color: var\(--ui-text\); \}/u);
+  assert.match(css, /\.attachment-list > article span \{ color: var\(--ui-text-soft\); \}/u);
+  assert.match(css, /\.attachment-actions > \.attachment-preview-button \{[^}]*width: auto/u,
+    "Visualizar não pode voltar à largura fixa de 24 px");
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.attachment-actions \{ grid-column: 2;[^}]*flex-wrap: wrap;/u,
+    "as ações precisam quebrar linha em telas estreitas");
+});
+
 test("as animações de janela miram classes que existem no código", async () => {
   // Uma regra apontada para uma classe inexistente é regra morta: passa em
   // revisão, não anima nada e ninguém descobre.
