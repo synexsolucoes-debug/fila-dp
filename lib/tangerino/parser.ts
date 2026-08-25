@@ -136,6 +136,25 @@ export function admissionSearchTerm(target: { externalAdmissionId: string; regis
 }
 
 /**
+ * Recupera o nome de uma demanda legada criada pelo próprio fluxo Tangerino.
+ *
+ * O formato é fechado e o resultado precisa parecer nome: letras, espaços e
+ * pontuação comum de nome. Números são recusados para impedir que CPF, matrícula
+ * ou outro identificador do texto do cartão vire uma pesquisa por engano.
+ */
+export function legacyAdmissionNameFromCard(title: string, description: string) {
+  const candidates = [
+    /^Admiss[ãa]o ERP\s*[—–-]\s*(.+)$/iu.exec(String(title ?? "").trim())?.[1] ?? "",
+    /(?:^|\n)Colaboradora?:\s*([^\n.]+)(?:\.|$)/iu.exec(String(description ?? ""))?.[1] ?? "",
+  ];
+  for (const raw of candidates) {
+    const name = raw.replace(/\s+/gu, " ").trim().slice(0, 160);
+    if (/^[\p{L}\p{M}][\p{L}\p{M} '\u2019.-]{1,159}$/u.test(name)) return name;
+  }
+  return "";
+}
+
+/**
  * Compara duas consultas para saber se houve mudança.
  *
  * Compara o texto original, e não a situação normalizada. Duas frases diferentes
