@@ -8,7 +8,14 @@ const ORIGIN_EXEMPT_PATHS = new Set([
   "/api/webhooks/worker",
 ]);
 
-const ORIGIN_EXEMPT_PATH_PREFIXES = ["/api/integrations/webhook/", "/api/v1/"];
+const ORIGIN_EXEMPT_PATH_PREFIXES = [
+  "/api/integrations/webhook/",
+  // Upload e conclusão não usam cookie de sessão: cada operação é autenticada
+  // por HMAC sobre workspace, autorização, ação e conteúdo. Exigir Origin aqui
+  // bloqueia o worker legítimo e não acrescenta proteção contra CSRF.
+  "/api/integrations/tangerino/attachments/",
+  "/api/v1/",
+];
 
 function parseOrigin(value: string | null) {
   if (!value || value === "null") return null;

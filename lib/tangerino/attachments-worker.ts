@@ -10,7 +10,7 @@ import { log } from "../observability.ts";
 import { tangerinoAgentConfig } from "./config.ts";
 import { safeTangerinoError, tangerinoErrors } from "./errors.ts";
 import { tangerinoBrowserLoginUrl } from "./hosts.ts";
-import { admissionSearchTerm, chooseAdmission } from "./parser.ts";
+import { admissionSearchTerm, chooseAdmission, legacyAdmissionNameFromCard } from "./parser.ts";
 import type { TangerinoArtifactSession } from "./types.ts";
 import { signTangerinoWorkerRequest } from "./worker-auth.ts";
 
@@ -23,6 +23,8 @@ type ClaimedAuthorization = {
   employee_id: string | null;
   integration_id: string;
   external_admission_id: string;
+  card_title: string;
+  card_description: string;
   attempt: number;
 };
 
@@ -38,6 +40,11 @@ type TransferFile = {
   contentType: string;
   sizeBytes: number;
   read: () => Promise<Buffer>;
+};
+
+type PreparedTransferFile = TransferFile & {
+  bytes: Buffer;
+  digest: string;
 };
 
 const contentTypeByExtension: Record<string, string> = {
@@ -119,14 +126,33 @@ async function filesFromDownloads(documentArchivePath: string, registrationFormP
   return files;
 }
 
+/**
+ * Usa a mesma identidade de conteúdo aplicada por `storeCardAttachment`.
+ *
+ * A Sólides pode incluir duas entradas com nomes diferentes e bytes idênticos
+ * no ZIP. O armazenamento corretamente mantém uma só cópia; a conclusão deve
+ * esperar essa mesma quantidade única, não o número bruto de nomes no arquivo.
+ */
+export async function deduplicateTransferFiles<T extends TransferFile>(files: T[]) {
+  const seen = new Set<string>();
+  const unique: Array<T & { bytes: Buffer; digest: string }> = [];
+  for (const file of files) {
+    const bytes = await file.read();
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (seen.has(digest)) continue;
+    seen.add(digest);
+    unique.push({ ...file, bytes, digest });
+  }
+  return unique;
+}
+
 async function uploadFile(input: {
   baseUrl: string;
   workspaceId: string;
   authorizationId: string;
-  file: TransferFile;
+  file: PreparedTransferFile;
 }) {
-  const bytes = await input.file.read();
-  const digest = createHash("sha256").update(bytes).digest("hex");
+  const { bytes, digest } = input.file;
   const signatureValue = `${digest}:${bytes.byteLength}`;
   const form = new FormData();
   const fileBytes = new Uint8Array(bytes.byteLength);
@@ -134,9 +160,15 @@ async function uploadFile(input: {
   form.set("file", new File([fileBytes], input.file.filename, { type: input.file.contentType }));
   const response = await fetch(new URL(`/api/integrations/tangerino/attachments/${encodeURIComponent(input.authorizationId)}`, input.baseUrl), {
     method: "POST",
-    headers: signTangerinoWorkerRequest({
-      workspaceId: input.workspaceId, authorizationId: input.authorizationId, action: "UPLOAD", value: signatureValue,
-    }),
+    headers: {
+      // Compatibilidade com o proxy atualmente publicado: esta chamada é
+      // servidor-a-servidor e autenticada por HMAC, mas o filtro de CSRF da
+      // produção ainda exige a origem pública nas mutações fora de /api/v1.
+      origin: new URL(input.baseUrl).origin,
+      ...signTangerinoWorkerRequest({
+        workspaceId: input.workspaceId, authorizationId: input.authorizationId, action: "UPLOAD", value: signatureValue,
+      }),
+    },
     body: form,
     signal: AbortSignal.timeout(90_000),
   });
@@ -148,6 +180,7 @@ async function completeTransfer(input: { baseUrl: string; workspaceId: string; a
     method: "POST",
     headers: {
       "content-type": "application/json",
+      origin: new URL(input.baseUrl).origin,
       ...signTangerinoWorkerRequest({
         workspaceId: input.workspaceId, authorizationId: input.authorizationId,
         action: "COMPLETE", value: String(input.expectedCount),
@@ -176,6 +209,7 @@ export async function claimNextAttachmentAuthorization(d1: Database, workspaceId
       WHERE auth_row.id = candidate.id AND auth_row.workspace_id = ?
         AND card.workspace_id = auth_row.workspace_id AND card.id = auth_row.card_id
       RETURNING auth_row.id, auth_row.card_id, card.company_id,
+        card.title AS card_title, card.description AS card_description,
         auth_row.employee_id, auth_row.integration_id, auth_row.external_admission_id, auth_row.attempt`)
     .bind(workspaceId, workspaceId).first<ClaimedAuthorization>();
 }
@@ -222,15 +256,37 @@ export async function runNextAttachmentAuthorization(
     const target = {
       workspaceId, companyId: claimed.company_id, employeeId: claimed.employee_id ?? `legacy:${claimed.card_id}`,
       externalAdmissionId: claimed.external_admission_id,
-      registrationNumber: String(employee?.registration_number ?? ""), fullName: String(employee?.full_name ?? ""),
+      registrationNumber: String(employee?.registration_number ?? ""),
+      fullName: String(employee?.full_name ?? legacyAdmissionNameFromCard(claimed.card_title, claimed.card_description)),
     };
-    const hit = chooseAdmission(await session.searchAdmission(admissionSearchTerm(target)), claimed.external_admission_id);
+    const primaryTerm = admissionSearchTerm(target);
+    let hits = await session.searchAdmission(primaryTerm);
+    if (hits.length === 0 && target.fullName && target.fullName !== primaryTerm) {
+      log("info", "tangerino.attachments_search_name_fallback", { workspaceId }, {
+        authorizationId: claimed.id, cardId: claimed.card_id,
+      });
+      hits = await session.searchAdmission(target.fullName);
+    }
+    const hit = hits.length === 0 && /^[1-9][0-9]{0,19}$/u.test(claimed.external_admission_id)
+      ? { id: claimed.external_admission_id, label: "ficha autorizada por identificador" }
+      : chooseAdmission(hits, claimed.external_admission_id);
+    if (hits.length === 0) {
+      log("info", "tangerino.attachments_direct_admission_fallback", { workspaceId }, {
+        authorizationId: claimed.id, cardId: claimed.card_id,
+      });
+    }
     await session.openAdmission(hit);
     temporaryDirectory = await mkdtemp(join(tmpdir(), "vinculato-tangerino-"));
     const downloads = await session.downloadAdmissionArtifacts({
       externalAdmissionId: claimed.external_admission_id, targetDirectory: temporaryDirectory,
     });
-    const files = await filesFromDownloads(downloads.documentArchivePath, downloads.registrationFormPath);
+    const downloadedFiles = await filesFromDownloads(downloads.documentArchivePath, downloads.registrationFormPath);
+    const files = await deduplicateTransferFiles(downloadedFiles);
+    if (files.length !== downloadedFiles.length) {
+      log("info", "tangerino.attachments_duplicate_content_ignored", { workspaceId }, {
+        authorizationId: claimed.id, duplicateCount: downloadedFiles.length - files.length,
+      });
+    }
     const baseUrl = appBaseUrl();
     for (const file of files) {
       await uploadFile({ baseUrl, workspaceId, authorizationId: claimed.id, file });
@@ -252,7 +308,8 @@ export async function runNextAttachmentAuthorization(
       WHERE workspace_id = ? AND id = ? AND state = 'RUNNING'`)
       .bind(retry ? "QUEUED" : "FAILED", errorCode.slice(0, 120), retry ? "QUEUED" : "FAILED", workspaceId, claimed.id).run();
     log(retry ? "warn" : "error", "tangerino.attachments_failed", { workspaceId }, {
-      authorizationId: claimed.id, cardId: claimed.card_id, errorCode, retry,
+      authorizationId: claimed.id, cardId: claimed.card_id, errorCode,
+      errorMessage: browserFailure.message, retry,
     });
     return { authorizationId: claimed.id, state: retry ? "QUEUED" as const : "FAILED" as const, errorCode };
   } finally {

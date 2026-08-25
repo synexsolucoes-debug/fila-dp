@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { mkdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { chromium, type Browser, type BrowserContext, type FrameLocator, type Locator, type Page } from "playwright";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { tangerinoErrors, TangerinoAgentError } from "../../lib/tangerino/errors.ts";
+import { tangerinoAdmissionsOverviewUrl } from "../../lib/tangerino/hosts.ts";
 import { assertAllowedTangerinoChallengeUrl, assertAllowedTangerinoUrl } from "../../lib/tangerino/navigation-security.ts";
 import { log } from "../../lib/observability.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../../lib/tangerino/read-only.ts";
@@ -25,7 +26,7 @@ import type { AdmissionSearchHit, AdmissionSnapshot, TangerinoArtifactSession } 
  * memória e não clica nos botões de ação dele.
  */
 
-type TangerinoLocatorScope = Pick<Page, "getByLabel" | "getByText" | "locator">;
+type TangerinoLocatorScope = Pick<Page, "getByLabel" | "getByPlaceholder" | "getByRole" | "getByText" | "locator">;
 
 async function isVisible(locator: Locator) {
   return locator.first().isVisible({ timeout: 1_500 }).catch(() => false);
@@ -193,8 +194,9 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
-  private admissionsFrame: FrameLocator | null = null;
+  private admissionsFrame: TangerinoLocatorScope | null = null;
   private selectedAdmissionCard: Locator | null = null;
+  private directAdmission = false;
   private persistentProfile = false;
   private authenticatedAt = 0;
   /** Requisições de alteração que a página tentou. Só método e caminho. */
@@ -287,15 +289,51 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   }
 
   private async resolveAdmissionsFrame(timeoutMs: number) {
-    const iframe = this.requirePage().locator(TangerinoSelectors.admissionsFrameCss).first();
-    await iframe.waitFor({ state: "attached", timeout: timeoutMs }).catch(() => undefined);
-    if (!await iframe.count().catch(() => 0)) return null;
-    const frame = iframe.contentFrame();
-    const body = frame.locator("body");
-    await body.waitFor({ state: "visible", timeout: timeoutMs }).catch(() => undefined);
-    if (!await isVisible(body)) return null;
-    const marker = await firstVisible(TangerinoSelectors.admissionsPageMarkers.map((text) => frame.getByText(text)));
-    return marker ? frame : null;
+    const page = this.requirePage();
+    const deadline = Date.now() + timeoutMs;
+    do {
+      const pageIsAdmissionsApp = (() => {
+        try { return new URL(page.url()).hostname === "admissao-demissao.tangerino.com.br"; }
+        catch { return false; }
+      })();
+      if (pageIsAdmissionsApp && await isVisible(page.locator("body"))) {
+        const pageMarker = await firstVisible(TangerinoSelectors.admissionsPageMarkers.map((text) => page.getByText(text)));
+        const searchField = await firstVisible(TangerinoSelectors.searchPlaceholders.map((text) => page.getByPlaceholder(text)));
+        if (pageMarker && searchField) return page;
+      }
+      const preferred = page.locator(TangerinoSelectors.admissionsFrameCss);
+      const allFrames = page.locator("iframe");
+      for (const candidates of [preferred, allFrames]) {
+        const total = Math.min(await candidates.count().catch(() => 0), 25);
+        for (let index = 0; index < total; index += 1) {
+          const iframe = candidates.nth(index);
+          const frame = iframe.contentFrame();
+          const body = frame.locator("body");
+          if (!await isVisible(body)) continue;
+          const marker = await firstVisible(TangerinoSelectors.admissionsPageMarkers.map((text) => frame.getByText(text)));
+          if (marker) return frame;
+
+          /* Classes e rótulos do shell mudam; a origem do produto não. Um
+             iframe oficial já é um candidato seguro e a próxima etapa ainda
+             exige o campo de pesquisa exato antes de digitar qualquer coisa. */
+          const source = await iframe.getAttribute("src").catch(() => null);
+          const handle = await iframe.elementHandle().catch(() => null);
+          const content = await handle?.contentFrame().catch(() => null);
+          const urls = [source ? new URL(source, page.url()).toString() : "", content?.url() ?? ""];
+          if (urls.some((raw) => {
+            try { return new URL(raw).hostname === "admissao-demissao.tangerino.com.br"; }
+            catch { return false; }
+          })) return frame;
+        }
+      }
+      await page.waitForTimeout(250);
+    } while (Date.now() < deadline);
+
+    const pagePath = (() => { try { return new URL(page.url()).pathname; } catch { return ""; } })();
+    log("warn", "tangerino.admissions_frame_not_found", {}, {
+      iframeCount: await page.locator("iframe").count().catch(() => 0), pagePath,
+    });
+    return null;
   }
 
   private requireAdmissionsFrame() {
@@ -413,16 +451,29 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       ...TangerinoSelectors.admissionsMenuText.map((text) =>
         page.locator(TangerinoSelectors.admissionsMenuCss).filter({ hasText: text })),
     ]);
-    if (!entry) throw tangerinoErrors.uiChanged("abertura da Admissão", "menu Admissão");
-    await entry.click();
-    const overview = await firstVisible(TangerinoSelectors.admissionsOverviewLinks.map((name) =>
-      page.getByRole("link", { name })));
-    if (!overview) throw tangerinoErrors.uiChanged("abertura da Admissão", "link Visão geral");
-    await overview.click();
-    const frame = await this.resolveAdmissionsFrame(Math.min(15_000, tangerinoAgentConfig().timeoutMs));
+    if (entry) {
+      await entry.click();
+      const overview = await firstVisible(TangerinoSelectors.admissionsOverviewLinks.map((name) =>
+        page.getByRole("link", { name })));
+      if (overview) await overview.click();
+    }
+
+    let frame = await this.resolveAdmissionsFrame(Math.min(5_000, tangerinoAgentConfig().timeoutMs));
+    if (!frame) {
+      /* A classe do item de menu varia entre versões do shell legado. A rota
+         oficial da funcionalidade é mais estável e evita transformar mudança
+         cosmética do menu em falha da integração. Continua sendo GET para um
+         host fixo validado pela mesma barreira de navegação do login. */
+      const directUrl = await assertAllowedTangerinoUrl(tangerinoAdmissionsOverviewUrl);
+      await page.goto(directUrl.toString(), {
+        waitUntil: "domcontentloaded", timeout: tangerinoAgentConfig().timeoutMs,
+      });
+      frame = await this.resolveAdmissionsFrame(Math.min(15_000, tangerinoAgentConfig().timeoutMs));
+    }
     if (!frame) throw tangerinoErrors.uiChanged("abertura da Admissão", "iframe da lista de admissões");
     this.admissionsFrame = frame;
     this.selectedAdmissionCard = null;
+    this.directAdmission = false;
   }
 
   /**
@@ -435,17 +486,82 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   async searchAdmission(term: string): Promise<AdmissionSearchHit[]> {
     const page = this.requirePage();
     const frame = this.requireAdmissionsFrame();
-    const field = await firstVisible([
+    const genericControls = 'input, textarea, [role="searchbox"], [contenteditable="true"]';
+    await frame.locator(genericControls).first().waitFor({
+      state: "visible", timeout: Math.min(15_000, tangerinoAgentConfig().timeoutMs),
+    }).catch(() => undefined);
+    let field = await firstVisible([
       ...TangerinoSelectors.searchPlaceholders.map((placeholder) => frame.getByPlaceholder(placeholder)),
       ...TangerinoSelectors.searchCss.map((css) => frame.locator(css)),
+      frame.getByRole("searchbox"),
+      frame.locator('input[type="search"]'),
+      frame.locator('[contenteditable="true"][aria-label*="pesquis" i]'),
+      frame.locator('[contenteditable="true"][aria-label*="busc" i]'),
     ]);
-    if (!field) throw tangerinoErrors.uiChanged("pesquisa do colaborador", "campo de busca");
+    if (!field) {
+      /* Algumas versões retiram o placeholder do único filtro da lista. Só é
+         seguro usar a estrutura como fallback quando existe exatamente um
+         campo textual visível; com dois ou mais, escolher seria adivinhar. */
+      const textInputs = frame.locator('input:not([type]), input[type="text"], textarea, [contenteditable="true"]');
+      const visibleInputs: Locator[] = [];
+      const total = Math.min(await textInputs.count().catch(() => 0), 20);
+      for (let index = 0; index < total; index += 1) {
+        const candidate = textInputs.nth(index);
+        if (await isVisible(candidate)) visibleInputs.push(candidate);
+      }
+      if (visibleInputs.length === 1) field = visibleInputs[0];
+    }
+    if (!field) {
+      const controls = frame.locator(genericControls);
+      const signatures: string[] = [];
+      const total = Math.min(await controls.count().catch(() => 0), 30);
+      for (let index = 0; index < total; index += 1) {
+        const candidate = controls.nth(index);
+        if (!await isVisible(candidate)) continue;
+        const tag = await candidate.evaluate((element) => element.tagName.toLowerCase()).catch(() => "");
+        const type = await candidate.getAttribute("type").catch(() => null) ?? "";
+        const name = await candidate.getAttribute("name").catch(() => null) ?? "";
+        const placeholder = await candidate.getAttribute("placeholder").catch(() => null) ?? "";
+        const role = await candidate.getAttribute("role").catch(() => null) ?? "";
+        const label = await candidate.getAttribute("aria-label").catch(() => null) ?? "";
+        signatures.push(`${tag}:${type}:${name}:${placeholder}:${role}:${label}`.slice(0, 180));
+      }
+      const body = frame.locator("body");
+      const structure = await body.evaluate((element) => ({
+        textLength: (element.textContent ?? "").length,
+        childCount: element.children.length,
+        scriptCount: element.querySelectorAll("script").length,
+        classSignatures: Array.from(element.querySelectorAll("[class]")).slice(0, 60)
+          .map((candidate) => `${candidate.tagName.toLowerCase()}.${String(candidate.getAttribute("class") ?? "").replace(/\s+/gu, ".")}`.slice(0, 140)),
+        pagePath: (() => { try { return new URL(location.href).pathname; } catch { return ""; } })(),
+      })).catch(() => ({ textLength: 0, childCount: 0, scriptCount: 0, classSignatures: [] as string[], pagePath: "" }));
+      const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
+      if (localLogPath) {
+        await page.screenshot({ path: join(dirname(localLogPath), "tangerino-search-not-found.png"), fullPage: true })
+          .catch(() => undefined);
+      }
+      log("warn", "tangerino.admissions_search_not_found", {}, {
+        inputCount: signatures.length, inputSignatures: signatures,
+        bodyTextLength: structure.textLength, bodyChildCount: structure.childCount,
+        scriptCount: structure.scriptCount, classSignatures: structure.classSignatures,
+        framePath: structure.pagePath,
+      });
+      throw tangerinoErrors.uiChanged("pesquisa do colaborador", "campo de busca");
+    }
     await field.fill(term);
     // O filtro Angular reage ao evento de entrada; Enter poderia acionar uma
-    // ação de formulário que a tela real não exige.
-    await page.waitForTimeout(750);
+    // ação de formulário que a tela real não exige. A resposta da API e a
+    // reconstrução dos cartões não terminam junto com o evento `input`: na
+    // aplicação real podem levar alguns segundos. Uma segunda leitura evita
+    // transformar essa latência em "nenhuma admissão encontrada".
+    await page.waitForTimeout(2_500);
     this.selectedAdmissionCard = null;
-    return collectSearchHits(frame);
+    let hits = await collectSearchHits(frame);
+    if (hits.length === 0) {
+      await page.waitForTimeout(2_500);
+      hits = await collectSearchHits(frame);
+    }
+    return hits;
   }
 
   async openAdmission(hit: AdmissionSearchHit) {
@@ -465,11 +581,24 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       }
     }
     if (!card || !await isVisible(card)) {
+      if (/^[1-9][0-9]{0,19}$/u.test(hit.id)) {
+        const page = this.requirePage();
+        const directUrl = `https://admissao-demissao.tangerino.com.br/ficha-colaborador/${encodeURIComponent(hit.id)}`;
+        await assertAllowedTangerinoUrl(directUrl);
+        await page.goto(directUrl, { waitUntil: "domcontentloaded", timeout: tangerinoAgentConfig().timeoutMs });
+        await page.locator("body").waitFor({
+          state: "visible", timeout: Math.min(15_000, tangerinoAgentConfig().timeoutMs),
+        });
+        this.selectedAdmissionCard = null;
+        this.directAdmission = true;
+        return;
+      }
       throw tangerinoErrors.uiChanged("seleção do processo", "cartão do resultado");
     }
     // Situação e etapa já estão no cartão. Selecioná-lo em memória evita abrir
     // ficha, documentos ou qualquer botão de significado operacional.
     this.selectedAdmissionCard = card;
+    this.directAdmission = false;
   }
 
   async readAdmission(): Promise<AdmissionSnapshot> {
@@ -496,26 +625,183 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     if (!/^\d{1,20}$/u.test(admissionId)) {
       throw tangerinoErrors.uiChanged("download dos anexos", "identificador numérico da admissão");
     }
-    if (!this.selectedAdmissionCard) {
+    if (!this.selectedAdmissionCard && !this.directAdmission) {
       throw tangerinoErrors.uiChanged("download dos anexos", "cartão selecionado");
     }
     await mkdir(input.targetDirectory, { recursive: true });
     const page = this.requirePage();
-    const frame = this.requireAdmissionsFrame();
-    await this.selectedAdmissionCard.click();
-    const section = await firstVisible(TangerinoSelectors.documentApprovalSection.map((name) => frame.getByText(name)));
+    let scope: TangerinoLocatorScope = this.directAdmission ? page : this.requireAdmissionsFrame();
+    const saveArtifactDiagnostic = async (filename = "tangerino-artifact-not-found.png") => {
+      const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
+      if (localLogPath) {
+        await page.screenshot({ path: join(dirname(localLogPath), filename), fullPage: true })
+          .catch(() => undefined);
+      }
+    };
+
+    const exportRegistrationForm = async (formPage: Page) => {
+      const exportLocators = () => TangerinoSelectors.exportRegistrationFormButtons.map((name) =>
+        formPage.getByRole("button", { name }));
+      await exportLocators()[0]?.first().waitFor({
+        state: "visible", timeout: Math.min(20_000, tangerinoAgentConfig().timeoutMs),
+      }).catch(() => undefined);
+      let exportButton = await firstVisible(exportLocators());
+      if (!exportButton) {
+        // `domcontentloaded` antecede a inicialização do aplicativo Angular. Se
+        // a primeira carga ficou incompleta (inclusive após um 502 transitório),
+        // uma única recarga GET é segura e suficiente; nunca se repete o clique
+        // que gera o arquivo.
+        await formPage.reload({
+          waitUntil: "domcontentloaded", timeout: Math.min(30_000, tangerinoAgentConfig().timeoutMs),
+        }).catch(() => undefined);
+        await exportLocators()[0]?.first().waitFor({
+          state: "visible", timeout: Math.min(20_000, tangerinoAgentConfig().timeoutMs),
+        }).catch(() => undefined);
+        exportButton = await firstVisible(exportLocators());
+      }
+      if (!exportButton) {
+        await saveArtifactDiagnostic("tangerino-registration-form-not-found.png");
+        throw tangerinoErrors.uiChanged("download da ficha cadastral", "botão Exportar ficha do colaborador");
+      }
+      const formResponse = formPage.waitForResponse((response) => {
+        try {
+          const path = new URL(response.url()).pathname;
+          return response.request().method() === "POST"
+            && /\/api\/v1\/ficha-cadastral\/report\/\d+$/u.test(path);
+        } catch { return false; }
+      }, {
+        timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs),
+      });
+      const formRequest = formPage.waitForRequest((request) => {
+        try {
+          const path = new URL(request.url()).pathname;
+          return request.method() === "POST"
+            && /\/api\/v1\/ficha-cadastral\/report\/\d+$/u.test(path);
+        } catch { return false; }
+      }, {
+        timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs),
+      });
+      // A interface cria o PDF em JavaScript. Um clique de ponteiro forçado
+      // pode acertar visualmente o botão sem executar o listener Angular quando
+      // o overlay de carregamento está terminando. O `click()` nativo atua no
+      // mesmo botão exato e dispara o listener registrado no próprio elemento.
+      await exportButton.evaluate((element) => (element as HTMLButtonElement).click());
+      await formRequest;
+      log("info", "tangerino.attachments_registration_form_request_sent");
+      const form = await formResponse;
+      await assertAllowedTangerinoUrl(form.url());
+      if (!form.ok()) throw tangerinoErrors.unavailable("A Sólides não concluiu o download da ficha cadastral.");
+      const formBytes = await form.body();
+      if (formBytes.byteLength < 5 || formBytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
+        throw tangerinoErrors.unavailable("A Sólides devolveu uma ficha cadastral inválida.");
+      }
+      const registrationFormPath = join(input.targetDirectory, "ficha-cadastral-solides.pdf");
+      await writeFile(registrationFormPath, formBytes);
+      return registrationFormPath;
+    };
+
+    let registrationFormPath: string | null = null;
+    if (this.directAdmission) {
+      /* A rota direta abre a ficha, não a visão geral do processo. Aproveitar
+         essa tela primeiro garante a ficha; depois, o link oficial volta para
+         a área em que o Tangerino/Sólides apresenta os documentos. */
+      registrationFormPath = await exportRegistrationForm(page);
+      const dashboardUrl = await assertAllowedTangerinoUrl(tangerinoAdmissionsOverviewUrl);
+      await page.goto(dashboardUrl.toString(), {
+        waitUntil: "domcontentloaded", timeout: Math.min(30_000, tangerinoAgentConfig().timeoutMs),
+      });
+      await page.waitForTimeout(1_000);
+      const overviewFrame = await this.resolveAdmissionsFrame(Math.min(5_000, tangerinoAgentConfig().timeoutMs));
+      if (overviewFrame) {
+        this.admissionsFrame = overviewFrame;
+        scope = overviewFrame;
+      } else {
+        // A visão geral também pode ser aberta como aplicativo de primeira
+        // classe, sem o iframe do shell legado.
+        scope = page;
+      }
+      await saveArtifactDiagnostic("tangerino-overview-after-form.png");
+    } else if (this.selectedAdmissionCard) {
+      const openDocuments = await firstVisible(TangerinoSelectors.openSubmittedDocumentsButtons.map((name) =>
+        this.selectedAdmissionCard?.getByRole("button", { name }) ?? page.locator("__never__")));
+      const openDetails = await firstVisible(TangerinoSelectors.openAdmissionDetailsButtons.map((name) =>
+        this.selectedAdmissionCard?.getByRole("button", { name }) ?? page.locator("__never__")));
+      if (openDocuments) await openDocuments.click();
+      else if (openDetails) await openDetails.click();
+      else await this.selectedAdmissionCard.click();
+
+      // O primeiro botão só expande a linha do tempo. "Aprovar documentos" é o
+      // cabeçalho de um `nz-collapse-panel`; o texto fica visível mesmo quando o
+      // conteúdo e o botão de download continuam recolhidos. A presença do
+      // título, portanto, não prova que a seção já abriu.
+      await scope.locator(TangerinoSelectors.documentApprovalPanelHeaderCss).first().waitFor({
+        state: "visible", timeout: Math.min(3_000, tangerinoAgentConfig().timeoutMs),
+      }).catch(() => undefined);
+      const downloadAlreadyVisible = await firstVisible(TangerinoSelectors.downloadAllDocumentsButtons.map((name) =>
+        scope.getByRole("button", { name })));
+      if (!downloadAlreadyVisible) {
+        const approvalHeader = await firstVisible(TangerinoSelectors.documentApprovalSection.map((name) =>
+          scope.locator(TangerinoSelectors.documentApprovalPanelHeaderCss).filter({ hasText: name })));
+        if (approvalHeader) {
+          log("info", "tangerino.attachments_approval_panel_opening");
+          // O cabeçalho é o alvo exato e somente de leitura. A animação do
+          // collapse mantém uma camada sobre ele e faz o clique convencional
+          // esperar até o timeout, embora o próprio componente já esteja
+          // visível. Forçar aqui só ignora essa checagem de ação, sem ampliar o
+          // seletor nem permitir qualquer ação de alteração.
+          await approvalHeader.click({ force: true });
+          log("info", "tangerino.attachments_approval_panel_opened");
+        }
+      }
+    }
+
+    await scope.getByText(TangerinoSelectors.documentApprovalSection[0]).first().waitFor({
+      state: "visible", timeout: Math.min(15_000, tangerinoAgentConfig().timeoutMs),
+    }).catch(() => undefined);
+    const section = await firstVisible(TangerinoSelectors.documentApprovalSection.map((name) => scope.getByText(name)));
+    if (!section) await saveArtifactDiagnostic();
     if (!section) throw tangerinoErrors.uiChanged("download dos anexos", "seção Aprovar documentos");
+    await scope.getByRole("button", { name: TangerinoSelectors.downloadAllDocumentsButtons[0] }).first().waitFor({
+      state: "visible", timeout: Math.min(15_000, tangerinoAgentConfig().timeoutMs),
+    }).catch(() => undefined);
     const downloadAll = await firstVisible(TangerinoSelectors.downloadAllDocumentsButtons.map((name) =>
-      frame.getByRole("button", { name })));
+      scope.getByRole("button", { name })));
+    if (!downloadAll) await saveArtifactDiagnostic();
     if (!downloadAll) throw tangerinoErrors.uiChanged("download dos anexos", "botão Baixar todos os documentos");
 
-    const archiveDownload = page.waitForEvent("download", { timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs) });
-    await downloadAll.click();
-    const archive = await archiveDownload;
-    const archiveFailure = await archive.failure();
-    if (archiveFailure) throw tangerinoErrors.unavailable("A Sólides não concluiu o download dos documentos.");
+    log("info", "tangerino.attachments_archive_download_starting");
+    const archiveResponse = page.waitForResponse((response) => {
+      try {
+        return response.request().method() === "POST"
+          && /\/api\/v1\/documentos\/admissao\/download-zip$/u.test(new URL(response.url()).pathname);
+      } catch { return false; }
+    }, { timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs) });
+    const archiveRequest = page.waitForRequest((request) => {
+      try {
+        return request.method() === "POST"
+          && /\/api\/v1\/documentos\/admissao\/download-zip$/u.test(new URL(request.url()).pathname);
+      } catch { return false; }
+    }, { timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs) });
+    // O botão vive dentro do mesmo collapse animado do cabeçalho. A referência
+    // continua restrita ao nome exato autorizado; o clique DOM evita que a
+    // camada visual intercepte o evento antes de ele alcançar o listener
+    // Angular `downloadTodosArquivos` confirmado no bundle oficial.
+    await downloadAll.evaluate((element) => (element as HTMLButtonElement).click());
+    await archiveRequest;
+    log("info", "tangerino.attachments_archive_request_sent");
+    const archive = await archiveResponse;
+    await assertAllowedTangerinoUrl(archive.url());
+    if (!archive.ok()) throw tangerinoErrors.unavailable("A Sólides não concluiu o download dos documentos.");
+    const archiveBytes = await archive.body();
+    const zipSignature = archiveBytes.subarray(0, 4).toString("hex");
+    if (archiveBytes.byteLength < 22 || !["504b0304", "504b0506", "504b0708"].includes(zipSignature)) {
+      throw tangerinoErrors.unavailable("A Sólides devolveu um arquivo de documentos inválido.");
+    }
+    log("info", "tangerino.attachments_archive_download_received");
     const documentArchivePath = join(input.targetDirectory, "documentos-solides.zip");
-    await archive.saveAs(documentArchivePath);
+    await writeFile(documentArchivePath, archiveBytes);
+
+    if (registrationFormPath) return { documentArchivePath, registrationFormPath };
 
     const formPage = await this.context?.newPage();
     if (!formPage) throw tangerinoErrors.unavailable("Não foi possível abrir a ficha cadastral.");
@@ -524,16 +810,7 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       const formUrl = `https://admissao-demissao.tangerino.com.br/ficha-colaborador/${encodeURIComponent(admissionId)}`;
       await assertAllowedTangerinoUrl(formUrl);
       await formPage.goto(formUrl, { waitUntil: "domcontentloaded", timeout: tangerinoAgentConfig().timeoutMs });
-      const exportButton = await firstVisible(TangerinoSelectors.exportRegistrationFormButtons.map((name) =>
-        formPage.getByRole("button", { name })));
-      if (!exportButton) throw tangerinoErrors.uiChanged("download da ficha cadastral", "botão Exportar ficha do colaborador");
-      const formDownload = formPage.waitForEvent("download", { timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs) });
-      await exportButton.click();
-      const form = await formDownload;
-      const formFailure = await form.failure();
-      if (formFailure) throw tangerinoErrors.unavailable("A Sólides não concluiu o download da ficha cadastral.");
-      const registrationFormPath = join(input.targetDirectory, "ficha-cadastral-solides.pdf");
-      await form.saveAs(registrationFormPath);
+      registrationFormPath = await exportRegistrationForm(formPage);
       return { documentArchivePath, registrationFormPath };
     } finally {
       await formPage.close().catch(() => undefined);
@@ -541,8 +818,9 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   }
 
   async back() {
-    if (this.selectedAdmissionCard) {
+    if (this.selectedAdmissionCard || this.directAdmission) {
       this.selectedAdmissionCard = null;
+      this.directAdmission = false;
       return;
     }
     const page = this.requirePage();
@@ -563,6 +841,7 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     this.browser = null;
     this.admissionsFrame = null;
     this.selectedAdmissionCard = null;
+    this.directAdmission = false;
     this.authenticatedAt = 0;
     this.persistentProfile = false;
   }
