@@ -1035,14 +1035,15 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .solides-attachment-sync.success { border-color: #b8e3d4; background: #eefaf6; }
 .solides-attachment-sync.error { border-color: #e7b9b9; background: #fff5f5; }
 .attachment-list { margin-top: 18px; display: grid; gap: 7px; }
-.attachment-list > article { min-height: 53px; padding: 8px 10px; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 26px; align-items: center; gap: 10px; border: 1px solid #dfe5e5; border-radius: 8px; background: #fff; }
+.attachment-list > article { min-height: 53px; padding: 8px 10px; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid #dfe5e5; border-radius: 8px; background: #fff; }
 .attachment-list > article > i { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 6px; background: #eef2f5; color: #607083; font-size: 7px; font-style: normal; font-weight: 800; }
 .attachment-list > article > div { min-width: 0; }
 .attachment-list > article strong, .attachment-list > article span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-list > article strong { font-size: 9px; }
 .attachment-list > article span { margin-top: 4px; color: #8b96a0; font-size: 7px; }
+.attachment-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .attachment-list > article a { color: var(--brand); font-size: 8px; font-weight: 750; }
-.attachment-list > article button { width: 24px; height: 24px; border: 0; background: transparent; color: #a34c4c; cursor: pointer; font-size: 15px; }
+.attachment-list > article .attachment-delete-button { width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #a34c4c; cursor: pointer; font-size: 15px; }
 .activity-panel { padding-bottom: 0; }
 .activity-heading { margin-top: 22px; padding-top: 18px; display: flex; justify-content: space-between; border-top: 1px solid #dfe5e5; }
 .activity-heading strong { font-size: 9px; }
@@ -1084,7 +1085,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 @media (max-width: 760px) { .solides-attachment-sync { align-items: stretch; flex-direction: column; }.solides-attachment-sync button { align-self: start; } }
 @media (max-width: 760px) { .card-dialog-tabs { padding-inline: 18px; }.card-tab-panel { padding: 18px; }.attachments-panel > header { flex-direction: column; }.demand-calendar-view { overflow-x: auto; }.calendar-grid { min-width: 640px; }.workspace-settings-layout { grid-template-columns: 1fr; }.settings-nav { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid #dfe5e5; }.settings-nav button { width: max-content; white-space: nowrap; }.workspace-settings-content { padding: 16px !important; }.integration-grid { grid-template-columns: 1fr; }.catalog-form, .fields-form, .calendar-settings-form { grid-template-columns: 1fr; }.catalog-form .wide, .fields-form .wide { grid-column: auto; }.catalog-form.compact { grid-template-columns: 1fr; }.sla-policy-list > form { grid-template-columns: 1fr 1fr; }.sla-policy-list > form > strong { grid-column: 1 / -1; }.sla-policy-list > form > button { grid-column: 2; }.archive-list > article { grid-template-columns: 8px minmax(0, 1fr) 1fr; }.archive-list > article button { grid-row: 2; }.archive-list > article button.danger { grid-column: 3; }.search-backdrop { padding: 72px 12px 12px; }.search-palette { width: 100%; }.board-create-form, .planner-block-form { grid-template-columns: 1fr; } }
 @media (max-width: 620px) { .security-sessions > header, .security-sessions > footer { align-items: stretch; flex-direction: column; }.security-sessions article { grid-template-columns: 34px minmax(0, 1fr); }.security-sessions article > button { grid-column: 2; justify-self: start; } }
-@media (max-width: 420px) { .attachment-list > article { grid-template-columns: 32px minmax(0, 1fr) 24px; }.attachment-list > article a { grid-column: 2; }.attachment-list > article button { grid-column: 3; grid-row: 1 / span 2; }.demand-table-view > header { align-items: start; flex-direction: column; padding-block: 12px; }.archive-list > article { grid-template-columns: 8px minmax(0, 1fr); }.archive-list > article button, .archive-list > article button.danger { grid-column: 2; justify-self: start; }.notification-drawer { width: 100%; }.card-choice-section header { align-items: start; flex-direction: column; gap: 4px; } }
+@media (max-width: 420px) { .attachment-list > article { grid-template-columns: 32px minmax(0, 1fr); }.attachment-actions { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; }.demand-table-view > header { align-items: start; flex-direction: column; padding-block: 12px; }.archive-list > article { grid-template-columns: 8px minmax(0, 1fr); }.archive-list > article button, .archive-list > article button.danger { grid-column: 2; justify-self: start; }.notification-drawer { width: 100%; }.card-choice-section header { align-items: start; flex-direction: column; gap: 4px; } }
 
 /* Responsive surface, crisp rendering and user-controlled appearance. */
 .dashboard-shell {

@@ -896,10 +896,36 @@
 .list-delete { align-self: center; white-space: nowrap; }
 .list-create-form { grid-template-columns: minmax(0, 1fr) 190px auto; }
 
-.attachment-list > article { grid-template-columns: 36px minmax(0, 1fr) auto auto 26px; }
-.attachment-preview-button {
-  min-height: 28px; padding: 0 8px; border: 1px solid var(--ui-border-strong); border-radius: 6px;
-  background: var(--ui-surface-muted); color: var(--ui-primary); cursor: pointer; font: 700 9px var(--font-geist-sans), sans-serif;
+.attachment-list > article {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text);
+}
+.attachment-list > article > i { background: var(--ui-surface-muted); color: var(--ui-text-soft); }
+.attachment-list > article strong { color: var(--ui-text); }
+.attachment-list > article span { color: var(--ui-text-soft); }
+.attachment-list > article .attachment-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.attachment-list > article .attachment-actions > a,
+.attachment-list > article .attachment-actions > .attachment-preview-button {
+  width: auto; min-width: max-content; min-height: 34px; height: 34px; padding: 0 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--ui-border-strong); border-radius: 7px;
+  background: var(--ui-surface-muted); color: var(--ui-primary); cursor: pointer;
+  font: 700 9px var(--font-geist-sans), sans-serif; text-decoration: none;
+  transition: border-color var(--motion-hover) var(--ease-standard), background var(--motion-hover) var(--ease-standard), color var(--motion-hover) var(--ease-standard);
+}
+.attachment-list > article .attachment-actions > :is(a, .attachment-preview-button):hover {
+  border-color: var(--ui-primary); background: var(--ui-primary-soft);
+}
+.attachment-list > article .attachment-actions > .attachment-delete-button {
+  width: 34px; min-width: 34px; height: 34px; border: 1px solid var(--ui-state-danger-text); border-radius: 7px;
+  background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); cursor: pointer; font-size: 17px;
+  transition: border-color var(--motion-hover) var(--ease-standard), background var(--motion-hover) var(--ease-standard);
+}
+.attachment-list > article .attachment-actions > .attachment-delete-button:hover {
+  border-color: var(--ui-state-danger-text); background: color-mix(in srgb, var(--ui-state-danger-text) 18%, var(--ui-surface));
+}
+.attachment-list > article .attachment-actions > :is(a, button):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ui-primary) 45%, transparent); outline-offset: 2px;
 }
 .attachment-preview-modal { width: min(1060px, calc(100vw - 32px)); height: min(780px, calc(100vh - 36px)); display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .attachment-preview-modal > header { min-height: 68px; }
@@ -972,9 +998,8 @@
   .list-transfer { grid-column: 2; }
   .list-delete { grid-column: 2; justify-self: start; }
   .list-create-form { grid-template-columns: 1fr; }
-  .attachment-list > article { grid-template-columns: 32px minmax(0, 1fr) auto; }
-  .attachment-list > article > a, .attachment-preview-button { grid-column: 2; justify-self: start; }
-  .attachment-list > article > button:last-child { grid-column: 3; grid-row: 1 / span 2; }
+  .attachment-list > article { grid-template-columns: 32px minmax(0, 1fr); }
+  .attachment-list > article .attachment-actions { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; }
   .attachment-preview-modal { width: calc(100vw - 18px); height: calc(100vh - 18px); }
   .attachment-preview-modal > header h2 { max-width: 44vw; }
 }
@@ -2927,6 +2952,7 @@
   --ui-radius-lg: 16px;
   --ui-shadow-card: 0 1px 2px rgba(6, 43, 96, .05);
   --ui-shadow-modal: 0 24px 72px rgba(4, 27, 69, .24);
+
 }
 
 .dashboard-shell.theme-dark {
