@@ -20,3 +20,13 @@ export const tangerinoBrowserHosts = ["tangerino.com.br", "solides.com.br"] as c
  * a Sólides mudar a entrada, a alteração passa por revisão e pela allowlist.
  */
 export const tangerinoBrowserLoginUrl = "https://app.tangerino.com.br/Tangerino/pages/LoginPage";
+
+/**
+ * Entrada estável da Visão geral de Admissão Digital.
+ *
+ * O menu do shell legado muda de classe entre contas e versões do Wicket. A
+ * rota oficial do aplicativo de Admissão Digital é estável e continua sendo
+ * uma navegação GET, somente leitura, dentro da allowlist fixa do Tangerino.
+ */
+export const tangerinoAdmissionsOverviewUrl =
+  "https://admissao-demissao.tangerino.com.br/dashboard";
