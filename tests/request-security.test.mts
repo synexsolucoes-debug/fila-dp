@@ -27,3 +27,14 @@ test("keeps signed provider webhooks outside browser-origin enforcement", () => 
   assert.equal(requiresSameOrigin("POST", "/api/saas/webhook/stripe"), false);
   assert.equal(requiresSameOrigin("POST", "/api/saas/webhook/stripe-fake"), true);
 });
+
+test("keeps only signed Tangerino attachment worker routes outside browser-origin enforcement", () => {
+  assert.equal(requiresSameOrigin(
+    "POST", "/api/integrations/tangerino/attachments/authorization-1",
+  ), false);
+  assert.equal(requiresSameOrigin(
+    "POST", "/api/integrations/tangerino/attachments/authorization-1/complete",
+  ), false);
+  assert.equal(requiresSameOrigin("POST", "/api/integrations/tangerino/attachments"), true);
+  assert.equal(requiresSameOrigin("POST", "/api/integrations/tangerino/credentials"), true);
+});
