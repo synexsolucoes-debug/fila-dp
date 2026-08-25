@@ -66,7 +66,7 @@ export const TangerinoSelectors = Object.freeze({
   admissionsMenuCss: "a.item-menu.item-modulo-menu-pricing",
   admissionsMenuText: [/^admiss[ãa]o$/iu],
   admissionsOverviewLinks: [/^vis[ãa]o geral$/iu],
-  admissionsFrameCss: 'iframe.embed.embed-page[src^="https://admissao-demissao.tangerino.com.br/"]',
+  admissionsFrameCss: 'iframe[src*="admissao-demissao.tangerino.com.br"]',
   admissionsPageMarkers: [/^admiss[ãa]o$/iu, /^todas admiss[õo]es$/iu],
 
   /** Pesquisa do colaborador dentro da área de admissão. */
@@ -74,7 +74,7 @@ export const TangerinoSelectors = Object.freeze({
   searchCss: ['input[placeholder="Digite o nome"]'],
 
   /** A interface real entrega cartões, sem papel ARIA de linha. */
-  resultCardCss: ".cards-scroll > .s-card",
+  resultCardCss: ".cards-scroll .s-card",
   resultNameCss: "strong.s-title",
   emptyResultMarkers: [/nenhum (?:resultado|registro|processo)/iu, /nada encontrado/iu, /sem resultados/iu],
 
@@ -91,6 +91,10 @@ export const TangerinoSelectors = Object.freeze({
 
   /** Downloads de leitura, liberados somente depois da autorização no cartão. */
   documentApprovalSection: [/^aprovar documentos$/iu],
+  openSubmittedDocumentsButtons: [/^ver documentos enviados$/iu],
+  openAdmissionDetailsButtons: [/^preencher dados$/iu, /^preencher documentos$/iu],
+  /** Cabeçalho do painel recolhível que contém os documentos já enviados. */
+  documentApprovalPanelHeaderCss: "nz-collapse-panel .ant-collapse-header",
   downloadAllDocumentsButtons: [/^baixar todos os documentos$/iu],
   exportRegistrationFormButtons: [/^exportar ficha do colaborador$/iu],
 
