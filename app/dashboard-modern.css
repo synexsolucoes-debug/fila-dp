@@ -896,6 +896,34 @@
 .list-delete { align-self: center; white-space: nowrap; }
 .list-create-form { grid-template-columns: minmax(0, 1fr) 190px auto; }
 
+.solides-attachment-sync {
+  border-color: var(--ui-border); background: var(--ui-surface-muted); color: var(--ui-text);
+}
+.solides-attachment-sync span { color: var(--ui-text-soft); }
+.solides-attachment-sync strong { color: var(--ui-text); }
+.solides-attachment-sync p { color: var(--ui-text-soft); }
+.solides-attachment-sync button {
+  border-color: var(--ui-accent); background: var(--ui-accent); color: var(--ui-on-accent);
+}
+.solides-attachment-sync.waiting {
+  border-color: color-mix(in srgb, var(--ui-accent-text) 42%, var(--ui-border));
+  background: var(--ui-accent-soft);
+}
+.solides-attachment-sync.waiting :is(span, strong) { color: var(--ui-accent-text); }
+.solides-attachment-sync.working {
+  border-color: var(--ui-state-warn-text); background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text);
+}
+.solides-attachment-sync.success {
+  border-color: var(--ui-state-ok-text); background: var(--ui-state-ok-bg); color: var(--ui-state-ok-text);
+}
+.solides-attachment-sync.error {
+  border-color: var(--ui-state-danger-text); background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text);
+}
+.solides-attachment-sync:is(.working, .success, .error) :is(span, strong, p) { color: inherit; }
+.solides-attachment-sync.error button {
+  border-color: var(--ui-state-danger-text); background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text);
+}
+
 .attachment-list > article {
   grid-template-columns: 36px minmax(0, 1fr) auto;
   border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text);

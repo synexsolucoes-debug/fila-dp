@@ -624,7 +624,7 @@ function SolidesAttachmentSyncPanel({ card, busy, canAuthorize, onAuthorize }: {
     },
   }[sync.state];
   const showButton = sync.state === "AWAITING_AUTHORIZATION" || sync.state === "FAILED";
-  return <section className={`solides-attachment-sync ${content.tone}`}>
+  return <section className={`solides-attachment-sync ${content.tone}`} role={sync.state === "FAILED" ? "alert" : "status"} aria-live="polite">
     <div><span>SÓLIDES</span><strong>{content.title}</strong><p>{content.description}</p></div>
     {showButton && canAuthorize && <button type="button" disabled={busy} onClick={onAuthorize}>
       {sync.state === "FAILED" ? "Autorizar novamente" : "Autorizar anexos da Sólides"}
