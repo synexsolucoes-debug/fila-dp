@@ -161,6 +161,21 @@ test("os anexos agrupam ações sem sobreposição e usam o contraste do tema", 
     "as ações precisam quebrar linha em telas estreitas");
 });
 
+test("o estado da transferência Sólides usa pares semânticos legíveis nos dois temas", async () => {
+  const [workspace, css] = await Promise.all([
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    lerCss("app/dashboard-modern.css"),
+  ]);
+  assert.match(workspace, /role=\{sync\.state === "FAILED" \? "alert" : "status"\} aria-live="polite"/u,
+    "o resultado da transferência precisa ser anunciado sem depender apenas da cor");
+  assert.match(css, /\.solides-attachment-sync\.success \{[^}]*background: var\(--ui-state-ok-bg\); color: var\(--ui-state-ok-text\);/u,
+    "sucesso precisa usar o par de fundo e texto que muda junto com o tema");
+  assert.match(css, /\.solides-attachment-sync\.working \{[^}]*var\(--ui-state-warn-bg\)[^}]*var\(--ui-state-warn-text\)/u);
+  assert.match(css, /\.solides-attachment-sync\.error \{[^}]*var\(--ui-state-danger-bg\)[^}]*var\(--ui-state-danger-text\)/u);
+  assert.match(css, /\.solides-attachment-sync:is\(\.working, \.success, \.error\) :is\(span, strong, p\) \{ color: inherit; \}/u,
+    "título e descrição não podem herdar o texto claro do modal sobre um aviso claro");
+});
+
 test("as animações de janela miram classes que existem no código", async () => {
   // Uma regra apontada para uma classe inexistente é regra morta: passa em
   // revisão, não anima nada e ninguém descobre.
