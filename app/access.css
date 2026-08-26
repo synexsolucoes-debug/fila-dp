@@ -1059,7 +1059,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .demand-table-view > header strong, .demand-calendar-view > header strong { font-size: 12px; }
 .demand-table-view > header span, .demand-calendar-view > header span { margin-top: 4px; color: #6b7789; font-size: 8px; }
 .demand-table-scroll { overflow-x: auto; }
-.demand-table-view table { width: 100%; min-width: 760px; border-collapse: collapse; }
+.demand-table-view table { width: 100%; min-width: 900px; border-collapse: collapse; }
 .demand-table-view th { padding: 11px 14px; color: #8a96a2; font-size: 8px; font-weight: 750; text-align: left; text-transform: uppercase; letter-spacing: .05em; }
 .demand-table-view td { padding: 13px 14px; border-top: 1px solid #edf0f0; color: #546275; font-size: 9px; }
 .demand-table-view tbody tr { cursor: pointer; }

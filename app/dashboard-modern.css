@@ -3194,6 +3194,14 @@
 .dashboard-task p { margin-bottom: 2px; overflow: hidden; color: var(--ui-text-soft); text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-task p small, .dashboard-card-employee { color: var(--ui-text-soft); font-size: 8px; }
 .dashboard-card-employee { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demand-area-flow {
+  min-width: 0; margin-top: 6px; display: inline-flex; align-items: center; gap: 5px;
+  color: var(--ui-primary); font-size: 8px; font-weight: 750; line-height: 1.3;
+}
+.demand-area-flow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demand-area-flow > svg { width: 11px; height: 11px; flex: 0 0 auto; color: var(--ui-text-soft); }
+.dashboard-task > .demand-area-flow { width: 100%; margin-bottom: 2px; }
+.demand-table-view .demand-area-flow { max-width: 210px; margin-top: 0; }
 .dashboard-sla.warning { color: #9a591f; background: #fff0df; }
 .dashboard-sla.overdue { color: #b83e38; background: #fce9e7; }
 .dashboard-sla.safe, .dashboard-sla.completed { color: #176c55; background: #e0f6ed; }

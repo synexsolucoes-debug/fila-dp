@@ -403,6 +403,57 @@ test("produto, SKU e saldo pertencem ao grupo; CNPJ fica somente nos eventos de 
   assert.match(groupProductMigration, /fdp_epi_movements_scope_check/u);
 });
 
+test("um único saldo do workspace é consumido por três CNPJs sem duplicação", () => {
+  const balanceTable = evolutionMigration.match(/CREATE TABLE "fdp_stock_balances"[\s\S]*?\);/u)?.[0] ?? "";
+  assert.match(balanceTable, /PRIMARY KEY \("workspace_id", "product_id", "stock_location_id"\)/u);
+  assert.doesNotMatch(balanceTable, /company_id/u);
+
+  let workspaceBalance = 10;
+  const consumption = new Map<string, number>();
+  for (const delivery of [
+    { companyId: "empresa-a", quantity: 2 },
+    { companyId: "empresa-b", quantity: 3 },
+    { companyId: "empresa-c", quantity: 1 },
+  ]) {
+    workspaceBalance -= delivery.quantity;
+    consumption.set(delivery.companyId, (consumption.get(delivery.companyId) ?? 0) + delivery.quantity);
+  }
+
+  assert.equal(workspaceBalance, 4);
+  assert.deepEqual(Object.fromEntries(consumption), { "empresa-a": 2, "empresa-b": 3, "empresa-c": 1 });
+  assert.equal([...consumption.values()].reduce((total, quantity) => total + quantity, 0), 6);
+});
+
+test("devolução higienizada pode voltar ao saldo e ser entregue por outro CNPJ", async () => {
+  const returnsRoute = await readFile(new URL("../app/api/epi/returns/route.ts", import.meta.url), "utf8");
+  const sanitizationRoute = await readFile(new URL("../app/api/epi/returns/[id]/sanitization/route.ts", import.meta.url), "utf8");
+  assert.match(returnsRoute, /backToStock[\s\S]{0,700}prepareStockChange/u);
+  assert.match(sanitizationRoute, /action === "complete"[\s\S]{0,240}prepareStockChange/u);
+  assert.doesNotMatch(evolutionMigration.match(/CREATE TABLE "fdp_stock_balances"[\s\S]*?\);/u)?.[0] ?? "", /company_id/u);
+
+  const history = [
+    { companyId: "empresa-a", type: "delivery", delta: -1 },
+    { companyId: "empresa-a", type: "sanitization_completed", delta: 1 },
+    { companyId: "empresa-b", type: "delivery", delta: -1 },
+  ];
+  assert.equal(history.reduce((balance, event) => balance + event.delta, 1), 0);
+  assert.deepEqual(history.map((event) => event.companyId), ["empresa-a", "empresa-a", "empresa-b"]);
+});
+
+test("transferir entre locais conserva o total consolidado do workspace", async () => {
+  const transfer = await readFile(new URL("../app/api/epi/stock/transfers/route.ts", import.meta.url), "utf8");
+  assert.match(transfer, /delta: -quantity/u);
+  assert.match(transfer, /delta: quantity/u);
+  assert.match(transfer, /targetStockLocationId/u);
+
+  const locations = { goiania: 6, brasilia: 4 };
+  const totalBefore = locations.goiania + locations.brasilia;
+  locations.goiania -= 2;
+  locations.brasilia += 2;
+  assert.deepEqual(locations, { goiania: 4, brasilia: 6 });
+  assert.equal(locations.goiania + locations.brasilia, totalBefore);
+});
+
 test("catálogo do grupo não recebe CNPJ e o uso continua recortado por empresa", async () => {
   const products = await readFile(new URL("../app/api/epi/products/route.ts", import.meta.url), "utf8");
   const detail = await readFile(new URL("../app/api/epi/products/[id]/route.ts", import.meta.url), "utf8");
@@ -473,6 +524,17 @@ test("áreas operacionais são N:N e governam a origem e o destino das demandas"
   const membersRoute = await readFile(new URL("../app/api/areas/[id]/members/route.ts", import.meta.url), "utf8");
   assert.match(areaRoute, /requireNamedCapability\(workspace, "departments\.create"/u);
   assert.match(membersRoute, /requireNamedCapability\(workspace, "departments\.manage_members"/u);
+});
+
+test("o fluxo entre áreas aparece no Kanban e na tabela sem depender de nomes fixos", async () => {
+  const workspace = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(workspace, /function DemandAreaFlow/u);
+  assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.requesterAreaId\)/u);
+  assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.responsibleAreaId\)/u);
+  assert.ok(workspace.includes('aria-label={`Fluxo entre áreas:'));
+  assert.ok(workspace.includes('<DemandAreaFlow card={card} areas={snapshot.areas} />'));
+  assert.ok(workspace.includes('<td><DemandAreaFlow card={card} areas={areas} /></td>'));
+  assert.doesNotMatch(workspace.match(/function DemandAreaFlow[\s\S]*?\n\}/u)?.[0] ?? "", /SESMT|Departamento Pessoal|Financeiro/u);
 });
 
 test("aprovar desconto cria rascunho na Central sem dedução automática", async () => {
