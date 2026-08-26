@@ -568,6 +568,21 @@ function slaLabel(card: Card) {
   return card.dueAt ? formatDue(card.dueAt) : "Sem prazo";
 }
 
+/**
+ * Origem e destino são parte do processo operacional, não uma etiqueta livre.
+ * O cartão recebe somente os IDs; os nomes configuráveis são resolvidos pelo
+ * catálogo do workspace para que renomear uma área não deixe snapshots textuais
+ * espalhados pelas demandas.
+ */
+function DemandAreaFlow({ card, areas }: { card: Card; areas: WorkspaceSnapshot["areas"] }) {
+  if (!card.requesterAreaId && !card.responsibleAreaId) return null;
+  const requester = areas.find((area) => area.id === card.requesterAreaId)?.name ?? "Área não informada";
+  const responsible = areas.find((area) => area.id === card.responsibleAreaId)?.name ?? "Área não informada";
+  return <span className="demand-area-flow" aria-label={`Fluxo entre áreas: ${requester} para ${responsible}`}>
+    <span>{requester}</span><ArrowRight aria-hidden="true" /><span>{responsible}</span>
+  </span>;
+}
+
 function compactSlaLabel(status: string, dueAt: string | null) {
   if (status === "overdue") return "Atrasada";
   if (status === "warning") return "Vence hoje";
@@ -2111,6 +2126,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                             <div className="dashboard-task-labels"><span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}</div>
                             <h2>{card.title}</h2>
                             <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
+                            <DemandAreaFlow card={card} areas={snapshot.areas} />
                             {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
                             <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}`}><Clock3 aria-hidden="true" /> {slaLabel(card)}</span><span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}<span className="dashboard-mini-avatar">{initials(card.assignees[0]?.name || card.assigneeName || "DP")}</span>{card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}</div>
                           </article>
@@ -2122,9 +2138,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                   );
                 })}
               </div>}
-              {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
+              {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
               {boardMode === "calendar" && <DemandCalendarView cards={filteredActiveCards} onOpen={openCard} />}
-              {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
+              {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
             </>
           )}
 
@@ -2695,13 +2711,13 @@ function MemberCompanyAccess({ member, companies, busy, onSave }: { member: Work
   return <details className="member-company-access"><summary>{selectedIds.length ? `${selectedIds.length} empresa(s) liberada(s)` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
 }
 
-function ProcessTablesView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
+function ProcessTablesView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {
   const grouped = cards.reduce<Record<string, Card[]>>((accumulator, card) => {
     (accumulator[card.processType] ??= []).push(card);
     return accumulator;
   }, {});
   const processNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
-  return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>FLUXO ESPECÍFICO</span><strong>{process}</strong></div><b>{grouped[process].length} demanda(s)</b></header><DemandTableView cards={grouped[process]} lists={lists} onOpen={onOpen} /></section>)}</div>;
+  return <div className="process-tables-view">{processNames.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Crie uma demanda para iniciar uma tabela de processo.</p></div>}{processNames.map((process) => <section key={process}><header><div><span>FLUXO ESPECÍFICO</span><strong>{process}</strong></div><b>{grouped[process].length} demanda(s)</b></header><DemandTableView cards={grouped[process]} lists={lists} areas={areas} onOpen={onOpen} /></section>)}</div>;
 }
 
 function CompanySettings({ companies, members, busy, onCreateCompany, onUpdateCompany, onDeleteCompany, onOpenAccess }: { companies: WorkspaceSnapshot["companies"]; members: WorkspaceSnapshot["members"]; busy: boolean; onCreateCompany: (payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onUpdateCompany: (id: string, payload: Record<string, unknown>) => Promise<WorkspaceSnapshot | null>; onDeleteCompany: (id: string, name: string) => void; onOpenAccess: () => void }) {
@@ -2871,17 +2887,17 @@ export function LegacyCompaniesView({ companies, metrics, cards, busy, canEdit, 
   </div>;
 }
 
-function DemandTableView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
+function DemandTableView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {
   const listNames = new Map(lists.map((list) => [list.id, list.name]));
   return (
     <section className="demand-table-view">
       <header><div><strong>Visão gerencial</strong><span>{cards.length} demanda(s) nos filtros atuais</span></div><span>Selecione uma linha para abrir os detalhes.</span></header>
       <div className="demand-table-scroll">
         <table>
-          <thead><tr><th>Demanda</th><th>Processo</th><th>Status</th><th>Responsáveis</th><th>Prazo / SLA</th><th>Checklist</th></tr></thead>
+          <thead><tr><th>Demanda</th><th>Fluxo entre áreas</th><th>Processo</th><th>Status</th><th>Responsáveis</th><th>Prazo / SLA</th><th>Checklist</th></tr></thead>
           <tbody>{cards.map((card) => {
             const complete = card.checklist.filter((item) => item.completed).length;
-            return <tr key={card.id} tabIndex={0} onClick={() => onOpen(card)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(card); }}><td><strong>{card.title}</strong><small>{card.company || "Sem empresa"}</small></td><td><span className={`table-process ${processColors[card.processType] ?? "gray"}`}>{card.processType}</span></td><td>{listNames.get(card.listId) ?? "—"}</td><td>{card.assignees.map((item) => item.name).join(", ") || card.assigneeName || "Não atribuído"}</td><td><em className={card.slaStatus}>{slaLabel(card)}</em></td><td>{complete}/{card.checklist.length}</td></tr>;
+            return <tr key={card.id} tabIndex={0} onClick={() => onOpen(card)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onOpen(card); }}><td><strong>{card.title}</strong><small>{card.company || "Sem empresa"}</small></td><td><DemandAreaFlow card={card} areas={areas} /></td><td><span className={`table-process ${processColors[card.processType] ?? "gray"}`}>{card.processType}</span></td><td>{listNames.get(card.listId) ?? "—"}</td><td>{card.assignees.map((item) => item.name).join(", ") || card.assigneeName || "Não atribuído"}</td><td><em className={card.slaStatus}>{slaLabel(card)}</em></td><td>{complete}/{card.checklist.length}</td></tr>;
           })}</tbody>
         </table>
         {cards.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Ajuste os filtros para ampliar a visão.</p></div>}
