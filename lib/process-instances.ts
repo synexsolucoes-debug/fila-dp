@@ -43,6 +43,10 @@ import {
 } from "./bpmn-graph.ts";
 import { addBusinessDays } from "./fila-dp-relations.ts";
 import { cleanText } from "./registrations.ts";
+import {
+  describeCondition, parseTransitionConditions, unmetConditions,
+  type ConditionFacts, type TransitionConditionMap,
+} from "./process-conditions.ts";
 
 type Database = ReturnType<typeof getD1>;
 type Row = Record<string, unknown>;
@@ -71,6 +75,8 @@ export type ProcessStepConfig = {
   approverUserId: string;
   approverDepartmentId: string;
   demandPriority: string;
+  /** Condições por seta que sai desta etapa (§25). Vazio = seta incondicional. */
+  transitions: TransitionConditionMap;
 };
 
 export type PublishedProcessVersion = {
@@ -118,6 +124,7 @@ function stepConfigOf(row: Row): ProcessStepConfig {
     approverUserId: text(row.approver_user_id),
     approverDepartmentId: text(row.approver_department_id),
     demandPriority: text(row.demand_priority) || "normal",
+    transitions: parseTransitionConditions(settings.transitions),
   };
 }
 
@@ -203,11 +210,21 @@ export type ProcessInstanceRow = {
   processVersionNumber: string;
   currentStepId: string;
   version: number;
+  /**
+   * Fatos da demanda para as condições de transição (§25).
+   *
+   * Montados aqui, junto do resto da instância, para que nenhuma rota precise
+   * lembrar de passá-los: uma condição que não é avaliada porque um chamador
+   * esqueceu um argumento é pior que condição nenhuma — ela libera a passagem
+   * em silêncio.
+   */
+  facts: ConditionFacts;
 };
 
 export async function loadProcessInstance(d1: Database, workspaceId: string, cardId: string): Promise<ProcessInstanceRow> {
   const row = await d1.prepare(`SELECT id, workspace_id, board_id, company_id, archived, created_by,
-      process_definition_id, process_version_id, process_version_number, current_step_id, version
+      process_definition_id, process_version_id, process_version_number, current_step_id, version,
+      priority, company, competence, process_type, requester_area_id, responsible_area_id, sla_status
     FROM fdp_cards WHERE workspace_id = ? AND id = ?`).bind(workspaceId, cardId).first<Row>();
   if (!row) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
   if (!text(row.process_version_id)) {
@@ -217,6 +234,16 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
       "CARD_WITHOUT_PROCESS",
     );
   }
+  /* Os valores personalizados da demanda, para as condições poderem falar
+     sobre eles. Uma consulta a mais só quando a demanda tem processo — que é
+     exatamente quando alguém pode querer avançar de etapa. */
+  const customValues = await d1.prepare(
+    `SELECT cf.field_key, v.value_text
+       FROM fdp_custom_field_values v
+       JOIN fdp_custom_fields cf ON cf.workspace_id = v.workspace_id AND cf.id = v.field_id
+      WHERE v.workspace_id = ? AND v.card_id = ?`,
+  ).bind(workspaceId, cardId).all<Row>();
+
   return {
     id: text(row.id),
     workspaceId: text(row.workspace_id),
@@ -229,6 +256,23 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
     processVersionNumber: text(row.process_version_number),
     currentStepId: text(row.current_step_id),
     version: Number(row.version ?? 1),
+    facts: {
+      priority: text(row.priority),
+      company: text(row.company),
+      companyId: text(row.company_id),
+      competence: text(row.competence),
+      processType: text(row.process_type),
+      requesterAreaId: text(row.requester_area_id),
+      responsibleAreaId: text(row.responsible_area_id),
+      slaStatus: text(row.sla_status),
+      /* Campos personalizados entram com prefixo para não colidirem com os
+         fatos da própria demanda: um campo chamado "empresa" não pode
+         sequestrar a condição escrita sobre a empresa do cadastro. */
+      ...Object.fromEntries(customValues.results.map((item) => [
+        `custom:${text(item.field_key)}`,
+        text(item.value_text),
+      ])),
+    },
   };
 }
 
@@ -337,6 +381,13 @@ export function evaluateTransition(input: {
   actor: TransitionActor;
   pendingChecklist: number;
   attachmentCount: number;
+  /**
+   * Fatos da demanda para as condições de transição (§25).
+   *
+   * Opcional: processo sem condição configurada não precisa deles, e omiti-los
+   * mantém o comportamento anterior intacto — que é o contrato desta adição.
+   */
+  facts?: ConditionFacts;
 }): TransitionEvaluation {
   const { version, instance, actor } = input;
   const targetStepId = cleanText(input.targetStepId, 160);
@@ -367,13 +418,38 @@ export function evaluateTransition(input: {
     });
   }
 
+  const currentConfig = version.steps.get(instance.currentStepId) ?? null;
+
   blockers.push(...evaluateStepRequirements({
-    config: version.steps.get(instance.currentStepId) ?? null,
+    config: currentConfig,
     actor,
     createdByEmail: instance.createdBy,
     pendingChecklist: input.pendingChecklist,
     attachmentCount: input.attachmentCount,
   }));
+
+  /* Condição da seta (§25).
+     Duas setas podem ligar as mesmas duas etapas com condições diferentes — é
+     assim que um desvio se escreve em BPMN. Por isso a pergunta é "existe
+     alguma seta até este destino cuja condição bate", e não "a condição do
+     destino bate": basta um caminho aberto para a transição ser legítima.
+
+     Quando nenhuma bate, o bloqueio cita a condição do caminho que menos
+     faltou. Listar as condições de todas as setas transformaria o motivo numa
+     parede de texto sobre caminhos que a pessoa nem tentou seguir. */
+  if (targetStepId && currentConfig && Object.keys(currentConfig.transitions).length > 0) {
+    const paths = outgoingFlows(version.graph, instance.currentStepId)
+      .filter((flow) => flow.target === targetStepId)
+      .map((flow) => unmetConditions(currentConfig.transitions[flow.id], input.facts ?? instance.facts));
+
+    if (paths.length > 0 && paths.every((unmet) => unmet.length > 0)) {
+      const closest = paths.reduce((best, unmet) => (unmet.length < best.length ? unmet : best));
+      blockers.push({
+        code: "PROCESS_TRANSITION_CONDITION_UNMET",
+        message: `Esta etapa só segue por aqui quando: ${closest.map(describeCondition).join("; ")}.`,
+      });
+    }
+  }
 
   return {
     allowed: blockers.length === 0,
@@ -391,6 +467,7 @@ export function availableTransitions(input: {
   actor: TransitionActor;
   pendingChecklist: number;
   attachmentCount: number;
+  facts?: ConditionFacts;
 }) {
   return outgoingFlows(input.version.graph, input.instance.currentStepId).map((flow) => {
     const evaluation = evaluateTransition({ ...input, targetStepId: flow.target });

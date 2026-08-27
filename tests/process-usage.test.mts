@@ -32,7 +32,7 @@ const step = (overrides: Partial<ProcessStepConfig>): ProcessStepConfig => ({
   requesterDepartmentId: "", responsibleDepartmentId: "",
   checklist: [], requiredDocuments: [], evidenceRequired: false,
   requiresApproval: false, approverUserId: "", approverDepartmentId: "",
-  demandPriority: "normal", ...overrides,
+  demandPriority: "normal", transitions: {}, ...overrides,
 });
 
 const graph = parseBpmnGraph(XML);
