@@ -16,15 +16,18 @@
  *
  * ## Por que a aba de documentos diz *como* cada documento é conferido
  *
- * Hoje o produto trata documento obrigatório como item de checklist: marcar é
- * declarar, não provar. Só `evidenceRequired` olha se existe anexo — e por
- * contagem total da demanda, não por documento. Esconder essa diferença faria a
- * ficha prometer uma conferência que não acontece; quem lê precisa saber se a
- * exigência é verificada ou apenas declarada, porque é isso que decide se a
- * auditoria confia na etapa. Enquanto o DP não decidir mudar a regra, a tela
- * conta a verdade sobre ela.
+ * São três rigores diferentes, e a diferença decide se a auditoria confia na
+ * etapa:
+ *
+ *   `attached`  — a etapa cobra um anexo **para cada documento** (§26).
+ *   `evidence`  — a etapa cobra *algum* anexo, sem conferir qual.
+ *   `declared`  — documento obrigatório é item de checklist: marcar basta.
+ *
+ * Esconder a diferença faria a ficha prometer uma conferência que não acontece.
+ * Quem lê precisa saber qual dos três vale ali.
  */
 import { describeCondition, FACT_LABELS } from "./process-conditions.ts";
+
 import type { ProcessStepConfig, PublishedProcessVersion } from "./process-instances.ts";
 import { orderedSteps } from "./process-usage.ts";
 import { stepLabel } from "./bpmn-graph.ts";
@@ -54,13 +57,27 @@ export type DocumentRequirement = {
   /** Rótulo das etapas que pedem este documento, na ordem do processo. */
   steps: string[];
   /**
-   * Como a exigência é conferida hoje.
+   * Como a exigência é conferida.
    *
-   * `evidence` significa que a etapa recusa avanço sem anexo; `declared`
-   * significa que basta marcar o item. A distinção é o §26 em aberto.
+   * `attached` significa que a etapa recusa avanço sem o anexo **deste**
+   * documento; `evidence`, que ela recusa avanço sem *algum* anexo; `declared`,
+   * que basta marcar o item.
    */
-  proof: "evidence" | "declared";
+  proof: DocumentProofLevel;
 };
+
+/**
+ * O rigor da conferência, como a ficha precisa mostrá-lo.
+ *
+ * São três, e não os dois de `DocumentProof`: a configuração da etapa escolhe
+ * entre "marcar basta" e "anexo por documento", mas `evidenceRequired` é uma
+ * terceira exigência, mais fraca que a segunda e mais forte que a primeira.
+ * Achatar as três em duas faria a coluna mentir para um dos casos.
+ */
+export type DocumentProofLevel = "attached" | "evidence" | "declared";
+
+/** Do mais rigoroso ao menos, para uma etapa não rebaixar a leitura da outra. */
+const PROOF_RANK: Record<DocumentProofLevel, number> = { attached: 2, evidence: 1, declared: 0 };
 
 const PRIORITY_LABELS: Record<string, string> = {
   low: "baixa", normal: "normal", high: "alta", urgent: "urgente",
@@ -100,16 +117,19 @@ export function summarizeDocuments(
       if (!name) continue;
       const key = documentKey(name);
       const current = byDocument.get(key);
-      // A etapa que exige anexo manda na leitura: se qualquer etapa confere de
+      // A etapa mais rigorosa manda na leitura: se qualquer etapa confere de
       // verdade, dizer "apenas declarado" subestimaria o processo.
-      const proof = entry.required && config?.evidenceRequired ? "evidence" : "declared";
+      const proof: DocumentProofLevel = !entry.required
+        ? "declared"
+        : config?.documentProof === "attached" ? "attached"
+          : config?.evidenceRequired ? "evidence" : "declared";
       if (!current) {
         byDocument.set(key, { name, required: entry.required, steps: [label], proof });
         continue;
       }
       if (!current.steps.includes(label)) current.steps.push(label);
       if (entry.required) current.required = true;
-      if (proof === "evidence") current.proof = "evidence";
+      if (PROOF_RANK[proof] > PROOF_RANK[current.proof]) current.proof = proof;
     }
   }
 
@@ -143,7 +163,13 @@ function stepRequirements(config: ProcessStepConfig | undefined, names: NameMaps
     list.push(`Não avança com item de checklist pendente (${config.checklist.length})`);
   }
   if (config.requiredDocuments.length) {
-    list.push(`Exige ${config.requiredDocuments.length} documento(s): ${config.requiredDocuments.join(", ")}`);
+    // Dizer *como* o documento é cobrado importa tanto quanto dizer que é: uma
+    // etapa que só marca checklist e outra que cobra o anexo de cada documento
+    // são exigências diferentes, e a lista precisa distingui-las (§26).
+    const how = config.documentProof === "attached"
+      ? ", cada um com anexo conferido pelo nome do arquivo"
+      : ", marcados no checklist";
+    list.push(`Exige ${config.requiredDocuments.length} documento(s)${how}: ${config.requiredDocuments.join(", ")}`);
   }
   if (config.evidenceRequired) list.push("Exige anexo na demanda antes de concluir");
   if (config.requiresApproval) {

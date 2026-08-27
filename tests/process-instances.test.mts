@@ -85,6 +85,7 @@ const stepConfig = (overrides: Partial<ProcessStepConfig> = {}): ProcessStepConf
   checklist: [], requiredDocuments: [], evidenceRequired: false,
   requiresApproval: false, approverUserId: "", approverDepartmentId: "", demandPriority: "normal",
   transitions: {}, entryRules: [], exitRules: [], blockingIntegrations: [],
+  documentProof: "declared",
   ...overrides,
 });
 
@@ -105,10 +106,10 @@ const instance = (overrides: Partial<ProcessInstanceRow> = {}): ProcessInstanceR
   createdBy: "solicitante@empresa.com",
   processDefinitionId: "def-1", processVersionId: "ver-4", processVersionNumber: "4.0",
   currentStepId: "Task_documentos", version: 3, facts: {},
-  failingIntegrations: new Set<string>(), ...overrides,
+  failingIntegrations: new Set<string>(), attachmentNames: [], ...overrides,
 });
 
-const clean = { pendingChecklist: 0, attachmentCount: 0 };
+const clean = { pendingChecklist: 0, attachmentCount: 0, attachmentNames: [] as string[] };
 
 test("transição que o desenho não liga é recusada", () => {
   const result = evaluateTransition({
@@ -154,7 +155,7 @@ test("checklist da etapa em aberto trava o avanço", () => {
 test("etapa que exige evidência recusa avanço sem anexo", () => {
   const blockers = evaluateStepRequirements({
     config: stepConfig({ evidenceRequired: true }), actor: actor(),
-    createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0,
+    createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_EVIDENCE_REQUIRED"]);
 });
@@ -162,7 +163,7 @@ test("etapa que exige evidência recusa avanço sem anexo", () => {
 test("etapa atribuída a outra pessoa não é avançada por quem não é responsável", () => {
   const blockers = evaluateStepRequirements({
     config: stepConfig({ responsibilityMode: "USER", responsibleUserId: "user-2" }),
-    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0,
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_NOT_RESPONSIBLE"]);
 });
@@ -171,7 +172,7 @@ test("o administrador não fica preso à atribuição da etapa", () => {
   const blockers = evaluateStepRequirements({
     config: stepConfig({ responsibilityMode: "USER", responsibleUserId: "user-2" }),
     actor: actor({ role: "admin" }), createdByEmail: "outro@empresa.com",
-    pendingChecklist: 0, attachmentCount: 0,
+    pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers, []);
 });
@@ -179,7 +180,7 @@ test("o administrador não fica preso à atribuição da etapa", () => {
 test("aprovação: quem não é aprovador não avança", () => {
   const blockers = evaluateStepRequirements({
     config: stepConfig({ requiresApproval: true, approverUserId: "gestor-1" }),
-    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0,
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_APPROVAL_REQUIRED"]);
 });
@@ -188,7 +189,7 @@ test("aprovação: quem abriu a demanda não aprova a própria etapa", () => {
   const blockers = evaluateStepRequirements({
     config: stepConfig({ requiresApproval: true, approverDepartmentId: "area-1" }),
     actor: actor({ areaIds: new Set(["area-1"]) }),
-    createdByEmail: "analista@empresa.com", pendingChecklist: 0, attachmentCount: 0,
+    createdByEmail: "analista@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_SELF_APPROVAL"]);
 });
@@ -198,7 +199,7 @@ test("aprovador nomeado aprova mesmo tendo aberto a demanda", () => {
   // etapa; recusá-la aqui inventaria uma regra que ninguém configurou.
   const blockers = evaluateStepRequirements({
     config: stepConfig({ requiresApproval: true, approverUserId: "user-1" }),
-    actor: actor(), createdByEmail: "analista@empresa.com", pendingChecklist: 0, attachmentCount: 0,
+    actor: actor(), createdByEmail: "analista@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers, []);
 });
@@ -217,7 +218,7 @@ test("o checklist da etapa inclui um item por documento obrigatório", () => {
 test("etapa sem configuração não inventa requisito", () => {
   assert.deepEqual(stepChecklist(null), []);
   assert.deepEqual(evaluateStepRequirements({
-    config: null, actor: actor(), createdByEmail: "x@y.com", pendingChecklist: 5, attachmentCount: 0,
+    config: null, actor: actor(), createdByEmail: "x@y.com", pendingChecklist: 5, attachmentCount: 0, attachmentNames: [],
   }), []);
 });
 

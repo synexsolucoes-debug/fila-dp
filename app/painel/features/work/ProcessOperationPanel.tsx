@@ -30,8 +30,17 @@ import styles from "./work.module.css";
 
 export type ProcessSheetSection = "flow" | "documents" | "rules" | "automations";
 
+type DocumentProof = "attached" | "evidence" | "declared";
+
 type DocumentRequirement = {
-  name: string; required: boolean; steps: string[]; proof: "evidence" | "declared";
+  name: string; required: boolean; steps: string[]; proof: DocumentProof;
+};
+
+/** O rigor de cada exigência, dito como quem confere a papelada diria (§26). */
+const proofLabel: Record<DocumentProof, string> = {
+  attached: "Anexo conferido pelo nome do arquivo",
+  evidence: "Exige algum anexo, sem conferir qual",
+  declared: "Marcado no checklist, sem verificação de anexo",
 };
 
 type StepRules = {
@@ -97,7 +106,8 @@ function normalize(payload: Record<string, unknown>): Payload {
       const item = (row ?? {}) as Record<string, unknown>;
       return {
         name: text(item.name), required: item.required === true, steps: list(item.steps),
-        proof: item.proof === "evidence" ? "evidence" as const : "declared" as const,
+        proof: item.proof === "attached" ? "attached" as const
+          : item.proof === "evidence" ? "evidence" as const : "declared" as const,
       };
     }).filter((item) => item.name),
     rules: (Array.isArray(payload.rules) ? payload.rules : []).map((row) => {
@@ -310,9 +320,7 @@ function DocumentsSection({ documents }: { documents: DocumentRequirement[] }) {
             <td>{document.name}</td>
             <td>{document.required ? "Obrigatório" : "Opcional"}</td>
             <td>{document.steps.join(", ")}</td>
-            <td>{document.proof === "evidence"
-              ? "Anexo verificado na etapa"
-              : "Marcado no checklist, sem verificação de anexo"}</td>
+            <td>{proofLabel[document.proof]}</td>
           </tr>)}
         </tbody>
       </table>

@@ -4,6 +4,7 @@ import {
   parseConditionList, parseTransitionConditions,
   type TransitionCondition, type TransitionConditionMap,
 } from "./process-conditions.ts";
+import { parseDocumentProof, type DocumentProof } from "./process-documents.ts";
 
 export const processLifecycleStatuses = ["draft", "in_review", "published", "inactive", "archived"] as const;
 export const processVersionStatuses = ["draft", "in_review", "published", "retired"] as const;
@@ -145,6 +146,8 @@ export type ProcessStepConfigInput = {
     exitRules: TransitionCondition[];
     transitions: TransitionConditionMap;
     blockingIntegrations: string[];
+    /** Como a etapa confere documento obrigatório (§26). */
+    documentProof: DocumentProof;
   };
 };
 
@@ -197,6 +200,7 @@ export function sanitizeProcessStepConfigs(value: unknown): ProcessStepConfigInp
         exitRules: parseConditionList(settings.exitRules),
         transitions: parseTransitionConditions(settings.transitions),
         blockingIntegrations: stringArray(settings.blockingIntegrations, 12, 60).map((item) => item.toLowerCase()),
+        documentProof: parseDocumentProof(settings.documentProof),
       },
     };
   });

@@ -41,7 +41,7 @@ const step = (overrides: Partial<ProcessStepConfig>): ProcessStepConfig => ({
   checklist: [], requiredDocuments: [], evidenceRequired: false,
   requiresApproval: false, approverUserId: "", approverDepartmentId: "",
   demandPriority: "normal", transitions: {}, entryRules: [], exitRules: [],
-  blockingIntegrations: [], ...overrides,
+  blockingIntegrations: [], documentProof: "declared", ...overrides,
 });
 
 const automationRow = (overrides: Partial<StepAutomationRow>): StepAutomationRow => ({
