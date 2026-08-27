@@ -1,5 +1,9 @@
 import { ApiError } from "./api-errors.ts";
 import { cleanText } from "./registrations.ts";
+import {
+  parseConditionList, parseTransitionConditions,
+  type TransitionCondition, type TransitionConditionMap,
+} from "./process-conditions.ts";
 
 export const processLifecycleStatuses = ["draft", "in_review", "published", "inactive", "archived"] as const;
 export const processVersionStatuses = ["draft", "in_review", "published", "retired"] as const;
@@ -131,7 +135,17 @@ export type ProcessStepConfigInput = {
   approvalCount: number;
   approvalMode: "sequential" | "parallel";
   subprocessProcessId: string;
-  settings: { name: string; description: string; instructions: string; internalCode: string; dynamicAssignee: string; notificationTemplate: string };
+  settings: {
+    name: string; description: string; instructions: string; internalCode: string;
+    dynamicAssignee: string; notificationTemplate: string;
+    /* Regras do §23/§25. Passam pelo mesmo saneador do motor — o que ele não
+       entende não é gravado, para o banco nunca guardar regra que a execução
+       vai descartar depois e ninguém entender por quê. */
+    entryRules: TransitionCondition[];
+    exitRules: TransitionCondition[];
+    transitions: TransitionConditionMap;
+    blockingIntegrations: string[];
+  };
 };
 
 export function sanitizeProcessStepConfigs(value: unknown): ProcessStepConfigInput[] {
@@ -179,6 +193,10 @@ export function sanitizeProcessStepConfigs(value: unknown): ProcessStepConfigInp
         name: cleanText(settings.name, 160), description: cleanText(settings.description, 1000),
         instructions: cleanText(settings.instructions, 4000), internalCode: cleanText(settings.internalCode, 80),
         dynamicAssignee: cleanText(settings.dynamicAssignee, 120), notificationTemplate: cleanText(settings.notificationTemplate, 1000),
+        entryRules: parseConditionList(settings.entryRules),
+        exitRules: parseConditionList(settings.exitRules),
+        transitions: parseTransitionConditions(settings.transitions),
+        blockingIntegrations: stringArray(settings.blockingIntegrations, 12, 60).map((item) => item.toLowerCase()),
       },
     };
   });

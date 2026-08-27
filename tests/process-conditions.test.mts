@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -166,4 +167,64 @@ test("o motivo do bloqueio é escrito em português, não em código", () => {
     describeCondition(cond({ field: "custom:contrato", operator: "in", value: "CLT, PJ" })),
     "contrato está entre CLT, PJ",
   );
+});
+
+/* ── A tela e o servidor falam a mesma língua ──────────────────────────── */
+
+test("o saneador de gravação aceita as regras, em vez de descartá-las", async () => {
+  // Descoberto ao construir a tela: `sanitizeProcessStepConfigs` monta o objeto
+  // `settings` campo a campo. Sem estas quatro linhas, a condição configurada
+  // no modelador sumia no caminho até o banco — e o motor executaria um
+  // processo sem a regra que alguém acabou de escrever, sem erro nenhum.
+  const { sanitizeProcessStepConfigs } = await import("../lib/process-management.ts");
+  const [config] = sanitizeProcessStepConfigs([{
+    bpmnElementId: "Task_1",
+    settings: {
+      entryRules: [{ field: "priority", operator: "equals", value: "urgent" }],
+      exitRules: [{ field: "competence", operator: "is_not_empty", value: "" }],
+      transitions: { Flow_3: [{ field: "custom:contrato", operator: "in", value: "CLT,PJ" }] },
+      blockingIntegrations: ["Sankhya", "  SOLIDES  "],
+    },
+  }]);
+  assert.equal(config.settings.entryRules.length, 1);
+  assert.equal(config.settings.exitRules[0].field, "competence");
+  assert.equal(config.settings.transitions.Flow_3[0].operator, "in");
+  // Canal é comparado em minúsculas contra o status da integração; normalizar
+  // na gravação evita depender de como quem digitou usou a tecla shift.
+  assert.deepEqual(config.settings.blockingIntegrations, ["sankhya", "solides"]);
+});
+
+test("regra inválida não chega ao banco", async () => {
+  // O saneador usa o mesmo parser do motor. Guardar o que a execução vai
+  // descartar depois produziria uma regra que existe na tela e não vale nada.
+  const { sanitizeProcessStepConfigs } = await import("../lib/process-management.ts");
+  const [config] = sanitizeProcessStepConfigs([{
+    bpmnElementId: "Task_1",
+    settings: { exitRules: [{ field: "x", operator: "eval", value: "1" }, { field: "", operator: "equals", value: "y" }] },
+  }]);
+  assert.deepEqual(config.settings.exitRules, []);
+});
+
+test("etapa sem regra nenhuma grava listas vazias, não indefinido", async () => {
+  const { sanitizeProcessStepConfigs } = await import("../lib/process-management.ts");
+  const [config] = sanitizeProcessStepConfigs([{ bpmnElementId: "Task_1", settings: {} }]);
+  assert.deepEqual(config.settings.entryRules, []);
+  assert.deepEqual(config.settings.exitRules, []);
+  assert.deepEqual(config.settings.transitions, {});
+  assert.deepEqual(config.settings.blockingIntegrations, []);
+});
+
+test("a tela oferece exatamente os operadores que o servidor aceita", async () => {
+  // Uma tela que ofereça um operador a mais entrega ao usuário uma regra que o
+  // servidor descarta em silêncio — o pior tipo de divergência, porque parece
+  // configurada.
+  const modeler = await readFile(
+    new URL("../app/painel/features/processes/ProcessModeler.tsx", import.meta.url), "utf8");
+  assert.match(modeler, /import \{ CONDITION_OPERATORS, FACT_LABELS \} from "@\/lib\/process-conditions"/u);
+  assert.match(modeler, /CONDITION_OPERATORS\.map/u, "a lista de operadores precisa vir do módulo, não ser recopiada");
+  // E todo operador tem rótulo em português.
+  const labels = modeler.slice(modeler.indexOf("const operatorLabel"), modeler.indexOf("const noValueOperators"));
+  for (const operator of CONDITION_OPERATORS) {
+    assert.match(labels, new RegExp(`${operator}:`, "u"), `${operator} sem rótulo na tela`);
+  }
 });

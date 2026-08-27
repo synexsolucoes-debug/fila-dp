@@ -6,7 +6,9 @@ import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, Focus, Maximize2, Redo2, Save, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import type { ProcessArea, ProcessDefinition, ProcessMember, ProcessStepConfig, ProcessVersionDetail } from "./processes.types";
+import type { ProcessArea, ProcessCondition, ProcessDefinition, ProcessMember, ProcessStepConfig, ProcessVersionDetail } from "./processes.types";
+import { outgoingFlows, parseBpmnGraph } from "@/lib/bpmn-graph";
+import { CONDITION_OPERATORS, FACT_LABELS } from "@/lib/process-conditions";
 import { AnimatedModal, ErrorBanner } from "../shared";
 import { stepTypeLabel } from "./processes.api";
 import styles from "./processes.module.css";
@@ -33,9 +35,45 @@ type ElementInfo = { id:string; type:string; name:string };
 
 function defaultConfig(element:ElementInfo):ProcessStepConfig {
   const stepType = element.type === "bpmn:UserTask" ? "USER_TASK" : element.type === "bpmn:ServiceTask" ? "SYSTEM_TASK" : element.type === "bpmn:SubProcess" ? "SUBPROCESS" : element.type.includes("Gateway") ? "GATEWAY" : element.type === "bpmn:Lane" ? "LANE" : element.type === "bpmn:StartEvent" ? "START_EVENT" : element.type === "bpmn:EndEvent" ? "END_EVENT" : "TASK";
-  return { id:crypto.randomUUID(),bpmnElementId:element.id,stepType,departmentId:"",responsibleUserId:"",responsibilityMode:"DEPARTMENT",slaValue:0,slaUnit:"hours",slaBusinessDays:false,cutoffTime:"",escalation:{},createDemand:false,demandType:"",requesterDepartmentId:"",responsibleDepartmentId:"",demandPriority:"normal",demandSlaValue:0,demandSlaUnit:"hours",checklistId:"",checklistItems:[],formId:"",requiredDocuments:[],optionalDocuments:[],evidenceRequired:false,requiresApproval:false,approverUserId:"",approverDepartmentId:"",approvalCount:1,approvalMode:"sequential",subprocessProcessId:"",settings:{name:element.name,description:"",instructions:"",internalCode:"",dynamicAssignee:"",notificationTemplate:""} };
+  return { id:crypto.randomUUID(),bpmnElementId:element.id,stepType,departmentId:"",responsibleUserId:"",responsibilityMode:"DEPARTMENT",slaValue:0,slaUnit:"hours",slaBusinessDays:false,cutoffTime:"",escalation:{},createDemand:false,demandType:"",requesterDepartmentId:"",responsibleDepartmentId:"",demandPriority:"normal",demandSlaValue:0,demandSlaUnit:"hours",checklistId:"",checklistItems:[],formId:"",requiredDocuments:[],optionalDocuments:[],evidenceRequired:false,requiresApproval:false,approverUserId:"",approverDepartmentId:"",approvalCount:1,approvalMode:"sequential",subprocessProcessId:"",settings:{name:element.name,description:"",instructions:"",internalCode:"",dynamicAssignee:"",notificationTemplate:"",entryRules:[],exitRules:[],transitions:{},blockingIntegrations:[]} };
 }
 const csv=(value:string)=>value.split(",").map((item)=>item.trim()).filter(Boolean).slice(0,50);
+
+/* Rótulos dos operadores. O motor mede; aqui só se escolhe — e a lista fechada
+   é a mesma dos dois lados, importada de `process-conditions`, para a tela
+   nunca oferecer um operador que o servidor descartaria em silêncio. */
+const operatorLabel:Record<string,string>={equals:"é",not_equals:"não é",in:"está entre",not_in:"não está entre",is_empty:"está vazio",is_not_empty:"está preenchido",greater_than:"é maior que",less_than:"é menor que"};
+const noValueOperators=new Set(["is_empty","is_not_empty"]);
+
+/**
+ * Editor de uma lista de condições.
+ *
+ * Uma linha por condição, e a linha lê como uma frase: campo → operador →
+ * valor. Quem configura um processo não é programador; a regra precisa ser
+ * legível antes de ser editável.
+ *
+ * O campo é livre de propósito: os fatos conhecidos entram como sugestão no
+ * datalist, e `custom:` alcança qualquer campo personalizado do workspace —
+ * enumerá-los aqui exigiria carregá-los no modelador só para preencher um
+ * select, e deixaria de fora o campo criado depois.
+ */
+function ConditionRows({rows,onChange,readOnly,emptyLabel}:{rows:ProcessCondition[];onChange:(next:ProcessCondition[])=>void;readOnly:boolean;emptyLabel:string}){
+  const update=(index:number,patch:Partial<ProcessCondition>)=>onChange(rows.map((row,i)=>i===index?{...row,...patch}:row));
+  return <div className={styles.conditionRows}>
+    {rows.length===0&&<p className={styles.conditionEmpty}>{emptyLabel}</p>}
+    {rows.map((row,index)=><div className={styles.conditionRow} key={index}>
+      <input aria-label="Campo" list="vinculato-condition-fields" value={row.field} placeholder="Campo" onChange={(e)=>update(index,{field:e.target.value})}/>
+      <select aria-label="Operador" value={row.operator} onChange={(e)=>update(index,{operator:e.target.value})}>
+        {CONDITION_OPERATORS.map((op)=><option key={op} value={op}>{operatorLabel[op]??op}</option>)}
+      </select>
+      {/* Operador que não usa valor esconde o campo em vez de desabilitá-lo:
+          um campo cinza ao lado de "está vazio" só faz perguntar o que vai ali. */}
+      {!noValueOperators.has(row.operator)&&<input aria-label="Valor" value={row.value} placeholder="Valor" onChange={(e)=>update(index,{value:e.target.value})}/>}
+      <button type="button" className={styles.conditionRemove} aria-label={`Remover condição ${index+1}`} disabled={readOnly} onClick={()=>onChange(rows.filter((_,i)=>i!==index))}>×</button>
+    </div>)}
+    <button type="button" className={styles.conditionAdd} disabled={readOnly||rows.length>=12} onClick={()=>onChange([...rows,{field:"",operator:"equals",value:""}])}>Adicionar condição</button>
+  </div>;
+}
 
 export function ProcessModeler({version,stepConfigs,areas,members,processes,readOnly,saveState,onDiagramChange,onStepConfigsChange,onSaveNow}:{version:ProcessVersionDetail;stepConfigs:ProcessStepConfig[];areas:ProcessArea[];members:ProcessMember[];processes:ProcessDefinition[];readOnly:boolean;saveState:"idle"|"dirty"|"saving"|"saved"|"error";onDiagramChange:(xml:string,svg:string)=>void;onStepConfigsChange:(next:ProcessStepConfig[])=>void;onSaveNow:()=>void}) {
   const canvasRef=useRef<HTMLDivElement>(null); const shellRef=useRef<HTMLDivElement>(null); const instanceRef=useRef<ModelerLike|null>(null); const changeRef=useRef(onDiagramChange); const sourceXmlRef=useRef(version.bpmnXml);
@@ -172,6 +210,22 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
   }, [readOnly, version.id]);
   const config=useMemo(()=>selected?stepConfigs.find((item)=>item.bpmnElementId===selected.id)??null:null,[selected,stepConfigs]);
   const escalation=config?.escalation??{};
+  /* As setas que saem do elemento selecionado, lidas do XML da versão.
+     Limitação conhecida e deliberada: uma seta recém-desenhada só aparece aqui
+     depois de o diagrama ser salvo. Ler o XML vivo do editor a cada traço
+     exigiria serializá-lo em toda alteração — caro, e por uma lista que só é
+     consultada quando alguém abre este painel. */
+  const outgoing=useMemo(()=>{
+    if(!selected)return [] as Array<{id:string;name:string;targetLabel:string}>;
+    try{
+      const graph=parseBpmnGraph(version.bpmnXml);
+      return outgoingFlows(graph,selected.id).map((flow)=>({
+        id:flow.id, name:flow.name,
+        targetLabel:graph.nodes.get(flow.target)?.name||flow.target,
+      }));
+    }catch{return [];}
+  },[selected,version.bpmnXml]);
+
   function patch(patchValue:Partial<ProcessStepConfig>){if(!selected||readOnly)return;const current=config??defaultConfig(selected);const next={...current,...patchValue};onStepConfigsChange(config?stepConfigs.map((item)=>item.id===config.id?next:item):[...stepConfigs,next]);}
   function patchSettings(value:Partial<ProcessStepConfig["settings"]>){if(!selected||readOnly)return;const current=config??defaultConfig(selected);patch({settings:{...current.settings,...value}});}
   function rename(name:string){if(!selected||readOnly)return;try{const element=instanceRef.current?.get("elementRegistry")?.get(selected.id);instanceRef.current?.get("modeling")?.updateProperties(element,{name});}catch{}setSelected((value)=>value?{...value,name}:value);patchSettings({name});}
@@ -200,6 +254,31 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
         <fieldset disabled={readOnly}><legend>Demanda</legend><label className={styles.checkLabel}><input type="checkbox" checked={config?.createDemand??false} onChange={(e)=>patch({createDemand:e.target.checked})}/> Criar demanda automaticamente</label>{config?.createDemand&&<><label>Tipo de demanda<input value={config.demandType} onChange={(e)=>patch({demandType:e.target.value})}/></label><label>Área solicitante<select value={config.requesterDepartmentId} onChange={(e)=>patch({requesterDepartmentId:e.target.value})}><option value="">Herdar do processo</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Área responsável<select value={config.responsibleDepartmentId} onChange={(e)=>patch({responsibleDepartmentId:e.target.value})}><option value="">Não definida</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Prioridade da demanda<select value={config.demandPriority} onChange={(e)=>patch({demandPriority:e.target.value as ProcessStepConfig["demandPriority"]})}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><div className={styles.inlineFields}><label>SLA da demanda<input type="number" min={0} value={config.demandSlaValue} onChange={(e)=>patch({demandSlaValue:Number(e.target.value)||0})}/></label><label>Unidade<select value={config.demandSlaUnit} onChange={(e)=>patch({demandSlaUnit:e.target.value as ProcessStepConfig["demandSlaUnit"]})}><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Dias</option></select></label></div></>}</fieldset>
         <fieldset disabled={readOnly}><legend>Checklist / Documentos</legend><label>Modelo de checklist<input value={config?.checklistId??""} onChange={(e)=>patch({checklistId:e.target.value})}/></label><label>Itens do checklist<textarea rows={3} value={(config?.checklistItems??[]).join(", ")} placeholder="Separe os itens por vírgula" onChange={(e)=>patch({checklistItems:csv(e.target.value)})}/></label><label>Formulário<input value={config?.formId??""} placeholder="Código ou identificador do formulário" onChange={(e)=>patch({formId:e.target.value})}/></label><label>Documentos obrigatórios<textarea rows={2} value={(config?.requiredDocuments??[]).join(", ")} onChange={(e)=>patch({requiredDocuments:csv(e.target.value)})}/></label><label>Documentos opcionais<textarea rows={2} value={(config?.optionalDocuments??[]).join(", ")} onChange={(e)=>patch({optionalDocuments:csv(e.target.value)})}/></label><label className={styles.checkLabel}><input type="checkbox" checked={config?.evidenceRequired??false} onChange={(e)=>patch({evidenceRequired:e.target.checked})}/> Evidência obrigatória para concluir</label></fieldset>
         <fieldset disabled={readOnly}><legend>Aprovação</legend><label className={styles.checkLabel}><input type="checkbox" checked={config?.requiresApproval??false} onChange={(e)=>patch({requiresApproval:e.target.checked})}/> Exige aprovação</label>{config?.requiresApproval&&<><label>Aprovador<select value={config.approverUserId} onChange={(e)=>patch({approverUserId:e.target.value})}><option value="">Não definido</option>{members.map((m)=><option key={m.id} value={m.id}>{m.name}</option>)}</select></label><label>Área aprovadora<select value={config.approverDepartmentId} onChange={(e)=>patch({approverDepartmentId:e.target.value})}><option value="">Não definida</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><div className={styles.inlineFields}><label>Quantidade<input type="number" min={1} max={20} value={config.approvalCount} onChange={(e)=>patch({approvalCount:Number(e.target.value)||1})}/></label><label>Modo<select value={config.approvalMode} onChange={(e)=>patch({approvalMode:e.target.value as ProcessStepConfig["approvalMode"]})}><option value="sequential">Sequencial</option><option value="parallel">Paralelo</option></select></label></div></>}</fieldset>
+        {/* Sugestões de campo, uma vez para os três editores. `custom:` alcança
+            qualquer campo personalizado — enumerá-los aqui deixaria de fora o
+            que for criado depois. */}
+        <datalist id="vinculato-condition-fields">{Object.entries(FACT_LABELS).map(([field,label])=><option key={field} value={field}>{label}</option>)}<option value="custom:">Campo personalizado — complete após os dois-pontos</option></datalist>
+        <fieldset disabled={readOnly}><legend>Regras da etapa</legend>
+          <p className={styles.fieldsetHint}>Medidas contra os dados da demanda. Uma demanda que não atende à regra não avança, e o motivo aparece para quem tentou.</p>
+          <span className={styles.conditionGroupLabel}>Para concluir esta etapa</span>
+          <ConditionRows readOnly={readOnly} rows={config?.settings.exitRules??[]} emptyLabel="Sem regra: a etapa conclui assim que os requisitos acima forem atendidos."
+            onChange={(next)=>patchSettings({exitRules:next})}/>
+          <span className={styles.conditionGroupLabel}>Para a demanda entrar nesta etapa</span>
+          <ConditionRows readOnly={readOnly} rows={config?.settings.entryRules??[]} emptyLabel="Sem regra: qualquer demanda que o desenho permitir entra aqui."
+            onChange={(next)=>patchSettings({entryRules:next})}/>
+        </fieldset>
+        {outgoing.length>0&&<fieldset disabled={readOnly}><legend>Condição de cada saída</legend>
+          <p className={styles.fieldsetHint}>Quando esta etapa tem mais de um caminho, a condição decide qual vale. Saída sem condição continua sempre aberta.</p>
+          {outgoing.map((flow)=><div className={styles.conditionFlow} key={flow.id}>
+            <span className={styles.conditionFlowHead}>{flow.name||"Sem rótulo"} <em>→ {flow.targetLabel}</em></span>
+            <ConditionRows readOnly={readOnly} rows={config?.settings.transitions?.[flow.id]??[]} emptyLabel="Caminho sempre disponível."
+              onChange={(next)=>patchSettings({transitions:{...(config?.settings.transitions??{}),[flow.id]:next}})}/>
+          </div>)}
+        </fieldset>}
+        <fieldset disabled={readOnly}><legend>Dependência de integração</legend>
+          <p className={styles.fieldsetHint}>Canais que precisam estar sãos para esta etapa concluir. Com o canal em erro, a etapa trava — em vez de dar por feito um trabalho que não chegou do outro lado.</p>
+          <label>Canais<input value={(config?.settings.blockingIntegrations??[]).join(", ")} placeholder="Ex.: sankhya, solides" onChange={(e)=>patchSettings({blockingIntegrations:csv(e.target.value).map((item)=>item.toLowerCase())})}/></label>
+        </fieldset>
         <fieldset disabled={readOnly}><legend>Comunicação</legend><label>Modelo de notificação<textarea rows={3} value={config?.settings.notificationTemplate??""} placeholder="Mensagem enviada quando a etapa for atribuída" onChange={(e)=>patchSettings({notificationTemplate:e.target.value})}/></label></fieldset>
         <fieldset disabled={readOnly}><legend>Subprocesso</legend><label>Processo<select value={config?.subprocessProcessId??""} onChange={(e)=>patch({subprocessProcessId:e.target.value})}><option value="">Nenhum</option>{processes.filter((p)=>p.id!==version.processId&&p.lifecycleStatus==="published").map((p)=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></fieldset>
       </div></>}
