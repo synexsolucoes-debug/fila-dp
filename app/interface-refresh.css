@@ -93,36 +93,26 @@
 /* ========================================================================== */
 
 /*
- * O sintoma era a barra esquerda subindo junto com o conteúdo. A causa não
- * estava na barra: ela já era `position: sticky`. Estava em `overflow-x: hidden`
- * no `body` e no `.dashboard-shell` — um elemento com overflow diferente de
- * `visible` vira contêiner de rolagem, e o sticky passa a se prender a ele em
- * vez de à janela. Como esse contêiner não rola (quem rola é a página), o
- * sticky nunca era acionado. A troca por `overflow-x: clip` está em access.css,
- * junto das declarações originais; aqui fica só o que a barra precisa para se
- * comportar bem depois disso.
+ * O sintoma era a barra esquerda subindo junto com o conteúdo, e a causa não
+ * estava nela: já era `position: sticky`. Estava em `overflow-x: hidden` no
+ * `body` e no `.dashboard-shell` — overflow diferente de `visible` vira
+ * contêiner de rolagem, e o sticky passa a se prender a ele em vez de à janela.
+ * Como esse contêiner não rola, o sticky nunca era acionado.
+ *
+ * O conserto do shell evoluiu depois desta folha: `dashboard-modern.css` passou
+ * a travar o shell inteiro na altura da janela a partir de 761px, e ali quem
+ * rola é a coluna de conteúdo. Isso é melhor que o sticky por dois motivos — o
+ * fundo escuro nunca termina no meio da coluna, e só a navegação rola por
+ * dentro, então a marca e a conta continuam ancoradas.
+ *
+ * Por isso esta folha **não** redeclara `position`, `height` nem `overflow` da
+ * barra. Ela é carregada depois daquela e venceria; medido no Chromium o
+ * resultado é o mesmo, então o único efeito de repetir seria o próximo leitor
+ * acreditar na regra errada. Fica só o acabamento, que não disputa com o
+ * layout. O `overflow-x: clip` em access.css continua valendo: abaixo de 761px
+ * o layout ainda depende da rolagem do documento, e sem ele a faixa superior
+ * volta a subir junto.
  */
-/*
- * Vale só a partir de 761px, que é onde a barra ainda é uma coluna. Abaixo
- * disso ela vira uma faixa de 60px no topo, e as regras que fazem isso já estão
- * em dashboard-modern.css — como esta folha é carregada depois, uma altura
- * global aqui venceria aquelas e devolveria a coluna no celular.
- */
-@media (min-width: 761px) {
-  .dashboard-sidebar {
-    position: sticky;
-    top: 0;
-    /* `dvh` acompanha a barra de endereço que aparece e some no navegador. */
-    height: 100dvh;
-    /* Com muitos módulos liberados a lista passa da altura da tela. Sem isto o
-     * fim do menu ficava inalcançável — a página rolava, mas a barra não. */
-    overflow-y: auto;
-    overflow-x: hidden;
-    /* Chegar ao fim do menu não pode continuar rolando a página atrás dele. */
-    overscroll-behavior: contain;
-  }
-}
-
 .dashboard-sidebar {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, .22) transparent;

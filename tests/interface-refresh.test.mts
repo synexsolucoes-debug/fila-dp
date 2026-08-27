@@ -17,17 +17,32 @@ test("a barra lateral volta a acompanhar a rolagem", async () => {
       "o shell não pode voltar a ser contêiner de rolagem do sticky");
   }
 
+  // Abaixo de 761px o layout volta a depender da rolagem do documento, e ali o
+  // `overflow-x: hidden` do `body` reintroduz o mesmo defeito: medido no
+  // Chromium a 390px, depois de rolar 900px, a faixa superior fica em -13px com
+  // `hidden` e em 0 com `clip`. O `hidden` fica antes, como fallback.
+  const document_ = rules.match(/html,\s*body\s*\{([^}]*)\}/u)?.[1] ?? "";
+  assert.match(document_, /overflow-x:\s*hidden/u, "o fallback de overflow-x sumiu");
+  assert.match(document_, /overflow-x:\s*clip/u, "o `body` voltou a ser contêiner de rolagem do sticky");
+  assert.ok(document_.indexOf("clip") > document_.indexOf("hidden"), "o clip precisa vir depois do fallback");
+
+  // De 761px para cima quem trava a barra é o shell na altura da janela, em
+  // dashboard-modern.css: a coluna de conteúdo rola e só a navegação rola por
+  // dentro da barra, então marca e conta continuam ancoradas.
+  const modern = await read("app/dashboard-modern.css");
+  const locked = modern.split("@media (min-width: 761px)").at(1)?.slice(0, 900) ?? "";
+  assert.match(locked, /\.dashboard-shell\s*\{[^}]*height:\s*100dvh[^}]*overflow:\s*hidden/u);
+  assert.match(locked, /\.dashboard-sidebar nav\s*\{[^}]*overflow-y:\s*auto/u);
+
+  // interface-refresh.css é carregada depois e venceria aquelas regras. Repetir
+  // layout aqui não muda o resultado medido, mas faz o próximo leitor acreditar
+  // na regra errada — então esta folha só cuida do acabamento da barra.
   const refresh = await read("app/interface-refresh.css");
-  // Menu mais alto que a tela precisa rolar dentro da própria barra; sem isso o
-  // último módulo fica inalcançável mesmo com o sticky funcionando.
-  // A regra vale só a partir de 761px: abaixo disso a barra vira faixa no topo
-  // e uma altura global aqui venceria as regras que fazem isso.
-  assert.match(refresh, /@media \(min-width: 761px\)/u);
   const sidebar = refresh.split(".dashboard-sidebar {").at(1)?.split("}").at(0) ?? "";
-  assert.match(sidebar, /position:\s*sticky/u);
-  assert.match(sidebar, /height:\s*100dvh/u);
-  assert.match(sidebar, /overflow-y:\s*auto/u);
-  assert.match(sidebar, /overscroll-behavior:\s*contain/u);
+  for (const property of ["position", "height", "overflow-y", "overflow:"]) {
+    assert.doesNotMatch(sidebar, new RegExp(`${property}\\s*:`, "u"),
+      `a camada de refinamento voltou a disputar \`${property}\` com o shell travado`);
+  }
 
   // O console global tem a mesma barra e o mesmo problema.
   const console_ = await read("app/plataforma/platform.module.css");
