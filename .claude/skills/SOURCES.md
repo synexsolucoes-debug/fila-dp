@@ -19,8 +19,18 @@ para atualizar, recopie do upstream e registre a mudança aqui.
 | `review-animations` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 | `write-swift` | [emilkowalski/skills](https://github.com/emilkowalski/skills) | MIT — `LICENSE.emilkowalski-skills.txt` |
 
-A skill `ui-ux-pro-max` não está aqui: ela é carregada como plugin, declarado em
-`../settings.json` ([nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill), MIT).
+## Skills carregadas como plugin
+
+Não estão neste diretório: são declaradas em `../settings.json` e o Claude Code
+baixa cada uma do repositório de origem.
+
+| Plugin | Origem | Skills | Licença |
+|---|---|---|---|
+| `ui-ux-pro-max@ui-ux-pro-max-skill` | [nextlevelbuilder/ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | `ui-ux-pro-max` | MIT |
+| `taste-skill@taste-skill` | [leonxlnx/taste-skill](https://github.com/leonxlnx/taste-skill) | `design-taste-frontend`, `design-taste-frontend-v1`, `industrial-brutalist-ui`, `minimalist-ui`, `high-end-visual-design`, `redesign-existing-projects`, `stitch-design-taste`, `gpt-taste`, `image-to-code`, `imagegen-frontend-web`, `imagegen-frontend-mobile`, `brandkit`, `full-output-enforcement` | MIT |
+
+Nenhum dos dois está fixado em `ref`/`sha`, então ambos acompanham o branch
+padrão do upstream.
 
 ## Skills fora do stack deste projeto
 

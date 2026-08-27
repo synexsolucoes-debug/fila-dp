@@ -6,9 +6,16 @@
         "source": "github",
         "repo": "nextlevelbuilder/ui-ux-pro-max-skill"
       }
+    },
+    "taste-skill": {
+      "source": {
+        "source": "github",
+        "repo": "leonxlnx/taste-skill"
+      }
     }
   },
   "enabledPlugins": {
-    "ui-ux-pro-max@ui-ux-pro-max-skill": true
+    "ui-ux-pro-max@ui-ux-pro-max-skill": true,
+    "taste-skill@taste-skill": true
   }
 }
