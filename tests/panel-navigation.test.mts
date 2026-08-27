@@ -252,7 +252,17 @@ test("o seletor de empresa da barra superior recorta a visão geral (§18, §19)
   // não mexia em número nenhum da visão geral, e quem escolhia não tinha como
   // saber se aquela empresa não tinha nada ou se o filtro era enfeite.
   assert.match(source, /const scopedCards = useMemo\(/u);
-  assert.match(source, /activeCards\.filter\(\(card\) => card\.companyId === companyFilter\)/u);
+  assert.match(source, /activeCards\.filter\(\(card\) => \(companyFilter === "all" \|\| card\.companyId === companyFilter\)/u);
+  // O recorte de período (§13) entrou pela mesma porta e vale para os mesmos
+  // blocos. Um filtro no topo que não alcança os fluxos, os vencimentos ou as
+  // movimentações repetiria o defeito que este teste existe para impedir.
+  assert.match(source, /const scopedFlows = useMemo\([\s\S]{0,200}inPeriod\(flow\.dueAt\)/u);
+  assert.match(source, /const scopedObligations = useMemo\([\s\S]{0,240}withinPeriod\(/u);
+  assert.match(source, /const scopedActivities = useMemo\(/u);
+  // A regra do período mora em `lib/overview-period.ts`, onde os casos de borda
+  // (sem prazo, atrasado, data ilegível) são teste de comportamento em
+  // `tests/overview-operational-center.test.mts` — não leitura de código-fonte.
+  assert.match(source, /from "@\/lib\/overview-period"/u);
   // Os indicadores medem o recorte, não o grupo.
   assert.match(source, /const active = scopedCards\.filter\(\(card\) => card\.slaStatus !== "completed"\);/u);
   assert.match(source, /\}, \[scopedCards, snapshot\]\);/u);

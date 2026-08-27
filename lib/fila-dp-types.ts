@@ -309,6 +309,15 @@ export type WorkspaceSnapshot = {
    */
   payrollCycles: PayrollCycleSummary[];
   /**
+   * Demandas em execução, com o processo e a etapa por trás (§15).
+   *
+   * Vem no mesmo lote do snapshot, como os ciclos: duas consultas a mais,
+   * nenhuma ida extra ao banco.
+   */
+  processFlows: ProcessFlowSummary[];
+  /** Obrigações em aberto com vencimento à frente ou já vencido (§16). */
+  upcomingObligations: UpcomingObligation[];
+  /**
    * Janela do histórico carregado (§39).
    *
    * O snapshot de abertura traz uma janela de comentários, caixa de entrada e
@@ -332,4 +341,65 @@ export type PayrollCycleSummary = {
   /** `open` | `pre_closing` | `processing` | `post_closing` | `closed`. */
   status: string;
   closedAt: string | null;
+};
+
+/**
+ * Uma demanda em execução, vista pelo lado do processo que a originou.
+ *
+ * O quadro responde "o que está aberto"; isto responde "como o processo está
+ * andando", que é outra pergunta. A demanda já guardava a versão do processo
+ * (`process_version_id`) e o passo corrente (`current_step_id`) desde a
+ * instanciação, mas nada disso chegava à interface — a Visão geral só via
+ * cartões soltos, sem o processo por trás.
+ *
+ * O rótulo da etapa é resolvido no servidor: ele mora no `settings_json` da
+ * configuração do passo ou no XML BPMN da versão, e nenhum dos dois deve
+ * trafegar até o navegador só para virar uma linha de texto.
+ */
+export type ProcessFlowSummary = {
+  /** A demanda em execução. */
+  cardId: string;
+  cardTitle: string;
+  companyId: string | null;
+  company: string;
+  /** O processo-modelo e a versão instanciada, preservada desde a criação. */
+  definitionId: string;
+  definitionName: string;
+  versionNumber: string;
+  /** Passo corrente: identificador BPMN e rótulo já resolvido. */
+  stepId: string;
+  stepLabel: string;
+  responsibleName: string;
+  /** Concluídas / total das tarefas instanciadas, e o percentual derivado. */
+  tasksDone: number;
+  tasksTotal: number;
+  progress: number;
+  /** O mesmo `slaStatus` da demanda, para a etiqueta não divergir do quadro. */
+  slaStatus: Card["slaStatus"];
+  dueAt: string | null;
+  updatedAt: string;
+};
+
+/**
+ * Uma obrigação com vencimento à frente (§16).
+ *
+ * `fdp_compliance_obligations` já existia e já tinha índice por
+ * `(workspace_id, due_date, status)`; o que faltava era chegar à Visão geral.
+ * Só o que ainda não fechou entra — obrigação concluída não é vencimento
+ * próximo, é histórico.
+ */
+export type UpcomingObligation = {
+  id: string;
+  companyId: string;
+  company: string;
+  title: string;
+  /** `payroll` | `social_security` | `tax` | `reporting` | `union` | `other`. */
+  obligationType: string;
+  /** Competência do ciclo de folha vinculado, quando houver. */
+  competence: string;
+  dueDate: string;
+  /** Negativo quando já venceu — a tela precisa distinguir os dois casos. */
+  daysRemaining: number;
+  /** `open` | `in_progress` | `blocked`. */
+  status: string;
 };

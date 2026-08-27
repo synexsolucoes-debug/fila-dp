@@ -28,6 +28,7 @@ import {
   ClipboardList,
   Clock3,
   Download,
+  GitBranch,
   Inbox,
   LayoutDashboard,
   ListChecks,
@@ -65,6 +66,7 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, Wor
 import type { ActionTarget } from "@/lib/action-center";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
+import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
 import { AnimatedTabs, competenceLabel, ProcessTabsProvider, useShortcuts, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
@@ -86,6 +88,9 @@ import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
    esconderia oito telas de quem confere. */
 type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
+
+/** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
+type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations";
 
 type CardTab = "details" | "process" | "checklist" | "attachments" | "activity";
 type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
@@ -755,6 +760,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [slaFilter, setSlaFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState(initialLocation.companyId || "all");
+  /**
+   * Recorte de período da Visão geral (§13).
+   *
+   * Fica ao lado do seletor de empresa e vale para a Visão geral inteira —
+   * indicadores, fluxos, vencimentos e movimentações. É diferente do `dueFilter`
+   * logo abaixo, que é filtro do quadro e não sai dele.
+   */
+  const [periodFilter, setPeriodFilter] = useState<OverviewPeriod>("all");
   const [processFilter, setProcessFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
   const [memberEmail, setMemberEmail] = useState("");
@@ -1039,19 +1052,51 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
    * Isto é diferente de `filteredActiveCards`, que aplica também responsável,
    * SLA, processo e prazo — filtros do quadro, que não valem para a visão geral.
    */
-  const scopedCards = useMemo(
-    () => companyFilter === "all" ? activeCards : activeCards.filter((card) => card.companyId === companyFilter),
-    [activeCards, companyFilter],
+  /* A janela do período, calculada uma vez: quatro blocos da Visão geral
+     perguntam a mesma coisa, e recalcular `new Date()` em cada um deles abriria
+     a porta para dois blocos discordarem sobre onde o dia termina. */
+  const periodEnd = useMemo(() => periodWindowEnd(periodFilter), [periodFilter]);
+  const inPeriod = useCallback(
+    (dueAt: string | null | undefined) => withinPeriod(dueAt, periodEnd),
+    [periodEnd],
   );
-  const scopedLists = useMemo(() => (snapshot?.lists ?? []).map((list) => companyFilter === "all"
-    ? list
-    : { ...list, cards: list.cards.filter((card) => card.companyId === companyFilter) }), [snapshot?.lists, companyFilter]);
+  const scopedCards = useMemo(
+    () => activeCards.filter((card) => (companyFilter === "all" || card.companyId === companyFilter) && inPeriod(card.dueAt)),
+    [activeCards, companyFilter, inPeriod],
+  );
+  const scopedLists = useMemo(() => (snapshot?.lists ?? []).map((list) => ({
+    ...list,
+    cards: list.cards.filter((card) => (companyFilter === "all" || card.companyId === companyFilter) && inPeriod(card.dueAt)),
+  })), [snapshot?.lists, companyFilter, inPeriod]);
   /* O fluxo da competência respeita o seletor de empresa, como todo o resto da
      Visão geral desde `db5300b`. Com uma empresa escolhida, o ciclo mostrado é
      o dela; sem, é o do grupo, e o avanço é o do ciclo menos adiantado. */
   const scopedCycles = useMemo(() => (snapshot?.payrollCycles ?? [])
     .filter((cycle) => companyFilter === "all" || cycle.companyId === companyFilter),
   [snapshot?.payrollCycles, companyFilter]);
+
+  /* Fluxos em andamento (§15), vencimentos (§16) e movimentações (§19) sob os
+     mesmos dois filtros do topo. O servidor já entregou tudo recortado por
+     acesso; aqui só se aplica a escolha de quem está olhando. */
+  const scopedFlows = useMemo(() => (snapshot?.processFlows ?? [])
+    .filter((flow) => (companyFilter === "all" || flow.companyId === companyFilter) && inPeriod(flow.dueAt)),
+  [snapshot?.processFlows, companyFilter, inPeriod]);
+  const scopedObligations = useMemo(() => (snapshot?.upcomingObligations ?? [])
+    .filter((item) => (companyFilter === "all" || item.companyId === companyFilter)
+      && withinPeriod(`${item.dueDate}T12:00:00Z`, periodEnd)),
+  [snapshot?.upcomingObligations, companyFilter, periodEnd]);
+  /* A movimentação é o oposto do vencimento: olha para trás. A janela do
+     período vale como "quanto tempo atrás", e `all` mostra tudo o que veio no
+     snapshot — que já é uma janela, a do §39. */
+  const scopedActivities = useMemo(() => {
+    const events = snapshot?.recentActivity ?? [];
+    const floor = periodWindowStart(periodFilter);
+    if (floor === null) return events;
+    return events.filter((event) => {
+      const at = Date.parse(event.createdAt);
+      return Number.isNaN(at) || at >= floor;
+    });
+  }, [snapshot?.recentActivity, periodFilter]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
   const filteredActiveCards = useMemo(() => {
     const now = new Date();
@@ -1912,6 +1957,10 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           <div className="dashboard-location"><span>{snapshot.workspace.name} /</span><strong> {header.title}</strong></div>
           <div className="dashboard-header-actions">
             <label className="header-company-select"><Building2 aria-hidden="true" /><select aria-label="Selecionar empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">{companyScopeLabel}</option>{snapshot.companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</option>)}</select></label>
+            {/* Período (§13). Só aparece na Visão geral porque é só lá que ele
+                manda: exibi-lo no quadro sugeriria um recorte que o quadro não
+                aplica, e filtro que não filtra é pior que filtro nenhum. */}
+            {view === "overview" && <label className="header-period-select"><CalendarClock aria-hidden="true" /><select aria-label="Selecionar período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as OverviewPeriod)}>{overviewPeriods.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
@@ -2015,7 +2064,17 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations}
             processes={navGroups} processBadges={navBadges} onOpenProcess={(target) => setView(target as View)}
             shortcuts={homeShortcuts}
-            onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
+            flows={scopedFlows} obligations={scopedObligations} periodLabel={overviewPeriodLabel(periodFilter)}
+            onOpenCard={(cardId) => { const card = activeCards.find((item) => item.id === cardId); if (card) openCard(card); }}
+            onFocus={(target, sla) => {
+              /* O indicador leva ao módulo já recortado (§14). Zerar os outros
+                 filtros do quadro é parte do contrato: chegar de um número e
+                 encontrar uma lista menor que ele, porque um filtro antigo
+                 continuava ligado, faz o indicador parecer errado. */
+              setAssigneeFilter("all"); setProcessFilter("all"); setDueFilter("all");
+              setSlaFilter(sla); setView(target as View);
+            }}
+            onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={scopedActivities} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processManagement" && <ProcessManagementView role={snapshot.workspace.role} />}
 
@@ -2551,8 +2610,23 @@ function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
   </section>;
 }
 
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations, processes, processBadges, onOpenProcess, shortcuts }: {
+function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations, processes, processBadges, onOpenProcess, shortcuts, flows, obligations, periodLabel, onOpenCard, onFocus }: {
   onNavigate: (target: ActionTarget) => void;
+  /** Demandas em execução, já sob os filtros do topo (§15). */
+  flows: WorkspaceSnapshot["processFlows"];
+  /** Obrigações em aberto, já sob os filtros do topo (§16). */
+  obligations: WorkspaceSnapshot["upcomingObligations"];
+  /** Rótulo do período escolhido, para os estados vazios dizerem o porquê. */
+  periodLabel: string;
+  onOpenCard: (cardId: string) => void;
+  /**
+   * Navega para o módulo já com o recorte de SLA aplicado (§14).
+   *
+   * Tipo próprio em vez de `ActionTarget`: aquele é a lista de destinos que
+   * *resolvem uma pendência* da central de ação, e alargá-lo para caber um
+   * indicador apagaria a razão de ele existir.
+   */
+  onFocus: (target: OverviewFocusTarget, sla: "all" | "overdue") => void;
   /** Processos que esta pessoa alcança, no mesmo recorte do menu (§30). */
   processes: ReadonlyArray<{ id: string; label: string; description: string; views: readonly string[] }>;
   /** Contagens já apuradas pelo painel — o cartão do processo não consulta nada. */
@@ -2582,6 +2656,7 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   const checkedItems = cards.reduce((total, card) => total + card.checklist.filter((item) => item.completed).length, 0);
   const maxStatus = Math.max(1, ...lists.map((list) => list.cards.length));
   const visibleColumns = lists.slice(0, 3);
+  const integrationsFailing = integrations.filter((item) => item.status === "error").length;
 
   return <div className="overview-layout">
     <CompetenceFlow cycles={cycles} scopeLabel={scopeLabel} active={stats.active}
@@ -2594,6 +2669,82 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
     <div className="overview-pair">
       <ActionCenter onNavigate={onNavigate} companyId={companyId} />
       <ConnectionMap integrations={integrations} onNavigate={onNavigate} />
+    </div>
+
+    {/* Fluxos em andamento (§15) e próximos vencimentos (§16).
+        As duas perguntas que o quadro não responde: o quadro mostra demandas
+        soltas por coluna, não o processo que as gerou nem a data legal que não
+        espera ninguém. Ficam lado a lado porque são o mesmo tipo de olhar —
+        "o que está correndo" e "o que está chegando". */}
+    <div className="overview-pair">
+      <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
+        <header>
+          <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
+          <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
+        </header>
+        <div className="overview-flow-list">
+          {flows.length === 0 && <div className="overview-empty">
+            <GitBranch aria-hidden="true" />
+            <strong>Nenhum processo em execução.</strong>
+            {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
+                o recorte escolhido é que não alcança nenhuma. */}
+            <p>{periodLabel === "Todo o período"
+              ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
+              : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
+          </div>}
+          {flows.slice(0, 6).map((flow) => <button type="button" key={flow.cardId}
+            className={`overview-flow-card sla-${flow.slaStatus}`} onClick={() => onOpenCard(flow.cardId)}>
+            <span className="overview-flow-head">
+              <strong>{flow.definitionName}</strong>
+              {flow.versionNumber && <em title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
+            </span>
+            <span className="overview-flow-demand">{flow.cardTitle}</span>
+            <span className="overview-flow-step">Etapa: <b>{flow.stepLabel || "Não iniciada"}</b></span>
+            {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas porque
+                percentual sozinho não diz o tamanho do processo: 50% de duas
+                tarefas e 50% de quarenta pedem decisões diferentes. */}
+            <span className="overview-flow-progress" role="img"
+              aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
+              <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
+            </span>
+            <span className="overview-flow-foot">
+              <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas • ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
+              <small>{flow.responsibleName || "Sem responsável"}</small>
+            </span>
+          </button>)}
+        </div>
+      </section>
+
+      <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
+        <header>
+          <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
+          <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
+        </header>
+        <div className="overview-obligation-list">
+          {obligations.length === 0 && <div className="overview-empty">
+            <CheckCircle2 aria-hidden="true" />
+            <strong>Nenhuma obrigação em aberto.</strong>
+            <p>{periodLabel === "Todo o período"
+              ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
+              : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
+          </div>}
+          {obligations.slice(0, 6).map((item) => <article key={item.id}
+            className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
+            <div>
+              <strong>{item.title}</strong>
+              <small>{item.company || "Sem empresa"}{item.competence ? ` • Competência ${item.competence}` : ""}</small>
+            </div>
+            <div className="overview-obligation-due">
+              <b>{formatDate(item.dueDate)}</b>
+              {/* "Vence em -2 dias" é o tipo de frase que só um sistema escreve.
+                  O atraso é dito como atraso. */}
+              <em>{item.daysRemaining < 0
+                ? `${Math.abs(item.daysRemaining)} dia(s) em atraso`
+                : item.daysRemaining === 0 ? "Vence hoje" : `Em ${item.daysRemaining} dia(s)`}</em>
+            </div>
+          </article>)}
+        </div>
+      </section>
     </div>
 
     {/* Retomar de onde parou (§67).
@@ -2663,9 +2814,31 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
       </StaggerContainer>
     </section>}
 
+    {/* Faixa de indicadores (§14).
+        Cada número que tem onde ser resolvido virou botão: ler "3 integrações
+        com erro" e não ter caminho para elas é o indicador cobrando uma ação
+        que ele mesmo não deixa tomar. Os que não têm destino próprio seguem
+        como texto — link que leva ao lugar errado é pior que nenhum.
+
+        "SLA no prazo" não entra aqui: ele tem a faixa logo abaixo, inteira,
+        com barra e contagem. Repeti-lo como sexto cartão seria o mesmo número
+        duas vezes na mesma dobra. */}
     <section className="overview-metrics" aria-label="Indicadores principais">
-      <article><span>Demandas abertas</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída no quadro", "concluídas no quadro")}</small></article>
-      <article className={stats.attention ? "requires-attention" : ""}><span>SLA em risco</span><strong>{stats.attention}</strong><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small></article>
+      <button type="button" className="overview-metric-action" onClick={() => onFocus("board", "all")}>
+        <span>Demandas em aberto</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída no quadro", "concluídas no quadro")}</small>
+      </button>
+      <button type="button" className={`overview-metric-action${stats.attention ? " requires-attention" : ""}`} onClick={() => onFocus("board", "overdue")}>
+        <span>SLA em risco</span><strong>{stats.attention}</strong><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small>
+      </button>
+      <button type="button" className="overview-metric-action" onClick={() => onFocus("processManagement", "all")}>
+        <span>Fluxos em andamento</span><strong>{flows.length}</strong><small>{flows.length ? plural(new Set(flows.map((flow) => flow.definitionId)).size, "processo em execução", "processos em execução") : "Nenhum processo em execução"}</small>
+      </button>
+      <button type="button" className={`overview-metric-action${obligations.some((item) => item.daysRemaining < 0) ? " requires-attention" : ""}`} onClick={() => onFocus("processes", "all")}>
+        <span>Obrigações próximas</span><strong>{obligations.length}</strong><small>{obligations.filter((item) => item.daysRemaining < 0).length ? `${obligations.filter((item) => item.daysRemaining < 0).length} já vencida(s)` : "Nenhuma vencida"}</small>
+      </button>
+      <button type="button" className={`overview-metric-action${integrationsFailing ? " requires-attention" : ""}`} onClick={() => onFocus("integrations", "all")}>
+        <span>Integrações com erro</span><strong>{integrationsFailing}</strong><small>{integrationsFailing ? "Sincronização interrompida" : `${integrations.length} conectada(s) sem falha`}</small>
+      </button>
       <article><span>Documentos pendentes</span><strong>{stats.documentsPending}</strong><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small></article>
       {/* Com uma empresa escolhida, "Empresas ativas: 3" seria um número do
           grupo inteiro sentado entre três números do recorte — o tipo de

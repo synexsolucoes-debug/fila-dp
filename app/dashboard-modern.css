@@ -3036,6 +3036,15 @@
 }
 .header-company-select svg { width: 15px; height: 15px; color: var(--ui-primary); flex: 0 0 auto; }
 .header-company-select select { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--ui-text); font-size: 11px; font-weight: 700; }
+/* Período (§13) ao lado da empresa, e com a mesma forma: são os dois recortes
+   globais da Visão geral, e vesti-los diferente sugeriria hierarquias que não
+   existem entre eles. Mais estreito porque o rótulo é curto e previsível. */
+.dashboard-header-actions .header-period-select {
+  min-width: min(172px, 15vw); height: 38px; display: inline-flex; align-items: center; gap: 7px;
+  padding: 0 10px; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-surface); color: var(--ui-text-soft);
+}
+.header-period-select svg { width: 15px; height: 15px; color: var(--ui-primary); flex: 0 0 auto; }
+.header-period-select select { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--ui-text); font-size: 11px; font-weight: 700; }
 .dashboard-header-actions .global-search-trigger { width: min(290px, 25vw); justify-content: flex-start; gap: 8px; padding: 0 10px; }
 .global-search-trigger span { overflow: hidden; color: var(--ui-text-soft); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .global-search-trigger kbd { margin-left: auto; padding: 2px 5px; border-radius: 5px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 8px; white-space: nowrap; }
@@ -3096,8 +3105,25 @@
   font-weight: 800;
 }
 
-.overview-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; }
-.overview-metrics article { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
+/* A faixa passou de quatro cartões fixos para sete (§14), e quatro colunas
+   fixas deixariam três órfãos numa segunda linha larga. `auto-fit` acomoda o
+   número real de indicadores — que muda com o recorte de empresa — sem que a
+   contagem precise estar escrita aqui. */
+.overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 13px; }
+.overview-metrics article,
+.overview-metrics .overview-metric-action { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
+/* O indicador que leva a algum lugar é botão de verdade: foco visível, cursor
+   de ação e alvo inteiro clicável. Alinhamento à esquerda porque o navegador
+   centraliza texto de botão, e centralizado ele deixaria de parecer da mesma
+   família dos cartões que continuam sendo texto. */
+.overview-metrics .overview-metric-action { text-align: left; cursor: pointer; font: inherit; color: inherit; transition: border-color .16s ease, background-color .16s ease, transform .16s ease; }
+.overview-metrics .overview-metric-action:hover { border-color: color-mix(in srgb, var(--ui-primary) 46%, var(--ui-border)); background: color-mix(in srgb, var(--ui-primary) 5%, var(--ui-surface)); }
+.overview-metrics .overview-metric-action:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.overview-metrics .overview-metric-action:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .overview-metrics .overview-metric-action { transition: none; }
+  .overview-metrics .overview-metric-action:active { transform: none; }
+}
 .overview-metrics span { color: var(--ui-text-soft); font-size: 11px; font-weight: 700; }
 .overview-metrics strong { margin-top: 10px; color: var(--ui-text); font-size: clamp(27px, 2.2vw, 36px); letter-spacing: -.06em; line-height: 1; }
 .overview-metrics small { margin-top: auto; color: var(--ui-text-soft); font-size: 10px; }
@@ -3140,6 +3166,64 @@
 .overview-empty svg { width: 25px; height: 25px; margin-bottom: 9px; color: var(--ui-mint); }
 .overview-empty strong { color: var(--ui-text); font-size: 11px; }
 .overview-empty p { max-width: 280px; margin: 5px 0 0; font-size: 10px; line-height: 1.45; }
+
+/* Fluxos em andamento (§15).
+   O cartão é denso de propósito: processo, versão, demanda, etapa, progresso e
+   responsável em seis linhas curtas. Quem olha a Visão geral está decidindo o
+   que abrir, e para isso precisa comparar cartões — não ler um. */
+.overview-flow-list { padding: 8px 14px 14px; display: grid; gap: 6px; }
+.overview-flow-card {
+  width: 100%; padding: 11px 12px; display: grid; gap: 6px;
+  border: 1px solid var(--ui-border); border-left: 3px solid var(--ui-border); border-radius: 10px;
+  background: var(--ui-surface); color: var(--ui-text); text-align: left; cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease;
+}
+.overview-flow-card:hover { background: color-mix(in srgb, var(--ui-primary) 4%, var(--ui-surface)); }
+.overview-flow-card:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+/* A borda esquerda repete o estado de SLA que o quadro já usa. Cor sozinha não
+   carrega o dado: o prazo continua escrito no rodapé do cartão. */
+.overview-flow-card.sla-warning { border-left-color: var(--ui-warning); }
+.overview-flow-card.sla-overdue { border-left-color: var(--ui-danger); }
+.overview-flow-card.sla-paused { border-left-color: var(--ui-text-soft); }
+.overview-flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.overview-flow-head strong { min-width: 0; color: var(--ui-text); font-size: 12px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.overview-flow-head em {
+  flex: 0 0 auto; padding: 1px 6px; border-radius: 99px; font-size: 9px; font-weight: 800; font-style: normal;
+  background: color-mix(in srgb, var(--ui-primary) 12%, var(--ui-surface)); color: var(--ui-primary);
+}
+.overview-flow-demand { color: var(--ui-text-soft); font-size: 11px; overflow-wrap: anywhere; }
+.overview-flow-step { color: var(--ui-text-soft); font-size: 10px; }
+.overview-flow-step b { color: var(--ui-text); font-weight: 700; }
+.overview-flow-progress { height: 5px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 20%, var(--ui-surface)); }
+.overview-flow-progress i { height: 100%; display: block; border-radius: inherit; background: var(--ui-mint); }
+.overview-flow-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.overview-flow-foot small { color: var(--ui-text-soft); font-size: 9px; }
+
+/* Próximos vencimentos (§16). Duas colunas: o que vence e quando. */
+.overview-obligation-list { padding: 5px 16px 13px; }
+.overview-obligation {
+  min-height: 58px; padding: 11px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: 12px; border-bottom: 1px solid var(--ui-border);
+}
+.overview-obligation:last-child { border-bottom: 0; }
+.overview-obligation strong { display: block; color: var(--ui-text); font-size: 11px; overflow-wrap: anywhere; }
+.overview-obligation small { display: block; margin-top: 2px; color: var(--ui-text-soft); font-size: 9px; }
+.overview-obligation-due { text-align: right; white-space: nowrap; }
+.overview-obligation-due b { display: block; color: var(--ui-text); font-size: 11px; }
+.overview-obligation-due em { display: block; margin-top: 2px; font-size: 9px; font-style: normal; font-weight: 700; color: var(--ui-text-soft); }
+.overview-obligation.warning .overview-obligation-due em { color: var(--ui-warning); }
+.overview-obligation.overdue .overview-obligation-due em { color: var(--ui-danger); }
+
+@media (prefers-reduced-motion: reduce) { .overview-flow-card { transition: none; } }
+
+/* Abaixo do tablet os dois painéis empilham — a grade de duas colunas do
+   `.overview-pair` já faz isso, mas o cartão de fluxo precisa soltar o rodapé
+   em duas linhas para o nome do responsável não ser cortado. */
+@media (max-width: 760px) {
+  .overview-flow-foot { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .overview-obligation { grid-template-columns: minmax(0, 1fr); }
+  .overview-obligation-due { text-align: left; }
+}
 
 .status-chart { min-height: 195px; padding: 23px 20px 17px; display: flex; align-items: end; gap: 18px; }
 .status-chart > div { min-width: 48px; height: 150px; flex: 1; display: grid; grid-template-rows: 1fr auto auto; align-items: end; gap: 6px; text-align: center; }

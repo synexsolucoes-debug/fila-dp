@@ -8,6 +8,7 @@ import { deniedWriteCapabilities, mergeDepartmentAndMemberGrants, resolveModules
 import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
+import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph";
 
 
 function safeJson(value: string) {
@@ -393,7 +394,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult,
     settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult,
     companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult, historyTotals,
-    tangerinoAttachmentAuthorizationsResult,
+    tangerinoAttachmentAuthorizationsResult, processFlowsResult, flowDiagramsResult, obligationsResult,
   ] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
@@ -509,6 +510,54 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       WHERE auth_row.workspace_id = ? AND card.board_id = ? AND card.archived = 0
       ORDER BY auth_row.card_id, auth_row.authorized_at DESC`)
       .bind(workspace.id, board.id).all(),
+    /* Demandas em execução, pelo lado do processo (§15).
+       A demanda já guardava a versão instanciada e o passo corrente desde a
+       criação; faltava juntá-los ao nome do processo e à contagem de tarefas.
+       As duas contagens são agregadas na própria consulta em vez de trazer os
+       itens: a Visão geral mostra "7 de 18", não a lista. */
+    d1.prepare(`SELECT c.id AS card_id, c.title, c.company_id, c.company, c.assignee_name,
+        c.sla_status, c.due_at, c.updated_at,
+        c.process_definition_id, c.process_version_id, c.process_version_number, c.current_step_id,
+        pd.name AS definition_name,
+        sc.settings_json AS step_settings,
+        (SELECT count(*)::int FROM fdp_checklist_items ci WHERE ci.card_id = c.id) AS tasks_total,
+        (SELECT count(*)::int FROM fdp_checklist_items ci WHERE ci.card_id = c.id AND ci.completed = 1) AS tasks_done
+      FROM fdp_cards c
+      JOIN fdp_process_definitions pd
+        ON pd.workspace_id = c.workspace_id AND pd.id = c.process_definition_id
+      LEFT JOIN fdp_process_step_configs sc
+        ON sc.workspace_id = c.workspace_id
+       AND sc.process_version_id = c.process_version_id
+       AND sc.bpmn_element_id = c.current_step_id
+      WHERE c.workspace_id = ? AND c.board_id = ? AND c.archived = 0
+        AND c.process_version_id IS NOT NULL AND c.process_version_id <> ''
+        AND c.sla_status <> 'completed'
+      ORDER BY c.updated_at DESC
+      LIMIT 60`).bind(workspace.id, board.id).all(),
+    /* O XML das versões que estão em execução agora — não uma por demanda.
+       O rótulo da etapa mora no `settings_json` do passo quando alguém o
+       nomeou na configuração, e no desenho quando não. Buscar por versão
+       distinta é o que evita repetir o mesmo diagrama em sessenta linhas. */
+    d1.prepare(`SELECT pv.id, pv.bpmn_xml
+      FROM fdp_process_versions pv
+      WHERE pv.workspace_id = ?
+        AND pv.id IN (
+          SELECT DISTINCT c.process_version_id FROM fdp_cards c
+           WHERE c.workspace_id = ? AND c.board_id = ? AND c.archived = 0
+             AND c.process_version_id IS NOT NULL AND c.process_version_id <> ''
+             AND c.sla_status <> 'completed')`).bind(workspace.id, workspace.id, board.id).all(),
+    /* Obrigações que ainda não fecharam (§16).
+       A tabela já tinha índice por (workspace_id, due_date, status); o que
+       faltava era a Visão geral enxergar. Vencida entra junto: esconder o que
+       passou do prazo é o oposto do que uma central operacional faz. */
+    d1.prepare(`SELECT o.id, o.company_id, o.title, o.obligation_type, o.due_date, o.status,
+        COALESCE(pc.competence, '') AS competence
+      FROM fdp_compliance_obligations o
+      LEFT JOIN fdp_payroll_cycles pc
+        ON pc.workspace_id = o.workspace_id AND pc.id = o.payroll_cycle_id
+      WHERE o.workspace_id = ? AND o.status <> 'completed'
+      ORDER BY o.due_date
+      LIMIT 40`).bind(workspace.id).all(),
   ]);
 
   const checklistRows = checklistResult.results as Array<Record<string, unknown>>;
@@ -669,6 +718,80 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     createdAt: String(row.created_at),
   });
 
+  /* Rótulo da etapa corrente, resolvido uma vez por versão em execução.
+     Ordem: o nome que alguém deu ao passo na configuração, depois o nome do
+     elemento no desenho, e só então o identificador cru. Cair no identificador
+     ("Activity_1f2c") é o pior caso e continua sendo melhor que uma linha
+     vazia, porque diz a quem configurou o processo onde a demanda parou. */
+  const stepLabelByVersion = new Map<string, BpmnGraph>();
+  for (const row of flowDiagramsResult.results as Array<Record<string, unknown>>) {
+    const xml = String(row.bpmn_xml ?? "");
+    if (!xml) continue;
+    stepLabelByVersion.set(String(row.id), parseBpmnGraph(xml));
+  }
+  const companyNameById = new Map(visibleCompanyRows.map((row) => [
+    String(row.id),
+    String(row.trade_name || row.legal_name || ""),
+  ]));
+
+  const processFlows = (processFlowsResult.results as Array<Record<string, unknown>>)
+    /* Mesmo recorte de empresa que os cartões: o fluxo é a demanda vista por
+       outro ângulo, e um ângulo novo não pode virar caminho lateral para ver o
+       que o recorte esconde. */
+    .filter((row) => isVisibleCompany(row.company_id))
+    .map((row) => {
+      const stepId = String(row.current_step_id ?? "");
+      const settings = row.step_settings && typeof row.step_settings === "object"
+        ? row.step_settings as Record<string, unknown>
+        : safeJson(String(row.step_settings ?? "{}"));
+      const configured = typeof settings.name === "string" ? settings.name.trim() : "";
+      const graph = stepLabelByVersion.get(String(row.process_version_id ?? ""));
+      const tasksTotal = Number(row.tasks_total ?? 0);
+      const tasksDone = Number(row.tasks_done ?? 0);
+      return {
+        cardId: String(row.card_id),
+        cardTitle: String(row.title ?? ""),
+        companyId: row.company_id ? String(row.company_id) : null,
+        company: String(row.company ?? "") || companyNameById.get(String(row.company_id ?? "")) || "",
+        definitionId: String(row.process_definition_id ?? ""),
+        definitionName: String(row.definition_name ?? ""),
+        versionNumber: String(row.process_version_number ?? ""),
+        stepId,
+        stepLabel: configured || (graph && stepId ? stepLabel(graph, stepId) : stepId),
+        responsibleName: String(row.assignee_name ?? ""),
+        tasksDone,
+        tasksTotal,
+        /* Sem tarefa instanciada não há progresso a afirmar. Zero é honesto;
+           100% num processo sem tarefas seria uma demanda "pronta" que ninguém
+           executou. */
+        progress: tasksTotal > 0 ? Math.round((tasksDone / tasksTotal) * 100) : 0,
+        slaStatus: String(row.sla_status ?? "safe") as "safe" | "warning" | "overdue" | "paused" | "completed",
+        dueAt: row.due_at ? String(row.due_at) : null,
+        updatedAt: String(row.updated_at ?? ""),
+      };
+    });
+
+  const upcomingObligations = (obligationsResult.results as Array<Record<string, unknown>>)
+    .filter((row) => isVisibleCompany(row.company_id))
+    .map((row) => {
+      const dueDate = String(row.due_date);
+      return {
+        id: String(row.id),
+        companyId: String(row.company_id),
+        company: companyNameById.get(String(row.company_id)) ?? "",
+        title: String(row.title ?? ""),
+        obligationType: String(row.obligation_type ?? "other"),
+        competence: String(row.competence ?? ""),
+        dueDate,
+        /* Dias corridos, não úteis: o prazo legal de uma obrigação cai no dia
+           que cai, feriado ou não. O SLA da demanda é que conta dia útil. */
+        daysRemaining: Math.round(
+          (Date.parse(`${dueDate}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000,
+        ),
+        status: String(row.status ?? "open"),
+      };
+    });
+
   return {
     workspace: { ...workspace, role: workspace.role, companyScope: companyAccess.unrestricted ? "all" : "restricted" },
     // O menu passa a refletir o plano contratado, não só a capability do papel.
@@ -790,6 +913,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       status: String(row.status),
       closedAt: row.closed_at ? String(row.closed_at) : null,
     })),
+    processFlows,
+    upcomingObligations,
   };
 }
 
