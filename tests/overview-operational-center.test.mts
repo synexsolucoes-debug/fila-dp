@@ -141,6 +141,21 @@ test("o indicador que tem onde ser resolvido é botão, não texto", () => {
   assert.equal((source.match(/className=\{?["`]overview-metric-action/gu) ?? []).length, 5);
 });
 
+test("o indicador de demandas em aberto mantém a âncora que o ensaio de navegador mira", async () => {
+  // Este teste existe por um defeito real: os indicadores viraram botão e o
+  // ensaio de navegador mirava `.overview-metrics article strong` com
+  // `.first()`. O seletor passou a casar com "Documentos pendentes" — 0 tanto
+  // no grupo quanto numa filial vazia —, e a conferência do recorte por empresa
+  // comparou 0 com 0 e reprovou a CI. A âncora tira o ensaio da dependência do
+  // tipo de elemento e da ordem dos cartões.
+  assert.match(source, /data-metric="demands-open"/u);
+  const ensaio = await readFile(new URL("../scripts/browser-check.mjs", import.meta.url), "utf8");
+  assert.match(ensaio, /\[data-metric="demands-open"\] strong/u);
+  // E o seletor frágil não pode voltar.
+  assert.doesNotMatch(ensaio, /locator\("\.overview-metrics/u);
+  assert.doesNotMatch(ensaio, /waitForSelector\("\.overview-metrics/u);
+});
+
 test("chegar pelo indicador zera os outros filtros do quadro", () => {
   // Chegar de um número e encontrar uma lista menor que ele, porque um filtro
   // antigo continuava ligado, faz o indicador parecer errado.

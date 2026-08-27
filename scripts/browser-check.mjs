@@ -484,14 +484,18 @@ if (password) {
 if (password) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${base}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".overview-metrics article strong", { timeout: 25000 }).catch(() => undefined);
+  // Mira o indicador pelo que ele e, nao pelo elemento que o desenha nem pela
+  // ordem em que aparece: o seletor por tipo de elemento mais `.first()` ja
+  // apontou para o cartao errado quando os indicadores viraram botao, e a
+  // conferencia do recorte passou a comparar 0 com 0.
+  await page.waitForSelector('[data-metric="demands-open"] strong', { timeout: 25000 }).catch(() => undefined);
   await page.waitForTimeout(1200);
 
   const chamadas = [];
   const escuta = (request) => { if (request.url().includes("action-center")) chamadas.push(request.url()); };
   page.on("request", escuta);
 
-  const abertasNoGrupo = Number((await page.locator(".overview-metrics article strong").first().innerText().catch(() => "0")).trim());
+  const abertasNoGrupo = Number((await page.locator('[data-metric="demands-open"] strong').innerText().catch(() => "0")).trim());
   const seletor = page.getByLabel("Selecionar empresa");
   const valores = await seletor.locator("option").evaluateAll((options) => options.map((option) => option.value));
   const vazia = valores.find((value) => value.startsWith("co-ui-2"));
@@ -501,7 +505,7 @@ if (password) {
   } else {
     await seletor.selectOption(vazia);
     await page.waitForTimeout(1800);
-    const abertasNaFilial = Number((await page.locator(".overview-metrics article strong").first().innerText().catch(() => "-1")).trim());
+    const abertasNaFilial = Number((await page.locator('[data-metric="demands-open"] strong').innerText().catch(() => "-1")).trim());
     record("escolher empresa recorta os indicadores da visão geral",
       abertasNoGrupo > 0 && abertasNaFilial === 0, `grupo ${abertasNoGrupo} → filial sem demanda ${abertasNaFilial}`);
 

@@ -2824,7 +2824,14 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         com barra e contagem. Repeti-lo como sexto cartão seria o mesmo número
         duas vezes na mesma dobra. */}
     <section className="overview-metrics" aria-label="Indicadores principais">
-      <button type="button" className="overview-metric-action" onClick={() => onFocus("board", "all")}>
+      {/* `data-metric` é o ponto de ancoragem do ensaio de navegador.
+          Ele mirava `.overview-metrics article strong` e `.first()`; quando os
+          indicadores viraram botão, `.first()` passou a devolver "Documentos
+          pendentes" — que é 0 tanto no grupo quanto numa filial vazia, então a
+          conferência do recorte por empresa comparava 0 com 0 e reprovava.
+          Ancorar no que o indicador *é* faz a próxima mudança de elemento ou de
+          ordem não quebrar o ensaio de novo. */}
+      <button type="button" className="overview-metric-action" data-metric="demands-open" onClick={() => onFocus("board", "all")}>
         <span>Demandas em aberto</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída no quadro", "concluídas no quadro")}</small>
       </button>
       <button type="button" className={`overview-metric-action${stats.attention ? " requires-attention" : ""}`} onClick={() => onFocus("board", "overdue")}>
