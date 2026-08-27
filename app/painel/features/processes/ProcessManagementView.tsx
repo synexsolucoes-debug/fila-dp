@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Archive, BookOpenCheck, Building2, CheckCircle2, Clock3, FilePenLine, FolderArchive, History,
-  LayoutTemplate, Pencil, Play, Plus, RotateCcw, Search, Settings2, ShieldCheck, SlidersHorizontal,
-  UserRound, Workflow, X,
+  Archive, BookOpenCheck, Building2, CheckCircle2, Clock3, FilePenLine, FileText, FolderArchive,
+  History, LayoutTemplate, Pencil, Play, Plus, RotateCcw, Search, Settings2, ShieldCheck,
+  SlidersHorizontal, UserRound, Workflow, X, Zap,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { processTemplates, templateShape } from "@/lib/process-templates";
@@ -12,7 +12,7 @@ import {
   AnimatedDrawer, AnimatedModal, AnimatedTabs, ConfirmDialog, EmptyState, ErrorBanner, FadeIn,
   MotionCard, PageSkeleton, StaggerContainer, StaggerItem, StatusPill, type AnimatedTab,
 } from "../shared";
-import { ProcessOperationPanel } from "../work";
+import { ProcessOperationPanel, type ProcessSheetSection } from "../work";
 import { ProcessModeler } from "./ProcessModeler";
 import { processRequest, processStatusLabel, processVersionLabel } from "./processes.api";
 import type {
@@ -566,6 +566,8 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
     <AnimatedModal open={detailTarget !== null} onClose={() => setDetailTarget(null)}
       label={`Ficha operacional de ${detailTarget?.name ?? "processo"}`} width={900} className={styles.processPortal}>
       {detailTarget && <ProcessDetail process={detailTarget} permissions={permissions} busy={busy}
+        versions={(catalog?.versions ?? []).filter((item) => item.processId === detailTarget.id)}
+        openVersion={async (id) => { setDetailTarget(null); await openVersion(id); }}
         close={() => setDetailTarget(null)}
         openModeler={() => { setDetailTarget(null); if (detailTarget.currentVersionId) void openVersion(detailTarget.currentVersionId); }}
         edit={() => { setTemplateKey(""); setDialog(detailTarget); setCorporate(detailTarget.isCorporate); setDetailTarget(null); }}
@@ -593,10 +595,41 @@ const criticalityLabel: Record<ProcessDefinition["criticality"], string> = { low
 const priorityLabel: Record<ProcessDefinition["defaultPriority"], string> = { low: "Baixa", normal: "Normal", high: "Alta", urgent: "Urgente" };
 const slaUnitLabel: Record<ProcessDefinition["globalSlaUnit"], string> = { minutes: "minutos", hours: "horas", days: "dias" };
 
-function ProcessDetail({ process, permissions, busy, close, openModeler, edit, createVersion, archive, restore }: {
+/**
+ * As seis abas que a §31 pede na ficha do processo.
+ *
+ * O eixo importa: a barra de seções da página navega o **catálogo** por ciclo de
+ * vida ("rascunhos", "publicados"), e a §31 pede navegar **um processo por
+ * dentro**. Eram dois eixos diferentes com a mesma aparência, e o segundo não
+ * existia: para saber quais documentos a Admissão cobra era preciso abrir o
+ * modelador e somar etapa por etapa de cabeça.
+ *
+ * Quatro das abas leem a mesma resposta da rota da ficha, e por isso saem do
+ * mesmo componente montado: quatro componentes fariam quatro pedidos iguais e
+ * abririam caminho para quatro leituras divergentes do mesmo processo.
+ */
+type DetailTab = "flow" | "description" | "documents" | "rules" | "automations" | "versions";
+
+const detailTabs: ReadonlyArray<AnimatedTab<DetailTab>> = [
+  { id: "flow", label: "Fluxo do processo", icon: Workflow },
+  { id: "description", label: "Descrição", icon: BookOpenCheck },
+  { id: "documents", label: "Documentos", icon: FileText },
+  { id: "rules", label: "Regras e validações", icon: ShieldCheck },
+  { id: "automations", label: "Automações", icon: Zap },
+  { id: "versions", label: "Histórico de versões", icon: History },
+];
+
+/** As abas que são recorte da ficha carregada — o resto sai do catálogo. */
+const sheetSections: Partial<Record<DetailTab, ProcessSheetSection>> = {
+  flow: "flow", documents: "documents", rules: "rules", automations: "automations",
+};
+
+function ProcessDetail({ process, permissions, busy, versions, openVersion, close, openModeler, edit, createVersion, archive, restore }: {
   process: ProcessDefinition;
   permissions: ProcessPermissions;
   busy: boolean;
+  versions: ProcessVersionSummary[];
+  openVersion: (id: string) => Promise<void>;
   close: () => void;
   openModeler: () => void;
   edit: () => void;
@@ -605,6 +638,8 @@ function ProcessDetail({ process, permissions, busy, close, openModeler, edit, c
   restore: () => void;
 }) {
   const archived = process.lifecycleStatus === "archived";
+  const [tab, setTab] = useState<DetailTab>("flow");
+  const sheetSection = sheetSections[tab];
   return <div className={styles.detailSheet}>
     <header className={styles.detailHeader}>
       <div>
@@ -619,6 +654,38 @@ function ProcessDetail({ process, permissions, busy, close, openModeler, edit, c
       <button type="button" className={styles.secondaryButton} onClick={close}>Fechar</button>
     </header>
 
+    {/* A mesma barra da página, e não uma segunda aparência de aba: duas
+        gramáticas de navegação na mesma tela fazem a pessoa aprender duas. */}
+    <div className={styles.sectionTabsRow}>
+      <AnimatedTabs tabs={detailTabs} active={tab} onChange={setTab} label="Seções do processo" />
+    </div>
+
+    {tab === "description" ? <ProcessDescription process={process} /> : null}
+
+    {tab === "versions" ? <HistoryTable versions={versions} onOpen={openVersion} /> : null}
+
+    {/* Fluxo, documentos, regras e automações são recortes da mesma ficha, e por
+        isso saem do mesmo componente: trocar de aba entre eles não recarrega. */}
+    {sheetSection ? <section>
+      <ProcessOperationPanel processId={process.id} section={sheetSection} />
+    </section> : null}
+
+    <footer className={styles.detailActions}>
+      <div>{archived ? "Processo arquivado — versões e histórico foram preservados." : "Escolha a próxima ação sem perder o contexto da ficha."}</div>
+      <span>
+        {permissions.manage && archived && <button type="button" className={styles.secondaryButton} onClick={restore} disabled={busy}><RotateCcw aria-hidden="true" />Restaurar</button>}
+        {permissions.manage && !archived && <button type="button" className={styles.secondaryButton} onClick={edit}><Pencil aria-hidden="true" />Editar cadastro</button>}
+        {permissions.manage && process.lifecycleStatus === "published" && <button type="button" className={styles.secondaryButton} onClick={createVersion} disabled={busy}><Plus aria-hidden="true" />Nova versão</button>}
+        {permissions.manage && !archived && <button type="button" className={styles.secondaryButton} onClick={archive}><Archive aria-hidden="true" />Arquivar</button>}
+        {process.currentVersionId && <button type="button" className={styles.primaryButton} onClick={openModeler}><Workflow aria-hidden="true" />Abrir modelador</button>}
+      </span>
+    </footer>
+  </div>;
+}
+
+/** O cadastro do processo (§22), que era a rolagem inteira e agora é uma aba. */
+function ProcessDescription({ process }: { process: ProcessDefinition }) {
+  return <>
     <section className={styles.detailPurpose}>
       <span>Propósito</span>
       <p>{process.objective || process.description || "Este processo ainda não possui objetivo documentado."}</p>
@@ -660,29 +727,11 @@ function ProcessDetail({ process, permissions, busy, close, openModeler, edit, c
       </section>
     </div>
 
-    {/* A leitura operacional do processo publicado (§39, §40, §43): etapas em
-        texto, quem responde por cada uma, o que ela exige, e o que o processo
-        produziu. O diagrama continua no modelador, para quem desenha. */}
-    {process.currentVersionId ? <section>
-      <ProcessOperationPanel processId={process.id} />
-    </section> : null}
-
     {(process.tags.length > 0 || process.notes) && <section className={styles.detailNotes}>
       {process.tags.length > 0 && <div><strong>Etiquetas</strong><span>{process.tags.map((tag) => <b key={tag}>{tag}</b>)}</span></div>}
       {process.notes && <div><strong>Observações</strong><p>{process.notes}</p></div>}
     </section>}
-
-    <footer className={styles.detailActions}>
-      <div>{archived ? "Processo arquivado — versões e histórico foram preservados." : "Escolha a próxima ação sem perder o contexto da ficha."}</div>
-      <span>
-        {permissions.manage && archived && <button type="button" className={styles.secondaryButton} onClick={restore} disabled={busy}><RotateCcw aria-hidden="true" />Restaurar</button>}
-        {permissions.manage && !archived && <button type="button" className={styles.secondaryButton} onClick={edit}><Pencil aria-hidden="true" />Editar cadastro</button>}
-        {permissions.manage && process.lifecycleStatus === "published" && <button type="button" className={styles.secondaryButton} onClick={createVersion} disabled={busy}><Plus aria-hidden="true" />Nova versão</button>}
-        {permissions.manage && !archived && <button type="button" className={styles.secondaryButton} onClick={archive}><Archive aria-hidden="true" />Arquivar</button>}
-        {process.currentVersionId && <button type="button" className={styles.primaryButton} onClick={openModeler}><Workflow aria-hidden="true" />Abrir modelador</button>}
-      </span>
-    </footer>
-  </div>;
+  </>;
 }
 
 function HistoryTable({ versions, onOpen }: { versions: ProcessVersionSummary[]; onOpen: (id: string) => Promise<void> }) {

@@ -5,16 +5,28 @@ import { ApiError } from "@/lib/api-errors";
 import { requireProcessCompanyAccess } from "@/lib/process-access";
 import { loadPublishedVersion } from "@/lib/process-instances";
 import { durationLabel, summarizeSteps, type ProcessUsage } from "@/lib/process-usage";
+import {
+  summarizeAutomations, summarizeDocuments, summarizeRules, type StepAutomationRow,
+} from "@/lib/process-sheet";
 import { stepLabel } from "@/lib/bpmn-graph";
 
 /**
- * A ficha operacional de um processo publicado (§39, §40, §43, §55).
+ * A ficha do processo, com as seis abas da §31 (§39, §40, §43, §55).
  *
- * Responde três coisas para quem opera: **como é** o processo em texto, **quem
- * responde** por cada etapa, e **o que ele produziu**. O diagrama continua
- * disponível para quem modela; esta rota existe porque exigir a leitura de um
- * BPMN para saber quem trata a etapa seguinte é transferir ao operador um
- * trabalho que o produto deveria fazer.
+ * Responde o que quem opera precisa: **como é** o processo em texto, **quem
+ * responde** por cada etapa, **o que ele exige**, **o que ele dispara sozinho**
+ * e **o que ele produziu**. O diagrama continua disponível para quem modela;
+ * esta rota existe porque exigir a leitura de um BPMN para saber quem trata a
+ * etapa seguinte é transferir ao operador um trabalho que o produto deveria
+ * fazer.
+ *
+ * As três abas novas — documentos, regras, automações — leem a configuração que
+ * já estava gravada por etapa. Nenhuma tabela nova: o que faltava era onde ler,
+ * não o que gravar.
+ *
+ * As outras duas abas da §31 — descrição e histórico de versões — continuam
+ * vindo do catálogo, que já as carrega: pedi-las de novo aqui criaria uma
+ * segunda fonte para o mesmo cadastro.
  *
  * O escopo por empresa é o mesmo do resto do módulo de processos: um processo
  * restrito a empresas fora do alcance da pessoa simplesmente não abre.
@@ -23,6 +35,15 @@ import { stepLabel } from "@/lib/bpmn-graph";
 type RouteContext = { params: Promise<{ id: string }> };
 
 const text = (value: unknown) => (value == null ? "" : String(value));
+const flag = (value: unknown) => Number(value) === 1;
+const stringList = (value: unknown): string[] => {
+  const raw = typeof value === "string" ? safeParse(value) : value;
+  return Array.isArray(raw) ? raw.map(text).filter(Boolean) : [];
+};
+
+function safeParse(value: string): unknown {
+  try { return JSON.parse(value); } catch { return []; }
+}
 
 export async function GET(request: Request, { params }: RouteContext) {
   const auth = await getApiUser();
@@ -48,13 +69,13 @@ export async function GET(request: Request, { params }: RouteContext) {
         process: { id, name: text(definition.name), code: text(definition.code) },
         published: false,
         detail: "Este processo ainda não tem versão publicada. Publique uma versão para que ele possa gerar demandas.",
-        steps: [], usage: null,
+        steps: [], usage: null, documents: [], rules: [], automations: [],
       }, { headers: { "Cache-Control": "no-store" } });
     }
 
     const version = await loadPublishedVersion(d1, workspace.id, versionId);
 
-    const [members, areas, totals, retention] = await Promise.all([
+    const [members, areas, totals, retention, automationRows] = await Promise.all([
       d1.prepare(`SELECT m.user_id, u.name FROM fdp_workspace_members m
           JOIN fdp_users u ON u.id = m.user_id WHERE m.workspace_id = ?`)
         .bind(workspace.id).all<{ user_id: string; name: string }>(),
@@ -82,12 +103,36 @@ export async function GET(request: Request, { params }: RouteContext) {
           AND c.closed_at IS NULL AND COALESCE(c.current_step_id, '') <> ''
         GROUP BY c.current_step_id ORDER BY 2 DESC LIMIT 5`)
         .bind(workspace.id, id).all<Record<string, unknown>>(),
+      /* As colunas de etapa que o motor não carrega, porque não decide com elas:
+         a demanda que a etapa abre (§27) e o documento opcional (§26). Ler daqui
+         evita engordar `ProcessStepConfig` com campo que a execução não usa. */
+      d1.prepare(`SELECT bpmn_element_id, create_demand, demand_type, demand_priority,
+            demand_sla_value, demand_sla_unit, requester_department_id, responsible_department_id,
+            optional_documents_json
+          FROM fdp_process_step_configs WHERE workspace_id = ? AND process_version_id = ?`)
+        .bind(workspace.id, versionId).all<Record<string, unknown>>(),
     ]);
 
-    const steps = summarizeSteps(version, {
+    const names = {
       users: new Map(members.results.map((row) => [row.user_id, row.name])),
       areas: new Map(areas.results.map((row) => [row.id, row.name])),
-    });
+    };
+    const steps = summarizeSteps(version, names);
+
+    const automation = new Map<string, StepAutomationRow>(automationRows.results.map((row) => [
+      text(row.bpmn_element_id),
+      {
+        bpmnElementId: text(row.bpmn_element_id),
+        createDemand: flag(row.create_demand),
+        demandType: text(row.demand_type),
+        demandPriority: text(row.demand_priority) || "normal",
+        demandSlaValue: Number(row.demand_sla_value ?? 0),
+        demandSlaUnit: text(row.demand_sla_unit) || "hours",
+        requesterDepartmentId: text(row.requester_department_id),
+        responsibleDepartmentId: text(row.responsible_department_id),
+        optionalDocuments: stringList(row.optional_documents_json),
+      },
+    ]));
 
     const averageHours = totals?.average_hours == null ? null : Number(totals.average_hours);
     const usage: ProcessUsage = {
@@ -121,6 +166,12 @@ export async function GET(request: Request, { params }: RouteContext) {
         name: version.definitionName,
       },
       steps,
+      /* As três abas da §31 que não existiam: elas leem a configuração já
+         gravada por etapa, sem avaliar nada — quem autoriza avanço continua
+         sendo `process-instances`, chamado do zero a cada pedido. */
+      documents: summarizeDocuments(version, automation),
+      rules: summarizeRules(version, names),
+      automations: summarizeAutomations(version, automation, names),
       usage,
       usageLabels: {
         averageDuration: durationLabel(averageHours),
