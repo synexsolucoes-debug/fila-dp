@@ -44,8 +44,8 @@ import {
 import { addBusinessDays } from "./fila-dp-relations.ts";
 import { cleanText } from "./registrations.ts";
 import {
-  describeCondition, parseTransitionConditions, unmetConditions,
-  type ConditionFacts, type TransitionConditionMap,
+  describeCondition, parseConditionList, parseTransitionConditions, unmetConditions,
+  type ConditionFacts, type TransitionCondition, type TransitionConditionMap,
 } from "./process-conditions.ts";
 
 type Database = ReturnType<typeof getD1>;
@@ -77,6 +77,18 @@ export type ProcessStepConfig = {
   demandPriority: string;
   /** Condições por seta que sai desta etapa (§25). Vazio = seta incondicional. */
   transitions: TransitionConditionMap;
+  /** Condições para **entrar** nesta etapa (§23). Medidas ao chegar. */
+  entryRules: TransitionCondition[];
+  /** Condições para **sair** desta etapa (§23). Medidas ao tentar avançar. */
+  exitRules: TransitionCondition[];
+  /**
+   * Canais de integração que precisam estar sãos para a etapa avançar (§25).
+   *
+   * Uma etapa que depende do ERP não deveria ser marcada como concluída
+   * enquanto a sincronização está quebrada: o trabalho não chegou do outro
+   * lado, e dar por feito cria divergência que só aparece na conferência.
+   */
+  blockingIntegrations: string[];
 };
 
 export type PublishedProcessVersion = {
@@ -125,6 +137,9 @@ function stepConfigOf(row: Row): ProcessStepConfig {
     approverDepartmentId: text(row.approver_department_id),
     demandPriority: text(row.demand_priority) || "normal",
     transitions: parseTransitionConditions(settings.transitions),
+    entryRules: parseConditionList(settings.entryRules),
+    exitRules: parseConditionList(settings.exitRules),
+    blockingIntegrations: list(settings.blockingIntegrations).map((item) => item.toLowerCase()),
   };
 }
 
@@ -219,6 +234,13 @@ export type ProcessInstanceRow = {
    * em silêncio.
    */
   facts: ConditionFacts;
+  /**
+   * Canais de integração em erro no workspace, em minúsculas (§25).
+   *
+   * Vem junto pelo mesmo motivo dos fatos: uma regra que depende de um
+   * argumento que o chamador pode esquecer é uma regra que às vezes não vale.
+   */
+  failingIntegrations: ReadonlySet<string>;
 };
 
 export async function loadProcessInstance(d1: Database, workspaceId: string, cardId: string): Promise<ProcessInstanceRow> {
@@ -237,6 +259,13 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
   /* Os valores personalizados da demanda, para as condições poderem falar
      sobre eles. Uma consulta a mais só quando a demanda tem processo — que é
      exatamente quando alguém pode querer avançar de etapa. */
+  /* Integrações com erro agora. Uma consulta pequena e indexada por workspace,
+     no mesmo lote lógico dos fatos — e só para demanda com processo, que é
+     quando alguém pode querer avançar. */
+  const failing = await d1.prepare(
+    `SELECT channel FROM fdp_integrations WHERE workspace_id = ? AND status = 'error'`,
+  ).bind(workspaceId).all<Row>();
+
   const customValues = await d1.prepare(
     `SELECT cf.field_key, v.value_text
        FROM fdp_custom_field_values v
@@ -273,6 +302,7 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
         text(item.value_text),
       ])),
     },
+    failingIntegrations: new Set(failing.results.map((row2) => text(row2.channel).toLowerCase())),
   };
 }
 
@@ -388,6 +418,8 @@ export function evaluateTransition(input: {
    * mantém o comportamento anterior intacto — que é o contrato desta adição.
    */
   facts?: ConditionFacts;
+  /** Canais de integração em erro agora. Omitido, usa o que a instância trouxe. */
+  failingIntegrations?: ReadonlySet<string>;
 }): TransitionEvaluation {
   const { version, instance, actor } = input;
   const targetStepId = cleanText(input.targetStepId, 160);
@@ -419,6 +451,41 @@ export function evaluateTransition(input: {
   }
 
   const currentConfig = version.steps.get(instance.currentStepId) ?? null;
+  const facts = input.facts ?? instance.facts;
+
+  /* Regra de saída da etapa atual e regra de entrada da etapa de destino (§23).
+     São a mesma máquina das condições de seta, apontada para outro lugar: a de
+     saída pergunta "esta etapa já pode ser deixada", a de entrada pergunta
+     "aquela etapa já pode receber". Separá-las importa porque o motivo é
+     diferente, e uma pessoa barrada precisa saber qual das duas a barrou. */
+  for (const unmet of unmetConditions(currentConfig?.exitRules, facts)) {
+    blockers.push({
+      code: "PROCESS_STEP_EXIT_RULE_UNMET",
+      message: `Esta etapa só é concluída quando: ${describeCondition(unmet)}.`,
+    });
+  }
+  if (targetStepId) {
+    const targetConfig = version.steps.get(targetStepId) ?? null;
+    for (const unmet of unmetConditions(targetConfig?.entryRules, facts)) {
+      blockers.push({
+        code: "PROCESS_STEP_ENTRY_RULE_UNMET",
+        message: `A etapa "${stepLabel(version.graph, targetStepId)}" só recebe a demanda quando: ${describeCondition(unmet)}.`,
+      });
+    }
+  }
+
+  /* Integração quebrada trava a etapa que depende dela (§25).
+     Uma etapa que espera o ERP não pode ser dada por concluída enquanto a
+     sincronização está caída: o trabalho não chegou do outro lado, e concluir
+     cria divergência que só aparece na conferência — quando já custou caro. */
+  const failing = input.failingIntegrations ?? instance.failingIntegrations;
+  for (const channel of currentConfig?.blockingIntegrations ?? []) {
+    if (!failing.has(channel)) continue;
+    blockers.push({
+      code: "PROCESS_STEP_INTEGRATION_FAILING",
+      message: `A integração ${channel} está com erro, e esta etapa depende dela para concluir.`,
+    });
+  }
 
   blockers.push(...evaluateStepRequirements({
     config: currentConfig,
@@ -440,7 +507,7 @@ export function evaluateTransition(input: {
   if (targetStepId && currentConfig && Object.keys(currentConfig.transitions).length > 0) {
     const paths = outgoingFlows(version.graph, instance.currentStepId)
       .filter((flow) => flow.target === targetStepId)
-      .map((flow) => unmetConditions(currentConfig.transitions[flow.id], input.facts ?? instance.facts));
+      .map((flow) => unmetConditions(currentConfig.transitions[flow.id], facts));
 
     if (paths.length > 0 && paths.every((unmet) => unmet.length > 0)) {
       const closest = paths.reduce((best, unmet) => (unmet.length < best.length ? unmet : best));
@@ -468,6 +535,7 @@ export function availableTransitions(input: {
   pendingChecklist: number;
   attachmentCount: number;
   facts?: ConditionFacts;
+  failingIntegrations?: ReadonlySet<string>;
 }) {
   return outgoingFlows(input.version.graph, input.instance.currentStepId).map((flow) => {
     const evaluation = evaluateTransition({ ...input, targetStepId: flow.target });

@@ -134,6 +134,17 @@ export function evaluateCondition(condition: TransitionCondition, facts: Conditi
   }
 }
 
+/**
+ * Lê uma lista solta de condições (regra de entrada ou de saída de etapa, §23).
+ *
+ * Mesma tolerância do mapa por seta: o que não se entende é descartado, e a
+ * regra some em vez de virar "sempre verdadeira". Uma regra corrompida que
+ * liberasse a passagem seria pior que regra nenhuma.
+ */
+export function parseConditionList(raw: unknown): TransitionCondition[] {
+  return parseTransitionConditions({ list: raw }).list ?? [];
+}
+
 /** As condições que **não** bateram — é o que a tela precisa para dizer o porquê. */
 export function unmetConditions(
   conditions: readonly TransitionCondition[] | undefined,

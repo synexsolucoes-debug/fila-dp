@@ -736,3 +736,53 @@
   .toast { animation: none; }
   .processTable tbody tr { transition: none; }
 }
+
+/* ── Regras e condições da etapa (§23, §25) ───────────────────────────────── */
+
+/* A dica do fieldset diz o que a regra faz *antes* de alguém escrevê-la. Sem
+   ela, "Regras da etapa" com três linhas vazias não ensina nada a quem abriu o
+   painel pela primeira vez. */
+.fieldsetHint { margin: 0 0 2px; color: var(--soft); font-size: 11px; line-height: 1.45; }
+
+.conditionGroupLabel { color: var(--p-text); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+
+.conditionRows { display: grid; gap: 6px; }
+.conditionEmpty { margin: 0; color: var(--muted); font-size: 11px; font-style: italic; }
+
+/* Campo → operador → valor → remover. A linha lê como uma frase, e é por isso
+   que o operador fica no meio e não numa coluna separada. */
+.conditionRow { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 26px; gap: 5px; align-items: center; }
+/* Operador sem valor deixa a linha com três colunas; o `span 2` no operador
+   ocupa o vão em vez de abrir um buraco onde o campo estava. */
+.conditionRow > select:last-of-type:nth-last-child(2) { grid-column: 2 / 4; }
+.conditionRow input, .conditionRow select { min-width: 0; font-size: 12px; }
+
+.conditionRemove {
+  width: 26px; height: 26px; padding: 0; display: grid; place-items: center;
+  border: 1px solid var(--b); border-radius: var(--ui-radius-sm);
+  background: transparent; color: var(--soft); font-size: 15px; line-height: 1; cursor: pointer;
+  transition: color var(--motion-hover) var(--ease-standard), border-color var(--motion-hover) var(--ease-standard);
+}
+.conditionRemove:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+.conditionRemove:disabled { opacity: .45; cursor: not-allowed; }
+
+.conditionAdd {
+  justify-self: start; padding: 4px 10px;
+  border: 1px dashed var(--b-strong); border-radius: var(--ui-radius-sm);
+  background: transparent; color: var(--p-text); font-size: 11px; font-weight: 700; cursor: pointer;
+  transition: background-color var(--motion-hover) var(--ease-standard), border-color var(--motion-hover) var(--ease-standard);
+}
+.conditionAdd:hover:not(:disabled) { background: var(--m); border-color: var(--p); }
+.conditionAdd:disabled { opacity: .45; cursor: not-allowed; }
+/* Retorno instantâneo ao toque: o botão precisa parecer que ouviu o clique. */
+.conditionAdd:active:not(:disabled), .conditionRemove:active:not(:disabled) { transform: scale(.97); }
+
+.conditionFlow { display: grid; gap: 6px; padding: 9px 0; border-top: 1px solid var(--b); }
+.conditionFlow:first-of-type { border-top: 0; padding-top: 2px; }
+.conditionFlowHead { color: var(--ui-text); font-size: 11.5px; font-weight: 700; }
+.conditionFlowHead em { color: var(--soft); font-style: normal; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .conditionAdd, .conditionRemove { transition: none; }
+  .conditionAdd:active:not(:disabled), .conditionRemove:active:not(:disabled) { transform: none; }
+}
