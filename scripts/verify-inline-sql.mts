@@ -39,7 +39,7 @@ async function main() {
   const failures: Failure[] = [];
   let prepared = 0;
   let approximated = 0;
-  let skipped = 0;
+  const naoVerificadas: typeof queries = [];
 
   /**
    * Substituições para o trecho interpolado.
@@ -85,7 +85,7 @@ async function main() {
           if (String((error as { code?: string }).code ?? "") === INDETERMINATE_PARAMETER) { ok = true; break; }
         }
       }
-      if (ok) approximated += 1; else skipped += 1;
+      if (ok) approximated += 1; else naoVerificadas.push(query);
       continue;
     }
     const statement = toPostgresParameters(query.sql);
@@ -116,7 +116,7 @@ async function main() {
   for (const failure of failures) {
     console.error(`\n${failure.file}:${failure.line}  [${failure.code}] ${failure.message}\n  ${failure.sql}`);
   }
-  console.log(`\nConsultas preparadas: ${prepared} | interpoladas verificadas por aproximação: ${approximated} | não verificadas: ${skipped} | falhas: ${failures.length}`);
+  console.log(`\nConsultas preparadas: ${prepared} | interpoladas verificadas por aproximação: ${approximated} | não verificadas: ${naoVerificadas.length} | falhas: ${failures.length}`);
 
   /**
    * Teto do que fica sem verificação.
@@ -129,11 +129,23 @@ async function main() {
    * Com o teto, quebrar uma consulta que hoje é verificável reprova o build.
    * Tornar mais uma verificável é livre — e obriga a baixar o número aqui,
    * senão o teste de folga acusa.
+   *
+   * Subiu de 24 para 25 quando o coletor passou a enxergar `.prepare(` escrito
+   * em duas linhas: 51 consultas que a ferramenta simplesmente não via entraram
+   * na conferência — todas passaram — e uma delas interpola o **nome da
+   * tabela**, forma que nenhuma substituição aproxima. O número maior aqui
+   * acompanha uma cobertura maior, não uma cobertura menor: as 25 restantes são
+   * todas `FROM ${...}`, e estão listadas quando o teto estoura.
    */
-  const MAXIMO_NAO_VERIFICADAS = 24;
-  if (skipped > MAXIMO_NAO_VERIFICADAS) {
-    console.error(`\nRegressão de cobertura: ${skipped} consultas sem verificação, o teto é ${MAXIMO_NAO_VERIFICADAS}.`);
+  const MAXIMO_NAO_VERIFICADAS = 25;
+  if (naoVerificadas.length > MAXIMO_NAO_VERIFICADAS) {
+    console.error(`\nRegressão de cobertura: ${naoVerificadas.length} consultas sem verificação, o teto é ${MAXIMO_NAO_VERIFICADAS}.`);
     console.error("Uma consulta que era verificável deixou de ser — provavelmente ela quebrou.");
+    // Dizer *quais*: sem a lista, quem recebe a reprovação precisa reencontrar
+    // à mão a consulta que a ferramenta já sabe nomear.
+    for (const query of naoVerificadas) {
+      console.error(`  ${query.file}:${query.line}  ${query.sql.replace(/\s+/gu, " ").slice(0, 100)}`);
+    }
     process.exitCode = 1;
   }
   if (failures.length) process.exitCode = 1;

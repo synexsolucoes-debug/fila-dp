@@ -47,7 +47,25 @@ const EXCECOES: Record<string, string> = {
     "console global: a lista de clientes conta membros por grupo",
   "app/api/platform/workspaces/[id]/route.ts":
     "console global: administrar o contrato de um cliente",
+  "lib/workspace-access.ts":
+    "família 1, em módulo: é aqui que mora a pergunta 'a que grupos esta pessoa "
+    + "pertence?', que o login faz antes de existir tenant — o recorte é por user_id",
 };
+
+/**
+ * Onde uma exceção pode morar.
+ *
+ * As duas famílias continuam as mesmas; o que mudou é que uma delas também tem
+ * implementação em módulo, e não só em rota. `lib/workspace-access.ts` é a
+ * pergunta pré-tenant do login escrita uma vez em vez de copiada em cada rota —
+ * ela ficou fora deste teste até o coletor de SQL passar a enxergar `.prepare(`
+ * escrito em duas linhas, e não porque alguém tivesse decidido isentá-la.
+ *
+ * É um arquivo nomeado, e não `lib/` inteiro: permitir o diretório transformaria
+ * a barreira em decoração no dia em que alguém puser uma consulta de negócio
+ * ali.
+ */
+const MODULOS_PERMITIDOS = new Set(["lib/workspace-access.ts"]);
 
 const queries = collectQueries(process.cwd())
   .map((query) => ({ ...query, file: query.file.replaceAll("\\", "/") }))
@@ -90,7 +108,8 @@ test("a lista de exceções não guarda entrada que deixou de ser necessária", 
 test("nenhuma exceção nova entra fora da autenticação e do console da plataforma", () => {
   for (const file of Object.keys(EXCECOES)) {
     assert.ok(
-      file.startsWith("app/api/auth/") || file.startsWith("app/api/platform/"),
+      file.startsWith("app/api/auth/") || file.startsWith("app/api/platform/")
+        || MODULOS_PERMITIDOS.has(file),
       `exceção fora das duas famílias permitidas: ${file}`,
     );
   }

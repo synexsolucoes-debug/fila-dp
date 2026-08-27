@@ -62,7 +62,25 @@ test("o verificador de SQL confere as consultas montadas com interpolação", as
   // o teto o processo sai com código 1; sem ele, saía com 0.
   assert.match(script, /const MAXIMO_NAO_VERIFICADAS = \d+;/u);
   assert.match(script, /Regressão de cobertura/u);
-  assert.match(script, /if \(skipped > MAXIMO_NAO_VERIFICADAS\)/u);
+  assert.match(script, /if \(naoVerificadas\.length > MAXIMO_NAO_VERIFICADAS\)/u);
+  // E a reprovação diz *quais* consultas ficaram de fora: sem a lista, quem a
+  // recebe precisa reencontrar à mão o que a ferramenta já sabe nomear.
+  assert.match(script, /for \(const query of naoVerificadas\)/u);
+
+  /* O coletor precisa enxergar `.prepare(` escrito em duas linhas.
+     Enquanto exigia a crase colada, a chamada quebrada em linhas não era
+     coletada — não reprovava nem entrava em "não verificada": não existia para
+     a ferramenta. Eram 6 de 12 só em `lib/process-instances.ts`, e 51 no
+     repositório. É o mesmo defeito que este verificador persegue: dizer OK
+     sobre o que não se olhou. */
+  const collector = await readFile(new URL("../scripts/inline-sql.mjs", import.meta.url), "utf8");
+  assert.match(collector, /while \(start < source\.length && \(source\[start\] === " "/u,
+    "o coletor voltou a exigir o literal colado em .prepare(");
+  const { extractQueries } = await import("../scripts/inline-sql.mjs");
+  const engine = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
+  const found = extractQueries("lib/process-instances.ts", engine);
+  assert.ok(found.some((query: { sql: string }) => /fdp_card_attachments/u.test(query.sql)),
+    "a consulta dos anexos precisa ser conferida contra o schema real");
 });
 
 test("o console da plataforma não pergunta a mesma coisa a cada cliente (§54)", async () => {
