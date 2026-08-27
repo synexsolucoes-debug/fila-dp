@@ -84,6 +84,7 @@ const stepConfig = (overrides: Partial<ProcessStepConfig> = {}): ProcessStepConf
   requesterDepartmentId: "", responsibleDepartmentId: "",
   checklist: [], requiredDocuments: [], evidenceRequired: false,
   requiresApproval: false, approverUserId: "", approverDepartmentId: "", demandPriority: "normal",
+  transitions: {},
   ...overrides,
 });
 
@@ -103,7 +104,7 @@ const instance = (overrides: Partial<ProcessInstanceRow> = {}): ProcessInstanceR
   id: "card-1", workspaceId: "w1", boardId: "b1", companyId: "c1", archived: false,
   createdBy: "solicitante@empresa.com",
   processDefinitionId: "def-1", processVersionId: "ver-4", processVersionNumber: "4.0",
-  currentStepId: "Task_documentos", version: 3, ...overrides,
+  currentStepId: "Task_documentos", version: 3, facts: {}, ...overrides,
 });
 
 const clean = { pendingChecklist: 0, attachmentCount: 0 };
@@ -217,4 +218,147 @@ test("etapa sem configuração não inventa requisito", () => {
   assert.deepEqual(evaluateStepRequirements({
     config: null, actor: actor(), createdByEmail: "x@y.com", pendingChecklist: 5, attachmentCount: 0,
   }), []);
+});
+
+/* -------------------------------------------------------------------------- *
+ * §25: condição de transição
+ * -------------------------------------------------------------------------- */
+
+/* O desenho de teste tem um gateway com duas saídas — `Flow_3` para o registro
+   e `Flow_4` para a pendência. É exatamente a forma de um desvio: mesmo ponto
+   de origem, dois caminhos, e um critério que decide qual vale. */
+
+const gatewayVersion = (transitions: Record<string, unknown>) => version({
+  Gateway_1: stepConfig({ id: "cfg-gw", bpmnElementId: "Gateway_1", stepType: "GATEWAY", name: "Documentos completos?", ...(transitions as object) }),
+});
+
+const atGateway = (facts: Record<string, string> = {}) =>
+  instance({ currentStepId: "Gateway_1", facts });
+
+test("seta sem condição continua incondicional", () => {
+  // O contrato desta adição: processo que não usa condição não muda de
+  // comportamento em nada.
+  const evaluation = evaluateTransition({
+    version: gatewayVersion({ transitions: {} }),
+    instance: atGateway(),
+    targetStepId: "Task_registro",
+    actor: actor(),
+    pendingChecklist: 0,
+    attachmentCount: 0,
+  });
+  assert.equal(evaluation.allowed, true, evaluation.blockers.map((item) => item.message).join(" | "));
+});
+
+test("a condição da seta barra o caminho e diz qual é o critério", () => {
+  const evaluation = evaluateTransition({
+    version: gatewayVersion({
+      transitions: { Flow_3: [{ field: "custom:documentos", operator: "equals", value: "completos" }] },
+    }),
+    instance: atGateway({ "custom:documentos": "pendentes" }),
+    targetStepId: "Task_registro",
+    actor: actor(),
+    pendingChecklist: 0,
+    attachmentCount: 0,
+  });
+  assert.equal(evaluation.allowed, false);
+  const blocker = evaluation.blockers.find((item) => item.code === "PROCESS_TRANSITION_CONDITION_UNMET");
+  assert.ok(blocker, "o bloqueio precisa ter código próprio");
+  assert.match(blocker.message, /documentos é completos/u);
+});
+
+test("o outro caminho do mesmo gateway continua aberto", () => {
+  // Um desvio que fechasse os dois lados prenderia a demanda no gateway.
+  const evaluation = evaluateTransition({
+    version: gatewayVersion({
+      transitions: { Flow_3: [{ field: "custom:documentos", operator: "equals", value: "completos" }] },
+    }),
+    instance: atGateway({ "custom:documentos": "pendentes" }),
+    targetStepId: "Task_pendencia",
+    actor: actor(),
+    pendingChecklist: 0,
+    attachmentCount: 0,
+  });
+  assert.equal(evaluation.allowed, true, evaluation.blockers.map((item) => item.message).join(" | "));
+});
+
+test("condição satisfeita libera a passagem", () => {
+  const evaluation = evaluateTransition({
+    version: gatewayVersion({
+      transitions: { Flow_3: [{ field: "custom:documentos", operator: "equals", value: "completos" }] },
+    }),
+    instance: atGateway({ "custom:documentos": "completos" }),
+    targetStepId: "Task_registro",
+    actor: actor(),
+    pendingChecklist: 0,
+    attachmentCount: 0,
+  });
+  assert.equal(evaluation.allowed, true, evaluation.blockers.map((item) => item.message).join(" | "));
+});
+
+test("os fatos vêm da própria demanda quando ninguém os passa", () => {
+  // Uma condição que não é avaliada porque um chamador esqueceu um argumento
+  // libera a passagem em silêncio — o pior modo de falhar que esta
+  // funcionalidade poderia ter.
+  const evaluation = evaluateTransition({
+    version: gatewayVersion({
+      transitions: { Flow_3: [{ field: "priority", operator: "equals", value: "urgent" }] },
+    }),
+    instance: atGateway({ priority: "normal" }),
+    targetStepId: "Task_registro",
+    actor: actor(),
+    pendingChecklist: 0,
+    attachmentCount: 0,
+  });
+  assert.equal(evaluation.allowed, false);
+  assert.ok(evaluation.blockers.some((item) => item.code === "PROCESS_TRANSITION_CONDITION_UNMET"));
+});
+
+test("todas as condições da seta precisam bater, não apenas uma", () => {
+  const evaluation = evaluateTransition({
+    version: gatewayVersion({
+      transitions: {
+        Flow_3: [
+          { field: "priority", operator: "equals", value: "urgent" },
+          { field: "competence", operator: "is_not_empty", value: "" },
+        ],
+      },
+    }),
+    instance: atGateway({ priority: "urgent", competence: "" }),
+    targetStepId: "Task_registro",
+    actor: actor(),
+    pendingChecklist: 0,
+    attachmentCount: 0,
+  });
+  assert.equal(evaluation.allowed, false);
+  const blocker = evaluation.blockers.find((item) => item.code === "PROCESS_TRANSITION_CONDITION_UNMET");
+  assert.match(blocker!.message, /Competência está preenchido/u);
+  // E cita só o que faltou, não o que já batia.
+  assert.doesNotMatch(blocker!.message, /Prioridade/u);
+});
+
+test("a condição não substitui os requisitos da etapa, soma-se a eles", () => {
+  // Checklist pendente e condição não atendida são dois motivos, e a pessoa
+  // precisa saber dos dois — resolver um e continuar barrada sem explicação é
+  // o que faz alguém achar que o sistema está travado.
+  const evaluation = evaluateTransition({
+    version: version({
+      Gateway_1: stepConfig({
+        id: "cfg-gw", bpmnElementId: "Gateway_1", stepType: "GATEWAY", name: "Documentos completos?",
+        evidenceRequired: true,
+        transitions: { Flow_3: [{ field: "priority", operator: "equals", value: "urgent" }] },
+      }),
+    }),
+    instance: atGateway({ priority: "normal" }),
+    targetStepId: "Task_registro",
+    actor: actor(),
+    pendingChecklist: 2,
+    attachmentCount: 0,
+  });
+  assert.equal(evaluation.allowed, false);
+  const codes = evaluation.blockers.map((item) => item.code).sort();
+  assert.deepEqual(codes, [
+    "PROCESS_STEP_CHECKLIST_PENDING",
+    "PROCESS_STEP_EVIDENCE_REQUIRED",
+    "PROCESS_TRANSITION_CONDITION_UNMET",
+  ]);
 });
