@@ -505,6 +505,20 @@
       "when": 1787900000012,
       "tag": "0069_tangerino_legacy_attachment_authorization",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1787900000013,
+      "tag": "0070_card_reference_number",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1787900000014,
+      "tag": "0071_card_cancellation",
+      "breakpoints": true
     }
   ]
 }

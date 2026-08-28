@@ -62,7 +62,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
-import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import { HistoryView } from "./features/history/HistoryView";
+import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
@@ -87,11 +88,11 @@ import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 
 /** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
-type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations";
+type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations" | "history";
 
 type CardTab = "details" | "process" | "checklist" | "attachments" | "activity";
 type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
@@ -387,6 +388,13 @@ const viewCatalog: Record<View, ViewEntry> = {
     eyebrow: "RELATÓRIOS", title: "Relatórios da operação",
     description: "Monitore SLAs, volume, produtividade e regras ativas do workspace.",
   },
+  history: {
+    label: "Histórico", icon: History,
+    eyebrow: "HISTÓRICO DA OPERAÇÃO",
+    title: "Tudo o que aconteceu",
+    description: "A trilha completa de movimentações: quem fez, o quê, em qual demanda e quando.",
+    ownHeader: true,
+  },
   integrations: {
     label: "Estado das integrações", icon: Cable, module: "integrations", hiddenFor: ["guest"],
     eyebrow: "INFRAESTRUTURA OPERACIONAL", title: "Estado das integrações",
@@ -564,6 +572,75 @@ function formatSyncStatus(updatedAt: Date | null, status: RealtimeStatus) {
   if (!updatedAt) return "Atualizado automaticamente";
   const minutes = Math.max(0, Math.floor((Date.now() - updatedAt.getTime()) / 60000));
   return minutes < 1 ? "Atualizado agora" : `Atualizado há ${minutes} min`;
+}
+
+/**
+ * O identificador que uma pessoa dita ao telefone: `#DM-2471`.
+ *
+ * O prefixo mora aqui, na apresentação, e não no banco: guardar "DM-2471" como
+ * texto impediria ordenar por número e transformaria qualquer mudança de
+ * prefixo numa migration de dados.
+ *
+ * Demanda de banco anterior à 0070 não tem número. Aí a resposta é vazia e a
+ * tela não mostra nada — melhor a ausência do que um `#DM-0` que parece uma
+ * demanda de verdade.
+ */
+function referenceLabel(card: Card) {
+  return card.referenceNumber == null ? "" : `#DM-${card.referenceNumber}`;
+}
+
+/**
+ * Processo, etapa e progresso no cartão do quadro.
+ *
+ * O `tasksTotal` é o que a **versão do processo prevê**, somando as tarefas de
+ * todas as etapas. Como a versão é imutável, o denominador é fixo desde a
+ * criação: "7 de 18" continua sendo de 18 enquanto a demanda anda, que é o que
+ * permite ler o progresso como avanço no processo, e não como uma fração cujo
+ * fundo se mexe.
+ *
+ * Sem tarefa nenhuma o percentual não aparece — 0% num cartão recém-criado
+ * parece atraso, quando é apenas ausência de item.
+ */
+function CardProcessLine({ flow }: { flow: ProcessFlowSummary }) {
+  const pct = flow.tasksTotal > 0 ? Math.round((flow.tasksDone / flow.tasksTotal) * 100) : null;
+  return <>
+    <span className="dashboard-card-step" title={`Processo: ${flow.definitionName} • versão ${flow.versionNumber}`}>
+      <Workflow aria-hidden="true" />{flow.stepLabel}
+    </span>
+    {pct !== null && <span className="dashboard-card-progress" title="Tarefas concluídas nas etapas já percorridas">
+      <i><b style={{ width: `${pct}%` }} /></i>
+      {flow.tasksDone} de {flow.tasksTotal} tarefas • {pct}%
+    </span>}
+  </>;
+}
+
+/**
+ * A mesma obrigação, uma linha só, com a contagem de empresas.
+ *
+ * A consulta devolve **uma linha por empresa**: doze filiais com o mesmo
+ * eSocial S-1299 ocupavam as seis vagas do painel com o mesmo prazo repetido,
+ * e a sétima obrigação — de outro tipo, talvez mais urgente — não aparecia. A
+ * especificação pede o formato agregado ("Empresas: 12"), e ele é o que deixa a
+ * lista responder "o que vence", em vez de "onde vence".
+ *
+ * Agrupa por obrigação + competência + vencimento: mesma obrigação com prazos
+ * diferentes são dois compromissos distintos, e juntá-los esconderia o mais
+ * apertado atrás do mais folgado. Mantém o menor `daysRemaining` do grupo pelo
+ * mesmo motivo.
+ *
+ * Sem consulta nova — é agregação do que o snapshot já traz.
+ */
+function groupObligations(items: readonly WorkspaceSnapshot["upcomingObligations"][number][]) {
+  const grupos = new Map<string, WorkspaceSnapshot["upcomingObligations"][number]
+    & { companies: number }>();
+  for (const item of items) {
+    const chave = `${item.title}|${item.competence}|${item.dueDate}`;
+    const atual = grupos.get(chave);
+    if (!atual) { grupos.set(chave, { ...item, companies: 1 }); continue; }
+    atual.companies += 1;
+    if (item.daysRemaining < atual.daysRemaining) atual.daysRemaining = item.daysRemaining;
+  }
+  return [...grupos.values()];
 }
 
 function slaLabel(card: Card) {
@@ -1094,8 +1171,8 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
      A consulta tem teto de 60 demandas em andamento. Passando disso, o cartão
      simplesmente não mostra etapa — melhor a ausência do que um rótulo
      inventado. */
-  const stepByCard = useMemo(() => new Map(
-    (snapshot?.processFlows ?? []).map((flow) => [flow.cardId, flow.stepLabel]),
+  const flowByCard = useMemo(() => new Map(
+    (snapshot?.processFlows ?? []).map((flow) => [flow.cardId, flow]),
   ), [snapshot?.processFlows]);
 
   const scopedObligations = useMemo(() => (snapshot?.upcomingObligations ?? [])
@@ -1218,7 +1295,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       active: active.length,
       attention: active.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length,
       waiting: active.filter((card) => waitingListIds.has(card.listId)).length,
-      onTime: scopedCards.length ? Math.round(((scopedCards.length - scopedCards.filter((card) => card.slaStatus === "overdue").length) / scopedCards.length) * 100) : 100,
+      /* `null` quando não há demanda no recorte, em vez de 100%.
+         Sem nenhuma demanda, "100% dentro do prazo" é uma afirmação sobre nada
+         — e é o número mais tranquilizador da tela, exibido justamente quando
+         não há evidência para tranquilizar ninguém. Ausência é verdade;
+         percentual sobre denominador zero, não. */
+      onTime: scopedCards.length
+        ? Math.round(((scopedCards.length - scopedCards.filter((card) => card.slaStatus === "overdue").length) / scopedCards.length) * 100)
+        : null,
       completed,
       documentsPending: active.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0),
       activeCompanies: snapshot?.companies.filter((company) => company.status === "active").length ?? 0,
@@ -1394,6 +1478,27 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
         if (next) setCardModalOpen(false);
       },
     });
+  }
+
+  /**
+   * Cancelar é dizer que este trabalho não vai acontecer (spec: Ações da demanda).
+   *
+   * Não usa `requestConfirmation` como o arquivamento: aquele diálogo confirma,
+   * e aqui é preciso **coletar** o motivo. Sem motivo o servidor recusa, e a
+   * restrição no banco recusa junto — cancelamento mudo é a informação que falta
+   * exatamente quando alguém pergunta, meses depois, por que não aconteceu.
+   */
+  async function cancelCard() {
+    if (!selectedCardId) return;
+    const reason = window.prompt(
+      "Por que esta demanda está sendo cancelada?\n\nO motivo fica no histórico e é o que responde a essa pergunta depois.");
+    /* `null` é desistência do diálogo, e não deve virar erro na tela. Texto em
+       branco é tentativa de cancelar sem dizer por quê, e aí o aviso é devido. */
+    if (reason === null) return;
+    if (!reason.trim()) { setToast("Cancelamento precisa de um motivo."); return; }
+    const next = await mutate(`/api/cards/${selectedCardId}/cancel`,
+      { method: "POST", body: JSON.stringify({ reason: reason.trim() }) }, "Demanda cancelada.");
+    if (next) setCardModalOpen(false);
   }
 
   async function toggleChecklist(itemId: string, completed: boolean) {
@@ -2128,7 +2233,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 <article><span>Demandas ativas</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída", "concluídas")}</small></article>
                 <article><span>Exigem atenção</span><strong>{stats.attention}</strong><small className="warning-text">SLA hoje ou atrasado</small></article>
                 <article><span>Aguardando terceiros</span><strong>{stats.waiting}</strong><small>SLA pausado</small></article>
-                <article><span>Dentro do prazo</span><strong>{stats.onTime}%</strong><small className="safe-text">Visão atual</small></article>
+                <article><span>Dentro do prazo</span><strong>{stats.onTime === null ? "—" : `${stats.onTime}%`}</strong><small className="safe-text">{stats.onTime === null ? "Nenhuma demanda no recorte" : "Das demandas em aberto"}</small></article>
               </div>
 
               <div className="dashboard-board-head">
@@ -2199,11 +2304,21 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                               if (event.key === "Enter" || event.key === " ") openCard(card);
                             }}
                           >
-                            <div className="dashboard-task-labels"><span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}</div>
+                            <div className="dashboard-task-labels"><span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}{referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}</div>
                             <h2>{card.title}</h2>
                             <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
                             <DemandAreaFlow card={card} areas={snapshot.areas} />
-                            {stepByCard.get(card.id) && <span className="dashboard-card-step" title="Etapa atual do processo"><Workflow aria-hidden="true" />{stepByCard.get(card.id)}</span>}
+                            {/* Processo, etapa e progresso — as três coisas que a
+                                especificação pede no cartão e que já existiam
+                                calculadas no servidor, sem chegar à tela.
+
+                                Processo e etapa são coisas diferentes e ficam em
+                                linhas diferentes: o processo diz *que trabalho é
+                                este*, a etapa diz *onde ele está*. O progresso
+                                conta as tarefas já instanciadas — as das etapas
+                                percorridas —, não as do processo inteiro, porque
+                                as etapas à frente ainda não geraram tarefa. */}
+                            {flowByCard.get(card.id) && <CardProcessLine flow={flowByCard.get(card.id)!} />}
                             {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
                             <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}`}><Clock3 aria-hidden="true" /> {slaLabel(card)}</span><span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}<span className="dashboard-mini-avatar">{initials(card.assignees[0]?.name || card.assigneeName || "DP")}</span>{card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}</div>
                           </article>
@@ -2225,6 +2340,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} onImportPayroll={(body) => mutate("/api/hr-metrics/import/pdf", { method: "POST", body }, "Extrato da folha importado e painéis atualizados.")} />}
           {view === "indicators" && <IndicatorsView canExportWorkspace={isAdmin} cards={scopedCards} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((item) => item.id === companyFilter)?.tradeName || snapshot.companies.find((item) => item.id === companyFilter)?.legalName || "Empresa selecionada")} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
+          {/* O histórico completo (spec: "Ver histórico completo"). Carrega
+              sob demanda, e não junto do snapshot: a trilha cresce sem limite,
+              e trazê-la na abertura faria todo mundo pagar por uma tela que
+              quase ninguém abre. */}
+          {view === "history" && <HistoryView onOpenCard={(cardId) => {
+            const card = allCards.find((item) => item.id === cardId);
+            if (card) openCard(card);
+          }} />}
           </PageTransition>
           </>}</ProcessTabsProvider>
         </div>
@@ -2285,7 +2408,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       {cardModalOpen && (
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
           <section className="workspace-modal card-modal demand-detail-modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
-            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}{selectedCard?.cancelledAt && <b className="demand-cancelled" title={selectedCard.cancellationReason}>CANCELADA</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
             {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "process" ? "active" : ""} onClick={() => setCardTab("process")}>Processo</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
             <div className="card-modal-body single">
               {selectedCard && <section className="demand-detail-summary"><div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div><div className="demand-document-state"><span>DOCUMENTOS</span><strong>{selectedCard.checklist.filter((item) => item.completed).length} aprovados</strong><small>{selectedCard.checklist.filter((item) => !item.completed).length} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div><div className="demand-quick-actions">{canEdit && !selectedCard.archived && <><button className="quick-complete" type="button" onClick={completeSelectedCard}><CheckCircle2 aria-hidden="true" /> Concluir</button><button type="button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button><button type="button" onClick={() => focusCardField("card-assignees")}>Responsável</button><button type="button" onClick={() => focusCardField("card-due-at")}>Prazo</button></>}</div></section>}
@@ -2306,7 +2429,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
                 <section className="card-choice-section full"><header><strong>Etiquetas</strong><span>Classifique sem alterar o processo</span></header><div className="choice-chips label-choices">{snapshot.labels.map((label) => <label className={cardForm.labelIds.includes(label.id) ? "selected" : ""} style={{ borderColor: cardForm.labelIds.includes(label.id) ? label.color : undefined }} key={label.id}><input type="checkbox" checked={cardForm.labelIds.includes(label.id)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, labelIds: event.target.checked ? [...cardForm.labelIds, label.id] : cardForm.labelIds.filter((id) => id !== label.id) })} /><i style={{ backgroundColor: label.color }} />{label.name}</label>)}</div></section>
                 {snapshot.customFields.map((field) => <label key={field.id}>{field.name}{field.fieldType === "select" ? <select value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })}><option value="">Selecione</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={field.fieldType === "date" ? "date" : field.fieldType === "number" ? "number" : "text"} value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })} />}</label>)}
-                <div className="card-form-actions full">{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="danger-link" onClick={archiveCard}>Arquivar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="secondary-button" onClick={() => void toggleSlaPause()}>{selectedCard.slaStatus === "paused" ? "Retomar SLA" : "Pausar SLA"}</button>}<span /><button type="button" className="secondary-button" onClick={() => setCardModalOpen(false)}>Fechar</button>{canEdit && !selectedCard?.archived && <button className="primary-button" disabled={busy}>{selectedCard ? "Salvar alterações" : "Criar demanda"}</button>}</div>
+                <div className="card-form-actions full">{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="danger-link" onClick={archiveCard}>Arquivar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && !selectedCard.closedAt && <button type="button" className="danger-link" onClick={cancelCard}>Cancelar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="secondary-button" onClick={() => void toggleSlaPause()}>{selectedCard.slaStatus === "paused" ? "Retomar SLA" : "Pausar SLA"}</button>}<span /><button type="button" className="secondary-button" onClick={() => setCardModalOpen(false)}>Fechar</button>{canEdit && !selectedCard?.archived && <button className="primary-button" disabled={busy}>{selectedCard ? "Salvar alterações" : "Criar demanda"}</button>}</div>
               </form>}
 
               {/* A etapa do processo, em texto, com o motivo de cada bloqueio
@@ -2659,7 +2782,7 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   activities: ActivityEvent[];
   cycles: WorkspaceSnapshot["payrollCycles"];
   integrations: WorkspaceSnapshot["integrations"];
-  stats: { active: number; attention: number; waiting: number; onTime: number; completed: number; documentsPending: number; activeCompanies: number };
+  stats: { active: number; attention: number; waiting: number; onTime: number | null; completed: number; documentsPending: number; activeCompanies: number };
   onOpen: (card: Card) => void;
   onOpenBoard: () => void;
   onNew: () => void;
@@ -2737,8 +2860,13 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 
 
     <section className="overview-sla-band">
-      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime}% dentro do prazo</strong><p>{stats.completed} demandas concluídas • {stats.waiting} com SLA pausado</p></div>
-      <div className="sla-progress" aria-label={`${stats.onTime}% das demandas dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>
+      {/* O percentual mede as demandas EM ABERTO que não estouraram o prazo — não
+          as concluídas. Os dois números viviam lado a lado sem dizer isso, e
+          "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia o
+          leitor supor que 100% das concluídas cumpriram o prazo. São
+          populações diferentes, e agora o texto diz qual é qual. */}
+      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime === null ? "Sem demandas em aberto" : `${stats.onTime}% das demandas em aberto dentro do prazo`}</strong><p>{stats.completed} concluída(s) no período • {stats.waiting} com SLA pausado</p></div>
+      {stats.onTime !== null && <div className="sla-progress" aria-label={`${stats.onTime}% das demandas em aberto dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>}
       <div className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></div>
     </section>
 
@@ -2815,11 +2943,13 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
               ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
               : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
           </div>}
-          {obligations.slice(0, 6).map((item) => <article key={item.id}
+          {groupObligations(obligations).slice(0, 6).map((item) => <article key={item.id}
             className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
             <div>
               <strong>{item.title}</strong>
-              <small>{item.company || "Sem empresa"}{item.competence ? ` • Competência ${item.competence}` : ""}</small>
+              <small>{item.companies > 1
+                ? `${item.companies} empresas`
+                : item.company || "Sem empresa"}{item.competence ? ` • Competência ${item.competence}` : ""}</small>
             </div>
             <div className="overview-obligation-due">
               <b>{formatDate(item.dueDate)}</b>
@@ -2850,7 +2980,11 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
       </div></section>
 
-      <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div></header><div className="recent-activity-list">
+      {/* O botão entrou junto com a tela. Ele tinha ficado de fora de propósito
+          enquanto não havia destino: link que leva ao lugar errado é pior que
+          nenhum, e o teste que guardava isso cobrava as duas metades — que o
+          botão não existisse sem a tela, e que entrasse quando ela entrasse. */}
+      <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
         {activities.slice(0, 5).map((activity) => <article key={activity.id}><span>{initials(activity.actorName || "DP")}</span><div><strong>{activity.actorName || "Equipe DP"} <small>{activityLabel(activity)}</small></strong><p>{activityDetails(activity)[0] || "Registro atualizado na operação."}</p></div><time>{formatMoment(activity.createdAt)}</time></article>)}
         {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
       </div></section>

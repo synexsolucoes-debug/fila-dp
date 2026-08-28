@@ -3109,7 +3109,12 @@
    fixas deixariam três órfãos numa segunda linha larga. `auto-fit` acomoda o
    número real de indicadores — que muda com o recorte de empresa — sem que a
    contagem precise estar escrita aqui. */
-.overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 13px; }
+/* Sete indicadores em `minmax(172px)` davam cinco colunas em 1440px: 5 + 2, com
+   TRÊS células vazias ao lado dos dois últimos, e ~700px de nada na dobra mais
+   nobre da tela. Com o mínimo maior a conta dá quatro colunas — 4 + 3, uma
+   célula vazia em vez de três, e cada cartão fica mais folgado.
+   O `auto-fit` continua reduzindo o número de colunas em telas estreitas. */
+.overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 13px; }
 .overview-metrics article,
 .overview-metrics .overview-metric-action { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 /* O indicador que leva a algum lugar é botão de verdade: foco visível, cursor
@@ -3283,6 +3288,18 @@
    Ela é um estado do processo, não um rótulo de classificação como o tipo — por
    isso não vira chip colorido junto dos outros lá em cima: fica na coluna do
    corpo, com o ícone do processo, onde se lê "em que ponto isto está". */
+/* O número da demanda (#DM-2471).
+   Fica na linha das etiquetas, empurrado para a direita: é identidade, não
+   classificação — quem varre o quadro procura pelo título, e volta ao número só
+   quando precisa citar a demanda. Por isso `auto` na margem em vez de vir
+   antes do tipo do processo. Tabular para os dígitos alinharem entre cartões. */
+.dashboard-card-reference {
+  margin-left: auto;
+  color: var(--ui-text-soft);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .dashboard-card-step {
   display: inline-flex;
   align-items: center;
@@ -4891,3 +4908,97 @@
   background: var(--ui-accent-soft);
   color: var(--ui-accent-text);
 }
+
+/* O número no cabeçalho do detalhe da demanda.
+   Selecionável de propósito (`user-select: all`): a razão de o número existir é
+   ser citado — colado num e-mail, num chamado, numa conversa. Um clique duplo
+   pega o identificador inteiro em vez de meia palavra. */
+.demand-reference {
+  margin-left: 8px;
+  color: var(--ui-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  user-select: all;
+}
+
+/* Progresso da demanda no cartão do quadro.
+   A barra vem antes do texto porque numa varredura o olho lê a proporção antes
+   de ler o número — o texto existe para quem precisa da contagem exata. */
+.dashboard-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--ui-text-soft);
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dashboard-card-progress i {
+  flex: 0 0 34px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ui-border);
+}
+.dashboard-card-progress b {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ui-primary);
+}
+
+/* Demanda cancelada, no cabeçalho do detalhe.
+   Cancelada não é erro nem alerta — é um desfecho. Por isso não usa o vermelho
+   de SLA estourado, que a operação lê como "aja agora": aqui não há nada a
+   fazer. O motivo fica no title, onde quem precisa dele o encontra sem que ele
+   ocupe a primeira linha. */
+.demand-cancelled {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  color: var(--ui-text-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+
+/* Histórico completo da operação.
+   Tabela, e não lista de cartões: a pergunta aqui é "quando isso aconteceu e
+   quem fez", e coluna alinhada responde isso na varredura vertical, que é como
+   se lê uma trilha. Datas em tabular para os dígitos alinharem entre linhas. */
+.history-view { display: flex; flex-direction: column; gap: 12px; }
+.history-table-wrap { overflow-x: auto; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); }
+.history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.history-table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+.history-table td { padding: 10px 12px; border-bottom: 1px solid var(--ui-border-soft, var(--ui-border)); vertical-align: top; }
+.history-table tr:last-child td { border-bottom: 0; }
+.history-table time { color: var(--ui-text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.history-table small { color: var(--ui-text-soft); }
+.history-card-link {
+  display: inline-flex; gap: 6px; align-items: baseline;
+  padding: 0; border: 0; background: none;
+  color: var(--ui-primary); cursor: pointer; font: inherit; text-align: left;
+}
+.history-card-link:hover { text-decoration: underline; }
+.history-card-link b { font-variant-numeric: tabular-nums; }
+.history-none { color: var(--ui-text-soft); }
+.history-empty, .history-error {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 40px 20px; border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md); text-align: center;
+}
+.history-empty svg { width: 24px; height: 24px; color: var(--ui-text-soft); }
+.history-loading { color: var(--ui-text-soft); font-size: 12px; }
+.history-more { align-self: center; }

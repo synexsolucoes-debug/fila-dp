@@ -292,7 +292,9 @@ test("o cartão da demanda mostra a etapa do processo (§38, §95)", async () =>
      a demanda está no quadro, a etapa diz onde ela está no processo. */
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   assert.match(app, /className="dashboard-card-step"/u);
-  assert.match(app, /stepByCard\.get\(card\.id\)/u);
+  assert.match(app, /flowByCard\.get\(card\.id\)/u);
+  assert.match(app, /\{flow\.stepLabel\}/u,
+    "a etapa precisa continuar sendo texto no cartão, não só um title");
 });
 
 test("a etapa do cartão não custa consulta nova", async () => {
@@ -300,7 +302,7 @@ test("a etapa do cartão não custa consulta nova", async () => {
   // empresa. Uma consulta por cartão seria dezenas de idas ao banco para
   // repetir o que o snapshot já traz.
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  const memo = app.slice(app.indexOf("const stepByCard"), app.indexOf("const scopedObligations"));
+  const memo = app.slice(app.indexOf("const flowByCard"), app.indexOf("const scopedObligations"));
   assert.match(memo, /snapshot\?\.processFlows/u);
   assert.ok(!/fetch\(|requestJson/u.test(memo), "o cartão passou a buscar a etapa por conta própria");
 });
@@ -309,6 +311,76 @@ test("demanda fora do teto de fluxos não ganha etapa inventada", async () => {
   // A consulta traz 60 demandas em andamento. Passando disso, o cartão mostra
   // ausência — que é verdade — em vez de um rótulo aproximado.
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /\{stepByCard\.get\(card\.id\) && </u,
+  assert.match(app, /\{flowByCard\.get\(card\.id\) && </u,
     "sem a guarda, demanda sem fluxo carregado renderizaria etapa vazia");
+});
+
+test("a mesma obrigação em várias empresas ocupa uma linha, com a contagem", async () => {
+  /* A consulta devolve uma linha por empresa. Doze filiais com o mesmo eSocial
+     S-1299 ocupavam as seis vagas do painel com o mesmo prazo repetido, e a
+     sétima obrigação — de outro tipo, talvez mais urgente — não aparecia. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /function groupObligations\(/u);
+  assert.match(app, /item\.companies > 1\s*\n?\s*\? `\$\{item\.companies\} empresas`/u);
+  assert.match(app, /groupObligations\(obligations\)\.slice\(0, 6\)/u,
+    "o painel precisa listar o agrupado, não a lista crua");
+});
+
+test("obrigações com vencimentos diferentes não são fundidas", async () => {
+  /* Mesma obrigação com prazos diferentes são dois compromissos. Juntá-los
+     esconderia o mais apertado atrás do mais folgado. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /const chave = `\$\{item\.title\}\|\$\{item\.competence\}\|\$\{item\.dueDate\}`/u);
+  assert.match(app, /if \(item\.daysRemaining < atual\.daysRemaining\) atual\.daysRemaining = item\.daysRemaining/u,
+    "o grupo precisa manter o prazo mais apertado, senão a urgência some na agregação");
+});
+
+test("o botão do histórico entrou junto com a tela, e aponta para ela", async () => {
+  /* Este teste nasceu ao contrário: enquanto não havia tela de histórico, ele
+     cobrava que o botão NÃO existisse — link que leva ao lugar errado é pior
+     que nenhum. A tela existe agora, então ele cobra a outra metade: que o
+     botão exista e aponte para uma visão registrada. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const painel = app.slice(app.indexOf('className="overview-panel activity-panel"'));
+  const bloco = painel.slice(0, painel.indexOf("</section>"));
+  assert.match(bloco, /onFocus\("history", "all"\)/u,
+    "o bloco de movimentações precisa dar caminho para a trilha completa");
+  assert.match(bloco, /Ver histórico completo/u);
+
+  const rotas = await readFile(new URL("../lib/panel-routes.ts", import.meta.url), "utf8");
+  assert.match(rotas, /history: "historico"/u,
+    "o destino precisa ser uma visão com endereço próprio, senão o botão leva a lugar nenhum");
+});
+
+test("sem demanda no recorte, o painel não afirma 100% dentro do prazo", async () => {
+  /* O cálculo caía em `: 100` quando não havia nenhuma demanda. O número mais
+     tranquilizador da tela aparecia justamente quando não havia evidência para
+     tranquilizar ninguém — percentual sobre denominador zero. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /onTime: scopedCards\.length\s*\n?\s*\? Math\.round/u);
+  assert.match(app, /: null,/u);
+  assert.ok(!/\) \* 100\) : 100,/u.test(app),
+    "voltar a 100 no recorte vazio traria de volta a afirmação sobre nada");
+  assert.match(app, /stats\.onTime === null \? "—"/u,
+    "o cartão precisa mostrar ausência, não zero nem cem");
+});
+
+test("a faixa de SLA diz qual população o percentual mede", async () => {
+  /* "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia supor que
+     100% das concluídas cumpriram o prazo. O percentual mede as demandas EM
+     ABERTO que não estouraram; são populações diferentes. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /das demandas em aberto dentro do prazo/u);
+  assert.match(app, /stats\.onTime !== null && <div className="sla-progress"/u,
+    "barra de progresso sem número para representar não deve ser desenhada");
+});
+
+test("a faixa de indicadores não deixa três células vazias na dobra mais nobre", async () => {
+  /* Sete indicadores com `minmax(172px)` davam cinco colunas em 1440px: 5 + 2,
+     com três células vazias ao lado dos dois últimos. Medido no produto de pé:
+     com o mínimo maior a conta dá quatro colunas — 4 + 3, uma célula vazia. */
+  const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
+  assert.match(css, /\.overview-metrics \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(238px, 1fr\)\); gap: 13px; \}/u);
+  assert.match(css, /auto-fit/u,
+    "largura fixa deixaria de reduzir colunas em tela estreita; medido em 820px, cai para duas");
 });

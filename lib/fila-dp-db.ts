@@ -9,6 +9,7 @@ import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
 import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph";
+import { stepChecklist } from "./process-instances";
 
 
 function safeJson(value: string) {
@@ -394,7 +395,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     assigneesResult, customFieldsResult, customValuesResult, attachmentsResult, templatesResult,
     settingsRow, holidaysResult, policiesResult, integrationsResult, plannerResult, calendarsResult,
     companiesResult, hrMetricsResult, pausesResult, cyclesResult, areasResult, historyTotals,
-    tangerinoAttachmentAuthorizationsResult, processFlowsResult, flowDiagramsResult, obligationsResult,
+    tangerinoAttachmentAuthorizationsResult, processFlowsResult, flowDiagramsResult,
+    plannedStepsResult, obligationsResult,
   ] = await Promise.all([
     d1.prepare("SELECT id, name, description, board_type FROM fdp_boards WHERE workspace_id = ? ORDER BY created_at").bind(workspace.id).all(),
     d1.prepare("SELECT id, board_id, name, kind, position, sla_behavior FROM fdp_lists WHERE board_id = ? ORDER BY position").bind(board.id).all(),
@@ -546,6 +548,23 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
            WHERE c.workspace_id = ? AND c.board_id = ? AND c.archived = 0
              AND c.process_version_id IS NOT NULL AND c.process_version_id <> ''
              AND c.sla_status <> 'completed')`).bind(workspace.id, workspace.id, board.id).all(),
+    /* As tarefas que o desenho prevê, por versão em execução (spec: Demandas).
+       O progresso da demanda é "7 de 18": o 18 vem do processo inteiro, não das
+       etapas já percorridas. A versão é imutável, então esse total é um número
+       conhecido e fixo desde a criação — não uma estimativa.
+
+       Vem por configuração de etapa, e não somado em SQL, porque quem decide o
+       que vira tarefa é `stepChecklist`: ela une checklist e documentos da etapa
+       e deduplica. Replicar isso em SQL produziria um total ligeiramente
+       diferente do que a execução materializa — e um progresso de "20 de 18". */
+    d1.prepare(`SELECT sc.process_version_id, sc.settings_json
+      FROM fdp_process_step_configs sc
+      WHERE sc.workspace_id = ?
+        AND sc.process_version_id IN (
+          SELECT DISTINCT c.process_version_id FROM fdp_cards c
+           WHERE c.workspace_id = ? AND c.board_id = ? AND c.archived = 0
+             AND c.process_version_id IS NOT NULL AND c.process_version_id <> ''
+             AND c.sla_status <> 'completed')`).bind(workspace.id, workspace.id, board.id).all(),
     /* Obrigações que ainda não fecharam (§16).
        A tabela já tinha índice por (workspace_id, due_date, status); o que
        faltava era a Visão geral enxergar. Vencida entra junto: esconder o que
@@ -632,6 +651,11 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     id: String(row.id),
     boardId: String(row.board_id),
     listId: String(row.list_id),
+    /* Número da demanda (#DM-2471). `null` só vem de banco anterior à 0070 —
+       a tela omite o número nesse caso, em vez de exibir zero ou inventar. */
+    referenceNumber: row.reference_number == null ? null : Number(row.reference_number),
+    cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
+    cancellationReason: String(row.cancellation_reason ?? ""),
     title: String(row.title),
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,
@@ -729,6 +753,25 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     if (!xml) continue;
     stepLabelByVersion.set(String(row.id), parseBpmnGraph(xml));
   }
+  /* Quantas tarefas o desenho prevê, por versão.
+     Usa a mesma `stepChecklist` da execução — checklist mais documentos da
+     etapa, deduplicados —, então o total bate exatamente com o que cada avanço
+     materializa. Somar em SQL daria um número próximo e errado. */
+  const plannedTasksByVersion = new Map<string, number>();
+  for (const row of plannedStepsResult.results as Array<Record<string, unknown>>) {
+    const versionId = String(row.process_version_id ?? "");
+    if (!versionId) continue;
+    const settings = row.settings_json && typeof row.settings_json === "object"
+      ? row.settings_json as Record<string, unknown>
+      : safeJson(String(row.settings_json ?? "{}"));
+    const previstas = stepChecklist({
+      checklist: Array.isArray(settings.checklist) ? settings.checklist.map(String) : [],
+      requiredDocuments: Array.isArray(settings.requiredDocuments)
+        ? settings.requiredDocuments.map(String) : [],
+    } as Parameters<typeof stepChecklist>[0]).length;
+    plannedTasksByVersion.set(versionId, (plannedTasksByVersion.get(versionId) ?? 0) + previstas);
+  }
+
   const companyNameById = new Map(visibleCompanyRows.map((row) => [
     String(row.id),
     String(row.trade_name || row.legal_name || ""),
@@ -746,7 +789,17 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
         : safeJson(String(row.step_settings ?? "{}"));
       const configured = typeof settings.name === "string" ? settings.name.trim() : "";
       const graph = stepLabelByVersion.get(String(row.process_version_id ?? ""));
-      const tasksTotal = Number(row.tasks_total ?? 0);
+      /* O total é o que o processo inteiro prevê, não o que as etapas já
+         percorridas materializaram: a demanda mostra "7 de 18" desde o primeiro
+         dia, e o 18 não se move enquanto ela anda. A versão é imutável, então
+         esse número é conhecido e fixo.
+
+         O recuo para o materializado cobre a versão sem configuração de etapa
+         gravada — processo antigo, ou desenho publicado sem configurar nada.
+         Ali "7 de 0" seria pior que o total parcial. */
+      const materializadas = Number(row.tasks_total ?? 0);
+      const previstas = plannedTasksByVersion.get(String(row.process_version_id ?? "")) ?? 0;
+      const tasksTotal = Math.max(previstas, materializadas);
       const tasksDone = Number(row.tasks_done ?? 0);
       return {
         cardId: String(row.card_id),

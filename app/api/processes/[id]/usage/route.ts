@@ -93,10 +93,11 @@ export async function GET(request: Request, { params }: RouteContext) {
          gráficos é um painel que ninguém lê antes de decidir. */
       d1.prepare(`SELECT
           count(*) FILTER (WHERE c.closed_at IS NULL)::int AS open,
-          count(*) FILTER (WHERE c.closed_at IS NOT NULL)::int AS completed,
+          count(*) FILTER (WHERE c.closed_at IS NOT NULL AND c.cancelled_at IS NULL)::int AS completed,
+          count(*) FILTER (WHERE c.cancelled_at IS NOT NULL)::int AS cancelled,
           count(*) FILTER (WHERE c.closed_at IS NULL AND c.due_at IS NOT NULL AND c.due_at < now())::int AS overdue,
           avg(EXTRACT(EPOCH FROM (c.closed_at - c.created_at)) / 3600)
-            FILTER (WHERE c.closed_at IS NOT NULL) AS average_hours
+            FILTER (WHERE c.closed_at IS NOT NULL AND c.cancelled_at IS NULL) AS average_hours
         FROM fdp_cards c
         WHERE c.workspace_id = ? AND c.process_definition_id = ? AND c.archived = 0`)
         .bind(workspace.id, id).first<Record<string, unknown>>(),

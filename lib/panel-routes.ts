@@ -31,7 +31,7 @@ export const panelViews = [
   "auxiliary", "psychologistPayments", "contractorPayments", "contractorProviders",
   "contractorCycles", "contractorClosings", "contractorAdjustments", "contractorLimits",
   "contractorCaju", "contractorArchive", "timeTracking", "epi", "integrations",
-  "agents", "triage", "registrations", "payroll", "indicators",
+  "agents", "triage", "registrations", "payroll", "indicators", "history",
 ] as const;
 export type PanelView = typeof panelViews[number];
 
@@ -67,6 +67,7 @@ const VIEW_PATHS: Record<PanelView, string> = {
   registrations: "cadastros",
   payroll: "folha",
   indicators: "indicadores",
+  history: "historico",
 };
 
 /**

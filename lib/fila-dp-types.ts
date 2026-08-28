@@ -164,6 +164,18 @@ export type Card = {
   id: string;
   boardId: string;
   listId: string;
+  /**
+   * O número da demanda dentro do cliente, apresentado como `#DM-2471`.
+   *
+   * É o identificador que uma pessoa dita ao telefone e cola num e-mail — o
+   * `id` acima é opaco e não serve para isso. Atribuído por gatilho no banco,
+   * então toda demanda tem um, inclusive as criadas pelos oito caminhos de
+   * inserção que existem hoje.
+   *
+   * `null` só em demanda lida de um banco anterior à migration 0070; a
+   * interface omite o número nesse caso em vez de inventar um.
+   */
+  referenceNumber: number | null;
   title: string;
   description: string;
   companyId: string | null;
@@ -197,6 +209,17 @@ export type Card = {
   legalDueAt: string | null;
   processTemplateId: string | null;
   closedAt: string | null;
+  /**
+   * Quando a demanda foi cancelada, e por quê.
+   *
+   * Cancelada é desfecho distinto de concluída: a demanda saiu da operação
+   * (`closedAt` também é preenchido) mas **não** conta como trabalho entregue.
+   * O motivo é obrigatório no banco — cancelamento sem motivo é exatamente a
+   * informação que falta quando alguém pergunta, meses depois, por que aquela
+   * admissão não aconteceu.
+   */
+  cancelledAt: string | null;
+  cancellationReason: string;
 };
 
 export type OperationalArea = {
@@ -370,7 +393,15 @@ export type ProcessFlowSummary = {
   stepId: string;
   stepLabel: string;
   responsibleName: string;
-  /** Concluídas / total das tarefas instanciadas, e o percentual derivado. */
+  /**
+   * Concluídas / total, e o percentual derivado.
+   *
+   * O total é o que a **versão do processo prevê**, somando as tarefas de todas
+   * as etapas — não só as das etapas já percorridas. A versão é imutável, então
+   * o denominador é fixo desde a criação da demanda: "7 de 18" continua sendo
+   * de 18 enquanto ela anda. Versão sem configuração de etapa gravada recai no
+   * total materializado, porque ali "7 de 0" seria pior.
+   */
   tasksDone: number;
   tasksTotal: number;
   progress: number;
