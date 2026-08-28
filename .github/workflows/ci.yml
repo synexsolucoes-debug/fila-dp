@@ -106,11 +106,30 @@ jobs:
       # triggers, constraints, isolamento entre clientes no banco restaurado e
       # imutabilidade de fechamento concluído. Leva segundos.
       # A retenção do provedor fica fora do repositório, e o ensaio de restauração
-      # não a alcança: ele prova que sabemos voltar, não que existe de onde. Sem
-      # credencial de Neon na CI, o passo roda em modo permissivo — ele imprime
+      # não a alcança: ele prova que sabemos voltar, não que existe de onde.
+      #
+      # O passo escolhe o modo pelo que ele tem em mãos, e o segredo é entregue ao
+      # script — antes ele estava fixo em permissivo e sem `env`, então cadastrar
+      # NEON_API_KEY nos segredos não mudava nada: a credencial nunca chegava ao
+      # verificador, e a CI seguiria imprimindo "NÃO VERIFICADO" para sempre.
+      # Configuração que parece resolver e não resolve é pior que pendência
+      # declarada, porque ninguém volta para conferir.
+      #
+      # Com credencial, confere de verdade e reprova janela menor que o mínimo.
+      # Sem ela — em fork, onde segredo não é exposto —, roda permissivo e diz
       # alto que não conferiu, em vez de deixar o silêncio parecer aprovação.
       - name: Conferir a política de backup do provedor
-        run: npm run verify:backup -- --permitir-sem-credencial
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: |
+          if [ -n "$NEON_API_KEY" ] && [ -n "$NEON_PROJECT_ID" ]; then
+            echo "Credencial do Neon presente: conferindo a janela de recuperação."
+            npm run verify:backup
+          else
+            echo "Sem credencial do Neon: o passo não vai conferir a janela de recuperação."
+            npm run verify:backup -- --permitir-sem-credencial
+          fi
 
       - name: Ensaiar backup e restauração
         env:

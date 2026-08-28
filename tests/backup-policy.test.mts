@@ -83,3 +83,33 @@ test("o runbook de restauração manda conferir antes de apontar a aplicação",
   assert.match(doc, /não são promessa de RTO/u,
     "os tempos medidos são do volume do ensaio; vendê-los como RTO seria inventar compromisso");
 });
+
+test("a CI entrega a credencial ao verificador, em vez de só aceitá-la nos segredos", async () => {
+  /* O defeito que este teste fecha: o passo estava fixo em
+     `--permitir-sem-credencial` e **sem bloco `env`**. Cadastrar NEON_API_KEY
+     nos segredos do repositório não mudava nada — a credencial nunca chegava ao
+     script, e a CI seguiria imprimindo "NÃO VERIFICADO" para sempre, com a
+     pendência marcada como resolvida no painel de quem configurou.
+
+     Configuração que parece resolver e não resolve é pior que pendência
+     declarada: a pendência alguém ainda vai cobrar; a falsa solução ninguém
+     volta para conferir. */
+  const workflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+
+  const passo = workflow.slice(workflow.indexOf("Conferir a política de backup do provedor"));
+  const bloco = passo.slice(0, passo.indexOf("- name:", 1));
+
+  assert.match(bloco, /NEON_API_KEY:\s*\$\{\{\s*secrets\.NEON_API_KEY\s*\}\}/u,
+    "o passo precisa passar NEON_API_KEY ao script, senão o segredo cadastrado não tem efeito");
+  assert.match(bloco, /NEON_PROJECT_ID:\s*\$\{\{\s*secrets\.NEON_PROJECT_ID\s*\}\}/u,
+    "sem NEON_PROJECT_ID o verificador não sabe qual projeto olhar");
+
+  /* E o modo tem de ser escolhido, não fixado: com credencial confere de
+     verdade; sem ela — em fork, onde segredo não é exposto — segue permissivo.
+     Se o permissivo voltar a ser incondicional, cadastrar o segredo volta a ser
+     um gesto sem efeito. */
+  assert.ok(/npm run verify:backup\s*$/mu.test(bloco),
+    "falta o caminho estrito: com credencial, a janela precisa ser conferida de verdade");
+  assert.match(bloco, /--permitir-sem-credencial/u,
+    "o caminho permissivo precisa continuar existindo para fork, que não recebe segredo");
+});
