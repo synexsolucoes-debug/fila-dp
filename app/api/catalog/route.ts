@@ -1,6 +1,7 @@
 import { apiError, getApiUser, text, validDate, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
+import { parseRuleAction, parseRuleTrigger } from "@/lib/automation-rules";
 
 const colors = new Set(["#dc2626", "#ea580c", "#d97706", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#64748b"]);
 
@@ -83,11 +84,17 @@ export async function POST(request: Request) {
       if (operation === "delete") await d1.prepare("DELETE FROM fdp_automation_rules WHERE id = ? AND workspace_id = ?").bind(id, workspace.id).run();
       else {
         const name = text(body.name, 120);
-        const trigger = ["card.created", "card.moved", "assignee.added", "checklist.completed", "sla.tick"].includes(String(body.trigger)) ? String(body.trigger) : "card.created";
+        /* Gatilho e ação vêm do mesmo módulo que a tela lê (§27). Antes, um
+           gatilho desconhecido virava `card.created` em silêncio: a regra
+           aparecia com o nome que a pessoa deu e disparava na hora errada, sem
+           erro em lugar nenhum. Recusar é o que ela precisa ver. */
+        const trigger = parseRuleTrigger(body.trigger);
         const condition = body.condition && typeof body.condition === "object" ? body.condition as Record<string, unknown> : {};
         if (condition.processType !== undefined) condition.processType = validProcessType(condition.processType);
-        const action = body.action && typeof body.action === "object" ? body.action : {};
+        const action = parseRuleAction(body.action);
         if (!name) return Response.json({ error: "Informe o nome da automação." }, { status: 400 });
+        if (!trigger) return Response.json({ error: "Escolha um gatilho que o produto reconheça." }, { status: 400 });
+        if (!action) return Response.json({ error: "Escolha uma ação que o produto saiba executar." }, { status: 400 });
         if (id) await d1.prepare("UPDATE fdp_automation_rules SET name = ?, trigger = ?, condition_json = ?, action_json = ?, enabled = ? WHERE id = ? AND workspace_id = ?").bind(name, trigger, JSON.stringify(condition), JSON.stringify(action), body.enabled === false ? 0 : 1, id, workspace.id).run();
         else {
           const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS value FROM fdp_automation_rules WHERE workspace_id = ?").bind(workspace.id).first<{ value: number }>();

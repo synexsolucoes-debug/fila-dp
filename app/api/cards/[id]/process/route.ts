@@ -1,6 +1,6 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import {
-  getWorkspaceContext, prepareActivity, prepareAuditEvent, requireCompanyAccess,
+  getWorkspaceContext, prepareActivity, prepareAuditEvent, requireCompanyAccess, runAutomations,
 } from "@/lib/fila-dp-db";
 import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
@@ -201,6 +201,24 @@ export async function POST(request: Request, { params }: RouteContext) {
         requestId: context.requestId,
       }),
     ]);
+
+    /* Automação do quadro reagindo ao processo (§27).
+       O §27 pede "etapa Documentação concluída → iniciar Registro" e "etapa
+       Integrações iniciada → criar tarefa TI". O motor de regras existia e
+       nenhum evento de processo o alcançava: mover etapa mudava a demanda sem
+       que nenhuma regra soubesse.
+
+       Roda **depois** do lote, e não dentro dele: a transição precisa estar
+       gravada antes de qualquer regra reagir a ela — uma regra que rodasse
+       junto poderia mover a demanda a partir de um estado que ainda não vale.
+       Se a automação falhar, a etapa já avançou, que é o efeito que a pessoa
+       pediu; a regra é o efeito colateral. */
+    await runAutomations(workspace.id, instance.boardId, instance.id, eventName, auth.user.email, {
+      toStepId: evaluation.targetStepId,
+      fromStepId,
+      processId: instance.processDefinitionId,
+      terminal: evaluation.terminal ? "yes" : "no",
+    });
 
     const after = await loadContext(request, id);
     if ("response" in after) return after.response;

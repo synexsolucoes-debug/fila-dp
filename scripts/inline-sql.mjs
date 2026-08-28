@@ -75,6 +75,15 @@ export function listSourceFiles(root, out = []) {
  * interpolação é preservada como `${...}` para quem chama decidir o que fazer.
  */
 function readStringLiteral(source, start) {
+  /* Pular espaço e quebra de linha entre `.prepare(` e o literal.
+     Sem isto, a chamada escrita em duas linhas — `d1.prepare(` seguido da
+     consulta na linha de baixo — não era coletada: a verificação não a
+     reprovava nem a contava entre as "não verificadas"; ela simplesmente não
+     existia para a ferramenta. Em `lib/process-instances.ts` eram 6 de 12. É o
+     mesmo defeito que o comentário de `verify-inline-sql` descreve: dizer OK
+     sobre o que não se olhou. */
+  while (start < source.length && (source[start] === " " || source[start] === "\n"
+    || source[start] === "\r" || source[start] === "\t")) start += 1;
   const quote = source[start];
   if (quote !== "`" && quote !== "'" && quote !== '"') return null;
   let text = "";

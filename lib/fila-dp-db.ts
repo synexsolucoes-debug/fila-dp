@@ -924,6 +924,11 @@ export function requireWorkspaceRole(role: WorkspaceRole, allowed: WorkspaceRole
   }
 }
 
+/** O texto que a automação escreve na notificação, contido e sem HTML. */
+function cleanNotificationText(value: unknown, limit: number) {
+  return String(value ?? "").replace(/[\u0000-\u001f<>]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, limit);
+}
+
 export async function runAutomations(
   workspaceId: string,
   boardId: string,
@@ -955,6 +960,28 @@ export async function runAutomations(
     }
     if (typeof action.labelId === "string") {
       statements.push(d1.prepare("INSERT INTO fdp_card_labels (workspace_id, card_id, label_id) SELECT ?, ?, id FROM fdp_labels WHERE id = ? AND workspace_id = ? ON CONFLICT DO NOTHING").bind(workspaceId, cardId, action.labelId, workspaceId));
+    }
+    /* Notificar quem responde pela demanda (§27).
+       O §27 pede "tarefa vencida → notificar responsável", e até aqui a regra
+       sabia mover, etiquetar e mexer no prazo — nunca avisar alguém. Sem isso,
+       a automação alterava o quadro em silêncio e a pessoa descobria depois.
+
+       A notificação vai para quem está atribuído à demanda, não para quem
+       disparou: quem disparou pode ser o relógio do SLA, e avisar o autor de um
+       evento automático não avisa ninguém.
+
+       `event_key` carrega a regra e o cartão porque o índice único
+       (user_id, event_key) é o que impede a mesma automação de encher a caixa
+       de avisos ao rodar de novo — idempotência por construção (§82). */
+    if (typeof action.notify === "string" && action.notify) {
+      const title = cleanNotificationText(action.notify, 160);
+      statements.push(d1.prepare(
+        `INSERT INTO fdp_notifications (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)
+           SELECT gen_random_uuid()::text, ?, a.user_id, ?, 'automation', ?, ?, ?
+             FROM fdp_card_assignees a
+            WHERE a.workspace_id = ? AND a.card_id = ?
+          ON CONFLICT (user_id, event_key) DO NOTHING`,
+      ).bind(workspaceId, `automation:${rule.id}:${cardId}`, title, `Automação "${rule.name}".`, cardId, workspaceId, cardId));
     }
     if (statements.length) await d1.batch(statements);
     await recordActivity(workspaceId, cardId, actorEmail, "automation.executed", { ruleId: rule.id, ruleName: rule.name, trigger });

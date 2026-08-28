@@ -47,6 +47,9 @@ import {
   describeCondition, parseConditionList, parseTransitionConditions, unmetConditions,
   type ConditionFacts, type TransitionCondition, type TransitionConditionMap,
 } from "./process-conditions.ts";
+import {
+  describeMissingDocuments, missingDocuments, parseDocumentProof, type DocumentProof,
+} from "./process-documents.ts";
 
 type Database = ReturnType<typeof getD1>;
 type Row = Record<string, unknown>;
@@ -89,6 +92,15 @@ export type ProcessStepConfig = {
    * lado, e dar por feito cria divergência que só aparece na conferência.
    */
   blockingIntegrations: string[];
+  /**
+   * Como a etapa confere os documentos que exige (§26).
+   *
+   * `declared` — o padrão — é o comportamento de sempre: documento obrigatório
+   * é item de checklist, e marcar basta. `attached` cobra um anexo por
+   * documento. A escolha é da etapa porque ligar a conferência para todo mundo
+   * pararia demanda que hoje anda.
+   */
+  documentProof: DocumentProof;
 };
 
 export type PublishedProcessVersion = {
@@ -140,6 +152,7 @@ function stepConfigOf(row: Row): ProcessStepConfig {
     entryRules: parseConditionList(settings.entryRules),
     exitRules: parseConditionList(settings.exitRules),
     blockingIntegrations: list(settings.blockingIntegrations).map((item) => item.toLowerCase()),
+    documentProof: parseDocumentProof(settings.documentProof),
   };
 }
 
@@ -241,6 +254,15 @@ export type ProcessInstanceRow = {
    * argumento que o chamador pode esquecer é uma regra que às vezes não vale.
    */
   failingIntegrations: ReadonlySet<string>;
+  /**
+   * Nome dos arquivos anexados à demanda (§26).
+   *
+   * Carregado aqui pelo mesmo motivo dos fatos e das integrações: a conferência
+   * por documento não pode depender de a rota lembrar de passar a lista — uma
+   * exigência que às vezes não é medida é pior do que exigência nenhuma, porque
+   * quem configurou acredita que ela vale.
+   */
+  attachmentNames: readonly string[];
 };
 
 export async function loadProcessInstance(d1: Database, workspaceId: string, cardId: string): Promise<ProcessInstanceRow> {
@@ -273,6 +295,14 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
       WHERE v.workspace_id = ? AND v.card_id = ?`,
   ).bind(workspaceId, cardId).all<Row>();
 
+  /* O nome dos anexos, para a conferência por documento (§26). Índice
+     (card_id, created_at) já existe; o teto evita que uma demanda com centenas
+     de arquivos transforme a leitura da etapa numa consulta cara. */
+  const attachments = await d1.prepare(
+    `SELECT filename FROM fdp_card_attachments
+      WHERE workspace_id = ? AND card_id = ? ORDER BY created_at DESC LIMIT 200`,
+  ).bind(workspaceId, cardId).all<Row>();
+
   return {
     id: text(row.id),
     workspaceId: text(row.workspace_id),
@@ -303,6 +333,7 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
       ])),
     },
     failingIntegrations: new Set(failing.results.map((row2) => text(row2.channel).toLowerCase())),
+    attachmentNames: attachments.results.map((row2) => text(row2.filename)).filter(Boolean),
   };
 }
 
@@ -343,6 +374,8 @@ export function evaluateStepRequirements(input: {
   createdByEmail: string;
   pendingChecklist: number;
   attachmentCount: number;
+  /** Nome dos arquivos anexados à demanda, para a conferência por documento (§26). */
+  attachmentNames: readonly string[];
 }): TransitionRequirement[] {
   const blockers: TransitionRequirement[] = [];
   const { config, actor } = input;
@@ -359,6 +392,24 @@ export function evaluateStepRequirements(input: {
       code: "PROCESS_STEP_EVIDENCE_REQUIRED",
       message: "Esta etapa exige evidência anexada antes de avançar.",
     });
+  }
+
+  /* Conferência por documento (§26).
+     `evidenceRequired` pergunta "existe algum anexo"; esta pergunta "existe o
+     anexo *deste* documento". São exigências diferentes e podem coexistir: a
+     primeira cobre a etapa que quer prova de qualquer natureza, a segunda a
+     etapa que sabe exatamente o que precisa receber.
+
+     Só vale quando a etapa pediu — `declared` é o padrão, e é o comportamento
+     que as versões já publicadas continuam tendo (§48). */
+  if (config.documentProof === "attached" && config.requiredDocuments.length) {
+    const missing = missingDocuments(config.requiredDocuments, input.attachmentNames);
+    if (missing.length) {
+      blockers.push({
+        code: "PROCESS_STEP_DOCUMENT_MISSING",
+        message: describeMissingDocuments(missing),
+      });
+    }
   }
 
   if (config.responsibilityMode === "USER" && config.responsibleUserId
@@ -420,6 +471,8 @@ export function evaluateTransition(input: {
   facts?: ConditionFacts;
   /** Canais de integração em erro agora. Omitido, usa o que a instância trouxe. */
   failingIntegrations?: ReadonlySet<string>;
+  /** Nome dos anexos. Omitido, usa o que a instância trouxe (§26). */
+  attachmentNames?: readonly string[];
 }): TransitionEvaluation {
   const { version, instance, actor } = input;
   const targetStepId = cleanText(input.targetStepId, 160);
@@ -493,6 +546,7 @@ export function evaluateTransition(input: {
     createdByEmail: instance.createdBy,
     pendingChecklist: input.pendingChecklist,
     attachmentCount: input.attachmentCount,
+    attachmentNames: input.attachmentNames ?? instance.attachmentNames,
   }));
 
   /* Condição da seta (§25).
@@ -536,6 +590,7 @@ export function availableTransitions(input: {
   attachmentCount: number;
   facts?: ConditionFacts;
   failingIntegrations?: ReadonlySet<string>;
+  attachmentNames?: readonly string[];
 }) {
   return outgoingFlows(input.version.graph, input.instance.currentStepId).map((flow) => {
     const evaluation = evaluateTransition({ ...input, targetStepId: flow.target });

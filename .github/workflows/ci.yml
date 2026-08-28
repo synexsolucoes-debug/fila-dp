@@ -105,6 +105,13 @@ jobs:
       # confere contagem por tabela, políticas de RLS, FORCE ROW LEVEL SECURITY,
       # triggers, constraints, isolamento entre clientes no banco restaurado e
       # imutabilidade de fechamento concluído. Leva segundos.
+      # A retenção do provedor fica fora do repositório, e o ensaio de restauração
+      # não a alcança: ele prova que sabemos voltar, não que existe de onde. Sem
+      # credencial de Neon na CI, o passo roda em modo permissivo — ele imprime
+      # alto que não conferiu, em vez de deixar o silêncio parecer aprovação.
+      - name: Conferir a política de backup do provedor
+        run: npm run verify:backup -- --permitir-sem-credencial
+
       - name: Ensaiar backup e restauração
         env:
           FDP_DR_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
@@ -190,3 +197,8 @@ jobs:
           # demanda pela interface e a prova de que o seletor de empresa
           # recorta de verdade a visão geral.
           npm run browser-check
+          # A §86-§98 vinha sendo classificada como "julgamento visual: precisa
+          # de olho humano". Parte dela e, e continua sendo; a parte mecanica —
+          # altura, raio e token de controle, emoji em texto de interface — a
+          # maquina mede melhor, e nao estava sendo medida por ninguem.
+          npm run interface-check

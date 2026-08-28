@@ -42,7 +42,8 @@
 .commandSelectors > label { display: grid; gap: 5px; }
 .commandSelectors select {
   min-height: 38px; min-width: 190px; padding: 0 10px; border: 1px solid var(--time-border);
-  border-radius: 7px; background: var(--time-surface); color: inherit;
+  /* Token, e não 7px cravado (§97). */
+  border-radius: var(--ui-radius-sm); background: var(--time-surface); color: inherit;
 }
 .commandActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
