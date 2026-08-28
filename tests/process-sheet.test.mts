@@ -256,3 +256,54 @@ test("a aba de automações não inventa que a regra de quadro é do processo", 
   assert.match(panel, /Configurações › Automações/u,
     "a tela precisa dizer onde as regras de quadro moram, em vez de omitir");
 });
+
+/* ── Rascunho (§31, §103) ──────────────────────────────────────────────── */
+
+test("a ficha de um processo em rascunho mostra o que está configurado", async () => {
+  /* Achado ao abrir a ficha de um processo recém-criado, com o produto de pé:
+     as quatro abas de dados abriam com banner vermelho — "Só uma versão
+     publicada pode gerar demanda" — e nenhum conteúdo. O produto recusava
+     *ler* o que ele mesmo mandava configurar, no estado em que todo processo
+     nasce.
+
+     Ler e executar são coisas diferentes. A recusa continua, e no mesmo lugar:
+     `loadPublishedVersion` é a porta da execução. */
+  const route = await readFile(
+    new URL("../app/api/processes/[id]/usage/route.ts", import.meta.url), "utf8");
+  assert.match(route, /loadVersionForReading/u);
+  // Sem os comentários: eles citam a porta estrita justamente para explicar por
+  // que ela não é usada aqui.
+  const codigo = route.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/^\s*\/\/.*$/gmu, "");
+  assert.ok(!/loadPublishedVersion/u.test(codigo),
+    "a ficha voltou a exigir versão publicada para apenas mostrar a configuração");
+  assert.match(route, /published: version\.published/u);
+});
+
+test("rascunho não ganha o botão de iniciar processo", async () => {
+  // Mostrar sem permitir instanciar é a única leitura segura: a rota de
+  // instanciação recusaria, e oferecer o botão seria prometer o que o servidor
+  // nega.
+  const route = await readFile(
+    new URL("../app/api/processes/[id]/usage/route.ts", import.meta.url), "utf8");
+  const bloco = route.slice(route.indexOf("permissions: {"));
+  assert.match(bloco, /start: version\.published/u);
+});
+
+test("a instanciação continua exigindo versão publicada", async () => {
+  // O guard que impede rascunho de gerar demanda não pode ter sido afrouxado
+  // junto: é ele que impede o caminho lateral.
+  const engine = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
+  assert.match(engine, /options\.requirePublished && !published/u);
+  const instanciar = await readFile(
+    new URL("../app/api/processes/versions/[id]/instantiate/route.ts", import.meta.url), "utf8");
+  assert.match(instanciar, /loadPublishedVersion/u,
+    "a rota de instanciação precisa continuar usando a porta estrita");
+});
+
+test("o painel mostra o aviso de rascunho junto do conteúdo, não no lugar dele", async () => {
+  const panel = await readFile(
+    new URL("../app/painel/features/work/ProcessOperationPanel.tsx", import.meta.url), "utf8");
+  assert.match(panel, /!payload\.published && !payload\.version/u,
+    "só processo sem versão nenhuma pode ficar sem conteúdo");
+  assert.match(panel, /\{rascunho\}<DocumentsSection/u);
+});

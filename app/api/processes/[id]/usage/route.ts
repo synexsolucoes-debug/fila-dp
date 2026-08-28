@@ -3,7 +3,7 @@ import { getWorkspaceContext } from "@/lib/fila-dp-db";
 import { hasCapability, requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { requireProcessCompanyAccess } from "@/lib/process-access";
-import { loadPublishedVersion } from "@/lib/process-instances";
+import { loadVersionForReading } from "@/lib/process-instances";
 import { durationLabel, summarizeSteps, type ProcessUsage } from "@/lib/process-usage";
 import {
   summarizeAutomations, summarizeDocuments, summarizeRules, type StepAutomationRow,
@@ -73,7 +73,14 @@ export async function GET(request: Request, { params }: RouteContext) {
       }, { headers: { "Cache-Control": "no-store" } });
     }
 
-    const version = await loadPublishedVersion(d1, workspace.id, versionId);
+    /* Lê a versão mesmo em rascunho (§31, §103).
+       Documentos, regras e automações são mais úteis *enquanto* alguém desenha
+       o processo. Recusar a leitura porque a versão não foi publicada fazia a
+       ficha abrir com quatro abas em erro no estado em que todo processo nasce
+       — o produto recusando ler o que ele mesmo mandou configurar.
+       Instanciar continua exigindo publicação: quem barra isso é
+       `loadPublishedVersion`, na rota de instanciação. */
+    const version = await loadVersionForReading(d1, workspace.id, versionId);
 
     const [members, areas, totals, retention, automationRows] = await Promise.all([
       d1.prepare(`SELECT m.user_id, u.name FROM fdp_workspace_members m
@@ -159,7 +166,8 @@ export async function GET(request: Request, { params }: RouteContext) {
         allowManualStart: Number(definition.allow_manual_start) === 1,
         allowAutomaticStart: Number(definition.allow_automatic_start) === 1,
       },
-      published: true,
+      published: version.published,
+      detail: version.published ? "" : "Esta versão ainda é um rascunho. O que está configurado aparece abaixo; publique a versão para que o processo possa abrir demandas.",
       version: {
         id: version.versionId,
         number: version.versionNumber,
@@ -180,7 +188,9 @@ export async function GET(request: Request, { params }: RouteContext) {
       permissions: {
         /* Iniciar processo é escrever demanda, não ler processo: quem só
            consulta o desenho não abre trabalho para a operação (§41). */
-        start: hasCapability(workspace, "cards.write") && Number(definition.allow_manual_start) === 1,
+        start: version.published
+          && hasCapability(workspace, "cards.write")
+          && Number(definition.allow_manual_start) === 1,
       },
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

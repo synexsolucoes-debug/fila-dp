@@ -204,23 +204,31 @@ export function ProcessOperationPanel({ processId, section = "flow", onStarted }
   if (loading) return <LoadingState title="Carregando a ficha operacional…" size="compact" />;
   if (!payload) return error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null;
 
-  if (!payload.published) {
+  /* Processo sem versão nenhuma não tem o que mostrar; processo com versão em
+     rascunho tem. A diferença importa porque é no rascunho que alguém está
+     desenhando, e é aí que ver os documentos e as regras já configurados vale
+     mais. Antes, as quatro abas abriam em erro (§31, §103). */
+  if (!payload.published && !payload.version) {
     return <p className={styles.agentDetail}>{payload.detail}</p>;
   }
 
   const { usage, usageLabels } = payload;
+  const rascunho = payload.published
+    ? null
+    : <p className={styles.agentDetail} role="status">{payload.detail}</p>;
 
   if (section === "documents") {
-    return <DocumentsSection documents={payload.documents} />;
+    return <>{rascunho}<DocumentsSection documents={payload.documents} /></>;
   }
   if (section === "rules") {
-    return <RulesSection rules={payload.rules} />;
+    return <>{rascunho}<RulesSection rules={payload.rules} /></>;
   }
   if (section === "automations") {
-    return <AutomationsSection automations={payload.automations} />;
+    return <>{rascunho}<AutomationsSection automations={payload.automations} /></>;
   }
 
   return <section className={styles.workspace} aria-label="Ficha operacional do processo">
+    {rascunho}
     {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
     {toast ? <p className={styles.agentDetail} role="status">{toast}</p> : null}
 
