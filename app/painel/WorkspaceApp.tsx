@@ -584,11 +584,11 @@ function referenceLabel(card: Card) {
 /**
  * Processo, etapa e progresso no cartão do quadro.
  *
- * O `tasksTotal` conta as tarefas **já instanciadas** — as das etapas que a
- * demanda percorreu. As etapas à frente ainda não geraram tarefa, então o total
- * cresce conforme o processo anda. Dizer "7 de 18" com 18 vindo do desenho
- * daria um denominador que a demanda não tem: seria uma promessa sobre trabalho
- * que ainda não existe como item.
+ * O `tasksTotal` é o que a **versão do processo prevê**, somando as tarefas de
+ * todas as etapas. Como a versão é imutável, o denominador é fixo desde a
+ * criação: "7 de 18" continua sendo de 18 enquanto a demanda anda, que é o que
+ * permite ler o progresso como avanço no processo, e não como uma fração cujo
+ * fundo se mexe.
  *
  * Sem tarefa nenhuma o percentual não aparece — 0% num cartão recém-criado
  * parece atraso, quando é apenas ausência de item.

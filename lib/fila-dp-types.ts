@@ -393,7 +393,15 @@ export type ProcessFlowSummary = {
   stepId: string;
   stepLabel: string;
   responsibleName: string;
-  /** Concluídas / total das tarefas instanciadas, e o percentual derivado. */
+  /**
+   * Concluídas / total, e o percentual derivado.
+   *
+   * O total é o que a **versão do processo prevê**, somando as tarefas de todas
+   * as etapas — não só as das etapas já percorridas. A versão é imutável, então
+   * o denominador é fixo desde a criação da demanda: "7 de 18" continua sendo
+   * de 18 enquanto ela anda. Versão sem configuração de etapa gravada recai no
+   * total materializado, porque ali "7 de 0" seria pior.
+   */
   tasksDone: number;
   tasksTotal: number;
   progress: number;

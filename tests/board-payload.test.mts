@@ -124,3 +124,25 @@ test("o cartão do quadro mostra processo, etapa e progresso (spec: Demandas)", 
      processo e a versão ficam no title, para não competir com ela na varredura. */
   assert.match(tela, /title=\{`Processo: \$\{flow\.definitionName\} • versão \$\{flow\.versionNumber\}`\}/u);
 });
+
+test("o progresso da demanda tem denominador fixo, vindo do desenho", async () => {
+  /* "7 de 18": o 18 é o que a versão prevê no processo inteiro, não o que as
+     etapas percorridas já materializaram. A versão é imutável, então o
+     denominador não se move enquanto a demanda anda — fração cujo fundo muda
+     não se lê como avanço. */
+  const db = await readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8");
+  assert.match(db, /const plannedTasksByVersion = new Map<string, number>\(\)/u);
+  assert.match(db, /const tasksTotal = Math\.max\(previstas, materializadas\)/u,
+    "versão sem configuração de etapa precisa recair no materializado; '7 de 0' seria pior");
+});
+
+test("o total previsto usa a mesma stepChecklist da execução", async () => {
+  /* Quem decide o que vira tarefa é `stepChecklist`: ela une checklist e
+     documentos da etapa e deduplica. Somar em SQL daria um número próximo e
+     errado — e um progresso de "20 de 18". */
+  const db = await readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8");
+  assert.match(db, /import \{ stepChecklist \} from "\.\/process-instances"/u);
+  assert.match(db, /const previstas = stepChecklist\(\{/u);
+  assert.ok(!/SUM\(jsonb_array_length/u.test(db),
+    "somar o checklist em SQL divergiria da regra que a execução aplica");
+});
