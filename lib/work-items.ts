@@ -134,7 +134,8 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
     sql: `SELECT 'card' AS source_type, c.id AS source_id, c.title, c.description,
         c.priority, c.company_id, COALESCE(NULLIF(co.trade_name, ''), co.legal_name, c.company) AS company_name,
         NULL::text AS employee_id, c.due_at, c.created_at, c.updated_at,
-        CASE WHEN c.closed_at IS NOT NULL THEN 'closed' ELSE c.sla_status END AS status,
+        CASE WHEN c.cancelled_at IS NOT NULL THEN 'cancelled'
+             WHEN c.closed_at IS NOT NULL THEN 'closed' ELSE c.sla_status END AS status,
         c.process_definition_id AS process_id, c.current_step_id AS process_step,
         c.process_version_number AS process_version,
         COALESCE(NULLIF(c.source_type, ''), 'manual') AS origin

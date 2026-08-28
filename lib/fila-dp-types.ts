@@ -209,6 +209,17 @@ export type Card = {
   legalDueAt: string | null;
   processTemplateId: string | null;
   closedAt: string | null;
+  /**
+   * Quando a demanda foi cancelada, e por quê.
+   *
+   * Cancelada é desfecho distinto de concluída: a demanda saiu da operação
+   * (`closedAt` também é preenchido) mas **não** conta como trabalho entregue.
+   * O motivo é obrigatório no banco — cancelamento sem motivo é exatamente a
+   * informação que falta quando alguém pergunta, meses depois, por que aquela
+   * admissão não aconteceu.
+   */
+  cancelledAt: string | null;
+  cancellationReason: string;
 };
 
 export type OperationalArea = {

@@ -172,7 +172,7 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
           O desenho publicado não autoriza nenhuma saída a partir desta etapa. Quem modela o processo precisa revisar a versão.
         </p>
         : <>
-          <h4 className={styles.groupHeading}>Próximas etapas</h4>
+          <h4 className={styles.groupHeading}>Para onde esta etapa pode seguir</h4>
           <div className={styles.list}>
             {transitions.map((transition) => <article key={transition.targetStepId}
               className={styles.item} data-tone={transition.allowed ? "neutral" : "warning"}>

@@ -4943,3 +4943,19 @@
   border-radius: 999px;
   background: var(--ui-primary);
 }
+
+/* Demanda cancelada, no cabeçalho do detalhe.
+   Cancelada não é erro nem alerta — é um desfecho. Por isso não usa o vermelho
+   de SLA estourado, que a operação lê como "aja agora": aqui não há nada a
+   fazer. O motivo fica no title, onde quem precisa dele o encontra sem que ele
+   ocupe a primeira linha. */
+.demand-cancelled {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  color: var(--ui-text-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .05em;
+}

@@ -635,6 +635,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     /* Número da demanda (#DM-2471). `null` só vem de banco anterior à 0070 —
        a tela omite o número nesse caso, em vez de exibir zero ou inventar. */
     referenceNumber: row.reference_number == null ? null : Number(row.reference_number),
+    cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
+    cancellationReason: String(row.cancellation_reason ?? ""),
     title: String(row.title),
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,
