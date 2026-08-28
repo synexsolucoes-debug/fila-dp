@@ -3109,7 +3109,12 @@
    fixas deixariam três órfãos numa segunda linha larga. `auto-fit` acomoda o
    número real de indicadores — que muda com o recorte de empresa — sem que a
    contagem precise estar escrita aqui. */
-.overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 13px; }
+/* Sete indicadores em `minmax(172px)` davam cinco colunas em 1440px: 5 + 2, com
+   TRÊS células vazias ao lado dos dois últimos, e ~700px de nada na dobra mais
+   nobre da tela. Com o mínimo maior a conta dá quatro colunas — 4 + 3, uma
+   célula vazia em vez de três, e cada cartão fica mais folgado.
+   O `auto-fit` continua reduzindo o número de colunas em telas estreitas. */
+.overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 13px; }
 .overview-metrics article,
 .overview-metrics .overview-metric-action { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
 /* O indicador que leva a algum lugar é botão de verdade: foco visível, cursor

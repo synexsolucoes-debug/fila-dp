@@ -374,3 +374,13 @@ test("a faixa de SLA diz qual população o percentual mede", async () => {
   assert.match(app, /stats\.onTime !== null && <div className="sla-progress"/u,
     "barra de progresso sem número para representar não deve ser desenhada");
 });
+
+test("a faixa de indicadores não deixa três células vazias na dobra mais nobre", async () => {
+  /* Sete indicadores com `minmax(172px)` davam cinco colunas em 1440px: 5 + 2,
+     com três células vazias ao lado dos dois últimos. Medido no produto de pé:
+     com o mínimo maior a conta dá quatro colunas — 4 + 3, uma célula vazia. */
+  const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
+  assert.match(css, /\.overview-metrics \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(238px, 1fr\)\); gap: 13px; \}/u);
+  assert.match(css, /auto-fit/u,
+    "largura fixa deixaria de reduzir colunas em tela estreita; medido em 820px, cai para duas");
+});
