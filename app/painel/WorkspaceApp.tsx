@@ -566,6 +566,21 @@ function formatSyncStatus(updatedAt: Date | null, status: RealtimeStatus) {
   return minutes < 1 ? "Atualizado agora" : `Atualizado há ${minutes} min`;
 }
 
+/**
+ * O identificador que uma pessoa dita ao telefone: `#DM-2471`.
+ *
+ * O prefixo mora aqui, na apresentação, e não no banco: guardar "DM-2471" como
+ * texto impediria ordenar por número e transformaria qualquer mudança de
+ * prefixo numa migration de dados.
+ *
+ * Demanda de banco anterior à 0070 não tem número. Aí a resposta é vazia e a
+ * tela não mostra nada — melhor a ausência do que um `#DM-0` que parece uma
+ * demanda de verdade.
+ */
+function referenceLabel(card: Card) {
+  return card.referenceNumber == null ? "" : `#DM-${card.referenceNumber}`;
+}
+
 function slaLabel(card: Card) {
   if (card.slaStatus === "overdue") return `Atrasada • ${formatDue(card.dueAt)}`;
   if (card.slaStatus === "warning") return card.dueAt ? `Atenção • ${formatDue(card.dueAt)}` : "Atenção no SLA";
@@ -2199,7 +2214,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                               if (event.key === "Enter" || event.key === " ") openCard(card);
                             }}
                           >
-                            <div className="dashboard-task-labels"><span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}</div>
+                            <div className="dashboard-task-labels"><span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}{referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}</div>
                             <h2>{card.title}</h2>
                             <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
                             <DemandAreaFlow card={card} areas={snapshot.areas} />
@@ -2285,7 +2300,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       {cardModalOpen && (
         <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
           <section className="workspace-modal card-modal demand-detail-modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
-            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
             {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "process" ? "active" : ""} onClick={() => setCardTab("process")}>Processo</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
             <div className="card-modal-body single">
               {selectedCard && <section className="demand-detail-summary"><div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div><div className="demand-document-state"><span>DOCUMENTOS</span><strong>{selectedCard.checklist.filter((item) => item.completed).length} aprovados</strong><small>{selectedCard.checklist.filter((item) => !item.completed).length} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div><div className="demand-quick-actions">{canEdit && !selectedCard.archived && <><button className="quick-complete" type="button" onClick={completeSelectedCard}><CheckCircle2 aria-hidden="true" /> Concluir</button><button type="button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button><button type="button" onClick={() => focusCardField("card-assignees")}>Responsável</button><button type="button" onClick={() => focusCardField("card-due-at")}>Prazo</button></>}</div></section>}

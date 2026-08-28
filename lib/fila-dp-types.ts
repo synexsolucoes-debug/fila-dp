@@ -164,6 +164,18 @@ export type Card = {
   id: string;
   boardId: string;
   listId: string;
+  /**
+   * O número da demanda dentro do cliente, apresentado como `#DM-2471`.
+   *
+   * É o identificador que uma pessoa dita ao telefone e cola num e-mail — o
+   * `id` acima é opaco e não serve para isso. Atribuído por gatilho no banco,
+   * então toda demanda tem um, inclusive as criadas pelos oito caminhos de
+   * inserção que existem hoje.
+   *
+   * `null` só em demanda lida de um banco anterior à migration 0070; a
+   * interface omite o número nesse caso em vez de inventar um.
+   */
+  referenceNumber: number | null;
   title: string;
   description: string;
   companyId: string | null;
