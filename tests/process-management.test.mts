@@ -23,8 +23,15 @@ test("interface entrega as nove seções, BPMN, autosave, exportação e proprie
      da página vira barra de abas — a §41 pede a segunda. Um teste que reprova
      por encurtar um rótulo reprova por mudança, não por defeito; o
      identificador é o que o resto do código realmente usa. */
+  /* Alcançável, e não necessariamente aba. Quatro seções — rascunhos, revisão,
+     publicados e arquivados — eram aba E cartão com contagem, o mesmo
+     `setSection` duas vezes empilhado; ficou o cartão. O que precisa ser
+     protegido é que nenhuma das nove fique órfã, por qualquer um dos dois
+     controles. Cobrar "é aba" testava o mecanismo; isto testa a propriedade. */
   for (const id of ["library", "modeler", "mine", "drafts", "review", "published", "archived", "history", "settings"]) {
-    assert.match(view, new RegExp(`id: "${id}", label: "`, "u"), `a seção ${id} sumiu da barra`);
+    const comoAba = new RegExp(`id: "${id}", label: "`, "u").test(view);
+    const comoCartao = new RegExp(`setSection\\("${id}"\\)`, "u").test(view);
+    assert.ok(comoAba || comoCartao, `a seção ${id} ficou órfã: não é aba nem tem quem a abra`);
   }
   // E o tipo continua sendo a fonte da lista: uma seção nova sem aba reprova
   // no compilador antes de chegar aqui.
@@ -157,4 +164,35 @@ test("edição e ciclo de versões respeitam o escopo de empresa", async () => {
   for (const source of [review, publish, createVersion]) assert.match(source, /requireProcessCompanyAccess/u);
   assert.match(access, /fdp_process_companies/u);
   assert.match(access, /COMPANY_ACCESS_REQUIRED/u);
+});
+
+test("o ciclo de vida do processo tem um seletor, não dois empilhados", async () => {
+  /* Rascunhos, Em revisão, Publicados e Arquivados eram uma aba E um cartão
+     logo abaixo, chamando exatamente o mesmo `setSection`. O mesmo controle
+     duas vezes, um sobre o outro, e o de cima sem os números. Ficou o de
+     baixo, que informa quantos há em cada estado. */
+  const view = await readFile(
+    new URL("../app/painel/features/processes/ProcessManagementView.tsx", import.meta.url), "utf8");
+  const bruto = view.slice(view.indexOf("const sectionTabs"), view.indexOf("];", view.indexOf("const sectionTabs")));
+  /* Sem os comentários: o comentário que explica a consolidação cita os quatro
+     rótulos removidos, e a asserção casaria com ele em vez de com o código. */
+  const abas = bruto.replace(/\/\*[\s\S]*?\*\//gu, "");
+  for (const duplicada of ["Rascunhos", "Em revisão", "Publicados", "Arquivados"]) {
+    assert.ok(!abas.includes(duplicada),
+      `"${duplicada}" voltou a ser aba, e já é cartão com contagem logo abaixo`);
+  }
+  for (const mantida of ["Biblioteca", "Modelador", "Meus processos", "Versões", "Configurações"]) {
+    assert.ok(abas.includes(mantida), `a aba "${mantida}" não tem equivalente na faixa e precisa continuar`);
+  }
+});
+
+test("a faixa de maturidade diz qual estado está aberto", async () => {
+  /* Agora que ela é o único seletor, precisa marcar a seleção — antes não
+     precisava, porque a aba ativa dizia por ela. */
+  const view = await readFile(
+    new URL("../app/painel/features/processes/ProcessManagementView.tsx", import.meta.url), "utf8");
+  for (const secao of ["drafts", "review", "published", "archived"]) {
+    assert.match(view, new RegExp(`setSection\\("${secao}"\\)[^>]*aria-current=\\{section === "${secao}"`, "u"),
+      `o cartão de "${secao}" precisa marcar quando está aberto`);
+  }
 });

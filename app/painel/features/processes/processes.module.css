@@ -786,3 +786,11 @@
   .conditionAdd, .conditionRemove { transition: none; }
   .conditionAdd:active:not(:disabled), .conditionRemove:active:not(:disabled) { transform: none; }
 }
+
+/* A faixa de maturidade virou o único seletor de ciclo de vida: as quatro abas
+   que faziam a mesma coisa saíram. Por isso ela precisa dizer onde você está —
+   antes não precisava, porque a aba ativa dizia por ela. */
+.maturityStrip button[aria-current="true"] {
+  background: var(--ui-primary-soft, rgba(99, 160, 255, .12));
+  box-shadow: inset 0 0 0 1px var(--ui-primary);
+}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  Archive, BookOpenCheck, Building2, CheckCircle2, Clock3, FilePenLine, FileText, FolderArchive,
+  Archive, BookOpenCheck, Building2, Clock3, FilePenLine, FileText,
   History, LayoutTemplate, Pencil, Play, Plus, RotateCcw, Search, Settings2, ShieldCheck,
   SlidersHorizontal, UserRound, Workflow, X, Zap,
 } from "lucide-react";
@@ -50,10 +50,12 @@ const sectionTabs: ReadonlyArray<AnimatedTab<ProcessSection>> = [
   { id: "library", label: "Biblioteca", icon: BookOpenCheck },
   { id: "modeler", label: "Modelador", icon: Workflow },
   { id: "mine", label: "Meus processos", icon: UserRound },
-  { id: "drafts", label: "Rascunhos", icon: FilePenLine },
-  { id: "review", label: "Em revisão", icon: Clock3 },
-  { id: "published", label: "Publicados", icon: CheckCircle2 },
-  { id: "archived", label: "Arquivados", icon: FolderArchive },
+  /* Rascunhos, Em revisão, Publicados e Arquivados NÃO entram aqui.
+     Cada um deles era uma aba e, logo abaixo, um cartão com contagem que
+     chamava exatamente o mesmo `setSection` — o mesmo controle duas vezes,
+     empilhado, e o de cima sem os números. Ficou o de baixo, que informa
+     quantos há em cada estado; a faixa passa a aparecer também dentro dessas
+     seções, para continuar servindo de seletor em vez de sumir ao ser usada. */
   { id: "history", label: "Versões", icon: History },
   { id: "settings", label: "Configurações", icon: Settings2 },
 ];
@@ -415,16 +417,16 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
           </div>
         ) : <>
           <section className={styles.maturityStrip} aria-label="Maturidade operacional da biblioteca">
-            <button type="button" onClick={() => setSection("drafts")} data-tone="draft">
+            <button type="button" onClick={() => setSection("drafts")} data-tone="draft" aria-current={section === "drafts" ? "true" : undefined}>
               <span>Rascunhos</span><strong>{maturity.drafts}</strong><small>Aguardando desenho ou ajuste</small>
             </button>
-            <button type="button" onClick={() => setSection("review")} data-tone="review">
+            <button type="button" onClick={() => setSection("review")} data-tone="review" aria-current={section === "review" ? "true" : undefined}>
               <span>Em revisão</span><strong>{maturity.review}</strong><small>Prontos para decisão</small>
             </button>
-            <button type="button" onClick={() => setSection("published")} data-tone="published">
+            <button type="button" onClick={() => setSection("published")} data-tone="published" aria-current={section === "published" ? "true" : undefined}>
               <span>Publicados</span><strong>{maturity.published}</strong><small>Referências vigentes</small>
             </button>
-            <button type="button" onClick={() => setSection("archived")} data-tone="archived">
+            <button type="button" onClick={() => setSection("archived")} data-tone="archived" aria-current={section === "archived" ? "true" : undefined}>
               <span>Arquivados</span><strong>{maturity.archived}</strong><small>Histórico preservado</small>
             </button>
           </section>
