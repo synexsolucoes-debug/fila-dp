@@ -335,19 +335,21 @@ test("obrigações com vencimentos diferentes não são fundidas", async () => {
     "o grupo precisa manter o prazo mais apertado, senão a urgência some na agregação");
 });
 
-test("o histórico não ganha botão para uma tela que não existe", async () => {
-  /* A especificação pede "Ver histórico completo". Não há tela de auditoria no
-     painel — o registro existe em fdp_audit_events sem lugar onde ser lido.
-     Botão que não leva a lugar nenhum é pior que botão nenhum. */
+test("o botão do histórico entrou junto com a tela, e aponta para ela", async () => {
+  /* Este teste nasceu ao contrário: enquanto não havia tela de histórico, ele
+     cobrava que o botão NÃO existisse — link que leva ao lugar errado é pior
+     que nenhum. A tela existe agora, então ele cobra a outra metade: que o
+     botão exista e aponte para uma visão registrada. */
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   const painel = app.slice(app.indexOf('className="overview-panel activity-panel"'));
   const bloco = painel.slice(0, painel.indexOf("</section>"));
-  assert.ok(!/Ver histórico completo/u.test(bloco),
-    "o botão só entra junto com a tela de histórico");
+  assert.match(bloco, /onFocus\("history", "all"\)/u,
+    "o bloco de movimentações precisa dar caminho para a trilha completa");
+  assert.match(bloco, /Ver histórico completo/u);
 
   const rotas = await readFile(new URL("../lib/panel-routes.ts", import.meta.url), "utf8");
-  assert.ok(!/\baudit\b\s*:/u.test(rotas),
-    "se a visão de auditoria passou a existir, o botão do histórico deve entrar com ela");
+  assert.match(rotas, /history: "historico"/u,
+    "o destino precisa ser uma visão com endereço próprio, senão o botão leva a lugar nenhum");
 });
 
 test("sem demanda no recorte, o painel não afirma 100% dentro do prazo", async () => {

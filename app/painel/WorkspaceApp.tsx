@@ -62,6 +62,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
+import { HistoryView } from "./features/history/HistoryView";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
@@ -87,11 +88,11 @@ import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 
 /** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
-type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations";
+type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations" | "history";
 
 type CardTab = "details" | "process" | "checklist" | "attachments" | "activity";
 type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
@@ -386,6 +387,13 @@ const viewCatalog: Record<View, ViewEntry> = {
     label: "Relatórios", icon: BarChart3, module: "indicators",
     eyebrow: "RELATÓRIOS", title: "Relatórios da operação",
     description: "Monitore SLAs, volume, produtividade e regras ativas do workspace.",
+  },
+  history: {
+    label: "Histórico", icon: History,
+    eyebrow: "HISTÓRICO DA OPERAÇÃO",
+    title: "Tudo o que aconteceu",
+    description: "A trilha completa de movimentações: quem fez, o quê, em qual demanda e quando.",
+    ownHeader: true,
   },
   integrations: {
     label: "Estado das integrações", icon: Cable, module: "integrations", hiddenFor: ["guest"],
@@ -2332,6 +2340,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) }, "Calendário externo configurado. A sincronização será ativada após a conexão OAuth.")} />}
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} onImportPayroll={(body) => mutate("/api/hr-metrics/import/pdf", { method: "POST", body }, "Extrato da folha importado e painéis atualizados.")} />}
           {view === "indicators" && <IndicatorsView canExportWorkspace={isAdmin} cards={scopedCards} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((item) => item.id === companyFilter)?.tradeName || snapshot.companies.find((item) => item.id === companyFilter)?.legalName || "Empresa selecionada")} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
+          {/* O histórico completo (spec: "Ver histórico completo"). Carrega
+              sob demanda, e não junto do snapshot: a trilha cresce sem limite,
+              e trazê-la na abertura faria todo mundo pagar por uma tela que
+              quase ninguém abre. */}
+          {view === "history" && <HistoryView onOpenCard={(cardId) => {
+            const card = allCards.find((item) => item.id === cardId);
+            if (card) openCard(card);
+          }} />}
           </PageTransition>
           </>}</ProcessTabsProvider>
         </div>
@@ -2964,16 +2980,11 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
       </div></section>
 
-      {/* A especificação pede um "Ver histórico completo" aqui, e ele **não** foi
-          colocado: não existe tela de histórico da operação para onde mandar.
-          Nenhuma das visões do painel é auditoria — o registro existe em
-          `fdp_audit_events`, sem lugar onde ser lido pelo cliente.
-
-          Botão que não leva a lugar nenhum é pior que botão nenhum, e este
-          arquivo já diz isso sobre os indicadores: "link que leva ao lugar
-          errado é pior que nenhum". A tela de histórico é trabalho próprio, não
-          uma linha de JSX. */}
-      <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div></header><div className="recent-activity-list">
+      {/* O botão entrou junto com a tela. Ele tinha ficado de fora de propósito
+          enquanto não havia destino: link que leva ao lugar errado é pior que
+          nenhum, e o teste que guardava isso cobrava as duas metades — que o
+          botão não existisse sem a tela, e que entrasse quando ela entrasse. */}
+      <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
         {activities.slice(0, 5).map((activity) => <article key={activity.id}><span>{initials(activity.actorName || "DP")}</span><div><strong>{activity.actorName || "Equipe DP"} <small>{activityLabel(activity)}</small></strong><p>{activityDetails(activity)[0] || "Registro atualizado na operação."}</p></div><time>{formatMoment(activity.createdAt)}</time></article>)}
         {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
       </div></section>

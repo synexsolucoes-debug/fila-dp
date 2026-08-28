@@ -122,7 +122,10 @@ export const processGroups: readonly ProcessGroup[] = [
     /* Triagem e Agentes moram aqui, e não no menu principal (§48): quem opera o
        dia a dia raramente precisa delas, e um item de menu que quase ninguém
        abre empurra para baixo os que todo mundo abre. */
-    views: ["indicators", "integrations", "triage", "agents"],
+    /* O histórico entra aqui, e não na Operação DP: é consulta e prestação de
+       contas, não trabalho do dia. Quem opera abre o quadro; quem audita abre a
+       trilha, e raramente. */
+    views: ["indicators", "integrations", "triage", "agents", "history"],
   },
 ] as const;
 

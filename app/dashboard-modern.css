@@ -4959,3 +4959,41 @@
   font-weight: 700;
   letter-spacing: .05em;
 }
+
+/* Histórico completo da operação.
+   Tabela, e não lista de cartões: a pergunta aqui é "quando isso aconteceu e
+   quem fez", e coluna alinhada responde isso na varredura vertical, que é como
+   se lê uma trilha. Datas em tabular para os dígitos alinharem entre linhas. */
+.history-view { display: flex; flex-direction: column; gap: 12px; }
+.history-table-wrap { overflow-x: auto; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); }
+.history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.history-table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+.history-table td { padding: 10px 12px; border-bottom: 1px solid var(--ui-border-soft, var(--ui-border)); vertical-align: top; }
+.history-table tr:last-child td { border-bottom: 0; }
+.history-table time { color: var(--ui-text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.history-table small { color: var(--ui-text-soft); }
+.history-card-link {
+  display: inline-flex; gap: 6px; align-items: baseline;
+  padding: 0; border: 0; background: none;
+  color: var(--ui-primary); cursor: pointer; font: inherit; text-align: left;
+}
+.history-card-link:hover { text-decoration: underline; }
+.history-card-link b { font-variant-numeric: tabular-nums; }
+.history-none { color: var(--ui-text-soft); }
+.history-empty, .history-error {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 40px 20px; border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md); text-align: center;
+}
+.history-empty svg { width: 24px; height: 24px; color: var(--ui-text-soft); }
+.history-loading { color: var(--ui-text-soft); font-size: 12px; }
+.history-more { align-self: center; }
