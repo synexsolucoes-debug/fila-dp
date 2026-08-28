@@ -1287,7 +1287,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       active: active.length,
       attention: active.filter((card) => card.slaStatus === "warning" || card.slaStatus === "overdue").length,
       waiting: active.filter((card) => waitingListIds.has(card.listId)).length,
-      onTime: scopedCards.length ? Math.round(((scopedCards.length - scopedCards.filter((card) => card.slaStatus === "overdue").length) / scopedCards.length) * 100) : 100,
+      /* `null` quando não há demanda no recorte, em vez de 100%.
+         Sem nenhuma demanda, "100% dentro do prazo" é uma afirmação sobre nada
+         — e é o número mais tranquilizador da tela, exibido justamente quando
+         não há evidência para tranquilizar ninguém. Ausência é verdade;
+         percentual sobre denominador zero, não. */
+      onTime: scopedCards.length
+        ? Math.round(((scopedCards.length - scopedCards.filter((card) => card.slaStatus === "overdue").length) / scopedCards.length) * 100)
+        : null,
       completed,
       documentsPending: active.reduce((total, card) => total + card.checklist.filter((item) => !item.completed).length, 0),
       activeCompanies: snapshot?.companies.filter((company) => company.status === "active").length ?? 0,
@@ -2218,7 +2225,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 <article><span>Demandas ativas</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída", "concluídas")}</small></article>
                 <article><span>Exigem atenção</span><strong>{stats.attention}</strong><small className="warning-text">SLA hoje ou atrasado</small></article>
                 <article><span>Aguardando terceiros</span><strong>{stats.waiting}</strong><small>SLA pausado</small></article>
-                <article><span>Dentro do prazo</span><strong>{stats.onTime}%</strong><small className="safe-text">Visão atual</small></article>
+                <article><span>Dentro do prazo</span><strong>{stats.onTime === null ? "—" : `${stats.onTime}%`}</strong><small className="safe-text">{stats.onTime === null ? "Nenhuma demanda no recorte" : "Das demandas em aberto"}</small></article>
               </div>
 
               <div className="dashboard-board-head">
@@ -2759,7 +2766,7 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   activities: ActivityEvent[];
   cycles: WorkspaceSnapshot["payrollCycles"];
   integrations: WorkspaceSnapshot["integrations"];
-  stats: { active: number; attention: number; waiting: number; onTime: number; completed: number; documentsPending: number; activeCompanies: number };
+  stats: { active: number; attention: number; waiting: number; onTime: number | null; completed: number; documentsPending: number; activeCompanies: number };
   onOpen: (card: Card) => void;
   onOpenBoard: () => void;
   onNew: () => void;
@@ -2837,8 +2844,13 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 
 
     <section className="overview-sla-band">
-      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime}% dentro do prazo</strong><p>{stats.completed} demandas concluídas • {stats.waiting} com SLA pausado</p></div>
-      <div className="sla-progress" aria-label={`${stats.onTime}% das demandas dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>
+      {/* O percentual mede as demandas EM ABERTO que não estouraram o prazo — não
+          as concluídas. Os dois números viviam lado a lado sem dizer isso, e
+          "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia o
+          leitor supor que 100% das concluídas cumpriram o prazo. São
+          populações diferentes, e agora o texto diz qual é qual. */}
+      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime === null ? "Sem demandas em aberto" : `${stats.onTime}% das demandas em aberto dentro do prazo`}</strong><p>{stats.completed} concluída(s) no período • {stats.waiting} com SLA pausado</p></div>
+      {stats.onTime !== null && <div className="sla-progress" aria-label={`${stats.onTime}% das demandas em aberto dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>}
       <div className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></div>
     </section>
 

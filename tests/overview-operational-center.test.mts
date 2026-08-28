@@ -349,3 +349,26 @@ test("o histórico não ganha botão para uma tela que não existe", async () =>
   assert.ok(!/\baudit\b\s*:/u.test(rotas),
     "se a visão de auditoria passou a existir, o botão do histórico deve entrar com ela");
 });
+
+test("sem demanda no recorte, o painel não afirma 100% dentro do prazo", async () => {
+  /* O cálculo caía em `: 100` quando não havia nenhuma demanda. O número mais
+     tranquilizador da tela aparecia justamente quando não havia evidência para
+     tranquilizar ninguém — percentual sobre denominador zero. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /onTime: scopedCards\.length\s*\n?\s*\? Math\.round/u);
+  assert.match(app, /: null,/u);
+  assert.ok(!/\) \* 100\) : 100,/u.test(app),
+    "voltar a 100 no recorte vazio traria de volta a afirmação sobre nada");
+  assert.match(app, /stats\.onTime === null \? "—"/u,
+    "o cartão precisa mostrar ausência, não zero nem cem");
+});
+
+test("a faixa de SLA diz qual população o percentual mede", async () => {
+  /* "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia supor que
+     100% das concluídas cumpriram o prazo. O percentual mede as demandas EM
+     ABERTO que não estouraram; são populações diferentes. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /das demandas em aberto dentro do prazo/u);
+  assert.match(app, /stats\.onTime !== null && <div className="sla-progress"/u,
+    "barra de progresso sem número para representar não deve ser desenhada");
+});
