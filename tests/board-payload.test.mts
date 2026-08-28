@@ -146,3 +146,29 @@ test("o total previsto usa a mesma stepChecklist da execução", async () => {
   assert.ok(!/SUM\(jsonb_array_length/u.test(db),
     "somar o checklist em SQL divergiria da regra que a execução aplica");
 });
+
+test("o cartão do quadro tem hierarquia: número legível, título maior, responsável nomeado", async () => {
+  /* O cartão vivia inteiro entre 8 e 12px — faixa estreita demais para existir
+     hierarquia, e por isso tudo pesava igual. O usuário disse três vezes que
+     não percebia mudança visual, e esta era a razão: o número era 9px cinza no
+     canto, o responsável era uma inicial dentro de um círculo, e "sem prazo"
+     vinha pintado com a mesma cor tranquila de quem está dentro do prazo. */
+  const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
+
+  /* Com o mesmo ancestral: `.dashboard-task-labels span` pesa mais que a classe
+     sozinha, e a primeira tentativa ficou em 9px por perder especificidade. */
+  assert.match(css, /\.dashboard-task-labels \.dashboard-card-reference \{[\s\S]*?font-size: 11px;/u,
+    "o número precisa vencer a regra de 9px das etiquetas, e isso exige o ancestral no seletor");
+  assert.match(css, /\.dashboard-task h2 \{[\s\S]*?font-size: 14px;/u);
+  assert.match(css, /-webkit-line-clamp: 2;/u,
+    "título de uma linha só corta o nome de quem a demanda trata");
+
+  /* Demanda sem prazo não é boa notícia. */
+  assert.match(css, /\.dashboard-sla\.safe:not\(\.has-due\)/u);
+
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /card\.dueAt \? " has-due" : ""/u,
+    "sem o marcador, a regra do prazo neutro atingiria também quem está no prazo");
+  assert.match(app, /\{dono && <span className="dashboard-mini-avatar">/u,
+    "avatar com inicial ao lado de 'Sem responsável' afirma que há alguém");
+});
