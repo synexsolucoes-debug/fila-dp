@@ -120,3 +120,30 @@ test("a lista de rotas prometidas cobre visões e configurações", () => {
   assert.ok(routes.includes("/painel/demandas"));
   assert.ok(routes.includes("/painel/configuracoes/seguranca"));
 });
+
+test("a lista de telas do painel tem uma fonte só, e as duas cópias não podem divergir", async () => {
+  /* `View`, em WorkspaceApp, é uma união escrita à mão que repete `panelViews`.
+     Descobri isso acrescentando uma tela: registrei em `panelViews` e NADA
+     quebrou na outra — nem compilação, nem teste. Uma tela em só uma das listas
+     falha em silêncio: some do menu, ou perde endereço, sem erro nenhum.
+
+     Enquanto as duas existirem, esta guarda é o que as mantém iguais. */
+  const [rotas, app] = await Promise.all([
+    readFile(new URL("../lib/panel-routes.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+  ]);
+
+  const bloco = rotas.slice(rotas.indexOf("export const panelViews = ["), rotas.indexOf("] as const;"));
+  const daRota = new Set([...bloco.matchAll(/"([a-zA-Z]+)"/gu)].map((m) => m[1]));
+
+  const uniao = app.slice(app.indexOf("type View ="), app.indexOf(";", app.indexOf("type View =")));
+  const daTela = new Set([...uniao.matchAll(/"([a-zA-Z]+)"/gu)].map((m) => m[1]));
+
+  const soNaRota = [...daRota].filter((id) => !daTela.has(id));
+  const soNaTela = [...daTela].filter((id) => !daRota.has(id));
+
+  assert.deepEqual(soNaRota, [],
+    "tela com endereço e sem entrada em `View`: o painel não sabe renderizá-la");
+  assert.deepEqual(soNaTela, [],
+    "tela em `View` e sem endereço: ninguém consegue abri-la por link");
+});
