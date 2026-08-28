@@ -606,6 +606,35 @@ function CardProcessLine({ flow }: { flow: ProcessFlowSummary }) {
   </>;
 }
 
+/**
+ * A mesma obrigação, uma linha só, com a contagem de empresas.
+ *
+ * A consulta devolve **uma linha por empresa**: doze filiais com o mesmo
+ * eSocial S-1299 ocupavam as seis vagas do painel com o mesmo prazo repetido,
+ * e a sétima obrigação — de outro tipo, talvez mais urgente — não aparecia. A
+ * especificação pede o formato agregado ("Empresas: 12"), e ele é o que deixa a
+ * lista responder "o que vence", em vez de "onde vence".
+ *
+ * Agrupa por obrigação + competência + vencimento: mesma obrigação com prazos
+ * diferentes são dois compromissos distintos, e juntá-los esconderia o mais
+ * apertado atrás do mais folgado. Mantém o menor `daysRemaining` do grupo pelo
+ * mesmo motivo.
+ *
+ * Sem consulta nova — é agregação do que o snapshot já traz.
+ */
+function groupObligations(items: readonly WorkspaceSnapshot["upcomingObligations"][number][]) {
+  const grupos = new Map<string, WorkspaceSnapshot["upcomingObligations"][number]
+    & { companies: number }>();
+  for (const item of items) {
+    const chave = `${item.title}|${item.competence}|${item.dueDate}`;
+    const atual = grupos.get(chave);
+    if (!atual) { grupos.set(chave, { ...item, companies: 1 }); continue; }
+    atual.companies += 1;
+    if (item.daysRemaining < atual.daysRemaining) atual.daysRemaining = item.daysRemaining;
+  }
+  return [...grupos.values()];
+}
+
 function slaLabel(card: Card) {
   if (card.slaStatus === "overdue") return `Atrasada • ${formatDue(card.dueAt)}`;
   if (card.slaStatus === "warning") return card.dueAt ? `Atenção • ${formatDue(card.dueAt)}` : "Atenção no SLA";
@@ -2865,11 +2894,13 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
               ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
               : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
           </div>}
-          {obligations.slice(0, 6).map((item) => <article key={item.id}
+          {groupObligations(obligations).slice(0, 6).map((item) => <article key={item.id}
             className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
             <div>
               <strong>{item.title}</strong>
-              <small>{item.company || "Sem empresa"}{item.competence ? ` • Competência ${item.competence}` : ""}</small>
+              <small>{item.companies > 1
+                ? `${item.companies} empresas`
+                : item.company || "Sem empresa"}{item.competence ? ` • Competência ${item.competence}` : ""}</small>
             </div>
             <div className="overview-obligation-due">
               <b>{formatDate(item.dueDate)}</b>
@@ -2900,6 +2931,15 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
       </div></section>
 
+      {/* A especificação pede um "Ver histórico completo" aqui, e ele **não** foi
+          colocado: não existe tela de histórico da operação para onde mandar.
+          Nenhuma das visões do painel é auditoria — o registro existe em
+          `fdp_audit_events`, sem lugar onde ser lido pelo cliente.
+
+          Botão que não leva a lugar nenhum é pior que botão nenhum, e este
+          arquivo já diz isso sobre os indicadores: "link que leva ao lugar
+          errado é pior que nenhum". A tela de histórico é trabalho próprio, não
+          uma linha de JSX. */}
       <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div></header><div className="recent-activity-list">
         {activities.slice(0, 5).map((activity) => <article key={activity.id}><span>{initials(activity.actorName || "DP")}</span><div><strong>{activity.actorName || "Equipe DP"} <small>{activityLabel(activity)}</small></strong><p>{activityDetails(activity)[0] || "Registro atualizado na operação."}</p></div><time>{formatMoment(activity.createdAt)}</time></article>)}
         {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}

@@ -314,3 +314,38 @@ test("demanda fora do teto de fluxos não ganha etapa inventada", async () => {
   assert.match(app, /\{flowByCard\.get\(card\.id\) && </u,
     "sem a guarda, demanda sem fluxo carregado renderizaria etapa vazia");
 });
+
+test("a mesma obrigação em várias empresas ocupa uma linha, com a contagem", async () => {
+  /* A consulta devolve uma linha por empresa. Doze filiais com o mesmo eSocial
+     S-1299 ocupavam as seis vagas do painel com o mesmo prazo repetido, e a
+     sétima obrigação — de outro tipo, talvez mais urgente — não aparecia. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /function groupObligations\(/u);
+  assert.match(app, /item\.companies > 1\s*\n?\s*\? `\$\{item\.companies\} empresas`/u);
+  assert.match(app, /groupObligations\(obligations\)\.slice\(0, 6\)/u,
+    "o painel precisa listar o agrupado, não a lista crua");
+});
+
+test("obrigações com vencimentos diferentes não são fundidas", async () => {
+  /* Mesma obrigação com prazos diferentes são dois compromissos. Juntá-los
+     esconderia o mais apertado atrás do mais folgado. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /const chave = `\$\{item\.title\}\|\$\{item\.competence\}\|\$\{item\.dueDate\}`/u);
+  assert.match(app, /if \(item\.daysRemaining < atual\.daysRemaining\) atual\.daysRemaining = item\.daysRemaining/u,
+    "o grupo precisa manter o prazo mais apertado, senão a urgência some na agregação");
+});
+
+test("o histórico não ganha botão para uma tela que não existe", async () => {
+  /* A especificação pede "Ver histórico completo". Não há tela de auditoria no
+     painel — o registro existe em fdp_audit_events sem lugar onde ser lido.
+     Botão que não leva a lugar nenhum é pior que botão nenhum. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const painel = app.slice(app.indexOf('className="overview-panel activity-panel"'));
+  const bloco = painel.slice(0, painel.indexOf("</section>"));
+  assert.ok(!/Ver histórico completo/u.test(bloco),
+    "o botão só entra junto com a tela de histórico");
+
+  const rotas = await readFile(new URL("../lib/panel-routes.ts", import.meta.url), "utf8");
+  assert.ok(!/\baudit\b\s*:/u.test(rotas),
+    "se a visão de auditoria passou a existir, o botão do histórico deve entrar com ela");
+});
