@@ -292,7 +292,9 @@ test("o cartão da demanda mostra a etapa do processo (§38, §95)", async () =>
      a demanda está no quadro, a etapa diz onde ela está no processo. */
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   assert.match(app, /className="dashboard-card-step"/u);
-  assert.match(app, /stepByCard\.get\(card\.id\)/u);
+  assert.match(app, /flowByCard\.get\(card\.id\)/u);
+  assert.match(app, /\{flow\.stepLabel\}/u,
+    "a etapa precisa continuar sendo texto no cartão, não só um title");
 });
 
 test("a etapa do cartão não custa consulta nova", async () => {
@@ -300,7 +302,7 @@ test("a etapa do cartão não custa consulta nova", async () => {
   // empresa. Uma consulta por cartão seria dezenas de idas ao banco para
   // repetir o que o snapshot já traz.
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  const memo = app.slice(app.indexOf("const stepByCard"), app.indexOf("const scopedObligations"));
+  const memo = app.slice(app.indexOf("const flowByCard"), app.indexOf("const scopedObligations"));
   assert.match(memo, /snapshot\?\.processFlows/u);
   assert.ok(!/fetch\(|requestJson/u.test(memo), "o cartão passou a buscar a etapa por conta própria");
 });
@@ -309,6 +311,6 @@ test("demanda fora do teto de fluxos não ganha etapa inventada", async () => {
   // A consulta traz 60 demandas em andamento. Passando disso, o cartão mostra
   // ausência — que é verdade — em vez de um rótulo aproximado.
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /\{stepByCard\.get\(card\.id\) && </u,
+  assert.match(app, /\{flowByCard\.get\(card\.id\) && </u,
     "sem a guarda, demanda sem fluxo carregado renderizaria etapa vazia");
 });

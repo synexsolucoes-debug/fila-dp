@@ -4915,3 +4915,31 @@
   font-weight: 700;
   user-select: all;
 }
+
+/* Progresso da demanda no cartão do quadro.
+   A barra vem antes do texto porque numa varredura o olho lê a proporção antes
+   de ler o número — o texto existe para quem precisa da contagem exata. */
+.dashboard-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--ui-text-soft);
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dashboard-card-progress i {
+  flex: 0 0 34px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ui-border);
+}
+.dashboard-card-progress b {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ui-primary);
+}

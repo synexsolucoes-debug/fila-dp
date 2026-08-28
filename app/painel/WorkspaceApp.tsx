@@ -62,7 +62,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
-import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
+import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
@@ -579,6 +579,31 @@ function formatSyncStatus(updatedAt: Date | null, status: RealtimeStatus) {
  */
 function referenceLabel(card: Card) {
   return card.referenceNumber == null ? "" : `#DM-${card.referenceNumber}`;
+}
+
+/**
+ * Processo, etapa e progresso no cartão do quadro.
+ *
+ * O `tasksTotal` conta as tarefas **já instanciadas** — as das etapas que a
+ * demanda percorreu. As etapas à frente ainda não geraram tarefa, então o total
+ * cresce conforme o processo anda. Dizer "7 de 18" com 18 vindo do desenho
+ * daria um denominador que a demanda não tem: seria uma promessa sobre trabalho
+ * que ainda não existe como item.
+ *
+ * Sem tarefa nenhuma o percentual não aparece — 0% num cartão recém-criado
+ * parece atraso, quando é apenas ausência de item.
+ */
+function CardProcessLine({ flow }: { flow: ProcessFlowSummary }) {
+  const pct = flow.tasksTotal > 0 ? Math.round((flow.tasksDone / flow.tasksTotal) * 100) : null;
+  return <>
+    <span className="dashboard-card-step" title={`Processo: ${flow.definitionName} • versão ${flow.versionNumber}`}>
+      <Workflow aria-hidden="true" />{flow.stepLabel}
+    </span>
+    {pct !== null && <span className="dashboard-card-progress" title="Tarefas concluídas nas etapas já percorridas">
+      <i><b style={{ width: `${pct}%` }} /></i>
+      {flow.tasksDone} de {flow.tasksTotal} tarefas • {pct}%
+    </span>}
+  </>;
 }
 
 function slaLabel(card: Card) {
@@ -1109,8 +1134,8 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
      A consulta tem teto de 60 demandas em andamento. Passando disso, o cartão
      simplesmente não mostra etapa — melhor a ausência do que um rótulo
      inventado. */
-  const stepByCard = useMemo(() => new Map(
-    (snapshot?.processFlows ?? []).map((flow) => [flow.cardId, flow.stepLabel]),
+  const flowByCard = useMemo(() => new Map(
+    (snapshot?.processFlows ?? []).map((flow) => [flow.cardId, flow]),
   ), [snapshot?.processFlows]);
 
   const scopedObligations = useMemo(() => (snapshot?.upcomingObligations ?? [])
@@ -2218,7 +2243,17 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                             <h2>{card.title}</h2>
                             <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
                             <DemandAreaFlow card={card} areas={snapshot.areas} />
-                            {stepByCard.get(card.id) && <span className="dashboard-card-step" title="Etapa atual do processo"><Workflow aria-hidden="true" />{stepByCard.get(card.id)}</span>}
+                            {/* Processo, etapa e progresso — as três coisas que a
+                                especificação pede no cartão e que já existiam
+                                calculadas no servidor, sem chegar à tela.
+
+                                Processo e etapa são coisas diferentes e ficam em
+                                linhas diferentes: o processo diz *que trabalho é
+                                este*, a etapa diz *onde ele está*. O progresso
+                                conta as tarefas já instanciadas — as das etapas
+                                percorridas —, não as do processo inteiro, porque
+                                as etapas à frente ainda não geraram tarefa. */}
+                            {flowByCard.get(card.id) && <CardProcessLine flow={flowByCard.get(card.id)!} />}
                             {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
                             <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}`}><Clock3 aria-hidden="true" /> {slaLabel(card)}</span><span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}<span className="dashboard-mini-avatar">{initials(card.assignees[0]?.name || card.assigneeName || "DP")}</span>{card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}</div>
                           </article>
