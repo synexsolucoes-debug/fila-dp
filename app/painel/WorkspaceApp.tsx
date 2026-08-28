@@ -2304,7 +2304,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                               if (event.key === "Enter" || event.key === " ") openCard(card);
                             }}
                           >
-                            <div className="dashboard-task-labels"><span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}{referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}</div>
+                            <div className="dashboard-task-labels">{referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}<span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}</div>
                             <h2>{card.title}</h2>
                             <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
                             <DemandAreaFlow card={card} areas={snapshot.areas} />
@@ -2320,7 +2320,17 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                                 as etapas à frente ainda não geraram tarefa. */}
                             {flowByCard.get(card.id) && <CardProcessLine flow={flowByCard.get(card.id)!} />}
                             {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
-                            <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}`}><Clock3 aria-hidden="true" /> {slaLabel(card)}</span><span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}<span className="dashboard-mini-avatar">{initials(card.assignees[0]?.name || card.assigneeName || "DP")}</span>{card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}</div>
+                            <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}${card.dueAt ? " has-due" : ""}`}><Clock3 aria-hidden="true" /> {slaLabel(card)}</span><span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}{(() => {
+                              /* Avatar com inicial ao lado de "Sem responsável" é
+                                 contradição: o círculo afirma que há alguém. Sem
+                                 responsável, fica só o texto. */
+                              const dono = card.assignees[0]?.name || card.assigneeName;
+                              return <span className="dashboard-task-owner" title={dono || "Sem responsável"}>
+                                {dono && <span className="dashboard-mini-avatar">{initials(dono)}</span>}
+                                <b className={dono ? "" : "dashboard-owner-none"}>{dono || "Sem responsável"}</b>
+                                {card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}
+                              </span>;
+                            })()}</div>
                           </article>
                         );
                       })}

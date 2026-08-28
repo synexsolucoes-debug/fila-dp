@@ -5002,3 +5002,87 @@
 .history-empty svg { width: 24px; height: 24px; color: var(--ui-text-soft); }
 .history-loading { color: var(--ui-text-soft); font-size: 12px; }
 .history-more { align-self: center; }
+
+/* ── Cartão da demanda, redesenhado ─────────────────────────────────────────
+   O cartão vivia inteiro entre 8 e 12px: faixa estreita demais para existir
+   hierarquia, e por isso tudo pesava igual. Aqui os degraus são de verdade —
+   título 14, número 11, apoio 10 — e cada elemento tem um trabalho.
+
+   Estas regras vêm depois das do bloco original de propósito: aquele arquivo já
+   redeclara `.dashboard-task` mais abaixo, e disputar especificidade no meio
+   dele deixaria o resultado dependendo de quem foi escrito por último. */
+
+.dashboard-task { padding: 15px 15px 13px; }
+
+/* A identidade da demanda lidera a linha: é assim que se cita uma demanda em
+   voz alta, e era 9px cinza no canto — presente e ilegível. */
+/* `.dashboard-task-labels span` pesa mais que uma classe sozinha, então a regra
+   precisa do mesmo ancestral para valer. Ficou 9px na primeira tentativa por
+   isso — perdeu por especificidade, não por ordem. */
+.dashboard-task-labels .dashboard-card-reference {
+  margin-left: 0;
+  padding: 0;
+  color: var(--ui-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.dashboard-task h2 {
+  margin: 10px 0 4px;
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.35;
+  /* Duas linhas: título cortado em "Rescisão — Maria Fer…" obriga a abrir o
+     cartão para saber de quem é. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.dashboard-task > p { font-size: 10px; line-height: 1.45; }
+
+/* O rodapé passa a ter dois lados: prazo à esquerda, responsável à direita.
+   Antes era tudo uma fileira só, e o responsável — uma inicial dentro de um
+   círculo — ficava indistinguível dos contadores. */
+.dashboard-task-bottom {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-task-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  min-width: 0;
+}
+.dashboard-task-owner b {
+  overflow: hidden;
+  max-width: 96px;
+  color: var(--ui-text-soft);
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Demanda sem prazo não é uma boa notícia, e vinha pintada com a mesma cor
+   tranquila de quem está dentro do prazo. Neutro diz o que ela é: ausência. */
+.dashboard-sla.safe:not(.has-due) {
+  color: var(--ui-text-soft);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ui-border);
+}
+
+/* Colunas com mais respiro: o pedido era conseguir ler o quadro, e cartões
+   colados fazem a coluna virar um bloco só. */
+.dashboard-column { padding-bottom: 4px; }
+.dashboard-card-list { gap: 10px; }
+/* Ausência de responsável é ausência, e não um nome em cinza igual aos outros. */
+.dashboard-task-owner .dashboard-owner-none { font-style: italic; opacity: .8; }
