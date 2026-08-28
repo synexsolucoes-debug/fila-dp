@@ -82,6 +82,13 @@ function payload(context: Extract<Loaded, { instance: unknown }>) {
       currentStepId: instance.currentStepId,
       currentStepLabel: stepLabel(version.graph, instance.currentStepId),
       terminal: isTerminalStep(version.graph, instance.currentStepId),
+      /* Se a etapa exige aval, quem avança está APROVANDO — e a tela precisa
+         dizer isso antes do clique, não depois. O motor já decide com
+         `requiresApproval` desde sempre; o que faltava era a tela saber, para
+         parar de chamar de "avançar" um ato que tem responsável e consequência.
+
+         Vem da configuração já carregada em `version.steps`: sem consulta nova. */
+      requiresApproval: Boolean(version.steps.get(instance.currentStepId)?.requiresApproval),
       version: instance.version,
     },
     transitions: availableTransitions({
