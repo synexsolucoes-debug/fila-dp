@@ -197,3 +197,8 @@ jobs:
           # demanda pela interface e a prova de que o seletor de empresa
           # recorta de verdade a visão geral.
           npm run browser-check
+          # A §86-§98 vinha sendo classificada como "julgamento visual: precisa
+          # de olho humano". Parte dela e, e continua sendo; a parte mecanica —
+          # altura, raio e token de controle, emoji em texto de interface — a
+          # maquina mede melhor, e nao estava sendo medida por ninguem.
+          npm run interface-check

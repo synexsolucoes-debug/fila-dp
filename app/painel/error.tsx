@@ -17,7 +17,7 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
   return (
     <main className="panel-error-boundary">
       <div>
-        <span>FILA DP</span>
+        <span>VINCULATO</span>
         <h1>Não foi possível abrir o painel.</h1>
         <p>A operação continua protegida. Tente carregar novamente; se persistir, o erro já ficará disponível para diagnóstico.</p>
         <button type="button" onClick={reset}><RefreshCw aria-hidden="true" /> Tentar novamente</button>

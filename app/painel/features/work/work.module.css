@@ -68,7 +68,9 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 .filters label > span { color: var(--work-soft); font-size: .58rem; font-weight: 780; letter-spacing: .1em; text-transform: uppercase; }
 .filters select, .filters input {
   min-width: 150px; min-height: 38px; padding: 0 10px; border: 1px solid var(--work-border);
-  border-radius: 8px; background: var(--work-surface); color: var(--work-text); font-size: .77rem;
+  /* Token, e não 8px cravado: a conferência de interface mediu este controle
+     fora da escala do produto — §97 pede que os módulos concordem. */
+  border-radius: var(--ui-radius-sm); background: var(--work-surface); color: var(--work-text); font-size: .77rem;
 }
 .filterActions { display: flex; gap: 8px; margin-left: auto; }
 .scopeToggle { display: inline-flex; padding: 3px; border: 1px solid var(--work-border); border-radius: 9px; background: var(--work-surface); }

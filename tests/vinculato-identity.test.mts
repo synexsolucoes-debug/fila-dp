@@ -44,7 +44,11 @@ test("nenhum texto de interface ainda diz o nome antigo", async () => {
     const source = interfaceTextOf(await readFile(file, "utf8"));
     // A marca também aparecia partida entre elementos ("Fila <strong>DP</strong>"),
     // que a busca por texto corrido não pegava. O padrão abaixo cobre os dois casos.
-    if (/Fila DP|FilaDP|Fila\s*<(?:strong|b)>\s*DP/u.test(source)) offenders.push(file.replace(root, ""));
+    /* Sem `i`, a varredura era cega para caixa alta — e foi assim que o
+       cartão de erro do painel ficou estampando "FILA DP" depois da
+       renomeação. Um guard que só pega uma grafia dá a impressão de cobertura
+       que ele não tem. */
+    if (/Fila\s*DP|FilaDP|Fila\s*<(?:strong|b)>\s*DP/iu.test(source)) offenders.push(file.replace(root, ""));
   }
   assert.deepEqual(offenders, [], `arquivos com o nome antigo: ${offenders.join(", ")}`);
 });
