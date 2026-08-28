@@ -3278,6 +3278,24 @@
 .dashboard-task p { margin-bottom: 2px; overflow: hidden; color: var(--ui-text-soft); text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-task p small, .dashboard-card-employee { color: var(--ui-text-soft); font-size: 8px; }
 .dashboard-card-employee { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A etapa atual da demanda no cartão do quadro (§38, §95).
+   Ela é um estado do processo, não um rótulo de classificação como o tipo — por
+   isso não vira chip colorido junto dos outros lá em cima: fica na coluna do
+   corpo, com o ícone do processo, onde se lê "em que ponto isto está". */
+.dashboard-card-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-primary);
+  font-size: 9px;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-card-step svg { width: 10px; height: 10px; flex-shrink: 0; }
 .demand-area-flow {
   min-width: 0; margin-top: 6px; display: inline-flex; align-items: center; gap: 5px;
   color: var(--ui-primary); font-size: 8px; font-weight: 750; line-height: 1.3;

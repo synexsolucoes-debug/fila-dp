@@ -162,22 +162,50 @@ function stepConfigOf(row: Row): ProcessStepConfig {
  * Recusar rascunho aqui, e não na rota, é o que impede o caminho lateral: uma
  * automação futura que chame o motor direto encontra a mesma recusa que a tela.
  */
+/**
+ * Carrega uma versão para **leitura**, publicada ou não.
+ *
+ * A ficha do processo (§31) precisa mostrar documentos, regras e automações
+ * enquanto alguém ainda está desenhando — que é justamente quando essas
+ * respostas são mais úteis. Antes, um processo em rascunho abria a ficha com
+ * banner vermelho de erro nas quatro abas: o produto recusava *ler* o que ele
+ * mesmo mandava configurar.
+ *
+ * A recusa continua existindo, e no mesmo lugar: `loadPublishedVersion` é a
+ * porta da **execução** e segue rejeitando rascunho. Ler e executar são coisas
+ * diferentes, e separar as duas é o que permite mostrar sem permitir instanciar.
+ */
+export async function loadVersionForReading(
+  d1: Database, workspaceId: string, versionId: string,
+): Promise<PublishedProcessVersion & { published: boolean }> {
+  const version = await loadVersionRow(d1, workspaceId, versionId, { requirePublished: false });
+  return version as PublishedProcessVersion & { published: boolean };
+}
+
 export async function loadPublishedVersion(
   d1: Database, workspaceId: string, versionId: string,
 ): Promise<PublishedProcessVersion> {
+  return loadVersionRow(d1, workspaceId, versionId, { requirePublished: true });
+}
+
+async function loadVersionRow(
+  d1: Database, workspaceId: string, versionId: string,
+  options: { requirePublished: boolean },
+): Promise<PublishedProcessVersion & { published: boolean }> {
   const row = await d1.prepare(`SELECT v.id, v.definition_id, v.status, v.version_major, v.version_minor, v.bpmn_xml,
       p.name AS definition_name, p.code AS definition_code, p.is_corporate, p.default_priority, p.lifecycle_status
     FROM fdp_process_versions v
     JOIN fdp_process_definitions p ON p.workspace_id = v.workspace_id AND p.id = v.definition_id
     WHERE v.workspace_id = ? AND v.id = ?`).bind(workspaceId, versionId).first<Row>();
   if (!row) throw ApiError.notFound("Versão de processo não encontrada.", "PROCESS_VERSION_NOT_FOUND");
-  if (text(row.status) !== "published") {
+  const published = text(row.status) === "published";
+  if (options.requirePublished && !published) {
     throw ApiError.badRequest(
       "Só uma versão publicada pode gerar demanda. Publique a versão antes de instanciá-la.",
       "PROCESS_VERSION_NOT_PUBLISHED",
     );
   }
-  if (["archived", "inactive"].includes(text(row.lifecycle_status))) {
+  if (options.requirePublished && ["archived", "inactive"].includes(text(row.lifecycle_status))) {
     throw ApiError.badRequest("Este processo está arquivado ou inativo e não inicia novas demandas.", "PROCESS_NOT_STARTABLE");
   }
 
@@ -200,6 +228,7 @@ export async function loadPublishedVersion(
     bpmnXml: text(row.bpmn_xml),
     graph,
     steps: new Map(configs.results.map((config) => [text(config.bpmn_element_id), stepConfigOf(config)])),
+    published,
   };
 }
 

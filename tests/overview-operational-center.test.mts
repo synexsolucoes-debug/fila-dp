@@ -248,3 +248,67 @@ test("o contrato dos dois blocos está declarado no tipo do snapshot", () => {
   assert.match(typesSource, /processFlows: ProcessFlowSummary\[\];/u);
   assert.match(typesSource, /upcomingObligations: UpcomingObligation\[\];/u);
 });
+
+/* ── A tela como central de operação (§93) e o cartão (§38, §95) ────────── */
+
+test("a Visão geral abre com os números, não com o menu (§93)", async () => {
+  /* Medido antes de mexer, com 15 demandas reais no banco: a página tinha
+     2738px e o indicador "Demandas em aberto" ficava em y=1610 — quase duas
+     telas abaixo do topo. Os 1610px anteriores eram a competência, três blocos
+     quase sempre vazios e 480px de cartões que repetem o menu lateral.
+
+     A §93 pede "central de operação" e proíbe "dashboard genérico de cards".
+     A correção é de ordem: a faixa de indicadores precisa vir antes de tudo
+     que é contexto ou navegação. Depois da troca, o mesmo indicador mede
+     y=170. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const layout = app.slice(app.indexOf('<div className="overview-layout">'),
+    app.indexOf('function MemberCompanyAccess'));
+
+  const posicao = (marca: string) => layout.indexOf(marca);
+  const metricas = posicao('className="overview-metrics"');
+  assert.ok(metricas > 0, "a faixa de indicadores sumiu da Visão geral");
+
+  for (const [marca, nome] of [
+    ['<CompetenceFlow', "competência"],
+    ['<ActionCenter', "central de ação"],
+    ['className="workspace-shortcuts"', "atalhos"],
+    ['className="workspace-processes"', "cartões de módulo"],
+  ] as const) {
+    assert.ok(posicao(marca) > metricas,
+      `${nome} voltou a ficar antes dos indicadores — a §93 pede a operação primeiro`);
+  }
+
+  // E o que exige ação vem logo depois dos números: é o que faz alguém agir.
+  assert.ok(posicao('className="overview-sla-band"') > metricas);
+  assert.ok(posicao('attention-panel') < posicao('<CompetenceFlow'),
+    "o que exige ação precisa vir antes do contexto do mês");
+});
+
+test("o cartão da demanda mostra a etapa do processo (§38, §95)", async () => {
+  /* A §95 pede que "progressos, SLA, etapa e responsável" fiquem claros no
+     quadro. Das quatro, a etapa era a única ausente — apesar de a §38 separar
+     status de etapa exatamente porque são coisas diferentes: a coluna diz onde
+     a demanda está no quadro, a etapa diz onde ela está no processo. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /className="dashboard-card-step"/u);
+  assert.match(app, /stepByCard\.get\(card\.id\)/u);
+});
+
+test("a etapa do cartão não custa consulta nova", async () => {
+  // `processFlows` já resolve o rótulo no servidor, com o mesmo recorte de
+  // empresa. Uma consulta por cartão seria dezenas de idas ao banco para
+  // repetir o que o snapshot já traz.
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const memo = app.slice(app.indexOf("const stepByCard"), app.indexOf("const scopedObligations"));
+  assert.match(memo, /snapshot\?\.processFlows/u);
+  assert.ok(!/fetch\(|requestJson/u.test(memo), "o cartão passou a buscar a etapa por conta própria");
+});
+
+test("demanda fora do teto de fluxos não ganha etapa inventada", async () => {
+  // A consulta traz 60 demandas em andamento. Passando disso, o cartão mostra
+  // ausência — que é verdade — em vez de um rótulo aproximado.
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /\{stepByCard\.get\(card\.id\) && </u,
+    "sem a guarda, demanda sem fluxo carregado renderizaria etapa vazia");
+});
