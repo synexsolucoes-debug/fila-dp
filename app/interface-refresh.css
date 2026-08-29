@@ -268,7 +268,7 @@
   width: 3px;
   height: 0;
   border-radius: 0 3px 3px 0;
-  background: var(--brand-accent-on-dark);
+  background: var(--ui-accent-on-ink);
   transform: translateY(-50%);
   transition: height var(--motion-base) var(--motion-enter);
 }
@@ -280,7 +280,7 @@
 .dashboard-shell :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   position: relative;
   z-index: 3;
-  outline: 3px solid color-mix(in srgb, var(--brand-accent) 55%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--ui-accent-on-ink) 60%, transparent);
   outline-offset: 2px;
 }
 
@@ -332,28 +332,44 @@
   --ui-badge-surface: #D9534B;
   --ui-badge-text: #1A0705;
 
-  --on-sidebar-text: #C3D4E8;
-  --on-sidebar-muted: #9FB3C9;
-  --on-sidebar-section: #8FA6BE;
+  /* Cinza de tinta, não cinza-azulado. Estes três eram a última coisa azul da
+     barra depois que o realce do item ativo virou ocre: texto levemente azul
+     sobre fundo verde-escuro dá aquele desalinho que se nota sem se saber
+     nomear. Medidos sobre a barra (#0A100D): 12,34:1, 8,77:1 e 7,27:1. */
+  --on-sidebar-text: #C6D2CB;
+  --on-sidebar-muted: #A3B3AA;
+  --on-sidebar-section: #93A399;
 }
 
 /* -- Barra lateral -------------------------------------------------------- */
 
 /* O ícone do item ativo usava --ui-mint (#168CFD) sobre o realce do item:
- * 3.55:1 no claro e 4.02:1 no escuro. #6FB4FF dá 6:1 e 6.73:1. */
+ * 3.55:1 no claro e 4.02:1 no escuro. Agora usa o acento do painel — ocre
+ * sobre a tinta —, que rende 9,74:1 sobre a barra. */
 .dashboard-sidebar nav button.active > span,
 .dashboard-sidebar nav a.active > span {
-  color: var(--brand-accent-on-dark);
+  color: var(--ui-accent-on-ink);
 }
 
-/* O realce do item ativo ainda era o verde-menta da marca anterior
- * (rgba(98,213,178,.16)), o que puxava o azul-marinho para um tom esverdeado. */
+/* Este arquivo é importado por último e vence no empate de especificidade: era
+ * daqui que saía o azul da navegação, e não do bloco de tokens da barra. Mexer
+ * só lá não mudava nada na tela — a navegação seguia azul no meio da tinta
+ * enquanto o resto do painel já era ocre.
+ * O realce sai do próprio token da barra, para que exista um lugar só onde a
+ * cor do item ativo é decidida. */
 .dashboard-sidebar nav button.active,
-.dashboard-sidebar nav button:hover,
-.dashboard-sidebar nav a.active,
-.dashboard-sidebar nav a:hover {
-  background: color-mix(in srgb, var(--brand-accent) 18%, transparent);
-  color: #fff;
+.dashboard-sidebar nav a.active {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+}
+
+/* Passar o mouse não é estar ali: o realce do ativo é ocre, o do passeio é só
+ * um degrau de superfície. Antes os dois eram a mesma regra, e o item sob o
+ * cursor ficava indistinguível do item aberto. */
+.dashboard-sidebar nav button:hover:not(.active),
+.dashboard-sidebar nav a:hover:not(.active) {
+  background: var(--ui-rail-hover);
+  color: var(--ui-text);
 }
 
 .dashboard-sidebar nav button:not(.active),
@@ -391,7 +407,7 @@
 }
 
 .sidebar-account :is(.switch-account-button, .sign-out-button):hover {
-  background: color-mix(in srgb, var(--brand-accent) 22%, transparent);
+  background: color-mix(in srgb, var(--ui-primary) 26%, transparent);
   color: #fff;
 }
 
@@ -438,21 +454,25 @@
 /* ========================================================================== */
 
 /* As iniciais do avatar usavam --ui-mint (#168CFD) sobre a superfície suave:
- * 4.2:1. Sobre #182b48, #9CCBFF dá 8.39:1. */
+ * 4.2:1. Passaram ao acento do painel sobre um véu do mesmo ocre — #423D25 na
+ * mistura —, que rende 5,53:1. O azul saiu daqui junto com o resto: uma inicial
+ * azul no meio de uma tela em tinta e ocre era o último resquício da paleta
+ * anterior visível no cabeçalho. */
 .theme-dark :is(.user-avatar, .header-profile > span, .workspace-switcher button > i, .workspace-member-list article > i, .sidebar-workspace button i) {
-  background: color-mix(in srgb, var(--brand-accent) 20%, var(--ui-surface-muted));
-  color: #9CCBFF;
+  background: color-mix(in srgb, var(--ui-primary) 22%, var(--ui-surface-muted));
+  color: var(--ui-accent-on-ink);
 }
 
 /*
  * O rótulo do cabeçalho das modais herdava --brand (#0857B2), que é um azul de
- * superfície clara: 2.44:1 sobre a modal escura. O par legível já existe em
- * --ui-mint-text, que o tema escuro define como o acento sobre fundo escuro.
+ * superfície clara: 2.44:1 sobre a modal escura. Agora usa o acento sobre a
+ * tinta, o mesmo token do item ativo da barra — o rótulo de seção é sempre a
+ * mesma cor, esteja ele na navegação ou no topo de uma janela.
  */
 .theme-dark :is(.workspace-modal, .notification-drawer, .search-palette) header span,
 .theme-dark .confirmation-modal header span,
 .theme-dark .notification-actions button {
-  color: var(--brand-accent-on-dark);
+  color: var(--ui-accent-on-ink);
 }
 
 /* Fundo de superfícies que ficaram brancas por HEX fixo na folha antiga. */
@@ -471,7 +491,7 @@
   background: var(--ui-surface);
   color: var(--ui-text);
 }
-.theme-dark .workspace-toast > span { background: color-mix(in srgb, var(--brand-accent) 24%, var(--ui-surface-muted)); color: #9CCBFF; }
+.theme-dark .workspace-toast > span { background: color-mix(in srgb, var(--ui-primary) 24%, var(--ui-surface-muted)); color: var(--ui-accent-on-ink); }
 .theme-dark .workspace-toast.error > span { background: var(--tone-danger-surface); color: var(--tone-danger-text); }
 .theme-dark .workspace-toast button { color: var(--ui-text-soft); }
 
@@ -500,8 +520,8 @@
  * tela escura. `:has()` deixa o `body` seguir o tema escolhido no painel sem
  * precisar de classe no `<html>` nem de mais um efeito no cliente.
  */
-body:has(.dashboard-shell.theme-dark) { background: #0b1626; }
+body:has(.dashboard-shell.theme-dark) { background: #0A100D; }
 body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
 
 /* O separador da barra lateral acompanha o tema em vez de ser branco fixo. */
-.sidebar-workspace, .sidebar-account { border-color: color-mix(in srgb, var(--brand-accent) 22%, transparent); }
+.sidebar-workspace, .sidebar-account { border-color: color-mix(in srgb, var(--ui-primary) 26%, transparent); }
