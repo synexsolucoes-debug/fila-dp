@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -558,4 +559,36 @@ test("demanda inexistente continua sendo 404, não 500", async () => {
       return true;
     },
   );
+});
+
+test("etapa que exige aval diz isso na tela, antes do clique", async () => {
+  /* A definição do usuário: "aprovar é liberar o avanço de etapa que exige
+     aval". O motor já fazia exatamente isso — `requiresApproval`,
+     `approverUserId`, `approverDepartmentId`, o bloqueio
+     PROCESS_STEP_APPROVAL_REQUIRED e a recusa de autoaprovação existiam desde
+     antes. O que faltava era a tela DIZER: o botão chamava de "Avançar" um ato
+     que tem responsável e consequência, e nada avisava que o clique era um aval.
+
+     Construir um sistema de aprovação novo teria criado um segundo, concorrendo
+     com o que já decide. */
+  const rota = await readFile(
+    new URL("../app/api/cards/[id]/process/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /requiresApproval: Boolean\(version\.steps\.get\(instance\.currentStepId\)\?\.requiresApproval\)/u,
+    "vem da configuração já carregada — sem consulta nova");
+
+  const painel = await readFile(
+    new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
+  assert.match(painel, /instance\.requiresApproval \? "Aprovar e avançar" : "Avançar"/u,
+    "quando a etapa exige aval, avançar É aprovar, e o botão precisa dizer");
+  assert.match(painel, /Esta etapa exige aprovação/u,
+    "o aviso vem antes da lista: quem chega precisa saber que o clique é um aval");
+});
+
+test("a recusa de autoaprovação continua sendo do motor, não da tela", async () => {
+  /* A tela avisa; quem recusa é o servidor. Mover essa decisão para o cliente
+     abriria o caminho lateral que o guard existe para fechar. */
+  const motor = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
+  assert.match(motor, /PROCESS_STEP_SELF_APPROVAL/u);
+  assert.match(motor, /Quem abriu a demanda não pode aprovar a própria etapa\./u);
+  assert.match(motor, /PROCESS_STEP_APPROVAL_REQUIRED/u);
 });

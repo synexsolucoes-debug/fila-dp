@@ -264,15 +264,19 @@ test("as duas escalas têm quatro degraus de superfície, e nenhum é branco pur
   const escuro = bloco(".dashboard-shell.theme-dark {");
 
   for (const [nome, tema] of [["claro", claro], ["escuro", escuro]] as const) {
+    /* `iu`, e não `u`: hexadecimal em maiúscula é o mesmo valor. Sem o `i` esta
+       conferência tinha dois furos — um token em `#0D1512` era lido como
+       ausente (foi assim que ela quebrou), e, pior, um `#FFFFFF` de volta na
+       escala passaria batido justamente pela regra que existe para barrá-lo. */
     for (const token of ["--ui-bg", "--ui-surface", "--ui-surface-elevated", "--ui-surface-muted"]) {
-      const valor = tema.match(new RegExp(`${token}:\\s*(#[0-9a-f]{3,8})`, "u"))?.[1];
+      const valor = tema.match(new RegExp(`${token}:\\s*(#[0-9a-f]{3,8})`, "iu"))?.[1];
       assert.ok(valor, `o tema ${nome} não declara ${token}`);
       assert.notEqual(valor!.toLowerCase(), "#ffffff", `${token} no tema ${nome} é branco puro`);
       assert.notEqual(valor!.toLowerCase(), "#fff", `${token} no tema ${nome} é branco puro`);
     }
     // Quatro valores distintos: dois degraus iguais são um degrau.
     const degraus = ["--ui-bg", "--ui-surface", "--ui-surface-elevated", "--ui-surface-muted"]
-      .map((token) => tema.match(new RegExp(`${token}:\\s*(#[0-9a-f]{3,8})`, "u"))?.[1]?.toLowerCase());
+      .map((token) => tema.match(new RegExp(`${token}:\\s*(#[0-9a-f]{3,8})`, "iu"))?.[1]?.toLowerCase());
     assert.equal(new Set(degraus).size, 4, `o tema ${nome} repete um degrau da escala`);
   }
 });

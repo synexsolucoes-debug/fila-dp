@@ -47,6 +47,7 @@ type ProcessState = {
     currentStepId: string;
     currentStepLabel: string;
     terminal: boolean;
+    requiresApproval: boolean;
     version: number;
   };
   transitions: Transition[];
@@ -64,6 +65,7 @@ function normalize(payload: Record<string, unknown>): ProcessState {
       processName: text(instance.processName),
       versionId: text(instance.versionId),
       versionNumber: text(instance.versionNumber),
+      requiresApproval: Boolean((instance as Record<string, unknown>).requiresApproval),
       currentStepId: text(instance.currentStepId),
       currentStepLabel: text(instance.currentStepLabel),
       terminal: instance.terminal === true,
@@ -172,6 +174,14 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
           O desenho publicado não autoriza nenhuma saída a partir desta etapa. Quem modela o processo precisa revisar a versão.
         </p>
         : <>
+          {/* Dito ANTES da lista: quem chega aqui precisa saber que o clique é
+              um aval, e não uma movimentação de fila. O motor já recusa quem não
+              é aprovador e recusa autoaprovação; isto é a metade que faltava —
+              avisar antes, em vez de explicar depois do erro. */}
+          {instance.requiresApproval ? <p className={styles.agentDetail}>
+            <Lock aria-hidden="true" /> Esta etapa exige aprovação. Avançar daqui
+            é dar o aval, e fica registrado no seu nome.
+          </p> : null}
           <h4 className={styles.groupHeading}>Para onde esta etapa pode seguir</h4>
           <div className={styles.list}>
             {transitions.map((transition) => <article key={transition.targetStepId}
@@ -199,7 +209,9 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
                     ? undefined
                     : transition.blockers.map((blocker) => blocker.message).join(" ")}
                   onClick={() => void advance(transition)}>
-                  {busy === transition.targetStepId ? "Avançando…" : "Avançar"}<ArrowRight aria-hidden="true" />
+                  {busy === transition.targetStepId
+                    ? (instance.requiresApproval ? "Aprovando…" : "Avançando…")
+                    : (instance.requiresApproval ? "Aprovar e avançar" : "Avançar")}<ArrowRight aria-hidden="true" />
                 </button>
                 {!canAdvance ? <span className={styles.nextAction}>Você não tem permissão para avançar a etapa.</span> : null}
               </div>

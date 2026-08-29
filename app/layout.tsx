@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Manrope } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
 import "./access.css";
@@ -9,17 +9,38 @@ import "./dashboard-modern.css";
 import "./interface-refresh.css";
 
 /**
- * Tipografia do produto (§15): Manrope nos títulos, Inter na interface e nos
- * dados. Até aqui o CSS nomeava as duas famílias sem carregar nenhuma, então a
- * interface caía para a fonte do sistema — o que muda de máquina para máquina e
- * derruba a densidade que uma tela operacional precisa.
+ * Tipografia do produto (§15, §90).
+ *
+ * Era Inter na interface e Manrope nos títulos — a dupla que aparece em
+ * qualquer painel genérico, e que não diz nada sobre o que este produto é.
+ *
+ * O Vinculato não é um painel de analytics: é um **sistema de registro**. Folha,
+ * prazos legais que não se movem, competências, provas que precisam sobreviver
+ * a uma auditoria trabalhista. IBM Plex tem exatamente esse caráter documental
+ * e técnico, sem a neutralidade de fonte-padrão.
+ *
+ * O par com o **Mono** é a escolha que carrega a identidade: todo número,
+ * código, CNPJ, prazo e competência passa a ser monoespaçado e tabular. Numa
+ * tela cheia de dados que precisam ser comparados linha a linha, isso não é
+ * estética — é o que faz a coluna alinhar e o olho encontrar a diferença.
  *
  * `next/font` hospeda os arquivos no próprio deploy: nenhuma requisição a
  * terceiros em tempo de execução, o que mantém o CSP fechado e o carregamento
  * previsível. `display: swap` evita texto invisível enquanto a fonte chega.
  */
-const interface_ = Inter({ subsets: ["latin"], display: "swap", variable: "--font-interface" });
-const titles = Manrope({ subsets: ["latin"], display: "swap", weight: ["600", "700", "800"], variable: "--font-titles" });
+const interface_ = IBM_Plex_Sans({
+  subsets: ["latin"], display: "swap",
+  weight: ["400", "500", "600", "700"], variable: "--font-interface",
+});
+const titles = IBM_Plex_Sans({
+  subsets: ["latin"], display: "swap",
+  weight: ["600", "700"], variable: "--font-titles",
+});
+/** Dados: número da demanda, CNPJ, prazo, competência, contagem. */
+const data = IBM_Plex_Mono({
+  subsets: ["latin"], display: "swap",
+  weight: ["400", "500", "600"], variable: "--font-data",
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -80,7 +101,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" className={`${interface_.variable} ${titles.variable}`}>
+    <html lang="pt-BR" className={`${interface_.variable} ${titles.variable} ${data.variable}`}>
       <body>{children}</body>
     </html>
   );

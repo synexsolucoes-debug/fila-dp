@@ -102,14 +102,28 @@ test("a identidade visual vive em tokens, não espalhada em HEX", async () => {
   }
 });
 
-test("a tipografia carrega de verdade: Manrope nos títulos, Inter na interface", async () => {
+test("a tipografia carrega de verdade, nos três papéis", async () => {
   // O CSS nomeava as duas famílias sem carregar nenhuma, então a interface caía
   // para a fonte do sistema — que muda de máquina para máquina e derruba a
-  // densidade que uma tela operacional precisa.
+  // densidade que uma tela operacional precisa. Isso é o que esta conferência
+  // protege, e continua valendo.
+  //
+  // As famílias mudaram: Inter e Manrope saíram, IBM Plex entrou (§90). Inter
+  // como interface e um grotesco geométrico nos títulos é a dupla que veste
+  // qualquer painel genérico — a escolha não dizia nada sobre este produto. O
+  // Plex foi desenhado para documentação técnica e traz o terceiro papel, que
+  // faltava: o monoespaçado dos DADOS. Número de demanda, CNPJ, prazo e
+  // competência se comparam em coluna, e proporcional desalinha a coluna.
+  //
+  // O papel é fixado pelo nome da variável, não pela família: trocar de
+  // desenho é decisão de identidade, mas deixar um dos três papéis sem fonte
+  // carregada é o defeito que esta conferência existe para pegar.
   const layout = await readFile(new URL("../app/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /from "next\/font\/google"/u, "sem carregamento, a família é só um nome no CSS");
-  assert.match(layout, /Manrope\(\{[^}]*variable: "--font-titles"/u);
-  assert.match(layout, /Inter\(\{[^}]*variable: "--font-interface"/u);
+  for (const papel of ["--font-titles", "--font-interface", "--font-data"]) {
+    assert.match(layout, new RegExp(`\\w+\\(\\{[^}]*variable: "${papel}"`, "u"),
+      `o papel ${papel} precisa de uma família carregada por next/font`);
+  }
   // `next/font` hospeda no próprio deploy: nenhuma requisição a terceiros em
   // runtime, o que mantém o CSP fechado.
   assert.doesNotMatch(layout, /fonts\.googleapis\.com|fonts\.gstatic\.com/u);

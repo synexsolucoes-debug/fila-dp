@@ -45,6 +45,32 @@
   --ui-warning: #a15c07;
   --ui-danger: #b42318;
 
+  /* Escala de raio — três degraus, e só três (§90).
+     Antes havia doze valores literais espalhados por access.css e
+     dashboard-modern.css: 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16 e 18px, cada
+     um escolhido na hora de escrever a regra. Nenhum deles está errado sozinho;
+     juntos são a razão pela qual a interface parecia montada por partes que não
+     se conhecem. Três degraus obrigam a decidir a que categoria a superfície
+     pertence — controle, cartão, superfície grande — em vez de arbitrar pixels.
+     Pílula (99px) e círculo (50%) continuam literais: ali o raio é a forma, não
+     a escala.
+     Ficam no `:root`, e não na casca do painel, porque access.css também veste
+     login e site: com os tokens presos ao painel, toda borda de fora resolveria
+     para valor inválido e cairia em canto reto sem avisar. */
+  --ui-radius-sm: 3px;
+  --ui-radius-md: 5px;
+  --ui-radius-lg: 8px;
+
+  /* Estado de coluna ≠ marca. Os pontinhos de "em análise" e "em execução"
+     usavam `--brand-accent`, o azul vivo do símbolo: a cor da identidade
+     empregada para dizer situação de trabalho. Duas coisas se perdiam nisso —
+     a marca deixava de ser reconhecível por ser a cor de um status qualquer, e
+     era esse azul que puxava o quadro de volta ao painel genérico.
+     O significado aprendido fica de pé: azul continua sendo "em andamento".
+     Só deixa de ser o azul do logotipo. Rende 6,59:1 sobre o cartão — bem
+     acima dos 3:1 que a WCAG 1.4.11 pede de um indicador não textual. */
+  --ui-status-doing: #6FA8C9;
+
   /* Superfícies escuras da marca: texto e traço sobre o azul-marinho. */
   --on-brand-text: #E6EEFA;
   --on-brand-soft: #B6C8E0;
@@ -52,12 +78,12 @@
   --brand-accent-on-dark: #6FB4FF;
   --on-brand-line: rgba(255, 255, 255, .16);
 
-  /* Interface e dados: Inter, carregada pelo layout. A pilha de reserva existe
+  /* Interface: IBM Plex Sans, carregada pelo layout. A pilha de reserva existe
      para o intervalo entre o HTML e a fonte, e para ambientes sem ela. */
-  --font-geist-sans: var(--font-interface), Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  /* Títulos: Manrope. §15 pede a distinção porque a tela operacional é densa —
+  --font-geist-sans: var(--font-interface), "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Títulos: o mesmo IBM Plex Sans, em peso maior. §15 pede a distinção porque a tela operacional é densa —
      o título precisa separar seções sem virar enfeite. */
-  --font-title: var(--font-titles), Manrope, var(--font-geist-sans);
+  --font-title: var(--font-titles), "IBM Plex Sans", var(--font-geist-sans);
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --shadow-soft: 0 12px 32px rgba(6, 43, 96, .10);
   --shadow-strong: 0 28px 70px rgba(4, 27, 69, .22);
@@ -84,7 +110,8 @@ body {
   font-family: var(--font-geist-sans), Arial, sans-serif;
   text-rendering: optimizeLegibility;
 }
-/* Títulos em Manrope; o resto da interface fica em Inter. A separação vale para
+/* Títulos e interface na mesma família (IBM Plex Sans), separados por peso; os
+   dados vão em IBM Plex Mono. A separação vale para
    todos os níveis, senão o painel usa uma família e o site outra. */
 h1, h2, h3, h4, h5, h6 { font-family: var(--font-title), Arial, sans-serif; letter-spacing: -.02em; }
 
