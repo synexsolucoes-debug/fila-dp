@@ -180,6 +180,8 @@ export type Card = {
   description: string;
   companyId: string | null;
   company: string;
+  employeeId: string | null;
+  requesterUserId: string | null;
   requesterAreaId: string | null;
   responsibleAreaId: string | null;
   processType: string;
