@@ -55,6 +55,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     }
 
+    const employeeId = text(body.employeeId, 120) || null;
+    if (employeeId) {
+      const employee = await d1.prepare(`SELECT id, company_id FROM fdp_employees
+        WHERE workspace_id = ? AND id = ? AND employment_status <> 'terminated'`)
+        .bind(workspace.id, employeeId).first<{ id: string; company_id: string }>();
+      if (!employee) throw ApiError.badRequest("Colaborador selecionado não encontrado ou desligado.", "EMPLOYEE_NOT_FOUND");
+      await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, employee.company_id);
+      if (companyId && employee.company_id !== companyId) {
+        throw ApiError.badRequest("O colaborador não pertence à empresa selecionada.", "EMPLOYEE_COMPANY_MISMATCH");
+      }
+    }
+    const requesterUserId = text(body.requesterUserId, 120) || user.id;
+    const requester = await d1.prepare(`SELECT user_id FROM fdp_workspace_members
+      WHERE workspace_id = ? AND user_id = ?`)
+      .bind(workspace.id, requesterUserId).first<{ user_id: string }>();
+    if (!requester) throw ApiError.badRequest("Solicitante não pertence a este grupo.", "REQUESTER_NOT_FOUND");
+
+    const requesterAreaId = text(body.requesterAreaId, 120) || null;
+    const responsibleAreaId = text(body.responsibleAreaId, 120) || null;
+    for (const [areaId, code] of [[requesterAreaId, "REQUESTER_AREA_NOT_FOUND"], [responsibleAreaId, "RESPONSIBLE_AREA_NOT_FOUND"]] as const) {
+      if (!areaId) continue;
+      const area = await d1.prepare("SELECT id FROM fdp_areas WHERE workspace_id = ? AND id = ? AND status = 'active'")
+        .bind(workspace.id, areaId).first<{ id: string }>();
+      if (!area) throw ApiError.badRequest("Área selecionada não encontrada ou inativa.", code);
+    }
+
     const requestedBoardId = text(body.boardId, 100);
     let targetBoardId = board.id;
     if (requestedBoardId && requestedBoardId !== board.id) {
@@ -97,6 +123,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       description: text(body.description, 4000),
       companyId,
       companyName,
+      employeeId,
+      requesterUserId,
+      requesterAreaId,
+      responsibleAreaId,
       competence: body.competence ? validCompetence(body.competence) : "",
       priority: text(body.priority, 20),
       sourceType: "process",
