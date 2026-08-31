@@ -37,6 +37,14 @@ type Transition = {
   blockers: Array<{ code: string; message: string }>;
 };
 
+type DemandStage = {
+  bpmnElementId: string;
+  title: string;
+  status: "pending" | "in_progress" | "completed" | "skipped" | "cancelled";
+  position: number;
+  dueAt: string | null;
+};
+
 type ProcessState = {
   instance: {
     cardId: string;
@@ -50,6 +58,7 @@ type ProcessState = {
     requiresApproval: boolean;
     version: number;
   };
+  stages: DemandStage[];
   transitions: Transition[];
 };
 
@@ -58,6 +67,7 @@ const text = (value: unknown) => (value == null ? "" : String(value));
 function normalize(payload: Record<string, unknown>): ProcessState {
   const instance = (payload.instance ?? {}) as Record<string, unknown>;
   const transitions = Array.isArray(payload.transitions) ? payload.transitions : [];
+  const stages = Array.isArray(payload.stages) ? payload.stages : [];
   return {
     instance: {
       cardId: text(instance.cardId),
@@ -71,6 +81,19 @@ function normalize(payload: Record<string, unknown>): ProcessState {
       terminal: instance.terminal === true,
       version: Number(instance.version ?? 0),
     },
+    stages: stages.map((row) => {
+      const item = (row ?? {}) as Record<string, unknown>;
+      const rawStatus = text(item.status);
+      const status = ["pending", "in_progress", "completed", "skipped", "cancelled"].includes(rawStatus)
+        ? rawStatus as DemandStage["status"] : "pending";
+      return {
+        bpmnElementId: text(item.bpmnElementId),
+        title: text(item.title),
+        status,
+        position: Number(item.position ?? 0),
+        dueAt: item.dueAt ? text(item.dueAt) : null,
+      };
+    }),
     transitions: transitions.map((row) => {
       const item = (row ?? {}) as Record<string, unknown>;
       const blockers = Array.isArray(item.blockers) ? item.blockers : [];
@@ -151,7 +174,7 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
   }
   if (!state) return error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null;
 
-  const { instance, transitions } = state;
+  const { instance, transitions, stages } = state;
 
   return <section className={styles.workspace} aria-label="Etapa do processo">
     {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
@@ -164,6 +187,39 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
         <dd><CircleDot aria-hidden="true" /> {instance.currentStepLabel || instance.currentStepId}</dd>
       </div>
     </dl>
+
+    {stages.length > 0 ? <div aria-label="Etapas da demanda">
+      <h4 className={styles.groupHeading}>Etapas desta demanda</h4>
+      <ol className={styles.list}>
+        {stages.map((stage) => {
+          const current = stage.bpmnElementId === instance.currentStepId;
+          const label = stage.status === "completed" ? "Concluída"
+            : stage.status === "in_progress" ? "Em andamento"
+              : stage.status === "skipped" ? "Ignorada"
+                : stage.status === "cancelled" ? "Cancelada" : "Pendente";
+          return <li key={stage.bpmnElementId} className={styles.item}
+            data-tone={stage.status === "completed" ? "positive" : current ? "info" : "neutral"}
+            aria-current={current ? "step" : undefined}>
+            <span className={styles.rail} aria-hidden="true" />
+            <div className={styles.itemBody}>
+              <div className={styles.itemTop}>
+                {stage.status === "completed"
+                  ? <CheckCircle2 aria-hidden="true" />
+                  : current ? <CircleDot aria-hidden="true" /> : <Workflow aria-hidden="true" />}
+                <span className={styles.itemTitle}>{stage.title || stage.bpmnElementId}</span>
+                <span className={styles.badge}
+                  data-tone={stage.status === "completed" ? "positive" : current ? "info" : "neutral"}>
+                  {label}
+                </span>
+              </div>
+              {stage.dueAt ? <p className={styles.itemMeta}>
+                Prazo: {new Date(stage.dueAt).toLocaleString("pt-BR")}
+              </p> : null}
+            </div>
+          </li>;
+        })}
+      </ol>
+    </div> : null}
 
     {instance.terminal
       ? <p className={styles.agentDetail}>
