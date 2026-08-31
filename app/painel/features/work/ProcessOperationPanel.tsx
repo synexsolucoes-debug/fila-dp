@@ -274,10 +274,18 @@ export function ProcessOperationPanel({ processId, section = "flow", onStarted }
           <div className={styles.itemMeta}>
             <span><Users aria-hidden="true" /> {step.responsible}</span>
             <span><Timer aria-hidden="true" /> {step.slaLabel}</span>
-            {step.checklist.length ? <span>{step.checklist.length} item(ns) de checklist</span> : null}
             {step.requiredDocuments.length ? <span><FileText aria-hidden="true" /> {step.requiredDocuments.join(", ")}</span> : null}
             {step.nextLabels.length ? <span>Segue para: {step.nextLabels.join(" ou ")}</span> : null}
           </div>
+          {/* As tarefas da etapa, nomeadas.
+              Antes esta linha dizia "2 item(ns) de checklist" — um número que
+              obriga a abrir o modelador para saber o que a etapa manda fazer. A
+              cadeia ÁREA → PROCESSO → ETAPA → TAREFA só fica visível quando a
+              última existe na tela; contá-las mostra que há tarefas e esconde
+              quais são. */}
+          {step.checklist.length ? <ul className={styles.taskChips}>
+            {step.checklist.map((task) => <li key={task}>{task}</li>)}
+          </ul> : null}
         </div>
       </li>)}
     </ol>
