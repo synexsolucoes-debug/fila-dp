@@ -107,22 +107,22 @@
      "greenbar" em que a folha de pagamento foi impressa por décadas. O acento
      deixa de ser azul-SaaS e vira ocre de carimbo — gasto num lugar só, o que
      exige atenção. O verde-selo fica com "em ordem". */
-  --ui-brand: #0B120F;
-  --ui-brand-soft: #16211C;
-  --ui-primary: #D9973F;
-  --ui-primary-hover: #E8AE5E;
-  --ui-primary-active: #F0C47E;
-  --ui-primary-soft: #2A2113;
-  --ui-bg: #0D1512;
-  --ui-surface: #151E1A;
-  --ui-surface-elevated: #1C2722;
-  --ui-surface-muted: #18231E;
-  --ui-border: #2A3830;
-  --ui-border-strong: #405248;
-  --ui-text: #E7EDE9;
-  --ui-text-soft: #A3B3AA;
-  --ui-text-muted: #8C9C93;
-  --ui-info: #7FB8A4;
+  --ui-brand: #111827;
+  --ui-brand-soft: #18223A;
+  --ui-primary: #365CF5;
+  --ui-primary-hover: #5B7CFF;
+  --ui-primary-active: #2948CF;
+  --ui-primary-soft: #1D2B58;
+  --ui-bg: #111827;
+  --ui-surface: #18223A;
+  --ui-surface-elevated: #202C46;
+  --ui-surface-muted: #1D2940;
+  --ui-border: #34425E;
+  --ui-border-strong: #4A5B7A;
+  --ui-text: #F8FAFC;
+  --ui-text-soft: #CBD5E1;
+  --ui-text-muted: #94A3B8;
+  --ui-info: #8EA5FF;
   --ui-success: #5FBE94;
   --ui-warning: #E0A552;
   --ui-danger: #E0837A;
@@ -130,9 +130,9 @@
      `--brand-accent-on-dark` é azul da marca: ele continua valendo para a
      marca, mas o painel não é a marca — e usar os dois lado a lado foi
      exatamente o que fez a navegação ficar azul enquanto o resto virou ocre. */
-  --ui-accent-on-ink: #E8AE5E;
-  --ui-rail: #0A100D;
-  --ui-avatar-bg: #2A2113;
+  --ui-accent-on-ink: #AFC0FF;
+  --ui-rail: #0F172A;
+  --ui-avatar-bg: #1D2B58;
   --ui-avatar-text: var(--ui-accent-on-ink);
   --ui-rail-border: var(--ui-border);
   /* A barra lateral tinha paleta própria, herdada do tema azul, e ela não é
@@ -140,13 +140,13 @@
      paleta e continuou azul sozinha no meio da tinta. Os tons abaixo são os
      mesmos da escala do painel, medidos: nenhum abaixo de 5,6:1 sobre a
      barra. */
-  --ui-rail-text: #A3B3AA;
-  --ui-rail-icon: #7E8F85;
-  --ui-rail-hover: #16211C;
-  --ui-rail-active: #2A2113;
+  --ui-rail-text: #CBD5E1;
+  --ui-rail-icon: #94A3B8;
+  --ui-rail-hover: #18223A;
+  --ui-rail-active: #243B78;
   --ui-rail-active-text: var(--ui-accent-on-ink);
-  --ui-rail-section: #8C9C93;
-  --ui-rail-context: #141F1A;
+  --ui-rail-section: #94A3B8;
+  --ui-rail-context: #18223A;
   --ui-done: var(--ui-success);
   --ui-done-soft: #0f2f20;
   /* No escuro o verde clareia; branco em cima dele reprova. */
@@ -3022,26 +3022,28 @@
    quem escreve por último ganha. Mexer só no de cima não muda nada na tela —
    foi o que aconteceu na primeira tentativa. */
 .dashboard-shell.theme-dark {
-  --ui-brand: #0B120F;
-  --ui-brand-soft: #16211C;
-  --ui-primary: #D9973F;
-  --ui-primary-hover: #E8AE5E;
-  --ui-primary-soft: #2A2113;
-  --ui-mint: #5FBE94;
+  --ui-brand: #111827;
+  --ui-brand-soft: #18223A;
+  --ui-primary: #365CF5;
+  --ui-primary-hover: #5B7CFF;
+  --ui-primary-soft: #1D2B58;
+  --ui-mint: #8EA5FF;
   /* Os dois tokens são o par de uma cor só, e trocá-los faz sumir o texto:
      `--ui-mint-text` é o verde em versão legível COMO texto, e `--ui-on-mint` é
      o que se escreve EM CIMA de um preenchimento verde. Escrever o fundo aqui
      deixou quatro rótulos de seção em 1:1 — invisíveis, sem erro nenhum, porque
      texto da cor do fundo é CSS perfeitamente válido. Só a auditoria pegou. */
-  --ui-mint-text: #7DD3AA;
-  --ui-on-mint: #0D1512;
-  --ui-bg: #0D1512;
-  --ui-surface: #151E1A;
-  --ui-surface-muted: #18231E;
-  --ui-border: #2A3830;
-  --ui-border-strong: #405248;
-  --ui-text: #E7EDE9;
-  --ui-text-soft: #A3B3AA;
+  --ui-mint-text: #AFC0FF;
+  --ui-on-mint: #111827;
+  --ui-bg: #111827;
+  --ui-surface: #18223A;
+  --ui-surface-elevated: #202C46;
+  --ui-surface-muted: #1D2940;
+  --ui-border: #34425E;
+  --ui-border-strong: #4A5B7A;
+  --ui-text: #F8FAFC;
+  --ui-text-soft: #CBD5E1;
+  --ui-text-muted: #94A3B8;
   --ui-success: #5FBE94;
   --ui-warning: #E0A552;
   --ui-danger: #E0837A;
@@ -4500,10 +4502,10 @@
      Texto de destaque sobre superfície escura precisa clarear mais que o
      preenchimento — por isso os dois são tokens separados: 9,40:1 do texto
      sobre o fundo, e 7,46:1 do que se lê em cima do preenchimento. */
-  --ui-accent: #D9973F;
-  --ui-accent-text: #E8AE5E;
-  --ui-on-accent: #0D1512;
-  --ui-accent-soft: #2A2113;
+  --ui-accent: #365CF5;
+  --ui-accent-text: #AFC0FF;
+  --ui-on-accent: #FFFFFF;
+  --ui-accent-soft: #1D2B58;
   /* No escuro o vermelho clareia para ser legível como texto, e branco em cima
      dele dá 2,3:1. O que se lê sobre o preenchimento escurece junto. */
   --ui-on-danger: #2b0906;
