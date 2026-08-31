@@ -211,6 +211,20 @@ test("a API pública pagina por cursor e nunca expõe CPF", async () => {
   assert.doesNotMatch(employees, /cpf_hash/);
 });
 
+test("demandas e biblioteca interna têm paginação estável no servidor", async () => {
+  const [cards, processes] = await Promise.all([
+    readFile(new URL("../app/api/cards/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/processes/route.ts", import.meta.url), "utf8"),
+  ]);
+  for (const source of [cards, processes]) {
+    assert.match(source, /searchParams\.get\("cursor"\)/u);
+    assert.match(source, /limit \+ 1/u);
+    assert.match(source, /nextCursor/u);
+    assert.match(source, /ORDER BY [\s\S]{0,80}\.id LIMIT \?/u);
+  }
+  assert.match(processes, /definition_id IN/u, "versões devem ser lidas somente para os processos da página");
+});
+
 test("o OpenAPI descreve apenas o que existe e documenta a verificação da assinatura", async () => {
   const source = await readFile(new URL("../app/api/v1/openapi.json/route.ts", import.meta.url), "utf8");
   for (const path of ["/companies", "/employees", "/competences", "/contractor-closings", "/contractor-components"]) {
