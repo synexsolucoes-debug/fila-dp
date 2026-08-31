@@ -558,6 +558,8 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
   processStepId: text("process_step_id").notNull().default(""),
   /** Tarefa a que o arquivo serve de prova (§43). Nulo é anexo da demanda ou da etapa. */
   checklistItemId: text("checklist_item_id"),
+  /** Comentário que contextualiza o arquivo (§44). */
+  commentId: text("comment_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_attachments_object_key_uq").on(table.objectKey),
@@ -568,6 +570,9 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
   index("fdp_card_attachments_checklist_item_idx")
     .on(table.workspaceId, table.checklistItemId)
     .where(sql`${table.checklistItemId} IS NOT NULL`),
+  index("fdp_card_attachments_comment_idx")
+    .on(table.workspaceId, table.commentId)
+    .where(sql`${table.commentId} IS NOT NULL`),
   foreignKey({
     name: "fdp_card_attachments_workspace_card_fk",
     columns: [table.workspaceId, table.cardId],
@@ -577,6 +582,11 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
     name: "fdp_card_attachments_checklist_item_fk",
     columns: [table.workspaceId, table.checklistItemId],
     foreignColumns: [checklistItems.workspaceId, checklistItems.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "fdp_card_attachments_comment_fk",
+    columns: [table.workspaceId, table.commentId],
+    foreignColumns: [cardComments.workspaceId, cardComments.id],
   }).onDelete("cascade"),
 ]);
 
