@@ -84,6 +84,7 @@ export async function storeCardAttachment(input: {
    */
   processStepId?: string | null;
   checklistItemId?: string | null;
+  commentId?: string | null;
 }) {
   const validated = validateCardAttachment(input);
   const sourceType = input.sourceType ?? "manual";
@@ -114,8 +115,8 @@ export async function storeCardAttachment(input: {
       ), inserted AS (
         INSERT INTO fdp_card_attachments
           (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by, source_type, source_reference,
-           process_step_id, checklist_item_id)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
+           process_step_id, checklist_item_id, comment_id)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
         WHERE (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_card_attachments WHERE workspace_id = ?)
             + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_epi_attachments WHERE workspace_id = ?)
             + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_contractor_documents WHERE workspace_id = ?) + ?
@@ -126,7 +127,7 @@ export async function storeCardAttachment(input: {
       .bind(input.workspaceId, input.workspaceId, attachmentId, input.workspaceId, input.cardId, objectKey,
         validated.filename, validated.contentType, input.sizeBytes, input.uploadedBy.slice(0, 220), sourceType,
         sourceReference,
-        (input.processStepId ?? "").slice(0, 160), input.checklistItemId || null,
+        (input.processStepId ?? "").slice(0, 160), input.checklistItemId || null, input.commentId || null,
         input.workspaceId, input.workspaceId, input.workspaceId, input.sizeBytes)
       .first<{ id: string }>();
 
