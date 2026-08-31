@@ -5,6 +5,7 @@ export type ChecklistItem = {
   completed: boolean;
   position: number;
   completedAt: string | null;
+  taskInstanceId?: string | null;
 };
 
 export type WorkspaceRole = "admin" | "member" | "observer" | "guest";
@@ -16,6 +17,7 @@ export type CardComment = {
   authorEmail: string;
   body: string;
   createdAt: string;
+  taskInstanceId?: string | null;
 };
 
 export type ActivityEvent = {
@@ -38,6 +40,7 @@ export type CardAttachment = {
   uploadedBy: string;
   createdAt: string;
   downloadUrl: string;
+  taskInstanceId?: string | null;
 };
 
 export type SolidesAttachmentSync = {
@@ -180,6 +183,8 @@ export type Card = {
   description: string;
   companyId: string | null;
   company: string;
+  employeeId?: string | null;
+  requesterUserId?: string | null;
   requesterAreaId: string | null;
   responsibleAreaId: string | null;
   processType: string;

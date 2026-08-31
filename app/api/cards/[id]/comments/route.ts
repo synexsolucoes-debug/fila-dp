@@ -9,7 +9,7 @@ export async function POST(request: Request, context: RouteContext) {
   if (!auth.user) return auth.response;
   try {
     const { id } = await context.params;
-    const body = await request.json() as { body?: string };
+    const body = await request.json() as { body?: string; taskInstanceId?: string };
     const comment = text(body.body, 2000);
     if (!comment) return Response.json({ error: "Escreva um comentário." }, { status: 400 });
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
@@ -20,9 +20,15 @@ export async function POST(request: Request, context: RouteContext) {
       .bind(id, board.id)
       .first<{ id: string; title: string }>();
     if (!card) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
+    const taskInstanceId = text(body.taskInstanceId, 120) || null;
+    if (taskInstanceId) {
+      const task = await d1.prepare("SELECT id FROM fdp_demand_tasks WHERE workspace_id = ? AND card_id = ? AND id = ?")
+        .bind(workspace.id, id, taskInstanceId).first<{ id: string }>();
+      if (!task) throw ApiError.badRequest("A tarefa selecionada não pertence a esta demanda.", "TASK_NOT_FOUND");
+    }
     const commentId = crypto.randomUUID();
-    await d1.prepare("INSERT INTO fdp_card_comments (id, workspace_id, card_id, author_user_id, body) VALUES (?, ?, ?, ?, ?)")
-      .bind(commentId, workspace.id, id, user.id, comment)
+    await d1.prepare("INSERT INTO fdp_card_comments (id, workspace_id, card_id, task_instance_id, author_user_id, body) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(commentId, workspace.id, id, taskInstanceId, user.id, comment)
       .run();
     const recipients = await d1.prepare("SELECT user_id FROM fdp_card_assignees WHERE card_id = ? AND user_id <> ?").bind(id, user.id).all<{ user_id: string }>();
     const mentionNames = Array.from(new Set(

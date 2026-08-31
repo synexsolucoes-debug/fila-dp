@@ -156,6 +156,10 @@ type RecoveryLink = { name: string; url: string; expiresAt: string };
 type AuthSession = { id: string; deviceLabel: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean };
 type CardForm = {
   boardId: string;
+  processVersionId: string;
+  employeeId: string;
+  requesterUserId: string;
+  competence: string;
   title: string;
   description: string;
   companyId: string;
@@ -175,6 +179,10 @@ type CardForm = {
 
 const emptyCardForm: CardForm = {
   boardId: "",
+  processVersionId: "",
+  employeeId: "",
+  requesterUserId: "",
+  competence: "",
   title: "",
   description: "",
   companyId: "",
@@ -191,6 +199,9 @@ const emptyCardForm: CardForm = {
   labelIds: [],
   customValues: {},
 };
+
+type ProcessStartOption = { id:string; processName:string; versionMajor:number; versionMinor:number; status:string; publishedAt:string };
+type EmployeeStartOption = { id:string; company_id:string; full_name:string; social_name:string; registration_number:string; employment_status:string };
 
 const processColors: Record<string, string> = {
   "CONCILIAÇÃO CADASTRAL": "blue",
@@ -830,6 +841,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [cardModalOpen, setCardModalOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [cardForm, setCardForm] = useState<CardForm>(emptyCardForm);
+  const [processStartOptions, setProcessStartOptions] = useState<ProcessStartOption[]>([]);
+  const [employeeStartOptions, setEmployeeStartOptions] = useState<EmployeeStartOption[]>([]);
+  const [startOptionsLoading, setStartOptionsLoading] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newComment, setNewComment] = useState("");
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
@@ -1089,6 +1103,23 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     }, 220);
     return () => window.clearTimeout(timeout);
   }, [searchOpen, searchQuery]);
+
+  useEffect(() => {
+    if (!cardModalOpen || selectedCardId) return;
+    let cancelled=false;
+    void Promise.all([
+      fetch("/api/processes", { cache:"no-store" }).then(async(response)=>response.ok?response.json():{versions:[]}),
+      fetch("/api/employees?status=active&limit=100", { cache:"no-store" }).then(async(response)=>response.ok?response.json():{employees:[]}),
+    ]).then(([processPayload,employeePayload]:Array<Record<string,unknown>>)=>{
+      if(cancelled)return;
+      const versions=Array.isArray(processPayload.versions)?processPayload.versions as ProcessStartOption[]:[];
+      const employees=Array.isArray(employeePayload.employees)?employeePayload.employees as EmployeeStartOption[]:[];
+      setProcessStartOptions(versions.filter((version)=>version.status==="published"));
+      setEmployeeStartOptions(employees.filter((employee)=>employee.employment_status!=="terminated"));
+    }).catch(()=>{if(!cancelled){setProcessStartOptions([]);setEmployeeStartOptions([]);}})
+      .finally(()=>{if(!cancelled)setStartOptionsLoading(false);});
+    return()=>{cancelled=true;};
+  },[cardModalOpen,selectedCardId]);
 
   useEffect(() => {
     if (!toast) return;
@@ -1364,6 +1395,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
 
   function openNewCard() {
     if (!canEdit) return;
+    setStartOptionsLoading(true);
     setSelectedCardId(null);
     setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "" });
     setNewChecklistItem("");
@@ -1374,6 +1406,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   function openFromTemplate(templateId: string) {
     const template = snapshot?.templates.find((item) => item.id === templateId);
     if (!template) return openNewCard();
+    setStartOptionsLoading(true);
     setSelectedCardId(null);
     setCardForm({ ...emptyCardForm, boardId: snapshot?.board.id ?? "", templateId, processType: template.processType, description: template.description });
     setCardTab("details");
@@ -1384,6 +1417,10 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     setSelectedCardId(card.id);
     setCardForm({
       boardId: card.boardId,
+      processVersionId: "",
+      employeeId: card.employeeId ?? "",
+      requesterUserId: card.requesterUserId ?? "",
+      competence: "",
       title: card.title,
       description: card.description,
       companyId: card.companyId ?? "",
@@ -1410,6 +1447,23 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     event.preventDefault();
     if (!cardForm.title.trim()) return;
     if (!selectedCardId) {
+      if (cardForm.processVersionId) {
+        setBusy(true);
+        setError("");
+        try {
+          const response=await fetch(`/api/processes/versions/${cardForm.processVersionId}/instantiate`,{
+            method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cardForm),
+          });
+          const payload=await response.json() as Record<string,unknown>;
+          if(!response.ok)throw requestErrorFrom(response,payload);
+          const next=await requestSnapshot("/api/workspace");
+          applySnapshot(next,"Demanda criada a partir da versão publicada, com etapas e tarefas materializadas.");
+          setCardModalOpen(false);
+        } catch(cause) {
+          setError(cause instanceof Error?cause.message:"Não foi possível iniciar o processo.");
+        } finally { setBusy(false); }
+        return;
+      }
       const next = await mutate("/api/cards", { method: "POST", body: JSON.stringify(cardForm) }, "Demanda criada com checklist padrão.");
       if (next) setCardModalOpen(false);
       return;
@@ -2424,22 +2478,32 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               {selectedCard && <section className="demand-detail-summary"><div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div><div className="demand-document-state"><span>DOCUMENTOS</span><strong>{selectedCard.checklist.filter((item) => item.completed).length} aprovados</strong><small>{selectedCard.checklist.filter((item) => !item.completed).length} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div><div className="demand-quick-actions">{canEdit && !selectedCard.archived && <><button className="quick-complete" type="button" onClick={completeSelectedCard}><CheckCircle2 aria-hidden="true" /> Concluir</button><button type="button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button><button type="button" onClick={() => focusCardField("card-assignees")}>Responsável</button><button type="button" onClick={() => focusCardField("card-due-at")}>Prazo</button></>}</div></section>}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
-                {!selectedCard && <label className="full">Começar com um template<select value={cardForm.templateId} onChange={(event) => { const template = snapshot.templates.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, templateId: event.target.value, processType: template?.processType ?? cardForm.processType, description: template?.description ?? cardForm.description }); }}><option value="">Demanda em branco</option>{snapshot.templates.filter((item) => item.active).map((template) => <option value={template.id} key={template.id}>{template.name} • SLA {template.defaultSlaDays} dia(s) útil(eis)</option>)}</select></label>}
+                {!selectedCard && <label className="full">Processo e versão publicados<select value={cardForm.processVersionId} disabled={!canEdit||startOptionsLoading} onChange={(event)=>setCardForm({...cardForm,processVersionId:event.target.value,templateId:"",listId:"",dueAt:""})}><option value="">Demanda avulsa (sem processo versionado)</option>{processStartOptions.map((version)=><option key={version.id} value={version.id}>{version.processName} • v{version.versionMajor}.{version.versionMinor}</option>)}</select><small className="card-process-helper">{startOptionsLoading?"Carregando versões publicadas...":cardForm.processVersionId?"Todas as etapas e tarefas desta versão serão copiadas para a nova demanda.":"Selecione uma versão para executar um fluxo BPMN auditável."}</small></label>}
+                {!selectedCard&&!cardForm.processVersionId && <label className="full">Começar com um template<select value={cardForm.templateId} onChange={(event) => { const template = snapshot.templates.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, templateId: event.target.value, processType: template?.processType ?? cardForm.processType, description: template?.description ?? cardForm.description }); }}><option value="">Demanda em branco</option>{snapshot.templates.filter((item) => item.active).map((template) => <option value={template.id} key={template.id}>{template.name} • SLA {template.defaultSlaDays} dia(s) útil(eis)</option>)}</select></label>}
                 {!selectedCard && <label className="full">Processo operacional<select value={cardForm.boardId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, boardId: event.target.value, listId: "" })}>{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.boardType === "process" ? `Processo: ${board.name}` : `Quadro geral: ${board.name}`}</option>)}</select><small className="card-process-helper">A demanda será criada e movimentada somente nas colunas deste processo.</small></label>}
                 <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Conciliar colaborador com o ERP" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
-                <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>CONCILIAÇÃO CADASTRAL</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>
+                {!cardForm.processVersionId&&<label>Tipo de processo
+                  <select value={cardForm.processType} disabled={!canEdit}
+                    onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}>
+                    <option>CONCILIAÇÃO CADASTRAL</option><option>RESCISÃO</option><option>FÉRIAS</option>
+                    <option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option>
+                  </select>
+                </label>}
                 <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
+                {!selectedCard&&<label>Colaborador<select value={cardForm.employeeId} disabled={!canEdit} onChange={(event)=>setCardForm({...cardForm,employeeId:event.target.value})}><option value="">Não informado</option>{employeeStartOptions.filter((employee)=>!cardForm.companyId||employee.company_id===cardForm.companyId).map((employee)=><option key={employee.id} value={employee.id}>{employee.social_name||employee.full_name} • {employee.registration_number}</option>)}</select></label>}
+                {!selectedCard&&<label>Solicitante<select value={cardForm.requesterUserId} disabled={!canEdit} onChange={(event)=>setCardForm({...cardForm,requesterUserId:event.target.value})}><option value="">Usuário atual</option>{snapshot.members.map((member)=><option key={member.userId} value={member.userId}>{member.name} • {member.email}</option>)}</select></label>}
+                {!selectedCard&&<label>Competência<input type="month" value={cardForm.competence} disabled={!canEdit} onChange={(event)=>setCardForm({...cardForm,competence:event.target.value})}/></label>}
                 <label>Área solicitante<select value={cardForm.requesterAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.requesterAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 <label>Área responsável<select value={cardForm.responsibleAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, responsibleAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.responsibleAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
-                <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>
+                {!cardForm.processVersionId&&<label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>}
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
-                <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>
+                {!cardForm.processVersionId&&<label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>}
                 <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
                 <section className="card-choice-section full"><header><strong>Etiquetas</strong><span>Classifique sem alterar o processo</span></header><div className="choice-chips label-choices">{snapshot.labels.map((label) => <label className={cardForm.labelIds.includes(label.id) ? "selected" : ""} style={{ borderColor: cardForm.labelIds.includes(label.id) ? label.color : undefined }} key={label.id}><input type="checkbox" checked={cardForm.labelIds.includes(label.id)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, labelIds: event.target.checked ? [...cardForm.labelIds, label.id] : cardForm.labelIds.filter((id) => id !== label.id) })} /><i style={{ backgroundColor: label.color }} />{label.name}</label>)}</div></section>
                 {snapshot.customFields.map((field) => <label key={field.id}>{field.name}{field.fieldType === "select" ? <select value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })}><option value="">Selecione</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={field.fieldType === "date" ? "date" : field.fieldType === "number" ? "number" : "text"} value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })} />}</label>)}
-                <div className="card-form-actions full">{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="danger-link" onClick={archiveCard}>Arquivar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && !selectedCard.closedAt && <button type="button" className="danger-link" onClick={cancelCard}>Cancelar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="secondary-button" onClick={() => void toggleSlaPause()}>{selectedCard.slaStatus === "paused" ? "Retomar SLA" : "Pausar SLA"}</button>}<span /><button type="button" className="secondary-button" onClick={() => setCardModalOpen(false)}>Fechar</button>{canEdit && !selectedCard?.archived && <button className="primary-button" disabled={busy}>{selectedCard ? "Salvar alterações" : "Criar demanda"}</button>}</div>
+                <div className="card-form-actions full">{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="danger-link" onClick={archiveCard}>Arquivar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && !selectedCard.closedAt && <button type="button" className="danger-link" onClick={cancelCard}>Cancelar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="secondary-button" onClick={() => void toggleSlaPause()}>{selectedCard.slaStatus === "paused" ? "Retomar SLA" : "Pausar SLA"}</button>}<span /><button type="button" className="secondary-button" onClick={() => setCardModalOpen(false)}>Fechar</button>{canEdit && !selectedCard?.archived && <button className="primary-button" disabled={busy}>{selectedCard ? "Salvar alterações" : cardForm.processVersionId?"Iniciar processo":"Criar demanda"}</button>}</div>
               </form>}
 
               {/* A etapa do processo, em texto, com o motivo de cada bloqueio

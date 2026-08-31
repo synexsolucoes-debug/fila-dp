@@ -423,7 +423,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
        carregamento do painel. A janela corta o que ninguém abre no dia a dia; o
        que ficou de fora **não é escondido**: o snapshot devolve, em `history`,
        quantos existem no total, e a tela busca o restante sob demanda. */
-    d1.prepare(`SELECT cc.id, cc.card_id, cc.body, cc.created_at, u.name AS author_name, u.email AS author_email
+    d1.prepare(`SELECT cc.id, cc.card_id, cc.task_instance_id, cc.body, cc.created_at, u.name AS author_name, u.email AS author_email
       FROM fdp_card_comments cc
       JOIN fdp_users u ON u.id = cc.author_user_id
       JOIN fdp_cards c ON c.id = cc.card_id
@@ -465,7 +465,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     d1.prepare(`SELECT cfv.card_id, cf.field_key, cfv.value_text
       FROM fdp_custom_field_values cfv JOIN fdp_custom_fields cf ON cf.id = cfv.field_id
       WHERE cf.workspace_id = ?`).bind(workspace.id).all(),
-    d1.prepare(`SELECT a.id, a.card_id, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at
+    d1.prepare(`SELECT a.id, a.card_id, a.task_instance_id, a.filename, a.content_type, a.size_bytes, a.uploaded_by, a.created_at
       FROM fdp_card_attachments a JOIN fdp_cards c ON c.id = a.card_id WHERE c.board_id = ? AND c.archived = 0 ORDER BY a.created_at DESC`).bind(board.id).all(),
     d1.prepare("SELECT id, name, process_type, description, checklist_json, default_sla_days, active, position FROM fdp_process_templates WHERE workspace_id = ? ORDER BY position").bind(workspace.id).all(),
     d1.prepare("SELECT business_days_json, day_start, day_end, realtime_seconds FROM fdp_workspace_settings WHERE workspace_id = ?").bind(workspace.id).first<Record<string, unknown>>(),
@@ -660,6 +660,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,
     company: String(row.company ?? ""),
+    employeeId: row.employee_id ? String(row.employee_id) : null,
+    requesterUserId: row.requester_user_id ? String(row.requester_user_id) : null,
     requesterAreaId: row.requester_area_id ? String(row.requester_area_id) : null,
     responsibleAreaId: row.responsible_area_id ? String(row.responsible_area_id) : null,
     processType: String(row.process_type ?? "OUTROS"),
@@ -679,6 +681,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       completed: Boolean(item.completed),
       position: Number(item.position),
       completedAt: item.completed_at ? String(item.completed_at) : null,
+      taskInstanceId: item.task_instance_id ? String(item.task_instance_id) : null,
     })),
     comments: commentRows.filter((item) => item.card_id === row.id).map((item) => ({
       id: String(item.id),
@@ -687,6 +690,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       authorEmail: String(item.author_email),
       body: String(item.body),
       createdAt: String(item.created_at),
+      taskInstanceId: item.task_instance_id ? String(item.task_instance_id) : null,
     })),
     activities: activityRows.filter((item) => item.card_id === row.id).map((item) => ({
       id: String(item.id),
@@ -705,7 +709,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     })),
     customValues: Object.fromEntries(customValueRows.filter((item) => item.card_id === row.id).map((item) => [String(item.field_key), String(item.value_text)])),
     attachments: attachmentRows.filter((item) => item.card_id === row.id).map((item) => ({
-      id: String(item.id), filename: String(item.filename), contentType: String(item.content_type), sizeBytes: Number(item.size_bytes), uploadedBy: String(item.uploaded_by), createdAt: String(item.created_at), downloadUrl: `/api/attachments/${encodeURIComponent(String(item.id))}`,
+      id: String(item.id), filename: String(item.filename), contentType: String(item.content_type), sizeBytes: Number(item.size_bytes), uploadedBy: String(item.uploaded_by), createdAt: String(item.created_at), downloadUrl: `/api/attachments/${encodeURIComponent(String(item.id))}`, taskInstanceId: item.task_instance_id ? String(item.task_instance_id) : null,
     })),
     solidesAttachments: (() => {
       const authorization = tangerinoAttachmentAuthorizationByCard.get(String(row.id));

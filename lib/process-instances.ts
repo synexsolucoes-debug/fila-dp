@@ -101,6 +101,18 @@ export type ProcessStepConfig = {
    * pararia demanda que hoje anda.
    */
   documentProof: DocumentProof;
+  /** Tarefas-modelo aninhadas na etapa e copiadas para cada demanda. */
+  tasks?: ProcessTaskTemplate[];
+};
+
+export type ProcessTaskTemplate = {
+  id: string;
+  title: string;
+  instructions: string;
+  responsibilityMode: string;
+  responsibleUserId: string;
+  responsibleAreaId: string;
+  evidenceRequired: boolean;
 };
 
 export type PublishedProcessVersion = {
@@ -126,6 +138,21 @@ function stepConfigOf(row: Row): ProcessStepConfig {
       const parsed = JSON.parse(text(value) || "[]") as unknown;
       return Array.isArray(parsed) ? parsed.map((item) => cleanText(item, 200)).filter(Boolean) : [];
     } catch { return []; }
+  };
+  const taskList = (value: unknown): ProcessTaskTemplate[] => {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, 60).map((item, index) => {
+      const task = item && typeof item === "object" ? item as Row : {};
+      return {
+        id: cleanText(task.id, 120) || `task-${index + 1}`,
+        title: cleanText(task.title, 180),
+        instructions: cleanText(task.instructions, 4000),
+        responsibilityMode: cleanText(task.responsibilityMode, 40) || text(row.responsibility_mode) || "DEPARTMENT",
+        responsibleUserId: cleanText(task.responsibleUserId, 120) || text(row.responsible_user_id),
+        responsibleAreaId: cleanText(task.responsibleAreaId, 120) || text(row.department_id),
+        evidenceRequired: flag(task.evidenceRequired),
+      };
+    }).filter((task) => task.title);
   };
   return {
     id: text(row.id),
@@ -153,6 +180,7 @@ function stepConfigOf(row: Row): ProcessStepConfig {
     exitRules: parseConditionList(settings.exitRules),
     blockingIntegrations: list(settings.blockingIntegrations).map((item) => item.toLowerCase()),
     documentProof: parseDocumentProof(settings.documentProof),
+    tasks: taskList(settings.tasks),
   };
 }
 
@@ -684,6 +712,10 @@ export type StartInstanceInput = {
   description?: string;
   companyId?: string | null;
   companyName?: string;
+  employeeId?: string | null;
+  requesterUserId?: string | null;
+  requesterAreaId?: string | null;
+  responsibleAreaId?: string | null;
   competence?: string;
   priority?: string;
   sourceType?: string;
@@ -704,7 +736,87 @@ export type StartedInstance = {
   versionNumber: string;
   dueAt: string | null;
   checklist: string[];
+  stageCount: number;
+  taskCount: number;
 };
+
+export type ProcessInstanceBlueprint = {
+  stages: Array<{
+    bpmnElementId: string;
+    title: string;
+    status: "pending" | "in_progress";
+    position: number;
+    config: ProcessStepConfig | null;
+    tasks: Array<{
+      templateId: string;
+      title: string;
+      instructions: string;
+      responsibilityMode: string;
+      responsibleUserId: string;
+      responsibleAreaId: string;
+      evidenceRequired: boolean;
+      position: number;
+    }>;
+  }>;
+};
+
+/**
+ * Converte a versão publicada em uma fotografia completa da execução. Eventos
+ * de início/fim delimitam o fluxo, mas não viram trabalho; todas as demais
+ * etapas são preservadas na ordem do documento. Quando a etapa ainda não tem
+ * tarefas-modelo ricas, o checklist vira tarefa por compatibilidade.
+ */
+export function materializeProcessBlueprint(
+  version: PublishedProcessVersion,
+  activeStepId: string,
+): ProcessInstanceBlueprint {
+  const stages = [...version.graph.nodes.values()]
+    .filter((node) => node.role !== "start" && node.role !== "end")
+    .map((node, stageIndex) => {
+      const config = version.steps.get(node.id) ?? null;
+      const configured = config?.tasks ?? [];
+      const fallbacks = configured.length
+        ? configured
+        : stepChecklist(config).map((title, index) => ({
+          id: `checklist-${index + 1}`, title, instructions: config?.instructions ?? "",
+          responsibilityMode: config?.responsibilityMode ?? "DEPARTMENT",
+          responsibleUserId: config?.responsibleUserId ?? "",
+          responsibleAreaId: config?.responsibleDepartmentId || config?.departmentId || "",
+          evidenceRequired: config?.evidenceRequired ?? false,
+        }));
+      const taskTemplates = fallbacks.length || !["task", "subprocess", "intermediate"].includes(node.role)
+        ? fallbacks
+        : [{
+          id: "stage-work", title: stepLabel(version.graph, node.id), instructions: config?.instructions ?? "",
+          responsibilityMode: config?.responsibilityMode ?? "DEPARTMENT",
+          responsibleUserId: config?.responsibleUserId ?? "",
+          responsibleAreaId: config?.responsibleDepartmentId || config?.departmentId || "",
+          evidenceRequired: config?.evidenceRequired ?? false,
+        }];
+      return {
+        bpmnElementId: node.id,
+        title: stepLabel(version.graph, node.id),
+        status: node.id === activeStepId ? "in_progress" as const : "pending" as const,
+        position: (stageIndex + 1) * 1000,
+        config,
+        tasks: taskTemplates.map((task, taskIndex) => ({
+          ...task,
+          responsibilityMode: task.responsibilityMode === "INHERIT"
+            ? config?.responsibilityMode ?? "DEPARTMENT"
+            : task.responsibilityMode,
+          responsibleUserId: task.responsibilityMode === "INHERIT"
+            ? config?.responsibleUserId ?? ""
+            : task.responsibleUserId,
+          responsibleAreaId: task.responsibilityMode === "INHERIT"
+            ? config?.responsibleDepartmentId || config?.departmentId || ""
+            : task.responsibleAreaId,
+          templateId: task.id,
+          position: (taskIndex + 1) * 1000,
+        })),
+      };
+    });
+  return { stages };
+}
 
 /**
  * Instancia uma versão publicada como demanda.
@@ -718,9 +830,15 @@ export type StartedInstance = {
 export async function prepareProcessInstance(d1: Database, input: StartInstanceInput) {
   const { version } = input;
   const initial = resolveInitialStep(version);
-  const checklist = stepChecklist(initial.config);
+  const blueprint = materializeProcessBlueprint(version, initial.stepId);
+  const checklist = blueprint.stages.find((stage) => stage.bpmnElementId === initial.stepId)?.tasks.map((task) => task.title) ?? [];
   const dueAt = await resolveStepDeadline(d1, input.workspaceId, initial.config, input.globalSlaMinutes ?? 0);
   const cardId = crypto.randomUUID();
+  const stageInstances = blueprint.stages.map((stage) => ({ ...stage, id: crypto.randomUUID() }));
+  const taskInstances = stageInstances.flatMap((stage) => stage.tasks.map((task) => ({
+    ...task, id: crypto.randomUUID(), stageInstanceId: stage.id,
+    bpmnElementId: stage.bpmnElementId, config: stage.config, active: stage.status === "in_progress",
+  })));
   const priority = ["low", "normal", "high", "urgent"].includes(String(input.priority))
     ? String(input.priority)
     : initial.config?.demandPriority ?? version.defaultPriority;
@@ -731,16 +849,17 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
 
   const statements = [
     d1.prepare(`INSERT INTO fdp_cards
-      (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority,
+      (id, workspace_id, board_id, list_id, title, description, company_id, company, employee_id, requester_user_id, process_type, priority,
        assignee_name, due_at, sla_status, position, source_type, created_by, competence,
        requester_area_id, responsible_area_id,
        process_definition_id, process_version_id, process_version_number, current_step_id, instantiated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`)
       .bind(
         cardId, input.workspaceId, input.boardId, input.listId,
         cleanText(input.title, 180) || `${version.definitionName} — ${initial.label}`,
         cleanText(input.description, 4000),
         input.companyId ?? null, cleanText(input.companyName, 160),
+        input.employeeId ?? null, input.requesterUserId ?? null,
         // O tipo de processo da demanda passa a ser o código da definição: é o
         // vocabulário do processo publicado, e não mais uma string solta.
         cleanText(version.definitionCode, 40).toUpperCase() || "PROCESSO",
@@ -750,18 +869,36 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
         cleanText(input.sourceType, 40) || "process",
         input.actor.email,
         cleanText(input.competence, 7),
-        initial.config?.requesterDepartmentId || null,
-        initial.config?.responsibleDepartmentId || initial.config?.departmentId || null,
+        input.requesterAreaId || initial.config?.requesterDepartmentId || null,
+        input.responsibleAreaId || initial.config?.responsibleDepartmentId || initial.config?.departmentId || null,
         version.definitionId, version.versionId, version.versionNumber, initial.stepId,
       ),
-    ...checklist.map((item, index) => d1.prepare(
-      "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position, process_step_id) VALUES (?, ?, ?, ?, 0, ?, ?)",
-    ).bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000, initial.stepId)),
+    ...stageInstances.map((stage) => d1.prepare(
+      `INSERT INTO fdp_demand_stages
+        (id, workspace_id, card_id, process_version_id, process_step_config_id, bpmn_element_id, title, status, position, started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'in_progress' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
+    ).bind(stage.id, input.workspaceId, cardId, version.versionId, stage.config?.id || null,
+      stage.bpmnElementId, stage.title, stage.status, stage.position, stage.status)),
+    ...taskInstances.map((task) => d1.prepare(
+      `INSERT INTO fdp_demand_tasks
+        (id, workspace_id, card_id, stage_instance_id, process_version_id, process_step_config_id,
+         bpmn_element_id, title, instructions, status, responsibility_mode, responsible_user_id,
+         responsible_area_id, started_at, due_at, evidence_required, position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END, ?, ?, ?)`,
+    ).bind(task.id, input.workspaceId, cardId, task.stageInstanceId, version.versionId,
+      task.config?.id || null, task.bpmnElementId, task.title, task.instructions,
+      task.active ? "in_progress" : "pending", task.responsibilityMode,
+      task.responsibleUserId || null, task.responsibleAreaId || null, task.active,
+      task.active ? dueAt : null, task.evidenceRequired ? 1 : 0, task.position)),
+    ...taskInstances.filter((task) => task.active).map((task) => d1.prepare(
+      "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, task_instance_id, title, completed, position, process_step_id) VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+    ).bind(crypto.randomUUID(), input.workspaceId, cardId, task.id, task.title, task.position, initial.stepId)),
   ];
 
   const result: StartedInstance = {
     cardId, stepId: initial.stepId, stepLabel: initial.label,
     versionNumber: version.versionNumber, dueAt, checklist,
+    stageCount: stageInstances.length, taskCount: taskInstances.length,
   };
   return { statements, result };
 }

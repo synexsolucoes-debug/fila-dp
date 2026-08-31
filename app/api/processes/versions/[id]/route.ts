@@ -3,6 +3,8 @@ import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent } from "@
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { parseJsonArray, safeSvgPreview, sanitizeProcessStepConfigs, validBpmnXml } from "@/lib/process-management";
+import { parseConditionList, parseTransitionConditions } from "@/lib/process-conditions";
+import { parseDocumentProof } from "@/lib/process-documents";
 
 type Row = Record<string, unknown>;
 type WorkspaceD1 = Awaited<ReturnType<typeof getWorkspaceContext>>["d1"];
@@ -63,6 +65,12 @@ function stepOf(row: Row) {
       internalCode: text(settings.internalCode),
       dynamicAssignee: text(settings.dynamicAssignee),
       notificationTemplate: text(settings.notificationTemplate),
+      entryRules: parseConditionList(settings.entryRules),
+      exitRules: parseConditionList(settings.exitRules),
+      transitions: parseTransitionConditions(settings.transitions),
+      blockingIntegrations: parseJsonArray(settings.blockingIntegrations).map(String),
+      documentProof: parseDocumentProof(settings.documentProof),
+      tasks: parseJsonArray(settings.tasks),
     },
   };
 }

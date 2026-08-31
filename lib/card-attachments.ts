@@ -71,12 +71,14 @@ export async function storeCardAttachment(input: {
   sizeBytes: number;
   body: ReadableStream<Uint8Array>;
   uploadedBy: string;
+  taskInstanceId?: string | null;
   sourceType?: "manual" | "solides";
   sourceReference?: string | null;
 }) {
   const validated = validateCardAttachment(input);
   const sourceType = input.sourceType ?? "manual";
   const sourceReference = input.sourceReference?.trim().slice(0, 200) || null;
+  const taskInstanceId = input.taskInstanceId?.trim().slice(0, 120) || null;
 
   if (sourceReference) {
     const existing = await input.d1.prepare(`SELECT id FROM fdp_card_attachments
@@ -102,8 +104,8 @@ export async function storeCardAttachment(input: {
         WHERE subscription.workspace_id = ? AND subscription.status IN ('trialing', 'active')
       ), inserted AS (
         INSERT INTO fdp_card_attachments
-          (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by, source_type, source_reference)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
+          (id, workspace_id, card_id, task_instance_id, object_key, filename, content_type, size_bytes, uploaded_by, source_type, source_reference)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
         WHERE (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_card_attachments WHERE workspace_id = ?)
             + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_epi_attachments WHERE workspace_id = ?)
             + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_contractor_documents WHERE workspace_id = ?) + ?
@@ -111,7 +113,7 @@ export async function storeCardAttachment(input: {
         ON CONFLICT DO NOTHING
         RETURNING id
       ) SELECT id FROM inserted`)
-      .bind(input.workspaceId, input.workspaceId, attachmentId, input.workspaceId, input.cardId, objectKey,
+      .bind(input.workspaceId, input.workspaceId, attachmentId, input.workspaceId, input.cardId, taskInstanceId, objectKey,
         validated.filename, validated.contentType, input.sizeBytes, input.uploadedBy.slice(0, 220), sourceType,
         sourceReference, input.workspaceId, input.workspaceId, input.workspaceId, input.sizeBytes)
       .first<{ id: string }>();

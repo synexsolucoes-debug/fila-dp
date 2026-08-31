@@ -13,17 +13,24 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
     requireCapability(workspace, "cards.write");
-    const item = await d1.prepare(`SELECT ci.id, ci.card_id, ci.title, ci.completed
+    const item = await d1.prepare(`SELECT ci.id, ci.card_id, ci.task_instance_id, ci.title, ci.completed
       FROM fdp_checklist_items ci JOIN fdp_cards c ON c.id = ci.card_id
       WHERE ci.id = ? AND c.board_id = ? AND c.archived = 0`)
       .bind(id, board.id)
-      .first<{ id: string; card_id: string; title: string; completed: number }>();
+      .first<{ id: string; card_id: string; task_instance_id: string | null; title: string; completed: number }>();
     if (!item) throw ApiError.notFound("Etapa não encontrada.", "CHECKLIST_ITEM_NOT_FOUND");
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, item.card_id);
     const completed = Boolean(body.completed);
-    await d1.prepare("UPDATE fdp_checklist_items SET completed = ?, completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id = ?")
-      .bind(completed ? 1 : 0, completed ? 1 : 0, id)
-      .run();
+    await d1.batch([
+      d1.prepare("UPDATE fdp_checklist_items SET completed = ?, completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END WHERE id = ?")
+        .bind(completed ? 1 : 0, completed ? 1 : 0, id),
+      ...(item.task_instance_id ? [d1.prepare(`UPDATE fdp_demand_tasks
+        SET status = ?, completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END,
+            completed_by = CASE WHEN ? = 1 THEN ? ELSE NULL END, updated_at = CURRENT_TIMESTAMP
+        WHERE workspace_id = ? AND id = ?`)
+        .bind(completed ? "completed" : "in_progress", completed ? 1 : 0, completed ? 1 : 0,
+          user.id, workspace.id, item.task_instance_id)] : []),
+    ]);
 
     const remaining = await d1.prepare("SELECT COUNT(*) AS count FROM fdp_checklist_items WHERE card_id = ? AND completed = 0").bind(item.card_id).first<{ count: number }>();
     if (Number(remaining?.count ?? 0) === 0) await runAutomations(workspace.id, board.id, item.card_id, "checklist.completed", auth.user.email, { allItems: true });

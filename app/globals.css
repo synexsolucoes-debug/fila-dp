@@ -4,10 +4,10 @@
   /* Identidade Vinculato — extraída da marca. Os componentes usam os tokens
      semânticos abaixo; valores HEX não devem ser repetidos fora deste bloco. */
   /* Extraídos dos pixels do símbolo oficial, não estimados. */
-  --vin-navy-deep: #041B45;
-  --vin-navy: #062B60;
-  --vin-blue: #0857B2;
-  --vin-blue-vivid: #168CFD;
+  --vin-navy-deep: #111827;
+  --vin-navy: #18223A;
+  --vin-blue: #365CF5;
+  --vin-blue-vivid: #5B7CFF;
   --vin-bg: #F6F8FC;
   --vin-surface: #FFFFFF;
   /* Neutros alinhados à paleta de referência (§14). Fundo e branco já eram
@@ -30,8 +30,8 @@
   --brand-deep: var(--vin-navy-deep);
   --brand-accent: var(--vin-blue-vivid);
   --brand-contrast: #FFFFFF;
-  --brand-soft: #E7F0FE;
-  --brand-soft-border: #C3DBFB;
+  --brand-soft: #E9EDFF;
+  --brand-soft-border: #C7D2FE;
   --accent-teal: var(--vin-teal);
   --accent-teal-soft: #E3F5F2;
   --ui-bg: var(--vin-bg);

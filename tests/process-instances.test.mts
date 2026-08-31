@@ -6,7 +6,7 @@ import {
   allowedTargets, initialStepId, isTerminalStep, outgoingFlows, parseBpmnGraph, stepLabel,
 } from "../lib/bpmn-graph.ts";
 import {
-  evaluateStepRequirements, evaluateTransition, loadProcessInstance, stepChecklist,
+  evaluateStepRequirements, evaluateTransition, loadProcessInstance, materializeProcessBlueprint, stepChecklist,
   type ProcessInstanceRow, type ProcessStepConfig, type PublishedProcessVersion, type TransitionActor,
 } from "../lib/process-instances.ts";
 
@@ -87,6 +87,7 @@ const stepConfig = (overrides: Partial<ProcessStepConfig> = {}): ProcessStepConf
   requiresApproval: false, approverUserId: "", approverDepartmentId: "", demandPriority: "normal",
   transitions: {}, entryRules: [], exitRules: [], blockingIntegrations: [],
   documentProof: "declared",
+  tasks: [],
   ...overrides,
 });
 
@@ -111,6 +112,35 @@ const instance = (overrides: Partial<ProcessInstanceRow> = {}): ProcessInstanceR
 });
 
 const clean = { pendingChecklist: 0, attachmentCount: 0, attachmentNames: [] as string[] };
+
+test("a instância materializa todas as etapas futuras sem copiar início e fim", () => {
+  const blueprint=materializeProcessBlueprint(version(),"Task_documentos");
+  assert.deepEqual(blueprint.stages.map((stage)=>stage.bpmnElementId),[
+    "Task_documentos","Gateway_1","Task_registro","Task_pendencia",
+  ]);
+  assert.equal(blueprint.stages[0].status,"in_progress");
+  assert.ok(blueprint.stages.slice(1).every((stage)=>stage.status==="pending"));
+});
+
+test("tarefas ricas preservam instruções, responsabilidade e evidência", () => {
+  const configured=stepConfig({tasks:[{
+    id:"task-docs",title:"Validar documentos",instructions:"Compare com o cadastro.",
+    responsibilityMode:"USER",responsibleUserId:"user-2",responsibleAreaId:"",evidenceRequired:true,
+  }]});
+  const blueprint=materializeProcessBlueprint(version({Task_documentos:configured}),"Task_documentos");
+  assert.deepEqual(blueprint.stages[0].tasks[0],{
+    templateId:"task-docs",id:"task-docs",title:"Validar documentos",instructions:"Compare com o cadastro.",
+    responsibilityMode:"USER",responsibleUserId:"user-2",responsibleAreaId:"",evidenceRequired:true,position:1000,
+  });
+});
+
+test("checklist legado vira tarefa auditável quando não há tarefa rica", () => {
+  const configured=stepConfig({checklist:["Conferir CTPS"],requiredDocuments:["Exame admissional"]});
+  const blueprint=materializeProcessBlueprint(version({Task_documentos:configured}),"Task_documentos");
+  assert.deepEqual(blueprint.stages[0].tasks.map((task)=>task.title),[
+    "Conferir CTPS","Documento obrigatório: Exame admissional",
+  ]);
+});
 
 test("transição que o desenho não liga é recusada", () => {
   const result = evaluateTransition({

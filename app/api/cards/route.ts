@@ -1,10 +1,54 @@
 import { ApiError, apiError, computeSlaStatus, getApiUser, text, validDueAt, validProcessType } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { addBusinessDays, replaceCardRelations } from "@/lib/fila-dp-relations";
 import { workingDayMinutes } from "@/lib/fila-dp-sla";
 import { validCompetence } from "@/lib/operations";
 import { validateActiveAreaIds } from "@/lib/areas";
+
+/** Página leve de demandas para telas que não podem carregar o snapshot inteiro. */
+export async function GET(request: Request) {
+  const auth = await getApiUser();
+  if (!auth.user) return auth.response;
+  try {
+    const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "cards.read");
+    const url = new URL(request.url);
+    const cursor = text(url.searchParams.get("cursor"), 120);
+    const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 50, 1), 100);
+    const query = text(url.searchParams.get("q"), 120);
+    const status = text(url.searchParams.get("status"), 30);
+    const processVersionId = text(url.searchParams.get("processVersionId"), 120);
+    const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
+    if (!access.unrestricted && access.companyIds.size === 0) return Response.json({ cards: [], nextCursor: null });
+    const where = ["card.workspace_id = ?", "card.board_id = ?"];
+    const values: unknown[] = [workspace.id, board.id];
+    if (!access.unrestricted) {
+      const ids = [...access.companyIds];
+      where.push(`card.company_id IN (${ids.map(() => "?").join(",")})`);
+      values.push(...ids);
+    }
+    if (cursor) { where.push("card.id > ?"); values.push(cursor); }
+    if (query) { where.push("(card.title ILIKE ? OR card.company ILIKE ? OR card.process_type ILIKE ?)"); values.push(`%${query}%`, `%${query}%`, `%${query}%`); }
+    if (status === "active") where.push("card.archived = 0");
+    if (status === "archived") where.push("card.archived = 1");
+    if (processVersionId) { where.push("card.process_version_id = ?"); values.push(processVersionId); }
+    const result = await d1.prepare(`SELECT card.id, card.reference_number, card.title, card.description,
+        card.company_id, card.company, card.employee_id, card.requester_user_id,
+        card.requester_area_id, card.responsible_area_id, card.process_type, card.priority,
+        card.assignee_name, card.due_at, card.sla_status, card.archived, card.list_id,
+        card.process_definition_id, card.process_version_id, card.process_version_number,
+        card.current_step_id, card.competence, card.created_at, card.updated_at,
+        (SELECT COUNT(*)::int FROM fdp_demand_tasks task WHERE task.workspace_id = card.workspace_id AND task.card_id = card.id) AS tasks_total,
+        (SELECT COUNT(*)::int FROM fdp_demand_tasks task WHERE task.workspace_id = card.workspace_id AND task.card_id = card.id AND task.status = 'completed') AS tasks_done
+      FROM fdp_cards card WHERE ${where.join(" AND ")} ORDER BY card.id LIMIT ?`)
+      .bind(...values, limit + 1).all<Record<string, unknown>>();
+    const cards = result.results.slice(0, limit);
+    return Response.json({ cards, nextCursor: result.results.length > limit ? String(cards.at(-1)?.id ?? "") : null });
+  } catch (error) {
+    return apiError(error);
+  }
+}
 
 export async function POST(request: Request) {
   const auth = await getApiUser();

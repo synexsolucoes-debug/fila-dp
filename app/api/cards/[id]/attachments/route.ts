@@ -21,12 +21,18 @@ export async function POST(request: Request, context: RouteContext) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File) || file.size === 0) return Response.json({ error: "Selecione um arquivo válido." }, { status: 400 });
+    const taskInstanceId = String(form.get("taskInstanceId") ?? "").trim().slice(0, 120) || null;
+    if (taskInstanceId) {
+      const task = await d1.prepare("SELECT id FROM fdp_demand_tasks WHERE workspace_id = ? AND card_id = ? AND id = ?")
+        .bind(workspace.id, id, taskInstanceId).first<{ id: string }>();
+      if (!task) throw ApiError.badRequest("A tarefa selecionada não pertence a esta demanda.", "TASK_NOT_FOUND");
+    }
     const stored = await storeCardAttachment({
       d1, workspaceId: workspace.id, cardId: id, filename: file.name, contentType: file.type,
-      sizeBytes: file.size, body: file.stream(), uploadedBy: auth.user.email,
+      sizeBytes: file.size, body: file.stream(), uploadedBy: auth.user.email, taskInstanceId,
     });
     await recordActivity(workspace.id, id, auth.user.email, "attachment.uploaded", {
-      attachmentId: stored.attachmentId, filename: file.name, sizeBytes: file.size,
+      attachmentId: stored.attachmentId, filename: file.name, sizeBytes: file.size, taskInstanceId,
     });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {

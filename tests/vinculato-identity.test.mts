@@ -79,10 +79,10 @@ test("identificadores técnicos foram preservados na renomeação", async () => 
 
 test("a identidade visual vive em tokens, não espalhada em HEX", async () => {
   const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  // Os dois azuis vêm dos pixels do símbolo oficial, não de estimativa. Eles não
-  // acompanham a paleta de referência de propósito: adotá-la faria a interface
-  // deixar de combinar com o próprio logo.
-  for (const token of ["--vin-navy: #062B60", "--vin-blue-vivid: #168CFD"]) {
+  // O azul-marinho e o azul de ação são os valores definidos na identidade
+  // consolidada da auditoria. Centralizados aqui, não viram HEX concorrentes
+  // espalhados pelos módulos.
+  for (const token of ["--vin-navy: #18223A", "--vin-blue: #365CF5", "--vin-blue-vivid: #5B7CFF"]) {
     assert.ok(globals.includes(token), `token ausente: ${token}`);
   }
   // Os neutros, ao contrário, seguem a paleta de referência (§14).

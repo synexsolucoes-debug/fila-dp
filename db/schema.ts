@@ -256,6 +256,8 @@ export const cards = pgTable("fdp_cards", {
   description: text("description").notNull().default(""),
   companyId: text("company_id").references(() => companies.id, { onDelete: "set null" }),
   company: text("company").notNull().default(""),
+  employeeId: text("employee_id"),
+  requesterUserId: text("requester_user_id"),
   requesterAreaId: text("requester_area_id"),
   responsibleAreaId: text("responsible_area_id"),
   processType: text("process_type").notNull().default("OUTROS"),
@@ -305,6 +307,8 @@ export const cards = pgTable("fdp_cards", {
     columns: [table.workspaceId, table.companyId],
     foreignColumns: [companies.workspaceId, companies.id],
   }),
+  foreignKey({ name: "fdp_cards_workspace_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }),
+  foreignKey({ name: "fdp_cards_workspace_requester_user_fk", columns: [table.workspaceId, table.requesterUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
   foreignKey({ name: "fdp_cards_requester_area_fk", columns: [table.workspaceId, table.requesterAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   foreignKey({ name: "fdp_cards_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   index("fdp_cards_workspace_requester_area_idx").on(table.workspaceId, table.requesterAreaId, table.createdAt),
@@ -321,10 +325,81 @@ export const cards = pgTable("fdp_cards", {
   check("fdp_cards_process_instance_check", sql`(${table.processVersionId} IS NULL AND ${table.processDefinitionId} IS NULL AND ${table.currentStepId} = '' AND ${table.processVersionNumber} = '' AND ${table.instantiatedAt} IS NULL) OR (${table.processVersionId} IS NOT NULL AND ${table.processDefinitionId} IS NOT NULL AND ${table.currentStepId} <> '' AND ${table.instantiatedAt} IS NOT NULL)`),
 ]);
 
+/**
+ * Fotografia de cada etapa de uma demanda no instante em que o processo é
+ * iniciado. A versão publicada continua sendo o modelo imutável; esta tabela é
+ * o histórico operacional da instância, inclusive para etapas futuras.
+ */
+export const demandStages = pgTable("fdp_demand_stages", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  cardId: text("card_id").notNull(),
+  processVersionId: text("process_version_id").notNull(),
+  processStepConfigId: text("process_step_config_id"),
+  bpmnElementId: text("bpmn_element_id").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("pending"),
+  position: doublePrecision("position").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_demand_stages_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_demand_stages_card_element_uq").on(table.workspaceId, table.cardId, table.bpmnElementId),
+  index("fdp_demand_stages_card_position_idx").on(table.workspaceId, table.cardId, table.position),
+  foreignKey({ name: "fdp_demand_stages_workspace_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_demand_stages_workspace_version_fk", columns: [table.workspaceId, table.processVersionId], foreignColumns: [processVersions.workspaceId, processVersions.id] }),
+  foreignKey({ name: "fdp_demand_stages_workspace_config_fk", columns: [table.workspaceId, table.processStepConfigId], foreignColumns: [processStepConfigs.workspaceId, processStepConfigs.id] }),
+  check("fdp_demand_stages_status_check", sql`${table.status} IN ('pending', 'in_progress', 'completed', 'skipped', 'cancelled')`),
+]);
+
+/** Tarefa executável e auditável pertencente a uma etapa materializada. */
+export const demandTasks = pgTable("fdp_demand_tasks", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  cardId: text("card_id").notNull(),
+  stageInstanceId: text("stage_instance_id").notNull(),
+  processVersionId: text("process_version_id").notNull(),
+  processStepConfigId: text("process_step_config_id"),
+  bpmnElementId: text("bpmn_element_id").notNull(),
+  title: text("title").notNull(),
+  instructions: text("instructions").notNull().default(""),
+  status: text("status").notNull().default("pending"),
+  responsibilityMode: text("responsibility_mode").notNull().default("DEPARTMENT"),
+  responsibleUserId: text("responsible_user_id"),
+  responsibleAreaId: text("responsible_area_id"),
+  startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+  dueAt: timestamp("due_at", { withTimezone: true, mode: "string" }),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+  completedBy: text("completed_by"),
+  completionNote: text("completion_note").notNull().default(""),
+  evidenceRequired: integer("evidence_required").notNull().default(0),
+  position: doublePrecision("position").notNull(),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_demand_tasks_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_demand_tasks_card_status_idx").on(table.workspaceId, table.cardId, table.status, table.position),
+  index("fdp_demand_tasks_stage_position_idx").on(table.workspaceId, table.stageInstanceId, table.position),
+  foreignKey({ name: "fdp_demand_tasks_workspace_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_demand_tasks_workspace_stage_fk", columns: [table.workspaceId, table.stageInstanceId], foreignColumns: [demandStages.workspaceId, demandStages.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_demand_tasks_workspace_version_fk", columns: [table.workspaceId, table.processVersionId], foreignColumns: [processVersions.workspaceId, processVersions.id] }),
+  foreignKey({ name: "fdp_demand_tasks_workspace_config_fk", columns: [table.workspaceId, table.processStepConfigId], foreignColumns: [processStepConfigs.workspaceId, processStepConfigs.id] }),
+  foreignKey({ name: "fdp_demand_tasks_workspace_user_fk", columns: [table.workspaceId, table.responsibleUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_demand_tasks_workspace_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_demand_tasks_workspace_completed_by_fk", columns: [table.workspaceId, table.completedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_demand_tasks_status_check", sql`${table.status} IN ('pending', 'in_progress', 'completed', 'skipped', 'cancelled')`),
+  check("fdp_demand_tasks_version_check", sql`${table.version} > 0`),
+  check("fdp_demand_tasks_evidence_check", sql`${table.evidenceRequired} IN (0, 1)`),
+]);
+
 export const checklistItems = pgTable("fdp_checklist_items", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
   cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
+  taskInstanceId: text("task_instance_id"),
   title: text("title").notNull(),
   completed: integer("completed").notNull().default(0),
   position: doublePrecision("position").notNull(),
@@ -336,12 +411,14 @@ export const checklistItems = pgTable("fdp_checklist_items", {
     columns: [table.workspaceId, table.cardId],
     foreignColumns: [cards.workspaceId, cards.id],
   }).onDelete("cascade"),
+  foreignKey({ name: "fdp_checklist_items_workspace_task_fk", columns: [table.workspaceId, table.taskInstanceId], foreignColumns: [demandTasks.workspaceId, demandTasks.id] }).onDelete("cascade"),
 ]);
 
 export const cardComments = pgTable("fdp_card_comments", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
   cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
+  taskInstanceId: text("task_instance_id"),
   authorUserId: text("author_user_id").notNull().references(() => users.id),
   body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -353,6 +430,7 @@ export const cardComments = pgTable("fdp_card_comments", {
     columns: [table.workspaceId, table.cardId],
     foreignColumns: [cards.workspaceId, cards.id],
   }).onDelete("cascade"),
+  foreignKey({ name: "fdp_card_comments_workspace_task_fk", columns: [table.workspaceId, table.taskInstanceId], foreignColumns: [demandTasks.workspaceId, demandTasks.id] }).onDelete("cascade"),
 ]);
 
 export const labels = pgTable("fdp_labels", {
@@ -440,6 +518,7 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
   cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
+  taskInstanceId: text("task_instance_id"),
   objectKey: text("object_key").notNull(),
   filename: text("filename").notNull(),
   contentType: text("content_type").notNull(),
@@ -454,6 +533,7 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
     columns: [table.workspaceId, table.cardId],
     foreignColumns: [cards.workspaceId, cards.id],
   }).onDelete("cascade"),
+  foreignKey({ name: "fdp_card_attachments_workspace_task_fk", columns: [table.workspaceId, table.taskInstanceId], foreignColumns: [demandTasks.workspaceId, demandTasks.id] }).onDelete("cascade"),
 ]);
 
 export const processTemplates = pgTable("fdp_process_templates", {

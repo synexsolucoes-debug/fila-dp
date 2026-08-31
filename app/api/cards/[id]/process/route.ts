@@ -42,7 +42,7 @@ async function loadContext(request: Request, cardId: string) {
   await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, instance.companyId);
   const version = await loadPublishedVersion(d1, workspace.id, instance.processVersionId);
 
-  const [areas, checklist, attachments] = await Promise.all([
+  const [areas, checklist, attachments, stages, tasks] = await Promise.all([
     d1.prepare("SELECT area_id FROM fdp_area_members WHERE workspace_id = ? AND user_id = ?")
       .bind(workspace.id, user.id).all<{ area_id: string }>(),
     d1.prepare(`SELECT COUNT(*)::int AS pending FROM fdp_checklist_items
@@ -51,6 +51,14 @@ async function loadContext(request: Request, cardId: string) {
       .bind(workspace.id, cardId, instance.currentStepId).first<{ pending: number }>(),
     d1.prepare("SELECT COUNT(*)::int AS total FROM fdp_card_attachments WHERE workspace_id = ? AND card_id = ?")
       .bind(workspace.id, cardId).first<{ total: number }>(),
+    d1.prepare(`SELECT id, bpmn_element_id, title, status, position, started_at, completed_at
+      FROM fdp_demand_stages WHERE workspace_id = ? AND card_id = ? ORDER BY position, id`)
+      .bind(workspace.id, cardId).all<Record<string, unknown>>(),
+    d1.prepare(`SELECT id, stage_instance_id, bpmn_element_id, title, instructions, status,
+        responsibility_mode, responsible_user_id, responsible_area_id, started_at, due_at,
+        completed_at, completed_by, completion_note, evidence_required, position, version
+      FROM fdp_demand_tasks WHERE workspace_id = ? AND card_id = ? ORDER BY position, id`)
+      .bind(workspace.id, cardId).all<Record<string, unknown>>(),
   ]);
 
   const actor: TransitionActor = {
@@ -65,6 +73,8 @@ async function loadContext(request: Request, cardId: string) {
     auth, d1, workspace, user, instance, version, actor,
     pendingChecklist: Number(checklist?.pending ?? 0),
     attachmentCount: Number(attachments?.total ?? 0),
+    stages: stages.results,
+    tasks: tasks.results,
     requestId: request.headers.get("x-fila-dp-request-id"),
   } as const;
 }
@@ -90,6 +100,8 @@ function payload(context: Extract<Loaded, { instance: unknown }>) {
          Vem da configuração já carregada em `version.steps`: sem consulta nova. */
       requiresApproval: Boolean(version.steps.get(instance.currentStepId)?.requiresApproval),
       version: instance.version,
+      stages: context.stages,
+      tasks: context.tasks,
     },
     transitions: availableTransitions({
       version, instance, actor: context.actor,
@@ -153,7 +165,11 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const nextConfig = version.steps.get(evaluation.targetStepId) ?? null;
     const dueAt = await resolveStepDeadline(d1, workspace.id, nextConfig, 0);
-    const checklist = stepChecklist(nextConfig);
+    const legacyChecklist = stepChecklist(nextConfig);
+    const targetTasks = await d1.prepare(`SELECT id, title, position FROM fdp_demand_tasks
+      WHERE workspace_id = ? AND card_id = ? AND bpmn_element_id = ? ORDER BY position, id`)
+      .bind(workspace.id, instance.id, evaluation.targetStepId)
+      .all<{ id: string; title: string; position: number }>();
 
     /* A troca de etapa acontece sozinha e antes de tudo, com `RETURNING`.
        Isso é deliberado: se ela não pegar — porque outra pessoa moveu a demanda
@@ -173,12 +189,30 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const eventName = evaluation.terminal ? "process.instance_completed" : "process.step_advanced";
     await d1.batch([
-      ...checklist.map((item, index) => d1.prepare(
-        "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position, process_step_id) VALUES (?, ?, ?, ?, 0, ?, ?)",
-      ).bind(
-        crypto.randomUUID(), workspace.id, instance.id, item,
-        (index + 1) * 1000, evaluation.targetStepId,
-      )),
+      d1.prepare(`UPDATE fdp_demand_stages SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE workspace_id = ? AND card_id = ? AND bpmn_element_id = ? AND status = 'in_progress'`)
+        .bind(workspace.id, instance.id, fromStepId),
+      d1.prepare(`UPDATE fdp_demand_stages SET status = 'in_progress', started_at = COALESCE(started_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+        WHERE workspace_id = ? AND card_id = ? AND bpmn_element_id = ? AND status = 'pending'`)
+        .bind(workspace.id, instance.id, evaluation.targetStepId),
+      d1.prepare(`UPDATE fdp_demand_tasks SET status = 'in_progress', started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+          due_at = COALESCE(due_at, ?), updated_at = CURRENT_TIMESTAMP
+        WHERE workspace_id = ? AND card_id = ? AND bpmn_element_id = ? AND status = 'pending'`)
+        .bind(dueAt, workspace.id, instance.id, evaluation.targetStepId),
+      ...(targetTasks.results.length ? targetTasks.results.map((task) => d1.prepare(
+        `INSERT INTO fdp_checklist_items
+          (id, workspace_id, card_id, task_instance_id, title, completed, position, process_step_id)
+         SELECT ?, ?, ?, ?, ?, 0, ?, ? WHERE NOT EXISTS (
+           SELECT 1 FROM fdp_checklist_items WHERE workspace_id = ? AND task_instance_id = ?
+         )`,
+      ).bind(crypto.randomUUID(), workspace.id, instance.id, task.id, task.title, task.position,
+        evaluation.targetStepId, workspace.id, task.id)) : legacyChecklist.map((item, index) => d1.prepare(
+        `INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position, process_step_id)
+         SELECT ?, ?, ?, ?, 0, ?, ? WHERE NOT EXISTS (
+           SELECT 1 FROM fdp_checklist_items WHERE workspace_id = ? AND card_id = ? AND process_step_id = ? AND title = ?
+         )`,
+      ).bind(crypto.randomUUID(), workspace.id, instance.id, item, (index + 1) * 1000,
+        evaluation.targetStepId, workspace.id, instance.id, evaluation.targetStepId, item))),
       prepareActivity(workspace.id, instance.id, auth.user.email, "process.step_advanced", {
         fromStepId, toStepId: evaluation.targetStepId, toStepLabel: evaluation.targetLabel,
         versionId: instance.processVersionId, versionNumber: instance.processVersionNumber,

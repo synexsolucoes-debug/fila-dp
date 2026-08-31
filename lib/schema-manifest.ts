@@ -79,6 +79,7 @@ export const expectedMigrations = [
   "0069_tangerino_legacy_attachment_authorization.sql",
   "0070_card_reference_number.sql",
   "0071_card_cancellation.sql",
+  "0072_demand_stage_and_task_instances.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
