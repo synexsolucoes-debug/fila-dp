@@ -117,6 +117,17 @@ export type ProcessStepConfig = {
   automations: StepAutomationRule[];
 };
 
+/**
+ * O que `stepTasks` precisa saber para derivar as tarefas de uma etapa.
+ *
+ * Parcial de propósito: além da configuração inteira que a execução carrega, há
+ * chamadores que só têm parte dela — teste que monta a estrutura à mão, tela que
+ * pré-visualiza uma etapa antes de gravá-la. Aceitar a parcial no tipo é o que
+ * impede o `as` no chamador, e foi um `as` que escondeu do compilador a
+ * configuração sem `tasks` que derrubava o painel em produção.
+ */
+export type StepTaskSource = Partial<ProcessStepConfig>;
+
 export type PublishedProcessVersion = {
   definitionId: string;
   definitionName: string;
@@ -130,7 +141,16 @@ export type PublishedProcessVersion = {
   steps: Map<string, ProcessStepConfig>;
 };
 
-function stepConfigOf(row: Row): ProcessStepConfig {
+/**
+ * Lê a configuração de uma etapa a partir da linha de `fdp_process_step_configs`.
+ *
+ * Exportada porque a leitura da linha é a definição de o que a etapa é: quem
+ * precisar contar, listar ou instanciar as tarefas de uma versão parte daqui,
+ * em vez de reconstruir a mesma tradução a partir de um subconjunto das colunas
+ * — que foi como o total previsto do painel passou a ler `checklist` de dentro
+ * de `settings_json`, onde ele nunca esteve.
+ */
+export function stepConfigOf(row: Row): ProcessStepConfig {
   const settings = row.settings_json && typeof row.settings_json === "object"
     ? row.settings_json as Row
     : (() => { try { return JSON.parse(text(row.settings_json) || "{}") as Row; } catch { return {}; } })();
@@ -272,31 +292,31 @@ export function resolveInitialStep(version: PublishedProcessVersion) {
  * CPF" desenhado à mão e o gerado a partir de `requiredDocuments: ["CPF"]` são
  * a mesma tarefa, e instanciar as duas faria a pessoa marcar duas vezes.
  */
-export function stepTasks(config: ProcessStepConfig | null): TaskTemplate[] {
+export function stepTasks(config: StepTaskSource | null): TaskTemplate[] {
   if (!config) return [];
   /* A queda para o checklist acontece **aqui**, e não só no carregador.
      `stepConfigOf` já resolve as duas fontes, mas nem toda configuração chega
-     por ele: os testes montam a estrutura à mão e `lib/fila-dp-db.ts` monta uma
-     parcial para contar tarefas previstas. Depender de o chamador ter populado
-     `tasks` fazia a etapa com checklist e sem tarefas-modelo instanciar zero
-     tarefas — silenciosamente, porque nada reclama de uma lista vazia. */
-  /* `config.tasks ?? []`, e não `config.tasks`: a configuração parcial que este
-     mesmo comentário cita — a que `lib/fila-dp-db.ts` monta para contar tarefas
-     previstas — não tem o campo, e um `as` no chamador escondia isso do
-     compilador. `undefined.length` derrubava `/api/workspace` inteiro, então o
-     painel deixava de abrir para o workspace assim que a primeira demanda
-     nascia de um processo. Falhava fechado e no lugar mais caro possível: a
-     tela inicial, para todo mundo do grupo, por causa de uma demanda. */
-  const proprias = config.tasks ?? [];
-  const tasks = proprias.length
-    ? [...proprias]
-    : parseTaskTemplates({ checklist: config.checklist });
+     por ele: os testes montam a estrutura à mão e `lib/fila-dp-db.ts` montava
+     uma parcial para contar tarefas previstas. Depender de o chamador ter
+     populado `tasks` fazia a etapa com checklist e sem tarefas-modelo
+     instanciar zero tarefas — silenciosamente, porque nada reclama de uma lista
+     vazia.
+     Ler a lista sem conferir que ela existe era pior que silencioso: a parcial
+     sem `tasks` derrubava a montagem inteira do painel com um `TypeError`, e
+     quem só queria abrir a tela recebia 500. Cada uma das três listas é lida
+     como ausente quando o chamador não a trouxe. */
+  const declared = Array.isArray(config.tasks) ? config.tasks : [];
+  const checklist = Array.isArray(config.checklist) ? config.checklist : [];
+  const requiredDocuments = Array.isArray(config.requiredDocuments) ? config.requiredDocuments : [];
+  const tasks = declared.length
+    ? [...declared]
+    : parseTaskTemplates({ checklist });
   const known = new Set(tasks.map((task) => task.key));
   /* A tarefa que já declara este documento também conta como cobertura, mesmo
      com outro nome: quem desenhou "Receber ASO" com `documentRequired: "ASO"`
      não quer uma segunda tarefa dizendo a mesma coisa. */
   const covered = new Set(tasks.map((task) => taskKey(task.documentRequired)).filter(Boolean));
-  for (const document of config.requiredDocuments) {
+  for (const document of requiredDocuments) {
     const name = `Documento obrigatório: ${document}`;
     /* A chave sai do nome gerado, e não de uma composição própria. Enquanto
        eram duas fórmulas diferentes, a tarefa escrita à mão com este mesmo
@@ -331,7 +351,7 @@ export function stepTasks(config: ProcessStepConfig | null): TaskTemplate[] {
  * o total previsto do progresso ("7 de 18") e o que a execução materializava
  * podiam divergir sem ninguém notar.
  */
-export function stepChecklist(config: ProcessStepConfig | null): string[] {
+export function stepChecklist(config: StepTaskSource | null): string[] {
   return [...new Set(stepTasks(config).map((task) => task.name))].slice(0, 120);
 }
 

@@ -6,7 +6,9 @@ import {
   parseTaskTemplates, taskCompletionBlocker, taskDeadline, taskKey, taskOf,
   type DemandTask, type TaskTemplate,
 } from "../lib/process-tasks.ts";
-import { stepChecklist, stepTasks, type ProcessStepConfig } from "../lib/process-instances.ts";
+import {
+  stepChecklist, stepConfigOf, stepTasks, type ProcessStepConfig, type StepTaskSource,
+} from "../lib/process-instances.ts";
 
 /* §24 e §41: a tarefa deixa de ser uma string dentro da etapa.
    Os testes abaixo cobrem as três coisas que essa mudança precisa garantir —
@@ -237,6 +239,47 @@ test("com conferência declarada, marcar continua bastando", () => {
 });
 
 /* -------------------------------------------------------------------------- *
+ * Configuração parcial: o painel inteiro dependia disto
+ * -------------------------------------------------------------------------- */
+
+test("configuração sem as listas não derruba quem só quer contar tarefas", () => {
+  /* `GET /api/workspace` respondia 500 para todo workspace com demanda em
+     processo: o snapshot montava uma configuração parcial para contar o total
+     previsto, e `stepTasks` lia `config.tasks.length` sem conferir que a lista
+     tinha vindo. Um `TypeError` numa contagem derrubava a montagem do painel
+     inteiro — quadro, demandas, empresas —, e a tela abria em erro. */
+  assert.deepEqual(stepChecklist({ checklist: ["Conferir CTPS"] }), ["Conferir CTPS"]);
+  assert.deepEqual(stepChecklist({ requiredDocuments: ["ASO"] }), ["Documento obrigatório: ASO"]);
+  assert.deepEqual(stepTasks({}), []);
+});
+
+test("o total previsto lê as colunas da etapa, não o settings_json", () => {
+  /* `checklist`, documentos e tarefas-modelo moram em coluna própria de
+     `fdp_process_step_configs`; `settings_json` guarda nome, instruções e
+     condições. A contagem que os procurava lá dentro achava sempre vazio e
+     dizia que a versão não previa tarefa nenhuma. Ler a linha pelo mesmo
+     `stepConfigOf` da execução é o que faz o denominador do "7 de 18" ser o
+     mesmo número que o avanço materializa. */
+  const linha = {
+    id: "cfg", bpmn_element_id: "Task_1", process_version_id: "v1",
+    checklist_json: ["Conferir CTPS"],
+    required_documents_json: ["ASO"],
+    settings_json: { name: "Documentação" },
+  };
+  assert.deepEqual(stepChecklist(stepConfigOf(linha)), ["Conferir CTPS", "Documento obrigatório: ASO"]);
+});
+
+test("a etapa que desenhou tarefas-modelo conta por elas", () => {
+  const linha = {
+    id: "cfg", bpmn_element_id: "Task_1", process_version_id: "v1",
+    checklist_json: ["Conferir CTPS"],
+    tasks_json: [{ name: "Abrir dossiê" }, { name: "Conferir CTPS" }],
+  };
+  // `tasksJson` manda quando existe: o checklist não soma por fora dele.
+  assert.deepEqual(stepChecklist(stepConfigOf(linha)), ["Abrir dossiê", "Conferir CTPS"]);
+});
+
+/* -------------------------------------------------------------------------- *
  * Automações da etapa (§27)
  * -------------------------------------------------------------------------- */
 
@@ -289,13 +332,18 @@ test("configuração de etapa sem o campo de tarefas não derruba quem a lê", (
      O efeito não ficou naquela contagem: `/api/workspace` inteiro passou a
      devolver 500, e o painel deixou de abrir para todo o grupo assim que a
      primeira demanda nasceu de um processo. Uma tela inicial que não abre por
-     causa de uma demanda criada é o pior lugar possível para falhar. */
-  const parcial = { checklist: ["Receber documentos", "Conferir CPF"], requiredDocuments: [] };
-  const tarefas = stepTasks(parcial as unknown as Parameters<typeof stepTasks>[0]);
+     causa de uma demanda criada é o pior lugar possível para falhar.
+
+     Os testes vizinhos cobrem a causa por outro ângulo — que a contagem lê as
+     colunas da etapa. Este prende o modo de falha em si: parcial sem `tasks`
+     não pode estourar. Sem `as`, agora que `StepTaskSource` aceita a parcial no
+     tipo: era justamente o cast que escondia o campo faltando. */
+  const parcial: StepTaskSource = { checklist: ["Receber documentos", "Conferir CPF"], requiredDocuments: [] };
+  const tarefas = stepTasks(parcial);
   assert.equal(tarefas.length, 2, "a configuração parcial precisa cair no checklist");
   assert.deepEqual(tarefas.map((t) => t.name), ["Receber documentos", "Conferir CPF"]);
   // E `stepChecklist`, que é o que o snapshot chama, sobrevive ao mesmo molde.
-  assert.equal(stepChecklist(parcial as unknown as Parameters<typeof stepChecklist>[0]).length, 2);
+  assert.equal(stepChecklist(parcial).length, 2);
   // Ausência total de configuração continua devolvendo lista vazia, não erro.
   assert.deepEqual(stepTasks(null), []);
 });
