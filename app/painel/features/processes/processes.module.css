@@ -811,3 +811,175 @@
 .taskRow input, .taskRow select { min-width: 0; font-size: 12px; }
 .taskRowHead { display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 5px; align-items: center; }
 .taskRowHead input { font-weight: 600; }
+
+/* ==========================================================================
+   Biblioteca em três colunas: catálogo · ficha · propriedades
+   ==========================================================================
+   A tabela larga respondia mal às três perguntas que a tela tem: quais
+   processos existem, como este funciona, e em que pé ele está. A primeira
+   cabia na tabela; a segunda só abrindo uma modal por cima; a terceira não
+   cabia em lugar nenhum.
+
+   Nenhum valor de cor aqui: tudo sai dos apelidos declarados em `.workspace`,
+   que apontam para os tokens do tema. É o que faz esta tela acompanhar a
+   paleta do produto em vez de manter a própria. */
+.libraryLayout {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(220px, 260px);
+  align-items: start;
+  gap: 14px;
+}
+
+/* --- Catálogo ------------------------------------------------------------- */
+
+.catalogColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-lg);
+  background: var(--s);
+}
+.catalogHeader {
+  padding: 13px 14px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--b);
+}
+.catalogHeader strong { font-size: 13px; }
+.catalogHeader span { color: var(--soft); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.catalogList { margin: 0; padding: 6px; list-style: none; display: grid; gap: 4px; max-height: 620px; overflow-y: auto; }
+
+/* O cartão do catálogo é botão: a lista existe para escolher, e escolher com o
+   teclado precisa do elemento certo, não de um `div` com `onClick`. */
+.catalogCard {
+  width: 100%;
+  padding: 10px 11px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.catalogCard:hover { background: var(--m); }
+/* O selecionado se marca por traço à esquerda além da cor: forma continua
+   legível para quem não distingue matiz. */
+.catalogCard[aria-current="true"] {
+  border-color: color-mix(in srgb, var(--p) 42%, var(--b));
+  background: var(--m);
+  box-shadow: inset 3px 0 0 var(--p);
+}
+.catalogTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.catalogTop strong { min-width: 0; font-size: 12.5px; overflow-wrap: anywhere; }
+.catalogCard small { color: var(--soft); font-size: 11px; }
+.catalogCard em { color: var(--muted); font-size: 10.5px; font-style: normal; font-variant-numeric: tabular-nums; }
+
+/* --- Ficha (coluna do meio) ---------------------------------------------- */
+
+.sheetColumn {
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--b);
+  border-radius: var(--ui-radius-lg);
+  background: var(--s);
+}
+
+/* A faixa de fatos da versão, logo abaixo do nome do processo. */
+.detailMeta {
+  margin: 14px 0 0;
+  padding: 12px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  border-top: 1px solid var(--b);
+  border-bottom: 1px solid var(--b);
+}
+.detailMeta > div { display: grid; gap: 3px; min-width: 0; }
+.detailMeta dt { color: var(--soft); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.detailMeta dd { margin: 0; color: var(--t); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* --- Propriedades (coluna da direita) ------------------------------------ */
+
+.propertiesColumn { display: grid; gap: 12px; min-width: 0; }
+.propertiesCard { border: 1px solid var(--b); border-radius: var(--ui-radius-lg); background: var(--s); }
+.propertiesCard > header { padding: 12px 14px; border-bottom: 1px solid var(--b); }
+.propertiesCard > header strong { font-size: 12.5px; }
+.propertiesCard dl { margin: 0; padding: 6px 14px 12px; display: grid; gap: 0; }
+.propertiesCard dl > div {
+  padding: 9px 0;
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid var(--b);
+}
+.propertiesCard dl > div:last-child { border-bottom: 0; }
+.propertiesCard dt { color: var(--soft); font-size: 10.5px; }
+.propertiesCard dd { margin: 0; color: var(--t); font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.propertiesCard dd small { display: block; margin-top: 2px; color: var(--muted); font-size: 10.5px; }
+
+.quickActions { padding: 8px; display: grid; gap: 2px; }
+.quickActions button {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--t);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.quickActions button:hover { background: var(--m); }
+.quickActions button:disabled { opacity: .55; cursor: not-allowed; }
+.propertiesNote { margin: 0; padding: 0 14px 12px; color: var(--soft); font-size: 11px; line-height: 1.45; }
+
+/* Abaixo de 1200px as três colunas não cabem sem espremer a ficha, que é a
+   que tem conteúdo de verdade. O catálogo vira faixa horizontal em cima e as
+   propriedades descem para o fim. */
+@media (max-width: 1200px) {
+  .libraryLayout { grid-template-columns: minmax(0, 1fr); }
+  .catalogList { max-height: 220px; }
+}
+
+/* --- Densidade acima das colunas ------------------------------------------
+   Medido: com a faixa de maturidade em 82px por botão, o catálogo só começava
+   em y≈570 numa janela de 900px — quase dois terços da altura gastos antes do
+   conteúdo. A faixa continua servindo de seletor por estado; ela só deixa de
+   ocupar a altura de um cartão para ocupar a de uma linha. */
+.maturityStrip button { min-height: 56px; padding: 9px 13px; }
+
+/* As abas da ficha numa linha só.
+   Na coluna do meio elas quebravam em duas e a segunda ficava colada no
+   conteúdo — parecia defeito de layout, não navegação. Rolar na horizontal
+   preserva a ordem e não come altura; a barra some porque ela própria roubaria
+   a linha que estamos economizando. */
+.sheetColumn .sectionTabsRow {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheetColumn .sectionTabsRow::-webkit-scrollbar { display: none; }
+
+/* As abas da ficha quando ela é a coluna do meio.
+   Em 438px de largura as seis abas quebravam em duas linhas, e a segunda
+   colava no conteúdo — parecia defeito, não navegação. Rolam na horizontal e
+   ficam numa linha só; a barra de rolagem some porque ela própria comeria a
+   altura que estamos economizando.
+   `flex: 0 0 auto` nas abas impede que o flex as encolha até o texto truncar,
+   que é o que aconteceria se elas apenas parassem de quebrar. */
+.sheetTabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheetTabs::-webkit-scrollbar { display: none; }
+.sheetTabs > * { flex: 0 0 auto; }

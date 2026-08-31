@@ -209,3 +209,38 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
   .detail { position: static; }
   .counters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* As tarefas da etapa, nomeadas em vez de contadas.
+   A linha de meta dizia "2 item(ns) de checklist": um número que prova que há
+   tarefas e esconde quais são, obrigando a abrir o modelador para saber o que a
+   etapa manda fazer. A cadeia ÁREA → PROCESSO → ETAPA → TAREFA só fica visível
+   quando a última aparece na tela.
+   Sem cor própria: os chips saem dos mesmos tokens do resto do painel, então
+   acompanham o tema do produto. */
+.taskChips {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.taskChips li {
+  padding: 3px 8px;
+  border: 1px solid var(--work-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--work-muted);
+  color: var(--work-text);
+  font-size: .68rem;
+  line-height: 1.5;
+}
+
+/* O que se lê sobre o preenchimento do botão primário.
+   `.primaryButton` sozinho pesa (0,1,0) e perde para `.dashboard-shell button`
+   (0,1,1), que pinta todo botão do painel com a cor de texto do tema. Enquanto
+   este painel só existia dentro de uma modal em portal, a regra ampla não o
+   alcançava; ao virar coluna da biblioteca, alcançou — e "Iniciar processo"
+   passou a ser texto claro sobre latão: 2,09:1, acusado pela auditoria.
+   `.workspace .primaryButton` pesa (0,2,0) e vence, sem tocar na regra global
+   nem em nenhuma outra tela. */
+.workspace .primaryButton { color: var(--work-on-accent); }

@@ -79,6 +79,11 @@ const formatMoment = (value: string) =>
 
 const field = (data: FormData, name: string) => String(data.get(name) ?? "").trim();
 
+/** "1 etapa" / "10 etapas". Local porque `lib/marketing.ts` veste o site, e
+ *  importar o vocabulário do site dentro do painel embaralha os dois. */
+const contar = (total: number, singular: string, plural: string) =>
+  `${total} ${total === 1 ? singular : plural}`;
+
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 /** `undefined` = nenhum diálogo; `null` = criar; objeto = editar. */
 type DialogTarget = ProcessDefinition | null | undefined;
@@ -107,6 +112,11 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
   const [corporate, setCorporate] = useState(true);
   const [archiveTarget, setArchiveTarget] = useState<ProcessDefinition | null>(null);
   const [detailTarget, setDetailTarget] = useState<ProcessDefinition | null>(null);
+  /* O processo aberto na coluna do meio. A biblioteca deixou de ser uma tabela
+     de onde se abre uma modal e passou a ser catálogo + ficha + propriedades
+     lado a lado: comparar dois processos era fechar e reabrir a modal, e a
+     ficha só existia por cima do que a pessoa estava lendo. */
+  const [selectedId, setSelectedId] = useState("");
 
   const [version, setVersion] = useState<ProcessVersionDetail | null>(null);
   const [steps, setSteps] = useState<ProcessStepConfig[]>([]);
@@ -170,6 +180,12 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
       return true;
     });
   }, [area, category, company, currentUserId, owner, processes, query, section, status]);
+
+  /* A seleção segue o que está à vista: filtrar até sobrar outro conjunto e
+     manter aberto um processo que sumiu da lista deixaria a ficha falando de
+     algo que a coluna ao lado não mostra mais. Sem seleção, abre o primeiro —
+     uma coluna do meio vazia na chegada desperdiça a maior área da tela. */
+  const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0] ?? null;
 
   const maturity = useMemo(() => ({
     drafts: processes.filter((item) => item.lifecycleStatus !== "archived" && item.currentVersion?.status === "draft").length,
@@ -454,35 +470,60 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
           </div>
 
           {filtered.length ? <FadeIn>
-            <div className={styles.processTableWrap}>
-              <table className={styles.processTable}>
-                <thead><tr>
-                  <th scope="col">Processo</th><th scope="col">Área / responsável</th><th scope="col">Escopo</th>
-                  <th scope="col">Versão</th><th scope="col">Status</th><th scope="col">Etapas</th>
-                  <th scope="col">Atualizado</th><th scope="col">Ações</th>
-                </tr></thead>
-                <tbody>
-                  {filtered.map((process) => <tr key={process.id}>
-                    <td>
-                      <strong>{process.name}</strong>
-                      <small>{process.code} · {process.category}</small>
-                      <p>{process.description || process.objective || "Sem descrição."}</p>
-                    </td>
-                    <td>{process.ownerDepartmentName || "—"}<small>{process.ownerUserName || "—"}</small></td>
-                    <td>{process.isCorporate ? "Corporativo" : process.companies.map((item) => item.name).join(", ")}</td>
-                    <td>{process.currentVersion ? processVersionLabel(process.currentVersion.versionMajor, process.currentVersion.versionMinor) : "—"}</td>
-                    <td><StatusPill status={process.lifecycleStatus} label={processStatusLabel[process.lifecycleStatus] || process.lifecycleStatus} /></td>
-                    <td>{process.stepCount}</td>
-                    <td>{formatMoment(process.updatedAt)}</td>
-                    <td><div className={styles.rowActions}>
-                      <button type="button" onClick={() => setDetailTarget(process)}>Abrir</button>
-                      {permissions.manage && process.lifecycleStatus !== "archived" && <button type="button" onClick={() => { setTemplateKey(""); setDialog(process); setCorporate(process.isCorporate); }}>Editar</button>}
-                      {permissions.manage && process.lifecycleStatus === "published" && <button type="button" onClick={() => void createVersion(process)}>Nova versão</button>}
-                      {permissions.manage && process.lifecycleStatus !== "archived" && <button type="button" className={styles.dangerText} onClick={() => setArchiveTarget(process)}><Archive aria-hidden="true" />Arquivar</button>}
-                    </div></td>
-                  </tr>)}
-                </tbody>
-              </table>
+            {/* Catálogo · ficha · propriedades.
+                O catálogo responde "quais processos existem", a ficha responde
+                "como este funciona" e a coluna da direita responde "em que pé
+                ele está". Antes as três respostas moravam em lugares
+                diferentes: tabela larga, modal por cima e nada. */}
+            <div className={styles.libraryLayout}>
+
+              <aside className={styles.catalogColumn} aria-label="Catálogo de processos">
+                <header className={styles.catalogHeader}>
+                  <strong>Catálogo de processos</strong>
+                  <span>{contar(filtered.length, "processo", "processos")}</span>
+                </header>
+                <ul className={styles.catalogList}>
+                  {filtered.map((process) => <li key={process.id}>
+                    <button type="button"
+                      className={styles.catalogCard}
+                      aria-current={selected?.id === process.id ? "true" : undefined}
+                      onClick={() => setSelectedId(process.id)}>
+                      <span className={styles.catalogTop}>
+                        <strong>{process.name}</strong>
+                        <StatusPill status={process.lifecycleStatus} label={processStatusLabel[process.lifecycleStatus] || process.lifecycleStatus} />
+                      </span>
+                      <small>{process.ownerDepartmentName || "Sem área definida"}</small>
+                      <em>
+                        {process.currentVersion
+                          ? `Versão ${processVersionLabel(process.currentVersion.versionMajor, process.currentVersion.versionMinor)}`
+                          : "Sem versão"}
+                        {" · "}{contar(process.stepCount, "etapa", "etapas")}
+                        {" · "}Atualizado {formatMoment(process.updatedAt)}
+                      </em>
+                    </button>
+                  </li>)}
+                </ul>
+              </aside>
+
+              <div className={styles.sheetColumn}>
+                {selected ? <ProcessDetail process={selected} permissions={permissions} busy={busy} inline
+                  versions={(catalog?.versions ?? []).filter((item) => item.processId === selected.id)}
+                  close={() => undefined}
+                  openVersion={openVersion}
+                  openModeler={() => { if (selected.currentVersionId) void openVersion(selected.currentVersionId); }}
+                  edit={() => { setTemplateKey(""); setDialog(selected); setCorporate(selected.isCorporate); }}
+                  createVersion={() => void createVersion(selected)}
+                  archive={() => setArchiveTarget(selected)}
+                  restore={() => void restoreProcess(selected)} /> : null}
+              </div>
+
+              {selected ? <ProcessProperties process={selected} permissions={permissions} busy={busy}
+                openModeler={() => { if (selected.currentVersionId) void openVersion(selected.currentVersionId); }}
+                edit={() => { setTemplateKey(""); setDialog(selected); setCorporate(selected.isCorporate); }}
+                createVersion={() => void createVersion(selected)}
+                archive={() => setArchiveTarget(selected)}
+                restore={() => void restoreProcess(selected)} /> : null}
+
             </div>
           </FadeIn> : <EmptyState icon={BookOpenCheck}
             title={processes.length ? "Nenhum processo com esses filtros" : "A biblioteca ainda está vazia"}
@@ -626,13 +667,15 @@ const sheetSections: Partial<Record<DetailTab, ProcessSheetSection>> = {
   flow: "flow", documents: "documents", rules: "rules", automations: "automations",
 };
 
-function ProcessDetail({ process, permissions, busy, versions, openVersion, close, openModeler, edit, createVersion, archive, restore }: {
+function ProcessDetail({ process, permissions, busy, versions, openVersion, close, openModeler, edit, createVersion, archive, restore, inline = false }: {
   process: ProcessDefinition;
   permissions: ProcessPermissions;
   busy: boolean;
   versions: ProcessVersionSummary[];
   openVersion: (id: string) => Promise<void>;
   close: () => void;
+  /** Na biblioteca a ficha é a coluna do meio, e não uma modal por cima. */
+  inline?: boolean;
   openModeler: () => void;
   edit: () => void;
   createVersion: () => void;
@@ -653,13 +696,31 @@ function ProcessDetail({ process, permissions, busy, versions, openVersion, clos
           <span>Atualizado {formatMoment(process.updatedAt)}</span>
         </div>
       </div>
-      <button type="button" className={styles.secondaryButton} onClick={close}>Fechar</button>
+      {inline ? null : <button type="button" className={styles.secondaryButton} onClick={close}>Fechar</button>}
     </header>
+
+    {/* Os cinco fatos que decidem se esta versão pode receber demanda hoje,
+        antes de qualquer aba: qual versão vale, desde quando, o prazo padrão e
+        o tipo. Estavam espalhados entre colunas da tabela e a aba de descrição. */}
+    <dl className={styles.detailMeta}>
+      <div><dt>Versão</dt><dd>{process.currentVersion
+        ? processVersionLabel(process.currentVersion.versionMajor, process.currentVersion.versionMinor) : "—"}</dd></div>
+      <div><dt>Publicada em</dt><dd>{process.currentVersion?.publishedAt
+        ? formatMoment(process.currentVersion.publishedAt) : "Não publicada"}</dd></div>
+      <div><dt>Atualizada em</dt><dd>{formatMoment(process.updatedAt)}</dd></div>
+      <div><dt>SLA padrão</dt><dd>{process.globalSlaValue > 0
+        ? `${process.globalSlaValue} ${slaUnitLabel[process.globalSlaUnit]}` : "Sem SLA definido"}</dd></div>
+      <div><dt>Tipo de processo</dt><dd>{process.category || "Não classificado"}</dd></div>
+    </dl>
 
     {/* A mesma barra da página, e não uma segunda aparência de aba: duas
         gramáticas de navegação na mesma tela fazem a pessoa aprender duas. */}
     <div className={styles.sectionTabsRow}>
-      <AnimatedTabs tabs={detailTabs} active={tab} onChange={setTab} label="Seções do processo" />
+      {/* `className` em vez de mexer no componente: `AnimatedTabs` veste várias
+          telas, e fazer as abas rolarem em todas elas por causa desta coluna
+          seria alterar o que não foi pedido. A variante fica aqui. */}
+      <AnimatedTabs tabs={detailTabs} active={tab} onChange={setTab} label="Seções do processo"
+        className={inline ? styles.sheetTabs : undefined} />
     </div>
 
     {tab === "description" ? <ProcessDescription process={process} /> : null}
@@ -672,7 +733,7 @@ function ProcessDetail({ process, permissions, busy, versions, openVersion, clos
       <ProcessOperationPanel processId={process.id} section={sheetSection} />
     </section> : null}
 
-    <footer className={styles.detailActions}>
+    {inline ? null : <footer className={styles.detailActions}>
       <div>{archived ? "Processo arquivado — versões e histórico foram preservados." : "Escolha a próxima ação sem perder o contexto da ficha."}</div>
       <span>
         {permissions.manage && archived && <button type="button" className={styles.secondaryButton} onClick={restore} disabled={busy}><RotateCcw aria-hidden="true" />Restaurar</button>}
@@ -681,8 +742,80 @@ function ProcessDetail({ process, permissions, busy, versions, openVersion, clos
         {permissions.manage && !archived && <button type="button" className={styles.secondaryButton} onClick={archive}><Archive aria-hidden="true" />Arquivar</button>}
         {process.currentVersionId && <button type="button" className={styles.primaryButton} onClick={openModeler}><Workflow aria-hidden="true" />Abrir modelador</button>}
       </span>
-    </footer>
+    </footer>}
   </div>;
+}
+
+/**
+ * A terceira coluna: em que pé este processo está (maquete de Processos).
+ *
+ * Ela responde o que a ficha não responde. A ficha explica **como o trabalho
+ * acontece** — etapas, tarefas, documentos, regras. Esta coluna explica o
+ * **estado do próprio processo**: qual versão vale, quem publicou e quando,
+ * quantas etapas e tarefas ele prevê, quantas automações dependem dele.
+ *
+ * Antes esses fatos estavam repartidos entre colunas da tabela, a aba de
+ * descrição e o rodapé da modal; decidir "posso mexer neste processo?" exigia
+ * percorrer os três.
+ */
+function ProcessProperties({ process, permissions, busy, openModeler, edit, createVersion, archive, restore }: {
+  process: ProcessDefinition;
+  permissions: ProcessPermissions;
+  busy: boolean;
+  openModeler: () => void;
+  edit: () => void;
+  createVersion: () => void;
+  archive: () => void;
+  restore: () => void;
+}) {
+  const archived = process.lifecycleStatus === "archived";
+  const escopo = process.isCorporate
+    ? "Todas as empresas do grupo"
+    : contar(process.companies.length, "empresa", "empresas");
+
+  return <aside className={styles.propertiesColumn} aria-label={`Propriedades de ${process.name}`}>
+    <section className={styles.propertiesCard}>
+      <header><strong>Propriedades do processo</strong></header>
+      <dl>
+        <div><dt>Status</dt><dd><StatusPill status={process.lifecycleStatus}
+          label={processStatusLabel[process.lifecycleStatus] || process.lifecycleStatus} /></dd></div>
+        <div><dt>Versão atual</dt><dd>{process.currentVersion
+          ? processVersionLabel(process.currentVersion.versionMajor, process.currentVersion.versionMinor)
+          : "Nenhuma"}</dd></div>
+        {/* "Publicado por" não existe no catálogo — e inventar um nome aqui
+            seria pior que a ausência, porque publicação é ato com responsável. */}
+        <div><dt>Publicação</dt><dd>{process.currentVersion?.publishedAt
+          ? formatMoment(process.currentVersion.publishedAt) : "Ainda não publicada"}</dd></div>
+        <div><dt>Última atualização</dt><dd>{formatMoment(process.updatedAt)}
+          {process.updatedByName ? <small>por {process.updatedByName}</small> : null}</dd></div>
+        <div><dt>Área responsável</dt><dd>{process.ownerDepartmentName || "Não definida"}</dd></div>
+        <div><dt>Responsável</dt><dd>{process.ownerUserName || "Não definido"}</dd></div>
+        <div><dt>Escopo</dt><dd>{escopo}</dd></div>
+        <div><dt>SLA padrão</dt><dd>{process.globalSlaValue > 0
+          ? `${process.globalSlaValue} ${slaUnitLabel[process.globalSlaUnit]}` : "Sem SLA definido"}</dd></div>
+        <div><dt>Total de etapas</dt><dd>{process.stepCount}</dd></div>
+      </dl>
+    </section>
+
+    <section className={styles.propertiesCard}>
+      <header><strong>Ações rápidas</strong></header>
+      <div className={styles.quickActions}>
+        {process.currentVersionId && <button type="button" onClick={openModeler}>
+          <Workflow aria-hidden="true" />Abrir modelador</button>}
+        {permissions.manage && !archived && <button type="button" onClick={edit}>
+          <Pencil aria-hidden="true" />Editar cadastro</button>}
+        {permissions.manage && process.lifecycleStatus === "published" && <button type="button" onClick={createVersion} disabled={busy}>
+          <Plus aria-hidden="true" />Nova versão</button>}
+        {permissions.manage && !archived && <button type="button" className={styles.dangerText} onClick={archive}>
+          <Archive aria-hidden="true" />Arquivar processo</button>}
+        {permissions.manage && archived && <button type="button" onClick={restore} disabled={busy}>
+          <RotateCcw aria-hidden="true" />Restaurar</button>}
+      </div>
+      {archived ? <p className={styles.propertiesNote}>
+        Processo arquivado — versões e histórico foram preservados.
+      </p> : null}
+    </section>
+  </aside>;
 }
 
 /** O cadastro do processo (§22), que era a rolagem inteira e agora é uma aba. */
