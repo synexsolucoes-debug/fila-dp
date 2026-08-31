@@ -855,6 +855,10 @@ export type StartInstanceInput = {
   description?: string;
   companyId?: string | null;
   companyName?: string;
+  employeeId?: string | null;
+  requesterUserId?: string | null;
+  requesterAreaId?: string | null;
+  responsibleAreaId?: string | null;
   competence?: string;
   priority?: string;
   sourceType?: string;
@@ -903,16 +907,17 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
 
   const statements = [
     d1.prepare(`INSERT INTO fdp_cards
-      (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority,
+      (id, workspace_id, board_id, list_id, title, description, company_id, company, employee_id, requester_user_id, process_type, priority,
        assignee_name, due_at, sla_status, position, source_type, created_by, competence,
        requester_area_id, responsible_area_id,
        process_definition_id, process_version_id, process_version_number, current_step_id, instantiated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`)
       .bind(
         cardId, input.workspaceId, input.boardId, input.listId,
         cleanText(input.title, 180) || `${version.definitionName} — ${initial.label}`,
         cleanText(input.description, 4000),
         input.companyId ?? null, cleanText(input.companyName, 160),
+        input.employeeId ?? null, input.requesterUserId ?? input.actor.userId,
         // O tipo de processo da demanda passa a ser o código da definição: é o
         // vocabulário do processo publicado, e não mais uma string solta.
         cleanText(version.definitionCode, 40).toUpperCase() || "PROCESSO",
@@ -922,8 +927,8 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
         cleanText(input.sourceType, 40) || "process",
         input.actor.email,
         cleanText(input.competence, 7),
-        initial.config?.requesterDepartmentId || null,
-        initial.config?.responsibleDepartmentId || initial.config?.departmentId || null,
+        input.requesterAreaId ?? initial.config?.requesterDepartmentId ?? null,
+        input.responsibleAreaId ?? initial.config?.responsibleDepartmentId ?? initial.config?.departmentId ?? null,
         version.definitionId, version.versionId, version.versionNumber, initial.stepId,
       ),
     ...prepareTaskInserts(d1, {
