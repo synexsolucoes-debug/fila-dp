@@ -280,8 +280,16 @@ export function stepTasks(config: ProcessStepConfig | null): TaskTemplate[] {
      parcial para contar tarefas previstas. Depender de o chamador ter populado
      `tasks` fazia a etapa com checklist e sem tarefas-modelo instanciar zero
      tarefas — silenciosamente, porque nada reclama de uma lista vazia. */
-  const tasks = config.tasks.length
-    ? [...config.tasks]
+  /* `config.tasks ?? []`, e não `config.tasks`: a configuração parcial que este
+     mesmo comentário cita — a que `lib/fila-dp-db.ts` monta para contar tarefas
+     previstas — não tem o campo, e um `as` no chamador escondia isso do
+     compilador. `undefined.length` derrubava `/api/workspace` inteiro, então o
+     painel deixava de abrir para o workspace assim que a primeira demanda
+     nascia de um processo. Falhava fechado e no lugar mais caro possível: a
+     tela inicial, para todo mundo do grupo, por causa de uma demanda. */
+  const proprias = config.tasks ?? [];
+  const tasks = proprias.length
+    ? [...proprias]
     : parseTaskTemplates({ checklist: config.checklist });
   const known = new Set(tasks.map((task) => task.key));
   /* A tarefa que já declara este documento também conta como cobertura, mesmo

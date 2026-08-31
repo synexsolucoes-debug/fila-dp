@@ -245,7 +245,7 @@
 
 .dashboard-task,
 .overview-panel,
-.overview-metrics article,
+.overview-context,
 .dashboard-column {
   transition:
     border-color var(--motion-base) var(--motion-standard),
@@ -443,11 +443,12 @@
   color: var(--tone-danger-text);
 }
 
-.overview-metrics .requires-attention {
+/* O bloco que pede ação continua se marcando pelo traço; o fundo saiu junto
+   com os sete cartões. Numa caixa de 120px o véu quente era acento; num bloco
+   de quatro linhas ele vira parede colorida atrás dos números. */
+.overview-context.requires-attention {
   border-color: color-mix(in srgb, var(--ui-warning) 55%, var(--ui-border));
-  background: var(--tone-warn-surface);
 }
-.overview-metrics .requires-attention strong { color: var(--tone-warn-text); }
 
 /* ========================================================================== */
 /* 6. Contraste — modo escuro                                                 */
@@ -504,7 +505,7 @@
 /* ========================================================================== */
 
 /* Elevação coerente: o cartão descansa em 1, o painel em 2, a modal em 3. */
-.overview-metrics article,
+.overview-context,
 .dashboard-stats article,
 .dashboard-task { box-shadow: var(--elevation-1); }
 

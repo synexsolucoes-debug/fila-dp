@@ -764,10 +764,16 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     const settings = row.settings_json && typeof row.settings_json === "object"
       ? row.settings_json as Record<string, unknown>
       : safeJson(String(row.settings_json ?? "{}"));
+    /* Sem `as`: o molde anterior omitia `tasks` e o cast dizia ao compilador
+       que estava tudo certo. `stepTasks` lia `config.tasks.length` e estourava
+       em tempo de execução — o cast não estava simplificando um tipo, estava
+       escondendo um campo que faltava. */
     const previstas = stepChecklist({
+      ...(settings as Partial<Parameters<typeof stepChecklist>[0]>),
       checklist: Array.isArray(settings.checklist) ? settings.checklist.map(String) : [],
       requiredDocuments: Array.isArray(settings.requiredDocuments)
         ? settings.requiredDocuments.map(String) : [],
+      tasks: [],
     } as Parameters<typeof stepChecklist>[0]).length;
     plannedTasksByVersion.set(versionId, (plannedTasksByVersion.get(versionId) ?? 0) + previstas);
   }

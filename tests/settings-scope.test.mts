@@ -41,15 +41,15 @@ const grupos = (() => {
   const inicio = source.indexOf("const settingsNavGroups");
   assert.notEqual(inicio, -1, "o menu voltou a ser JSX solto: não há como conferir as portas");
   const bloco = source.slice(inicio, source.indexOf("\n];", inicio));
-  return [...bloco.matchAll(/\{ label: "([^"]+)", adminOnly: (true|false), sections: \[([\s\S]*?)\n {2}\] \}/gu)]
+  return [...bloco.matchAll(/\{ label: "([^"]+)", sections: \[([\s\S]*?)\n {2}\] \}/gu)]
     .map((match) => ({
       label: match[1],
-      adminOnly: match[2] === "true",
-      sections: [...match[3].matchAll(/section: "([a-z]+)"/gu)].map((entry) => entry[1]),
+      sections: [...match[2].matchAll(/section: "([a-z]+)"[^\n]*adminOnly: (true|false)/gu)]
+        .map((entry) => ({ nome: entry[1], adminOnly: entry[2] === "true" })),
     }));
 })();
 
-const comPorta = grupos.flatMap((grupo) => grupo.sections);
+const comPorta = grupos.flatMap((grupo) => grupo.sections.map((secao) => secao.nome));
 
 test("toda seção declarada tem exatamente uma porta no menu", () => {
   for (const secao of declaradas) {
@@ -86,14 +86,26 @@ test("o cabeçalho do modal nomeia a seção aberta, e não duas dentre nove", (
 });
 
 test("a administração do grupo fica atrás de isAdmin; a conta pessoal não", () => {
-  const pessoais = grupos.filter((grupo) => !grupo.adminOnly).flatMap((grupo) => grupo.sections);
+  /* A exigência é a mesma de sempre; o que mudou é onde ela é declarada.
+     Enquanto o `adminOnly` era do grupo, agrupar por assunto e autorizar eram a
+     mesma decisão — "Geral" e "Empresas" não podiam ficar juntas sem abrir uma
+     das duas. Agora a marca é da seção, e esta conferência acompanha: a lista
+     de quem exige administrador continua idêntica, seção por seção. */
+  const todas = grupos.flatMap((grupo) => grupo.sections);
+  const pessoais = todas.filter((secao) => !secao.adminOnly).map((secao) => secao.nome);
   assert.deepEqual(pessoais.sort(), ["general", "security"],
     "uma seção de administração ficou visível para quem não é administrador do grupo");
-  const administrativas = grupos.filter((grupo) => grupo.adminOnly).flatMap((grupo) => grupo.sections);
+  const administrativas = todas.filter((secao) => secao.adminOnly).map((secao) => secao.nome);
   for (const secao of ["companies", "team", "columns", "fields", "templates", "sla", "automations"]) {
     assert.ok(administrativas.includes(secao), `${secao} deixou de exigir administrador`);
   }
-  assert.match(source, /settingsNavGroups\.filter\(\(group\) => isAdmin \|\| !group\.adminOnly\)/u);
+  /* O filtro precisa correr sobre a seção. Se voltasse a filtrar pelo grupo, as
+     marcas acima viravam enfeite: um grupo misto entregaria a seção
+     administrativa junto com a pública, e nada aqui acusaria. */
+  assert.match(source, /sections: group\.sections\.filter\(\(item\) => isAdmin \|\| !item\.adminOnly\)/u);
+  /* E o grupo que ficou sem seção alguma não pode restar como rótulo solto,
+     anunciando uma área que a pessoa não alcança. */
+  assert.match(source, /\.filter\(\(group\) => group\.sections\.length > 0\)/u);
 });
 
 test("cada botão do menu tem nome acessível mesmo quando o CSS mostra só o ícone", () => {

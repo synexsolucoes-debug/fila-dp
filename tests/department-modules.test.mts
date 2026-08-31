@@ -202,7 +202,12 @@ test("criação e alteração persistem departamento e módulos no mesmo fluxo",
   // A porta de "Usuários e acessos" agora nasce de `settingsNavGroups`; o
   // desenho do botão é conferido em `settings-scope.test.mts`, aqui basta que a
   // seção exista e continue exigindo administrador.
-  assert.match(screen, /\{ section: "team", icon: Users, hint: "Departamento e módulos" \}/u);
+  //
+  // O `adminOnly` passou do grupo para a seção quando o menu foi reagrupado por
+  // assunto (§11.1) — antes, agrupar e autorizar eram a mesma decisão. Esta
+  // linha agora cobra a marca explicitamente, o que o literal anterior não
+  // fazia: ele descrevia a seção sem dizer nada sobre quem a alcança.
+  assert.match(screen, /\{ section: "team", icon: Users, hint: "Departamento e módulos", adminOnly: true \}/u);
   assert.match(screen, /title: "Usuários e acessos"/u);
   assert.match(screen, /Departamento principal/u);
   assert.match(screen, /Módulos liberados neste departamento/u);

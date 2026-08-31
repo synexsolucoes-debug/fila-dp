@@ -106,15 +106,18 @@ type SettingsSection = "general" | "companies" | "columns" | "team" | "security"
  * passa a ser um erro de tipo, e não uma tela mal rotulada em produção.
  */
 const settingsSectionMeta: Record<SettingsSection, { group: string; title: string; description: string }> = {
-  security: { group: "CONTA PESSOAL", title: "Perfil e segurança", description: "Revise apenas as sessões da identidade atual." },
-  general: { group: "CONTA E WORKSPACE", title: "Geral", description: "Nome do workspace, quadros disponíveis e a conta com que você está entrando." },
-  companies: { group: "ADMINISTRAÇÃO DO WORKSPACE", title: "Empresas", description: "Cadastre, edite e organize os CNPJs do grupo." },
-  team: { group: "ADMINISTRAÇÃO DO WORKSPACE", title: "Usuários e acessos", description: "Defina o departamento e os módulos disponíveis para cada usuário." },
-  columns: { group: "CONFIGURAÇÃO DO QUADRO", title: "Colunas", description: "Nome, ordem e efeito de cada coluna sobre o SLA." },
-  fields: { group: "CONFIGURAÇÃO DO QUADRO", title: "Campos e etiquetas", description: "Etiquetas e campos personalizados que aparecem nas demandas." },
-  templates: { group: "CONFIGURAÇÃO DO QUADRO", title: "Templates", description: "Checklists e SLA prontos para abrir uma demanda sem esquecer etapas." },
-  sla: { group: "CONFIGURAÇÃO DO QUADRO", title: "SLA e calendário", description: "Expediente, feriados e metas de prazo por processo." },
-  automations: { group: "CONFIGURAÇÃO DO QUADRO", title: "Automações", description: "Regras que reagem automaticamente aos eventos das demandas." },
+  security: { group: "CONTA", title: "Perfil e segurança", description: "Revise apenas as sessões da identidade atual." },
+  general: { group: "WORKSPACE", title: "Geral", description: "Nome do workspace, quadros disponíveis e a conta com que você está entrando." },
+  companies: { group: "WORKSPACE", title: "Empresas", description: "Cadastre, edite e organize os CNPJs do grupo." },
+  team: { group: "PESSOAS E ACESSO", title: "Usuários e acessos", description: "Defina o departamento e os módulos disponíveis para cada usuário." },
+  columns: { group: "OPERAÇÃO", title: "Colunas", description: "Nome, ordem e efeito de cada coluna sobre o SLA." },
+  fields: { group: "OPERAÇÃO", title: "Campos e etiquetas", description: "Etiquetas e campos personalizados que aparecem nas demandas." },
+  /* "Modelos", e não "Templates": a tela vizinha chama a mesma coisa de modelo
+     de processo, e duas palavras para um conceito só é o tipo de divergência
+     que faz alguém procurar a configuração no lugar errado. */
+  templates: { group: "OPERAÇÃO", title: "Modelos", description: "Checklists e SLA prontos para abrir uma demanda sem esquecer etapas." },
+  sla: { group: "OPERAÇÃO", title: "SLA e calendário", description: "Expediente, feriados e metas de prazo por processo." },
+  automations: { group: "OPERAÇÃO", title: "Automações", description: "Regras que reagem automaticamente aos eventos das demandas." },
 };
 
 /* O menu lateral das configurações escrito como dado, e não como sete botões
@@ -122,21 +125,34 @@ const settingsSectionMeta: Record<SettingsSection, { group: string; title: strin
    a API — e nenhuma tinha botão que levasse até elas. Escritas aqui, a lista de
    seções e a lista de portas ficam lado a lado, e um teste consegue exigir que
    toda seção de `SettingsSection` apareça neste menu. */
-const settingsNavGroups: Array<{ label: string; adminOnly: boolean; sections: Array<{ section: SettingsSection; icon: LucideIcon; hint: string }> }> = [
-  { label: "CONTA E WORKSPACE", adminOnly: false, sections: [
-    { section: "security", icon: Smartphone, hint: "Dispositivos e sessões" },
-    { section: "general", icon: LayoutDashboard, hint: "Workspaces e quadros" },
+/* O `adminOnly` é da SEÇÃO, e não do grupo.
+   Enquanto foi do grupo, o agrupamento e a autorização eram a mesma decisão:
+   pôr "Geral" (que todo mundo abre) ao lado de "Empresas" (que só admin abre)
+   era impossível sem abrir uma das duas para quem não deve. O resultado era um
+   menu organizado pela regra de acesso em vez de pelo assunto — "Conta e
+   workspace" juntava segurança pessoal com quadros do grupo porque as duas
+   eram públicas, não porque tenham a ver uma com a outra.
+   Separar as duas coisas mantém a autorização idêntica — o mesmo conjunto de
+   sete seções continua exigindo administrador — e libera o menu para ser
+   agrupado por assunto: onde se configura o ambiente, quem tem acesso, como a
+   operação roda, e a conta de quem está usando. */
+const settingsNavGroups: Array<{ label: string; sections: Array<{ section: SettingsSection; icon: LucideIcon; hint: string; adminOnly: boolean }> }> = [
+  { label: "WORKSPACE", sections: [
+    { section: "general", icon: LayoutDashboard, hint: "Nome, workspaces e quadros", adminOnly: false },
+    { section: "companies", icon: Building2, hint: "CNPJs do grupo", adminOnly: true },
   ] },
-  { label: "WORKSPACE", adminOnly: true, sections: [
-    { section: "companies", icon: Building2, hint: "CNPJs do grupo" },
-    { section: "team", icon: Users, hint: "Departamento e módulos" },
+  { label: "PESSOAS E ACESSO", sections: [
+    { section: "team", icon: Users, hint: "Departamento e módulos", adminOnly: true },
   ] },
-  { label: "QUADRO", adminOnly: true, sections: [
-    { section: "columns", icon: ListChecks, hint: "Etapas e SLA" },
-    { section: "fields", icon: Blocks, hint: "Etiquetas e campos" },
-    { section: "templates", icon: ClipboardCheck, hint: "Checklists prontos" },
-    { section: "sla", icon: CalendarClock, hint: "Expediente e feriados" },
-    { section: "automations", icon: Workflow, hint: "Regras automáticas" },
+  { label: "OPERAÇÃO", sections: [
+    { section: "columns", icon: ListChecks, hint: "Etapas e SLA", adminOnly: true },
+    { section: "fields", icon: Blocks, hint: "Etiquetas e campos", adminOnly: true },
+    { section: "templates", icon: ClipboardCheck, hint: "Checklists prontos", adminOnly: true },
+    { section: "sla", icon: CalendarClock, hint: "Expediente e feriados", adminOnly: true },
+    { section: "automations", icon: Workflow, hint: "Regras automáticas", adminOnly: true },
+  ] },
+  { label: "CONTA", sections: [
+    { section: "security", icon: Smartphone, hint: "Dispositivos e sessões", adminOnly: false },
   ] },
 ];
 type RealtimeStatus = "syncing" | "current" | "delayed";
@@ -168,6 +184,7 @@ type CardForm = {
   dueAt: string;
   listId: string;
   templateId: string;
+  processVersionId: string;
   assigneeIds: string[];
   labelIds: string[];
   customValues: Record<string, string>;
@@ -187,9 +204,24 @@ const emptyCardForm: CardForm = {
   dueAt: "",
   listId: "",
   templateId: "",
+  /* Versão publicada do processo que esta demanda vai executar (§10).
+     Vazio significa demanda avulsa — o caminho que sempre existiu e continua
+     valendo para o trabalho que não tem processo modelado. */
+  processVersionId: "",
   assigneeIds: [],
   labelIds: [],
   customValues: {},
+};
+
+/**
+ * Um processo publicado, do jeito que a modal de nova demanda precisa dele.
+ *
+ * Só o necessário para escolher: o nome, a área dona (§4 — é ela que responde
+ * pelo trabalho) e a versão que será instanciada. O resto do catálogo fica na
+ * tela de Processos, que é onde ele é editado.
+ */
+type StartableProcess = {
+  id: string; name: string; areaName: string; versionId: string; versionLabel: string; stepCount: number;
 };
 
 const processColors: Record<string, string> = {
@@ -830,6 +862,11 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [toast, setToast] = useState("");
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [cardModalOpen, setCardModalOpen] = useState(false);
+  /* Os processos publicados que podem originar uma demanda (§10).
+     Carregados quando a modal de criação abre, e não no snapshot de abertura:
+     o catálogo cresce com a operação e quase toda visita ao painel não abre
+     esta modal — é o mesmo motivo pelo qual o histórico carrega sob demanda. */
+  const [startableProcesses, setStartableProcesses] = useState<StartableProcess[] | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [cardForm, setCardForm] = useState<CardForm>(emptyCardForm);
   const [newChecklistItem, setNewChecklistItem] = useState("");
@@ -917,6 +954,46 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     if (!sidebarPreferenceLoaded.current) return;
     window.localStorage.setItem("fila-dp-sidebar-collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  /* Catálogo de processos que podem originar demanda (§10).
+     Carrega uma vez, na primeira abertura da modal de criação. Falha aqui não
+     interrompe nada: a lista fica vazia e a modal segue oferecendo a demanda
+     avulsa — perder o atalho é bem menos grave do que impedir a criação. */
+  useEffect(() => {
+    if (!cardModalOpen || startableProcesses !== null) return;
+    let cancelado = false;
+    void (async () => {
+      try {
+        const resposta = await fetch("/api/processes", { cache: "no-store" });
+        if (!resposta.ok) throw new Error(String(resposta.status));
+        const corpo = await resposta.json() as { processes?: unknown };
+        const lista = Array.isArray(corpo.processes) ? corpo.processes : [];
+        const disponiveis = lista.flatMap((item) => {
+          const processo = item as Record<string, unknown>;
+          const versao = processo.currentVersion as Record<string, unknown> | null;
+          /* Só entra o que a operação pode de fato executar: versão publicada
+             (§8.3 — rascunho não vira demanda) e início manual permitido. Um
+             processo em rascunho na lista seria um caminho que o servidor
+             recusaria depois do clique. */
+          if (!versao || String(versao.status) !== "published") return [];
+          if (processo.allowManualStart === false) return [];
+          if (processo.active === false) return [];
+          return [{
+            id: String(processo.id ?? ""),
+            name: String(processo.name ?? ""),
+            areaName: String(processo.ownerDepartmentName || "Sem área definida"),
+            versionId: String(versao.id ?? ""),
+            versionLabel: `v${Number(versao.versionMajor ?? 1)}.${Number(versao.versionMinor ?? 0)}`,
+            stepCount: Number(processo.stepCount ?? 0),
+          }];
+        }).filter((processo) => processo.versionId && processo.name);
+        if (!cancelado) setStartableProcesses(disponiveis);
+      } catch {
+        if (!cancelado) setStartableProcesses([]);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [cardModalOpen, startableProcesses]);
 
   /* ---------------------------------------------------------------------- *
    * Endereço do painel (§43, §44)
@@ -1398,6 +1475,11 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       dueAt: card.dueAt ?? "",
       listId: card.listId,
       templateId: "",
+      /* Vazio ao abrir uma demanda existente: a origem já foi decidida na
+         criação e não se troca depois. Trocar a versão de uma demanda em
+         andamento reescreveria as etapas por baixo de quem está executando —
+         é a mesma razão pela qual a versão instanciada é imutável (§8.3). */
+      processVersionId: "",
       assigneeIds: card.assignees.map((assignee) => assignee.userId),
       labelIds: card.labels.map((label) => label.id),
       customValues: card.customValues,
@@ -1412,6 +1494,45 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     event.preventDefault();
     if (!cardForm.title.trim()) return;
     if (!selectedCardId) {
+      /* Demanda que nasce de um processo (§10).
+         O caminho é o endpoint que já instancia versão publicada: é ele que
+         materializa etapas, tarefas, SLA, responsáveis padrão e regras a partir
+         da versão — e é por isso que a criação não pode reimplementar nada
+         disso aqui. Duplicar essas regras no formulário faria a demanda criada
+         pela tela divergir da criada por integração ou automação, que passam
+         pelo mesmo endpoint. */
+      if (cardForm.processVersionId) {
+        /* `mutate` não serve aqui: ele aplica a resposta como se fosse o
+           snapshot do workspace, e o `instantiate` devolve `{ instance: { cardId } }`.
+           Passar por ele derrubava o painel inteiro para a tela de erro — não é
+           hipótese, foi o que aconteceu no primeiro ensaio deste fluxo.
+           O caminho certo é o mesmo que o avanço de etapa já usa: chamar a rota
+           e então recarregar o snapshot por `/api/workspace`. */
+        setBusy(true);
+        setError("");
+        try {
+          const resposta = await fetch(
+            `/api/processes/versions/${encodeURIComponent(cardForm.processVersionId)}/instantiate`,
+            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+              boardId: cardForm.boardId,
+              title: cardForm.title,
+              description: cardForm.description,
+              companyId: cardForm.companyId,
+              priority: cardForm.priority,
+              trigger: "manual",
+            }) },
+          );
+          const corpo = await resposta.json() as { error?: string };
+          if (!resposta.ok) throw new Error(corpo.error || "Não foi possível iniciar o processo.");
+          applySnapshot(await requestSnapshot("/api/workspace"), "Demanda criada a partir do processo.");
+          setCardModalOpen(false);
+        } catch (causa) {
+          setError(causa instanceof Error ? causa.message : "Não foi possível iniciar o processo.");
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
       const next = await mutate("/api/cards", { method: "POST", body: JSON.stringify(cardForm) }, "Demanda criada com checklist padrão.");
       if (next) setCardModalOpen(false);
       return;
@@ -2426,18 +2547,48 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               {selectedCard && <section className="demand-detail-summary"><div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div><div className="demand-document-state"><span>DOCUMENTOS</span><strong>{selectedCard.checklist.filter((item) => item.completed).length} aprovados</strong><small>{selectedCard.checklist.filter((item) => !item.completed).length} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div><div className="demand-quick-actions">{canEdit && !selectedCard.archived && <><button className="quick-complete" type="button" onClick={completeSelectedCard}><CheckCircle2 aria-hidden="true" /> Concluir</button><button type="button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button><button type="button" onClick={() => focusCardField("card-assignees")}>Responsável</button><button type="button" onClick={() => focusCardField("card-due-at")}>Prazo</button></>}</div></section>}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
-                {!selectedCard && <label className="full">Começar com um template<select value={cardForm.templateId} onChange={(event) => { const template = snapshot.templates.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, templateId: event.target.value, processType: template?.processType ?? cardForm.processType, description: template?.description ?? cardForm.description }); }}><option value="">Demanda em branco</option>{snapshot.templates.filter((item) => item.active).map((template) => <option value={template.id} key={template.id}>{template.name} • SLA {template.defaultSlaDays} dia(s) útil(eis)</option>)}</select></label>}
+                {/* Origem da demanda (§10): o processo publicado.
+                    A demanda é a EXECUÇÃO de um processo (§4), então escolher
+                    qual vem antes de tudo. Agrupado por área porque é a área
+                    que responde pelo trabalho, e porque "Admissão" pode existir
+                    em duas áreas com regras diferentes — sem o agrupamento, as
+                    duas apareceriam como o mesmo nome repetido.
+                    Escolher um processo faz a criação passar pelo endpoint que
+                    instancia a versão: etapas, tarefas, SLA e responsáveis
+                    padrão vêm de lá, e não daqui. */}
+                {!selectedCard && startableProcesses !== null && startableProcesses.length > 0 && (
+                  <label className="full">Processo
+                    <select value={cardForm.processVersionId} disabled={!canEdit}
+                      onChange={(event) => setCardForm({ ...cardForm, processVersionId: event.target.value })}>
+                      <option value="">Demanda avulsa — sem processo</option>
+                      {[...new Set(startableProcesses.map((item) => item.areaName))].sort().map((area) => (
+                        <optgroup label={area} key={area}>
+                          {startableProcesses.filter((item) => item.areaName === area).map((item) => (
+                            <option value={item.versionId} key={item.versionId}>
+                              {item.name} · {item.versionLabel} · {plural(item.stepCount, "etapa", "etapas")}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <small className="card-form-hint">{cardForm.processVersionId
+                      ? "As etapas, tarefas e o SLA vêm da versão publicada deste processo."
+                      : "Sem processo, a demanda nasce solta: você define as etapas à mão."}</small>
+                  </label>
+                )}
+                {!selectedCard && !cardForm.processVersionId && <label className="full">Começar com um template<select value={cardForm.templateId} onChange={(event) => { const template = snapshot.templates.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, templateId: event.target.value, processType: template?.processType ?? cardForm.processType, description: template?.description ?? cardForm.description }); }}><option value="">Demanda em branco</option>{snapshot.templates.filter((item) => item.active).map((template) => <option value={template.id} key={template.id}>{template.name} • SLA {template.defaultSlaDays} dia(s) útil(eis)</option>)}</select></label>}
                 {!selectedCard && <label className="full">Processo operacional<select value={cardForm.boardId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, boardId: event.target.value, listId: "" })}>{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.boardType === "process" ? `Processo: ${board.name}` : `Quadro geral: ${board.name}`}</option>)}</select><small className="card-process-helper">A demanda será criada e movimentada somente nas colunas deste processo.</small></label>}
                 <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Conciliar colaborador com o ERP" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
-                <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>CONCILIAÇÃO CADASTRAL</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>
+                {!cardForm.processVersionId &&
+                  <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>CONCILIAÇÃO CADASTRAL</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>}
                 <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
                 <label>Área solicitante<select value={cardForm.requesterAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.requesterAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 <label>Área responsável<select value={cardForm.responsibleAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, responsibleAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.responsibleAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
-                <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>
+                {!cardForm.processVersionId && <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>}
                 <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
                 <section className="card-choice-section full"><header><strong>Etiquetas</strong><span>Classifique sem alterar o processo</span></header><div className="choice-chips label-choices">{snapshot.labels.map((label) => <label className={cardForm.labelIds.includes(label.id) ? "selected" : ""} style={{ borderColor: cardForm.labelIds.includes(label.id) ? label.color : undefined }} key={label.id}><input type="checkbox" checked={cardForm.labelIds.includes(label.id)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, labelIds: event.target.checked ? [...cardForm.labelIds, label.id] : cardForm.labelIds.filter((id) => id !== label.id) })} /><i style={{ backgroundColor: label.color }} />{label.name}</label>)}</div></section>
                 {snapshot.customFields.map((field) => <label key={field.id}>{field.name}{field.fieldType === "select" ? <select value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })}><option value="">Selecione</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={field.fieldType === "date" ? "date" : field.fieldType === "number" ? "number" : "text"} value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })} />}</label>)}
@@ -2517,7 +2668,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
             <header><div><span>{settingsSectionMeta[settingsSection].group}</span><h2 id="workspace-modal-title">{settingsSectionMeta[settingsSection].title}</h2><p>{settingsSectionMeta[settingsSection].description}</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
             <div className="workspace-settings-layout">
               <nav className="settings-nav" aria-label="Seções das configurações">
-                {settingsNavGroups.filter((group) => isAdmin || !group.adminOnly).flatMap((group) => [
+                {/* Filtra por seção e só então decide se o grupo aparece: um
+                    rótulo de grupo sem nenhum botão embaixo é uma promessa de
+                    seção que a pessoa não tem. Para quem não é administrador,
+                    "Pessoas e acesso" e "Operação" somem inteiros. */}
+                {settingsNavGroups
+                  .map((group) => ({ ...group, sections: group.sections.filter((item) => isAdmin || !item.adminOnly) }))
+                  .filter((group) => group.sections.length > 0)
+                  .flatMap((group) => [
                   <span className="settings-nav-label" key={group.label}>{group.label}</span>,
                   /* O `aria-label` repete o título porque em telas estreitas o
                      CSS esconde o `<span>` e deixa só o ícone: sem ele o botão
@@ -2805,11 +2963,35 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 }) {
   const attention = cards.filter((card) => card.slaStatus === "overdue" || card.slaStatus === "warning").sort((a, b) => (a.slaStatus === "overdue" ? -1 : 1) - (b.slaStatus === "overdue" ? -1 : 1));
   const companyById = new Map(companies.map((company) => [company.id, company]));
-  const totalChecklistItems = cards.reduce((total, card) => total + card.checklist.length, 0);
-  const checkedItems = cards.reduce((total, card) => total + card.checklist.filter((item) => item.completed).length, 0);
   const maxStatus = Math.max(1, ...lists.map((list) => list.cards.length));
   const visibleColumns = lists.slice(0, 3);
   const integrationsFailing = integrations.filter((item) => item.status === "error").length;
+
+  /* Os números dos três contextos (§7.2).
+     Todos derivam das mesmas demandas, fluxos e integrações que o snapshot já
+     traz — nenhuma consulta nova, nenhum valor fixo. Onde não há dado, o texto
+     diz que não há, em vez de mostrar zero como se fosse medição. */
+  /* "Vence hoje" é `slaStatus === "warning"`, e não uma comparação de data
+     feita aqui. A primeira versão deste bloco calculava pelo calendário e
+     mostrava "Vencendo hoje: 0" logo acima de uma lista com três demandas
+     etiquetadas "Vence hoje" — dois cálculos para a mesma pergunta, discordando
+     na mesma tela. Quem decide o que é hoje é o SLA, que conhece expediente e
+     feriado; o calendário do navegador não. `compactSlaLabel` já traduz esse
+     status com estas mesmas palavras no cartão. */
+  const venceHoje = cards.filter((card) => card.slaStatus === "warning").length;
+  const atrasadas = cards.filter((card) => card.slaStatus === "overdue").length;
+  const hojeExigeAcao = venceHoje + atrasadas > 0;
+  /* Processos DISTINTOS em execução, não fluxos: doze admissões correndo são um
+     processo com doze demandas, e contá-las como doze processos diria que a
+     operação roda doze fluxos diferentes. */
+  const processosEmExecucao = new Set(flows.map((flow) => flow.definitionId)).size;
+  const integracoesConectadas = integrations.filter((item) => item.status === "connected").length;
+  const ultimaSincronizacao = (() => {
+    const marcas = integrations.map((item) => item.lastSyncAt).filter((value): value is string => Boolean(value));
+    if (marcas.length === 0) return null;
+    const recente = marcas.reduce((maior, atual) => (atual > maior ? atual : maior));
+    return new Date(recente).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  })();
 
   return <div className="overview-layout">
 
@@ -2838,36 +3020,79 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         "SLA no prazo" não entra aqui: ele tem a faixa logo abaixo, inteira,
         com barra e contagem. Repeti-lo como sexto cartão seria o mesmo número
         duas vezes na mesma dobra. */}
-    <section className="overview-metrics" aria-label="Indicadores principais">
-      {/* `data-metric` é o ponto de ancoragem do ensaio de navegador.
-          Ele mirava `.overview-metrics article strong` e `.first()`; quando os
-          indicadores viraram botão, `.first()` passou a devolver "Documentos
-          pendentes" — que é 0 tanto no grupo quanto numa filial vazia, então a
-          conferência do recorte por empresa comparava 0 com 0 e reprovava.
-          Ancorar no que o indicador *é* faz a próxima mudança de elemento ou de
-          ordem não quebrar o ensaio de novo. */}
-      <button type="button" className="overview-metric-action" data-metric="demands-open" onClick={() => onFocus("board", "all")}>
-        <span>Demandas em aberto</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída no quadro", "concluídas no quadro")}</small>
-      </button>
-      <button type="button" className={`overview-metric-action${stats.attention ? " requires-attention" : ""}`} onClick={() => onFocus("board", "overdue")}>
-        <span>SLA em risco</span><strong>{stats.attention}</strong><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small>
-      </button>
-      <button type="button" className="overview-metric-action" onClick={() => onFocus("processManagement", "all")}>
-        <span>Fluxos em andamento</span><strong>{flows.length}</strong><small>{flows.length ? plural(new Set(flows.map((flow) => flow.definitionId)).size, "processo em execução", "processos em execução") : "Nenhum processo em execução"}</small>
-      </button>
-      <button type="button" className={`overview-metric-action${obligations.some((item) => item.daysRemaining < 0) ? " requires-attention" : ""}`} onClick={() => onFocus("processes", "all")}>
-        <span>Obrigações próximas</span><strong>{obligations.length}</strong><small>{obligations.filter((item) => item.daysRemaining < 0).length ? `${obligations.filter((item) => item.daysRemaining < 0).length} já vencida(s)` : "Nenhuma vencida"}</small>
-      </button>
-      <button type="button" className={`overview-metric-action${integrationsFailing ? " requires-attention" : ""}`} onClick={() => onFocus("integrations", "all")}>
-        <span>Integrações com erro</span><strong>{integrationsFailing}</strong><small>{integrationsFailing ? "Sincronização interrompida" : `${integrations.length} conectada(s) sem falha`}</small>
-      </button>
-      <article><span>Documentos pendentes</span><strong>{stats.documentsPending}</strong><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small></article>
-      {/* Com uma empresa escolhida, "Empresas ativas: 3" seria um número do
-          grupo inteiro sentado entre três números do recorte — o tipo de
-          vizinhança que faz ler errado sem perceber. */}
-      {companyId
-        ? <article><span>Empresa em foco</span><strong className="overview-metric-name">{scopeLabel}</strong><small>Os números acima são só desta empresa</small></article>
-        : <article><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><small>Cadastros disponíveis na operação</small></article>}
+    {/* Três contextos, e não sete cartões soltos (§7.2).
+        Sete indicadores lado a lado, cada um numa caixa igual, obrigam a ler os
+        sete para descobrir qual pede ação — a tela informava sem hierarquizar.
+        Agrupados, a pergunta que cada bloco responde fica explícita: o que é
+        para hoje, como está a operação, e como estão os sistemas que alimentam
+        ela. Nenhum número novo foi inventado: todos saem das mesmas demandas,
+        fluxos e integrações que já vinham no snapshot.
+
+        `data-metric` é o ponto de ancoragem do ensaio de navegador. Ele mirava
+        `.overview-metrics article strong` e `.first()`; quando os indicadores
+        viraram botão, `.first()` passou a devolver "Documentos pendentes" — que
+        é 0 tanto no grupo quanto numa filial vazia, então a conferência do
+        recorte por empresa comparava 0 com 0 e reprovava. Ancorar no que o
+        indicador *é* faz a mudança de elemento, de grupo ou de ordem não
+        quebrar o ensaio — foi o que permitiu esta reorganização. */}
+    <section className="overview-contexts" aria-label="Resumo da operação">
+
+      <article className={`overview-context${hojeExigeAcao ? " requires-attention" : ""}`}>
+        <header><span>HOJE</span><h2>{hojeExigeAcao ? "Precisa de ação" : "Nada vencendo agora"}</h2></header>
+        <dl>
+          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "overdue")}>
+            <dt>Vencendo hoje</dt><dd>{venceHoje}</dd>
+          </button>
+          <button type="button" className={`overview-context-row${atrasadas ? " grave" : ""}`} onClick={() => onFocus("board", "overdue")}>
+            <dt>Atrasadas</dt><dd>{atrasadas}</dd>
+          </button>
+          {/* Pausada não é atrasada: a coluna em que ela está congela o prazo.
+              Fica aqui porque também trava a fila de alguém — mas sem urgência,
+              então não conta para "precisa de ação". */}
+          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "all")}>
+            <dt>Aguardando terceiros</dt><dd>{stats.waiting}</dd>
+          </button>
+        </dl>
+      </article>
+
+      <article className="overview-context">
+        <header><span>OPERAÇÃO</span><h2>{scopeLabel}</h2></header>
+        <dl>
+          <button type="button" className="overview-context-row" data-metric="demands-open" onClick={() => onFocus("board", "all")}>
+            <dt>Demandas em aberto</dt><dd><strong>{stats.active}</strong></dd>
+          </button>
+          <button type="button" className="overview-context-row" onClick={() => onFocus("processManagement", "all")}>
+            <dt>Processos em execução</dt><dd>{processosEmExecucao}</dd>
+          </button>
+          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "all")}>
+            <dt>Tarefas pendentes</dt><dd>{stats.documentsPending}</dd>
+          </button>
+          <button type="button" className="overview-context-row" onClick={() => onFocus("history", "all")}>
+            <dt>Concluídas no período</dt><dd>{stats.completed}</dd>
+          </button>
+        </dl>
+      </article>
+
+      <article className={`overview-context${integrationsFailing ? " requires-attention" : ""}`}>
+        <header><span>CONEXÕES</span><h2>{integrationsFailing ? "Sincronização interrompida" : "Sistemas em dia"}</h2></header>
+        <dl>
+          <button type="button" className="overview-context-row" onClick={() => onFocus("integrations", "all")}>
+            <dt>Integrações ativas</dt><dd>{integracoesConectadas}</dd>
+          </button>
+          <button type="button" className={`overview-context-row${integrationsFailing ? " grave" : ""}`} onClick={() => onFocus("integrations", "all")}>
+            <dt>Com erro</dt><dd>{integrationsFailing}</dd>
+          </button>
+          <button type="button" className={`overview-context-row${obligations.some((item) => item.daysRemaining < 0) ? " grave" : ""}`} onClick={() => onFocus("processes", "all")}>
+            <dt>Obrigações próximas</dt><dd>{obligations.length}</dd>
+          </button>
+          {/* Sem sincronização registrada o certo é dizer isso, e não uma data
+              de mentira nem um traço que parece dado que faltou carregar. */}
+          <div className="overview-context-row estatico">
+            <dt>Última sincronização</dt><dd className="overview-context-quando">{ultimaSincronizacao ?? "Nunca"}</dd>
+          </div>
+        </dl>
+      </article>
+
     </section>
 
 

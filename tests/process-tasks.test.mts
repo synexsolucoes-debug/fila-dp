@@ -279,3 +279,23 @@ test("etapa sem automações não inventa nenhuma", () => {
   assert.deepEqual(parseStepAutomations(undefined), []);
   assert.deepEqual(parseStepAutomations({ trigger: "step_entered" }), []);
 });
+
+test("configuração de etapa sem o campo de tarefas não derruba quem a lê", () => {
+  /* Regressão medida no produto de pé, não hipótese: `lib/fila-dp-db.ts` monta
+     uma configuração parcial — só checklist e documentos — para contar as
+     tarefas previstas de cada versão. Quando `tasks` passou a existir,
+     `stepTasks` começou a ler `config.tasks.length` sem guarda, e um `as` no
+     chamador escondeu a falta do campo do compilador.
+     O efeito não ficou naquela contagem: `/api/workspace` inteiro passou a
+     devolver 500, e o painel deixou de abrir para todo o grupo assim que a
+     primeira demanda nasceu de um processo. Uma tela inicial que não abre por
+     causa de uma demanda criada é o pior lugar possível para falhar. */
+  const parcial = { checklist: ["Receber documentos", "Conferir CPF"], requiredDocuments: [] };
+  const tarefas = stepTasks(parcial as unknown as Parameters<typeof stepTasks>[0]);
+  assert.equal(tarefas.length, 2, "a configuração parcial precisa cair no checklist");
+  assert.deepEqual(tarefas.map((t) => t.name), ["Receber documentos", "Conferir CPF"]);
+  // E `stepChecklist`, que é o que o snapshot chama, sobrevive ao mesmo molde.
+  assert.equal(stepChecklist(parcial as unknown as Parameters<typeof stepChecklist>[0]).length, 2);
+  // Ausência total de configuração continua devolvendo lista vazia, não erro.
+  assert.deepEqual(stepTasks(null), []);
+});
