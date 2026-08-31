@@ -118,7 +118,7 @@
 .footerInner p { margin: 6px 0 0; color: var(--site-soft); font-size: .84rem; }
 .footerInner nav { display: grid; gap: 6px; align-content: start; }
 .footerInner nav span { font-size: .7rem; font-weight: 820; letter-spacing: .1em; text-transform: uppercase; color: var(--site-soft); }
-.footerInner nav a { font-size: .85rem; text-decoration: none; color: var(--site-soft); }
+.footerInner nav a { min-height: 24px; display: inline-flex; align-items: center; font-size: .85rem; text-decoration: none; color: var(--site-soft); }
 .footerInner nav a:hover { color: var(--site-accent); }
 .footerNote {
   max-width: 1120px; margin: 0 auto; padding: 0 20px 28px;
