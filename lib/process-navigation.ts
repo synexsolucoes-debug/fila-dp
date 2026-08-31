@@ -28,6 +28,22 @@ export type ProcessNavView = string;
 export type ProcessGroupKind =
   /** Um processo operacional: tem início, etapas e fim, e atravessa áreas. */
   | "process"
+  /**
+   * Módulo que pertence a uma **área** e não a um processo (§91).
+   *
+   * A §91 pede uma seção "Áreas" no menu, e ela existe por um motivo real: há
+   * módulos que são a caixa de ferramentas de quem responde por uma área, não
+   * um fluxo com início e fim. A Gestão de EPI é o caso — quem opera ali passa
+   * o dia entre estoque, entrega e devolução, sem que isso seja "um processo"
+   * sendo executado.
+   *
+   * O que esta família **não** faz é virar organograma. Não existe um item
+   * "SESMT" nem um item "DP" no menu: seria exatamente o `area.name === "SESMT"`
+   * que a §10 proíbe, e a §9 separa área operacional de lotação de colaborador.
+   * A seção agrupa *módulos de área*; quem responde por eles é configuração do
+   * workspace (`fdp_areas` e `fdp_area_module_assignments`), não código.
+   */
+  | "area"
   /** Apoio: não é processo, é a base ou a leitura sobre a qual eles rodam. */
   | "support";
 
@@ -90,7 +106,10 @@ export const processGroups: readonly ProcessGroup[] = [
     id: "epi",
     label: "Gestão de EPI",
     description: "Estoque, entrega, devolução, higienização, descarte e análise de desconto.",
-    kind: "process",
+    /* Área, e não processo (§91). O que acontece aqui é a operação contínua de
+       quem cuida do equipamento; o *processo* que atravessa áreas é o desconto,
+       e ele nasce como demanda entre a área do EPI e o DP (§65, §116). */
+    kind: "area",
     views: ["epi"],
   },
   {

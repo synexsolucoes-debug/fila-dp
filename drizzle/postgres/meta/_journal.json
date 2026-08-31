@@ -519,6 +519,13 @@
       "when": 1787900000014,
       "tag": "0071_card_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1787900000015,
+      "tag": "0072_process_tasks_and_evidence",
+      "breakpoints": true
     }
   ]
 }

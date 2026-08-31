@@ -321,21 +321,73 @@ export const cards = pgTable("fdp_cards", {
   check("fdp_cards_process_instance_check", sql`(${table.processVersionId} IS NULL AND ${table.processDefinitionId} IS NULL AND ${table.currentStepId} = '' AND ${table.processVersionNumber} = '' AND ${table.instantiatedAt} IS NULL) OR (${table.processVersionId} IS NOT NULL AND ${table.processDefinitionId} IS NOT NULL AND ${table.currentStepId} <> '' AND ${table.instantiatedAt} IS NOT NULL)`),
 ]);
 
+/**
+ * Tarefa da demanda (§24, §41).
+ *
+ * Continua sendo a tabela do checklist — é o que o quadro, a Inbox, os
+ * conectores e o motor já escrevem —, agora com o que uma tarefa de processo
+ * precisa carregar: quem responde, de que área, até quando, quem concluiu, com
+ * que prova e dependendo de qual outra.
+ *
+ * Os defaults reproduzem o comportamento anterior linha a linha: `required` e
+ * `blocksAdvance` valem 1 em tudo que já existe, que é a regra "todo item
+ * pendente trava a etapa" que o motor sempre aplicou (§48, §108).
+ */
 export const checklistItems = pgTable("fdp_checklist_items", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
   cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  instructions: text("instructions").notNull().default(""),
   completed: integer("completed").notNull().default(0),
   position: doublePrecision("position").notNull(),
   completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+  /** Etapa que exige a tarefa. Vazio é item solto: demanda legada e adição manual. */
+  processStepId: text("process_step_id").notNull().default(""),
+  /** Chave estável dentro da etapa; é sobre ela que `dependsOnJson` fala. */
+  templateKey: text("template_key").notNull().default(""),
+  areaId: text("area_id"),
+  assigneeUserId: text("assignee_user_id"),
+  assigneeRole: text("assignee_role").notNull().default(""),
+  slaValue: integer("sla_value").notNull().default(0),
+  slaUnit: text("sla_unit").notNull().default("hours"),
+  startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+  dueAt: timestamp("due_at", { withTimezone: true, mode: "string" }),
+  completedBy: text("completed_by").notNull().default(""),
+  required: integer("required").notNull().default(1),
+  blocksAdvance: integer("blocks_advance").notNull().default(1),
+  evidenceRequired: integer("evidence_required").notNull().default(0),
+  documentRequired: text("document_required").notNull().default(""),
+  completionRule: text("completion_rule").notNull().default("manual"),
+  dependsOnJson: jsonb("depends_on_json").$type<string[]>().notNull().default([]),
 }, (table) => [
   index("fdp_checklist_card_position_idx").on(table.cardId, table.position),
+  index("fdp_checklist_items_process_step_idx")
+    .on(table.workspaceId, table.cardId, table.processStepId)
+    .where(sql`${table.processStepId} <> ''`),
+  index("fdp_checklist_items_assignee_due_idx")
+    .on(table.workspaceId, table.assigneeUserId, table.dueAt)
+    .where(sql`${table.completed} = 0 AND ${table.assigneeUserId} IS NOT NULL`),
+  index("fdp_checklist_items_open_due_idx")
+    .on(table.workspaceId, table.dueAt)
+    .where(sql`${table.completed} = 0 AND ${table.dueAt} IS NOT NULL`),
+  uniqueIndex("fdp_checklist_items_workspace_id_uq").on(table.workspaceId, table.id),
   foreignKey({
     name: "fdp_checklist_items_workspace_card_fk",
     columns: [table.workspaceId, table.cardId],
     foreignColumns: [cards.workspaceId, cards.id],
   }).onDelete("cascade"),
+  foreignKey({
+    name: "fdp_checklist_items_area_fk",
+    columns: [table.workspaceId, table.areaId],
+    foreignColumns: [areas.workspaceId, areas.id],
+  }),
+  check("fdp_checklist_items_completion_rule_check",
+    sql`${table.completionRule} IN ('manual', 'evidence', 'document')`),
+  check("fdp_checklist_items_sla_unit_check", sql`${table.slaUnit} IN ('minutes', 'hours', 'days')`),
+  check("fdp_checklist_items_completed_at_check",
+    sql`${table.completed} = 0 OR ${table.completedAt} IS NOT NULL`),
 ]);
 
 export const cardComments = pgTable("fdp_card_comments", {
@@ -344,14 +396,24 @@ export const cardComments = pgTable("fdp_card_comments", {
   cardId: text("card_id").notNull().references(() => cards.id, { onDelete: "cascade" }),
   authorUserId: text("author_user_id").notNull().references(() => users.id),
   body: text("body").notNull(),
+  /** Tarefa a que o comentário se refere (§41). Nulo é comentário da demanda. */
+  checklistItemId: text("checklist_item_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   index("fdp_comments_card_created_idx").on(table.cardId, table.createdAt),
+  index("fdp_card_comments_checklist_item_idx")
+    .on(table.workspaceId, table.checklistItemId, table.createdAt)
+    .where(sql`${table.checklistItemId} IS NOT NULL`),
   foreignKey({
     name: "fdp_card_comments_workspace_card_fk",
     columns: [table.workspaceId, table.cardId],
     foreignColumns: [cards.workspaceId, cards.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "fdp_card_comments_checklist_item_fk",
+    columns: [table.workspaceId, table.checklistItemId],
+    foreignColumns: [checklistItems.workspaceId, checklistItems.id],
   }).onDelete("cascade"),
 ]);
 
@@ -445,14 +507,29 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
   contentType: text("content_type").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
   uploadedBy: text("uploaded_by").notNull(),
+  /** Etapa em que o arquivo foi anexado (§43). Vazio é anexo da demanda. */
+  processStepId: text("process_step_id").notNull().default(""),
+  /** Tarefa a que o arquivo serve de prova (§43). Nulo é anexo da demanda ou da etapa. */
+  checklistItemId: text("checklist_item_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_attachments_object_key_uq").on(table.objectKey),
   index("fdp_attachments_card_created_idx").on(table.cardId, table.createdAt),
+  index("fdp_card_attachments_step_idx")
+    .on(table.workspaceId, table.cardId, table.processStepId)
+    .where(sql`${table.processStepId} <> ''`),
+  index("fdp_card_attachments_checklist_item_idx")
+    .on(table.workspaceId, table.checklistItemId)
+    .where(sql`${table.checklistItemId} IS NOT NULL`),
   foreignKey({
     name: "fdp_card_attachments_workspace_card_fk",
     columns: [table.workspaceId, table.cardId],
     foreignColumns: [cards.workspaceId, cards.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "fdp_card_attachments_checklist_item_fk",
+    columns: [table.workspaceId, table.checklistItemId],
+    foreignColumns: [checklistItems.workspaceId, checklistItems.id],
   }).onDelete("cascade"),
 ]);
 
@@ -1076,6 +1153,16 @@ export const processStepConfigs = pgTable("fdp_process_step_configs", {
   approvalCount: integer("approval_count").notNull().default(1),
   approvalMode: text("approval_mode").notNull().default("sequential"),
   subprocessProcessId: text("subprocess_process_id"),
+  /**
+   * Tarefas-modelo da etapa (§24).
+   *
+   * `checklistJson` continua valendo e continua sendo o que as versões já
+   * publicadas usam — versão publicada não muda (§28). Quando `tasksJson` está
+   * preenchido, é ele que descreve a tarefa por inteiro.
+   */
+  tasksJson: jsonb("tasks_json").$type<Record<string, unknown>[]>().notNull().default([]),
+  /** Automações declaradas da etapa (§27). */
+  automationsJson: jsonb("automations_json").$type<Record<string, unknown>[]>().notNull().default([]),
   settingsJson: jsonb("settings_json").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),

@@ -79,24 +79,23 @@ test("identificadores técnicos foram preservados na renomeação", async () => 
 
 test("a identidade visual vive em tokens, não espalhada em HEX", async () => {
   const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  // Os dois azuis vêm dos pixels do símbolo oficial, não de estimativa. Eles não
-  // acompanham a paleta de referência de propósito: adotá-la faria a interface
-  // deixar de combinar com o próprio logo.
-  for (const token of ["--vin-navy: #062B60", "--vin-blue-vivid: #168CFD"]) {
-    assert.ok(globals.includes(token), `token ausente: ${token}`);
+  // A paleta de referência (§88) inteira, como valor de token. Antes, dois dos
+  // oito tons não existiam no código — o azul-escuro e o azul de marca vinham
+  // dos pixels do logo — e a interface era de uma paleta enquanto a
+  // especificação era de outra.
+  for (const token of [
+    "--vin-navy-deep: #18223A", "--vin-blue: #365CF5", "--vin-slate: #64748B",
+    "--vin-bg: #F6F8FC", "--vin-surface: #FFFFFF", "--vin-text: #172033",
+    "--vin-border: #E2E8F0", "--vin-teal: #16A394",
+  ]) {
+    assert.ok(globals.includes(token), `token da paleta de referência ausente: ${token}`);
   }
-  // Os neutros, ao contrário, seguem a paleta de referência (§14).
-  for (const token of ["--vin-bg: #F6F8FC", "--vin-text: #172033", "--vin-border: #E2E8F0", "--vin-teal: #16A394"]) {
-    assert.ok(globals.includes(token), `token ausente: ${token}`);
+  // Os dois degraus derivados existem porque oito cores não fecham uma
+  // interface. Eles não podem virar uma segunda paleta: a conferência é que
+  // continuem sendo dois, e declarados.
+  for (const token of ["--vin-navy: ", "--vin-blue-vivid: "]) {
+    assert.ok(globals.includes(token), `degrau derivado ausente: ${token}`);
   }
-  // Exceção medida: a referência pede #64748B para texto secundário, que rende
-  // 4.48:1 sobre o fundo #F6F8FC — abaixo do mínimo 4.5 da WCAG 2.2 AA. O tom
-  // adotado rende 5.78:1. Adotar o pedido criaria a violação que a auditoria de
-  // acessibilidade acusaria nas 59 telas.
-  assert.ok(globals.includes("--vin-text-soft: #55627A"), "o texto secundário precisa passar no contraste");
-  // A conferência é sobre uso como valor, não sobre a palavra: o comentário que
-  // explica a exceção cita o tom, e casar com ele acusaria o contrário.
-  assert.ok(!/:\s*#64748B/u.test(globals), "o tom que reprova no contraste não pode virar valor de token");
   for (const semantic of ["--brand:", "--brand-strong:", "--brand-accent:", "--ui-surface:", "--ui-text:"]) {
     assert.ok(globals.includes(semantic), `token semântico ausente: ${semantic}`);
   }
@@ -108,12 +107,10 @@ test("a tipografia carrega de verdade, nos três papéis", async () => {
   // densidade que uma tela operacional precisa. Isso é o que esta conferência
   // protege, e continua valendo.
   //
-  // As famílias mudaram: Inter e Manrope saíram, IBM Plex entrou (§90). Inter
-  // como interface e um grotesco geométrico nos títulos é a dupla que veste
-  // qualquer painel genérico — a escolha não dizia nada sobre este produto. O
-  // Plex foi desenhado para documentação técnica e traz o terceiro papel, que
-  // faltava: o monoespaçado dos DADOS. Número de demanda, CNPJ, prazo e
-  // competência se comparam em coluna, e proporcional desalinha a coluna.
+  // As famílias são as do §89: Inter na interface e Manrope nos títulos. O
+  // terceiro papel — o monoespaçado dos DADOS — fica em IBM Plex Mono, porque
+  // número de demanda, CNPJ, prazo e competência se comparam em coluna, e
+  // proporcional desalinha a coluna.
   //
   // O papel é fixado pelo nome da variável, não pela família: trocar de
   // desenho é decisão de identidade, mas deixar um dos três papéis sem fonte
@@ -392,4 +389,85 @@ test("administrador global entra no console mesmo sem vínculo de workspace", as
   assert.match(route, /const platformAdmin = isPlatformAdmin\(identity\)/u);
   assert.match(route, /if \(!access && !platformAdmin\)/u);
   assert.match(route, /platformAdmin && !access \? "\/plataforma"/u);
+});
+
+/**
+ * Contraste dos tons da paleta de referência, medido — não afirmado (§88, §100).
+ *
+ * O §88 e o §100 se contradizem em um valor, e a contradição precisa ficar
+ * registrada em número, não em comentário: `#64748B` rende **4.48:1** sobre o
+ * fundo `#F6F8FC`, 0,02 abaixo do mínimo 4.5 da WCAG 2.2 AA para texto pequeno.
+ *
+ * A paleta foi adotada como pedida, e `--ui-text-soft-aa` existe para o texto
+ * pequeno persistente que precisa passar. Este teste falha se alguém mexer em
+ * qualquer um dos dois sem medir: é o que impede a exceção de virar regra por
+ * esquecimento, e é o que impede o token AA de sumir numa limpeza.
+ */
+function relativeLuminance(hex: string) {
+  const channel = (value: number) => {
+    const srgb = value / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  };
+  const int = Number.parseInt(hex.replace("#", ""), 16);
+  const [r, g, b] = [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrast(foreground: string, background: string) {
+  const [light, dark] = [relativeLuminance(foreground), relativeLuminance(background)]
+    .sort((left, right) => right - left);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+test("o cinza da referência entra como token, e o texto pequeno usa a versão legível", async () => {
+  const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  // O cinza da referência está no código, como token (§88).
+  assert.ok(globals.includes("--vin-slate: #64748B"), "o cinza da paleta de referência precisa ser um token");
+
+  // E o número que decide onde ele pode ser usado. Se um dia isto passar de
+  // 4.5, o par de tokens deixa de ser necessário e o teste avisa.
+  const medido = contrast("#64748B", "#F6F8FC");
+  assert.ok(medido < 4.5, `#64748B passou a render ${medido.toFixed(2)}:1 — o par de tokens pode virar um só`);
+  assert.ok(medido >= 3, `#64748B precisa ao menos servir a indicador não textual: ${medido.toFixed(2)}:1`);
+
+  // Texto pequeno aponta para a versão legível — medida, não presumida. Foi com
+  // `--ui-text-soft` no tom puro que `npm run a11y-check` acusou 22 violações.
+  assert.ok(globals.includes("--vin-slate-aa: #55627A"), "o cinza legível precisa existir");
+  assert.ok(globals.includes("--vin-text-soft: var(--vin-slate-aa)"),
+    "o texto secundário precisa apontar para o cinza que passa em 4.5:1");
+  assert.ok(contrast("#55627A", "#F6F8FC") >= 4.5, "o cinza legível precisa passar em 4.5:1");
+});
+
+test("o azul de marca é legível como texto sobre branco", async () => {
+  // #365CF5 é o azul do §88 e vira cor de link e de botão. Abaixo de 4.5:1 ele
+  // seria uma cor de marca que não pode ser usada onde marca mais aparece.
+  assert.ok(contrast("#365CF5", "#FFFFFF") >= 4.5,
+    `o azul de marca rende ${contrast("#365CF5", "#FFFFFF").toFixed(2)}:1 sobre branco`);
+});
+
+test("a superfície escura da marca continua legível com o navy novo", async () => {
+  /* Trocar `--vin-navy-deep` de #041B45 para #18223A clareou o fundo das
+     superfícies escuras — barra lateral, cabeçalho de modal, painel de marca.
+     Os três tons que escrevem sobre ele foram escolhidos contra o navy antigo;
+     este teste é o que garante que nenhum deles caiu abaixo do mínimo na troca. */
+  for (const [tom, papel] of [
+    ["#E6EEFA", "--on-brand-text"],
+    ["#B6C8E0", "--on-brand-soft"],
+    ["#6FB4FF", "--brand-accent-on-dark"],
+  ] as const) {
+    const medido = contrast(tom, "#18223A");
+    assert.ok(medido >= 4.5, `${papel} rende ${medido.toFixed(2)}:1 sobre o azul-escuro da marca`);
+  }
+});
+
+test("o realce da marca serve a indicador, e diz que não serve a texto", async () => {
+  // #5C7DF7 rende 3.66:1 sobre branco: acima dos 3:1 da WCAG 1.4.11 para
+  // indicador não textual, abaixo dos 4.5 para texto pequeno. O comentário do
+  // token precisa continuar dizendo isso — é o que impede o próximo uso errado.
+  const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const medido = contrast("#5C7DF7", "#FFFFFF");
+  assert.ok(medido >= 3 && medido < 4.5, `realce rende ${medido.toFixed(2)}:1 sobre branco`);
+  // O comentário vem antes da declaração, que é onde quem lê o token o encontra.
+  assert.match(globals, /nunca a texto pequeno[\s\S]{0,200}?--vin-blue-vivid:/u);
 });

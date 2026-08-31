@@ -6,9 +6,14 @@ import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-font/css/bpmn.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, Focus, Maximize2, Redo2, Save, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import type { ProcessArea, ProcessCondition, ProcessDefinition, ProcessMember, ProcessStepConfig, ProcessVersionDetail } from "./processes.types";
+import type { ProcessArea, ProcessCondition, ProcessDefinition, ProcessMember, ProcessStepAutomation, ProcessStepConfig, ProcessTaskTemplate, ProcessVersionDetail } from "./processes.types";
 import { outgoingFlows, parseBpmnGraph } from "@/lib/bpmn-graph";
 import { CONDITION_OPERATORS, FACT_LABELS } from "@/lib/process-conditions";
+import {
+  AUTOMATION_ACTION_LABELS, AUTOMATION_ACTIONS,
+  AUTOMATION_TRIGGER_LABELS, AUTOMATION_TRIGGERS,
+} from "@/lib/process-tasks";
+import { domainEventNames } from "@/lib/domain-events";
 import { AnimatedModal, ErrorBanner } from "../shared";
 import { stepTypeLabel } from "./processes.api";
 import styles from "./processes.module.css";
@@ -35,7 +40,7 @@ type ElementInfo = { id:string; type:string; name:string };
 
 function defaultConfig(element:ElementInfo):ProcessStepConfig {
   const stepType = element.type === "bpmn:UserTask" ? "USER_TASK" : element.type === "bpmn:ServiceTask" ? "SYSTEM_TASK" : element.type === "bpmn:SubProcess" ? "SUBPROCESS" : element.type.includes("Gateway") ? "GATEWAY" : element.type === "bpmn:Lane" ? "LANE" : element.type === "bpmn:StartEvent" ? "START_EVENT" : element.type === "bpmn:EndEvent" ? "END_EVENT" : "TASK";
-  return { id:crypto.randomUUID(),bpmnElementId:element.id,stepType,departmentId:"",responsibleUserId:"",responsibilityMode:"DEPARTMENT",slaValue:0,slaUnit:"hours",slaBusinessDays:false,cutoffTime:"",escalation:{},createDemand:false,demandType:"",requesterDepartmentId:"",responsibleDepartmentId:"",demandPriority:"normal",demandSlaValue:0,demandSlaUnit:"hours",checklistId:"",checklistItems:[],formId:"",requiredDocuments:[],optionalDocuments:[],evidenceRequired:false,requiresApproval:false,approverUserId:"",approverDepartmentId:"",approvalCount:1,approvalMode:"sequential",subprocessProcessId:"",settings:{name:element.name,description:"",instructions:"",internalCode:"",dynamicAssignee:"",notificationTemplate:"",entryRules:[],exitRules:[],transitions:{},blockingIntegrations:[],documentProof:"declared"} };
+  return { id:crypto.randomUUID(),bpmnElementId:element.id,stepType,departmentId:"",responsibleUserId:"",responsibilityMode:"DEPARTMENT",slaValue:0,slaUnit:"hours",slaBusinessDays:false,cutoffTime:"",escalation:{},createDemand:false,demandType:"",requesterDepartmentId:"",responsibleDepartmentId:"",demandPriority:"normal",demandSlaValue:0,demandSlaUnit:"hours",checklistId:"",checklistItems:[],formId:"",requiredDocuments:[],optionalDocuments:[],evidenceRequired:false,requiresApproval:false,approverUserId:"",approverDepartmentId:"",approvalCount:1,approvalMode:"sequential",subprocessProcessId:"",tasks:[],automations:[],settings:{name:element.name,description:"",instructions:"",internalCode:"",dynamicAssignee:"",notificationTemplate:"",entryRules:[],exitRules:[],transitions:{},blockingIntegrations:[],documentProof:"declared"} };
 }
 const csv=(value:string)=>value.split(",").map((item)=>item.trim()).filter(Boolean).slice(0,50);
 
@@ -72,6 +77,94 @@ function ConditionRows({rows,onChange,readOnly,emptyLabel}:{rows:ProcessConditio
       <button type="button" className={styles.conditionRemove} aria-label={`Remover condição ${index+1}`} disabled={readOnly} onClick={()=>onChange(rows.filter((_,i)=>i!==index))}>×</button>
     </div>)}
     <button type="button" className={styles.conditionAdd} disabled={readOnly||rows.length>=12} onClick={()=>onChange([...rows,{field:"",operator:"equals",value:""}])}>Adicionar condição</button>
+  </div>;
+}
+
+/**
+ * Editor das tarefas-modelo da etapa (§24).
+ *
+ * Uma linha por tarefa, com os campos que decidem execução — quem responde, até
+ * quando, se trava o avanço, que prova exige e de qual outra depende. Os campos
+ * longos (descrição, instrução) ficam de fora de propósito: o painel é estreito
+ * e o que se ajusta aqui é a **regra**, não o texto.
+ *
+ * A dependência é um `select` das outras tarefas da mesma etapa, e não texto
+ * livre: uma chave digitada errado produziria uma tarefa que nunca desbloqueia,
+ * e o erro só apareceria numa demanda real.
+ */
+function TaskRows({rows,onChange,readOnly,areas,members}:{rows:ProcessTaskTemplate[];onChange:(next:ProcessTaskTemplate[])=>void;readOnly:boolean;areas:ProcessArea[];members:ProcessMember[]}){
+  const slug=(value:string)=>value.normalize("NFD").replace(/[\u0300-\u036f]/gu,"").toLowerCase().replace(/[^a-z0-9]+/gu,"-").replace(/^-+|-+$/gu,"").slice(0,60);
+  const update=(index:number,value:Partial<ProcessTaskTemplate>)=>onChange(rows.map((row,i)=>i===index?{...row,...value}:row));
+  return <div className={styles.taskRows}>
+    {rows.length===0&&<p className={styles.fieldsetHint}>Sem tarefas desenhadas. Sem elas, cada item do checklist vira uma tarefa obrigatória que trava o avanço — que é como esta etapa já se comporta.</p>}
+    {rows.map((row,index)=><div key={index} className={styles.taskRow}>
+      <div className={styles.taskRowHead}>
+        <input aria-label={`Nome da tarefa ${index+1}`} value={row.name} placeholder="Ex.: Conferir CPF" disabled={readOnly}
+          onChange={(e)=>update(index,{name:e.target.value,key:row.key||slug(e.target.value)})}/>
+        <button type="button" className={styles.conditionRemove} aria-label={`Remover tarefa ${index+1}`} disabled={readOnly}
+          onClick={()=>onChange(rows.filter((_,i)=>i!==index))}>×</button>
+      </div>
+      <div className={styles.inlineFields}>
+        <label>Área<select value={row.areaId} disabled={readOnly} onChange={(e)=>update(index,{areaId:e.target.value})}>
+          <option value="">Herdar da etapa</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+        <label>Responsável<select value={row.assigneeUserId} disabled={readOnly} onChange={(e)=>update(index,{assigneeUserId:e.target.value})}>
+          <option value="">Não definido</option>{members.map((m)=><option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
+      </div>
+      <div className={styles.inlineFields}>
+        <label>Prazo<input type="number" min={0} value={row.slaValue} disabled={readOnly} onChange={(e)=>update(index,{slaValue:Number(e.target.value)||0})}/></label>
+        <label>Unidade<select value={row.slaUnit} disabled={readOnly} onChange={(e)=>update(index,{slaUnit:e.target.value as ProcessTaskTemplate["slaUnit"]})}>
+          <option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Dias</option></select></label>
+      </div>
+      <label>Como concluir<select value={row.completionRule} disabled={readOnly} onChange={(e)=>update(index,{completionRule:e.target.value as ProcessTaskTemplate["completionRule"]})}>
+        <option value="manual">Marcar basta</option><option value="evidence">Exigir evidência anexada na tarefa</option><option value="document">Exigir um documento nomeado</option></select></label>
+      {row.completionRule==="document"&&<label>Documento exigido<input value={row.documentRequired} placeholder="Ex.: Comprovante de residência" disabled={readOnly}
+        onChange={(e)=>update(index,{documentRequired:e.target.value})}/></label>}
+      <label>Depende de<select value={row.dependsOn[0]??""} disabled={readOnly} onChange={(e)=>update(index,{dependsOn:e.target.value?[e.target.value]:[]})}>
+        <option value="">Nada — pode começar já</option>
+        {rows.filter((other,i)=>i!==index&&other.key).map((other)=><option key={other.key} value={other.key}>{other.name||other.key}</option>)}</select></label>
+      <label className={styles.checkLabel}><input type="checkbox" checked={row.required} disabled={readOnly}
+        onChange={(e)=>update(index,{required:e.target.checked})}/> Obrigatória</label>
+      <label className={styles.checkLabel}><input type="checkbox" checked={row.blocksAdvance} disabled={readOnly}
+        onChange={(e)=>update(index,{blocksAdvance:e.target.checked})}/> Trava o avanço da etapa</label>
+    </div>)}
+    <button type="button" className={styles.conditionAdd} disabled={readOnly||rows.length>=40}
+      onClick={()=>onChange([...rows,{key:"",name:"",description:"",instructions:"",assigneeUserId:"",assigneeRole:"",areaId:"",slaValue:0,slaUnit:"hours",required:true,blocksAdvance:true,evidenceRequired:false,documentRequired:"",completionRule:"manual",dependsOn:[],position:(rows.length+1)*1000}])}>Adicionar tarefa</button>
+  </div>;
+}
+
+/**
+ * Editor das automações da etapa (§27).
+ *
+ * A linha lê como frase: quando → então. Os gatilhos e as ações são listas
+ * fechadas, importadas do mesmo módulo que as executa, para a tela nunca
+ * oferecer uma combinação que o servidor descartaria em silêncio.
+ */
+function AutomationRows({rows,onChange,readOnly,areas}:{rows:ProcessStepAutomation[];onChange:(next:ProcessStepAutomation[])=>void;readOnly:boolean;areas:ProcessArea[]}){
+  const update=(index:number,value:Partial<ProcessStepAutomation>)=>onChange(rows.map((row,i)=>i===index?{...row,...value}:row));
+  return <div className={styles.taskRows}>
+    {rows.length===0&&<p className={styles.fieldsetHint}>Nenhuma automação nesta etapa.</p>}
+    {rows.map((row,index)=><div key={index} className={styles.taskRow}>
+      <div className={styles.taskRowHead}>
+        <span className={styles.fieldsetHint}>Automação {index+1}</span>
+        <button type="button" className={styles.conditionRemove} aria-label={`Remover automação ${index+1}`} disabled={readOnly}
+          onClick={()=>onChange(rows.filter((_,i)=>i!==index))}>×</button>
+      </div>
+      <label>Quando<select value={row.trigger} disabled={readOnly} onChange={(e)=>update(index,{trigger:e.target.value as ProcessStepAutomation["trigger"]})}>
+        {AUTOMATION_TRIGGERS.map((item)=><option key={item} value={item}>{AUTOMATION_TRIGGER_LABELS[item]}</option>)}</select></label>
+      <label>Então<select value={row.action} disabled={readOnly} onChange={(e)=>update(index,{action:e.target.value as ProcessStepAutomation["action"]})}>
+        {AUTOMATION_ACTIONS.filter((item)=>item!=="create_demand").map((item)=><option key={item} value={item}>{AUTOMATION_ACTION_LABELS[item]}</option>)}</select></label>
+      {row.action==="create_task"&&<>
+        <label>Tarefa a criar<input value={row.label} placeholder="Ex.: Liberar acesso ao ERP" disabled={readOnly} onChange={(e)=>update(index,{label:e.target.value})}/></label>
+        <label>Na área<select value={row.areaId} disabled={readOnly} onChange={(e)=>update(index,{areaId:e.target.value})}>
+          <option value="">Herdar da etapa</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+      </>}
+      {row.action==="notify_responsible"&&<label>Texto do aviso<input value={row.label} placeholder="Ex.: Documentação vencida — conferir a demanda" disabled={readOnly} onChange={(e)=>update(index,{label:e.target.value})}/></label>}
+      {row.action==="record_event"&&<label>Evento<select value={row.eventName} disabled={readOnly} onChange={(e)=>update(index,{eventName:e.target.value})}>
+        <option value="">Selecione</option>{domainEventNames.map((name)=><option key={name} value={name}>{name}</option>)}</select>
+        <small className={styles.fieldsetHint}>Só eventos do catálogo: é o que os webhooks dos clientes já sabem receber.</small></label>}
+    </div>)}
+    <button type="button" className={styles.conditionAdd} disabled={readOnly||rows.length>=20}
+      onClick={()=>onChange([...rows,{trigger:"step_entered",action:"notify_responsible",areaId:"",label:"",eventName:""}])}>Adicionar automação</button>
   </div>;
 }
 
@@ -253,6 +346,8 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
         <fieldset disabled={readOnly}><legend>Prazo / SLA</legend><div className={styles.inlineFields}><label>Valor<input type="number" min={0} value={config?.slaValue??0} onChange={(e)=>patch({slaValue:Number(e.target.value)||0})}/></label><label>Unidade<select value={config?.slaUnit??"hours"} onChange={(e)=>patch({slaUnit:e.target.value as ProcessStepConfig["slaUnit"]})}><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Dias</option></select></label></div><label className={styles.checkLabel}><input type="checkbox" checked={config?.slaBusinessDays??false} onChange={(e)=>patch({slaBusinessDays:e.target.checked})}/> Contar somente dias úteis</label><label>Horário limite<input type="time" value={config?.cutoffTime??""} onChange={(e)=>patch({cutoffTime:e.target.value})}/></label><div className={styles.inlineFields}><label>Escalonar após<input type="number" min={0} value={Number(escalation.afterValue??0)} onChange={(e)=>patch({escalation:{...escalation,afterValue:Number(e.target.value)||0}})}/></label><label>Notificar<select value={Boolean(escalation.notifyDepartmentManager)?"manager":Boolean(escalation.notifyOwner)?"owner":"none"} onChange={(e)=>patch({escalation:{...escalation,notifyOwner:e.target.value==="owner",notifyDepartmentManager:e.target.value==="manager"}})}><option value="none">Não notificar</option><option value="owner">Dono do processo</option><option value="manager">Gestor da área</option></select></label></div></fieldset>
         <fieldset disabled={readOnly}><legend>Demanda</legend><label className={styles.checkLabel}><input type="checkbox" checked={config?.createDemand??false} onChange={(e)=>patch({createDemand:e.target.checked})}/> Criar demanda automaticamente</label>{config?.createDemand&&<><label>Tipo de demanda<input value={config.demandType} onChange={(e)=>patch({demandType:e.target.value})}/></label><label>Área solicitante<select value={config.requesterDepartmentId} onChange={(e)=>patch({requesterDepartmentId:e.target.value})}><option value="">Herdar do processo</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Área responsável<select value={config.responsibleDepartmentId} onChange={(e)=>patch({responsibleDepartmentId:e.target.value})}><option value="">Não definida</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Prioridade da demanda<select value={config.demandPriority} onChange={(e)=>patch({demandPriority:e.target.value as ProcessStepConfig["demandPriority"]})}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label><div className={styles.inlineFields}><label>SLA da demanda<input type="number" min={0} value={config.demandSlaValue} onChange={(e)=>patch({demandSlaValue:Number(e.target.value)||0})}/></label><label>Unidade<select value={config.demandSlaUnit} onChange={(e)=>patch({demandSlaUnit:e.target.value as ProcessStepConfig["demandSlaUnit"]})}><option value="minutes">Minutos</option><option value="hours">Horas</option><option value="days">Dias</option></select></label></div></>}</fieldset>
         <fieldset disabled={readOnly}><legend>Checklist / Documentos</legend><label>Modelo de checklist<input value={config?.checklistId??""} onChange={(e)=>patch({checklistId:e.target.value})}/></label><label>Itens do checklist<textarea rows={3} value={(config?.checklistItems??[]).join(", ")} placeholder="Separe os itens por vírgula" onChange={(e)=>patch({checklistItems:csv(e.target.value)})}/></label><label>Formulário<input value={config?.formId??""} placeholder="Código ou identificador do formulário" onChange={(e)=>patch({formId:e.target.value})}/></label><label>Documentos obrigatórios<textarea rows={2} value={(config?.requiredDocuments??[]).join(", ")} onChange={(e)=>patch({requiredDocuments:csv(e.target.value)})}/></label><label>Documentos opcionais<textarea rows={2} value={(config?.optionalDocuments??[]).join(", ")} onChange={(e)=>patch({optionalDocuments:csv(e.target.value)})}/></label><label>Como conferir os obrigatórios<select value={config?.settings.documentProof??"declared"} onChange={(e)=>patchSettings({documentProof:e.target.value as ProcessStepConfig["settings"]["documentProof"]})}><option value="declared">Marcar no checklist basta</option><option value="attached">Exigir um anexo por documento</option></select><small className={styles.fieldsetHint}>Com anexo por documento, a etapa só avança quando o nome do arquivo traz as palavras do documento — “Comprovante de residência” é atendido por <code>comprovante-residencia.pdf</code>. Demandas já abertas seguem a versão que instanciaram.</small></label><label className={styles.checkLabel}><input type="checkbox" checked={config?.evidenceRequired??false} onChange={(e)=>patch({evidenceRequired:e.target.checked})}/> Evidência obrigatória para concluir</label></fieldset>
+        <fieldset disabled={readOnly}><legend>Tarefas da etapa</legend><TaskRows rows={config?.tasks??[]} readOnly={readOnly} areas={areas} members={members} onChange={(tasks)=>patch({tasks})}/></fieldset>
+        <fieldset disabled={readOnly}><legend>Automações</legend><AutomationRows rows={config?.automations??[]} readOnly={readOnly} areas={areas} onChange={(automations)=>patch({automations})}/></fieldset>
         <fieldset disabled={readOnly}><legend>Aprovação</legend><label className={styles.checkLabel}><input type="checkbox" checked={config?.requiresApproval??false} onChange={(e)=>patch({requiresApproval:e.target.checked})}/> Exige aprovação</label>{config?.requiresApproval&&<><label>Aprovador<select value={config.approverUserId} onChange={(e)=>patch({approverUserId:e.target.value})}><option value="">Não definido</option>{members.map((m)=><option key={m.id} value={m.id}>{m.name}</option>)}</select></label><label>Área aprovadora<select value={config.approverDepartmentId} onChange={(e)=>patch({approverDepartmentId:e.target.value})}><option value="">Não definida</option>{areas.map((a)=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><div className={styles.inlineFields}><label>Quantidade<input type="number" min={1} max={20} value={config.approvalCount} onChange={(e)=>patch({approvalCount:Number(e.target.value)||1})}/></label><label>Modo<select value={config.approvalMode} onChange={(e)=>patch({approvalMode:e.target.value as ProcessStepConfig["approvalMode"]})}><option value="sequential">Sequencial</option><option value="parallel">Paralelo</option></select></label></div></>}</fieldset>
         {/* Sugestões de campo, uma vez para os três editores. `custom:` alcança
             qualquer campo personalizado — enumerá-los aqui deixaria de fora o

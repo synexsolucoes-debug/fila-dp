@@ -5,6 +5,10 @@ import {
   type TransitionCondition, type TransitionConditionMap,
 } from "./process-conditions.ts";
 import { parseDocumentProof, type DocumentProof } from "./process-documents.ts";
+import {
+  parseStepAutomations, parseTaskTemplates,
+  type StepAutomationRule, type TaskTemplate,
+} from "./process-tasks.ts";
 
 export const processLifecycleStatuses = ["draft", "in_review", "published", "inactive", "archived"] as const;
 export const processVersionStatuses = ["draft", "in_review", "published", "retired"] as const;
@@ -136,6 +140,17 @@ export type ProcessStepConfigInput = {
   approvalCount: number;
   approvalMode: "sequential" | "parallel";
   subprocessProcessId: string;
+  /**
+   * Tarefas-modelo da etapa (§24).
+   *
+   * Passam pelo mesmo saneador que o motor usa para lê-las. Isso não é
+   * simetria por elegância: se o gravador aceitasse um campo que a execução
+   * descarta, o desenho ficaria dizendo uma coisa na tela e outra na demanda —
+   * e ninguém descobriria antes da primeira admissão travada.
+   */
+  tasks: TaskTemplate[];
+  /** Automações declaradas da etapa (§27). Mesmo saneador da execução. */
+  automations: StepAutomationRule[];
   settings: {
     name: string; description: string; instructions: string; internalCode: string;
     dynamicAssignee: string; notificationTemplate: string;
@@ -192,6 +207,8 @@ export function sanitizeProcessStepConfigs(value: unknown): ProcessStepConfigInp
       approvalCount: numberBetween(item.approvalCount, 1, 20, 1),
       approvalMode: item.approvalMode === "parallel" ? "parallel" as const : "sequential" as const,
       subprocessProcessId: cleanText(item.subprocessProcessId, 120),
+      tasks: parseTaskTemplates({ tasksJson: item.tasks }),
+      automations: parseStepAutomations(item.automations),
       settings: {
         name: cleanText(settings.name, 160), description: cleanText(settings.description, 1000),
         instructions: cleanText(settings.instructions, 4000), internalCode: cleanText(settings.internalCode, 80),

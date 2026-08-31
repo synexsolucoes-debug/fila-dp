@@ -8,7 +8,29 @@ export type ProcessCompanyOption = { id: string; name: string; status: string };
 export type ProcessVersionSummary = { id:string; processId:string; processName:string; version:number; versionMajor:number; versionMinor:number; status:ProcessVersionStatus; revision:number; changeSummary:string; createdBy:string; createdByName:string; createdAt:string; updatedAt:string; publishedBy:string; publishedAt:string };
 export type ProcessVersionDetail = { id:string; processId:string; processName:string; processCode:string; version:number; versionMajor:number; versionMinor:number; status:ProcessVersionStatus; revision:number; bpmnXml:string; svgPreview:string; configuration:Record<string,unknown>; changeSummary:string; createdAt:string; updatedAt:string; publishedAt:string; requirePublicationApproval:boolean };
 export type ProcessDefinition = { id:string; code:string; name:string; description:string; objective:string; category:string; ownerDepartmentId:string; ownerDepartmentName:string; ownerUserId:string; ownerUserName:string; lifecycleStatus:ProcessLifecycleStatus; active:boolean; currentVersionId:string; isCorporate:boolean; allowManualStart:boolean; allowAutomaticStart:boolean; requirePublicationApproval:boolean; globalSlaValue:number; globalSlaUnit:"minutes"|"hours"|"days"; criticality:"low"|"medium"|"high"|"critical"; defaultPriority:"low"|"normal"|"high"|"urgent"; tags:string[]; notes:string; stepCount:number; companies:Array<{id:string;name:string}>; createdBy:string; updatedBy:string; updatedByName:string; createdAt:string; updatedAt:string; archivedAt:string; currentVersion:null|{id:string;version:number;versionMajor:number;versionMinor:number;status:ProcessVersionStatus;revision:number;bpmnXml:string;svgPreview:string;updatedAt:string;publishedAt:string} };
-export type ProcessStepConfig = { id:string; bpmnElementId:string; stepType:string; departmentId:string; responsibleUserId:string; responsibilityMode:string; slaValue:number; slaUnit:"minutes"|"hours"|"days"; slaBusinessDays:boolean; cutoffTime:string; escalation:Record<string,unknown>; createDemand:boolean; demandType:string; requesterDepartmentId:string; responsibleDepartmentId:string; demandPriority:"low"|"normal"|"high"|"urgent"; demandSlaValue:number; demandSlaUnit:"minutes"|"hours"|"days"; checklistId:string; checklistItems:string[]; formId:string; requiredDocuments:string[]; optionalDocuments:string[]; evidenceRequired:boolean; requiresApproval:boolean; approverUserId:string; approverDepartmentId:string; approvalCount:number; approvalMode:"sequential"|"parallel"; subprocessProcessId:string; settings:{name:string;description:string;instructions:string;internalCode:string;dynamicAssignee:string;notificationTemplate:string;entryRules:ProcessCondition[];exitRules:ProcessCondition[];transitions:Record<string,ProcessCondition[]>;blockingIntegrations:string[];documentProof:"declared"|"attached"} };
+export type ProcessStepConfig = { id:string; bpmnElementId:string; stepType:string; departmentId:string; responsibleUserId:string; responsibilityMode:string; slaValue:number; slaUnit:"minutes"|"hours"|"days"; slaBusinessDays:boolean; cutoffTime:string; escalation:Record<string,unknown>; createDemand:boolean; demandType:string; requesterDepartmentId:string; responsibleDepartmentId:string; demandPriority:"low"|"normal"|"high"|"urgent"; demandSlaValue:number; demandSlaUnit:"minutes"|"hours"|"days"; checklistId:string; checklistItems:string[]; formId:string; requiredDocuments:string[]; optionalDocuments:string[]; evidenceRequired:boolean; requiresApproval:boolean; approverUserId:string; approverDepartmentId:string; approvalCount:number; approvalMode:"sequential"|"parallel"; subprocessProcessId:string; tasks:ProcessTaskTemplate[]; automations:ProcessStepAutomation[]; settings:{name:string;description:string;instructions:string;internalCode:string;dynamicAssignee:string;notificationTemplate:string;entryRules:ProcessCondition[];exitRules:ProcessCondition[];transitions:Record<string,ProcessCondition[]>;blockingIntegrations:string[];documentProof:"declared"|"attached"} };
+/**
+ * Uma tarefa-modelo da etapa, do jeito que o modelador a edita (§24).
+ *
+ * O mesmo formato que `lib/process-tasks.ts` lê na execução: a tela não tem um
+ * dialeto próprio, para o que se desenha e o que se executa nunca divergirem.
+ */
+export type ProcessTaskTemplate = {
+  key:string; name:string; description:string; instructions:string;
+  assigneeUserId:string; assigneeRole:string; areaId:string;
+  slaValue:number; slaUnit:"minutes"|"hours"|"days";
+  required:boolean; blocksAdvance:boolean; evidenceRequired:boolean;
+  documentRequired:string; completionRule:"manual"|"evidence"|"document";
+  dependsOn:string[]; position:number;
+};
+
+/** Uma automação declarada na etapa (§27). */
+export type ProcessStepAutomation = {
+  trigger:"step_entered"|"step_completed"|"task_overdue"|"all_required_done"|"process_completed";
+  action:"create_demand"|"create_task"|"notify_responsible"|"record_event";
+  areaId:string; label:string; eventName:string;
+};
+
 /** Uma condição do §23/§25, do jeito que o modelador a edita. */
 export type ProcessCondition = { field:string; operator:string; value:string };
 

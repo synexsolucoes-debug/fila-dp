@@ -3,6 +3,7 @@ import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent } from "@
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { parseJsonArray, safeSvgPreview, sanitizeProcessStepConfigs, validBpmnXml } from "@/lib/process-management";
+import { parseStepAutomations, parseTaskTemplates } from "@/lib/process-tasks";
 
 type Row = Record<string, unknown>;
 type WorkspaceD1 = Awaited<ReturnType<typeof getWorkspaceContext>>["d1"];
@@ -56,6 +57,10 @@ function stepOf(row: Row) {
     approvalCount: Number(row.approval_count ?? 1),
     approvalMode: text(row.approval_mode || "sequential"),
     subprocessProcessId: text(row.subprocess_process_id),
+    // Pelo mesmo saneador da execução: o modelador recebe exatamente a forma
+    // que o motor vai ler, e não a linha crua do banco.
+    tasks: parseTaskTemplates({ tasksJson: row.tasks_json }),
+    automations: parseStepAutomations(row.automations_json),
     settings: {
       name: text(settings.name),
       description: text(settings.description),

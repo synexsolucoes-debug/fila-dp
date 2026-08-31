@@ -794,3 +794,20 @@
   background: var(--ui-primary-soft, rgba(99, 160, 255, .12));
   box-shadow: inset 0 0 0 1px var(--ui-primary);
 }
+
+/* Tarefas e automações da etapa (§24, §27).
+   Cada tarefa é um bloco, e não uma linha como a condição: são nove campos, e
+   espremê-los numa grade horizontal no painel estreito produziria selects de
+   quarenta pixels que ninguém lê. O contorno separa uma tarefa da seguinte —
+   sem ele, dois blocos de campos empilhados viram uma lista contínua onde não
+   se sabe onde uma tarefa termina. */
+.taskRows { display: grid; gap: 9px; }
+.taskRow {
+  display: grid; gap: 6px; padding: 9px;
+  border: 1px solid var(--b); border-radius: var(--ui-radius-md);
+  background: var(--m);
+}
+.taskRow label { display: grid; gap: 3px; font-size: 11px; }
+.taskRow input, .taskRow select { min-width: 0; font-size: 12px; }
+.taskRowHead { display: grid; grid-template-columns: minmax(0, 1fr) 26px; gap: 5px; align-items: center; }
+.taskRowHead input { font-weight: 600; }

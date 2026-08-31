@@ -50,6 +50,10 @@ import {
 import {
   describeMissingDocuments, missingDocuments, parseDocumentProof, type DocumentProof,
 } from "./process-documents.ts";
+import {
+  parseStepAutomations, parseTaskTemplates, taskDeadline, taskKey,
+  type StepAutomationRule, type TaskTemplate,
+} from "./process-tasks.ts";
 
 type Database = ReturnType<typeof getD1>;
 type Row = Record<string, unknown>;
@@ -101,6 +105,16 @@ export type ProcessStepConfig = {
    * pararia demanda que hoje anda.
    */
   documentProof: DocumentProof;
+  /**
+   * Tarefas-modelo da etapa (§24).
+   *
+   * Sempre preenchido: quando a etapa não desenhou tarefas, cada título de
+   * `checklist` vira uma tarefa obrigatória e bloqueante — que é o significado
+   * que o motor já dava a um item de checklist.
+   */
+  tasks: TaskTemplate[];
+  /** Automações declaradas da etapa (§27). */
+  automations: StepAutomationRule[];
 };
 
 export type PublishedProcessVersion = {
@@ -153,6 +167,8 @@ function stepConfigOf(row: Row): ProcessStepConfig {
     exitRules: parseConditionList(settings.exitRules),
     blockingIntegrations: list(settings.blockingIntegrations).map((item) => item.toLowerCase()),
     documentProof: parseDocumentProof(settings.documentProof),
+    tasks: parseTaskTemplates({ tasksJson: row.tasks_json, checklist: list(row.checklist_json) }),
+    automations: parseStepAutomations(row.automations_json),
   };
 }
 
@@ -244,11 +260,110 @@ export function resolveInitialStep(version: PublishedProcessVersion) {
   return { stepId, config: version.steps.get(stepId) ?? null, label: stepLabel(version.graph, stepId) };
 }
 
-/** Checklist que a etapa exige: itens configurados mais um por documento obrigatório. */
-export function stepChecklist(config: ProcessStepConfig | null): string[] {
+/**
+ * Tarefas que a etapa instancia (§24).
+ *
+ * As tarefas-modelo desenhadas, mais uma por documento obrigatório que nenhuma
+ * delas já cobre. A tarefa gerada por documento nasce com a regra de conclusão
+ * `document`: ela é a exigência, então exigir a marcação sem o arquivo seria a
+ * mesma declaração vazia que §26 já tinha resolvido para a etapa.
+ *
+ * A dedução de duplicata é por chave, e não por título: "Documento obrigatório:
+ * CPF" desenhado à mão e o gerado a partir de `requiredDocuments: ["CPF"]` são
+ * a mesma tarefa, e instanciar as duas faria a pessoa marcar duas vezes.
+ */
+export function stepTasks(config: ProcessStepConfig | null): TaskTemplate[] {
   if (!config) return [];
-  const documents = config.requiredDocuments.map((document) => `Documento obrigatório: ${document}`);
-  return [...new Set([...config.checklist, ...documents])].slice(0, 60);
+  /* A queda para o checklist acontece **aqui**, e não só no carregador.
+     `stepConfigOf` já resolve as duas fontes, mas nem toda configuração chega
+     por ele: os testes montam a estrutura à mão e `lib/fila-dp-db.ts` monta uma
+     parcial para contar tarefas previstas. Depender de o chamador ter populado
+     `tasks` fazia a etapa com checklist e sem tarefas-modelo instanciar zero
+     tarefas — silenciosamente, porque nada reclama de uma lista vazia. */
+  const tasks = config.tasks.length
+    ? [...config.tasks]
+    : parseTaskTemplates({ checklist: config.checklist });
+  const known = new Set(tasks.map((task) => task.key));
+  /* A tarefa que já declara este documento também conta como cobertura, mesmo
+     com outro nome: quem desenhou "Receber ASO" com `documentRequired: "ASO"`
+     não quer uma segunda tarefa dizendo a mesma coisa. */
+  const covered = new Set(tasks.map((task) => taskKey(task.documentRequired)).filter(Boolean));
+  for (const document of config.requiredDocuments) {
+    const name = `Documento obrigatório: ${document}`;
+    /* A chave sai do nome gerado, e não de uma composição própria. Enquanto
+       eram duas fórmulas diferentes, a tarefa escrita à mão com este mesmo
+       título e a gerada aqui recebiam chaves distintas e a etapa instanciava
+       as duas — a pessoa marcava o mesmo documento duas vezes. */
+    const key = taskKey(name);
+    if (!key || known.has(key) || covered.has(taskKey(document))) continue;
+    known.add(key);
+    tasks.push({
+      key, name,
+      description: "", instructions: "",
+      assigneeUserId: "", assigneeRole: "", areaId: config.responsibleDepartmentId || config.departmentId || "",
+      slaValue: 0, slaUnit: "hours",
+      required: true, blocksAdvance: true,
+      evidenceRequired: false,
+      documentRequired: document,
+      /* Só quando a etapa escolheu conferir por anexo (§26). Com `declared`,
+         marcar continua bastando — é o comportamento das versões publicadas, e
+         apertá-lo aqui pararia demanda que hoje anda (§48). */
+      completionRule: config.documentProof === "attached" ? "document" : "manual",
+      dependsOn: [],
+      position: (tasks.length + 1) * 1000,
+    });
+  }
+  return tasks.slice(0, 120);
+}
+
+/**
+ * Títulos das tarefas da etapa.
+ *
+ * Derivado de `stepTasks` de propósito: enquanto os dois eram listas separadas,
+ * o total previsto do progresso ("7 de 18") e o que a execução materializava
+ * podiam divergir sem ninguém notar.
+ */
+export function stepChecklist(config: ProcessStepConfig | null): string[] {
+  return [...new Set(stepTasks(config).map((task) => task.name))].slice(0, 120);
+}
+
+/**
+ * Statements que materializam as tarefas de uma etapa numa demanda.
+ *
+ * Um único lugar constrói a linha da tarefa, e os três caminhos que instanciam
+ * etapa — criação da demanda, avanço manual e resolução de proposta de agente —
+ * chamam este. Antes cada um montava seu próprio `INSERT` com sete colunas; com
+ * dezenove, três cópias divergiriam na primeira alteração.
+ */
+export function prepareTaskInserts(d1: Database, input: {
+  workspaceId: string;
+  cardId: string;
+  stepId: string;
+  tasks: readonly TaskTemplate[];
+  /** Prazo da etapa, herdado pela tarefa que não tem SLA próprio. */
+  stepDueAt: string | null;
+  /** Área responsável da etapa, herdada pela tarefa que não nomeia a sua. */
+  fallbackAreaId?: string | null;
+}) {
+  return input.tasks.map((task) => d1.prepare(
+    `INSERT INTO fdp_checklist_items
+       (id, workspace_id, card_id, title, description, instructions, completed, position,
+        process_step_id, template_key, area_id, assignee_user_id, assignee_role,
+        sla_value, sla_unit, started_at, due_at, required, blocks_advance,
+        evidence_required, document_required, completion_rule, depends_on_json)
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    crypto.randomUUID(), input.workspaceId, input.cardId,
+    task.name, task.description, task.instructions,
+    task.position, input.stepId, task.key,
+    task.areaId || input.fallbackAreaId || null,
+    task.assigneeUserId || null, task.assigneeRole,
+    task.slaValue, task.slaUnit,
+    taskDeadline(task, input.stepDueAt),
+    task.required ? 1 : 0, task.blocksAdvance ? 1 : 0,
+    task.evidenceRequired ? 1 : 0, task.documentRequired, task.completionRule,
+    JSON.stringify(task.dependsOn),
+  ));
 }
 
 /* -------------------------------------------------------------------------- *
@@ -324,13 +439,22 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
       WHERE v.workspace_id = ? AND v.card_id = ?`,
   ).bind(workspaceId, cardId).all<Row>();
 
-  /* O nome dos anexos, para a conferência por documento (§26). Índice
-     (card_id, created_at) já existe; o teto evita que uma demanda com centenas
-     de arquivos transforme a leitura da etapa numa consulta cara. */
+  /* O nome dos anexos, para a conferência por documento (§26, §43).
+     O recorte é a etapa atual **mais** os anexos sem etapa. Os dois lados
+     importam: com só a etapa, toda demanda aberta antes da migration 0072
+     perderia as provas que já tinha — todo anexo existente tem `process_step_id`
+     vazio (§48). Sem o recorte, um comprovante enviado na etapa de Registro
+     continuaria satisfazendo a exigência escrita na etapa de Documentação, que
+     é exatamente o furo que §43 aponta.
+
+     O teto evita que uma demanda com centenas de arquivos transforme a leitura
+     da etapa numa consulta cara. */
   const attachments = await d1.prepare(
     `SELECT filename FROM fdp_card_attachments
-      WHERE workspace_id = ? AND card_id = ? ORDER BY created_at DESC LIMIT 200`,
-  ).bind(workspaceId, cardId).all<Row>();
+      WHERE workspace_id = ? AND card_id = ?
+        AND (process_step_id = ? OR process_step_id = '')
+      ORDER BY created_at DESC LIMIT 200`,
+  ).bind(workspaceId, cardId, text(row.current_step_id)).all<Row>();
 
   return {
     id: text(row.id),
@@ -405,15 +529,30 @@ export function evaluateStepRequirements(input: {
   attachmentCount: number;
   /** Nome dos arquivos anexados à demanda, para a conferência por documento (§26). */
   attachmentNames: readonly string[];
+  /**
+   * As tarefas que estão travando, quando quem chama sabe quais são (§42).
+   *
+   * Opcional: `pendingChecklist` sozinho continua valendo e produz a mesma
+   * recusa de antes. Quando os títulos vêm junto, a mensagem diz *o que* fazer
+   * em vez de quantos itens faltam — "esta etapa tem 3 itens em aberto" obriga
+   * a pessoa a ir procurar quais.
+   */
+  blockingTasks?: readonly { title: string }[];
 }): TransitionRequirement[] {
   const blockers: TransitionRequirement[] = [];
   const { config, actor } = input;
   if (!config) return blockers;
 
-  if (input.pendingChecklist > 0) {
+  const named = input.blockingTasks ?? [];
+  const pending = named.length || input.pendingChecklist;
+  if (pending > 0) {
     blockers.push({
       code: "PROCESS_STEP_CHECKLIST_PENDING",
-      message: `Esta etapa tem ${input.pendingChecklist} item(ns) de checklist em aberto.`,
+      message: named.length
+        ? (named.length === 1
+          ? `A tarefa «${named[0].title}» precisa ser concluída antes de avançar.`
+          : `${named.length} tarefas obrigatórias desta etapa continuam em aberto: ${named.slice(0, 4).map((task) => `«${task.title}»`).join(", ")}${named.length > 4 ? " e outras" : ""}.`)
+        : `Esta etapa tem ${pending} item(ns) de checklist em aberto.`,
     });
   }
   if (config.evidenceRequired && input.attachmentCount === 0) {
@@ -502,6 +641,8 @@ export function evaluateTransition(input: {
   failingIntegrations?: ReadonlySet<string>;
   /** Nome dos anexos. Omitido, usa o que a instância trouxe (§26). */
   attachmentNames?: readonly string[];
+  /** Tarefas obrigatórias e bloqueantes ainda em aberto nesta etapa (§42). */
+  blockingTasks?: readonly { title: string }[];
 }): TransitionEvaluation {
   const { version, instance, actor } = input;
   const targetStepId = cleanText(input.targetStepId, 160);
@@ -576,6 +717,7 @@ export function evaluateTransition(input: {
     pendingChecklist: input.pendingChecklist,
     attachmentCount: input.attachmentCount,
     attachmentNames: input.attachmentNames ?? instance.attachmentNames,
+    blockingTasks: input.blockingTasks,
   }));
 
   /* Condição da seta (§25).
@@ -620,6 +762,7 @@ export function availableTransitions(input: {
   facts?: ConditionFacts;
   failingIntegrations?: ReadonlySet<string>;
   attachmentNames?: readonly string[];
+  blockingTasks?: readonly { title: string }[];
 }) {
   return outgoingFlows(input.version.graph, input.instance.currentStepId).map((flow) => {
     const evaluation = evaluateTransition({ ...input, targetStepId: flow.target });
@@ -718,7 +861,8 @@ export type StartedInstance = {
 export async function prepareProcessInstance(d1: Database, input: StartInstanceInput) {
   const { version } = input;
   const initial = resolveInitialStep(version);
-  const checklist = stepChecklist(initial.config);
+  const tasks = stepTasks(initial.config);
+  const checklist = tasks.map((task) => task.name);
   const dueAt = await resolveStepDeadline(d1, input.workspaceId, initial.config, input.globalSlaMinutes ?? 0);
   const cardId = crypto.randomUUID();
   const priority = ["low", "normal", "high", "urgent"].includes(String(input.priority))
@@ -754,9 +898,10 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
         initial.config?.responsibleDepartmentId || initial.config?.departmentId || null,
         version.definitionId, version.versionId, version.versionNumber, initial.stepId,
       ),
-    ...checklist.map((item, index) => d1.prepare(
-      "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position, process_step_id) VALUES (?, ?, ?, ?, 0, ?, ?)",
-    ).bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000, initial.stepId)),
+    ...prepareTaskInserts(d1, {
+      workspaceId: input.workspaceId, cardId, stepId: initial.stepId, tasks, stepDueAt: dueAt,
+      fallbackAreaId: initial.config?.responsibleDepartmentId || initial.config?.departmentId || null,
+    }),
   ];
 
   const result: StartedInstance = {
