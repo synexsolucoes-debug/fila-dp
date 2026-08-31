@@ -1,23 +1,43 @@
 @import "tailwindcss";
 
 :root {
-  /* Identidade Vinculato — extraída da marca. Os componentes usam os tokens
-     semânticos abaixo; valores HEX não devem ser repetidos fora deste bloco. */
-  /* Extraídos dos pixels do símbolo oficial, não estimados. */
-  --vin-navy-deep: #041B45;
-  --vin-navy: #062B60;
-  --vin-blue: #0857B2;
-  --vin-blue-vivid: #168CFD;
+  /* Identidade Vinculato — a paleta de referência do §88, inteira e em tokens.
+     Os componentes usam os tokens semânticos abaixo; valores HEX não devem ser
+     repetidos fora deste bloco.
+
+     Os oito tons pedidos entram todos como valor de token, e não como
+     inspiração: #18223A, #365CF5, #16A394, #F6F8FC, #FFFFFF, #172033, #64748B
+     e #E2E8F0. Os dois tons derivados existem porque oito cores não fecham uma
+     interface — falta um degrau entre o azul-escuro e o azul de marca (fundo de
+     barra, hover de superfície escura) e um azul que se leia *sobre* o escuro.
+     Ambos saem dos tons pedidos, não de uma segunda paleta. */
+  --vin-navy-deep: #18223A;
+  /* Degrau entre #18223A e #365CF5. Superfícies escuras intermediárias. */
+  --vin-navy: #22304F;
+  --vin-blue: #365CF5;
+  /* Realce: #365CF5 clareado. Rende 3.66:1 sobre branco — acima dos 3:1 que a
+     WCAG 1.4.11 pede de indicador não textual, e por isso serve a foco, ícone e
+     traço, nunca a texto pequeno. Quem carrega o azul legível sobre superfície
+     escura é `--brand-accent-on-dark`, mais abaixo. */
+  --vin-blue-vivid: #5C7DF7;
   --vin-bg: #F6F8FC;
   --vin-surface: #FFFFFF;
-  /* Neutros alinhados à paleta de referência (§14). Fundo e branco já eram
-     idênticos; texto principal e bordas passam a ser exatamente os pedidos. */
   --vin-text: #172033;
-  /* Exceção deliberada: a referência pede #64748B para texto secundário, que
-     rende 4.48:1 sobre o fundo #F6F8FC — abaixo do mínimo 4.5 da WCAG 2.2 AA.
-     Este tom rende 5.78:1 com a mesma leitura visual. Adotar o pedido
-     introduziria a violação que a auditoria de acessibilidade acusaria. */
-  --vin-text-soft: #55627A;
+  /* O cinza da referência, e o mesmo cinza em versão legível.
+     `#64748B` entra como token — é a paleta pedida, e é o tom de ícone, traço,
+     texto grande e estado. O que ele não pode ser é texto pequeno sobre o fundo
+     claro: medido, rende **4.48:1** sobre `#F6F8FC`, 0,02 abaixo do mínimo 4.5
+     da WCAG 2.2 AA.
+     Isso não é opinião nem margem de segurança inventada: com `--ui-text-soft`
+     apontando para ele, a auditoria de acessibilidade (`npm run a11y-check`)
+     acusou 22 violações de contraste em texto corrido da home e do login.
+     `--vin-slate-aa` é o mesmo cinza escurecido até 5.78:1, e é para onde o
+     texto pequeno aponta. Os dois tons ficam declarados aqui porque §88 e §100
+     se contradizem exatamente neste ponto, e a contradição precisa estar
+     resolvida em token, não escondida em regra de componente. */
+  --vin-slate: #64748B;
+  --vin-slate-aa: #55627A;
+  --vin-text-soft: var(--vin-slate-aa);
   --vin-border: #E2E8F0;
   /* Turquesa da referência, para o que a marca chama de "conectado". Rende
      3.13:1 sobre branco, então serve como preenchimento e indicador — nunca
@@ -39,7 +59,15 @@
   --ui-surface-muted: #EEF2F8;
   --ui-border: var(--vin-border);
   --ui-text: var(--vin-text);
+  /* Texto secundário: o cinza legível. É o que veste rótulo, legenda, ajuda e
+     texto corrido — onde a WCAG 2.2 AA vale e §100 cobra. */
   --ui-text-soft: var(--vin-text-soft);
+  /* O cinza da referência puro, para o que **não** é texto pequeno: ícone,
+     traço, estado e texto grande. Rende 4.48:1 sobre o fundo claro — acima dos
+     3:1 que a WCAG 1.4.11 pede de indicador não textual, e acima dos 3:1 de
+     texto grande. Usar isto em corpo de 12px é o erro que este par de tokens
+     existe para tornar visível. */
+  --ui-slate: var(--vin-slate);
   --ui-text-muted: #626C7A;
   --ui-success: #137a4f;
   --ui-warning: #a15c07;
@@ -78,12 +106,12 @@
   --brand-accent-on-dark: #6FB4FF;
   --on-brand-line: rgba(255, 255, 255, .16);
 
-  /* Interface: IBM Plex Sans, carregada pelo layout. A pilha de reserva existe
+  /* Interface: Inter, carregada pelo layout (§89). A pilha de reserva existe
      para o intervalo entre o HTML e a fonte, e para ambientes sem ela. */
-  --font-geist-sans: var(--font-interface), "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  /* Títulos: o mesmo IBM Plex Sans, em peso maior. §15 pede a distinção porque a tela operacional é densa —
+  --font-geist-sans: var(--font-interface), "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Títulos: Manrope (§89). A distinção existe porque a tela operacional é densa —
      o título precisa separar seções sem virar enfeite. */
-  --font-title: var(--font-titles), "IBM Plex Sans", var(--font-geist-sans);
+  --font-title: var(--font-titles), "Manrope", var(--font-geist-sans);
   --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --shadow-soft: 0 12px 32px rgba(6, 43, 96, .10);
   --shadow-strong: 0 28px 70px rgba(4, 27, 69, .22);
@@ -110,9 +138,9 @@ body {
   font-family: var(--font-geist-sans), Arial, sans-serif;
   text-rendering: optimizeLegibility;
 }
-/* Títulos e interface na mesma família (IBM Plex Sans), separados por peso; os
-   dados vão em IBM Plex Mono. A separação vale para
-   todos os níveis, senão o painel usa uma família e o site outra. */
+/* Títulos em Manrope, interface em Inter, dados em IBM Plex Mono (§89). A
+   separação vale para todos os níveis, senão o painel usa uma família e o site
+   outra. */
 h1, h2, h3, h4, h5, h6 { font-family: var(--font-title), Arial, sans-serif; letter-spacing: -.02em; }
 
 a { color: inherit; text-decoration: none; }
@@ -334,7 +362,13 @@ button, summary { font: inherit; }
  * de apoio que leem sobre o navy caem para ~3.2:1 aqui. Em vez de espalhar
  * exceções pelas regras filhas, a seção redefine os próprios tokens de apoio e
  * o resto do CSS continua valendo. Medido contra a parada mais clara. */
-.final-cta { padding: 92px 7vw; display: grid; grid-template-columns: 1.25fr .75fr; gap: 6vw; align-items: end; background: linear-gradient(135deg, var(--brand-strong) 0%, var(--brand) 100%); color: var(--brand-contrast); --on-brand-soft: #CFE4FF; --brand-accent-on-dark: #B6DAFF; }
+/* O degradê da chamada final vai de escuro a escuro, e não de escuro ao azul de
+   marca. Com #365CF5 (§88) na parada clara — mais claro que o #0857B2 anterior —
+   os três tons de texto desta faixa caíam para 3.61:1, 4.04:1 e 4.49:1: a
+   auditoria de acessibilidade acusou as oito violações, e elas eram reais.
+   O azul de marca continua na faixa, como realce; o que ele deixa de ser é
+   fundo de texto. */
+.final-cta { padding: 92px 7vw; display: grid; grid-template-columns: 1.25fr .75fr; gap: 6vw; align-items: end; background: linear-gradient(135deg, var(--brand-deep) 0%, var(--brand-strong) 100%); color: var(--brand-contrast); --on-brand-soft: #CFE4FF; --brand-accent-on-dark: #B6DAFF; }
 .cta-kicker { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; font-family: var(--font-geist-mono); text-transform: uppercase; letter-spacing: .1em; font-size: 10px; font-weight: 800; color: var(--brand-accent-on-dark); }
 .final-cta h2 { font-size: clamp(32px, 3.8vw, 56px); }
 .final-cta-actions { display: flex; flex-direction: column; align-items: stretch; }

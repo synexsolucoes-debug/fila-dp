@@ -29,6 +29,7 @@
 import { describeCondition, FACT_LABELS } from "./process-conditions.ts";
 
 import type { ProcessStepConfig, PublishedProcessVersion } from "./process-instances.ts";
+import { AUTOMATION_ACTION_LABELS, AUTOMATION_TRIGGER_LABELS } from "./process-tasks.ts";
 import { orderedSteps } from "./process-usage.ts";
 import { stepLabel } from "./bpmn-graph.ts";
 
@@ -251,12 +252,16 @@ function slaPhrase(value: number, unit: string) {
 /**
  * O que o processo dispara sozinho.
  *
- * Só entra o que o produto realmente executa: a criação de demanda configurada
- * na etapa. O encadeamento "etapa concluída → próxima etapa" é o desenho, e já
- * é lido na aba de fluxo; repeti-lo aqui como automação faria a aba parecer
- * cheia sem acrescentar nada. As regras de quadro (mover, etiquetar, prazo) são
- * do workspace e não pertencem a um processo — a tela diz onde elas moram em
- * vez de fingir que são deste processo.
+ * Duas origens, e as duas executam de verdade. A criação de demanda vem da
+ * configuração da etapa e é anterior a este arquivo; as demais vêm de
+ * `automations_json` e são executadas por `lib/process-automations.ts` nos
+ * pontos em que o motor já passa — transição, conclusão da última tarefa
+ * obrigatória e a varredura agendada.
+ *
+ * O encadeamento "etapa concluída → próxima etapa" continua fora: ele é o
+ * desenho, já é lido na aba de fluxo, e repeti-lo aqui faria a aba parecer
+ * cheia sem acrescentar nada. As regras de quadro (mover, etiquetar, prazo)
+ * também — são do workspace e não pertencem a um processo.
  */
 export function summarizeAutomations(
   version: PublishedProcessVersion,
@@ -266,24 +271,44 @@ export function summarizeAutomations(
   const list: StepAutomation[] = [];
 
   orderedSteps(version.graph).forEach((id, index) => {
-    const row = automation.get(id);
-    if (!row?.createDemand) return;
     const config = version.steps.get(id);
-    const area = row.responsibleDepartmentId ? names.areas.get(row.responsibleDepartmentId) : "";
-    const parts = [
-      `abre demanda${row.demandType ? ` de ${row.demandType}` : ""}`,
-      area ? `para ${area}` : "",
-      `prioridade ${PRIORITY_LABELS[row.demandPriority] ?? row.demandPriority}`,
-      slaPhrase(row.demandSlaValue, row.demandSlaUnit),
-    ].filter(Boolean);
+    const stepName = config?.name || stepLabel(version.graph, id);
+    const row = automation.get(id);
 
-    list.push({
-      stepId: id,
-      label: config?.name || stepLabel(version.graph, id),
-      position: index + 1,
-      trigger: `Ao chegar em «${config?.name || stepLabel(version.graph, id)}»`,
-      effect: parts.join(", "),
-    });
+    if (row?.createDemand) {
+      const area = row.responsibleDepartmentId ? names.areas.get(row.responsibleDepartmentId) : "";
+      const parts = [
+        `abre demanda${row.demandType ? ` de ${row.demandType}` : ""}`,
+        area ? `para ${area}` : "",
+        `prioridade ${PRIORITY_LABELS[row.demandPriority] ?? row.demandPriority}`,
+        slaPhrase(row.demandSlaValue, row.demandSlaUnit),
+      ].filter(Boolean);
+
+      list.push({
+        stepId: id, label: stepName, position: index + 1,
+        trigger: `Ao chegar em «${stepName}»`,
+        effect: parts.join(", "),
+      });
+    }
+
+    for (const rule of config?.automations ?? []) {
+      const area = rule.areaId ? names.areas.get(rule.areaId) : "";
+      const effect = rule.action === "create_task"
+        ? `cria a tarefa «${rule.label}»${area ? ` para ${area}` : ""}`
+        : rule.action === "notify_responsible"
+          ? `avisa quem responde${rule.label ? `: «${rule.label}»` : ""}`
+          : rule.action === "record_event"
+            ? `registra o evento ${rule.eventName}`
+            : AUTOMATION_ACTION_LABELS[rule.action];
+      list.push({
+        stepId: id, label: stepName, position: index + 1,
+        // A frase é montada com o rótulo do gatilho e o nome da etapa porque
+        // "quando a demanda chega nesta etapa" sozinho não diz qual etapa é —
+        // e a aba lista as automações do processo inteiro.
+        trigger: `Quando ${AUTOMATION_TRIGGER_LABELS[rule.trigger]} («${stepName}»)`,
+        effect,
+      });
+    }
   });
 
   return list;

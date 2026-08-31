@@ -234,10 +234,12 @@ const processGroupIcons: Record<string, LucideIcon> = {
   analise: BarChart3,
 };
 
-/** Rótulo das duas famílias do menu. "Processos" é o que a operação executa;
- *  "Apoio" é a base e a leitura sobre as quais eles rodam (§27). */
+/** Rótulo das três famílias do menu. "Processos" é o que a operação executa;
+ *  "Áreas" são os módulos de quem responde por uma área (§91); "Apoio" é a base
+ *  e a leitura sobre as quais eles rodam (§27). */
 const processKindLabels: Record<string, string> = {
   process: "PROCESSOS",
+  area: "ÁREAS",
   support: "APOIO E GOVERNANÇA",
 };
 
@@ -1951,7 +1953,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               O menu mostra o *processo*; os módulos dele só aparecem quando ele
               é o processo aberto (§66). Sem isso a barra volta a ter quinze
               itens simultâneos, que é o que a §64 pede para acabar. */}
-          {(["process", "support"] as const).map((kind) => {
+          {(["process", "area", "support"] as const).map((kind) => {
             const groups = navGroups.filter((group) => group.kind === kind);
             if (!groups.length) return null;
             return <div key={kind} className="sidebar-nav-group">

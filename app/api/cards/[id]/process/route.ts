@@ -8,9 +8,10 @@ import { prepareAdoptionIncrement } from "@/lib/adoption-metrics";
 import { prepareDomainEventEnvelope } from "@/lib/outbox";
 import {
   availableTransitions, evaluateTransition, loadProcessInstance, loadPublishedVersion,
-  prepareTransitionStatement, resolveStepDeadline, stepChecklist,
+  prepareTaskInserts, prepareTransitionStatement, resolveStepDeadline, stepTasks,
   type TransitionActor,
 } from "@/lib/process-instances";
+import { prepareStepAutomations } from "@/lib/process-automations";
 import { isTerminalStep, stepLabel } from "@/lib/bpmn-graph";
 import { cleanText } from "@/lib/registrations";
 
@@ -42,16 +43,28 @@ async function loadContext(request: Request, cardId: string) {
   await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, instance.companyId);
   const version = await loadPublishedVersion(d1, workspace.id, instance.processVersionId);
 
-  const [areas, checklist, attachments] = await Promise.all([
+  const [areas, blocking, attachments] = await Promise.all([
     d1.prepare("SELECT area_id FROM fdp_area_members WHERE workspace_id = ? AND user_id = ?")
       .bind(workspace.id, user.id).all<{ area_id: string }>(),
-    d1.prepare(`SELECT COUNT(*)::int AS pending FROM fdp_checklist_items
+    /* As tarefas que travam a saída da etapa (§42).
+       `required = 1 AND blocks_advance = 1` é a diferença que §24 introduziu:
+       antes toda tarefa em aberto barrava igualmente, e não havia como marcar
+       uma como opcional. Os defaults da migration 0072 põem 1 nas duas colunas
+       em toda linha existente, então demanda aberta antes desta mudança
+       encontra exatamente o bloqueio de sempre (§48, §108).
+
+       Os títulos vêm junto porque a recusa precisa dizer o que fazer: "3 itens
+       em aberto" manda a pessoa procurar quais. */
+    d1.prepare(`SELECT id, title FROM fdp_checklist_items
         WHERE workspace_id = ? AND card_id = ? AND completed = 0
-          AND (process_step_id = ? OR process_step_id = '')`)
-      .bind(workspace.id, cardId, instance.currentStepId).first<{ pending: number }>(),
+          AND required = 1 AND blocks_advance = 1
+          AND (process_step_id = ? OR process_step_id = '')
+        ORDER BY position LIMIT 60`)
+      .bind(workspace.id, cardId, instance.currentStepId).all<{ id: string; title: string }>(),
     d1.prepare("SELECT COUNT(*)::int AS total FROM fdp_card_attachments WHERE workspace_id = ? AND card_id = ?")
       .bind(workspace.id, cardId).first<{ total: number }>(),
   ]);
+  const blockingTasks = blocking.results.map((row) => ({ title: String(row.title ?? "") }));
 
   const actor: TransitionActor = {
     userId: user.id,
@@ -63,7 +76,8 @@ async function loadContext(request: Request, cardId: string) {
 
   return {
     auth, d1, workspace, user, instance, version, actor,
-    pendingChecklist: Number(checklist?.pending ?? 0),
+    pendingChecklist: blockingTasks.length,
+    blockingTasks,
     attachmentCount: Number(attachments?.total ?? 0),
     requestId: request.headers.get("x-fila-dp-request-id"),
   } as const;
@@ -94,6 +108,7 @@ function payload(context: Extract<Loaded, { instance: unknown }>) {
     transitions: availableTransitions({
       version, instance, actor: context.actor,
       pendingChecklist: context.pendingChecklist,
+      blockingTasks: context.blockingTasks,
       attachmentCount: context.attachmentCount,
     }),
   };
@@ -142,6 +157,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const evaluation = evaluateTransition({
       version, instance, targetStepId, actor: context.actor,
       pendingChecklist: context.pendingChecklist,
+      blockingTasks: context.blockingTasks,
       attachmentCount: context.attachmentCount,
     });
     if (!evaluation.allowed) {
@@ -153,7 +169,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const nextConfig = version.steps.get(evaluation.targetStepId) ?? null;
     const dueAt = await resolveStepDeadline(d1, workspace.id, nextConfig, 0);
-    const checklist = stepChecklist(nextConfig);
+    const tasks = stepTasks(nextConfig);
 
     /* A troca de etapa acontece sozinha e antes de tudo, com `RETURNING`.
        Isso é deliberado: se ela não pegar — porque outra pessoa moveu a demanda
@@ -172,13 +188,55 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
 
     const eventName = evaluation.terminal ? "process.instance_completed" : "process.step_advanced";
+
+    /* Automações declaradas nas etapas (§27).
+       Três gatilhos disparam numa transição, e são fatos diferentes:
+       a etapa que ficou para trás foi *concluída*, a de destino foi *alcançada*
+       e, quando o destino é terminal, o *processo* terminou. Tratar os três
+       como um só faria a automação de conclusão rodar na entrada.
+
+       Entram no mesmo `batch` da transição de propósito: automação gravada
+       sobre um avanço que não pegou afirma um efeito sem causa. */
+    const currentConfig = version.steps.get(fromStepId) ?? null;
+    const automationBase = {
+      workspaceId: workspace.id, cardId: instance.id,
+      processDefinitionId: instance.processDefinitionId,
+      processVersionId: instance.processVersionId,
+    };
+    const completedStep = prepareStepAutomations(d1, {
+      rules: currentConfig?.automations ?? [], trigger: "step_completed",
+      context: {
+        ...automationBase, stepId: fromStepId, stepLabel: stepLabel(version.graph, fromStepId),
+        fallbackAreaId: currentConfig?.responsibleDepartmentId || currentConfig?.departmentId || null,
+      },
+    });
+    const enteredStep = prepareStepAutomations(d1, {
+      rules: nextConfig?.automations ?? [], trigger: "step_entered",
+      context: {
+        ...automationBase, stepId: evaluation.targetStepId, stepLabel: evaluation.targetLabel,
+        fallbackAreaId: nextConfig?.responsibleDepartmentId || nextConfig?.departmentId || null,
+      },
+    });
+    const finishedProcess = evaluation.terminal
+      ? prepareStepAutomations(d1, {
+        rules: nextConfig?.automations ?? [], trigger: "process_completed",
+        context: {
+          ...automationBase, stepId: evaluation.targetStepId, stepLabel: evaluation.targetLabel,
+          fallbackAreaId: nextConfig?.responsibleDepartmentId || nextConfig?.departmentId || null,
+        },
+      })
+      : { statements: [], events: [] };
+
     await d1.batch([
-      ...checklist.map((item, index) => d1.prepare(
-        "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position, process_step_id) VALUES (?, ?, ?, ?, 0, ?, ?)",
-      ).bind(
-        crypto.randomUUID(), workspace.id, instance.id, item,
-        (index + 1) * 1000, evaluation.targetStepId,
-      )),
+      /* A etapa de destino materializa as tarefas dela na mesma transação da
+         transição (§80): ou a demanda avança com as tarefas da etapa nova, ou
+         não avança. Etapa avançada sem as tarefas dela é o estado em que
+         ninguém sabe o que falta fazer. */
+      ...prepareTaskInserts(d1, {
+        workspaceId: workspace.id, cardId: instance.id, stepId: evaluation.targetStepId,
+        tasks, stepDueAt: dueAt,
+        fallbackAreaId: nextConfig?.responsibleDepartmentId || nextConfig?.departmentId || null,
+      }),
       prepareActivity(workspace.id, instance.id, auth.user.email, "process.step_advanced", {
         fromStepId, toStepId: evaluation.targetStepId, toStepLabel: evaluation.targetLabel,
         versionId: instance.processVersionId, versionNumber: instance.processVersionNumber,
@@ -197,6 +255,12 @@ export async function POST(request: Request, { params }: RouteContext) {
           companyId: instance.companyId ?? "",
         },
       }, { actorUserId: user.id, requestId: context.requestId }),
+      ...completedStep.statements, ...enteredStep.statements, ...finishedProcess.statements,
+      ...[...completedStep.events, ...enteredStep.events, ...finishedProcess.events].map((event) =>
+        prepareDomainEventEnvelope(d1, {
+          name: event.name, origin: "internal", workspaceId: workspace.id,
+          entityId: instance.id, payload: event.payload,
+        }, { actorUserId: user.id, requestId: context.requestId })),
       prepareAdoptionIncrement(d1, workspace.id,
         evaluation.terminal ? "process_instances_completed" : "process_steps_advanced"),
       prepareAuditEvent({

@@ -5,6 +5,7 @@ import {
   asAgentQueueConflict, decideAgentSchedule, listSchedulableAgents, prepareNextRun,
 } from "@/lib/agent-scheduler";
 import { processNextIntegrationJob, queueIntegrationRun } from "@/lib/integration-engine";
+import { sweepOverdueTasks } from "@/lib/process-automations";
 import { log } from "@/lib/observability";
 import { nextSankhyaRunAt, parseSankhyaConfig } from "@/lib/sankhya/config";
 import { queueSankhyaRun } from "@/lib/sankhya/queue";
@@ -102,6 +103,15 @@ export async function GET(request: Request) {
         // de cada recusa fica nomeado, e um agente pausado, sem credencial, sem
         // mapeamento publicado ou fora do expediente nem chega a gastar vaga da
         // varredura (§87).
+        /* Tarefa vencida avisa quem responde (§27).
+           Antes das integrações de propósito: é barato — duas consultas
+           indexadas — e um workspace com fila grande não pode consumir a janela
+           inteira e deixar o aviso de prazo para o ciclo seguinte. A falha aqui
+           não derruba a varredura do tenant: o `catch` externo já isola, e o
+           aviso perdido volta no próximo ciclo, porque a tarefa continua
+           vencida e a chave de idempotência continua inédita. */
+        await sweepOverdueTasks(scoped, workspace.id).catch(() => undefined);
+
         const agents = await listSchedulableAgents(scoped, workspace.id);
         for (const decision of decideAgentSchedule(agents, new Date())) {
           if (Date.now() >= deadline) break;

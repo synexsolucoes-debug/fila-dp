@@ -72,13 +72,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
          demand_type, requester_department_id, responsible_department_id, demand_priority, demand_sla_value,
          demand_sla_unit, checklist_id, checklist_json, form_id, required_documents_json, optional_documents_json,
          evidence_required, requires_approval, approver_user_id, approver_department_id, approval_count,
-         approval_mode, subprocess_process_id, settings_json)
+         approval_mode, subprocess_process_id, tasks_json, automations_json, settings_json)
         SELECT gen_random_uuid()::text, workspace_id, ?, bpmn_element_id, step_type, department_id, responsible_user_id,
          responsibility_mode, sla_value, sla_unit, sla_business_days, cutoff_time, escalation_json, create_demand,
          demand_type, requester_department_id, responsible_department_id, demand_priority, demand_sla_value,
          demand_sla_unit, checklist_id, checklist_json, form_id, required_documents_json, optional_documents_json,
          evidence_required, requires_approval, approver_user_id, approver_department_id, approval_count,
-         approval_mode, subprocess_process_id, settings_json
+         approval_mode, subprocess_process_id, tasks_json, automations_json, settings_json
           FROM fdp_process_step_configs WHERE workspace_id = ? AND process_version_id = ?`)
         .bind(versionId, workspace.id, latest.id));
     }

@@ -87,6 +87,7 @@ const stepConfig = (overrides: Partial<ProcessStepConfig> = {}): ProcessStepConf
   requiresApproval: false, approverUserId: "", approverDepartmentId: "", demandPriority: "normal",
   transitions: {}, entryRules: [], exitRules: [], blockingIntegrations: [],
   documentProof: "declared",
+  tasks: [], automations: [],
   ...overrides,
 });
 

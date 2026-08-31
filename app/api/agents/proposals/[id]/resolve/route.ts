@@ -8,7 +8,7 @@ import { isSensitiveAction } from "@/lib/agent-proposals";
 import { prepareDomainEventEnvelope } from "@/lib/outbox";
 import {
   evaluateTransition, loadProcessInstance, loadPublishedVersion, prepareTransitionStatement,
-  resolveStepDeadline, stepChecklist, type TransitionActor,
+  prepareTaskInserts, resolveStepDeadline, stepTasks, type TransitionActor,
 } from "@/lib/process-instances";
 import { cleanText } from "@/lib/registrations";
 
@@ -97,13 +97,18 @@ export async function POST(request: Request, { params }: RouteContext) {
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, instance.companyId);
     const version = await loadPublishedVersion(d1, workspace.id, instance.processVersionId);
 
-    const [areas, checklistRow, attachments] = await Promise.all([
+    const [areas, blocking, attachments] = await Promise.all([
       d1.prepare("SELECT area_id FROM fdp_area_members WHERE workspace_id = ? AND user_id = ?")
         .bind(workspace.id, user.id).all<{ area_id: string }>(),
-      d1.prepare(`SELECT COUNT(*)::int AS pending FROM fdp_checklist_items
+      /* Mesma leitura da rota de avanço: só trava o que é obrigatório e
+         declarado como bloqueante (§24). O agente não pode ter um critério de
+         avanço mais frouxo — nem mais duro — que o da pessoa. */
+      d1.prepare(`SELECT title FROM fdp_checklist_items
           WHERE workspace_id = ? AND card_id = ? AND completed = 0
-            AND (process_step_id = ? OR process_step_id = '')`)
-        .bind(workspace.id, cardId, instance.currentStepId).first<{ pending: number }>(),
+            AND required = 1 AND blocks_advance = 1
+            AND (process_step_id = ? OR process_step_id = '')
+          ORDER BY position LIMIT 60`)
+        .bind(workspace.id, cardId, instance.currentStepId).all<{ title: string }>(),
       d1.prepare("SELECT COUNT(*)::int AS total FROM fdp_card_attachments WHERE workspace_id = ? AND card_id = ?")
         .bind(workspace.id, cardId).first<{ total: number }>(),
     ]);
@@ -117,9 +122,11 @@ export async function POST(request: Request, { params }: RouteContext) {
     };
 
     const targetStepId = String(proposal.proposed_step_id ?? "");
+    const blockingTasks = blocking.results.map((row) => ({ title: String(row.title ?? "") }));
     const evaluation = evaluateTransition({
       version, instance, targetStepId, actor,
-      pendingChecklist: Number(checklistRow?.pending ?? 0),
+      pendingChecklist: blockingTasks.length,
+      blockingTasks,
       attachmentCount: Number(attachments?.total ?? 0),
     });
     if (!evaluation.allowed) {
@@ -141,9 +148,11 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
 
     await d1.batch([
-      ...stepChecklist(nextConfig).map((item, index) => d1.prepare(
-        "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position, process_step_id) VALUES (?, ?, ?, ?, 0, ?, ?)",
-      ).bind(crypto.randomUUID(), workspace.id, cardId, item, (index + 1) * 1000, evaluation.targetStepId)),
+      ...prepareTaskInserts(d1, {
+        workspaceId: workspace.id, cardId, stepId: evaluation.targetStepId,
+        tasks: stepTasks(nextConfig), stepDueAt: dueAt,
+        fallbackAreaId: nextConfig?.responsibleDepartmentId || nextConfig?.departmentId || null,
+      }),
       d1.prepare(`UPDATE fdp_agent_proposals
           SET status = 'applied', resolved_by = ?, resolved_at = CURRENT_TIMESTAMP,
               resolution_note = ?, result_type = 'card', result_id = ?, updated_at = CURRENT_TIMESTAMP

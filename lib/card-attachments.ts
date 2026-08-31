@@ -73,6 +73,17 @@ export async function storeCardAttachment(input: {
   uploadedBy: string;
   sourceType?: "manual" | "solides";
   sourceReference?: string | null;
+  /**
+   * Etapa e tarefa a que o arquivo pertence (§43).
+   *
+   * Ambos opcionais, e ambos vazios é o anexo da demanda — que é o que todo
+   * arquivo já gravado é. O que muda com eles preenchidos é a conferência: a
+   * etapa que exige "Comprovante de residência" passa a olhar os anexos *dela*,
+   * e não os da demanda inteira, onde um comprovante enviado três etapas antes
+   * satisfazia a exigência sem que ninguém percebesse.
+   */
+  processStepId?: string | null;
+  checklistItemId?: string | null;
 }) {
   const validated = validateCardAttachment(input);
   const sourceType = input.sourceType ?? "manual";
@@ -102,8 +113,9 @@ export async function storeCardAttachment(input: {
         WHERE subscription.workspace_id = ? AND subscription.status IN ('trialing', 'active')
       ), inserted AS (
         INSERT INTO fdp_card_attachments
-          (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by, source_type, source_reference)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
+          (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by, source_type, source_reference,
+           process_step_id, checklist_item_id)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM entitlement
         WHERE (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_card_attachments WHERE workspace_id = ?)
             + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_epi_attachments WHERE workspace_id = ?)
             + (SELECT COALESCE(SUM(size_bytes), 0) FROM fdp_contractor_documents WHERE workspace_id = ?) + ?
@@ -113,7 +125,9 @@ export async function storeCardAttachment(input: {
       ) SELECT id FROM inserted`)
       .bind(input.workspaceId, input.workspaceId, attachmentId, input.workspaceId, input.cardId, objectKey,
         validated.filename, validated.contentType, input.sizeBytes, input.uploadedBy.slice(0, 220), sourceType,
-        sourceReference, input.workspaceId, input.workspaceId, input.workspaceId, input.sizeBytes)
+        sourceReference,
+        (input.processStepId ?? "").slice(0, 160), input.checklistItemId || null,
+        input.workspaceId, input.workspaceId, input.workspaceId, input.sizeBytes)
       .first<{ id: string }>();
 
     if (stored) return { attachmentId, created: true };
