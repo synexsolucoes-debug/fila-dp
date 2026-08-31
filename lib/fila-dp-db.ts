@@ -665,6 +665,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,
     company: String(row.company ?? ""),
+    employeeId: row.employee_id ? String(row.employee_id) : null,
+    requesterUserId: row.requester_user_id ? String(row.requester_user_id) : null,
     requesterAreaId: row.requester_area_id ? String(row.requester_area_id) : null,
     responsibleAreaId: row.responsible_area_id ? String(row.responsible_area_id) : null,
     processType: String(row.process_type ?? "OUTROS"),
