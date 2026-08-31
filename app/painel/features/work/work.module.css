@@ -234,3 +234,13 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
   font-size: .68rem;
   line-height: 1.5;
 }
+
+/* O que se lê sobre o preenchimento do botão primário.
+   `.primaryButton` sozinho pesa (0,1,0) e perde para `.dashboard-shell button`
+   (0,1,1), que pinta todo botão do painel com a cor de texto do tema. Enquanto
+   este painel só existia dentro de uma modal em portal, a regra ampla não o
+   alcançava; ao virar coluna da biblioteca, alcançou — e "Iniciar processo"
+   passou a ser texto claro sobre latão: 2,09:1, acusado pela auditoria.
+   `.workspace .primaryButton` pesa (0,2,0) e vence, sem tocar na regra global
+   nem em nenhuma outra tela. */
+.workspace .primaryButton { color: var(--work-on-accent); }
