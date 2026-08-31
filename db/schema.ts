@@ -330,6 +330,45 @@ export const cards = pgTable("fdp_cards", {
 ]);
 
 /**
+ * Fotografia imutável das etapas que a versão publicada entregou à demanda.
+ * A demanda aponta para a versão e também materializa todas as etapas: assim a
+ * operação enxerga passado, presente e futuro sem reinterpretar o BPMN a cada
+ * leitura, e a publicação de outra versão não altera uma execução em curso.
+ */
+export const demandStages = pgTable("fdp_demand_stages", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  cardId: text("card_id").notNull(),
+  processVersionId: text("process_version_id").notNull(),
+  processStepConfigId: text("process_step_config_id"),
+  bpmnElementId: text("bpmn_element_id").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("pending"),
+  position: doublePrecision("position").notNull(),
+  responsibleAreaId: text("responsible_area_id"),
+  responsibleUserId: text("responsible_user_id"),
+  dueAt: timestamp("due_at", { withTimezone: true, mode: "string" }),
+  snapshotJson: jsonb("snapshot_json").$type<Record<string, unknown>>().notNull().default({}),
+  startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_demand_stages_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_demand_stages_card_element_uq").on(table.workspaceId, table.cardId, table.bpmnElementId),
+  index("fdp_demand_stages_card_position_idx").on(table.workspaceId, table.cardId, table.position),
+  index("fdp_demand_stages_workspace_status_due_idx").on(table.workspaceId, table.status, table.dueAt),
+  foreignKey({ name: "fdp_demand_stages_workspace_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_demand_stages_workspace_version_fk", columns: [table.workspaceId, table.processVersionId], foreignColumns: [processVersions.workspaceId, processVersions.id] }),
+  foreignKey({ name: "fdp_demand_stages_workspace_config_fk", columns: [table.workspaceId, table.processStepConfigId], foreignColumns: [processStepConfigs.workspaceId, processStepConfigs.id] }),
+  foreignKey({ name: "fdp_demand_stages_workspace_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_demand_stages_workspace_user_fk", columns: [table.workspaceId, table.responsibleUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_demand_stages_status_check", sql`${table.status} IN ('pending', 'in_progress', 'completed', 'skipped', 'cancelled')`),
+  check("fdp_demand_stages_version_check", sql`${table.version} > 0`),
+]);
+
+/**
  * Tarefa da demanda (§24, §41).
  *
  * Continua sendo a tabela do checklist — é o que o quadro, a Inbox, os
