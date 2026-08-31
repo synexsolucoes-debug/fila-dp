@@ -9,7 +9,7 @@ import { ApiError } from "./fila-dp-api";
 import { safeIntegrationError } from "./integrations";
 import { listAccessibleWorkspaces, noAccessibleWorkspaceError, resolveActiveWorkspace } from "./workspace-access";
 import { parseBpmnGraph, stepLabel, type BpmnGraph } from "./bpmn-graph";
-import { stepChecklist } from "./process-instances";
+import { stepChecklist, stepConfigOf } from "./process-instances";
 
 
 function safeJson(value: string) {
@@ -556,8 +556,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
        Vem por configuração de etapa, e não somado em SQL, porque quem decide o
        que vira tarefa é `stepChecklist`: ela une checklist e documentos da etapa
        e deduplica. Replicar isso em SQL produziria um total ligeiramente
-       diferente do que a execução materializa — e um progresso de "20 de 18". */
-    d1.prepare(`SELECT sc.process_version_id, sc.settings_json
+       diferente do que a execução materializa — e um progresso de "20 de 18".
+
+       A linha inteira, e não um recorte de colunas: quem traduz linha em etapa é
+       `stepConfigOf`, e escolher aqui de quais colunas a tradução parte foi como
+       o total passou a ser lido de `settings_json`, que guarda nome, instruções
+       e condições — nunca o checklist, os documentos ou as tarefas-modelo. */
+    d1.prepare(`SELECT sc.*
       FROM fdp_process_step_configs sc
       WHERE sc.workspace_id = ?
         AND sc.process_version_id IN (
@@ -761,14 +766,13 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
   for (const row of plannedStepsResult.results as Array<Record<string, unknown>>) {
     const versionId = String(row.process_version_id ?? "");
     if (!versionId) continue;
-    const settings = row.settings_json && typeof row.settings_json === "object"
-      ? row.settings_json as Record<string, unknown>
-      : safeJson(String(row.settings_json ?? "{}"));
-    const previstas = stepChecklist({
-      checklist: Array.isArray(settings.checklist) ? settings.checklist.map(String) : [],
-      requiredDocuments: Array.isArray(settings.requiredDocuments)
-        ? settings.requiredDocuments.map(String) : [],
-    } as Parameters<typeof stepChecklist>[0]).length;
+    /* Pela mesma leitura de linha da execução. Montar aqui uma configuração
+       parcial "só com o que a contagem usa" custou as duas coisas que este
+       cálculo existe para ter: o número certo — a parcial lia listas que moram
+       em coluna própria de dentro de `settings_json` e contava zero para toda
+       versão — e a tela no ar, porque a parcial sem `tasks` derrubava o
+       snapshot inteiro. */
+    const previstas = stepChecklist(stepConfigOf(row)).length;
     plannedTasksByVersion.set(versionId, (plannedTasksByVersion.get(versionId) ?? 0) + previstas);
   }
 
