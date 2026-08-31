@@ -44,14 +44,23 @@ export async function POST(request: Request, context: RouteContext) {
       processStepId = String(task.process_step_id ?? "");
     }
 
-    const stored = await storeCardAttachment({
+    const commentId = String(form.get("commentId") ?? "").slice(0, 80) || null;
+    if (commentId) {
+      const comment = await d1.prepare(
+        "SELECT id FROM fdp_card_comments WHERE workspace_id = ? AND id = ? AND card_id = ?",
+      ).bind(workspace.id, commentId, id).first<{ id: string }>();
+      if (!comment) throw ApiError.notFound("Comentário não encontrado nesta demanda.", "COMMENT_NOT_FOUND");
+    }
+
+        const stored = await storeCardAttachment({
       d1, workspaceId: workspace.id, cardId: id, filename: file.name, contentType: file.type,
       sizeBytes: file.size, body: file.stream(), uploadedBy: auth.user.email,
-      processStepId, checklistItemId,
+      processStepId, checklistItemId, commentId,
     });
     await recordActivity(workspace.id, id, auth.user.email, "attachment.uploaded", {
       attachmentId: stored.attachmentId, filename: file.name, sizeBytes: file.size,
       processStepId: processStepId || undefined, taskId: checklistItemId ?? undefined,
+      commentId: commentId ?? undefined,
     });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
