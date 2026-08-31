@@ -41,7 +41,12 @@ test("keeps collaboration and authorization wired to durable workspace data", as
   assert.match(database, /requireWorkspaceRole/);
   assert.match(membersRoute, /\["admin"\]/);
   assert.match(commentsRoute, /\["admin", "member", "guest"\]/);
-  assert.match(dashboard, /CONTA PESSOAL/);
+  // A conta pessoal continua tendo lugar próprio nas configurações. A
+  // conferência deixa de mirar o rótulo do grupo — que virou "CONTA" quando o
+  // menu foi reagrupado por assunto (§11.1) — e passa a mirar a seção em si,
+  // que é o que importa aqui: ela existe e não fica atrás de administrador.
+  assert.match(dashboard, /title: "Perfil e segurança"/);
+  assert.match(dashboard, /\{ section: "security", icon: Smartphone, hint: "Dispositivos e sessões", adminOnly: false \}/);
   assert.doesNotMatch(dashboard, /AccessView|Plano e ativação/);
   assert.match(dashboard, /COMENTÁRIOS/);
   assert.match(dashboard, /HISTÓRICO/);

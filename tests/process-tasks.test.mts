@@ -6,7 +6,9 @@ import {
   parseTaskTemplates, taskCompletionBlocker, taskDeadline, taskKey, taskOf,
   type DemandTask, type TaskTemplate,
 } from "../lib/process-tasks.ts";
-import { stepChecklist, stepConfigOf, stepTasks, type ProcessStepConfig } from "../lib/process-instances.ts";
+import {
+  stepChecklist, stepConfigOf, stepTasks, type ProcessStepConfig, type StepTaskSource,
+} from "../lib/process-instances.ts";
 
 /* §24 e §41: a tarefa deixa de ser uma string dentro da etapa.
    Os testes abaixo cobrem as três coisas que essa mudança precisa garantir —
@@ -319,4 +321,29 @@ test("automationsFor separa os gatilhos", () => {
 test("etapa sem automações não inventa nenhuma", () => {
   assert.deepEqual(parseStepAutomations(undefined), []);
   assert.deepEqual(parseStepAutomations({ trigger: "step_entered" }), []);
+});
+
+test("configuração de etapa sem o campo de tarefas não derruba quem a lê", () => {
+  /* Regressão medida no produto de pé, não hipótese: `lib/fila-dp-db.ts` monta
+     uma configuração parcial — só checklist e documentos — para contar as
+     tarefas previstas de cada versão. Quando `tasks` passou a existir,
+     `stepTasks` começou a ler `config.tasks.length` sem guarda, e um `as` no
+     chamador escondeu a falta do campo do compilador.
+     O efeito não ficou naquela contagem: `/api/workspace` inteiro passou a
+     devolver 500, e o painel deixou de abrir para todo o grupo assim que a
+     primeira demanda nasceu de um processo. Uma tela inicial que não abre por
+     causa de uma demanda criada é o pior lugar possível para falhar.
+
+     Os testes vizinhos cobrem a causa por outro ângulo — que a contagem lê as
+     colunas da etapa. Este prende o modo de falha em si: parcial sem `tasks`
+     não pode estourar. Sem `as`, agora que `StepTaskSource` aceita a parcial no
+     tipo: era justamente o cast que escondia o campo faltando. */
+  const parcial: StepTaskSource = { checklist: ["Receber documentos", "Conferir CPF"], requiredDocuments: [] };
+  const tarefas = stepTasks(parcial);
+  assert.equal(tarefas.length, 2, "a configuração parcial precisa cair no checklist");
+  assert.deepEqual(tarefas.map((t) => t.name), ["Receber documentos", "Conferir CPF"]);
+  // E `stepChecklist`, que é o que o snapshot chama, sobrevive ao mesmo molde.
+  assert.equal(stepChecklist(parcial).length, 2);
+  // Ausência total de configuração continua devolvendo lista vazia, não erro.
+  assert.deepEqual(stepTasks(null), []);
 });

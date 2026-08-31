@@ -279,9 +279,12 @@ test("a visão geral diz de quem são os números que mostra", () => {
   // competência, quando a faixa marinho saiu no redesenho. O requisito é o
   // mesmo: o recorte precisa estar escrito na tela, não subentendido.
   assert.match(source, /COMPETÊNCIA · \{scopeLabel\.toUpperCase\(\)\}/u);
-  // E o cartão de empresas deixa de misturar um número do grupo entre três do
-  // recorte.
-  assert.match(source, /<span>Empresa em foco<\/span>/u);
+  /* O recorte também precisa estar escrito na própria faixa de números, e não
+     só no bloco da competência mais abaixo. Antes isso era um oitavo cartão
+     ("Empresa em foco") ao lado dos outros sete; com os três contextos do §7.2
+     ele virou o título do bloco OPERAÇÃO — o recorte passou a encabeçar os
+     números que ele recorta, em vez de disputar espaço com eles. */
+  assert.match(source, /<header><span>OPERAÇÃO<\/span><h2>\{scopeLabel\}<\/h2><\/header>/u);
 });
 
 test("o fluxo da competência respeita a empresa escolhida", () => {

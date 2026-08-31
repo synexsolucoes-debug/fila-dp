@@ -3164,33 +3164,59 @@
    nobre da tela. Com o mínimo maior a conta dá quatro colunas — 4 + 3, uma
    célula vazia em vez de três, e cada cartão fica mais folgado.
    O `auto-fit` continua reduzindo o número de colunas em telas estreitas. */
-.overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 13px; }
-.overview-metrics article,
-.overview-metrics .overview-metric-action { min-height: 120px; padding: 17px 18px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
-/* O indicador que leva a algum lugar é botão de verdade: foco visível, cursor
-   de ação e alvo inteiro clicável. Alinhamento à esquerda porque o navegador
-   centraliza texto de botão, e centralizado ele deixaria de parecer da mesma
-   família dos cartões que continuam sendo texto. */
-.overview-metrics .overview-metric-action { text-align: left; cursor: pointer; font: inherit; color: inherit; transition: border-color .16s ease, background-color .16s ease, transform .16s ease; }
-.overview-metrics .overview-metric-action:hover { border-color: color-mix(in srgb, var(--ui-primary) 46%, var(--ui-border)); background: color-mix(in srgb, var(--ui-primary) 5%, var(--ui-surface)); }
-.overview-metrics .overview-metric-action:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-.overview-metrics .overview-metric-action:active { transform: translateY(1px); }
+/* Os três contextos do resumo (§7.2).
+   Substituem a faixa de sete cartões independentes. A diferença que importa não
+   é de estilo: sete caixas iguais dão o mesmo peso visual a "documentos
+   pendentes" e a "demandas atrasadas", e quem abre a tela precisa ler as sete
+   para descobrir qual pede ação. Três blocos com título dizem antes do número o
+   que cada grupo responde.
+   As classes são todas `overview-*`, usadas só nesta tela: nenhum módulo fora da
+   Visão geral muda por causa deste bloco. */
+.overview-contexts { display: grid; grid-template-columns: repeat(auto-fit, minmax(288px, 1fr)); gap: 13px; align-items: start; }
+
+.overview-context {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+.overview-context > header { padding: 14px 16px 12px; border-bottom: 1px solid var(--ui-border); }
+.overview-context > header span { display: block; color: var(--ui-primary); font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.overview-context > header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 14px; letter-spacing: -.015em; }
+
+/* O bloco que pede ação se marca pela borda, e não por fundo colorido: o fundo
+   competiria com os números, que são o conteúdo. */
+.overview-context.requires-attention { border-color: color-mix(in srgb, var(--ui-warning) 52%, var(--ui-border)); }
+.overview-context.requires-attention > header h2 { color: var(--ui-warning); }
+
+.overview-context dl { margin: 0; display: flex; flex-direction: column; }
+
+/* Linha de razão: rótulo à esquerda, número à direita, fio entre uma e outra.
+   `justify-content: space-between` alinha os números à direita, e o
+   `tabular-nums` faz as unidades caírem na mesma coluna entre as linhas — é o
+   que deixa a comparação vertical possível sem ler dígito por dígito. */
+.overview-context-row {
+  width: 100%; min-height: 40px; padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 0; border-top: 1px solid var(--ui-border); border-radius: 0;
+  background: transparent; color: inherit; font: inherit; text-align: left;
+}
+.overview-context dl > :first-child { border-top: 0; }
+.overview-context-row dt { color: var(--ui-text-soft); font-size: 12px; }
+.overview-context-row dd { margin: 0; color: var(--ui-text); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.overview-context-row dd strong { font: inherit; }
+/* O número que já é a resposta da linha não precisa de destaque extra; o que
+   precisa é o que está fora do esperado. */
+.overview-context-row.grave dd { color: var(--ui-danger); }
+.overview-context-quando { font-size: 12px !important; font-weight: 600 !important; color: var(--ui-text-soft) !important; }
+
+.overview-context-row:not(.estatico) { cursor: pointer; transition: background-color .16s ease; }
+.overview-context-row:not(.estatico):hover { background: color-mix(in srgb, var(--ui-primary) 6%, var(--ui-surface)); }
+.overview-context-row:not(.estatico):hover dt { color: var(--ui-text); }
+.overview-context-row:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) {
-  .overview-metrics .overview-metric-action { transition: none; }
-  .overview-metrics .overview-metric-action:active { transform: none; }
+  .overview-context-row:not(.estatico) { transition: none; }
 }
-.overview-metrics span { color: var(--ui-text-soft); font-size: 11px; font-weight: 700; }
-.overview-metrics strong { margin-top: 10px; color: var(--ui-text); font-size: clamp(27px, 2.2vw, 36px); letter-spacing: -.06em; line-height: 1; }
-.overview-metrics small { margin-top: auto; color: var(--ui-text-soft); font-size: 10px; }
-/* Nome de empresa no lugar de um número: a escala do dígito (até 36px, com
-   -.06em de espaçamento) deixaria a razão social ilegível e transbordando. */
-.overview-metrics .overview-metric-name {
-  font-size: 15px; letter-spacing: -.01em; line-height: 1.25; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.overview-metrics .requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); background: #fff8f0; }
-.overview-metrics .requires-attention strong { color: #a95e21; }
-.theme-dark .overview-metrics .requires-attention { background: color-mix(in srgb, #F4A261 11%, var(--ui-surface)); }
+.overview-context.requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); }
 
 .overview-sla-band { min-height: 104px; padding: 19px 23px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 1.15fr) minmax(150px, .72fr); align-items: center; gap: 26px; border: 1px solid color-mix(in srgb, var(--ui-mint) 52%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 11%, var(--ui-surface)); }
 .overview-sla-band strong { display: block; margin-top: 5px; color: var(--ui-text); font-size: 18px; letter-spacing: -.035em; }
@@ -3387,8 +3413,6 @@
   .dashboard-header-actions .header-company-select { min-width: 38px; width: 38px; padding: 0; justify-content: center; }
   .header-company-select select { display: none; }
   .dashboard-header-actions .help-button, .dashboard-header-actions .header-profile { display: none; }
-  .overview-metrics { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
-  .overview-metrics article { min-width: min(74vw, 250px); scroll-snap-align: start; }
   .overview-sla-band { grid-template-columns: 1fr; gap: 14px; }
   .overview-sla-summary { justify-content: flex-start; }
   .status-chart { overflow-x: auto; }
@@ -4570,7 +4594,7 @@
 }
 
 /* O selo âmbar da visão geral: no escuro o marrom original dava 2.76:1. */
-.theme-dark .overview-metrics .requires-attention strong { color: var(--ui-state-warn-text); }
+.theme-dark .overview-context.requires-attention > header h2 { color: var(--ui-state-warn-text); }
 
 /* Rótulos de apoio da folha ficavam abaixo de 4.5:1 sobre o painel da tela. */
 .payroll-toolbar > label,
@@ -4696,7 +4720,7 @@
 
 /* --- Cartões e superfícies ------------------------------------------------ */
 .dashboard-task,
-.overview-metrics > article,
+.overview-context,
 .dashboard-stats article {
   transition: transform var(--motion-fast) var(--motion-ease),
     box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
@@ -5163,7 +5187,7 @@
 .dashboard-sla,
 .dashboard-check,
 .dashboard-comments,
-.overview-metrics strong,
+.overview-context-row dd,
 .overview-obligation-due b,
 .history-table time,
 .history-card-link b,

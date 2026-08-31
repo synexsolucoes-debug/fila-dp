@@ -130,15 +130,32 @@ test("o seletor de período só aparece onde ele manda", () => {
 test("o indicador que tem onde ser resolvido é botão, não texto", () => {
   // Ler "3 integrações com erro" e não ter caminho para elas é o indicador
   // cobrando uma ação que ele mesmo não deixa tomar.
-  for (const rotulo of ["Demandas em aberto", "Fluxos em andamento", "Obrigações próximas", "Integrações com erro"]) {
-    // O `onFocus` precisa ser o handler do próprio elemento que carrega o
-    // rótulo — não um botão qualquer em algum lugar acima dele.
-    const padrao = new RegExp(`onFocus\\([^)]*\\)\\}>\\s*<span>${rotulo}</span>`, "u");
+  //
+  // Os rótulos mudaram de elemento quando os sete cartões soltos viraram os
+  // três contextos do §7.2 — de `<span>` para `<dt>`, dentro de uma lista de
+  // definição. A exigência não mudou: quem carrega o rótulo é quem carrega o
+  // `onFocus`, e não um botão qualquer acima dele.
+  for (const rotulo of ["Demandas em aberto", "Processos em execução", "Obrigações próximas", "Atrasadas"]) {
+    const padrao = new RegExp(`onFocus\\([^)]*\\)\\}>\\s*<dt>${rotulo}</dt>`, "u");
     assert.match(source, padrao, `"${rotulo}" precisa levar a algum lugar`);
   }
-  // E o elemento é botão de verdade, não uma `article` com `onClick`: teclado,
+  // E o elemento é botão de verdade, não uma `div` com `onClick`: teclado,
   // foco e leitor de tela dependem do elemento, não do cursor.
-  assert.equal((source.match(/className=\{?["`]overview-metric-action/gu) ?? []).length, 5);
+  /* A classe é lida inteira, e não só até `overview-context-row`: parando ali,
+     o `estatico` que vem logo depois ficava de fora do trecho casado e a linha
+     estática era acusada de não estar marcada. */
+  const linhas = [...source.matchAll(/<(button|div)[^>]*className=\{?[`"]([^`"]*overview-context-row[^`"]*)/gu)];
+  assert.ok(linhas.length >= 10, `só ${linhas.length} linha(s) de contexto — a faixa encolheu sem querer`);
+  for (const linha of linhas) {
+    if (linha[1] === "button") continue;
+    // A única linha que pode não ser botão é a que não tem para onde levar, e
+    // ela precisa se declarar como tal — senão "estático" vira desculpa para
+    // qualquer indicador mudo voltar.
+    assert.match(linha[0], /estatico/u,
+      "linha de contexto que não é botão precisa estar marcada como estática");
+  }
+  assert.doesNotMatch(source, /<div[^>]*overview-context-row[^>]*onClick/u,
+    "linha clicável precisa ser <button>, senão teclado e leitor de tela não alcançam");
 });
 
 test("o indicador de demandas em aberto mantém a âncora que o ensaio de navegador mira", async () => {
@@ -166,7 +183,12 @@ test("chegar pelo indicador zera os outros filtros do quadro", () => {
 });
 
 test("o indicador de SLA leva ao quadro já recortado no atraso", () => {
-  assert.match(source, /onFocus\("board", "overdue"\)[\s\S]{0,120}<span>SLA em risco<\/span>/u);
+  // O rótulo virou "Em risco de SLA" e o elemento virou `<dt>` com os três
+  // contextos do §7.2. A garantia é a de sempre: quem lê um número de prazo
+  // chega ao quadro já recortado no atraso, e não numa lista inteira onde
+  // precisa refazer o filtro à mão.
+  assert.match(source, /onFocus\("board", "overdue"\)[\s\S]{0,120}<dt>Vencendo hoje<\/dt>/u);
+  assert.match(source, /onFocus\("board", "overdue"\)[\s\S]{0,120}<dt>Atrasadas<\/dt>/u);
 });
 
 /* ── §15: fluxos em andamento ──────────────────────────────────────────── */
@@ -272,7 +294,7 @@ test("a Visão geral abre com os números, não com o menu (§93)", async () => 
     app.indexOf('function MemberCompanyAccess'));
 
   const posicao = (marca: string) => layout.indexOf(marca);
-  const metricas = posicao('className="overview-metrics"');
+  const metricas = posicao('className="overview-contexts"');
   assert.ok(metricas > 0, "a faixa de indicadores sumiu da Visão geral");
 
   for (const [marca, nome] of [
@@ -381,12 +403,99 @@ test("a faixa de SLA diz qual população o percentual mede", async () => {
     "barra de progresso sem número para representar não deve ser desenhada");
 });
 
-test("a faixa de indicadores não deixa três células vazias na dobra mais nobre", async () => {
-  /* Sete indicadores com `minmax(172px)` davam cinco colunas em 1440px: 5 + 2,
-     com três células vazias ao lado dos dois últimos. Medido no produto de pé:
-     com o mínimo maior a conta dá quatro colunas — 4 + 3, uma célula vazia. */
+test("a faixa de indicadores não deixa célula vazia na dobra mais nobre", async () => {
+  /* O defeito original: sete indicadores com `minmax(172px)` davam cinco
+     colunas em 1440px — 5 + 2, com três células mortas ao lado dos dois
+     últimos. Com três contextos o resto da divisão é sempre zero, então aquele
+     arranjo específico não volta.
+     O que continua podendo quebrar é o outro lado: largura mínima fixa demais
+     mantém três colunas numa tela onde elas não cabem, e o conteúdo espreme ou
+     transborda. Por isso a conferência é sobre `auto-fit` — que reduz o número
+     de colunas sozinho — e sobre o mínimo caber três vezes em 1440px, que é a
+     resolução alvo da §16. */
   const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
-  assert.match(css, /\.overview-metrics \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(238px, 1fr\)\); gap: 13px; \}/u);
-  assert.match(css, /auto-fit/u,
-    "largura fixa deixaria de reduzir colunas em tela estreita; medido em 820px, cai para duas");
+  const faixa = css.match(/\.overview-contexts \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\((\d+)px, 1fr\)\); gap: (\d+)px;/u);
+  assert.ok(faixa, "a faixa de contextos deixou de ser uma grade que se adapta sozinha");
+  const minimo = Number(faixa[1]);
+  const intervalo = Number(faixa[2]);
+  // 1440 menos a barra lateral e os recuos da coluna de conteúdo.
+  const colunaUtil = 1440 - 268 - 92;
+  assert.ok(minimo * 3 + intervalo * 2 <= colunaUtil,
+    `três contextos de ${minimo}px não cabem nos ${colunaUtil}px úteis de 1440px`);
+  // E em tablet os três não podem insistir em ficar lado a lado.
+  assert.ok(minimo * 3 + intervalo * 2 > 768 - 40,
+    "o mínimo é pequeno demais: três colunas continuariam espremidas no tablet");
+});
+/* -------------------------------------------------------------------------- */
+/* Os três contextos do resumo (§7.2)                                          */
+/* -------------------------------------------------------------------------- */
+
+test("o resumo tem três contextos, e não uma coleção de cartões soltos", async () => {
+  /* Sete indicadores lado a lado, cada um numa caixa igual, obrigam a ler os
+     sete para descobrir qual pede ação: a tela informava sem hierarquizar. A
+     §7.2 é explícita — "não criar dezenas de cards independentes" — e nomeia os
+     três contextos. Eles são a hierarquia: o que é para hoje, como está a
+     operação, e como estão os sistemas que a alimentam. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  for (const contexto of ["HOJE", "OPERAÇÃO", "CONEXÕES"]) {
+    assert.match(app, new RegExp(`<header><span>${contexto}</span>`, "u"),
+      `o contexto ${contexto} sumiu do resumo`);
+  }
+  /* Conta os blocos `overview-context` — o `${...}` de um className por
+     template literal também encerra o nome da classe, e não só aspas ou espaço.
+     Sem admitir o `$`, os dois blocos com estado condicional ficavam de fora e
+     a conta dava 1. */
+  const contextos = (app.match(/<article className=\{?[`"]overview-context[`"$]/gu) ?? []).length;
+  assert.equal(contextos, 3, "o resumo precisa ter exatamente os três contextos do §7.2");
+});
+
+test("nenhum número do resumo é fixo no código", async () => {
+  /* §13: estado vazio é preferível a dado falso. Cada valor do resumo precisa
+     sair de uma expressão — das demandas, dos fluxos ou das integrações que o
+     snapshot traz. Um literal aqui seria um KPI inventado, que é exatamente o
+     que a especificação proíbe. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  const inicio = app.indexOf('className="overview-contexts"');
+  const faixa = app.slice(inicio, app.indexOf("</section>", inicio));
+  const fixos = [...faixa.matchAll(/<dd[^>]*>(\d+)</gu)].map((match) => match[1]);
+  assert.deepEqual(fixos, [], `número fixo no resumo: ${fixos.join(", ")}`);
+  // E os valores vêm mesmo das fontes reais, não de um objeto montado à parte.
+  for (const fonte of ["stats.active", "stats.documentsPending", "stats.completed", "integrationsFailing", "obligations.length"]) {
+    assert.ok(faixa.includes(fonte), `o resumo deixou de ler ${fonte}`);
+  }
+});
+
+test("sem sincronização registrada o resumo diz isso, em vez de inventar uma data", async () => {
+  /* Um traço parece dado que faltou carregar; uma data qualquer seria mentira.
+     "Nunca" é a informação verdadeira quando nenhuma integração sincronizou. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /\{ultimaSincronizacao \?\? "Nunca"\}/u);
+  assert.match(app, /const marcas = integrations\.map\(\(item\) => item\.lastSyncAt\)/u,
+    "a última sincronização precisa sair do campo real das integrações");
+});
+
+test("processos em execução conta processos distintos, não demandas", async () => {
+  /* Doze admissões correndo são UM processo com doze demandas. Contá-las como
+     doze processos diria que a operação roda doze fluxos diferentes — e é a
+     confusão entre modelo e execução que o §4 existe para separar. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /const processosEmExecucao = new Set\(flows\.map\(\(flow\) => flow\.definitionId\)\)\.size/u);
+});
+
+test("o resumo não recalcula o que é 'vence hoje' por conta própria", async () => {
+  /* Este teste nasce de um defeito que a tela mostrou de pé: o resumo dizia
+     "Vencendo hoje: 0" logo acima de um painel com três demandas etiquetadas
+     "Vence hoje". A primeira versão comparava `dueAt` com a data do navegador;
+     o resto do produto pergunta ao `slaStatus`, que conhece expediente e
+     feriado. Dois cálculos para a mesma pergunta sempre acabam discordando —
+     e quem lê não tem como saber qual dos dois números acreditar. */
+  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /const venceHoje = cards\.filter\(\(card\) => card\.slaStatus === "warning"\)\.length/u);
+  const inicio = app.indexOf('className="overview-contexts"');
+  const faixa = app.slice(0, inicio);
+  assert.doesNotMatch(faixa.slice(faixa.lastIndexOf("const integrationsFailing")),
+    /getFullYear\(\)|getMonth\(\)|getDate\(\)/u,
+    "o resumo voltou a decidir o que vence hoje pelo calendário do navegador");
+  // E o rótulo é o mesmo que o cartão usa para o mesmo estado.
+  assert.match(app, /if \(status === "warning"\) return "Vence hoje";/u);
 });
