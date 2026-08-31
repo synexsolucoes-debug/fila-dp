@@ -141,8 +141,15 @@ test("o total previsto usa a mesma stepChecklist da execução", async () => {
      documentos da etapa e deduplica. Somar em SQL daria um número próximo e
      errado — e um progresso de "20 de 18". */
   const db = await readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8");
-  assert.match(db, /import \{ stepChecklist \} from "\.\/process-instances"/u);
-  assert.match(db, /const previstas = stepChecklist\(\{/u);
+  assert.match(db, /import \{ stepChecklist, stepConfigOf \} from "\.\/process-instances"/u);
+  /* Pela linha inteira, lida pelo mesmo `stepConfigOf` da execução. Montar aqui
+     uma configuração parcial "só com o que a contagem usa" já custou as duas
+     coisas: o total certo — a parcial procurava o checklist em `settings_json`,
+     onde ele nunca esteve — e a tela no ar, porque a parcial sem `tasks`
+     derrubava o snapshot inteiro com um TypeError. */
+  assert.match(db, /const previstas = stepChecklist\(stepConfigOf\(row\)\)\.length/u);
+  assert.doesNotMatch(db, /stepChecklist\(\{/u,
+    "a contagem não pode voltar a inventar uma configuração parcial");
   assert.ok(!/SUM\(jsonb_array_length/u.test(db),
     "somar o checklist em SQL divergiria da regra que a execução aplica");
 });
