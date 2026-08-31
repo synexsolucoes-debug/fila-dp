@@ -239,9 +239,15 @@ test("bloco novo não vira caminho lateral para ver o que o recorte esconde", ()
 
 test("as duas consultas novas são escopadas por workspace", () => {
   // Multi-tenancy (§75): nenhuma delas pode existir sem `workspace_id = ?`.
-  const fluxos = dbSource.slice(dbSource.indexOf("FROM fdp_cards c\n      JOIN fdp_process_definitions"));
-  assert.match(fluxos.slice(0, 900), /WHERE c\.workspace_id = \?/u);
-  assert.match(dbSource, /FROM fdp_compliance_obligations o[\s\S]{0,400}WHERE o\.workspace_id = \?/u);
+  assert.match(
+    dbSource,
+    /FROM fdp_cards c[\s\S]{0,900}JOIN fdp_process_definitions[\s\S]{0,900}WHERE c\.workspace_id = \?/u,
+  );
+
+  assert.match(
+    dbSource,
+    /FROM fdp_compliance_obligations o[\s\S]{0,400}WHERE o\.workspace_id = \?/u,
+  );
 });
 
 test("o contrato dos dois blocos está declarado no tipo do snapshot", () => {
