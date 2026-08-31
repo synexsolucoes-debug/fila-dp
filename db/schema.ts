@@ -256,6 +256,8 @@ export const cards = pgTable("fdp_cards", {
   description: text("description").notNull().default(""),
   companyId: text("company_id").references(() => companies.id, { onDelete: "set null" }),
   company: text("company").notNull().default(""),
+  employeeId: text("employee_id"),
+  requesterUserId: text("requester_user_id"),
   requesterAreaId: text("requester_area_id"),
   responsibleAreaId: text("responsible_area_id"),
   processType: text("process_type").notNull().default("OUTROS"),
@@ -305,6 +307,12 @@ export const cards = pgTable("fdp_cards", {
     columns: [table.workspaceId, table.companyId],
     foreignColumns: [companies.workspaceId, companies.id],
   }),
+  foreignKey({ name: "fdp_cards_workspace_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }),
+  foreignKey({ name: "fdp_cards_workspace_requester_user_fk", columns: [table.workspaceId, table.requesterUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  index("fdp_cards_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.createdAt)
+    .where(sql`${table.employeeId} IS NOT NULL`),
+  index("fdp_cards_workspace_requester_user_idx").on(table.workspaceId, table.requesterUserId, table.createdAt)
+    .where(sql`${table.requesterUserId} IS NOT NULL`),
   foreignKey({ name: "fdp_cards_requester_area_fk", columns: [table.workspaceId, table.requesterAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   foreignKey({ name: "fdp_cards_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   index("fdp_cards_workspace_requester_area_idx").on(table.workspaceId, table.requesterAreaId, table.createdAt),
