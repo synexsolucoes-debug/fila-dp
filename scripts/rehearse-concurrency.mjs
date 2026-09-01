@@ -7,13 +7,10 @@
  * conexões chegando ao mesmo tempo, cada uma vendo o estado anterior à outra.
  *
  * Por isso este ensaio abre conexões de verdade e dispara em paralelo. Ele
- * cobre os cinco casos que o produto tem:
+ * cobre os casos gerais já existentes e os cinco riscos exigidos pela auditoria:
+ * estoque, tarefas, avanço de etapa, aprovações e versionamento de processo.
  *
- *   1. duas pessoas editando a mesma demanda;
- *   2. dois webhooks idênticos simultâneos;
- *   3. dois trabalhadores tentando pegar o mesmo trabalho;
- *   4. duas aprovações simultâneas;
- *   5. duas requisições de fechamento simultâneas.
+ * Cada caso usa conexões PostgreSQL distintas e operações realmente paralelas.
  *
  * Em todos, o resultado esperado é o mesmo: **um vence, um é recusado**, e o
  * recusado sabe que perdeu — em vez de sobrescrever em silêncio.
@@ -189,12 +186,132 @@ async function twoClosings() {
     Number(row.rows[0].version) === 2, `versão ${row.rows[0].version}`);
 }
 
+/** Consulta transacional com o contexto tenant exigido pela função de estoque. */
+async function workspaceQuery(text, values = []) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.workspace_id', $1, true)", [id("w")]);
+    const result = await client.query(text, values);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/* 6. Duas baixas disputando a última unidade do estoque. */
+async function twoStockConsumers() {
+  await query(`INSERT INTO fdp_stock_locations
+      (id, workspace_id, code, name, status, is_default, created_by, updated_by)
+    VALUES ($1, $2, 'ENSAIO', 'Estoque Ensaio', 'active', 1, $3, $3)
+    ON CONFLICT (workspace_id, code) DO NOTHING`, [id("loc"), id("w"), id("u")]);
+  await query(`INSERT INTO fdp_epi_products
+      (id, workspace_id, company_id, name, epi_type, ca_number, size, brand, model,
+       unit_value, stock_quantity, registered_on, status, registration_reason, created_by, updated_by)
+    VALUES ($1, $2, $3, 'Capacete Ensaio', 'head', $4, 'U', 'Ensaio', 'E1',
+      10, 0, CURRENT_DATE, 'in_stock', 'initial_purchase', $5, $5)
+    ON CONFLICT (id) DO NOTHING`, [id("epi"), id("w"), id("co"), id("ca"), id("u")]);
+
+  await workspaceQuery("SELECT fdp_apply_stock_change($1, $2, $3, 1, $4)",
+    [id("w"), id("epi"), id("loc"), id("u")]);
+  const consume = () => workspaceQuery("SELECT fdp_apply_stock_change($1, $2, $3, -1, $4)",
+    [id("w"), id("epi"), id("loc"), id("u")]);
+  const { a, b } = await inParallel(consume, consume);
+  const applied = [a, b].filter((result) => result.rowCount === 1).length;
+  check("estoque: duas baixas disputam a última unidade, uma vence", applied === 1, `${applied} baixa(s)`);
+
+  const balance = await query(`SELECT quantity, version FROM fdp_stock_balances
+    WHERE workspace_id = $1 AND product_id = $2 AND stock_location_id = $3`,
+  [id("w"), id("epi"), id("loc")]);
+  check("estoque: saldo nunca fica negativo",
+    Number(balance.rows[0].quantity) === 0 && Number(balance.rows[0].version) === 2,
+    `saldo ${balance.rows[0].quantity}; versão ${balance.rows[0].version}`);
+}
+
+/* 7. Duas conclusões simultâneas da mesma tarefa. */
+async function twoTaskCompletions() {
+  await query(`INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position)
+    VALUES ($1, $2, $3, 'Tarefa concorrente', 0, 1000) ON CONFLICT (id) DO NOTHING`,
+  [id("task"), id("w"), id("card")]);
+  const complete = () => query(`UPDATE fdp_checklist_items
+      SET completed = 1, completed_at = now(), completed_by = 'ensaio@local'
+      WHERE workspace_id = $1 AND id = $2 AND completed IS DISTINCT FROM 1 RETURNING id`,
+    [id("w"), id("task")]);
+  const { a, b } = await inParallel(complete, complete);
+  const applied = [a, b].filter((result) => result.rowCount === 1).length;
+  check("tarefa: duas conclusões simultâneas geram uma única mudança", applied === 1, `${applied} mudança(s)`);
+}
+
+/* Prepara uma versão e uma demanda para os ensaios de etapa e versionamento. */
+async function prepareProcessConcurrency() {
+  await query(`INSERT INTO fdp_process_definitions
+      (id, workspace_id, code, name, category, status, created_by, updated_by)
+    VALUES ($1, $2, $3, 'Processo Concorrente', 'general', 'active', $4, $4)
+    ON CONFLICT (id) DO NOTHING`, [id("proc"), id("w"), id("pcode"), id("u")]);
+  await query(`INSERT INTO fdp_process_versions
+      (id, workspace_id, definition_id, version, status, configuration_json,
+       version_major, version_minor, revision, created_by, updated_by)
+    VALUES ($1, $2, $3, 1, 'draft', '{}'::jsonb, 1, 0, 0, $4, $4)
+    ON CONFLICT (id) DO NOTHING`, [id("pv"), id("w"), id("proc"), id("u")]);
+  await query(`INSERT INTO fdp_cards
+      (id, workspace_id, board_id, list_id, title, position, created_by,
+       process_definition_id, process_version_id, process_version_number, current_step_id, instantiated_at)
+    VALUES ($1, $2, $3, $4, 'Demanda com etapa', 2000, 'ensaio@local',
+      $5, $6, '1.0', 'etapa-a', now()) ON CONFLICT (id) DO NOTHING`,
+  [id("pcard"), id("w"), id("b"), id("l"), id("proc"), id("pv")]);
+  await query(`INSERT INTO fdp_demand_stages
+      (id, workspace_id, card_id, process_version_id, bpmn_element_id, title, status, position)
+    VALUES ($1, $2, $3, $4, 'etapa-a', 'Etapa A', 'in_progress', 1000)
+    ON CONFLICT (id) DO NOTHING`, [id("stage"), id("w"), id("pcard"), id("pv")]);
+}
+
+/* 8. Dois avanços simultâneos da mesma etapa persistida. */
+async function twoStageAdvances() {
+  const advance = () => query(`UPDATE fdp_demand_stages
+      SET status = 'completed', completed_at = now(), updated_at = now()
+      WHERE workspace_id = $1 AND id = $2 AND status = 'in_progress' AND version = 1
+      RETURNING version`, [id("w"), id("stage")]);
+  const { a, b } = await inParallel(advance, advance);
+  const applied = [a, b].filter((result) => result.rowCount === 1).length;
+  check("etapa: dois avanços simultâneos, um único fechamento", applied === 1, `${applied} avanço(s)`);
+  const row = await query("SELECT status, version FROM fdp_demand_stages WHERE workspace_id = $1 AND id = $2",
+    [id("w"), id("stage")]);
+  check("etapa: estado e versão permanecem coerentes",
+    row.rows[0].status === "completed" && Number(row.rows[0].version) === 2,
+    `${row.rows[0].status}; versão ${row.rows[0].version}`);
+}
+
+/* 9. Dois autosaves da mesma revisão do processo. */
+async function twoProcessVersionSaves() {
+  const save = (summary) => query(`SELECT fdp_save_process_version_draft(
+      $1, $2, 0, '', '', jsonb_build_object('summary', $3), '[]'::jsonb, $4) AS revision`,
+    [id("w"), id("pv"), summary, id("u")]);
+  const { a, b } = await inParallel(() => save("A"), () => save("B"));
+  const applied = [a, b].filter((result) => result.rowCount === 1).length;
+  const rejected = [a, b].filter((result) => result.error).length;
+  check("processo: dois autosaves da mesma revisão, um vence e um recebe conflito",
+    applied === 1 && rejected === 1, `${applied} salvo(s); ${rejected} conflito(s)`);
+  const row = await query("SELECT revision FROM fdp_process_versions WHERE workspace_id = $1 AND id = $2",
+    [id("w"), id("pv")]);
+  check("processo: revisão avança exatamente uma vez", Number(row.rows[0].revision) === 1,
+    `revisão ${row.rows[0].revision}`);
+}
+
 try {
   await setup();
   await twoEditors();
   await twoWebhooks();
   await twoWorkers();
   await twoApprovals();
+  await twoStockConsumers();
+  await twoTaskCompletions();
+  await prepareProcessConcurrency();
+  await twoStageAdvances();
+  await twoProcessVersionSaves();
   await twoClosings();
 } finally {
   await cleanup();
