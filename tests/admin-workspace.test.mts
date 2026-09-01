@@ -196,4 +196,13 @@ test("a administração não mantém uma paleta própria", async () => {
   assert.doesNotMatch(painelCss,
     /\.settings-nav button\.active[^\n]*color-mix\(in srgb, var\(--ui-mint\)/u,
     "o véu de menta voltou atrás do texto latão, abaixo do contraste mínimo");
+
+  /* E o escopo dessas correções acompanha a moldura da tela.
+     Elas nasceram escopadas em `.workspace-settings-modal`; quando a
+     Administração virou tela, a modal deixou de existir e TODAS pararam de
+     valer de uma vez — o selo do papel voltou a azul, visto na tela. O escopo
+     passou a ser o corpo, que é o mesmo elemento nas duas formas. */
+  assert.doesNotMatch(painelCss, /\.theme-dark \.workspace-settings-modal/u,
+    "as correções voltaram a depender da modal, que não existe mais");
+  assert.match(painelCss, /\.theme-dark \.workspace-settings-layout \{[^}]*--brand: var\(--ui-accent-text/u);
 });

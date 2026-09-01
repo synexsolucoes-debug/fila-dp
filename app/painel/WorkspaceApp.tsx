@@ -21,6 +21,7 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
   CircleHelp,
   ClipboardCheck,
@@ -856,7 +857,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   initialLocation?: PanelLocation;
 }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
-  const [view, setView] = useState<View>(initialLocation.view as View);
+  const [view, setViewState] = useState<View>(initialLocation.view as View);
   const [contractorPaymentFocus, setContractorPaymentFocus] = useState<{
     companyId: string; competence: string; closingId: string;
   } | null>(null);
@@ -885,7 +886,21 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [newComment, setNewComment] = useState("");
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
-  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(Boolean(initialLocation.settings));
+  /* A Administração está aberta. Deixou de ser `workspaceModalOpen` porque
+     deixou de ser janela: hoje ela substitui o conteúdo da área principal, e o
+     nome do estado precisa dizer isso para o próximo que ler. */
+  const [administrationOpen, setAdministrationOpen] = useState(Boolean(initialLocation.settings));
+
+  /* Trocar de tela fecha a Administração.
+     Ela ocupa a área principal, a mesma das outras telas — sem isto, clicar em
+     "Demandas" com a Administração aberta continuaria mostrando a
+     Administração, porque a condição de renderização vence a do `view`.
+     Envolver o `setView` resolve nos trinta e poucos lugares que o chamam, em
+     vez de exigir que cada um lembre de fechar. */
+  const setView = useCallback((next: View) => {
+    setAdministrationOpen(false);
+    setViewState(next);
+  }, []);
   /* O nome do grupo em edição, ou `null` quando ninguém digitou nada ainda.
      O estado guardava a string direto e só era preenchido por
      `openWorkspaceSettings`. Desde a §46 a modal também abre pelo endereço —
@@ -1054,9 +1069,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const currentPath = useMemo(() => panelPath({
     view: view as PanelView,
     recordId: cardModalOpen && selectedCardId ? selectedCardId : "",
-    settings: workspaceModalOpen ? settingsSection as PanelSettingsSection : null,
+    settings: administrationOpen ? settingsSection as PanelSettingsSection : null,
     companyId: companyFilter === "all" ? "" : companyFilter,
-  }), [view, cardModalOpen, selectedCardId, workspaceModalOpen, settingsSection, companyFilter]);
+  }), [view, cardModalOpen, selectedCardId, administrationOpen, settingsSection, companyFilter]);
 
   useEffect(() => {
     const here = `${window.location.pathname}${window.location.search}`;
@@ -1071,7 +1086,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       const next = parsePanelPath(window.location.pathname, window.location.search);
       setView(next.view as View);
       setCompanyFilter(next.companyId || "all");
-      setWorkspaceModalOpen(Boolean(next.settings));
+      setAdministrationOpen(Boolean(next.settings));
       if (next.settings) setSettingsSection(next.settings as SettingsSection);
       if (!next.recordId) {
         setCardModalOpen(false);
@@ -1080,6 +1095,10 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     }
     window.addEventListener("popstate", applyLocation);
     return () => window.removeEventListener("popstate", applyLocation);
+    /* `setView` é estável (`useCallback` com lista vazia) e o efeito precisa
+       assinar o `popstate` uma vez só: incluí-lo na lista não muda quando ele
+       roda, mas reassinar o ouvinte a cada render é trabalho por nada. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -1216,12 +1235,12 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   }, [toast]);
 
   useEffect(() => {
-    if (!cardModalOpen && !inboxModalOpen && !workspaceModalOpen && !searchOpen && !notificationsOpen && !archiveOpen && !confirmation && !attachmentPreview) return;
+    if (!cardModalOpen && !inboxModalOpen && !searchOpen && !notificationsOpen && !archiveOpen && !confirmation && !attachmentPreview) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setCardModalOpen(false);
         setInboxModalOpen(false);
-        setWorkspaceModalOpen(false);
+        setAdministrationOpen(false);
         setSearchOpen(false);
         setNotificationsOpen(false);
         setArchiveOpen(false);
@@ -1236,7 +1255,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [cardModalOpen, inboxModalOpen, workspaceModalOpen, searchOpen, notificationsOpen, archiveOpen, confirmation, attachmentPreview]);
+  }, [cardModalOpen, inboxModalOpen, searchOpen, notificationsOpen, archiveOpen, confirmation, attachmentPreview]);
 
   const activeCards = useMemo(() => snapshot?.lists.flatMap((list) => list.cards) ?? [], [snapshot]);
   /**
@@ -1755,7 +1774,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
 
   function openWorkspaceSettings() {
     setWorkspaceNameEdit(null);
-    setWorkspaceModalOpen(true);
+    setAdministrationOpen(true);
   }
 
   async function loadAuthSessions() {
@@ -1803,7 +1822,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     event.preventDefault();
     if (!workspaceName.trim()) return;
     const next = await mutate("/api/workspace", { method: "PATCH", body: JSON.stringify({ name: workspaceName }) }, "Workspace atualizado.");
-    if (next) setWorkspaceModalOpen(false);
+    if (next) setAdministrationOpen(false);
   }
 
   async function addMember(event: FormEvent) {
@@ -1910,7 +1929,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     const next = await mutate("/api/workspaces/select", { method: "POST", body: JSON.stringify({ workspaceId }) }, "Workspace alterado.");
     if (next) {
       setWorkspaceNameEdit(null);
-      setWorkspaceModalOpen(false);
+      setAdministrationOpen(false);
       setView("board");
     }
   }
@@ -2080,6 +2099,219 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const principalCompany = snapshot.companies.find((company) => company.isPrincipal) ?? null;
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
 
+  /* A Administração, desenhada como página.
+   *
+   * O conteúdo é o mesmo das nove seções; o que mudou foi a moldura. O
+   * cabeçalho deixa de ser o de uma janela — sem "×" para fechar, porque não
+   * há nada por baixo para voltar — e passa a ser o cabeçalho da tela, com o
+   * caminho que diz onde a pessoa está.
+   */
+  const administrationPage = snapshot ? <>
+    <div className="dashboard-heading admin-page-heading">
+      <div>
+        <nav className="admin-breadcrumb" aria-label="Você está em">
+          <button type="button" onClick={() => setView("overview")}>Início</button>
+          <ChevronRight aria-hidden="true" />
+          <span aria-current="page">Administração</span>
+        </nav>
+        {/* O grupo da seção continua dito, agora como sobrescrito do título —
+            "WORKSPACE" no caminho não dizia onde a pessoa estava, dizia o nome
+            interno do agrupamento. */}
+        <span className="dashboard-eyebrow">{settingsSectionMeta[settingsSection].group}</span>
+        <h1 id="admin-page-title">{settingsSectionMeta[settingsSection].title}</h1>
+        <p className="admin-page-description">{settingsSectionMeta[settingsSection].description}</p>
+      </div>
+      <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
+    </div>
+        <div className="workspace-settings-layout">
+          <nav className="settings-nav" aria-label="Seções das configurações">
+            {/* Filtra por seção e só então decide se o grupo aparece: um
+                rótulo de grupo sem nenhum botão embaixo é uma promessa de
+                seção que a pessoa não tem. Para quem não é administrador,
+                "Pessoas e acesso" e "Operação" somem inteiros. */}
+            {settingsNavGroups
+              .map((group) => ({ ...group, sections: group.sections.filter((item) => isAdmin || !item.adminOnly) }))
+              .filter((group) => group.sections.length > 0)
+              .flatMap((group) => [
+              <span className="settings-nav-label" key={group.label}>{group.label}</span>,
+              /* O `aria-label` repete o título porque em telas estreitas o
+                 CSS esconde o `<span>` e deixa só o ícone: sem ele o botão
+                 fica sem nome acessível justamente onde ninguém consegue
+                 adivinhar o desenho. */
+              ...group.sections.map((item) => (
+                <button key={item.section} aria-label={settingsSectionMeta[item.section].title} className={settingsSection === item.section ? "active" : ""} onClick={() => { setSettingsSection(item.section); if (item.section === "security") void loadAuthSessions(); }}>
+                  <item.icon aria-hidden="true" /><span>{settingsSectionMeta[item.section].title}<small>{item.hint}</small></span>
+                </button>
+              )),
+            ])}
+          </nav>
+          <div className="workspace-settings-content">
+            {settingsSection === "general" && <>
+              {/* Os números antes dos formulários, como a maquete põe: quem
+                  abre a administração precisa saber o tamanho do que vai
+                  alterar antes de alterar. */}
+              <AdminIndicators snapshot={snapshot} />
+              <form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceNameEdit(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form>
+              <div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>
+
+              {/* Workspaces e quadros viraram tabela (maquete 3).
+                  Eram duas listas de botões onde o estado só aparecia no
+                  rótulo do próprio botão. A tabela separa o que é dado do
+                  que é ação: papel, situação e tamanho ficam em coluna, e o
+                  botão da última coluna faz uma coisa só. A situação do
+                  grupo — arquivado, em análise — não cabia em botão algum e
+                  simplesmente não era mostrada. */}
+              {snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher">
+                <header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header>
+                <div className="overview-table-scroll">
+                  <table className="overview-table admin-table">
+                    <thead><tr>
+                      <th scope="col">Workspace</th>
+                      <th scope="col">Seu papel</th>
+                      <th scope="col">Situação</th>
+                      <th scope="col"><span className="sr-only">Ação</span></th>
+                    </tr></thead>
+                    <tbody>
+                      {snapshot.availableWorkspaces.map((item) => <tr key={item.id} aria-current={item.id === snapshot.workspace.id ? "true" : undefined}>
+                        <th scope="row"><strong>{item.name}</strong>{item.isOwner && <small>Você é o titular</small>}</th>
+                        <td>{roleLabels[item.role]}</td>
+                        {/* `statusReason` explica por que o grupo saiu de
+                            operação; sem ele "Arquivado" é um rótulo que
+                            não diz o que fazer a respeito. */}
+                        <td>{item.operational
+                          ? <span className="admin-tag ok">Em operação</span>
+                          : <span className="admin-tag idle" title={item.statusReason || undefined}>{item.statusReason || item.status}</span>}</td>
+                        <td className="admin-acao">{item.id === snapshot.workspace.id
+                          ? <span className="admin-tag atual">Atual</span>
+                          : <button type="button" className="secondary-button" disabled={busy} onClick={() => void switchWorkspace(item.id)}>Abrir</button>}</td>
+                      </tr>)}
+                    </tbody>
+                  </table>
+                </div>
+              </section>}
+
+              <section className="board-manager">
+                <header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header>
+                <div className="overview-table-scroll">
+                  <table className="overview-table admin-table">
+                    <thead><tr>
+                      <th scope="col">Quadro</th>
+                      <th scope="col">Tipo</th>
+                      <th scope="col">Etapas</th>
+                      <th scope="col"><span className="sr-only">Ação</span></th>
+                    </tr></thead>
+                    <tbody>
+                      {snapshot.boards.map((board) => <tr key={board.id} aria-current={board.id === snapshot.board.id ? "true" : undefined}>
+                        <th scope="row"><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></th>
+                        <td>{board.boardType || "—"}</td>
+                        <td>{board.stages.length}</td>
+                        <td className="admin-acao">{board.id === snapshot.board.id
+                          ? <span className="admin-tag atual">Atual</span>
+                          : <button type="button" className="secondary-button" onClick={() => void switchBoard(board.id)}>Abrir</button>}</td>
+                      </tr>)}
+                    </tbody>
+                  </table>
+                </div>
+                {isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}
+              </section>
+            </>}
+            {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
+            {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onUpdateCompany={updateCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
+            {settingsSection === "team" && <>
+              <section className="access-admin-hero">
+                <span><Users aria-hidden="true" /></span>
+                <div>
+                  <strong>Workspace → Departamento → Módulos</strong>
+                  <p>O departamento principal define os módulos que a pessoa recebe por padrão. Em “Usuários e acessos” você abre exceção para alguém, inclusive em módulo que a área dela não tem.</p>
+                </div>
+                <b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b>
+              </section>
+              <section className="workspace-team">
+                <header>
+                  <div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div>
+                  <p>O papel define as ações; o departamento dá os módulos padrão; a exceção individual vence o departamento; a empresa limita os CNPJs.</p>
+                </header>
+                <div className="workspace-member-list">{snapshot.members.map((member) => (
+                  <article key={member.userId}>
+                    <i>{initials(member.name)}</i>
+                    <div>
+                      <strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong>
+                      <small>{member.email}</small>
+                      <span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span>
+                      <span className={`member-department-status ${member.departmentId ? "assigned" : "missing"}`}>
+                        <Building2 aria-hidden="true" /> {member.departmentName || (member.isOwner ? "Proprietário do Workspace" : "Sem departamento")}
+                      </span>
+                    </div>
+                    {isAdmin && !member.isOwner ? (
+                      <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}>
+                        <option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option>
+                      </select>
+                    ) : <b>{roleLabels[member.role]}</b>}
+                    {isAdmin && !member.isOwner && (
+                      <select className="member-department-select" aria-label={`Departamento de ${member.name}`} value={member.departmentId ?? ""} disabled={busy}
+                        onChange={(event) => updateMemberDepartment(member.userId, member.name, event.target.value)}>
+                        {!member.departmentId && <option value="">Selecione o departamento</option>}
+                        {activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name}</option>)}
+                      </select>
+                    )}
+                    {isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}
+                    {isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}
+                    {isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}
+                    {isAdmin && !member.isOwner && <details className="member-modules-details"><summary>Módulos deste usuário</summary><MemberModules memberId={member.userId} key={`${member.userId}:${member.departmentId ?? "none"}`} memberName={member.name} canManage={isAdmin} /></details>}
+                  </article>
+                ))}</div>
+              </section>
+
+              {/* A matriz fica logo abaixo da lista, e antes do formulário
+                  que cria usuário: os dois lugares em que se escolhe um
+                  papel são o seletor de cada linha acima e o `<select>` do
+                  formulário abaixo. Ela precisa estar entre os dois, e não
+                  numa seção que ninguém abre no momento de decidir. */}
+              <PermissionMatrix />
+
+              {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}>
+                <header><div><strong>Criar e liberar usuário</strong><span>Defina a lotação e os módulos antes de gerar o acesso.</span></div><b>1. Identidade · 2. Departamento · 3. Módulos · 4. Ativação</b></header>
+                <div>
+                  <label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label>
+                  <label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label>
+                  <label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label>
+                  <label>Departamento principal<select value={memberDepartmentId} required onChange={(event) => selectMemberDepartment(event.target.value)}>
+                    <option value="">Selecione…</option>{activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name} · {department.code}</option>)}
+                  </select></label>
+                  <fieldset className="invite-module-scope" disabled={busy || !memberDepartmentId}>
+                    <legend>Módulos liberados neste departamento</legend>
+                    {!memberDepartmentId && <p>Selecione o departamento para ver os módulos disponíveis.</p>}
+                    {memberDepartmentId && selectedDepartmentModules.length === 0 && <p>Este departamento ainda não possui módulos configurados.</p>}
+                    <div>{selectedDepartmentModules.map((module) => {
+                      const hardBlocked = ["module_inactive", "workspace_inactive", "subscription_inactive", "not_in_plan", "revoked_by_platform"].includes(module.reason);
+                      return <label key={module.key} data-disabled={hardBlocked || undefined}>
+                        <input type="checkbox" checked={memberModuleKeys.includes(module.key)} disabled={hardBlocked}
+                          onChange={(event) => setMemberModuleKeys((current) => event.target.checked ? [...current, module.key] : current.filter((key) => key !== module.key))} />
+                        <span><strong>{module.name}</strong><small>{hardBlocked ? module.message : module.description}</small></span>
+                      </label>;
+                    })}</div>
+                  </fieldset>
+                  <fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset>
+                  <button className="primary-button" disabled={busy || !memberEmail.trim() || !memberDepartmentId || memberModuleKeys.length === 0}>Criar usuário e gerar link</button>
+                </div>
+              </form>}
+            </>}
+            {settingsSection === "team" && recoveryLink && <section className="access-recovery-link"><header><div><span>LINK ÚNICO DE RECUPERAÇÃO</span><strong>{recoveryLink.name}</strong><small>Válido até {new Date(recoveryLink.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. O link deixa de funcionar após o primeiro uso.</small></div><button onClick={() => { void navigator.clipboard.writeText(recoveryLink.url).then(() => setToast("Link de recuperação copiado.")); }}>Copiar link</button></header><input value={recoveryLink.url} readOnly aria-label="Link de recuperação" /></section>}
+            {settingsSection === "security" && <section className="security-sessions">
+              <header><div><strong>Dispositivos conectados</strong><span>Revise os acessos ativos da sua conta. Endereços IP e identificadores completos do navegador não são armazenados.</span></div><button className="secondary-button" disabled={busy || sessionsLoading || authSessions.length < 2} onClick={() => void revokeAuthSessions("/api/auth/sessions?scope=others")}>Sair dos outros</button></header>
+              {sessionsLoading && <p>Carregando sessões...</p>}
+              {!sessionsLoading && authSessions.length === 0 && <p>Nenhuma sessão gerenciável foi encontrada para este tipo de acesso.</p>}
+              <div>{authSessions.map((session) => <article key={session.id}><i><Smartphone aria-hidden="true" /></i><span><strong>{session.deviceLabel}{session.current && <em>Atual</em>}</strong><small>Último uso: {new Date(session.lastSeenAt).toLocaleString("pt-BR")} · Criada em {new Date(session.createdAt).toLocaleDateString("pt-BR")}</small><small>Expira em {new Date(session.expiresAt).toLocaleString("pt-BR")}</small></span><button className="secondary-button" disabled={busy} onClick={() => void revokeAuthSessions(`/api/auth/sessions/${session.id}`)}>{session.current ? "Sair deste dispositivo" : "Revogar"}</button></article>)}</div>
+              <footer><span>Se você não reconhecer um dispositivo, encerre todas as sessões e entre novamente.</span><button className="danger-button" disabled={busy || sessionsLoading || authSessions.length === 0} onClick={() => void revokeAuthSessions("/api/auth/sessions?scope=all")}>Sair de todos</button></footer>
+            </section>}
+            {settingsSection === "fields" && <FieldsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
+            {settingsSection === "templates" && <TemplatesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} onUseTemplate={(id) => { setAdministrationOpen(false); openFromTemplate(id); }} />}
+            {settingsSection === "sla" && <SlaSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} />}
+            {settingsSection === "automations" && <RulesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
+          </div>
+        </div>
+  </> : null;
+
   return (
     <main className={`dashboard-shell theme-dark${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className="dashboard-sidebar">
@@ -2185,6 +2417,22 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               })}
             </div>;
           })}
+
+          {/* A Administração ganhou lugar no menu.
+              Ela só era alcançável pela engrenagem do rodapé, que abre o que
+              abre sem dizer o quê — e a maquete a põe como item, no mesmo nível
+              dos outros. O grupo próprio existe porque ela não é processo nem
+              área: é a configuração de tudo isso. */}
+          <div className="sidebar-nav-group">
+            <span className="sidebar-nav-section">CONFIGURAÇÃO</span>
+            <button type="button" title="Administração"
+              className={`${administrationOpen ? "active " : ""}sidebar-nav-item`}
+              onClick={() => { setSettingsSection(isAdmin ? "general" : "security"); openWorkspaceSettings(); }}
+              aria-current={administrationOpen ? "page" : undefined}>
+              <span aria-hidden="true"><Settings /></span> Administração
+            </button>
+          </div>
+
           <details ref={mobileNavigationRef} className="sidebar-mobile-more">
             <summary className={mobilePrimaryViews.has(view) ? "" : "active"} aria-label="Abrir todos os módulos">
               <span aria-hidden="true"><MoreHorizontal /></span><span>Mais</span>
@@ -2371,7 +2619,19 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {/* `transitionKey` remonta este bloco a cada troca de módulo, o que
               reinicia a animação de entrada. Sem a chave, a transição só
               rodaria na primeira vez. */}
-          <PageTransition transitionKey={view} className="view-transition">
+          {/* A Administração é uma tela, e não uma janela por cima da tela.
+              Ela era uma modal: abria sobre o painel, escurecia o resto e
+              prendia o foco. Isso serve para uma confirmação de três linhas —
+              não para nove seções onde se cadastra empresa, cria usuário,
+              define coluna, escreve automação e confere permissão. Quem
+              administra fica ali, e ficar não é o que uma modal permite.
+
+              O endereço não muda: `/painel/configuracoes/<seção>` continua
+              sendo o link que se manda para alguém, e agora ele abre a tela em
+              vez de abrir a janela. */}
+          {administrationOpen ? <PageTransition transitionKey={`administracao-${settingsSection}`} className="view-transition">
+            {administrationPage}
+          </PageTransition> : <PageTransition transitionKey={view} className="view-transition">
           {/* A tela que desenha o próprio cabeçalho não recebe este (§41). */}
           {!header.ownHeader && <div className="dashboard-heading">
             <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{view === "overview" ? `Olá, ${user.displayName.split(" ")[0] || "equipe"}.` : header.title}</h1><p>{view === "overview" ? "Veja as prioridades da operação e avance com segurança." : header.description}</p><div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div></div>
@@ -2552,7 +2812,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
             const card = allCards.find((item) => item.id === cardId);
             if (card) openCard(card);
           }} />}
-          </PageTransition>
+          </PageTransition>}
           </>}</ProcessTabsProvider>
         </div>
       </section>
@@ -2860,200 +3120,6 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
         </div>
       )}
 
-      {workspaceModalOpen && (
-        <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setWorkspaceModalOpen(false); }}>
-          <section className="workspace-modal workspace-settings-modal" role="dialog" aria-modal="true" aria-labelledby="workspace-modal-title">
-            <header><div><span>{settingsSectionMeta[settingsSection].group}</span><h2 id="workspace-modal-title">{settingsSectionMeta[settingsSection].title}</h2><p>{settingsSectionMeta[settingsSection].description}</p></div><button onClick={() => setWorkspaceModalOpen(false)} aria-label="Fechar">×</button></header>
-            <div className="workspace-settings-layout">
-              <nav className="settings-nav" aria-label="Seções das configurações">
-                {/* Filtra por seção e só então decide se o grupo aparece: um
-                    rótulo de grupo sem nenhum botão embaixo é uma promessa de
-                    seção que a pessoa não tem. Para quem não é administrador,
-                    "Pessoas e acesso" e "Operação" somem inteiros. */}
-                {settingsNavGroups
-                  .map((group) => ({ ...group, sections: group.sections.filter((item) => isAdmin || !item.adminOnly) }))
-                  .filter((group) => group.sections.length > 0)
-                  .flatMap((group) => [
-                  <span className="settings-nav-label" key={group.label}>{group.label}</span>,
-                  /* O `aria-label` repete o título porque em telas estreitas o
-                     CSS esconde o `<span>` e deixa só o ícone: sem ele o botão
-                     fica sem nome acessível justamente onde ninguém consegue
-                     adivinhar o desenho. */
-                  ...group.sections.map((item) => (
-                    <button key={item.section} aria-label={settingsSectionMeta[item.section].title} className={settingsSection === item.section ? "active" : ""} onClick={() => { setSettingsSection(item.section); if (item.section === "security") void loadAuthSessions(); }}>
-                      <item.icon aria-hidden="true" /><span>{settingsSectionMeta[item.section].title}<small>{item.hint}</small></span>
-                    </button>
-                  )),
-                ])}
-              </nav>
-              <div className="workspace-settings-content">
-                {settingsSection === "general" && <>
-                  {/* Os números antes dos formulários, como a maquete põe: quem
-                      abre a administração precisa saber o tamanho do que vai
-                      alterar antes de alterar. */}
-                  <AdminIndicators snapshot={snapshot} />
-                  <form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceNameEdit(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form>
-                  <div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>
-
-                  {/* Workspaces e quadros viraram tabela (maquete 3).
-                      Eram duas listas de botões onde o estado só aparecia no
-                      rótulo do próprio botão. A tabela separa o que é dado do
-                      que é ação: papel, situação e tamanho ficam em coluna, e o
-                      botão da última coluna faz uma coisa só. A situação do
-                      grupo — arquivado, em análise — não cabia em botão algum e
-                      simplesmente não era mostrada. */}
-                  {snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher">
-                    <header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header>
-                    <div className="overview-table-scroll">
-                      <table className="overview-table admin-table">
-                        <thead><tr>
-                          <th scope="col">Workspace</th>
-                          <th scope="col">Seu papel</th>
-                          <th scope="col">Situação</th>
-                          <th scope="col"><span className="sr-only">Ação</span></th>
-                        </tr></thead>
-                        <tbody>
-                          {snapshot.availableWorkspaces.map((item) => <tr key={item.id} aria-current={item.id === snapshot.workspace.id ? "true" : undefined}>
-                            <th scope="row"><strong>{item.name}</strong>{item.isOwner && <small>Você é o titular</small>}</th>
-                            <td>{roleLabels[item.role]}</td>
-                            {/* `statusReason` explica por que o grupo saiu de
-                                operação; sem ele "Arquivado" é um rótulo que
-                                não diz o que fazer a respeito. */}
-                            <td>{item.operational
-                              ? <span className="admin-tag ok">Em operação</span>
-                              : <span className="admin-tag idle" title={item.statusReason || undefined}>{item.statusReason || item.status}</span>}</td>
-                            <td className="admin-acao">{item.id === snapshot.workspace.id
-                              ? <span className="admin-tag atual">Atual</span>
-                              : <button type="button" className="secondary-button" disabled={busy} onClick={() => void switchWorkspace(item.id)}>Abrir</button>}</td>
-                          </tr>)}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>}
-
-                  <section className="board-manager">
-                    <header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header>
-                    <div className="overview-table-scroll">
-                      <table className="overview-table admin-table">
-                        <thead><tr>
-                          <th scope="col">Quadro</th>
-                          <th scope="col">Tipo</th>
-                          <th scope="col">Etapas</th>
-                          <th scope="col"><span className="sr-only">Ação</span></th>
-                        </tr></thead>
-                        <tbody>
-                          {snapshot.boards.map((board) => <tr key={board.id} aria-current={board.id === snapshot.board.id ? "true" : undefined}>
-                            <th scope="row"><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></th>
-                            <td>{board.boardType || "—"}</td>
-                            <td>{board.stages.length}</td>
-                            <td className="admin-acao">{board.id === snapshot.board.id
-                              ? <span className="admin-tag atual">Atual</span>
-                              : <button type="button" className="secondary-button" onClick={() => void switchBoard(board.id)}>Abrir</button>}</td>
-                          </tr>)}
-                        </tbody>
-                      </table>
-                    </div>
-                    {isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}
-                  </section>
-                </>}
-                {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
-                {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onUpdateCompany={updateCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
-                {settingsSection === "team" && <>
-                  <section className="access-admin-hero">
-                    <span><Users aria-hidden="true" /></span>
-                    <div>
-                      <strong>Workspace → Departamento → Módulos</strong>
-                      <p>O departamento principal define os módulos que a pessoa recebe por padrão. Em “Usuários e acessos” você abre exceção para alguém, inclusive em módulo que a área dela não tem.</p>
-                    </div>
-                    <b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b>
-                  </section>
-                  <section className="workspace-team">
-                    <header>
-                      <div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div>
-                      <p>O papel define as ações; o departamento dá os módulos padrão; a exceção individual vence o departamento; a empresa limita os CNPJs.</p>
-                    </header>
-                    <div className="workspace-member-list">{snapshot.members.map((member) => (
-                      <article key={member.userId}>
-                        <i>{initials(member.name)}</i>
-                        <div>
-                          <strong>{member.name}{member.isOwner && <em>Administrador principal</em>}</strong>
-                          <small>{member.email}</small>
-                          <span className={`member-activation-status ${member.isActivated ? "active" : "pending"}`}>{member.isActivated ? "Acesso ativo" : "Ativação pendente"}</span>
-                          <span className={`member-department-status ${member.departmentId ? "assigned" : "missing"}`}>
-                            <Building2 aria-hidden="true" /> {member.departmentName || (member.isOwner ? "Proprietário do Workspace" : "Sem departamento")}
-                          </span>
-                        </div>
-                        {isAdmin && !member.isOwner ? (
-                          <select aria-label={`Papel de ${member.name}`} value={member.role} disabled={busy} onChange={(event) => void updateMemberRole(member.userId, event.target.value as WorkspaceRole)}>
-                            <option value="admin">Administrador</option><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option>
-                          </select>
-                        ) : <b>{roleLabels[member.role]}</b>}
-                        {isAdmin && !member.isOwner && (
-                          <select className="member-department-select" aria-label={`Departamento de ${member.name}`} value={member.departmentId ?? ""} disabled={busy}
-                            onChange={(event) => updateMemberDepartment(member.userId, member.name, event.target.value)}>
-                            {!member.departmentId && <option value="">Selecione o departamento</option>}
-                            {activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name}</option>)}
-                          </select>
-                        )}
-                        {isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}
-                        {isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}
-                        {isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}
-                        {isAdmin && !member.isOwner && <details className="member-modules-details"><summary>Módulos deste usuário</summary><MemberModules memberId={member.userId} key={`${member.userId}:${member.departmentId ?? "none"}`} memberName={member.name} canManage={isAdmin} /></details>}
-                      </article>
-                    ))}</div>
-                  </section>
-
-                  {/* A matriz fica logo abaixo da lista, e antes do formulário
-                      que cria usuário: os dois lugares em que se escolhe um
-                      papel são o seletor de cada linha acima e o `<select>` do
-                      formulário abaixo. Ela precisa estar entre os dois, e não
-                      numa seção que ninguém abre no momento de decidir. */}
-                  <PermissionMatrix />
-
-                  {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}>
-                    <header><div><strong>Criar e liberar usuário</strong><span>Defina a lotação e os módulos antes de gerar o acesso.</span></div><b>1. Identidade · 2. Departamento · 3. Módulos · 4. Ativação</b></header>
-                    <div>
-                      <label>Nome<input value={memberName} onChange={(event) => setMemberName(event.target.value)} placeholder="Nome da pessoa" maxLength={120} /></label>
-                      <label>E-mail<input type="email" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nome@empresa.com" required /></label>
-                      <label>Papel<select value={memberRole} onChange={(event) => setMemberRole(event.target.value as WorkspaceRole)}><option value="member">Membro</option><option value="observer">Observador</option><option value="guest">Convidado</option><option value="admin">Administrador</option></select></label>
-                      <label>Departamento principal<select value={memberDepartmentId} required onChange={(event) => selectMemberDepartment(event.target.value)}>
-                        <option value="">Selecione…</option>{activeDepartments.map((department) => <option value={department.id} key={department.id}>{department.name} · {department.code}</option>)}
-                      </select></label>
-                      <fieldset className="invite-module-scope" disabled={busy || !memberDepartmentId}>
-                        <legend>Módulos liberados neste departamento</legend>
-                        {!memberDepartmentId && <p>Selecione o departamento para ver os módulos disponíveis.</p>}
-                        {memberDepartmentId && selectedDepartmentModules.length === 0 && <p>Este departamento ainda não possui módulos configurados.</p>}
-                        <div>{selectedDepartmentModules.map((module) => {
-                          const hardBlocked = ["module_inactive", "workspace_inactive", "subscription_inactive", "not_in_plan", "revoked_by_platform"].includes(module.reason);
-                          return <label key={module.key} data-disabled={hardBlocked || undefined}>
-                            <input type="checkbox" checked={memberModuleKeys.includes(module.key)} disabled={hardBlocked}
-                              onChange={(event) => setMemberModuleKeys((current) => event.target.checked ? [...current, module.key] : current.filter((key) => key !== module.key))} />
-                            <span><strong>{module.name}</strong><small>{hardBlocked ? module.message : module.description}</small></span>
-                          </label>;
-                        })}</div>
-                      </fieldset>
-                      <fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset>
-                      <button className="primary-button" disabled={busy || !memberEmail.trim() || !memberDepartmentId || memberModuleKeys.length === 0}>Criar usuário e gerar link</button>
-                    </div>
-                  </form>}
-                </>}
-                {settingsSection === "team" && recoveryLink && <section className="access-recovery-link"><header><div><span>LINK ÚNICO DE RECUPERAÇÃO</span><strong>{recoveryLink.name}</strong><small>Válido até {new Date(recoveryLink.expiresAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. O link deixa de funcionar após o primeiro uso.</small></div><button onClick={() => { void navigator.clipboard.writeText(recoveryLink.url).then(() => setToast("Link de recuperação copiado.")); }}>Copiar link</button></header><input value={recoveryLink.url} readOnly aria-label="Link de recuperação" /></section>}
-                {settingsSection === "security" && <section className="security-sessions">
-                  <header><div><strong>Dispositivos conectados</strong><span>Revise os acessos ativos da sua conta. Endereços IP e identificadores completos do navegador não são armazenados.</span></div><button className="secondary-button" disabled={busy || sessionsLoading || authSessions.length < 2} onClick={() => void revokeAuthSessions("/api/auth/sessions?scope=others")}>Sair dos outros</button></header>
-                  {sessionsLoading && <p>Carregando sessões...</p>}
-                  {!sessionsLoading && authSessions.length === 0 && <p>Nenhuma sessão gerenciável foi encontrada para este tipo de acesso.</p>}
-                  <div>{authSessions.map((session) => <article key={session.id}><i><Smartphone aria-hidden="true" /></i><span><strong>{session.deviceLabel}{session.current && <em>Atual</em>}</strong><small>Último uso: {new Date(session.lastSeenAt).toLocaleString("pt-BR")} · Criada em {new Date(session.createdAt).toLocaleDateString("pt-BR")}</small><small>Expira em {new Date(session.expiresAt).toLocaleString("pt-BR")}</small></span><button className="secondary-button" disabled={busy} onClick={() => void revokeAuthSessions(`/api/auth/sessions/${session.id}`)}>{session.current ? "Sair deste dispositivo" : "Revogar"}</button></article>)}</div>
-                  <footer><span>Se você não reconhecer um dispositivo, encerre todas as sessões e entre novamente.</span><button className="danger-button" disabled={busy || sessionsLoading || authSessions.length === 0} onClick={() => void revokeAuthSessions("/api/auth/sessions?scope=all")}>Sair de todos</button></footer>
-                </section>}
-                {settingsSection === "fields" && <FieldsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
-                {settingsSection === "templates" && <TemplatesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} onUseTemplate={(id) => { setWorkspaceModalOpen(false); openFromTemplate(id); }} />}
-                {settingsSection === "sla" && <SlaSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} />}
-                {settingsSection === "automations" && <RulesSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onCatalog={updateCatalog} onConfirm={requestConfirmation} />}
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
 
       {confirmation && (
         <div className="workspace-modal-backdrop confirmation-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmation(null); }}>

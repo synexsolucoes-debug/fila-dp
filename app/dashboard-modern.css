@@ -5303,7 +5303,12 @@
 
 /* A Administração no tema do produto — os restos medidos na tela.
  *
- * O bloco fica escopado em `.workspace-settings-modal` de proposito: as classes
+ * O escopo é `.workspace-settings-layout`, o corpo da Administração — e não a
+ * modal, que deixou de existir quando ela virou tela. Escopar na modal fazia
+ * todas estas correções pararem de valer no instante em que a moldura mudou: o
+ * selo do papel voltou a azul, medido na tela.
+ *
+ * As classes
  * abaixo (`.danger-link`, `.secondary-button`, `legend`, `--brand`) aparecem em
  * outras telas, e corrigi-las na origem mudaria o que nao esta em questao aqui.
  * Escopado, so a Administracao muda.
@@ -5311,7 +5316,7 @@
  * Os tres primeiros vieram de medicao no navegador, secao por secao, e nao de
  * leitura de codigo — as outras cinco secoes ja estavam corretas, e so medindo
  * deu para saber quais eram quais. */
-.theme-dark .workspace-settings-modal {
+.theme-dark .workspace-settings-layout {
   /* `--brand` ainda e o azul #365CF5 de antes do redesenho, e ele pinta os
      contadores e as etiquetas dos catalogos daqui. Nao reprova contraste — e
      identidade: azul num painel de tinta e latao. Redefinido no escopo, cada
@@ -5322,17 +5327,17 @@
 
 /* "Excluir" em #B14A4A sobre a superficie da modal: 3,20:1, medido. O token de
    estado do tema escuro existe exatamente para este papel. */
-.theme-dark .workspace-settings-modal .danger-link { color: var(--ui-state-danger-text); }
+.theme-dark .workspace-settings-layout .danger-link { color: var(--ui-state-danger-text); }
 
 /* O "×" que remove alguem da lista de usuarios: #A14C4C sobre a superficie
    surda, 2,81:1 — e um controle destrutivo, o pior lugar para texto apagado. */
-.theme-dark .workspace-settings-modal .workspace-member-list article > button { color: var(--ui-state-danger-text); }
+.theme-dark .workspace-settings-layout .workspace-member-list article > button { color: var(--ui-state-danger-text); }
 
 /* "Dias uteis", a legenda do fieldset do calendario: #687689 sobre a superficie,
    3,68:1. As outras legendas da modal ja recebiam o token; esta ficou de fora
    por ser `legend`, e nao `label`. */
-.theme-dark .workspace-settings-modal .calendar-settings-form legend,
-.theme-dark .workspace-settings-modal fieldset > legend { color: var(--ui-text-soft); }
+.theme-dark .workspace-settings-layout .calendar-settings-form legend,
+.theme-dark .workspace-settings-layout fieldset > legend { color: var(--ui-text-soft); }
 
 /* As tres etiquetas de veu claro que sobraram na modal.
  *
@@ -5344,10 +5349,10 @@
  *
  * `--ui-primary-soft` e o veu do proprio acento: e o par que a barra lateral e
  * o menu das configuracoes ja usam, e rende 7,98:1 com `--ui-accent-text`. */
-.theme-dark .workspace-settings-modal .workspace-account-summary em,
-.theme-dark .workspace-settings-modal .catalog-section > header > b,
-.theme-dark .workspace-settings-modal .field-catalog em,
-.theme-dark .workspace-settings-modal .workspace-member-list article > div strong em {
+.theme-dark .workspace-settings-layout .workspace-account-summary em,
+.theme-dark .workspace-settings-layout .catalog-section > header > b,
+.theme-dark .workspace-settings-layout .field-catalog em,
+.theme-dark .workspace-settings-layout .workspace-member-list article > div strong em {
   background: var(--ui-primary-soft);
   color: var(--ui-accent-text, var(--ui-primary));
 }
@@ -5440,4 +5445,46 @@
   .demand-progress { padding-inline: 14px; }
   .demand-drawer-actions { padding-inline: 14px; }
   .demand-drawer-complete { margin-left: 0; }
+}
+
+
+/* ==========================================================================
+   A ADMINISTRAÇÃO COMO TELA (maquete 3)
+   Ela era uma modal. O conteúdo das nove seções não mudou; o que muda aqui é a
+   moldura — a tela não tem fundo escurecido, não tem sombra de janela e não tem
+   largura máxima de diálogo. As regras da modal continuam válidas para as
+   outras janelas do painel; estas valem só quando `.workspace-settings-layout`
+   está dentro da área de conteúdo.
+   ========================================================================== */
+
+.admin-page-heading { align-items: flex-start; }
+.admin-breadcrumb { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.admin-breadcrumb button {
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  color: var(--ui-accent-text, var(--ui-primary)); font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .06em;
+}
+.admin-breadcrumb button:hover { text-decoration: underline; }
+.admin-breadcrumb button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
+.admin-breadcrumb svg { width: 12px; height: 12px; color: var(--ui-text-soft); }
+.admin-breadcrumb span { color: var(--ui-text-soft); font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+.admin-page-description { margin: 6px 0 0; color: var(--ui-text-soft); font-size: 11px; }
+
+/* Fora da modal, o corpo das configurações deixa de ser uma caixa com altura
+   mínima de diálogo e passa a ser a tela: a coluna das seções sobe com a
+   rolagem e o conteúdo ocupa a largura que tiver. */
+.view-transition > .workspace-settings-layout {
+  min-height: 0; overflow: visible;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface);
+}
+.view-transition > .workspace-settings-layout > .settings-nav { position: sticky; top: 0; align-self: start; }
+.theme-dark .view-transition > .workspace-settings-layout,
+.theme-dark .view-transition > .workspace-settings-layout > .workspace-settings-content { background: transparent; }
+.theme-dark .view-transition > .workspace-settings-layout { background: var(--ui-surface); }
+
+/* O grupo da Administração na barra lateral. */
+.sidebar-nav-group .sidebar-nav-item[aria-current="page"] { font-weight: 800; }
+
+@media (max-width: 1050px) {
+  .view-transition > .workspace-settings-layout { grid-template-columns: minmax(0, 1fr); }
+  .view-transition > .workspace-settings-layout > .settings-nav { position: static; }
 }
