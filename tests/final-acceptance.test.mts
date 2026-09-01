@@ -35,9 +35,38 @@ accepts(1, "Processos definem, Demandas executam e a Visão Geral acompanha", ()
 });
 
 accepts(14, "os cinco indicadores são reais e acionáveis", () => {
-  for (const label of ["Demandas em aberto", "Fluxos em andamento", "Obrigações próximas", "Integrações com erro", "SLA NO PRAZO"]) assert.match(workspace, new RegExp(label, "u"));
-  assert.match(workspace, /data-metric="sla-on-time"[\s\S]{0,180}onFocus\("board", "safe"\)/u);
-  assert.match(overviewTests, /nenhum número do resumo é fixo/u);
+  /* A faixa mudou de forma enquanto este portão era escrito: os três contextos
+     do §7.2 viraram os cinco indicadores da maquete. As asserções abaixo foram
+     reescritas contra a estrutura atual, e o que elas cobram ficou mais estrito,
+     não menos:
+
+     - antes, "acionável" era um destino literal conferido em UM indicador;
+       agora, TODOS os cinco precisam declarar destino;
+     - antes, "real" apoiava-se no nome de um teste vizinho; agora, nenhum dos
+       cinco valores pode ser um literal com dígito — e a frase de apoio
+       tampouco, que é onde a maquete pedia a variação percentual inventada. */
+  const faixa = (() => {
+    const de = workspace.indexOf('key: "demands-open"');
+    assert.notEqual(de, -1, "a faixa de indicadores sumiu da Visão geral");
+    return workspace.slice(de, workspace.indexOf(" ];", de));
+  })();
+
+  for (const label of ["Demandas em aberto", "Fluxos em andamento", "Obrigações próximas", "Integrações com erro", "SLA no prazo"]) {
+    assert.ok(faixa.includes(`label: "${label}"`), `"${label}" sumiu da faixa de indicadores`);
+  }
+
+  // Acionável: cada um dos cinco leva a algum lugar, e o elemento é botão.
+  const destinos = [...faixa.matchAll(/target: "(\w+)"/gu)].map((match) => match[1]);
+  assert.equal(destinos.length, 5, `${destinos.length} indicador(es) com destino — a faixa tem cinco`);
+  assert.match(workspace, /<button type="button" key=\{kpi\.key\} data-metric=\{kpi\.key\}/u);
+  // E o SLA mantém a âncora nomeada, que é o que o ensaio de navegador mira.
+  assert.ok(faixa.includes('key: "sla-on-time"'));
+
+  // Real: nenhum valor nem frase de apoio com número escrito à mão.
+  const fixos = [...faixa.matchAll(/(?:value|support): "([^"$]*\d[^"]*)"/gu)].map((match) => match[1]);
+  assert.deepEqual(fixos, [], `número fixo na faixa: ${fixos.join(", ")}`);
+
+  assert.match(overviewTests, /nenhum número da faixa é fixo no código/u);
 });
 
 accepts(18, "saúde das integrações mostra estado, sincronização, erro e detalhe", () => {

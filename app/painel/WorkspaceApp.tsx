@@ -67,6 +67,9 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
+import { PRIORITY_LABELS } from "@/lib/work-items";
+import { capabilitiesForRole, workspaceRoles } from "@/lib/authorization";
+import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
 import { AnimatedTabs, competenceLabel, ProcessTabsProvider, useShortcuts, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
@@ -885,7 +888,19 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(Boolean(initialLocation.settings));
-  const [workspaceName, setWorkspaceName] = useState("");
+  /* O nome do grupo em edição, ou `null` quando ninguém digitou nada ainda.
+     O estado guardava a string direto e só era preenchido por
+     `openWorkspaceSettings`. Desde a §46 a modal também abre pelo endereço —
+     `/painel/configuracoes/grupo`, que é o link que se manda para alguém e o
+     que sobrevive a um F5 —, e por esse caminho aquela função não roda: o
+     administrador chegava a "Nome do workspace" em branco, num campo
+     `required`. Parecia que o grupo tinha perdido o nome, e salvar dali o
+     renomearia para o que a pessoa digitasse.
+
+     Derivar do snapshot em vez de sincronizar por efeito resolve os dois
+     caminhos de abertura de uma vez, e sem a chance de o efeito apagar o que
+     está sendo digitado. */
+  const [workspaceNameEdit, setWorkspaceNameEdit] = useState<string | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [slaFilter, setSlaFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState(initialLocation.companyId || "all");
@@ -1320,6 +1335,8 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const assignees = useMemo(() => Array.from(new Set(activeCards.flatMap((card) => card.assignees.length ? card.assignees.map((assignee) => assignee.name) : [card.assigneeName]).filter(Boolean))).sort(), [activeCards]);
   const processTypes = useMemo(() => Array.from(new Set(activeCards.map((card) => card.processType).filter(Boolean))).sort(), [activeCards]);
   const workspaceInitials = initials(snapshot?.workspace.name ?? "Synex DP");
+  /** O valor do campo: o que está sendo digitado, ou o nome vigente do grupo. */
+  const workspaceName = workspaceNameEdit ?? snapshot?.workspace.name ?? "";
   const userInitials = initials(user.displayName);
   const canEdit = snapshot ? ["admin", "member"].includes(snapshot.workspace.role) : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
@@ -1745,7 +1762,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   }
 
   function openWorkspaceSettings() {
-    setWorkspaceName(snapshot?.workspace.name ?? "");
+    setWorkspaceNameEdit(null);
     setWorkspaceModalOpen(true);
   }
 
@@ -1900,7 +1917,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     if (workspaceId === snapshot?.workspace.id) return;
     const next = await mutate("/api/workspaces/select", { method: "POST", body: JSON.stringify({ workspaceId }) }, "Workspace alterado.");
     if (next) {
-      setWorkspaceName(next.workspace.name);
+      setWorkspaceNameEdit(null);
       setWorkspaceModalOpen(false);
       setView("board");
     }
@@ -2602,12 +2619,84 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       )}
 
       {cardModalOpen && (
-        <div className="workspace-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
-          <section className="workspace-modal card-modal demand-detail-modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
+        /* A demanda passou de modal centrada a gaveta à direita, como a maquete
+           pede. A diferença não é de gosto: a modal centrada tapa o quadro, e
+           quem trabalha uma fila abre demanda atrás de demanda comparando com o
+           que está atrás. A gaveta deixa a coluna de origem visível.
+
+           `role="dialog"` e `aria-modal` continuam: para quem usa leitor de
+           tela ou teclado, o comportamento é o mesmo — o foco fica preso
+           dentro e Esc fecha. O que muda é a posição na tela. */
+        <div className="workspace-modal-backdrop demand-drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
+          <section className="workspace-modal card-modal demand-detail-modal demand-drawer" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
             <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}{selectedCard?.cancelledAt && <b className="demand-cancelled" title={selectedCard.cancellationReason}>CANCELADA</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
             {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "process" ? "active" : ""} onClick={() => setCardTab("process")}>Processo</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
             <div className="card-modal-body single">
-              {selectedCard && <section className="demand-detail-summary"><div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div><div className="demand-document-state"><span>DOCUMENTOS</span><strong>{selectedCard.checklist.filter((item) => item.completed).length} aprovados</strong><small>{selectedCard.checklist.filter((item) => !item.completed).length} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div><div className="demand-quick-actions">{canEdit && !selectedCard.archived && <><button className="quick-complete" type="button" onClick={completeSelectedCard}><CheckCircle2 aria-hidden="true" /> Concluir</button><button type="button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button><button type="button" onClick={() => focusCardField("card-assignees")}>Responsável</button><button type="button" onClick={() => focusCardField("card-due-at")}>Prazo</button></>}</div></section>}
+              {selectedCard && (() => {
+                /* O fluxo desta demanda já vem no snapshot — a mesma fonte que
+                   a Visão geral usa. Nenhuma consulta nova para desenhar a
+                   barra: quando a demanda não nasceu de processo, não há fluxo,
+                   e a faixa mostra o checklist no lugar do progresso da versão. */
+                const fluxo = flowByCard.get(selectedCard.id);
+                const feitos = selectedCard.checklist.filter((item) => item.completed).length;
+                const pendentes = selectedCard.checklist.length - feitos;
+                return <>
+                  {/* Progresso da demanda (maquete 4).
+                      A barra sai do total que a VERSÃO do processo prevê, e não
+                      das tarefas já materializadas: "7 de 18" continua sendo de
+                      18 enquanto a demanda anda. Sem tarefa nenhuma prevista,
+                      barra nenhuma é desenhada — barra vazia se lê como "0%
+                      concluído", que afirma progresso sem denominador. */}
+                  <section className="demand-progress" aria-label="Progresso da demanda">
+                    <header>
+                      <span>PROGRESSO DA DEMANDA</span>
+                      <strong>{fluxo && fluxo.tasksTotal > 0
+                        ? `${fluxo.tasksDone} de ${fluxo.tasksTotal} tarefas · ${fluxo.progress}%`
+                        : selectedCard.checklist.length
+                          ? `${feitos} de ${selectedCard.checklist.length} itens do checklist`
+                          : "Sem tarefas previstas"}</strong>
+                    </header>
+                    {fluxo && fluxo.tasksTotal > 0 && <div className="demand-progress-bar" role="img"
+                      aria-label={`${fluxo.progress}% concluído, ${fluxo.tasksDone} de ${fluxo.tasksTotal} tarefas`}>
+                      <i style={{ width: `${Math.max(0, Math.min(100, fluxo.progress))}%` }} />
+                    </div>}
+                  </section>
+
+                  {/* Os oito campos da maquete, em texto e lado a lado.
+                      Eles existiam espalhados pelo formulário de edição, onde
+                      só se lê um campo de cada vez porque cada um é um controle.
+                      Aqui é leitura: quem abre a demanda quer saber de quem ela
+                      é e quando vence antes de decidir mexer em alguma coisa.
+
+                      "Próxima etapa" não aparece aqui: as transições possíveis
+                      dependem de bloqueios que só o servidor sabe avaliar, e
+                      elas já são carregadas — com o motivo de cada bloqueio — na
+                      aba Processo. Repetir o rótulo aqui, sem o bloqueio junto,
+                      prometeria um avanço que pode não estar liberado. */}
+                  <dl className="demand-fields">
+                    <div><dt>Responsável</dt><dd>{selectedCard.assignees.map((item) => item.name).join(", ") || selectedCard.assigneeName || "Não atribuído"}</dd></div>
+                    <div><dt>Prazo</dt><dd>{selectedCard.dueAt ? formatDue(selectedCard.dueAt) : "Sem prazo"}</dd></div>
+                    <div><dt>Criada em</dt><dd>{formatMoment(selectedCard.createdAt)}</dd></div>
+                    <div><dt>Competência</dt><dd>{selectedCard.competence ? competenceLabel(selectedCard.competence) : "Sem competência"}</dd></div>
+                    <div><dt>Prioridade</dt><dd>{PRIORITY_LABELS[selectedCard.priority] ?? selectedCard.priority}</dd></div>
+                    <div><dt>Tipo</dt><dd>{selectedCard.processType}</dd></div>
+                    <div className="demand-field-wide">
+                      <dt>Etapa atual</dt>
+                      <dd>{fluxo
+                        ? <button type="button" className="demand-field-link" onClick={() => setCardTab("process")}>
+                            {fluxo.stepLabel || "Não iniciada"}
+                            {fluxo.versionNumber ? <em>v{fluxo.versionNumber}</em> : null}
+                          </button>
+                        : "Demanda avulsa, sem processo"}</dd>
+                    </div>
+                  </dl>
+
+                  <section className="demand-detail-summary">
+                    <div className={`demand-sla-state ${selectedCard.slaStatus}`}><span>SLA</span><strong>{slaLabel(selectedCard)}</strong><small>{selectedCard.slaStatus === "paused" ? selectedCard.slaPausedReason || "Pausa justificada" : selectedCard.dueAt ? `Vencimento: ${formatDue(selectedCard.dueAt)}` : "Defina um prazo para controlar o SLA"}</small></div>
+                    <div className="demand-document-state"><span>DOCUMENTOS</span><strong>{feitos} aprovados</strong><small>{pendentes} pendente(s) • {selectedCard.attachments.length} anexo(s)</small></div>
+                  </section>
+                </>;
+              })()}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
                 {/* Origem da demanda (§10): o processo publicado.
@@ -2643,8 +2732,26 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 {!selectedCard && <label className="full">Processo operacional<select value={cardForm.boardId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, boardId: event.target.value, listId: "" })}>{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.boardType === "process" ? `Processo: ${board.name}` : `Quadro geral: ${board.name}`}</option>)}</select><small className="card-process-helper">A demanda será criada e movimentada somente nas colunas deste processo.</small></label>}
                 <label className="full">Título da demanda<input autoFocus value={cardForm.title} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, title: event.target.value })} placeholder="Ex.: Conciliar colaborador com o ERP" required /></label>
                 <label className="full">Descrição<textarea value={cardForm.description} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, description: event.target.value })} placeholder="Contexto e orientações para execução" rows={4} /></label>
+                {/* O tipo vigente entra na lista quando não estiver nela.
+                    Demanda criada a partir de um processo publicado recebe o
+                    CÓDIGO do processo como tipo — `EPI_ENTREGA`, e não um dos
+                    sete rótulos escritos aqui. O `<select>` sem opção
+                    correspondente cai na primeira, e a tela passava a mostrar
+                    "CONCILIAÇÃO CADASTRAL" logo abaixo de um campo que dizia
+                    "EPI_ENTREGA": dois valores para o mesmo dado na mesma
+                    tela. Pior que a divergência visual, salvar dali gravava a
+                    primeira opção por cima do tipo real, sem ninguém pedir.
+
+                    A opção extra é separada das sete por `optgroup` para não
+                    parecer parte do catálogo padrão. */}
                 {!cardForm.processVersionId &&
-                  <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>CONCILIAÇÃO CADASTRAL</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>}
+                  <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}>
+                    {cardForm.processType && !processTypeOptions.includes(cardForm.processType)
+                      && <optgroup label="Tipo vigente desta demanda"><option>{cardForm.processType}</option></optgroup>}
+                    <optgroup label="Tipos do catálogo">
+                      {processTypeOptions.map((tipo) => <option key={tipo}>{tipo}</option>)}
+                    </optgroup>
+                  </select></label>}
                 <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
                 {!selectedCard && <label>Colaborador<select value={cardForm.employeeId} disabled={!canEdit || employeeStartOptions === null} onChange={(event) => setCardForm({ ...cardForm, employeeId: event.target.value })}><option value="">{employeeStartOptions === null ? "Carregando..." : "Não informado"}</option>{(employeeStartOptions ?? []).filter((employee) => !cardForm.companyId || employee.company_id === cardForm.companyId).map((employee) => <option key={employee.id} value={employee.id}>{employee.social_name || employee.full_name} • {employee.registration_number}</option>)}</select></label>}
                 {!selectedCard && <label>Solicitante<select value={cardForm.requesterUserId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterUserId: event.target.value })}><option value="">Usuário atual</option>{snapshot.members.map((member) => <option key={member.userId} value={member.userId}>{member.name} • {member.email}</option>)}</select></label>}
@@ -2653,7 +2760,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 <label>Área responsável<select value={cardForm.responsibleAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, responsibleAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.responsibleAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 {!cardForm.processVersionId && <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>}
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
-                <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
+                <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>
                 {!cardForm.processVersionId && <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>}
                 <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
                 <section className="card-choice-section full"><header><strong>Etiquetas</strong><span>Classifique sem alterar o processo</span></header><div className="choice-chips label-choices">{snapshot.labels.map((label) => <label className={cardForm.labelIds.includes(label.id) ? "selected" : ""} style={{ borderColor: cardForm.labelIds.includes(label.id) ? label.color : undefined }} key={label.id}><input type="checkbox" checked={cardForm.labelIds.includes(label.id)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, labelIds: event.target.checked ? [...cardForm.labelIds, label.id] : cardForm.labelIds.filter((id) => id !== label.id) })} /><i style={{ backgroundColor: label.color }} />{label.name}</label>)}</div></section>
@@ -2673,7 +2780,18 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 <section className="card-tab-panel checklist-panel">
                   <div><span>CHECKLIST</span><strong>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</strong></div>
                   <div className="checklist-progress"><i style={{ width: `${selectedCard.checklist.length ? (selectedCard.checklist.filter((item) => item.completed).length / selectedCard.checklist.length) * 100 : 0}%` }} /></div>
-                  <ul>{selectedCard.checklist.map((item) => <li key={item.id}><label><input type="checkbox" checked={item.completed} disabled={!canEdit} onChange={(event) => void toggleChecklist(item.id, event.target.checked)} /><span>{item.title}</span></label></li>)}</ul>
+                  {/* A marca "Pendente" por item, como a maquete pede.
+                      A caixa desmarcada já diz que falta — mas ela diz isso só
+                      pela ausência de um traço de 8px, e quem percorre uma lista
+                      de dez itens procurando o que falta acaba contando caixas.
+                      A palavra dá o que a caixa não dá: um alvo de leitura. */}
+                  <ul>{selectedCard.checklist.map((item) => <li key={item.id} data-pendente={item.completed ? "false" : "true"}>
+                    <label>
+                      <input type="checkbox" checked={item.completed} disabled={!canEdit} onChange={(event) => void toggleChecklist(item.id, event.target.checked)} />
+                      <span>{item.title}</span>
+                    </label>
+                    {!item.completed && <b className="checklist-pendente">Pendente</b>}
+                  </li>)}</ul>
                   {canEdit && <form onSubmit={addChecklistItem}><input value={newChecklistItem} onChange={(event) => setNewChecklistItem(event.target.value)} placeholder="Nova etapa obrigatória" /><button disabled={!newChecklistItem.trim()}>＋</button></form>}
                   <p>Ao concluir todas as etapas, a demanda será movida automaticamente para Concluído.</p>
                 </section>
@@ -2698,6 +2816,29 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
 
               {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{selectedCard.attachments.filter((attachment) => attachment.commentId === comment.id).map((attachment) => <a key={attachment.id} href={attachment.downloadUrl} className="comment-attachment"><Paperclip aria-hidden="true" />{attachment.filename}</a>)}{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><label className="upload-button">Anexar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => setCommentAttachment(event.target.files?.[0] ?? null)} /></label>{commentAttachment ? <small>Arquivo: {commentAttachment.name}</small> : null}<button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
             </div>
+
+            {/* O rodapé de ações da maquete, fixo no pé da gaveta.
+                Antes estas ações moravam dentro da faixa de resumo, no topo: ao
+                rolar até o checklist ou os comentários — que é onde se decide
+                avançar — elas ficavam duas telas acima. Fixas no pé, a decisão e
+                o botão que a executa ficam no mesmo lugar.
+
+                "Avançar etapa" leva à aba Processo em vez de avançar daqui: o
+                destino depende de bloqueios que só o servidor avalia, e é lá que
+                eles são carregados com o motivo de cada um. Um botão que
+                avançasse direto teria de escolher o destino sozinho — e falhar
+                calado quando houvesse bloqueio. */}
+            {selectedCard && canEdit && !selectedCard.archived && <footer className="demand-drawer-actions">
+              {flowByCard.has(selectedCard.id) && <button type="button" className="primary-button" onClick={() => setCardTab("process")}>
+                <GitBranch aria-hidden="true" /> Avançar etapa
+              </button>}
+              <button type="button" className="secondary-button" onClick={() => focusCardField("card-assignees")}>Reatribuir</button>
+              <button type="button" className="secondary-button" onClick={() => focusCardField("card-due-at")}>Prazo</button>
+              <button type="button" className="secondary-button" onClick={() => { setCardTab("activity"); setNewComment("Solicitação de documentos: informe quais documentos ainda precisam ser enviados."); }}>Solicitar documento</button>
+              <button type="button" className="secondary-button demand-drawer-complete" onClick={completeSelectedCard}>
+                <CheckCircle2 aria-hidden="true" /> Concluir
+              </button>
+            </footer>}
           </section>
         </div>
       )}
@@ -2755,7 +2896,75 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 ])}
               </nav>
               <div className="workspace-settings-content">
-                {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}
+                {settingsSection === "general" && <>
+                  {/* Os números antes dos formulários, como a maquete põe: quem
+                      abre a administração precisa saber o tamanho do que vai
+                      alterar antes de alterar. */}
+                  <AdminIndicators snapshot={snapshot} />
+                  <form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceNameEdit(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form>
+                  <div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>
+
+                  {/* Workspaces e quadros viraram tabela (maquete 3).
+                      Eram duas listas de botões onde o estado só aparecia no
+                      rótulo do próprio botão. A tabela separa o que é dado do
+                      que é ação: papel, situação e tamanho ficam em coluna, e o
+                      botão da última coluna faz uma coisa só. A situação do
+                      grupo — arquivado, em análise — não cabia em botão algum e
+                      simplesmente não era mostrada. */}
+                  {snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher">
+                    <header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header>
+                    <div className="overview-table-scroll">
+                      <table className="overview-table admin-table">
+                        <thead><tr>
+                          <th scope="col">Workspace</th>
+                          <th scope="col">Seu papel</th>
+                          <th scope="col">Situação</th>
+                          <th scope="col"><span className="sr-only">Ação</span></th>
+                        </tr></thead>
+                        <tbody>
+                          {snapshot.availableWorkspaces.map((item) => <tr key={item.id} aria-current={item.id === snapshot.workspace.id ? "true" : undefined}>
+                            <th scope="row"><strong>{item.name}</strong>{item.isOwner && <small>Você é o titular</small>}</th>
+                            <td>{roleLabels[item.role]}</td>
+                            {/* `statusReason` explica por que o grupo saiu de
+                                operação; sem ele "Arquivado" é um rótulo que
+                                não diz o que fazer a respeito. */}
+                            <td>{item.operational
+                              ? <span className="admin-tag ok">Em operação</span>
+                              : <span className="admin-tag idle" title={item.statusReason || undefined}>{item.statusReason || item.status}</span>}</td>
+                            <td className="admin-acao">{item.id === snapshot.workspace.id
+                              ? <span className="admin-tag atual">Atual</span>
+                              : <button type="button" className="secondary-button" disabled={busy} onClick={() => void switchWorkspace(item.id)}>Abrir</button>}</td>
+                          </tr>)}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>}
+
+                  <section className="board-manager">
+                    <header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header>
+                    <div className="overview-table-scroll">
+                      <table className="overview-table admin-table">
+                        <thead><tr>
+                          <th scope="col">Quadro</th>
+                          <th scope="col">Tipo</th>
+                          <th scope="col">Etapas</th>
+                          <th scope="col"><span className="sr-only">Ação</span></th>
+                        </tr></thead>
+                        <tbody>
+                          {snapshot.boards.map((board) => <tr key={board.id} aria-current={board.id === snapshot.board.id ? "true" : undefined}>
+                            <th scope="row"><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></th>
+                            <td>{board.boardType || "—"}</td>
+                            <td>{board.stages.length}</td>
+                            <td className="admin-acao">{board.id === snapshot.board.id
+                              ? <span className="admin-tag atual">Atual</span>
+                              : <button type="button" className="secondary-button" onClick={() => void switchBoard(board.id)}>Abrir</button>}</td>
+                          </tr>)}
+                        </tbody>
+                      </table>
+                    </div>
+                    {isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}
+                  </section>
+                </>}
                 {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
                 {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onUpdateCompany={updateCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
                 {settingsSection === "team" && <>
@@ -2802,6 +3011,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                       </article>
                     ))}</div>
                   </section>
+
+                  {/* A matriz fica logo abaixo da lista, e antes do formulário
+                      que cria usuário: os dois lugares em que se escolhe um
+                      papel são o seletor de cada linha acima e o `<select>` do
+                      formulário abaixo. Ela precisa estar entre os dois, e não
+                      numa seção que ninguém abre no momento de decidir. */}
+                  <PermissionMatrix />
+
                   {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}>
                     <header><div><strong>Criar e liberar usuário</strong><span>Defina a lotação e os módulos antes de gerar o acesso.</span></div><b>1. Identidade · 2. Departamento · 3. Módulos · 4. Ativação</b></header>
                     <div>
@@ -2928,13 +3145,23 @@ function ConnectionMap({ integrations, onNavigate }: {
         {integrations.map((item) => {
           const tom = connectionTone(item.status);
           return <li key={item.id} data-tone={tom}>
+            {/* Os dois lados desta linha resolveram problemas diferentes no
+                mesmo elemento, e os dois ficam:
+
+                - o item virou botão, para que o conector leve ao próprio
+                  detalhe em vez de só se anunciar;
+                - a última sincronização passa a ser dita em QUALQUER estado, e
+                  não só no conectado. Era justamente no conector com erro que
+                  ela faltava — e é ali que ela responde a pergunta que importa:
+                  há quanto tempo este sistema parou de trazer dado. Ausência
+                  não vira data inventada: `lastSyncLabel(null)` diz "nunca
+                  sincronizou". */}
             <button type="button" onClick={() => onNavigate("integrations")}
               aria-label={`Abrir detalhes da integração ${item.displayName}`}>
               <i aria-hidden="true" />
               <span>
                 <strong>{item.displayName}</strong>
-                <small>{connectionStatusLabel(item.status)}
-                  {item.status === "connected" ? ` · ${lastSyncLabel(item.lastSyncAt)}` : ""}
+                <small>{connectionStatusLabel(item.status)} · {lastSyncLabel(item.lastSyncAt)}
                   {item.status === "error" ? " · Abra para consultar o diagnóstico" : ""}</small>
               </span>
             </button>
@@ -2944,6 +3171,17 @@ function ConnectionMap({ integrations, onNavigate }: {
     </div>
   </section>;
 }
+
+/**
+ * Os sete tipos do catálogo padrão do DP.
+ *
+ * A demanda que nasce de um processo publicado NÃO usa esta lista: ela recebe o
+ * código do próprio processo (`EPI_ENTREGA`, por exemplo). Por isso o seletor
+ * precisa admitir um valor de fora dela — e por isso a lista mora aqui, e não
+ * escrita dentro do JSX, onde não dava para perguntar se um valor pertence a
+ * ela.
+ */
+const processTypeOptions = ["CONCILIAÇÃO CADASTRAL", "RESCISÃO", "FÉRIAS", "BENEFÍCIOS", "FOLHA", "CADASTRO", "OUTROS"];
 
 const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
 
@@ -3033,8 +3271,21 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 }) {
   const attention = cards.filter((card) => card.slaStatus === "overdue" || card.slaStatus === "warning").sort((a, b) => (a.slaStatus === "overdue" ? -1 : 1) - (b.slaStatus === "overdue" ? -1 : 1));
   const companyById = new Map(companies.map((company) => [company.id, company]));
-  const maxStatus = Math.max(1, ...lists.map((list) => list.cards.length));
   const visibleColumns = lists.slice(0, 3);
+  /* Demanda por id, para a linha do histórico dizer a que ela se refere.
+     `activities` e `cards` já vêm do mesmo snapshot e do mesmo recorte, então
+     não há consulta nova; o evento cuja demanda o recorte não alcança fica sem
+     a coluna, e não com o título de outra. */
+  const cardById = new Map(cards.map((card) => [card.id, card]));
+
+  /* A aba escolhida do bloco de status. Vazia = ainda não escolheram, e aí o
+     padrão é a primeira coluna com demanda: abrir numa aba vazia faria a tela
+     parecer sem dados quando há. */
+  const [statusTab, setStatusTab] = useState("");
+  const statusList = lists.find((list) => list.id === statusTab)
+    ?? lists.find((list) => list.cards.length > 0)
+    ?? lists[0]
+    ?? null;
   const integrationsFailing = integrations.filter((item) => item.status === "error").length;
 
   /* Os números dos três contextos (§7.2).
@@ -3051,17 +3302,99 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   const venceHoje = cards.filter((card) => card.slaStatus === "warning").length;
   const atrasadas = cards.filter((card) => card.slaStatus === "overdue").length;
   const hojeExigeAcao = venceHoje + atrasadas > 0;
-  /* Cada linha de `flows` é uma demanda em execução vinculada à versão que a
-     instanciou. É essa ocorrência real — e não o número de modelos distintos —
-     que o indicador "Fluxos em andamento" precisa contar. */
-  const fluxosEmAndamento = flows.length;
+  /* Duas contagens diferentes, e o indicador usa as duas:
+
+     - `flows.length` é a ocorrência real — cada linha é uma demanda em execução
+       vinculada à versão que a instanciou. É o que "Fluxos em andamento" conta,
+       e é o que o valor do indicador mostra.
+     - `processosEmExecucao` são os modelos DISTINTOS por trás dessas
+       ocorrências. Doze admissões correndo são um processo com doze demandas, e
+       chamá-las de doze processos diria que a operação roda doze fluxos
+       diferentes — a confusão entre modelo e execução que o §4 separa.
+
+     Por isso a frase de apoio do indicador diz "N processos distintos": ela
+     qualifica o número de cima em vez de repeti-lo. */
+  const processosEmExecucao = new Set(flows.map((flow) => flow.definitionId)).size;
   const integracoesConectadas = integrations.filter((item) => item.status === "connected").length;
+  const obrigacoesVencidas = obligations.filter((item) => item.daysRemaining < 0).length;
   const ultimaSincronizacao = (() => {
     const marcas = integrations.map((item) => item.lastSyncAt).filter((value): value is string => Boolean(value));
     if (marcas.length === 0) return null;
     const recente = marcas.reduce((maior, atual) => (atual > maior ? atual : maior));
     return new Date(recente).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   })();
+
+  /* Os cinco indicadores da maquete.
+     Cada um traz um número e a frase que o qualifica. A maquete desenha uma
+     variação percentual ao lado do número — "+12% vs. mês anterior" — e ela
+     não entra: o snapshot não carrega nenhuma série histórica, então o
+     percentual teria de ser inventado, que é o que a §13 proíbe em primeiro
+     lugar. No lugar dele vai um segundo fato medido: o número que explica o
+     primeiro. É a mesma linha de texto e diz algo verdadeiro.
+
+     Nada foi perdido dos três contextos que estavam aqui: os sete valores que
+     eles mostravam continuam na tela, seis deles como a frase de apoio de um
+     indicador. */
+  const kpis: Array<{
+    key: string;
+    icon: LucideIcon;
+    label: string;
+    value: string;
+    support: string;
+    target: OverviewFocusTarget;
+    sla: "all" | "overdue";
+    /** Pinta o cartão de alerta — sempre derivado de um número, nunca fixo. */
+    alert: boolean;
+    /** Só o SLA tem barra: é o único indicador que é uma proporção. */
+    bar?: number | null;
+  }> = [
+    {
+      key: "demands-open", icon: ClipboardList, label: "Demandas em aberto",
+      value: String(stats.active),
+      support: `${stats.completed} concluída(s) no período · ${stats.waiting} aguardando terceiros`,
+      target: "board", sla: "all", alert: false,
+    },
+    {
+      key: "flows-running", icon: GitBranch, label: "Fluxos em andamento",
+      value: String(flows.length),
+      /* Processos DISTINTOS, não fluxos: doze admissões correndo são um
+         processo com doze demandas, e contá-las como doze processos diria que
+         a operação roda doze fluxos diferentes (§4). */
+      support: `${plural(processosEmExecucao, "processo distinto", "processos distintos")} · ${stats.documentsPending} tarefa(s) pendente(s)`,
+      target: "processManagement", sla: "all", alert: false,
+    },
+    {
+      key: "obligations-due", icon: CalendarClock, label: "Obrigações próximas",
+      value: String(obligations.length),
+      support: obrigacoesVencidas
+        ? `${obrigacoesVencidas} já vencida(s)`
+        : "Nenhuma vencida até agora",
+      target: "processes", sla: "all", alert: obrigacoesVencidas > 0,
+    },
+    {
+      key: "integrations-failing", icon: Cable, label: "Integrações com erro",
+      value: String(integrationsFailing),
+      /* Sem sincronização registrada o certo é dizer isso, e não uma data de
+         mentira nem um traço que parece dado que faltou carregar. */
+      support: `${integracoesConectadas} conectada(s) · última sincronização ${ultimaSincronizacao ?? "Nunca"}`,
+      target: "integrations", sla: "all", alert: integrationsFailing > 0,
+    },
+    {
+      key: "sla-on-time", icon: Timer, label: "SLA no prazo",
+      /* Sem demanda no recorte não há percentual: o número mais tranquilizador
+         da tela não pode aparecer justamente quando não há evidência nenhuma
+         para tranquilizar ninguém. */
+      value: stats.onTime === null ? "—" : `${stats.onTime}%`,
+      /* O percentual mede as demandas EM ABERTO que não estouraram o prazo, e
+         não as concluídas — populações diferentes. A frase de apoio abre o
+         número em atraso e vencimento de hoje, que é o que faz alguém agir. */
+      support: stats.onTime === null
+        ? "Sem demandas em aberto neste recorte"
+        : `das demandas em aberto · ${atrasadas} atrasada(s) · ${venceHoje} vencendo hoje`,
+      target: "board", sla: "overdue", alert: hojeExigeAcao,
+      bar: stats.onTime,
+    },
+  ];
 
   return <div className="overview-layout">
 
@@ -3090,13 +3423,10 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         "SLA no prazo" não entra aqui: ele tem a faixa logo abaixo, inteira,
         com barra e contagem. Repeti-lo como sexto cartão seria o mesmo número
         duas vezes na mesma dobra. */}
-    {/* Três contextos, e não sete cartões soltos (§7.2).
-        Sete indicadores lado a lado, cada um numa caixa igual, obrigam a ler os
-        sete para descobrir qual pede ação — a tela informava sem hierarquizar.
-        Agrupados, a pergunta que cada bloco responde fica explícita: o que é
-        para hoje, como está a operação, e como estão os sistemas que alimentam
-        ela. Nenhum número novo foi inventado: todos saem das mesmas demandas,
-        fluxos e integrações que já vinham no snapshot.
+    {/* Cinco indicadores, como a maquete pede.
+        O recorte vigente fica escrito ao lado do título: um número sem o
+        conjunto que ele mede é um número sobre nada, e a Visão geral tem dois
+        filtros no topo que mudam os cinco de uma vez.
 
         `data-metric` é o ponto de ancoragem do ensaio de navegador. Ele mirava
         `.overview-metrics article strong` e `.first()`; quando os indicadores
@@ -3104,81 +3434,154 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         é 0 tanto no grupo quanto numa filial vazia, então a conferência do
         recorte por empresa comparava 0 com 0 e reprovava. Ancorar no que o
         indicador *é* faz a mudança de elemento, de grupo ou de ordem não
-        quebrar o ensaio — foi o que permitiu esta reorganização. */}
-    <section className="overview-contexts" aria-label="Resumo da operação">
+        quebrar o ensaio — foi o que permitiu esta reorganização.
 
-      <article className={`overview-context${hojeExigeAcao ? " requires-attention" : ""}`}>
-        <header><span>HOJE</span><h2>{hojeExigeAcao ? "Precisa de ação" : "Nada vencendo agora"}</h2></header>
-        <dl>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "overdue")}>
-            <dt>Vencendo hoje</dt><dd>{venceHoje}</dd>
-          </button>
-          <button type="button" className={`overview-context-row${atrasadas ? " grave" : ""}`} onClick={() => onFocus("board", "overdue")}>
-            <dt>Atrasadas</dt><dd>{atrasadas}</dd>
-          </button>
-          {/* Pausada não é atrasada: a coluna em que ela está congela o prazo.
-              Fica aqui porque também trava a fila de alguém — mas sem urgência,
-              então não conta para "precisa de ação". */}
-          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "all")}>
-            <dt>Aguardando terceiros</dt><dd>{stats.waiting}</dd>
-          </button>
-        </dl>
-      </article>
-
-      <article className="overview-context">
-        <header><span>OPERAÇÃO</span><h2>{scopeLabel}</h2></header>
-        <dl>
-          <button type="button" className="overview-context-row" data-metric="demands-open" onClick={() => onFocus("board", "all")}>
-            <dt>Demandas em aberto</dt><dd><strong>{stats.active}</strong></dd>
-          </button>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("processManagement", "all")}>
-            <dt>Fluxos em andamento</dt><dd>{fluxosEmAndamento}</dd>
-          </button>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "all")}>
-            <dt>Tarefas pendentes</dt><dd>{stats.documentsPending}</dd>
-          </button>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("history", "all")}>
-            <dt>Concluídas no período</dt><dd>{stats.completed}</dd>
-          </button>
-        </dl>
-      </article>
-
-      <article className={`overview-context${integrationsFailing ? " requires-attention" : ""}`}>
-        <header><span>CONEXÕES</span><h2>{integrationsFailing ? "Sincronização interrompida" : "Sistemas em dia"}</h2></header>
-        <dl>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("integrations", "all")}>
-            <dt>Integrações ativas</dt><dd>{integracoesConectadas}</dd>
-          </button>
-          <button type="button" className={`overview-context-row${integrationsFailing ? " grave" : ""}`} onClick={() => onFocus("integrations", "all")}>
-            <dt>Integrações com erro</dt><dd>{integrationsFailing}</dd>
-          </button>
-          <button type="button" className={`overview-context-row${obligations.some((item) => item.daysRemaining < 0) ? " grave" : ""}`} onClick={() => onFocus("processes", "all")}>
-            <dt>Obrigações próximas</dt><dd>{obligations.length}</dd>
-          </button>
-          {/* Sem sincronização registrada o certo é dizer isso, e não uma data
-              de mentira nem um traço que parece dado que faltou carregar. */}
-          <div className="overview-context-row estatico">
-            <dt>Última sincronização</dt><dd className="overview-context-quando">{ultimaSincronizacao ?? "Nunca"}</dd>
-          </div>
-        </dl>
-      </article>
-
+        Cada indicador é botão porque cada um tem onde ser resolvido: ler "3
+        integrações com erro" e não ter caminho para elas é o indicador cobrando
+        uma ação que ele mesmo não deixa tomar. */}
+    <section className="overview-kpis" aria-label={`Indicadores da operação — ${scopeLabel}`}>
+      {kpis.map((kpi) => {
+        const KpiIcon = kpi.icon;
+        return <button type="button" key={kpi.key} data-metric={kpi.key}
+          className={`overview-kpi${kpi.alert ? " requires-attention" : ""}`}
+          onClick={() => onFocus(kpi.target, kpi.sla)}>
+          <span className="overview-kpi-top">
+            <span className="overview-kpi-label">{kpi.label}</span>
+            <i aria-hidden="true"><KpiIcon /></i>
+          </span>
+          <strong className="overview-kpi-value">{kpi.value}</strong>
+          {/* Barra sem número para representar não deve ser desenhada. */}
+          {typeof kpi.bar === "number" && <span className="overview-kpi-bar" aria-hidden="true">
+            <i style={{ width: `${Math.max(0, Math.min(100, kpi.bar))}%` }} />
+          </span>}
+          <small className="overview-kpi-support">{kpi.support}</small>
+        </button>;
+      })}
     </section>
 
 
-    <button type="button" className="overview-sla-band" data-metric="sla-on-time"
-      onClick={() => onFocus("board", "safe")}
-      aria-label={stats.onTime === null ? "SLA no prazo: sem demandas em aberto" : `SLA no prazo: ${stats.onTime}%. Abrir demandas no prazo.`}>
-      {/* O percentual mede as demandas EM ABERTO que não estouraram o prazo — não
-          as concluídas. Os dois números viviam lado a lado sem dizer isso, e
-          "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia o
-          leitor supor que 100% das concluídas cumpriram o prazo. São
-          populações diferentes, e agora o texto diz qual é qual. */}
-      <span className="overview-sla-copy"><span>SLA NO PRAZO</span><strong>{stats.onTime === null ? "Sem demandas em aberto" : `${stats.onTime}% das demandas em aberto dentro do prazo`}</strong><small>{stats.completed} concluída(s) no período • {stats.waiting} com SLA pausado</small></span>
-      {stats.onTime !== null && <span className="sla-progress" aria-label={`${stats.onTime}% das demandas em aberto dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></span>}
-      <span className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></span>
-    </button>
+    {/* Fluxos em andamento (§15) e próximos vencimentos (§16).
+        As duas perguntas que o quadro não responde: ele mostra demandas soltas
+        por coluna, não o processo que as gerou nem a data legal que não espera
+        ninguém.
 
+        Os dois viraram tabela, como a maquete pede. Cartão e tabela servem a
+        leituras diferentes: o cartão é bom para ler um, a tabela é boa para
+        comparar seis. Quem abre a Visão geral está escolhendo o que abrir, e
+        para isso compara — a coluna alinhada deixa "etapa" embaixo de "etapa" e
+        "responsável" embaixo de "responsável", que é o que o cartão não fazia.
+
+        Empilhados em largura inteira, e não lado a lado como eram enquanto
+        eram cartões: cinco colunas num painel de meia largura cortavam a
+        última — a tela mostrou "SITU…" no lugar de "SITUAÇÃO", que é a coluna
+        que diz se a demanda está atrasada. O invólucro rolava, mas rolagem
+        lateral escondida dentro de um painel é informação que ninguém acha. */}
+    <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
+      <header>
+        <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
+        <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
+      </header>
+      <div className="overview-flow-list">
+        {flows.length === 0 && <div className="overview-empty">
+          <GitBranch aria-hidden="true" />
+          <strong>Nenhum processo em execução.</strong>
+          {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
+              o recorte escolhido é que não alcança nenhuma. */}
+          <p>{periodLabel === "Todo o período"
+            ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
+            : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
+        </div>}
+        {flows.length > 0 && <div className="overview-table-scroll">
+          <table className="overview-table overview-flow-table">
+            <thead><tr>
+              <th scope="col">Processo</th>
+              <th scope="col">Etapa atual</th>
+              <th scope="col">Progresso</th>
+              <th scope="col">Responsável</th>
+              <th scope="col">Situação</th>
+            </tr></thead>
+            <tbody>
+              {flows.slice(0, 6).map((flow) => <tr key={flow.cardId} className={`sla-${flow.slaStatus}`}>
+                <td>
+                  {/* A linha inteira não vira clicável: `<tr onClick>` não
+                      recebe foco nem é anunciado como destino. O caminho para
+                      a demanda é este botão, que é um elemento de verdade. */}
+                  <button type="button" className="overview-table-link" onClick={() => onOpenCard(flow.cardId)}>
+                    <strong>{flow.definitionName}</strong>
+                    <small>{flow.cardTitle}</small>
+                  </button>
+                  {flow.versionNumber && <em className="overview-version-tag"
+                    title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
+                </td>
+                <td>{flow.stepLabel || "Não iniciada"}</td>
+                {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas
+                    porque percentual sozinho não diz o tamanho do processo:
+                    50% de duas tarefas e 50% de quarenta pedem decisões
+                    diferentes. */}
+                <td className="overview-progress-cell">
+                  {/* Barra sem número para representar não é desenhada: com
+                      `tasksTotal` em zero ela ficava vazia na tela, e barra
+                      vazia se lê como "0% concluído" — que é afirmar um
+                      progresso onde não há nem denominador. */}
+                  {flow.tasksTotal > 0 && <span className="overview-flow-progress" role="img"
+                    aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
+                    <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
+                  </span>}
+                  <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas · ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
+                </td>
+                <td>{flow.responsibleName || "Sem responsável"}</td>
+                {/* Cor sozinha não carrega o dado: o estado do prazo continua
+                    escrito, com as mesmas palavras do cartão do quadro. */}
+                <td><span className={`overview-sla-tag sla-${flow.slaStatus}`}>{compactSlaLabel(flow.slaStatus, flow.dueAt)}</span></td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+      </div>
+    </section>
+
+    <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
+      <header>
+        <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
+        <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
+      </header>
+      <div className="overview-obligation-list">
+        {obligations.length === 0 && <div className="overview-empty">
+          <CheckCircle2 aria-hidden="true" />
+          <strong>Nenhuma obrigação em aberto.</strong>
+          <p>{periodLabel === "Todo o período"
+            ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
+            : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
+        </div>}
+        {obligations.length > 0 && <div className="overview-table-scroll">
+          <table className="overview-table overview-obligation-table">
+            <thead><tr>
+              <th scope="col">Obrigação</th>
+              <th scope="col">Empresa</th>
+              <th scope="col">Competência</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col">Situação</th>
+            </tr></thead>
+            <tbody>
+              {groupObligations(obligations).slice(0, 6).map((item) => <tr key={item.id}
+                className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
+                <td><strong>{item.title}</strong></td>
+                {/* A consulta devolve uma linha por empresa; doze filiais com o
+                    mesmo eSocial ocupariam as seis vagas com o mesmo prazo. */}
+                <td>{item.companies > 1 ? `${item.companies} empresas` : item.company || "Sem empresa"}</td>
+                <td>{item.competence || "—"}</td>
+                <td>{formatDate(item.dueDate)}</td>
+                {/* "Vence em -2 dias" é o tipo de frase que só um sistema
+                    escreve. O atraso é dito como atraso. */}
+                <td><span className="overview-obligation-due">{item.daysRemaining < 0
+                  ? `${Math.abs(item.daysRemaining)} dia(s) em atraso`
+                  : item.daysRemaining === 0 ? "Vence hoje" : `Em ${item.daysRemaining} dia(s)`}</span></td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+      </div>
+    </section>
 
     <div className="overview-grid">
       <section className="overview-panel attention-panel"><header><div><span>ATENÇÃO HOJE</span><h2>O que exige ação</h2></div><button onClick={onOpenBoard}>Ver quadro <ArrowRight aria-hidden="true" /></button></header><div className="overview-attention-list">
@@ -3186,92 +3589,77 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         {attention.slice(0, 4).map((card) => <button className={`overview-attention-card ${card.slaStatus}`} key={card.id} onClick={() => onOpen(card)}><i /><span><strong>{card.title}</strong><small>{card.company || "Sem empresa"} • {card.assigneeName || "Sem responsável"}</small></span><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>)}
       </div></section>
 
-      <section className="overview-panel status-panel"><header><div><span>VOLUME POR STATUS</span><h2>Demandas na operação</h2></div><button onClick={onOpenBoard}>Abrir demandas <ArrowRight aria-hidden="true" /></button></header><div className="status-chart" role="img" aria-label="Gráfico de demandas por status">
-        {lists.map((list) => <div key={list.id}><span style={{ height: `${Math.max(10, (list.cards.length / maxStatus) * 100)}%` }} /><strong>{list.cards.length}</strong><small>{list.name}</small></div>)}
-      </div></section>
+      {/* Demandas por status: uma aba por coluna, tabela embaixo.
+          O bloco era um gráfico de barras — respondia "quantas em cada coluna" e
+          parava aí. A pergunta seguinte, "quais são", exigia sair da tela. As
+          abas guardam a primeira resposta (a contagem está no próprio rótulo) e
+          destravam a segunda sem trocar de página.
+
+          As colunas são as do quadro deste grupo, não uma lista escrita aqui:
+          quem renomeia "Em execução" para "Na fila" lê "Na fila" nesta aba. */}
+      <section className="overview-panel status-panel" aria-labelledby="overview-status-title">
+        <header>
+          <div><span>VOLUME POR STATUS</span><h2 id="overview-status-title">Demandas na operação</h2></div>
+          <button onClick={onOpenBoard}>Abrir demandas <ArrowRight aria-hidden="true" /></button>
+        </header>
+        {lists.length === 0
+          ? <div className="overview-empty">
+              <ClipboardList aria-hidden="true" />
+              <strong>Nenhuma coluna configurada.</strong>
+              <p>As colunas do quadro definem os status que aparecem aqui.</p>
+            </div>
+          : <>
+              <div className="overview-status-tabs" role="tablist" aria-label="Status das demandas">
+                {lists.map((list) => <button type="button" key={list.id} role="tab"
+                  id={`overview-status-tab-${list.id}`}
+                  aria-selected={statusList?.id === list.id}
+                  aria-controls={statusList?.id === list.id ? `overview-status-panel-${list.id}` : undefined}
+                  onClick={() => setStatusTab(list.id)}>
+                  {list.name}<b>{list.cards.length}</b>
+                </button>)}
+              </div>
+              {statusList && <div className="overview-status-body" role="tabpanel"
+                id={`overview-status-panel-${statusList.id}`}
+                aria-labelledby={`overview-status-tab-${statusList.id}`}>
+                {statusList.cards.length === 0
+                  ? <p className="overview-status-vazio">Nenhuma demanda em {statusList.name} neste recorte.</p>
+                  : <div className="overview-table-scroll">
+                      <table className="overview-table overview-status-table">
+                        <thead><tr>
+                          <th scope="col">Demanda</th>
+                          <th scope="col">Empresa</th>
+                          <th scope="col">Responsável</th>
+                          <th scope="col">Prazo</th>
+                        </tr></thead>
+                        <tbody>
+                          {statusList.cards.slice(0, 6).map((card) => <tr key={card.id} className={`sla-${card.slaStatus}`}>
+                            <td>
+                              <button type="button" className="overview-table-link" onClick={() => onOpen(card)}>
+                                <strong>{card.title}</strong>
+                                <small>{card.processType}</small>
+                              </button>
+                            </td>
+                            <td>{card.company || "Sem empresa"}</td>
+                            <td>{card.assigneeName || "Sem responsável"}</td>
+                            <td><span className={`overview-sla-tag sla-${card.slaStatus}`}>{compactSlaLabel(card.slaStatus, card.dueAt)}</span></td>
+                          </tr>)}
+                        </tbody>
+                      </table>
+                    </div>}
+                {/* A tabela mostra seis. Dizer o total impede que a aba pareça a
+                    lista inteira — uma janela sem aviso vira "o sistema perdeu
+                    minhas demandas". */}
+                {statusList.cards.length > 6 && <p className="overview-status-vazio">
+                  Mostrando 6 de {statusList.cards.length} em {statusList.name}.
+                </p>}
+              </div>}
+            </>}
+      </section>
     </div>
 
 
     <CompetenceFlow cycles={cycles} scopeLabel={scopeLabel} active={stats.active}
       onNew={canEdit ? onNew : undefined} onNavigate={onNavigate} />
-
-    {/* Fluxos em andamento (§15) e próximos vencimentos (§16).
-        As duas perguntas que o quadro não responde: o quadro mostra demandas
-        soltas por coluna, não o processo que as gerou nem a data legal que não
-        espera ninguém. Ficam lado a lado porque são o mesmo tipo de olhar —
-        "o que está correndo" e "o que está chegando". */}
-    <div className="overview-pair">
-      <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
-        <header>
-          <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
-          <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
-        </header>
-        <div className="overview-flow-list">
-          {flows.length === 0 && <div className="overview-empty">
-            <GitBranch aria-hidden="true" />
-            <strong>Nenhum processo em execução.</strong>
-            {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
-                o recorte escolhido é que não alcança nenhuma. */}
-            <p>{periodLabel === "Todo o período"
-              ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
-              : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
-          </div>}
-          {flows.slice(0, 6).map((flow) => <button type="button" key={flow.cardId}
-            className={`overview-flow-card sla-${flow.slaStatus}`} onClick={() => onOpenCard(flow.cardId)}>
-            <span className="overview-flow-head">
-              <strong>{flow.definitionName}</strong>
-              {flow.versionNumber && <em title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
-            </span>
-            <span className="overview-flow-demand">{flow.cardTitle}</span>
-            <span className="overview-flow-step">Etapa: <b>{flow.stepLabel || "Não iniciada"}</b></span>
-            {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas porque
-                percentual sozinho não diz o tamanho do processo: 50% de duas
-                tarefas e 50% de quarenta pedem decisões diferentes. */}
-            <span className="overview-flow-progress" role="img"
-              aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
-              <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
-            </span>
-            <span className="overview-flow-foot">
-              <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas • ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
-              <small>{flow.responsibleName || "Sem responsável"}</small>
-            </span>
-          </button>)}
-        </div>
-      </section>
-
-      <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
-        <header>
-          <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
-          <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
-        </header>
-        <div className="overview-obligation-list">
-          {obligations.length === 0 && <div className="overview-empty">
-            <CheckCircle2 aria-hidden="true" />
-            <strong>Nenhuma obrigação em aberto.</strong>
-            <p>{periodLabel === "Todo o período"
-              ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
-              : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
-          </div>}
-          {groupObligations(obligations).slice(0, 6).map((item) => <article key={item.id}
-            className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
-            <div>
-              <strong>{item.title}</strong>
-              <small>{item.companies > 1
-                ? `${item.companies} empresas`
-                : item.company || "Sem empresa"}{item.competence ? ` • Competência ${item.competence}` : ""}</small>
-            </div>
-            <div className="overview-obligation-due">
-              <b>{formatDate(item.dueDate)}</b>
-              {/* "Vence em -2 dias" é o tipo de frase que só um sistema escreve.
-                  O atraso é dito como atraso. */}
-              <em>{item.daysRemaining < 0
-                ? `${Math.abs(item.daysRemaining)} dia(s) em atraso`
-                : item.daysRemaining === 0 ? "Vence hoje" : `Em ${item.daysRemaining} dia(s)`}</em>
-            </div>
-          </article>)}
-        </div>
-      </section>
-    </div>
 
     {/* Lado a lado, como o Modelo 2 põe: o que precisa de você e o que está
         ligado. Antes a central de ação abria a tela sozinha, em largura
@@ -3284,20 +3672,57 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 
     {/* Consulta, não operação: a prévia repete o quadro e o histórico conta o
         que já passou. Por isso fecham a tela, depois do que exige ação. */}
-    <div className="overview-grid overview-bottom-grid">
-      <section className="overview-panel board-preview"><header><div><span>PRÉVIA DO QUADRO</span><h2>Próximas demandas</h2></div><button onClick={onOpenBoard}>Ver todas <ArrowRight aria-hidden="true" /></button></header><div className="board-preview-columns">
-        {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
-      </div></section>
+    <section className="overview-panel board-preview"><header><div><span>PRÉVIA DO QUADRO</span><h2>Próximas demandas</h2></div><button onClick={onOpenBoard}>Ver todas <ArrowRight aria-hidden="true" /></button></header><div className="board-preview-columns">
+      {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
+    </div></section>
 
-      {/* O botão entrou junto com a tela. Ele tinha ficado de fora de propósito
-          enquanto não havia destino: link que leva ao lugar errado é pior que
-          nenhum, e o teste que guardava isso cobrava as duas metades — que o
-          botão não existisse sem a tela, e que entrasse quando ela entrasse. */}
-      <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
-        {activities.slice(0, 5).map((activity) => <article key={activity.id}><span>{initials(activity.actorName || "DP")}</span><div><strong>{activity.actorName || "Equipe DP"} <small>{activityLabel(activity)}</small></strong><p>{activityDetails(activity)[0] || "Registro atualizado na operação."}</p></div><time>{formatMoment(activity.createdAt)}</time></article>)}
-        {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
-      </div></section>
-    </div>
+    {/* Últimas movimentações (§19), em largura inteira.
+        O botão entrou junto com a tela de histórico. Ele tinha ficado de fora
+        de propósito enquanto não havia destino: link que leva ao lugar errado é
+        pior que nenhum, e o teste que guardava isso cobrava as duas metades —
+        que o botão não existisse sem a tela, e que entrasse quando ela entrasse.
+
+        A lista de avatares virou tabela, como a maquete pede. O que ela ganha é
+        a coluna "Relacionado a": antes o evento dizia "moveu a demanda de
+        coluna" sem dizer QUAL demanda, e descobrir exigia abrir o histórico
+        inteiro. Cinco colunas não cabem na coluna estreita da grade, então o
+        bloco passa a ocupar a largura toda. */}
+    <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
+      {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
+      {activities.length > 0 && <div className="overview-table-scroll">
+        <table className="overview-table overview-activity-table">
+          <thead><tr>
+            <th scope="col">Data e hora</th>
+            <th scope="col">Evento</th>
+            <th scope="col">Relacionado a</th>
+            <th scope="col">Responsável</th>
+            <th scope="col">Empresa</th>
+          </tr></thead>
+          <tbody>
+            {activities.slice(0, 6).map((activity) => {
+              const demanda = activity.cardId ? cardById.get(activity.cardId) : undefined;
+              const detalhe = activityDetails(activity)[0];
+              return <tr key={activity.id}>
+                <td className="overview-quando">{formatMoment(activity.createdAt)}</td>
+                <td>
+                  <strong>{activityLabel(activity)}</strong>
+                  {detalhe && <small>{detalhe}</small>}
+                </td>
+                {/* Sem a demanda carregada no recorte, a célula diz que não
+                    sabe — o título de outra demanda seria pior que o traço. */}
+                <td>{demanda
+                  ? <button type="button" className="overview-table-link" onClick={() => onOpen(demanda)}>
+                      <strong>{demanda.title}</strong>
+                    </button>
+                  : <span className="overview-ausente">—</span>}</td>
+                <td>{activity.actorName || "Equipe DP"}</td>
+                <td>{demanda?.company || <span className="overview-ausente">—</span>}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>}
+    </div></section>
 
     {/* Retomar de onde parou (§67).
         Fica acima de "Meus processos" de propósito: quem abre a home no meio
@@ -3593,6 +4018,147 @@ function DemandCalendarView({ cards, onOpen }: { cards: Card[]; onOpen: (card: C
   );
 }
 
+/**
+ * A faixa de indicadores da Administração (maquete 3).
+ *
+ * Os cinco números que dizem o tamanho do que está sendo administrado, antes
+ * dos formulários que o alteram. Todos saem do snapshot que a modal já tem em
+ * mãos — nenhuma consulta nova, e nenhum valor escrito no código.
+ *
+ * A maquete traz também "Plano e utilização" com barras de consumo. Ele não
+ * entra: a tela de plano foi tirada do painel de propósito (§44), e há teste
+ * guardando essa retirada. Ressuscitá-la de lado, como faixa de progresso sem
+ * a tela por trás, seria mostrar consumo sem lugar nenhum para agir sobre ele.
+ */
+function AdminIndicators({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+  const ativas = snapshot.companies.filter((company) => company.status === "active").length;
+  const comErro = snapshot.integrations.filter((item) => item.status === "error").length;
+  const conectadas = snapshot.integrations.filter((item) => item.status === "connected").length;
+  const semAtivar = snapshot.members.filter((member) => !member.isActivated).length;
+  const etapas = snapshot.boards.reduce((total, board) => total + board.stages.length, 0);
+
+  const indicadores = [
+    {
+      key: "members", icon: Users, label: "Usuários com acesso",
+      value: String(snapshot.members.length),
+      support: semAtivar ? `${semAtivar} ainda sem ativar o acesso` : "Todos com acesso ativado",
+      alert: semAtivar > 0,
+    },
+    {
+      key: "companies", icon: Building2, label: "Empresas do grupo",
+      value: String(snapshot.companies.length),
+      support: `${ativas} em operação`,
+      alert: false,
+    },
+    {
+      key: "workspaces", icon: LayoutDashboard, label: "Workspaces acessíveis",
+      value: String(snapshot.availableWorkspaces.length),
+      support: snapshot.workspace.companyScope === "restricted"
+        ? "Seu acesso é restrito a algumas empresas"
+        : "Seu acesso alcança todas as empresas",
+      alert: false,
+    },
+    {
+      key: "boards", icon: ClipboardList, label: "Quadros da operação",
+      value: String(snapshot.boards.length),
+      support: plural(etapas, "etapa configurada", "etapas configuradas"),
+      alert: false,
+    },
+    {
+      key: "integrations", icon: Cable, label: "Integrações com erro",
+      value: String(comErro),
+      support: `${conectadas} conectada(s) de ${snapshot.integrations.length} configurada(s)`,
+      alert: comErro > 0,
+    },
+  ];
+
+  return <section className="admin-indicators" aria-label={`Indicadores da administração — ${snapshot.workspace.name}`}>
+    {indicadores.map((item) => {
+      const ItemIcon = item.icon;
+      return <article key={item.key} className={`admin-indicator${item.alert ? " requires-attention" : ""}`}>
+        <span className="admin-indicator-top">
+          <span>{item.label}</span>
+          <i aria-hidden="true"><ItemIcon /></i>
+        </span>
+        <strong>{item.value}</strong>
+        <small>{item.support}</small>
+      </article>;
+    })}
+  </section>;
+}
+
+/**
+ * A matriz de permissões (maquete 3).
+ *
+ * O modelo já existia inteiro e nunca chegou a uma tela: `capabilitiesForRole`
+ * nasceu com o comentário "a tela de usuários precisa mostrar o que cada papel
+ * concede — sem isso o administrador escolhe 'Membro' ou 'Observador' no
+ * escuro", e nenhum componente jamais o chamou. O seletor de papel logo acima
+ * desta matriz é exatamente essa escolha no escuro.
+ *
+ * As linhas são as capacidades reais, agrupadas pelas áreas do catálogo e
+ * escritas na linguagem dele — `competences.transition` não diz nada a quem
+ * administra; "Avançar a competência entre as etapas do fechamento" diz.
+ *
+ * A maquete desenha três estados por célula: concedido, parcial e negado. O
+ * "parcial" não existe no modelo — uma capacidade é do papel ou não é — então
+ * ele não é desenhado. Inventar um meio-termo numa matriz de permissão é o
+ * tipo de enfeite que faz alguém conceder acesso achando que concedeu menos.
+ */
+function PermissionMatrix() {
+  const [aberta, setAberta] = useState<CapabilityArea | "">("");
+  const papeis = workspaceRoles;
+  const concedidas = new Map(papeis.map((papel) => [papel, new Set<string>(capabilitiesForRole(papel))]));
+
+  return <section className="permission-matrix" aria-labelledby="permission-matrix-title">
+    <header>
+      <div>
+        <strong id="permission-matrix-title">O que cada papel permite</strong>
+        <span>Lista completa, direto do modelo de autorização — não é um resumo escrito à mão.</span>
+      </div>
+    </header>
+    {capabilityAreas.map((area) => {
+      const itens = capabilitiesOfArea(area.key);
+      if (itens.length === 0) return null;
+      const expandida = aberta === area.key;
+      return <div className="permission-area" key={area.key}>
+        <button type="button" aria-expanded={expandida}
+          onClick={() => setAberta(expandida ? "" : area.key)}>
+          <span>{area.label}</span>
+          <b>{plural(itens.length, "permissão", "permissões")}</b>
+          <ChevronDown aria-hidden="true" data-open={expandida ? "true" : "false"} />
+        </button>
+        {expandida && <div className="overview-table-scroll">
+          <table className="overview-table permission-table">
+            <thead><tr>
+              <th scope="col">Permissão</th>
+              {papeis.map((papel) => <th scope="col" key={papel}>{roleLabels[papel]}</th>)}
+            </tr></thead>
+            <tbody>
+              {itens.map((capability) => <tr key={capability}>
+                <th scope="row">{capabilityCatalog[capability].label}</th>
+                {papeis.map((papel) => {
+                  const tem = concedidas.get(papel)?.has(capability) ?? false;
+                  /* O símbolo sozinho não basta: quem usa leitor de tela ouve
+                     "check" sem saber de quê, e quem não distingue verde de
+                     cinza vê duas marcas parecidas. O texto acessível diz o
+                     par inteiro — papel e permissão. */
+                  return <td key={papel} className={tem ? "concedida" : "negada"}>
+                    <span aria-hidden="true">{tem ? "\u2713" : "\u2014"}</span>
+                    <span className="sr-only">
+                      {roleLabels[papel]}: {tem ? "permitido" : "não permitido"}
+                    </span>
+                  </td>;
+                })}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+      </div>;
+    })}
+  </section>;
+}
+
 function ListsSettings({ snapshot, busy, isAdmin, onMutate, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onMutate: SnapshotMutation; onConfirm: ConfirmHandler }) {
   const [deleteTargets, setDeleteTargets] = useState<Record<string, string>>({});
   const lists = [...snapshot.lists].sort((a, b) => a.position - b.position);
@@ -3790,7 +4356,7 @@ function RulesSettings({ snapshot, busy, isAdmin, onCatalog, onConfirm }: { snap
   const showConditionSelector = trigger === "card.created" || trigger === "card.moved";
   const fixedConditionText = trigger === "assignee.added" ? "Só continua se houver um responsável atribuído." : trigger === "checklist.completed" ? "Só continua quando todas as etapas estiverem concluídas." : trigger === "sla.tick" ? "Só continua quando o prazo estiver vencido." : "Sem condição adicional.";
 
-  return <div className="settings-stack"><section className="catalog-section rules-editor"><header><div><strong>Editor No-Code</strong><span>Regras ativas que executam tarefas automaticamente no fluxo do DP.</span></div>{isAdmin && <button className="secondary-button" onClick={() => edit()}><Plus aria-hidden="true" /> Nova regra</button>}</header><div className="rule-catalog no-code-rule-catalog">{snapshot.rules.length === 0 && <div className="empty-view"><span><ListChecks aria-hidden="true" /></span><strong>Nenhuma automação criada</strong><p>Crie uma regra para padronizar o fluxo da sua operação.</p></div>}{snapshot.rules.map((rule) => <article key={rule.id}><div><strong>{rule.name}</strong><div className="rule-flow"><span>Quando {triggerLabels[rule.trigger] ?? rule.trigger}</span><ArrowRight aria-hidden="true" /><span>Se {conditionLabel(rule.condition)}</span><ArrowRight aria-hidden="true" /><span>Então {actionLabel(rule.action)}</span></div></div>{isAdmin && <><button onClick={() => edit(rule)}>Editar</button><button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir automação?", description: `A regra “${rule.name}” deixará de ser executada na operação.`, confirmLabel: "Excluir automação", action: () => onCatalog({ resource: "rule", operation: "delete", id: rule.id }, "Automação excluída.") })}>Excluir</button></>}</article>)}</div></section>{isAdmin && editorOpen && <form className="catalog-section rule-editor-form no-code-editor" onSubmit={save}><header><div><strong>{editingId ? "Editar automação" : "Nova automação"}</strong><span>Escolha o evento, a condição e o resultado desejado. O sistema traduz isso para uma regra auditável.</span></div><button type="button" className="danger-link" onClick={() => setEditorOpen(false)}>Cancelar</button></header><div className="no-code-editor-body"><label className="wide">Nome da automação<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Ao concluir checklist, finalizar demanda" required /></label><section><span>1. Quando</span><label>Gatilho<select value={trigger} onChange={(event) => changeTrigger(event.target.value)}>{RULE_TRIGGERS.map((item) => <option key={item} value={item}>Quando {RULE_TRIGGER_LABELS[item]}</option>)}</select></label></section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>2. Se</span>{showConditionSelector ? <><label>Condição<select value={conditionType} onChange={(event) => { setConditionType(event.target.value as ConditionType); setConditionValue(""); }}><option value="always">Sem condição adicional</option>{trigger === "card.created" && <><option value="processType">O processo for</option><option value="priority">A prioridade for</option></>}{trigger === "card.moved" && <option value="toList">A coluna de destino for</option>}</select></label>{conditionType === "processType" && <label>Processo<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["ADMISSÃO", "FÉRIAS", "RESCISÃO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "OUTROS"].map((item) => <option key={item}>{item}</option>)}</select></label>}{conditionType === "priority" && <label>Prioridade<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>}{conditionType === "toList" && <label>Coluna<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}</> : <div className="fixed-rule-condition"><CheckCircle2 aria-hidden="true" />{fixedConditionText}</div>}</section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>3. Então</span><label>Ação<select value={actionType} onChange={(event) => { setActionType(event.target.value as ActionType); setActionValue(""); }}><option value="moveTo">Mover a demanda</option><option value="slaStatus">Atualizar o SLA</option><option value="labelId">Aplicar uma etiqueta</option><option value="notify">Notificar o responsável</option></select></label>{actionType === "moveTo" && <label>Coluna de destino<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}{actionType === "slaStatus" && <label>Novo status<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option><option value="safe">Dentro do prazo</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>}{actionType === "labelId" && <label>Etiqueta<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>}{actionType === "notify" && <label>Aviso<input value={actionValue} onChange={(event) => setActionValue(event.target.value)} maxLength={160} placeholder="Ex.: Documentação vencida — conferir a demanda" required /></label>}</section></div>{editorError && <p className="no-code-editor-error" role="alert"><CircleAlert aria-hidden="true" />{editorError}</p>}<footer><span>Prévia: Quando {triggerLabels[trigger] ?? trigger}, se {conditionType === "always" ? fixedConditionText.toLowerCase() : "a condição selecionada for atendida"}, então {actionType === "moveTo" ? "a demanda será movida" : actionType === "slaStatus" ? "o SLA será atualizado" : actionType === "notify" ? "quem responde pela demanda será avisado" : "uma etiqueta será aplicada"}.</span><button className="primary-button" disabled={busy}>Salvar automação</button></footer></form>}</div>;
+  return <div className="settings-stack"><section className="catalog-section rules-editor"><header><div><strong>Editor No-Code</strong><span>Regras ativas que executam tarefas automaticamente no fluxo do DP.</span></div>{isAdmin && <button className="secondary-button" onClick={() => edit()}><Plus aria-hidden="true" /> Nova regra</button>}</header><div className="rule-catalog no-code-rule-catalog">{snapshot.rules.length === 0 && <div className="empty-view"><span><ListChecks aria-hidden="true" /></span><strong>Nenhuma automação criada</strong><p>Crie uma regra para padronizar o fluxo da sua operação.</p></div>}{snapshot.rules.map((rule) => <article key={rule.id}><div><strong>{rule.name}</strong><div className="rule-flow"><span>Quando {triggerLabels[rule.trigger] ?? rule.trigger}</span><ArrowRight aria-hidden="true" /><span>Se {conditionLabel(rule.condition)}</span><ArrowRight aria-hidden="true" /><span>Então {actionLabel(rule.action)}</span></div></div>{isAdmin && <><button onClick={() => edit(rule)}>Editar</button><button className="danger" disabled={busy} onClick={() => onConfirm({ title: "Excluir automação?", description: `A regra “${rule.name}” deixará de ser executada na operação.`, confirmLabel: "Excluir automação", action: () => onCatalog({ resource: "rule", operation: "delete", id: rule.id }, "Automação excluída.") })}>Excluir</button></>}</article>)}</div></section>{isAdmin && editorOpen && <form className="catalog-section rule-editor-form no-code-editor" onSubmit={save}><header><div><strong>{editingId ? "Editar automação" : "Nova automação"}</strong><span>Escolha o evento, a condição e o resultado desejado. O sistema traduz isso para uma regra auditável.</span></div><button type="button" className="danger-link" onClick={() => setEditorOpen(false)}>Cancelar</button></header><div className="no-code-editor-body"><label className="wide">Nome da automação<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Ao concluir checklist, finalizar demanda" required /></label><section><span>1. Quando</span><label>Gatilho<select value={trigger} onChange={(event) => changeTrigger(event.target.value)}>{RULE_TRIGGERS.map((item) => <option key={item} value={item}>Quando {RULE_TRIGGER_LABELS[item]}</option>)}</select></label></section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>2. Se</span>{showConditionSelector ? <><label>Condição<select value={conditionType} onChange={(event) => { setConditionType(event.target.value as ConditionType); setConditionValue(""); }}><option value="always">Sem condição adicional</option>{trigger === "card.created" && <><option value="processType">O processo for</option><option value="priority">A prioridade for</option></>}{trigger === "card.moved" && <option value="toList">A coluna de destino for</option>}</select></label>{conditionType === "processType" && <label>Processo<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["ADMISSÃO", "FÉRIAS", "RESCISÃO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "OUTROS"].map((item) => <option key={item}>{item}</option>)}</select></label>}{conditionType === "priority" && <label>Prioridade<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>}{conditionType === "toList" && <label>Coluna<select value={conditionValue} onChange={(event) => setConditionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}</> : <div className="fixed-rule-condition"><CheckCircle2 aria-hidden="true" />{fixedConditionText}</div>}</section><ArrowRight className="flow-arrow" aria-hidden="true" /><section><span>3. Então</span><label>Ação<select value={actionType} onChange={(event) => { setActionType(event.target.value as ActionType); setActionValue(""); }}><option value="moveTo">Mover a demanda</option><option value="slaStatus">Atualizar o SLA</option><option value="labelId">Aplicar uma etiqueta</option><option value="notify">Notificar o responsável</option></select></label>{actionType === "moveTo" && <label>Coluna de destino<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.lists.map((list) => <option value={list.kind} key={list.id}>{list.name}</option>)}</select></label>}{actionType === "slaStatus" && <label>Novo status<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option><option value="safe">Dentro do prazo</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>}{actionType === "labelId" && <label>Etiqueta<select value={actionValue} onChange={(event) => setActionValue(event.target.value)} required><option value="">Selecione</option>{snapshot.labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>}{actionType === "notify" && <label>Aviso<input value={actionValue} onChange={(event) => setActionValue(event.target.value)} maxLength={160} placeholder="Ex.: Documentação vencida — conferir a demanda" required /></label>}</section></div>{editorError && <p className="no-code-editor-error" role="alert"><CircleAlert aria-hidden="true" />{editorError}</p>}<footer><span>Prévia: Quando {triggerLabels[trigger] ?? trigger}, se {conditionType === "always" ? fixedConditionText.toLowerCase() : "a condição selecionada for atendida"}, então {actionType === "moveTo" ? "a demanda será movida" : actionType === "slaStatus" ? "o SLA será atualizado" : actionType === "notify" ? "quem responde pela demanda será avisado" : "uma etiqueta será aplicada"}.</span><button className="primary-button" disabled={busy}>Salvar automação</button></footer></form>}</div>;
 }
 
 function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxItem[]; busy: boolean; canEdit: boolean; onConvert: (item: InboxItem) => Promise<void>; onNew: () => void }) {
