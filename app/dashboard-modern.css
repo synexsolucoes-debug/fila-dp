@@ -4777,7 +4777,8 @@
   .workspace-modal-backdrop,
   .workspace-modal, .card-modal, .inbox-modal, .archive-modal,
   .confirmation-modal, .demand-detail-modal, .workspace-settings-modal,
-  .dashboard-shell [aria-busy="true"] { animation: none !important; }
+  .dashboard-shell [aria-busy="true"],
+  .demand-drawer { animation: none !important; }
 
   .dashboard-sidebar nav button:hover:not(.active),
   .dashboard-task:hover,
@@ -5334,4 +5335,94 @@
 .theme-dark .workspace-settings-modal .workspace-member-list article > div strong em {
   background: var(--ui-primary-soft);
   color: var(--ui-accent-text, var(--ui-primary));
+}
+
+
+/* ==========================================================================
+   A DEMANDA COMO GAVETA (maquete 4)
+   Escopado em `.demand-drawer` e `.demand-drawer-backdrop`: as outras modais
+   do painel (nova demanda, arquivo, inbox, configuracoes) continuam
+   centralizadas, e nenhuma delas muda por causa deste bloco.
+   ========================================================================== */
+
+/* O fundo deixa de centralizar e passa a encostar o painel a direita, sem
+   recuo desse lado: a gaveta nasce da borda da tela, e nao flutua perto dela.
+   O quadro atras continua visivel, que e a razao de a gaveta existir — quem
+   trabalha uma fila abre demanda atras de demanda comparando com a coluna de
+   origem, e a modal centralizada tapava justamente essa coluna. */
+.demand-drawer-backdrop { padding: 0; display: flex; align-items: stretch; justify-content: flex-end; }
+
+.demand-drawer {
+  width: min(760px, 100%); max-height: 100vh; height: 100vh;
+  display: flex; flex-direction: column;
+  border-radius: 0; border-right: 0; border-top: 0; border-bottom: 0;
+  border-left: 1px solid var(--ui-border);
+}
+/* A entrada vem da direita, e nao de baixo com escala: o movimento diz de onde
+   a peca veio, e uma gaveta que sobe do chao mente sobre a propria posicao. */
+.demand-drawer { animation: gavetaIn var(--motion-base) var(--motion-ease) both; }
+@keyframes gavetaIn { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+
+/* O corpo e quem rola; o cabecalho e o rodape ficam parados. Sem isto o painel
+   inteiro rolaria e o rodape de acoes sairia da tela — que e exatamente o
+   defeito que ele existe para corrigir. */
+.demand-drawer > .card-modal-body { flex: 1; min-height: 0; overflow-y: auto; }
+.demand-drawer > header { flex: 0 0 auto; }
+
+/* Progresso da demanda */
+.demand-progress { padding: 14px 20px 0; }
+.demand-progress > header { min-height: 0; padding: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border: 0; background: transparent; }
+.demand-progress > header span { color: var(--ui-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .09em; }
+.demand-progress > header strong { color: var(--ui-text); font-size: 11px; font-variant-numeric: tabular-nums; }
+.demand-progress-bar { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 20%, var(--ui-surface)); }
+.demand-progress-bar i { height: 100%; display: block; border-radius: inherit; background: var(--ui-mint); }
+
+/* Os oito campos, em leitura */
+.demand-fields {
+  margin: 14px 20px 0; padding: 12px 14px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 16px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted);
+}
+.demand-fields > div { min-width: 0; }
+.demand-field-wide { grid-column: 1 / -1; }
+.demand-fields dt { color: var(--ui-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.demand-fields dd { margin: 4px 0 0; color: var(--ui-text); font-size: 11px; overflow-wrap: anywhere; }
+.demand-field-link {
+  padding: 0; display: inline-flex; align-items: center; gap: 7px;
+  border: 0; background: transparent; color: var(--ui-accent-text, var(--ui-primary)); font: inherit; font-size: 11px; font-weight: 700;
+  cursor: pointer; text-align: left;
+}
+.demand-field-link:hover { text-decoration: underline; }
+.demand-field-link:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
+.demand-field-link em {
+  padding: 1px 6px; border-radius: 99px; font-size: 8px; font-weight: 800; font-style: normal;
+  background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary));
+}
+
+/* A marca de pendente no item do checklist */
+.checklist-panel ul li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.checklist-pendente {
+  flex: 0 0 auto; padding: 2px 7px; border-radius: 99px;
+  background: color-mix(in srgb, var(--ui-warning) 16%, var(--ui-surface)); color: var(--ui-warning);
+  font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+}
+
+/* O rodape de acoes, parado no pe da gaveta */
+.demand-drawer-actions {
+  flex: 0 0 auto; padding: 12px 20px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  border-top: 1px solid var(--ui-border); background: var(--ui-surface);
+}
+.demand-drawer-actions .primary-button,
+.demand-drawer-actions .secondary-button { min-height: 34px; padding: 0 12px; font-size: 10px; }
+.demand-drawer-complete { margin-left: auto; }
+
+@media (max-width: 760px) {
+  /* No celular a gaveta ocupa a tela inteira: sobrar 40px do quadro atras nao
+     ajuda ninguem, e tira largura de quem precisa dela. */
+  .demand-drawer { width: 100%; border-left: 0; }
+  .demand-fields { margin-inline: 14px; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+  .demand-progress { padding-inline: 14px; }
+  .demand-drawer-actions { padding-inline: 14px; }
+  .demand-drawer-complete { margin-left: 0; }
 }

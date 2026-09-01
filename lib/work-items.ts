@@ -284,7 +284,15 @@ const STATUS_LABELS: Record<string, string> = {
   dead_letter: "Falhou e parou",
 };
 
-const PRIORITY_LABELS: Record<string, string> = {
+/**
+ * Os nomes das prioridades, em um lugar só.
+ *
+ * Eles já estavam escritos duas vezes — aqui, para o item de trabalho, e à mão
+ * nas `<option>` do formulário da demanda. Duas cópias das mesmas quatro
+ * palavras divergem sem ninguém notar: renomear "Alta" para "Elevada" numa
+ * delas faria a mesma demanda ter duas prioridades diferentes conforme a tela.
+ */
+export const PRIORITY_LABELS: Record<string, string> = {
   urgent: "Urgente",
   high: "Alta",
   normal: "Normal",
