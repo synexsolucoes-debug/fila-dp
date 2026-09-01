@@ -3121,8 +3121,8 @@
    junto — o seletor compartilhado é justamente o que torna a remoção
    cega perigosa. */
 .overview-panel header > div > span,
-.overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
-.overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-primary); }
+.overview-sla-band > .overview-sla-copy > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
+.overview-panel header > div > span, .overview-sla-band > .overview-sla-copy > span { color: var(--ui-primary); }
 
 /* ==========================================================================
    Meus processos (§29)
@@ -3218,9 +3218,11 @@
 }
 .overview-context.requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); }
 
-.overview-sla-band { min-height: 104px; padding: 19px 23px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 1.15fr) minmax(150px, .72fr); align-items: center; gap: 26px; border: 1px solid color-mix(in srgb, var(--ui-mint) 52%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 11%, var(--ui-surface)); }
+.overview-sla-band { width: 100%; min-height: 104px; padding: 19px 23px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 1.15fr) minmax(150px, .72fr); align-items: center; gap: 26px; border: 1px solid color-mix(in srgb, var(--ui-mint) 52%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 11%, var(--ui-surface)); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background-color .16s ease; }
+.overview-sla-band:hover { border-color: var(--ui-primary); background: color-mix(in srgb, var(--ui-mint) 16%, var(--ui-surface)); }
+.overview-sla-band:focus-visible { outline: 3px solid color-mix(in srgb, var(--ui-primary) 32%, transparent); outline-offset: 2px; }
 .overview-sla-band strong { display: block; margin-top: 5px; color: var(--ui-text); font-size: 18px; letter-spacing: -.035em; }
-.overview-sla-band p { margin: 5px 0 0; color: var(--ui-text-soft); font-size: 10px; }
+.overview-sla-band small { display: block; margin: 5px 0 0; color: var(--ui-text-soft); font-size: 10px; }
 .sla-progress { height: 11px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 22%, var(--ui-surface)); }
 .sla-progress i { height: 100%; display: block; border-radius: inherit; background: var(--ui-mint); }
 .overview-sla-summary { display: flex; align-items: center; justify-content: flex-end; gap: 9px; text-align: left; }
@@ -4848,7 +4850,10 @@
 .connection-map-graph { position: relative; margin-top: 18px; }
 .connection-map-hub { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); z-index: 2; }
 .connection-map-graph > ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 88px; }
-.connection-map-graph > ul > li { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 11px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
+.connection-map-graph > ul > li { position: relative; min-height: 40px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
+.connection-map-graph > ul > li > button { width: 100%; min-height: 40px; padding: 7px 11px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: inherit; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.connection-map-graph > ul > li > button:hover { background: var(--ui-surface-muted); }
+.connection-map-graph > ul > li > button:focus-visible { outline-offset: 2px; }
 
 /* O fio até o centro. Nasce na borda interna do cartão e morre antes do hub. */
 .connection-map-graph > ul > li::after { content: ""; position: absolute; top: 50%; width: 44px; height: 0; border-top: 2px solid var(--ui-border-strong); }
@@ -4858,11 +4863,11 @@
 .connection-map-graph > ul > li[data-tone="warn"]::after { border-top-style: dashed; border-top-color: var(--ui-warning); }
 .connection-map-graph > ul > li[data-tone="bad"]::after { border-top-style: dotted; border-top-color: var(--ui-danger); }
 
-.connection-map-graph > ul > li > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
-.connection-map-graph > ul > li[data-tone="ok"] > i { border-color: var(--ui-done); background: var(--ui-done); }
-.connection-map-graph > ul > li[data-tone="warn"] > i { border-color: var(--ui-warning); }
-.connection-map-graph > ul > li[data-tone="bad"] > i { border-color: var(--ui-danger); background: var(--ui-danger); }
-.connection-map-graph > ul > li > span { min-width: 0; }
+.connection-map-graph > ul > li > button > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li[data-tone="ok"] > button > i { border-color: var(--ui-done); background: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"] > button > i { border-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"] > button > i { border-color: var(--ui-danger); background: var(--ui-danger); }
+.connection-map-graph > ul > li > button > span { min-width: 0; }
 .connection-map-graph > ul > li strong { display: block; font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connection-map-graph > ul > li small { display: block; font-size: 10.5px; color: var(--ui-text-soft); }
 

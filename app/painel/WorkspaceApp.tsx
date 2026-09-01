@@ -2928,12 +2928,16 @@ function ConnectionMap({ integrations, onNavigate }: {
         {integrations.map((item) => {
           const tom = connectionTone(item.status);
           return <li key={item.id} data-tone={tom}>
-            <i aria-hidden="true" />
-            <span>
-              <strong>{item.displayName}</strong>
-              <small>{connectionStatusLabel(item.status)}
-                {item.status === "connected" ? ` · ${lastSyncLabel(item.lastSyncAt)}` : ""}</small>
-            </span>
+            <button type="button" onClick={() => onNavigate("integrations")}
+              aria-label={`Abrir detalhes da integração ${item.displayName}`}>
+              <i aria-hidden="true" />
+              <span>
+                <strong>{item.displayName}</strong>
+                <small>{connectionStatusLabel(item.status)}
+                  {item.status === "connected" ? ` · ${lastSyncLabel(item.lastSyncAt)}` : ""}
+                  {item.status === "error" ? " · Abra para consultar o diagnóstico" : ""}</small>
+              </span>
+            </button>
           </li>;
         })}
       </ul>
@@ -3003,7 +3007,7 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
    * *resolvem uma pendência* da central de ação, e alargá-lo para caber um
    * indicador apagaria a razão de ele existir.
    */
-  onFocus: (target: OverviewFocusTarget, sla: "all" | "overdue") => void;
+  onFocus: (target: OverviewFocusTarget, sla: "all" | Card["slaStatus"]) => void;
   /** Processos que esta pessoa alcança, no mesmo recorte do menu (§30). */
   processes: ReadonlyArray<{ id: string; label: string; description: string; views: readonly string[] }>;
   /** Contagens já apuradas pelo painel — o cartão do processo não consulta nada. */
@@ -3047,10 +3051,10 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
   const venceHoje = cards.filter((card) => card.slaStatus === "warning").length;
   const atrasadas = cards.filter((card) => card.slaStatus === "overdue").length;
   const hojeExigeAcao = venceHoje + atrasadas > 0;
-  /* Processos DISTINTOS em execução, não fluxos: doze admissões correndo são um
-     processo com doze demandas, e contá-las como doze processos diria que a
-     operação roda doze fluxos diferentes. */
-  const processosEmExecucao = new Set(flows.map((flow) => flow.definitionId)).size;
+  /* Cada linha de `flows` é uma demanda em execução vinculada à versão que a
+     instanciou. É essa ocorrência real — e não o número de modelos distintos —
+     que o indicador "Fluxos em andamento" precisa contar. */
+  const fluxosEmAndamento = flows.length;
   const integracoesConectadas = integrations.filter((item) => item.status === "connected").length;
   const ultimaSincronizacao = (() => {
     const marcas = integrations.map((item) => item.lastSyncAt).filter((value): value is string => Boolean(value));
@@ -3128,7 +3132,7 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
             <dt>Demandas em aberto</dt><dd><strong>{stats.active}</strong></dd>
           </button>
           <button type="button" className="overview-context-row" onClick={() => onFocus("processManagement", "all")}>
-            <dt>Processos em execução</dt><dd>{processosEmExecucao}</dd>
+            <dt>Fluxos em andamento</dt><dd>{fluxosEmAndamento}</dd>
           </button>
           <button type="button" className="overview-context-row" onClick={() => onFocus("board", "all")}>
             <dt>Tarefas pendentes</dt><dd>{stats.documentsPending}</dd>
@@ -3146,7 +3150,7 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
             <dt>Integrações ativas</dt><dd>{integracoesConectadas}</dd>
           </button>
           <button type="button" className={`overview-context-row${integrationsFailing ? " grave" : ""}`} onClick={() => onFocus("integrations", "all")}>
-            <dt>Com erro</dt><dd>{integrationsFailing}</dd>
+            <dt>Integrações com erro</dt><dd>{integrationsFailing}</dd>
           </button>
           <button type="button" className={`overview-context-row${obligations.some((item) => item.daysRemaining < 0) ? " grave" : ""}`} onClick={() => onFocus("processes", "all")}>
             <dt>Obrigações próximas</dt><dd>{obligations.length}</dd>
@@ -3162,16 +3166,18 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
     </section>
 
 
-    <section className="overview-sla-band">
+    <button type="button" className="overview-sla-band" data-metric="sla-on-time"
+      onClick={() => onFocus("board", "safe")}
+      aria-label={stats.onTime === null ? "SLA no prazo: sem demandas em aberto" : `SLA no prazo: ${stats.onTime}%. Abrir demandas no prazo.`}>
       {/* O percentual mede as demandas EM ABERTO que não estouraram o prazo — não
           as concluídas. Os dois números viviam lado a lado sem dizer isso, e
           "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia o
           leitor supor que 100% das concluídas cumpriram o prazo. São
           populações diferentes, e agora o texto diz qual é qual. */}
-      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime === null ? "Sem demandas em aberto" : `${stats.onTime}% das demandas em aberto dentro do prazo`}</strong><p>{stats.completed} concluída(s) no período • {stats.waiting} com SLA pausado</p></div>
-      {stats.onTime !== null && <div className="sla-progress" aria-label={`${stats.onTime}% das demandas em aberto dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>}
-      <div className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></div>
-    </section>
+      <span className="overview-sla-copy"><span>SLA NO PRAZO</span><strong>{stats.onTime === null ? "Sem demandas em aberto" : `${stats.onTime}% das demandas em aberto dentro do prazo`}</strong><small>{stats.completed} concluída(s) no período • {stats.waiting} com SLA pausado</small></span>
+      {stats.onTime !== null && <span className="sla-progress" aria-label={`${stats.onTime}% das demandas em aberto dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></span>}
+      <span className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></span>
+    </button>
 
 
     <div className="overview-grid">

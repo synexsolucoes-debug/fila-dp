@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, CheckCircle2, CircleDot, Lock, Workflow } from "lucide-react";
+import { ArrowRight, CheckCircle2, CircleDot, ExternalLink, Link2, Lock, Workflow } from "lucide-react";
 import { ErrorBanner, LoadingState } from "../shared";
 import { requestJson } from "./work.api";
 import styles from "./work.module.css";
@@ -61,6 +61,14 @@ type ProcessState = {
   };
   stages: DemandStage[];
   transitions: Transition[];
+};
+
+type ModuleLink = {
+  id: string;
+  moduleKey: string;
+  entityId: string;
+  label: string;
+  href: string;
 };
 
 const text = (value: unknown) => (value == null ? "" : String(value));
@@ -123,11 +131,23 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notLinked, setNotLinked] = useState(false);
+  const [moduleLinks, setModuleLinks] = useState<ModuleLink[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await requestJson<Record<string, unknown>>(`/api/cards/${encodeURIComponent(cardId)}/process`);
+      const [data, linkData] = await Promise.all([
+        requestJson<Record<string, unknown>>(`/api/cards/${encodeURIComponent(cardId)}/process`),
+        requestJson<Record<string, unknown>>(`/api/cards/${encodeURIComponent(cardId)}/links`),
+      ]);
+      const rawLinks = Array.isArray(linkData.links) ? linkData.links : [];
+      setModuleLinks(rawLinks.map((row) => {
+        const item = (row ?? {}) as Record<string, unknown>;
+        return {
+          id: text(item.id), moduleKey: text(item.moduleKey), entityId: text(item.entityId),
+          label: text(item.label), href: text(item.href) || "/painel",
+        };
+      }));
       /* Demanda sem processo é o caso comum — as anteriores à consolidação e as
          abertas à mão. Isso não é erro, e o servidor diz isso em um campo, não
          em uma frase: a versão anterior reconhecia o caso procurando "processo"
@@ -170,9 +190,12 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
 
   if (loading) return <LoadingState title="Consultando a etapa…" size="compact" />;
   if (notLinked) {
-    return <p className={styles.agentDetail}>
-      Esta demanda não nasceu de um processo publicado. Ela continua sendo tratada pelo quadro, com as colunas e o SLA de sempre.
-    </p>;
+    return <>
+      <p className={styles.agentDetail}>
+        Esta demanda não nasceu de um processo publicado. Ela continua sendo tratada pelo quadro, com as colunas e o SLA de sempre.
+      </p>
+      <DemandLinks links={moduleLinks} />
+    </>;
   }
   if (!state) return error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null;
 
@@ -190,10 +213,12 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
       </div>
     </dl>
 
+    <DemandLinks links={moduleLinks} />
+
     {stages.length > 0 ? <div aria-label="Etapas da demanda">
       <h4 className={styles.groupHeading}>Etapas desta demanda</h4>
       <ol className={styles.list}>
-        {stages.map((stage) => {
+        {[...stages].sort((a, b) => a.position - b.position).map((stage) => {
           const current = stage.bpmnElementId === instance.currentStepId;
           const label = stage.status === "completed" ? "Concluída"
             : stage.status === "in_progress" ? "Em andamento"
@@ -209,6 +234,7 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
                   ? <CheckCircle2 aria-hidden="true" />
                   : current ? <CircleDot aria-hidden="true" /> : <Workflow aria-hidden="true" />}
                 <span className={styles.itemTitle}>{stage.title || stage.bpmnElementId}</span>
+                <span className={styles.itemMeta}>Etapa {stage.position + 1}</span>
                 <span className={styles.badge}
                   data-tone={stage.status === "completed" ? "positive" : current ? "info" : "neutral"}>
                   {label}
@@ -280,5 +306,28 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
             })}
           </div>
         </>}
+  </section>;
+}
+
+const moduleLabels: Record<string, string> = {
+  competence: "Competência", movement: "Movimentação", obligation: "Obrigação",
+  benefit: "Benefício", contractor: "PJ", epi: "EPI", integration: "Integração",
+};
+
+function DemandLinks({ links }: { links: ModuleLink[] }) {
+  if (!links.length) return <section className={styles.linkedModules} aria-label="Módulos vinculados">
+    <h4 className={styles.groupHeading}><Link2 aria-hidden="true" /> Módulos vinculados</h4>
+    <p className={styles.agentDetail}>Nenhum registro especializado está vinculado a esta demanda.</p>
+  </section>;
+  return <section className={styles.linkedModules} aria-label="Módulos vinculados">
+    <h4 className={styles.groupHeading}><Link2 aria-hidden="true" /> Módulos vinculados</h4>
+    <ul className={styles.moduleLinks}>
+      {links.map((link) => <li key={link.id}>
+        <span><small>{moduleLabels[link.moduleKey] ?? link.moduleKey}</small><strong>{link.label}</strong></span>
+        <a href={link.href} aria-label={`Abrir ${moduleLabels[link.moduleKey] ?? link.moduleKey}: ${link.label}`}>
+          Abrir <ExternalLink aria-hidden="true" />
+        </a>
+      </li>)}
+    </ul>
   </section>;
 }

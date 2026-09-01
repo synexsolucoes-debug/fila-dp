@@ -135,7 +135,7 @@ test("o indicador que tem onde ser resolvido é botão, não texto", () => {
   // três contextos do §7.2 — de `<span>` para `<dt>`, dentro de uma lista de
   // definição. A exigência não mudou: quem carrega o rótulo é quem carrega o
   // `onFocus`, e não um botão qualquer acima dele.
-  for (const rotulo of ["Demandas em aberto", "Processos em execução", "Obrigações próximas", "Atrasadas"]) {
+  for (const rotulo of ["Demandas em aberto", "Fluxos em andamento", "Obrigações próximas", "Atrasadas"]) {
     const padrao = new RegExp(`onFocus\\([^)]*\\)\\}>\\s*<dt>${rotulo}</dt>`, "u");
     assert.match(source, padrao, `"${rotulo}" precisa levar a algum lugar`);
   }
@@ -399,7 +399,7 @@ test("a faixa de SLA diz qual população o percentual mede", async () => {
      ABERTO que não estouraram; são populações diferentes. */
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   assert.match(app, /das demandas em aberto dentro do prazo/u);
-  assert.match(app, /stats\.onTime !== null && <div className="sla-progress"/u,
+  assert.match(app, /stats\.onTime !== null && <span className="sla-progress"/u,
     "barra de progresso sem número para representar não deve ser desenhada");
 });
 
@@ -474,12 +474,13 @@ test("sem sincronização registrada o resumo diz isso, em vez de inventar uma d
     "a última sincronização precisa sair do campo real das integrações");
 });
 
-test("processos em execução conta processos distintos, não demandas", async () => {
-  /* Doze admissões correndo são UM processo com doze demandas. Contá-las como
-     doze processos diria que a operação roda doze fluxos diferentes — e é a
-     confusão entre modelo e execução que o §4 existe para separar. */
+test("fluxos em andamento conta as execuções reais", async () => {
+  /* O indicador pedido é de fluxos em andamento: cada demanda instanciada é
+     uma execução real do processo e precisa aparecer na contagem. O catálogo
+     continua contando modelos separadamente. */
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /const processosEmExecucao = new Set\(flows\.map\(\(flow\) => flow\.definitionId\)\)\.size/u);
+  assert.match(app, /const fluxosEmAndamento = flows\.length/u);
+  assert.match(app, /<dt>Fluxos em andamento<\/dt><dd>\{fluxosEmAndamento\}<\/dd>/u);
 });
 
 test("o resumo não recalcula o que é 'vence hoje' por conta própria", async () => {
