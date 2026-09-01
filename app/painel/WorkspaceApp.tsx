@@ -882,6 +882,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [cardForm, setCardForm] = useState<CardForm>(emptyCardForm);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(Boolean(initialLocation.settings));
   const [workspaceName, setWorkspaceName] = useState("");
@@ -1672,8 +1673,35 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   async function addComment(event: FormEvent) {
     event.preventDefault();
     if (!selectedCardId || !newComment.trim()) return;
-    const next = await mutate(`/api/cards/${selectedCardId}/comments`, { method: "POST", body: JSON.stringify({ body: newComment }) }, "Comentário publicado.");
-    if (next) setNewComment("");
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/cards/${selectedCardId}/comments`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: newComment }),
+      });
+      const payload = await response.json() as WorkspaceSnapshot & { error?: string; createdCommentId?: string };
+      if (!response.ok || !payload.createdCommentId) {
+        throw new Error(payload.error || "Não foi possível publicar o comentário.");
+      }
+      applySnapshot(normalizeWorkspaceSnapshot(payload));
+      if (commentAttachment) {
+        const form = new FormData();
+        form.set("file", commentAttachment);
+        form.set("commentId", payload.createdCommentId);
+        const upload = await fetch(`/api/cards/${selectedCardId}/attachments`, { method: "POST", body: form });
+        const uploaded = await upload.json() as WorkspaceSnapshot & { error?: string };
+        if (!upload.ok) throw new Error(uploaded.error || "O comentário foi publicado, mas o anexo não foi enviado.");
+        applySnapshot(normalizeWorkspaceSnapshot(uploaded));
+      }
+      setNewComment("");
+      setCommentAttachment(null);
+      setToast(commentAttachment ? "Comentário e anexo publicados." : "Comentário publicado.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível publicar o comentário.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function editComment(commentId: string, currentBody: string) {
@@ -1890,13 +1918,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     if (next) { setNewBoardName(""); setNewBoardDescription(""); }
   }
 
-  async function uploadAttachment(file: File) {
+  async function uploadAttachment(file: File, commentId?: string) {
     if (!selectedCardId) return;
     setBusy(true);
     setError("");
     try {
       const form = new FormData();
       form.set("file", file);
+      if (commentId) form.set("commentId", commentId);
       const response = await fetch(`/api/cards/${selectedCardId}/attachments`, { method: "POST", body: form });
       const payload = await response.json() as WorkspaceSnapshot & { error?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível enviar o arquivo.");
@@ -2667,7 +2696,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 </div>
               </section>}
 
-              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
+              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{selectedCard.attachments.filter((attachment) => attachment.commentId === comment.id).map((attachment) => <a key={attachment.id} href={attachment.downloadUrl} className="comment-attachment"><Paperclip aria-hidden="true" />{attachment.filename}</a>)}{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><label className="upload-button">Anexar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => setCommentAttachment(event.target.files?.[0] ?? null)} /></label>{commentAttachment ? <small>Arquivo: {commentAttachment.name}</small> : null}<button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
             </div>
           </section>
         </div>
