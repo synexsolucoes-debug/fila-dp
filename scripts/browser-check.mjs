@@ -285,10 +285,16 @@ if (password && await emailField.count()) {
 
   await page.goto(`${base}/painel/configuracoes/seguranca`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1200);
+  /* A Administração deixou de ser modal e virou tela. O endereço próprio
+     continua sendo a exigência — é o link que se manda para alguém e o que
+     sobrevive a um F5 —, e o que ele precisa abrir é a seção pedida, com o
+     título dela. Conferir `[role=dialog]` passaria a cobrar a janela de volta. */
   record("as configurações têm endereço próprio",
-    await page.locator("[role=dialog]").count() > 0
+    await page.locator("#admin-page-title").count() > 0
       && new URL(page.url()).pathname === "/painel/configuracoes/seguranca",
-    new URL(page.url()).pathname);
+    `${new URL(page.url()).pathname} · ${await page.locator("#admin-page-title").innerText().catch(() => "sem título")}`);
+  record("e abrem como tela, não como janela por cima do painel",
+    await page.locator(".workspace-modal-backdrop").count() === 0);
 
   await page.goto(`${base}/painel`, { waitUntil: "networkidle" });
   await page.waitForTimeout(1000);
@@ -509,17 +515,38 @@ if (password) {
     record("escolher empresa recorta os indicadores da visão geral",
       abertasNoGrupo > 0 && abertasNaFilial === 0, `grupo ${abertasNoGrupo} → filial sem demanda ${abertasNaFilial}`);
 
-    // O rótulo do recorte migrou da faixa "RESUMO OPERACIONAL" para o
-    // cabeçalho do fluxo da competência, quando a faixa marinho saiu.
-    const resumo = await page.locator(".competence-flow > header span").first().innerText().catch(() => "");
-    record("a visão geral diz de quem são os números", /FILIAL VAZIA/u.test(resumo), resumo);
-
-    const ultima = chamadas[chamadas.length - 1] ?? "";
-    record("a central de ação consulta o servidor com a empresa escolhida",
-      ultima.includes(`companyId=${vazia}`), ultima.slice(-70) || "nenhuma chamada");
+    /* O rótulo do recorte já migrou duas vezes: da faixa "RESUMO OPERACIONAL"
+       para o cabeçalho da competência, e agora para o nome da própria faixa de
+       indicadores — a competência saiu da Visão geral com a maquete. O lugar
+       mudou; a exigência é a de sempre: "3 demandas" com uma empresa escolhida
+       e "3" com o grupo inteiro são o mesmo texto para fatos diferentes. */
+    const resumo = await page.locator(".overview-kpis").getAttribute("aria-label").catch(() => "");
+    record("a visão geral diz de quem são os números",
+      /Filial Vazia/iu.test(resumo ?? ""), resumo ?? "");
   }
   page.off("request", escuta);
   await seletor.selectOption("all").catch(() => undefined);
+
+  /* A central de ação mudou de tela: saiu da Visão geral, que a maquete refez
+     com quatro blocos, e passou para "Meu trabalho". A exigência continua
+     sendo que ela consulte o servidor com a empresa escolhida — a rota sempre
+     aceitou `companyId` e conferia o acesso; era o painel que não enviava. */
+  if (vazia) {
+    const chamadasTrabalho = [];
+    const escutaTrabalho = (request) => {
+      if (request.url().includes("/api/dashboard/action-center")) chamadasTrabalho.push(request.url());
+    };
+    page.on("request", escutaTrabalho);
+    await page.goto(`${base}/painel/trabalho`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1200);
+    await page.getByLabel("Selecionar empresa").selectOption(vazia).catch(() => undefined);
+    await page.waitForTimeout(2000);
+    page.off("request", escutaTrabalho);
+    const ultima = chamadasTrabalho[chamadasTrabalho.length - 1] ?? "";
+    record("a central de ação consulta o servidor com a empresa escolhida",
+      ultima.includes(`companyId=${vazia}`), ultima.slice(-70) || "nenhuma chamada");
+    await page.getByLabel("Selecionar empresa").selectOption("all").catch(() => undefined);
+  }
 }
 
 // 4d. Relatórios e a exportação seguem o recorte de empresa.

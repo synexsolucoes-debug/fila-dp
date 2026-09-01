@@ -330,6 +330,35 @@ export const cards = pgTable("fdp_cards", {
 ]);
 
 /**
+ * Vínculos da demanda com os módulos especializados (§49).
+ *
+ * A demanda orquestra o trabalho, mas não duplica competência, movimentação,
+ * obrigação, benefício, fechamento PJ, entrega de EPI ou integração. Este
+ * registro mantém apenas a referência tenant-scoped e um rótulo operacional;
+ * a entidade dona continua sendo a fonte da verdade.
+ */
+export const demandModuleLinks = pgTable("fdp_demand_module_links", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  cardId: text("card_id").notNull(),
+  moduleKey: text("module_key").notNull(),
+  entityId: text("entity_id").notNull(),
+  label: text("label").notNull(),
+  metadataJson: jsonb("metadata_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_demand_module_links_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_demand_module_links_target_uq").on(table.workspaceId, table.cardId, table.moduleKey, table.entityId),
+  index("fdp_demand_module_links_card_idx").on(table.workspaceId, table.cardId, table.createdAt),
+  index("fdp_demand_module_links_entity_idx").on(table.workspaceId, table.moduleKey, table.entityId),
+  foreignKey({ name: "fdp_demand_module_links_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_demand_module_links_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_demand_module_links_module_check", sql`${table.moduleKey} IN ('competence', 'movement', 'obligation', 'benefit', 'contractor', 'epi', 'integration')`),
+  check("fdp_demand_module_links_label_check", sql`length(trim(${table.label})) BETWEEN 1 AND 180`),
+]);
+
+/**
  * Fotografia imutável das etapas que a versão publicada entregou à demanda.
  * A demanda aponta para a versão e também materializa todas as etapas: assim a
  * operação enxerga passado, presente e futuro sem reinterpretar o BPMN a cada

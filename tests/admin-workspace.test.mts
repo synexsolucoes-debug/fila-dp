@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { capabilities, capabilitiesForRole, workspaceRoles } from "../lib/authorization.ts";
-import { capabilityAreas, capabilitiesOfArea, capabilityCatalog } from "../lib/capability-catalog.ts";
+import { capabilityAreas, capabilitiesOfArea } from "../lib/capability-catalog.ts";
 
 /**
  * A Administração do workspace, na forma da maquete 3.

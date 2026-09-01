@@ -3202,17 +3202,26 @@ function ConnectionMap({ integrations, onNavigate }: {
         {integrations.map((item) => {
           const tom = connectionTone(item.status);
           return <li key={item.id} data-tone={tom}>
-            <i aria-hidden="true" />
-            <span>
-              <strong>{item.displayName}</strong>
-              {/* A última sincronização passa a ser dita em qualquer estado, e
+            {/* Os dois lados desta linha resolveram problemas diferentes no
+                mesmo elemento, e os dois ficam:
+
+                - o item virou botão, para que o conector leve ao próprio
+                  detalhe em vez de só se anunciar;
+                - a última sincronização passa a ser dita em QUALQUER estado, e
                   não só no conectado. Era justamente no conector com erro que
                   ela faltava — e é ali que ela responde a pergunta que importa:
                   há quanto tempo este sistema parou de trazer dado. Ausência
                   não vira data inventada: `lastSyncLabel(null)` diz "nunca
                   sincronizou". */}
-              <small>{connectionStatusLabel(item.status)} · {lastSyncLabel(item.lastSyncAt)}</small>
-            </span>
+            <button type="button" onClick={() => onNavigate("integrations")}
+              aria-label={`Abrir detalhes da integração ${item.displayName}`}>
+              <i aria-hidden="true" />
+              <span>
+                <strong>{item.displayName}</strong>
+                <small>{connectionStatusLabel(item.status)} · {lastSyncLabel(item.lastSyncAt)}
+                  {item.status === "error" ? " · Abra para consultar o diagnóstico" : ""}</small>
+              </span>
+            </button>
           </li>;
         })}
       </ul>
@@ -3249,7 +3258,7 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
    * *resolvem uma pendência* da central de ação, e alargá-lo para caber um
    * indicador apagaria a razão de ele existir.
    */
-  onFocus: (target: OverviewFocusTarget, sla: "all" | "overdue") => void;
+  onFocus: (target: OverviewFocusTarget, sla: "all" | Card["slaStatus"]) => void;
   cards: Card[];
   lists: WorkspaceSnapshot["lists"];
   activities: ActivityEvent[];
@@ -3289,9 +3298,18 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
   const venceHoje = cards.filter((card) => card.slaStatus === "warning").length;
   const atrasadas = cards.filter((card) => card.slaStatus === "overdue").length;
   const hojeExigeAcao = venceHoje + atrasadas > 0;
-  /* Processos DISTINTOS em execução, não fluxos: doze admissões correndo são um
-     processo com doze demandas, e contá-las como doze processos diria que a
-     operação roda doze fluxos diferentes. */
+  /* Duas contagens diferentes, e o indicador usa as duas:
+
+     - `flows.length` é a ocorrência real — cada linha é uma demanda em execução
+       vinculada à versão que a instanciou. É o que "Fluxos em andamento" conta,
+       e é o que o valor do indicador mostra.
+     - `processosEmExecucao` são os modelos DISTINTOS por trás dessas
+       ocorrências. Doze admissões correndo são um processo com doze demandas, e
+       chamá-las de doze processos diria que a operação roda doze fluxos
+       diferentes — a confusão entre modelo e execução que o §4 separa.
+
+     Por isso a frase de apoio do indicador diz "N processos distintos": ela
+     qualifica o número de cima em vez de repeti-lo. */
   const processosEmExecucao = new Set(flows.map((flow) => flow.definitionId)).size;
   const integracoesConectadas = integrations.filter((item) => item.status === "connected").length;
   const obrigacoesVencidas = obligations.filter((item) => item.daysRemaining < 0).length;

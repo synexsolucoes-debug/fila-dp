@@ -156,6 +156,24 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
 .fieldList > div { display: grid; grid-template-columns: minmax(90px, 34%) 1fr; gap: 10px; align-items: baseline; }
 .fieldList dt { color: var(--work-soft); font-size: .67rem; font-weight: 720; text-transform: uppercase; letter-spacing: .05em; }
 .fieldList dd { font-size: .78rem; word-break: break-word; }
+.linkedModules { margin-top: 12px; }
+.linkedModules .groupHeading { align-items: center; }
+.linkedModules .groupHeading svg { width: 14px; height: 14px; }
+.moduleLinks { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.moduleLinks li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-width: 0; padding: 9px 11px; border: 1px solid var(--work-border);
+  border-radius: var(--ui-radius-sm); background: var(--work-muted);
+}
+.moduleLinks span { display: grid; min-width: 0; gap: 2px; }
+.moduleLinks small { color: var(--work-soft); font-size: .61rem; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; }
+.moduleLinks strong { overflow: hidden; font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.moduleLinks a {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 9px;
+  border-radius: var(--ui-radius-sm); color: var(--work-accent-text); font-size: .69rem;
+  font-weight: 730; text-decoration: none; transition: background-color .16s ease;
+}
+.moduleLinks a:hover { background: var(--work-surface); }
 .detailActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .noteField { display: grid; gap: 5px; }
 .noteField textarea {
