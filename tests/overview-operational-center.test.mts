@@ -27,6 +27,17 @@ const source = await readFile(painel, "utf8");
 const dbSource = await readFile(dados, "utf8");
 const typesSource = await readFile(tipos, "utf8");
 
+/** Recorta um trecho do painel entre duas marcas, para a conferência mirar o
+ *  bloco em questão e não o arquivo inteiro — detector largo demais reprova
+ *  código correto, que é o defeito mais repetido desta auditoria. */
+function bloco(inicio: string, fim: string) {
+  const de = source.indexOf(inicio);
+  assert.notEqual(de, -1, `não achei "${inicio}" no painel`);
+  const ate = source.indexOf(fim, de);
+  assert.notEqual(ate, -1, `não achei o fim "${fim}" a partir de "${inicio}"`);
+  return source.slice(de, ate + fim.length);
+}
+
 /* ── §13: o recorte de período ─────────────────────────────────────────── */
 
 test("sem período escolhido nada é escondido", () => {
@@ -131,31 +142,24 @@ test("o indicador que tem onde ser resolvido é botão, não texto", () => {
   // Ler "3 integrações com erro" e não ter caminho para elas é o indicador
   // cobrando uma ação que ele mesmo não deixa tomar.
   //
-  // Os rótulos mudaram de elemento quando os sete cartões soltos viraram os
-  // três contextos do §7.2 — de `<span>` para `<dt>`, dentro de uma lista de
-  // definição. A exigência não mudou: quem carrega o rótulo é quem carrega o
-  // `onFocus`, e não um botão qualquer acima dele.
-  for (const rotulo of ["Demandas em aberto", "Processos em execução", "Obrigações próximas", "Atrasadas"]) {
-    const padrao = new RegExp(`onFocus\\([^)]*\\)\\}>\\s*<dt>${rotulo}</dt>`, "u");
-    assert.match(source, padrao, `"${rotulo}" precisa levar a algum lugar`);
+  // A faixa mudou de forma três vezes: sete cartões soltos, depois os três
+  // contextos do §7.2, agora os cinco indicadores da maquete. A exigência é a
+  // mesma nas três: quem carrega o rótulo é quem carrega o `onFocus`, e o
+  // elemento é botão de verdade — teclado, foco e leitor de tela dependem do
+  // elemento, não do cursor.
+  const faixa = bloco('key: "demands-open"', " ];");
+  for (const rotulo of ["Demandas em aberto", "Fluxos em andamento", "Obrigações próximas", "Integrações com erro", "SLA no prazo"]) {
+    assert.ok(faixa.includes(`label: "${rotulo}"`), `"${rotulo}" sumiu da faixa de indicadores`);
   }
-  // E o elemento é botão de verdade, não uma `div` com `onClick`: teclado,
-  // foco e leitor de tela dependem do elemento, não do cursor.
-  /* A classe é lida inteira, e não só até `overview-context-row`: parando ali,
-     o `estatico` que vem logo depois ficava de fora do trecho casado e a linha
-     estática era acusada de não estar marcada. */
-  const linhas = [...source.matchAll(/<(button|div)[^>]*className=\{?[`"]([^`"]*overview-context-row[^`"]*)/gu)];
-  assert.ok(linhas.length >= 10, `só ${linhas.length} linha(s) de contexto — a faixa encolheu sem querer`);
-  for (const linha of linhas) {
-    if (linha[1] === "button") continue;
-    // A única linha que pode não ser botão é a que não tem para onde levar, e
-    // ela precisa se declarar como tal — senão "estático" vira desculpa para
-    // qualquer indicador mudo voltar.
-    assert.match(linha[0], /estatico/u,
-      "linha de contexto que não é botão precisa estar marcada como estática");
-  }
-  assert.doesNotMatch(source, /<div[^>]*overview-context-row[^>]*onClick/u,
-    "linha clicável precisa ser <button>, senão teclado e leitor de tela não alcançam");
+  // Todo indicador declara um destino: nenhum fica mudo.
+  const destinos = [...faixa.matchAll(/target: "(\w+)"/gu)].map((match) => match[1]);
+  assert.equal(destinos.length, 5, `${destinos.length} indicador(es) com destino — a faixa da maquete tem cinco`);
+  assert.equal(new Set(destinos).size >= 4, true, "quatro dos cinco indicadores caem no mesmo lugar");
+  // E o elemento é botão, não uma `div` com `onClick`.
+  assert.match(source, /<button type="button" key=\{kpi\.key\} data-metric=\{kpi\.key\}/u);
+  assert.match(source, /className=\{`overview-kpi\$\{kpi\.alert \? " requires-attention" : ""\}`\}\s*\n?\s*onClick=\{\(\) => onFocus\(kpi\.target, kpi\.sla\)\}/u);
+  assert.doesNotMatch(source, /<div[^>]*overview-kpi[^>]*onClick/u,
+    "indicador clicável precisa ser <button>, senão teclado e leitor de tela não alcançam");
 });
 
 test("o indicador de demandas em aberto mantém a âncora que o ensaio de navegador mira", async () => {
@@ -164,8 +168,11 @@ test("o indicador de demandas em aberto mantém a âncora que o ensaio de navega
   // `.first()`. O seletor passou a casar com "Documentos pendentes" — 0 tanto
   // no grupo quanto numa filial vazia —, e a conferência do recorte por empresa
   // comparou 0 com 0 e reprovou a CI. A âncora tira o ensaio da dependência do
-  // tipo de elemento e da ordem dos cartões.
-  assert.match(source, /data-metric="demands-open"/u);
+  // tipo de elemento e da ordem dos cartões, e é ela que permitiu reorganizar a
+  // faixa duas vezes desde então sem tocar no ensaio.
+  assert.match(source, /key: "demands-open"/u);
+  // O valor precisa continuar dentro de um `strong`, que é o que o ensaio lê.
+  assert.match(source, /<strong className="overview-kpi-value">\{kpi\.value\}<\/strong>/u);
   const ensaio = await readFile(new URL("../scripts/browser-check.mjs", import.meta.url), "utf8");
   assert.match(ensaio, /\[data-metric="demands-open"\] strong/u);
   // E o seletor frágil não pode voltar.
@@ -183,12 +190,14 @@ test("chegar pelo indicador zera os outros filtros do quadro", () => {
 });
 
 test("o indicador de SLA leva ao quadro já recortado no atraso", () => {
-  // O rótulo virou "Em risco de SLA" e o elemento virou `<dt>` com os três
-  // contextos do §7.2. A garantia é a de sempre: quem lê um número de prazo
-  // chega ao quadro já recortado no atraso, e não numa lista inteira onde
-  // precisa refazer o filtro à mão.
-  assert.match(source, /onFocus\("board", "overdue"\)[\s\S]{0,120}<dt>Vencendo hoje<\/dt>/u);
-  assert.match(source, /onFocus\("board", "overdue"\)[\s\S]{0,120}<dt>Atrasadas<\/dt>/u);
+  // A garantia é a de sempre, através de três formatos de faixa: quem lê um
+  // número de prazo chega ao quadro já recortado no atraso, e não numa lista
+  // inteira onde precisa refazer o filtro à mão.
+  const sla = bloco('key: "sla-on-time"', '},\n  ];');
+  assert.match(sla, /target: "board", sla: "overdue"/u);
+  // E os dois números que faziam alguém agir continuam escritos na faixa.
+  assert.match(sla, /\$\{atrasadas\} atrasada\(s\)/u);
+  assert.match(sla, /\$\{venceHoje\} vencendo hoje/u);
 });
 
 /* ── §15: fluxos em andamento ──────────────────────────────────────────── */
@@ -205,7 +214,7 @@ test("o fluxo carrega a versão que a demanda instanciou, não a vigente", () =>
   // §29: alteração no processo não pode reescrever demanda antiga. O número
   // exibido vem da coluna gravada na criação.
   assert.match(dbSource, /c\.process_version_number/u);
-  assert.match(source, /\{flow\.versionNumber && <em title=\{`Versão instanciada nesta demanda: \$\{flow\.versionNumber\}`\}/u);
+  assert.match(source, /\{flow\.versionNumber && <em className="overview-version-tag"\s*\n?\s*title=\{`Versão instanciada nesta demanda: \$\{flow\.versionNumber\}`\}/u);
 });
 
 test("o progresso é contado no banco, não trazendo as tarefas", () => {
@@ -294,7 +303,7 @@ test("a Visão geral abre com os números, não com o menu (§93)", async () => 
     app.indexOf('function MemberCompanyAccess'));
 
   const posicao = (marca: string) => layout.indexOf(marca);
-  const metricas = posicao('className="overview-contexts"');
+  const metricas = posicao('className="overview-kpis"');
   assert.ok(metricas > 0, "a faixa de indicadores sumiu da Visão geral");
 
   for (const [marca, nome] of [
@@ -308,7 +317,7 @@ test("a Visão geral abre com os números, não com o menu (§93)", async () => 
   }
 
   // E o que exige ação vem logo depois dos números: é o que faz alguém agir.
-  assert.ok(posicao('className="overview-sla-band"') > metricas);
+  assert.ok(posicao('flows-panel') > metricas);
   assert.ok(posicao('attention-panel') < posicao('<CompetenceFlow'),
     "o que exige ação precisa vir antes do contexto do mês");
 });
@@ -398,104 +407,208 @@ test("a faixa de SLA diz qual população o percentual mede", async () => {
      100% das concluídas cumpriram o prazo. O percentual mede as demandas EM
      ABERTO que não estouraram; são populações diferentes. */
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /das demandas em aberto dentro do prazo/u);
-  assert.match(app, /stats\.onTime !== null && <div className="sla-progress"/u,
+  assert.match(app, /das demandas em aberto/u);
+  assert.match(app, /\{typeof kpi\.bar === "number" && <span className="overview-kpi-bar"/u,
     "barra de progresso sem número para representar não deve ser desenhada");
 });
 
 test("a faixa de indicadores não deixa célula vazia na dobra mais nobre", async () => {
   /* O defeito original: sete indicadores com `minmax(172px)` davam cinco
      colunas em 1440px — 5 + 2, com três células mortas ao lado dos dois
-     últimos. Com três contextos o resto da divisão é sempre zero, então aquele
-     arranjo específico não volta.
-     O que continua podendo quebrar é o outro lado: largura mínima fixa demais
-     mantém três colunas numa tela onde elas não cabem, e o conteúdo espreme ou
-     transborda. Por isso a conferência é sobre `auto-fit` — que reduz o número
-     de colunas sozinho — e sobre o mínimo caber três vezes em 1440px, que é a
-     resolução alvo da §16. */
+     últimos. Com cinco indicadores o arranjo só fecha se os cinco couberem
+     lado a lado na largura útil; senão volta o mesmo resto de divisão, agora
+     como 4 + 1.
+     O outro lado é o inverso: mínimo fixo demais mantém cinco colunas numa tela
+     onde elas não cabem, e o conteúdo espreme ou transborda. Por isso a
+     conferência é sobre `auto-fit` — que reduz o número de colunas sozinho — e
+     sobre o mínimo caber cinco vezes em 1440px, que é a resolução alvo. */
   const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
-  const faixa = css.match(/\.overview-contexts \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\((\d+)px, 1fr\)\); gap: (\d+)px;/u);
-  assert.ok(faixa, "a faixa de contextos deixou de ser uma grade que se adapta sozinha");
+  const faixa = css.match(/\.overview-kpis \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\((\d+)px, 1fr\)\); gap: (\d+)px;/u);
+  assert.ok(faixa, "a faixa de indicadores deixou de ser uma grade que se adapta sozinha");
   const minimo = Number(faixa[1]);
   const intervalo = Number(faixa[2]);
   // 1440 menos a barra lateral e os recuos da coluna de conteúdo.
   const colunaUtil = 1440 - 268 - 92;
-  assert.ok(minimo * 3 + intervalo * 2 <= colunaUtil,
-    `três contextos de ${minimo}px não cabem nos ${colunaUtil}px úteis de 1440px`);
-  // E em tablet os três não podem insistir em ficar lado a lado.
-  assert.ok(minimo * 3 + intervalo * 2 > 768 - 40,
-    "o mínimo é pequeno demais: três colunas continuariam espremidas no tablet");
+  assert.ok(minimo * 5 + intervalo * 4 <= colunaUtil,
+    `cinco indicadores de ${minimo}px não cabem nos ${colunaUtil}px úteis de 1440px`);
+  // E em tablet os cinco não podem insistir em ficar lado a lado.
+  assert.ok(minimo * 5 + intervalo * 4 > 768 - 40,
+    "o mínimo é pequeno demais: cinco colunas continuariam espremidas no tablet");
 });
 /* -------------------------------------------------------------------------- */
-/* Os três contextos do resumo (§7.2)                                          */
+/* Os cinco indicadores da faixa                                               */
 /* -------------------------------------------------------------------------- */
 
-test("o resumo tem três contextos, e não uma coleção de cartões soltos", async () => {
-  /* Sete indicadores lado a lado, cada um numa caixa igual, obrigam a ler os
-     sete para descobrir qual pede ação: a tela informava sem hierarquizar. A
-     §7.2 é explícita — "não criar dezenas de cards independentes" — e nomeia os
-     três contextos. Eles são a hierarquia: o que é para hoje, como está a
-     operação, e como estão os sistemas que a alimentam. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  for (const contexto of ["HOJE", "OPERAÇÃO", "CONEXÕES"]) {
-    assert.match(app, new RegExp(`<header><span>${contexto}</span>`, "u"),
-      `o contexto ${contexto} sumiu do resumo`);
-  }
-  /* Conta os blocos `overview-context` — o `${...}` de um className por
-     template literal também encerra o nome da classe, e não só aspas ou espaço.
-     Sem admitir o `$`, os dois blocos com estado condicional ficavam de fora e
-     a conta dava 1. */
-  const contextos = (app.match(/<article className=\{?[`"]overview-context[`"$]/gu) ?? []).length;
-  assert.equal(contextos, 3, "o resumo precisa ter exatamente os três contextos do §7.2");
+test("a faixa tem os cinco indicadores da maquete, e nenhum a mais", async () => {
+  /* A faixa já foi sete cartões soltos e já foi três contextos agrupados. A
+     maquete pede cinco, e cinco é o número que cabe lado a lado na dobra sem
+     virar uma parede de caixas iguais — que é o defeito que a §7.2 nomeia. */
+  const faixa = bloco('key: "demands-open"', " ];");
+  const chaves = [...faixa.matchAll(/key: "([a-z-]+)"/gu)].map((match) => match[1]);
+  assert.deepEqual(chaves, ["demands-open", "flows-running", "obligations-due", "integrations-failing", "sla-on-time"]);
+  // Todo indicador tem ícone: o rótulo sozinho força ler os cinco para achar um.
+  assert.equal((faixa.match(/icon: [A-Z]/gu) ?? []).length, 5, "há indicador sem ícone");
 });
 
-test("nenhum número do resumo é fixo no código", async () => {
-  /* §13: estado vazio é preferível a dado falso. Cada valor do resumo precisa
-     sair de uma expressão — das demandas, dos fluxos ou das integrações que o
-     snapshot traz. Um literal aqui seria um KPI inventado, que é exatamente o
-     que a especificação proíbe. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  const inicio = app.indexOf('className="overview-contexts"');
-  const faixa = app.slice(inicio, app.indexOf("</section>", inicio));
-  const fixos = [...faixa.matchAll(/<dd[^>]*>(\d+)</gu)].map((match) => match[1]);
-  assert.deepEqual(fixos, [], `número fixo no resumo: ${fixos.join(", ")}`);
+test("nenhum número da faixa é fixo no código", async () => {
+  /* §13: estado vazio é preferível a dado falso. Cada valor da faixa precisa
+     sair de uma expressão — das demandas, dos fluxos, das obrigações ou das
+     integrações que o snapshot traz. Um literal aqui seria um KPI inventado,
+     que é exatamente o que a especificação proíbe.
+
+     Inclui a frase de apoio: a maquete desenha uma variação percentual ao lado
+     do número ("+12% vs. mês anterior"), e o snapshot não carrega série
+     histórica nenhuma. Escrever aquele "+12%" seria inventar a medição. */
+  const faixa = bloco('key: "demands-open"', " ];");
+  const fixos = [...faixa.matchAll(/value: "([^"$]*\d[^"]*)"/gu)].map((match) => match[1]);
+  assert.deepEqual(fixos, [], `número fixo na faixa: ${fixos.join(", ")}`);
+  const apoiosFixos = [...faixa.matchAll(/support: "([^"$]*\d[^"]*)"/gu)].map((match) => match[1]);
+  assert.deepEqual(apoiosFixos, [], `frase de apoio com número fixo: ${apoiosFixos.join(", ")}`);
+  assert.doesNotMatch(faixa, /vs\.? (o )?(mês|período) anterior/iu,
+    "a variação da maquete só pode entrar quando houver série histórica para medi-la");
   // E os valores vêm mesmo das fontes reais, não de um objeto montado à parte.
-  for (const fonte of ["stats.active", "stats.documentsPending", "stats.completed", "integrationsFailing", "obligations.length"]) {
-    assert.ok(faixa.includes(fonte), `o resumo deixou de ler ${fonte}`);
+  for (const fonte of ["stats.active", "flows.length", "obligations.length", "integrationsFailing", "stats.onTime", "stats.documentsPending", "stats.completed", "stats.waiting"]) {
+    assert.ok(faixa.includes(fonte), `a faixa deixou de ler ${fonte}`);
   }
 });
 
-test("sem sincronização registrada o resumo diz isso, em vez de inventar uma data", async () => {
+test("o alerta do indicador também sai de um número, e não de uma decisão escrita", async () => {
+  /* Um `alert: true` fixo pintaria de âmbar um cartão que está em ordem. Cada
+     alerta precisa ser a comparação de um valor medido. */
+  const faixa = bloco('key: "demands-open"', " ];");
+  const alertas = [...faixa.matchAll(/alert: ([^,\n]+)/gu)].map((match) => match[1].trim());
+  assert.equal(alertas.length, 5);
+  for (const alerta of alertas) {
+    assert.ok(alerta === "false" || /[a-zA-Z]/u.test(alerta.replace(/true|false/u, "")),
+      `alerta fixo em "true": ${alerta}`);
+  }
+  assert.ok(alertas.includes("obrigacoesVencidas > 0"));
+  assert.ok(alertas.includes("integrationsFailing > 0"));
+});
+
+test("sem demanda no recorte a faixa não afirma 100% dentro do prazo", async () => {
+  /* O cálculo caía em `: 100` quando não havia nenhuma demanda. O número mais
+     tranquilizador da tela aparecia justamente quando não havia evidência para
+     tranquilizar ninguém — percentual sobre denominador zero. */
+  const sla = bloco('key: "sla-on-time"', "},\n  ];");
+  assert.match(sla, /stats\.onTime === null \? "—"/u,
+    "o indicador precisa mostrar ausência, não zero nem cem");
+  assert.match(sla, /"Sem demandas em aberto neste recorte"/u);
+  // Barra sem número para representar não deve ser desenhada.
+  assert.match(source, /\{typeof kpi\.bar === "number" && <span className="overview-kpi-bar"/u);
+});
+
+test("sem sincronização registrada a faixa diz isso, em vez de inventar uma data", async () => {
   /* Um traço parece dado que faltou carregar; uma data qualquer seria mentira.
      "Nunca" é a informação verdadeira quando nenhuma integração sincronizou. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /\{ultimaSincronizacao \?\? "Nunca"\}/u);
-  assert.match(app, /const marcas = integrations\.map\(\(item\) => item\.lastSyncAt\)/u,
+  assert.match(source, /\$\{ultimaSincronizacao \?\? "Nunca"\}/u);
+  assert.match(source, /const marcas = integrations\.map\(\(item\) => item\.lastSyncAt\)/u,
     "a última sincronização precisa sair do campo real das integrações");
+});
+
+test("o recorte vigente fica escrito junto dos números", async () => {
+  /* Cinco números sem dizer sobre qual conjunto foram medidos são cinco números
+     sobre nada — e a Visão geral tem dois filtros no topo que mudam os cinco de
+     uma vez. O rótulo do recorte é o que impede a leitura errada. */
+  assert.match(source, /aria-label=\{`Indicadores da operação — \$\{scopeLabel\}`\}/u);
 });
 
 test("processos em execução conta processos distintos, não demandas", async () => {
   /* Doze admissões correndo são UM processo com doze demandas. Contá-las como
      doze processos diria que a operação roda doze fluxos diferentes — e é a
      confusão entre modelo e execução que o §4 existe para separar. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /const processosEmExecucao = new Set\(flows\.map\(\(flow\) => flow\.definitionId\)\)\.size/u);
+  assert.match(source, /const processosEmExecucao = new Set\(flows\.map\(\(flow\) => flow\.definitionId\)\)\.size/u);
+  // E o indicador diz qual dos dois números é qual: fluxos correndo no valor,
+  // processos distintos na frase de apoio.
+  const fluxos = bloco('key: "flows-running"', "},");
+  assert.match(fluxos, /value: String\(flows\.length\)/u);
+  assert.match(fluxos, /plural\(processosEmExecucao, "processo distinto", "processos distintos"\)/u);
 });
 
-test("o resumo não recalcula o que é 'vence hoje' por conta própria", async () => {
+test("a faixa não recalcula o que é 'vence hoje' por conta própria", async () => {
   /* Este teste nasce de um defeito que a tela mostrou de pé: o resumo dizia
      "Vencendo hoje: 0" logo acima de um painel com três demandas etiquetadas
      "Vence hoje". A primeira versão comparava `dueAt` com a data do navegador;
      o resto do produto pergunta ao `slaStatus`, que conhece expediente e
      feriado. Dois cálculos para a mesma pergunta sempre acabam discordando —
      e quem lê não tem como saber qual dos dois números acreditar. */
-  const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /const venceHoje = cards\.filter\(\(card\) => card\.slaStatus === "warning"\)\.length/u);
-  const inicio = app.indexOf('className="overview-contexts"');
-  const faixa = app.slice(0, inicio);
-  assert.doesNotMatch(faixa.slice(faixa.lastIndexOf("const integrationsFailing")),
+  assert.match(source, /const venceHoje = cards\.filter\(\(card\) => card\.slaStatus === "warning"\)\.length/u);
+  const inicio = source.indexOf('className="overview-kpis"');
+  const antes = source.slice(0, inicio);
+  assert.doesNotMatch(antes.slice(antes.lastIndexOf("const integrationsFailing")),
     /getFullYear\(\)|getMonth\(\)|getDate\(\)/u,
-    "o resumo voltou a decidir o que vence hoje pelo calendário do navegador");
+    "a faixa voltou a decidir o que vence hoje pelo calendário do navegador");
   // E o rótulo é o mesmo que o cartão usa para o mesmo estado.
-  assert.match(app, /if \(status === "warning"\) return "Vence hoje";/u);
+  assert.match(source, /if \(status === "warning"\) return "Vence hoje";/u);
+});
+
+/* -------------------------------------------------------------------------- */
+/* As tabelas da Visão geral (maquete)                                         */
+/* -------------------------------------------------------------------------- */
+
+test("as tabelas têm cabeçalho de coluna de verdade", () => {
+  /* `<td>` em negrito parece cabeçalho e não é: o leitor de tela não associa a
+     célula à sua coluna, e quem navega por teclado perde a referência ao rolar.
+     `<th scope="col">` é o que faz a associação existir. */
+  for (const [tabela, colunas] of [
+    ["overview-flow-table", ["Processo", "Etapa atual", "Progresso", "Responsável", "Situação"]],
+    ["overview-obligation-table", ["Obrigação", "Empresa", "Competência", "Vencimento", "Situação"]],
+    ["overview-status-table", ["Demanda", "Empresa", "Responsável", "Prazo"]],
+    ["overview-activity-table", ["Data e hora", "Evento", "Relacionado a", "Responsável", "Empresa"]],
+  ] as const) {
+    const trecho = bloco(tabela, "</table>");
+    for (const coluna of colunas) {
+      assert.match(trecho, new RegExp(`<th scope="col">${coluna}</th>`, "u"),
+        `a coluna ${coluna} de ${tabela} sumiu ou deixou de ser <th>`);
+    }
+  }
+});
+
+test("a linha da tabela não vira clicável no lugar de um botão", () => {
+  /* `<tr onClick>` não recebe foco, não é anunciado como destino e não responde
+     ao Enter. O caminho para a demanda é um botão dentro da célula. */
+  /* Sem tirar os comentários, esta própria conferência acusaria a explicação
+     escrita ao lado do botão — que cita `<tr onClick>` justamente para dizer
+     por que ele não está ali. */
+  const tela = bloco('<div className="overview-layout">', "function MemberCompanyAccess")
+    .replace(/\/\*[\s\S]*?\*\//gu, "");
+  assert.doesNotMatch(tela, /<tr[^>]*onClick/u);
+  assert.match(source, /className="overview-table-link" onClick=\{\(\) => onOpenCard\(flow\.cardId\)\}/u);
+  assert.match(source, /className="overview-table-link" onClick=\{\(\) => onOpen\(card\)\}/u);
+});
+
+test("a situação do prazo continua escrita, e não só colorida", () => {
+  /* A borda esquerda repete o estado de SLA que o quadro usa. Cor sozinha não
+     carrega o dado para quem não distingue matiz — a palavra tem de estar lá,
+     e com o mesmo vocabulário do cartão do quadro. */
+  assert.match(source, /<span className=\{`overview-sla-tag sla-\$\{flow\.slaStatus\}`\}>\{compactSlaLabel\(flow\.slaStatus, flow\.dueAt\)\}<\/span>/u);
+  assert.match(source, /<span className=\{`overview-sla-tag sla-\$\{card\.slaStatus\}`\}>\{compactSlaLabel\(card\.slaStatus, card\.dueAt\)\}<\/span>/u);
+});
+
+test("o bloco de status abre numa aba com conteúdo, não numa vazia", () => {
+  /* Abrir na primeira coluna do quadro — quase sempre a de entrada, quase
+     sempre vazia — faria a tela parecer sem dados justamente quando há. */
+  assert.match(source, /\?\? lists\.find\(\(list\) => list\.cards\.length > 0\)/u);
+  // A contagem vem no próprio rótulo: escolher a aba não pode ser às cegas.
+  assert.match(source, /\{list\.name\}<b>\{list\.cards\.length\}<\/b>/u);
+  // E a janela de seis avisa o total, senão a aba parece a lista inteira.
+  assert.match(source, /Mostrando 6 de \{statusList\.cards\.length\}/u);
+});
+
+test("o histórico diz a que demanda o evento se refere", () => {
+  /* O evento dizia "moveu a demanda de coluna" sem dizer QUAL demanda, e
+     descobrir exigia abrir o histórico inteiro. A coluna nova resolve isso a
+     partir do mesmo snapshot — nenhuma consulta a mais. */
+  assert.match(source, /const cardById = new Map\(cards\.map\(\(card\) => \[card\.id, card\]\)\)/u);
+  assert.match(source, /const demanda = activity\.cardId \? cardById\.get\(activity\.cardId\) : undefined/u);
+  /* Evento cuja demanda o recorte não alcança fica sem a coluna, e não com o
+     título de outra: mostrar a demanda errada é pior que mostrar nenhuma. */
+  assert.match(source, /: <span className="overview-ausente">—<\/span>/u);
+});
+
+test("a última sincronização é dita em qualquer estado do conector", () => {
+  /* Ela faltava justamente no conector com erro — e é ali que ela responde a
+     pergunta que importa: há quanto tempo este sistema parou de trazer dado. */
+  assert.match(source, /\{connectionStatusLabel\(item\.status\)\} · \{lastSyncLabel\(item\.lastSyncAt\)\}/u);
+  assert.doesNotMatch(source, /item\.status === "connected" \? ` · \$\{lastSyncLabel/u);
 });

@@ -2865,8 +2865,13 @@ function ConnectionMap({ integrations, onNavigate }: {
             <i aria-hidden="true" />
             <span>
               <strong>{item.displayName}</strong>
-              <small>{connectionStatusLabel(item.status)}
-                {item.status === "connected" ? ` · ${lastSyncLabel(item.lastSyncAt)}` : ""}</small>
+              {/* A última sincronização passa a ser dita em qualquer estado, e
+                  não só no conectado. Era justamente no conector com erro que
+                  ela faltava — e é ali que ela responde a pergunta que importa:
+                  há quanto tempo este sistema parou de trazer dado. Ausência
+                  não vira data inventada: `lastSyncLabel(null)` diz "nunca
+                  sincronizou". */}
+              <small>{connectionStatusLabel(item.status)} · {lastSyncLabel(item.lastSyncAt)}</small>
             </span>
           </li>;
         })}
@@ -2963,8 +2968,21 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 }) {
   const attention = cards.filter((card) => card.slaStatus === "overdue" || card.slaStatus === "warning").sort((a, b) => (a.slaStatus === "overdue" ? -1 : 1) - (b.slaStatus === "overdue" ? -1 : 1));
   const companyById = new Map(companies.map((company) => [company.id, company]));
-  const maxStatus = Math.max(1, ...lists.map((list) => list.cards.length));
   const visibleColumns = lists.slice(0, 3);
+  /* Demanda por id, para a linha do histórico dizer a que ela se refere.
+     `activities` e `cards` já vêm do mesmo snapshot e do mesmo recorte, então
+     não há consulta nova; o evento cuja demanda o recorte não alcança fica sem
+     a coluna, e não com o título de outra. */
+  const cardById = new Map(cards.map((card) => [card.id, card]));
+
+  /* A aba escolhida do bloco de status. Vazia = ainda não escolheram, e aí o
+     padrão é a primeira coluna com demanda: abrir numa aba vazia faria a tela
+     parecer sem dados quando há. */
+  const [statusTab, setStatusTab] = useState("");
+  const statusList = lists.find((list) => list.id === statusTab)
+    ?? lists.find((list) => list.cards.length > 0)
+    ?? lists[0]
+    ?? null;
   const integrationsFailing = integrations.filter((item) => item.status === "error").length;
 
   /* Os números dos três contextos (§7.2).
@@ -2986,12 +3004,85 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
      operação roda doze fluxos diferentes. */
   const processosEmExecucao = new Set(flows.map((flow) => flow.definitionId)).size;
   const integracoesConectadas = integrations.filter((item) => item.status === "connected").length;
+  const obrigacoesVencidas = obligations.filter((item) => item.daysRemaining < 0).length;
   const ultimaSincronizacao = (() => {
     const marcas = integrations.map((item) => item.lastSyncAt).filter((value): value is string => Boolean(value));
     if (marcas.length === 0) return null;
     const recente = marcas.reduce((maior, atual) => (atual > maior ? atual : maior));
     return new Date(recente).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   })();
+
+  /* Os cinco indicadores da maquete.
+     Cada um traz um número e a frase que o qualifica. A maquete desenha uma
+     variação percentual ao lado do número — "+12% vs. mês anterior" — e ela
+     não entra: o snapshot não carrega nenhuma série histórica, então o
+     percentual teria de ser inventado, que é o que a §13 proíbe em primeiro
+     lugar. No lugar dele vai um segundo fato medido: o número que explica o
+     primeiro. É a mesma linha de texto e diz algo verdadeiro.
+
+     Nada foi perdido dos três contextos que estavam aqui: os sete valores que
+     eles mostravam continuam na tela, seis deles como a frase de apoio de um
+     indicador. */
+  const kpis: Array<{
+    key: string;
+    icon: LucideIcon;
+    label: string;
+    value: string;
+    support: string;
+    target: OverviewFocusTarget;
+    sla: "all" | "overdue";
+    /** Pinta o cartão de alerta — sempre derivado de um número, nunca fixo. */
+    alert: boolean;
+    /** Só o SLA tem barra: é o único indicador que é uma proporção. */
+    bar?: number | null;
+  }> = [
+    {
+      key: "demands-open", icon: ClipboardList, label: "Demandas em aberto",
+      value: String(stats.active),
+      support: `${stats.completed} concluída(s) no período · ${stats.waiting} aguardando terceiros`,
+      target: "board", sla: "all", alert: false,
+    },
+    {
+      key: "flows-running", icon: GitBranch, label: "Fluxos em andamento",
+      value: String(flows.length),
+      /* Processos DISTINTOS, não fluxos: doze admissões correndo são um
+         processo com doze demandas, e contá-las como doze processos diria que
+         a operação roda doze fluxos diferentes (§4). */
+      support: `${plural(processosEmExecucao, "processo distinto", "processos distintos")} · ${stats.documentsPending} tarefa(s) pendente(s)`,
+      target: "processManagement", sla: "all", alert: false,
+    },
+    {
+      key: "obligations-due", icon: CalendarClock, label: "Obrigações próximas",
+      value: String(obligations.length),
+      support: obrigacoesVencidas
+        ? `${obrigacoesVencidas} já vencida(s)`
+        : "Nenhuma vencida até agora",
+      target: "processes", sla: "all", alert: obrigacoesVencidas > 0,
+    },
+    {
+      key: "integrations-failing", icon: Cable, label: "Integrações com erro",
+      value: String(integrationsFailing),
+      /* Sem sincronização registrada o certo é dizer isso, e não uma data de
+         mentira nem um traço que parece dado que faltou carregar. */
+      support: `${integracoesConectadas} conectada(s) · última sincronização ${ultimaSincronizacao ?? "Nunca"}`,
+      target: "integrations", sla: "all", alert: integrationsFailing > 0,
+    },
+    {
+      key: "sla-on-time", icon: Timer, label: "SLA no prazo",
+      /* Sem demanda no recorte não há percentual: o número mais tranquilizador
+         da tela não pode aparecer justamente quando não há evidência nenhuma
+         para tranquilizar ninguém. */
+      value: stats.onTime === null ? "—" : `${stats.onTime}%`,
+      /* O percentual mede as demandas EM ABERTO que não estouraram o prazo, e
+         não as concluídas — populações diferentes. A frase de apoio abre o
+         número em atraso e vencimento de hoje, que é o que faz alguém agir. */
+      support: stats.onTime === null
+        ? "Sem demandas em aberto neste recorte"
+        : `das demandas em aberto · ${atrasadas} atrasada(s) · ${venceHoje} vencendo hoje`,
+      target: "board", sla: "overdue", alert: hojeExigeAcao,
+      bar: stats.onTime,
+    },
+  ];
 
   return <div className="overview-layout">
 
@@ -3020,13 +3111,10 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         "SLA no prazo" não entra aqui: ele tem a faixa logo abaixo, inteira,
         com barra e contagem. Repeti-lo como sexto cartão seria o mesmo número
         duas vezes na mesma dobra. */}
-    {/* Três contextos, e não sete cartões soltos (§7.2).
-        Sete indicadores lado a lado, cada um numa caixa igual, obrigam a ler os
-        sete para descobrir qual pede ação — a tela informava sem hierarquizar.
-        Agrupados, a pergunta que cada bloco responde fica explícita: o que é
-        para hoje, como está a operação, e como estão os sistemas que alimentam
-        ela. Nenhum número novo foi inventado: todos saem das mesmas demandas,
-        fluxos e integrações que já vinham no snapshot.
+    {/* Cinco indicadores, como a maquete pede.
+        O recorte vigente fica escrito ao lado do título: um número sem o
+        conjunto que ele mede é um número sobre nada, e a Visão geral tem dois
+        filtros no topo que mudam os cinco de uma vez.
 
         `data-metric` é o ponto de ancoragem do ensaio de navegador. Ele mirava
         `.overview-metrics article strong` e `.first()`; quando os indicadores
@@ -3034,79 +3122,154 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         é 0 tanto no grupo quanto numa filial vazia, então a conferência do
         recorte por empresa comparava 0 com 0 e reprovava. Ancorar no que o
         indicador *é* faz a mudança de elemento, de grupo ou de ordem não
-        quebrar o ensaio — foi o que permitiu esta reorganização. */}
-    <section className="overview-contexts" aria-label="Resumo da operação">
+        quebrar o ensaio — foi o que permitiu esta reorganização.
 
-      <article className={`overview-context${hojeExigeAcao ? " requires-attention" : ""}`}>
-        <header><span>HOJE</span><h2>{hojeExigeAcao ? "Precisa de ação" : "Nada vencendo agora"}</h2></header>
-        <dl>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "overdue")}>
-            <dt>Vencendo hoje</dt><dd>{venceHoje}</dd>
-          </button>
-          <button type="button" className={`overview-context-row${atrasadas ? " grave" : ""}`} onClick={() => onFocus("board", "overdue")}>
-            <dt>Atrasadas</dt><dd>{atrasadas}</dd>
-          </button>
-          {/* Pausada não é atrasada: a coluna em que ela está congela o prazo.
-              Fica aqui porque também trava a fila de alguém — mas sem urgência,
-              então não conta para "precisa de ação". */}
-          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "all")}>
-            <dt>Aguardando terceiros</dt><dd>{stats.waiting}</dd>
-          </button>
-        </dl>
-      </article>
-
-      <article className="overview-context">
-        <header><span>OPERAÇÃO</span><h2>{scopeLabel}</h2></header>
-        <dl>
-          <button type="button" className="overview-context-row" data-metric="demands-open" onClick={() => onFocus("board", "all")}>
-            <dt>Demandas em aberto</dt><dd><strong>{stats.active}</strong></dd>
-          </button>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("processManagement", "all")}>
-            <dt>Processos em execução</dt><dd>{processosEmExecucao}</dd>
-          </button>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("board", "all")}>
-            <dt>Tarefas pendentes</dt><dd>{stats.documentsPending}</dd>
-          </button>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("history", "all")}>
-            <dt>Concluídas no período</dt><dd>{stats.completed}</dd>
-          </button>
-        </dl>
-      </article>
-
-      <article className={`overview-context${integrationsFailing ? " requires-attention" : ""}`}>
-        <header><span>CONEXÕES</span><h2>{integrationsFailing ? "Sincronização interrompida" : "Sistemas em dia"}</h2></header>
-        <dl>
-          <button type="button" className="overview-context-row" onClick={() => onFocus("integrations", "all")}>
-            <dt>Integrações ativas</dt><dd>{integracoesConectadas}</dd>
-          </button>
-          <button type="button" className={`overview-context-row${integrationsFailing ? " grave" : ""}`} onClick={() => onFocus("integrations", "all")}>
-            <dt>Com erro</dt><dd>{integrationsFailing}</dd>
-          </button>
-          <button type="button" className={`overview-context-row${obligations.some((item) => item.daysRemaining < 0) ? " grave" : ""}`} onClick={() => onFocus("processes", "all")}>
-            <dt>Obrigações próximas</dt><dd>{obligations.length}</dd>
-          </button>
-          {/* Sem sincronização registrada o certo é dizer isso, e não uma data
-              de mentira nem um traço que parece dado que faltou carregar. */}
-          <div className="overview-context-row estatico">
-            <dt>Última sincronização</dt><dd className="overview-context-quando">{ultimaSincronizacao ?? "Nunca"}</dd>
-          </div>
-        </dl>
-      </article>
-
+        Cada indicador é botão porque cada um tem onde ser resolvido: ler "3
+        integrações com erro" e não ter caminho para elas é o indicador cobrando
+        uma ação que ele mesmo não deixa tomar. */}
+    <section className="overview-kpis" aria-label={`Indicadores da operação — ${scopeLabel}`}>
+      {kpis.map((kpi) => {
+        const KpiIcon = kpi.icon;
+        return <button type="button" key={kpi.key} data-metric={kpi.key}
+          className={`overview-kpi${kpi.alert ? " requires-attention" : ""}`}
+          onClick={() => onFocus(kpi.target, kpi.sla)}>
+          <span className="overview-kpi-top">
+            <span className="overview-kpi-label">{kpi.label}</span>
+            <i aria-hidden="true"><KpiIcon /></i>
+          </span>
+          <strong className="overview-kpi-value">{kpi.value}</strong>
+          {/* Barra sem número para representar não deve ser desenhada. */}
+          {typeof kpi.bar === "number" && <span className="overview-kpi-bar" aria-hidden="true">
+            <i style={{ width: `${Math.max(0, Math.min(100, kpi.bar))}%` }} />
+          </span>}
+          <small className="overview-kpi-support">{kpi.support}</small>
+        </button>;
+      })}
     </section>
 
 
-    <section className="overview-sla-band">
-      {/* O percentual mede as demandas EM ABERTO que não estouraram o prazo — não
-          as concluídas. Os dois números viviam lado a lado sem dizer isso, e
-          "100% dentro do prazo" ao lado de "0 demandas concluídas" fazia o
-          leitor supor que 100% das concluídas cumpriram o prazo. São
-          populações diferentes, e agora o texto diz qual é qual. */}
-      <div><span>SAÚDE DO SLA</span><strong>{stats.onTime === null ? "Sem demandas em aberto" : `${stats.onTime}% das demandas em aberto dentro do prazo`}</strong><p>{stats.completed} concluída(s) no período • {stats.waiting} com SLA pausado</p></div>
-      {stats.onTime !== null && <div className="sla-progress" aria-label={`${stats.onTime}% das demandas em aberto dentro do prazo`} role="img"><i style={{ width: `${Math.max(0, Math.min(100, stats.onTime))}%` }} /></div>}
-      <div className="overview-sla-summary"><strong>{stats.attention}</strong><span>pendência(s)<br />que precisam de atenção</span></div>
+    {/* Fluxos em andamento (§15) e próximos vencimentos (§16).
+        As duas perguntas que o quadro não responde: ele mostra demandas soltas
+        por coluna, não o processo que as gerou nem a data legal que não espera
+        ninguém.
+
+        Os dois viraram tabela, como a maquete pede. Cartão e tabela servem a
+        leituras diferentes: o cartão é bom para ler um, a tabela é boa para
+        comparar seis. Quem abre a Visão geral está escolhendo o que abrir, e
+        para isso compara — a coluna alinhada deixa "etapa" embaixo de "etapa" e
+        "responsável" embaixo de "responsável", que é o que o cartão não fazia.
+
+        Empilhados em largura inteira, e não lado a lado como eram enquanto
+        eram cartões: cinco colunas num painel de meia largura cortavam a
+        última — a tela mostrou "SITU…" no lugar de "SITUAÇÃO", que é a coluna
+        que diz se a demanda está atrasada. O invólucro rolava, mas rolagem
+        lateral escondida dentro de um painel é informação que ninguém acha. */}
+    <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
+      <header>
+        <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
+        <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
+      </header>
+      <div className="overview-flow-list">
+        {flows.length === 0 && <div className="overview-empty">
+          <GitBranch aria-hidden="true" />
+          <strong>Nenhum processo em execução.</strong>
+          {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
+              o recorte escolhido é que não alcança nenhuma. */}
+          <p>{periodLabel === "Todo o período"
+            ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
+            : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
+        </div>}
+        {flows.length > 0 && <div className="overview-table-scroll">
+          <table className="overview-table overview-flow-table">
+            <thead><tr>
+              <th scope="col">Processo</th>
+              <th scope="col">Etapa atual</th>
+              <th scope="col">Progresso</th>
+              <th scope="col">Responsável</th>
+              <th scope="col">Situação</th>
+            </tr></thead>
+            <tbody>
+              {flows.slice(0, 6).map((flow) => <tr key={flow.cardId} className={`sla-${flow.slaStatus}`}>
+                <td>
+                  {/* A linha inteira não vira clicável: `<tr onClick>` não
+                      recebe foco nem é anunciado como destino. O caminho para
+                      a demanda é este botão, que é um elemento de verdade. */}
+                  <button type="button" className="overview-table-link" onClick={() => onOpenCard(flow.cardId)}>
+                    <strong>{flow.definitionName}</strong>
+                    <small>{flow.cardTitle}</small>
+                  </button>
+                  {flow.versionNumber && <em className="overview-version-tag"
+                    title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
+                </td>
+                <td>{flow.stepLabel || "Não iniciada"}</td>
+                {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas
+                    porque percentual sozinho não diz o tamanho do processo:
+                    50% de duas tarefas e 50% de quarenta pedem decisões
+                    diferentes. */}
+                <td className="overview-progress-cell">
+                  {/* Barra sem número para representar não é desenhada: com
+                      `tasksTotal` em zero ela ficava vazia na tela, e barra
+                      vazia se lê como "0% concluído" — que é afirmar um
+                      progresso onde não há nem denominador. */}
+                  {flow.tasksTotal > 0 && <span className="overview-flow-progress" role="img"
+                    aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
+                    <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
+                  </span>}
+                  <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas · ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
+                </td>
+                <td>{flow.responsibleName || "Sem responsável"}</td>
+                {/* Cor sozinha não carrega o dado: o estado do prazo continua
+                    escrito, com as mesmas palavras do cartão do quadro. */}
+                <td><span className={`overview-sla-tag sla-${flow.slaStatus}`}>{compactSlaLabel(flow.slaStatus, flow.dueAt)}</span></td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+      </div>
     </section>
 
+    <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
+      <header>
+        <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
+        <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
+      </header>
+      <div className="overview-obligation-list">
+        {obligations.length === 0 && <div className="overview-empty">
+          <CheckCircle2 aria-hidden="true" />
+          <strong>Nenhuma obrigação em aberto.</strong>
+          <p>{periodLabel === "Todo o período"
+            ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
+            : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
+        </div>}
+        {obligations.length > 0 && <div className="overview-table-scroll">
+          <table className="overview-table overview-obligation-table">
+            <thead><tr>
+              <th scope="col">Obrigação</th>
+              <th scope="col">Empresa</th>
+              <th scope="col">Competência</th>
+              <th scope="col">Vencimento</th>
+              <th scope="col">Situação</th>
+            </tr></thead>
+            <tbody>
+              {groupObligations(obligations).slice(0, 6).map((item) => <tr key={item.id}
+                className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
+                <td><strong>{item.title}</strong></td>
+                {/* A consulta devolve uma linha por empresa; doze filiais com o
+                    mesmo eSocial ocupariam as seis vagas com o mesmo prazo. */}
+                <td>{item.companies > 1 ? `${item.companies} empresas` : item.company || "Sem empresa"}</td>
+                <td>{item.competence || "—"}</td>
+                <td>{formatDate(item.dueDate)}</td>
+                {/* "Vence em -2 dias" é o tipo de frase que só um sistema
+                    escreve. O atraso é dito como atraso. */}
+                <td><span className="overview-obligation-due">{item.daysRemaining < 0
+                  ? `${Math.abs(item.daysRemaining)} dia(s) em atraso`
+                  : item.daysRemaining === 0 ? "Vence hoje" : `Em ${item.daysRemaining} dia(s)`}</span></td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+      </div>
+    </section>
 
     <div className="overview-grid">
       <section className="overview-panel attention-panel"><header><div><span>ATENÇÃO HOJE</span><h2>O que exige ação</h2></div><button onClick={onOpenBoard}>Ver quadro <ArrowRight aria-hidden="true" /></button></header><div className="overview-attention-list">
@@ -3114,92 +3277,77 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         {attention.slice(0, 4).map((card) => <button className={`overview-attention-card ${card.slaStatus}`} key={card.id} onClick={() => onOpen(card)}><i /><span><strong>{card.title}</strong><small>{card.company || "Sem empresa"} • {card.assigneeName || "Sem responsável"}</small></span><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>)}
       </div></section>
 
-      <section className="overview-panel status-panel"><header><div><span>VOLUME POR STATUS</span><h2>Demandas na operação</h2></div><button onClick={onOpenBoard}>Abrir demandas <ArrowRight aria-hidden="true" /></button></header><div className="status-chart" role="img" aria-label="Gráfico de demandas por status">
-        {lists.map((list) => <div key={list.id}><span style={{ height: `${Math.max(10, (list.cards.length / maxStatus) * 100)}%` }} /><strong>{list.cards.length}</strong><small>{list.name}</small></div>)}
-      </div></section>
+      {/* Demandas por status: uma aba por coluna, tabela embaixo.
+          O bloco era um gráfico de barras — respondia "quantas em cada coluna" e
+          parava aí. A pergunta seguinte, "quais são", exigia sair da tela. As
+          abas guardam a primeira resposta (a contagem está no próprio rótulo) e
+          destravam a segunda sem trocar de página.
+
+          As colunas são as do quadro deste grupo, não uma lista escrita aqui:
+          quem renomeia "Em execução" para "Na fila" lê "Na fila" nesta aba. */}
+      <section className="overview-panel status-panel" aria-labelledby="overview-status-title">
+        <header>
+          <div><span>VOLUME POR STATUS</span><h2 id="overview-status-title">Demandas na operação</h2></div>
+          <button onClick={onOpenBoard}>Abrir demandas <ArrowRight aria-hidden="true" /></button>
+        </header>
+        {lists.length === 0
+          ? <div className="overview-empty">
+              <ClipboardList aria-hidden="true" />
+              <strong>Nenhuma coluna configurada.</strong>
+              <p>As colunas do quadro definem os status que aparecem aqui.</p>
+            </div>
+          : <>
+              <div className="overview-status-tabs" role="tablist" aria-label="Status das demandas">
+                {lists.map((list) => <button type="button" key={list.id} role="tab"
+                  id={`overview-status-tab-${list.id}`}
+                  aria-selected={statusList?.id === list.id}
+                  aria-controls={statusList?.id === list.id ? `overview-status-panel-${list.id}` : undefined}
+                  onClick={() => setStatusTab(list.id)}>
+                  {list.name}<b>{list.cards.length}</b>
+                </button>)}
+              </div>
+              {statusList && <div className="overview-status-body" role="tabpanel"
+                id={`overview-status-panel-${statusList.id}`}
+                aria-labelledby={`overview-status-tab-${statusList.id}`}>
+                {statusList.cards.length === 0
+                  ? <p className="overview-status-vazio">Nenhuma demanda em {statusList.name} neste recorte.</p>
+                  : <div className="overview-table-scroll">
+                      <table className="overview-table overview-status-table">
+                        <thead><tr>
+                          <th scope="col">Demanda</th>
+                          <th scope="col">Empresa</th>
+                          <th scope="col">Responsável</th>
+                          <th scope="col">Prazo</th>
+                        </tr></thead>
+                        <tbody>
+                          {statusList.cards.slice(0, 6).map((card) => <tr key={card.id} className={`sla-${card.slaStatus}`}>
+                            <td>
+                              <button type="button" className="overview-table-link" onClick={() => onOpen(card)}>
+                                <strong>{card.title}</strong>
+                                <small>{card.processType}</small>
+                              </button>
+                            </td>
+                            <td>{card.company || "Sem empresa"}</td>
+                            <td>{card.assigneeName || "Sem responsável"}</td>
+                            <td><span className={`overview-sla-tag sla-${card.slaStatus}`}>{compactSlaLabel(card.slaStatus, card.dueAt)}</span></td>
+                          </tr>)}
+                        </tbody>
+                      </table>
+                    </div>}
+                {/* A tabela mostra seis. Dizer o total impede que a aba pareça a
+                    lista inteira — uma janela sem aviso vira "o sistema perdeu
+                    minhas demandas". */}
+                {statusList.cards.length > 6 && <p className="overview-status-vazio">
+                  Mostrando 6 de {statusList.cards.length} em {statusList.name}.
+                </p>}
+              </div>}
+            </>}
+      </section>
     </div>
 
 
     <CompetenceFlow cycles={cycles} scopeLabel={scopeLabel} active={stats.active}
       onNew={canEdit ? onNew : undefined} onNavigate={onNavigate} />
-
-    {/* Fluxos em andamento (§15) e próximos vencimentos (§16).
-        As duas perguntas que o quadro não responde: o quadro mostra demandas
-        soltas por coluna, não o processo que as gerou nem a data legal que não
-        espera ninguém. Ficam lado a lado porque são o mesmo tipo de olhar —
-        "o que está correndo" e "o que está chegando". */}
-    <div className="overview-pair">
-      <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
-        <header>
-          <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
-          <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
-        </header>
-        <div className="overview-flow-list">
-          {flows.length === 0 && <div className="overview-empty">
-            <GitBranch aria-hidden="true" />
-            <strong>Nenhum processo em execução.</strong>
-            {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
-                o recorte escolhido é que não alcança nenhuma. */}
-            <p>{periodLabel === "Todo o período"
-              ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
-              : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
-          </div>}
-          {flows.slice(0, 6).map((flow) => <button type="button" key={flow.cardId}
-            className={`overview-flow-card sla-${flow.slaStatus}`} onClick={() => onOpenCard(flow.cardId)}>
-            <span className="overview-flow-head">
-              <strong>{flow.definitionName}</strong>
-              {flow.versionNumber && <em title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
-            </span>
-            <span className="overview-flow-demand">{flow.cardTitle}</span>
-            <span className="overview-flow-step">Etapa: <b>{flow.stepLabel || "Não iniciada"}</b></span>
-            {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas porque
-                percentual sozinho não diz o tamanho do processo: 50% de duas
-                tarefas e 50% de quarenta pedem decisões diferentes. */}
-            <span className="overview-flow-progress" role="img"
-              aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
-              <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
-            </span>
-            <span className="overview-flow-foot">
-              <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas • ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
-              <small>{flow.responsibleName || "Sem responsável"}</small>
-            </span>
-          </button>)}
-        </div>
-      </section>
-
-      <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
-        <header>
-          <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
-          <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
-        </header>
-        <div className="overview-obligation-list">
-          {obligations.length === 0 && <div className="overview-empty">
-            <CheckCircle2 aria-hidden="true" />
-            <strong>Nenhuma obrigação em aberto.</strong>
-            <p>{periodLabel === "Todo o período"
-              ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
-              : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
-          </div>}
-          {groupObligations(obligations).slice(0, 6).map((item) => <article key={item.id}
-            className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
-            <div>
-              <strong>{item.title}</strong>
-              <small>{item.companies > 1
-                ? `${item.companies} empresas`
-                : item.company || "Sem empresa"}{item.competence ? ` • Competência ${item.competence}` : ""}</small>
-            </div>
-            <div className="overview-obligation-due">
-              <b>{formatDate(item.dueDate)}</b>
-              {/* "Vence em -2 dias" é o tipo de frase que só um sistema escreve.
-                  O atraso é dito como atraso. */}
-              <em>{item.daysRemaining < 0
-                ? `${Math.abs(item.daysRemaining)} dia(s) em atraso`
-                : item.daysRemaining === 0 ? "Vence hoje" : `Em ${item.daysRemaining} dia(s)`}</em>
-            </div>
-          </article>)}
-        </div>
-      </section>
-    </div>
 
     {/* Lado a lado, como o Modelo 2 põe: o que precisa de você e o que está
         ligado. Antes a central de ação abria a tela sozinha, em largura
@@ -3212,20 +3360,57 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
 
     {/* Consulta, não operação: a prévia repete o quadro e o histórico conta o
         que já passou. Por isso fecham a tela, depois do que exige ação. */}
-    <div className="overview-grid overview-bottom-grid">
-      <section className="overview-panel board-preview"><header><div><span>PRÉVIA DO QUADRO</span><h2>Próximas demandas</h2></div><button onClick={onOpenBoard}>Ver todas <ArrowRight aria-hidden="true" /></button></header><div className="board-preview-columns">
-        {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
-      </div></section>
+    <section className="overview-panel board-preview"><header><div><span>PRÉVIA DO QUADRO</span><h2>Próximas demandas</h2></div><button onClick={onOpenBoard}>Ver todas <ArrowRight aria-hidden="true" /></button></header><div className="board-preview-columns">
+      {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
+    </div></section>
 
-      {/* O botão entrou junto com a tela. Ele tinha ficado de fora de propósito
-          enquanto não havia destino: link que leva ao lugar errado é pior que
-          nenhum, e o teste que guardava isso cobrava as duas metades — que o
-          botão não existisse sem a tela, e que entrasse quando ela entrasse. */}
-      <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
-        {activities.slice(0, 5).map((activity) => <article key={activity.id}><span>{initials(activity.actorName || "DP")}</span><div><strong>{activity.actorName || "Equipe DP"} <small>{activityLabel(activity)}</small></strong><p>{activityDetails(activity)[0] || "Registro atualizado na operação."}</p></div><time>{formatMoment(activity.createdAt)}</time></article>)}
-        {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
-      </div></section>
-    </div>
+    {/* Últimas movimentações (§19), em largura inteira.
+        O botão entrou junto com a tela de histórico. Ele tinha ficado de fora
+        de propósito enquanto não havia destino: link que leva ao lugar errado é
+        pior que nenhum, e o teste que guardava isso cobrava as duas metades —
+        que o botão não existisse sem a tela, e que entrasse quando ela entrasse.
+
+        A lista de avatares virou tabela, como a maquete pede. O que ela ganha é
+        a coluna "Relacionado a": antes o evento dizia "moveu a demanda de
+        coluna" sem dizer QUAL demanda, e descobrir exigia abrir o histórico
+        inteiro. Cinco colunas não cabem na coluna estreita da grade, então o
+        bloco passa a ocupar a largura toda. */}
+    <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
+      {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
+      {activities.length > 0 && <div className="overview-table-scroll">
+        <table className="overview-table overview-activity-table">
+          <thead><tr>
+            <th scope="col">Data e hora</th>
+            <th scope="col">Evento</th>
+            <th scope="col">Relacionado a</th>
+            <th scope="col">Responsável</th>
+            <th scope="col">Empresa</th>
+          </tr></thead>
+          <tbody>
+            {activities.slice(0, 6).map((activity) => {
+              const demanda = activity.cardId ? cardById.get(activity.cardId) : undefined;
+              const detalhe = activityDetails(activity)[0];
+              return <tr key={activity.id}>
+                <td className="overview-quando">{formatMoment(activity.createdAt)}</td>
+                <td>
+                  <strong>{activityLabel(activity)}</strong>
+                  {detalhe && <small>{detalhe}</small>}
+                </td>
+                {/* Sem a demanda carregada no recorte, a célula diz que não
+                    sabe — o título de outra demanda seria pior que o traço. */}
+                <td>{demanda
+                  ? <button type="button" className="overview-table-link" onClick={() => onOpen(demanda)}>
+                      <strong>{demanda.title}</strong>
+                    </button>
+                  : <span className="overview-ausente">—</span>}</td>
+                <td>{activity.actorName || "Equipe DP"}</td>
+                <td>{demanda?.company || <span className="overview-ausente">—</span>}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>}
+    </div></section>
 
     {/* Retomar de onde parou (§67).
         Fica acima de "Meus processos" de propósito: quem abre a home no meio

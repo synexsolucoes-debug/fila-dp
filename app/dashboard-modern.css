@@ -3121,8 +3121,7 @@
    junto — o seletor compartilhado é justamente o que torna a remoção
    cega perigosa. */
 .overview-panel header > div > span,
-.overview-sla-band > div:first-child > span { display: block; font-size: 9px; font-weight: 850; letter-spacing: .11em; }
-.overview-panel header > div > span, .overview-sla-band > div:first-child > span { color: var(--ui-primary); }
+.overview-panel header > div > span { color: var(--ui-primary); }
 
 /* ==========================================================================
    Meus processos (§29)
@@ -3159,73 +3158,130 @@
    fixas deixariam três órfãos numa segunda linha larga. `auto-fit` acomoda o
    número real de indicadores — que muda com o recorte de empresa — sem que a
    contagem precise estar escrita aqui. */
-/* Sete indicadores em `minmax(172px)` davam cinco colunas em 1440px: 5 + 2, com
-   TRÊS células vazias ao lado dos dois últimos, e ~700px de nada na dobra mais
-   nobre da tela. Com o mínimo maior a conta dá quatro colunas — 4 + 3, uma
-   célula vazia em vez de três, e cada cartão fica mais folgado.
-   O `auto-fit` continua reduzindo o número de colunas em telas estreitas. */
-/* Os três contextos do resumo (§7.2).
-   Substituem a faixa de sete cartões independentes. A diferença que importa não
-   é de estilo: sete caixas iguais dão o mesmo peso visual a "documentos
-   pendentes" e a "demandas atrasadas", e quem abre a tela precisa ler as sete
-   para descobrir qual pede ação. Três blocos com título dizem antes do número o
-   que cada grupo responde.
-   As classes são todas `overview-*`, usadas só nesta tela: nenhum módulo fora da
-   Visão geral muda por causa deste bloco. */
-.overview-contexts { display: grid; grid-template-columns: repeat(auto-fit, minmax(288px, 1fr)); gap: 13px; align-items: start; }
+/* A faixa de cinco indicadores (maquete da Visão geral).
+   Cada cartão é um botão: rótulo e ícone em cima, número grande, e uma frase de
+   apoio embaixo com o segundo fato medido. A maquete desenha uma variação
+   percentual nessa linha; ela não entra porque o snapshot não carrega série
+   histórica nenhuma, e um "+12%" ali seria número inventado.
 
-.overview-context {
-  display: flex; flex-direction: column;
+   `auto-fit` com mínimo de 204px: cinco colunas mais os quatro intervalos dão
+   1068px, dentro dos 1080px úteis de uma tela de 1440px — passando disso o
+   grid cai para quatro e volta a sobrar célula morta. Em telas menores ele
+   reduz a contagem sozinho, em vez de espremer.
+
+   As classes são todas `overview-*`, usadas só nesta tela: nenhum módulo fora
+   da Visão geral muda por causa deste bloco. */
+.overview-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(204px, 1fr)); gap: 12px; align-items: stretch; }
+
+.overview-kpi {
+  min-height: 118px; padding: 14px 15px 13px;
+  display: flex; flex-direction: column; gap: 6px;
   border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface);
+  background: var(--ui-surface); color: inherit; font: inherit; text-align: left;
+  cursor: pointer; transition: border-color .16s ease, background-color .16s ease;
 }
-.overview-context > header { padding: 14px 16px 12px; border-bottom: 1px solid var(--ui-border); }
-.overview-context > header span { display: block; color: var(--ui-primary); font-size: 10px; font-weight: 800; letter-spacing: .12em; }
-.overview-context > header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 14px; letter-spacing: -.015em; }
+.overview-kpi:hover { border-color: var(--ui-border-strong); background: color-mix(in srgb, var(--ui-primary) 4%, var(--ui-surface)); }
+.overview-kpi:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .overview-kpi { transition: none; } }
 
-/* O bloco que pede ação se marca pela borda, e não por fundo colorido: o fundo
-   competiria com os números, que são o conteúdo. */
-.overview-context.requires-attention { border-color: color-mix(in srgb, var(--ui-warning) 52%, var(--ui-border)); }
-.overview-context.requires-attention > header h2 { color: var(--ui-warning); }
+.overview-kpi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.overview-kpi-label { color: var(--ui-text-soft); font-size: 11px; font-weight: 600; line-height: 1.35; }
+.overview-kpi-top i { flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center; border-radius: var(--ui-radius-md); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+.overview-kpi-top i svg { width: 14px; height: 14px; }
 
-.overview-context dl { margin: 0; display: flex; flex-direction: column; }
+/* `tabular-nums` para que os números caiam na mesma coluna entre os cinco
+   cartões: é o que deixa a comparação lateral possível sem ler dígito a
+   dígito. */
+.overview-kpi-value { margin-top: auto; color: var(--ui-text); font-size: 27px; font-weight: 750; letter-spacing: -.035em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.overview-kpi-support { color: var(--ui-text-soft); font-size: 10px; line-height: 1.4; }
 
-/* Linha de razão: rótulo à esquerda, número à direita, fio entre uma e outra.
-   `justify-content: space-between` alinha os números à direita, e o
-   `tabular-nums` faz as unidades caírem na mesma coluna entre as linhas — é o
-   que deixa a comparação vertical possível sem ler dígito por dígito. */
-.overview-context-row {
-  width: 100%; min-height: 40px; padding: 0 16px;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  border: 0; border-top: 1px solid var(--ui-border); border-radius: 0;
-  background: transparent; color: inherit; font: inherit; text-align: left;
+.overview-kpi-bar { height: 4px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 20%, var(--ui-surface)); }
+.overview-kpi-bar i { height: 100%; display: block; border-radius: inherit; background: var(--ui-mint); }
+
+/* O indicador que pede ação se marca pela borda e pelo número, não por um fundo
+   quente: com cinco lado a lado, dois em véu ocre viram uma faixa listrada onde
+   nenhum se destaca. */
+.overview-kpi.requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); }
+.overview-kpi.requires-attention .overview-kpi-value { color: var(--ui-warning); }
+.overview-kpi.requires-attention .overview-kpi-top i { background: color-mix(in srgb, var(--ui-warning) 16%, var(--ui-surface)); color: var(--ui-warning); }
+
+/* ── As tabelas da Visão geral ──────────────────────────────────────────────
+   Fluxos, vencimentos, status e movimentações passaram a ser tabela porque a
+   pergunta que a tela responde é comparativa: qual destes seis abro primeiro.
+   Cartão é bom para ler um; coluna alinhada é o que deixa "etapa" embaixo de
+   "etapa" e "responsável" embaixo de "responsável".
+
+   O `overflow-x` fica no invólucro, e não no painel: sem ele, cinco colunas num
+   painel de 360px empurram a página inteira para o lado. */
+.overview-table-scroll { overflow-x: auto; }
+.overview-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.overview-table th {
+  padding: 8px 12px; border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .07em;
+  text-align: left; text-transform: uppercase; white-space: nowrap;
 }
-.overview-context dl > :first-child { border-top: 0; }
-.overview-context-row dt { color: var(--ui-text-soft); font-size: 12px; }
-.overview-context-row dd { margin: 0; color: var(--ui-text); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.overview-context-row dd strong { font: inherit; }
-/* O número que já é a resposta da linha não precisa de destaque extra; o que
-   precisa é o que está fora do esperado. */
-.overview-context-row.grave dd { color: var(--ui-danger); }
-.overview-context-quando { font-size: 12px !important; font-weight: 600 !important; color: var(--ui-text-soft) !important; }
+.overview-table td { padding: 10px 12px; border-bottom: 1px solid var(--ui-border); color: var(--ui-text-soft); vertical-align: middle; }
+.overview-table tbody tr:last-child td { border-bottom: 0; }
+.overview-table tbody tr:hover td { background: var(--ui-surface-muted); }
 
-.overview-context-row:not(.estatico) { cursor: pointer; transition: background-color .16s ease; }
-.overview-context-row:not(.estatico):hover { background: color-mix(in srgb, var(--ui-primary) 6%, var(--ui-surface)); }
-.overview-context-row:not(.estatico):hover dt { color: var(--ui-text); }
-.overview-context-row:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
-@media (prefers-reduced-motion: reduce) {
-  .overview-context-row:not(.estatico) { transition: none; }
+/* A linha inteira não é clicável — `<tr onClick>` não recebe foco nem é
+   anunciado como destino. O caminho é este botão, que é elemento de verdade. */
+.overview-table-link {
+  max-width: 260px; padding: 0; display: block;
+  border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.overview-context.requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); }
+.overview-table-link strong { display: block; overflow: hidden; color: var(--ui-text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.overview-table-link small { display: block; margin-top: 2px; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.overview-table-link:hover strong { text-decoration: underline; }
+.overview-table-link:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
 
-.overview-sla-band { min-height: 104px; padding: 19px 23px; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 1.15fr) minmax(150px, .72fr); align-items: center; gap: 26px; border: 1px solid color-mix(in srgb, var(--ui-mint) 52%, var(--ui-border)); border-radius: var(--ui-radius-lg); background: color-mix(in srgb, var(--ui-mint) 11%, var(--ui-surface)); }
-.overview-sla-band strong { display: block; margin-top: 5px; color: var(--ui-text); font-size: 18px; letter-spacing: -.035em; }
-.overview-sla-band p { margin: 5px 0 0; color: var(--ui-text-soft); font-size: 10px; }
-.sla-progress { height: 11px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 22%, var(--ui-surface)); }
-.sla-progress i { height: 100%; display: block; border-radius: inherit; background: var(--ui-mint); }
-.overview-sla-summary { display: flex; align-items: center; justify-content: flex-end; gap: 9px; text-align: left; }
-.overview-sla-summary strong { margin: 0; color: var(--ui-warning); font-size: 30px; }
-.overview-sla-summary span { color: var(--ui-text-soft); font-size: 10px; line-height: 1.35; }
+.overview-version-tag {
+  margin-top: 3px; padding: 1px 6px; display: inline-block; border-radius: 99px;
+  background: color-mix(in srgb, var(--ui-primary) 12%, var(--ui-surface)); color: var(--ui-accent-text, var(--ui-primary));
+  font-size: 8px; font-weight: 800; font-style: normal;
+}
+
+/* Cor sozinha não carrega o dado: a etiqueta traz a palavra, e a cor só
+   reforça. */
+.overview-sla-tag { padding: 2px 7px; display: inline-block; border-radius: 99px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 9px; font-weight: 700; white-space: nowrap; }
+.overview-sla-tag.sla-warning { background: color-mix(in srgb, var(--ui-warning) 16%, var(--ui-surface)); color: var(--ui-warning); }
+.overview-sla-tag.sla-overdue { background: color-mix(in srgb, var(--ui-danger) 16%, var(--ui-surface)); color: var(--ui-danger); }
+.overview-sla-tag.sla-paused { background: var(--ui-surface-muted); color: var(--ui-text-soft); }
+
+.overview-progress-cell { min-width: 132px; }
+.overview-progress-cell small { display: block; margin-top: 4px; color: var(--ui-text-soft); font-size: 9px; white-space: nowrap; }
+.overview-quando { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.overview-ausente { color: var(--ui-text-soft); }
+.overview-activity-table td strong { display: block; color: var(--ui-text); font-size: 11px; font-weight: 600; }
+.overview-activity-table td small { display: block; margin-top: 2px; max-width: 320px; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.overview-obligation-table td strong { color: var(--ui-text); font-size: 11px; }
+.overview-obligation-table .overview-obligation-due { font-size: 10px; font-weight: 700; white-space: nowrap; }
+.overview-obligation-table tr.warning .overview-obligation-due { color: var(--ui-warning); }
+.overview-obligation-table tr.overdue .overview-obligation-due { color: var(--ui-danger); }
+
+/* Abas do bloco de status: o rótulo é o nome da coluna do quadro, e a contagem
+   vem junto para que escolher a aba não seja às cegas. */
+.overview-status-tabs { padding: 10px 14px 0; display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+.overview-status-tabs::-webkit-scrollbar { display: none; }
+.overview-status-tabs > button {
+  flex: 0 0 auto; padding: 6px 10px; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--ui-border); border-radius: 99px;
+  background: transparent; color: var(--ui-text-soft); font-size: 10px; font-weight: 700; cursor: pointer;
+}
+.overview-status-tabs > button b { padding: 0 5px; border-radius: 99px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 9px; font-variant-numeric: tabular-nums; }
+.overview-status-tabs > button[aria-selected="true"] { border-color: var(--ui-primary); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+.overview-status-tabs > button[aria-selected="true"] b { background: color-mix(in srgb, var(--ui-primary) 18%, var(--ui-surface)); color: var(--ui-accent-text, var(--ui-primary)); }
+.overview-status-tabs > button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.overview-status-body { padding: 10px 0 4px; }
+/* O bloco de status divide a linha com "Atenção hoje", então a tabela tem
+   metade da largura para quatro colunas. Medido: o título da demanda em 260px
+   empurrava a coluna PRAZO 30px para fora, e "Vence hoje" aparecia como
+   "Vence ho…" — a etiqueta que existe justamente para dizer o prazo. O título
+   cede a largura porque ele já tem reticências previstas; a etiqueta não. */
+.overview-status-table th, .overview-status-table td { padding-right: 8px; padding-left: 8px; }
+.overview-status-table .overview-table-link { max-width: 168px; }
+.overview-status-table th:first-child, .overview-status-table td:first-child { padding-left: 12px; }
+.overview-status-vazio { margin: 0; padding: 14px; color: var(--ui-text-soft); font-size: 10px; text-align: center; }
 
 .overview-grid { display: grid; grid-template-columns: minmax(0, 1.14fr) minmax(360px, .86fr); gap: 18px; }
 .overview-panel { min-width: 0; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
@@ -3248,73 +3304,28 @@
 .overview-empty strong { color: var(--ui-text); font-size: 11px; }
 .overview-empty p { max-width: 280px; margin: 5px 0 0; font-size: 10px; line-height: 1.45; }
 
-/* Fluxos em andamento (§15).
-   O cartão é denso de propósito: processo, versão, demanda, etapa, progresso e
-   responsável em seis linhas curtas. Quem olha a Visão geral está decidindo o
-   que abrir, e para isso precisa comparar cartões — não ler um. */
-.overview-flow-list { padding: 8px 14px 14px; display: grid; gap: 6px; }
-.overview-flow-card {
-  width: 100%; padding: 11px 12px; display: grid; gap: 6px;
-  border: 1px solid var(--ui-border); border-left: 3px solid var(--ui-border); border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface); color: var(--ui-text); text-align: left; cursor: pointer;
-  transition: border-color .16s ease, background-color .16s ease;
-}
-.overview-flow-card:hover { background: color-mix(in srgb, var(--ui-primary) 4%, var(--ui-surface)); }
-.overview-flow-card:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-/* A borda esquerda repete o estado de SLA que o quadro já usa. Cor sozinha não
-   carrega o dado: o prazo continua escrito no rodapé do cartão. */
-.overview-flow-card.sla-warning { border-left-color: var(--ui-warning); }
-.overview-flow-card.sla-overdue { border-left-color: var(--ui-danger); }
-.overview-flow-card.sla-paused { border-left-color: var(--ui-text-soft); }
-.overview-flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.overview-flow-head strong { min-width: 0; color: var(--ui-text); font-size: 12px; letter-spacing: -.01em; overflow-wrap: anywhere; }
-.overview-flow-head em {
-  flex: 0 0 auto; padding: 1px 6px; border-radius: 99px; font-size: 9px; font-weight: 800; font-style: normal;
-  background: color-mix(in srgb, var(--ui-primary) 12%, var(--ui-surface)); color: var(--ui-primary);
-}
-.overview-flow-demand { color: var(--ui-text-soft); font-size: 11px; overflow-wrap: anywhere; }
-.overview-flow-step { color: var(--ui-text-soft); font-size: 10px; }
-.overview-flow-step b { color: var(--ui-text); font-weight: 700; }
-.overview-flow-progress { height: 5px; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 20%, var(--ui-surface)); }
+/* Fluxos em andamento (§15) e próximos vencimentos (§16).
+   Os dois blocos passaram de cartão para tabela; o estilo comum das colunas
+   está em `.overview-table`, acima. O que sobra aqui é o recuo do invólucro e a
+   barra de progresso, que a célula continua desenhando. */
+.overview-flow-list, .overview-obligation-list { padding: 4px 0 6px; }
+.overview-flow-progress { height: 5px; display: block; overflow: hidden; border-radius: 99px; background: color-mix(in srgb, var(--ui-mint) 20%, var(--ui-surface)); }
 .overview-flow-progress i { height: 100%; display: block; border-radius: inherit; background: var(--ui-mint); }
-.overview-flow-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.overview-flow-foot small { color: var(--ui-text-soft); font-size: 9px; }
 
-/* Próximos vencimentos (§16). Duas colunas: o que vence e quando. */
-.overview-obligation-list { padding: 5px 16px 13px; }
-.overview-obligation {
-  min-height: 58px; padding: 11px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center; gap: 12px; border-bottom: 1px solid var(--ui-border);
-}
-.overview-obligation:last-child { border-bottom: 0; }
-.overview-obligation strong { display: block; color: var(--ui-text); font-size: 11px; overflow-wrap: anywhere; }
-.overview-obligation small { display: block; margin-top: 2px; color: var(--ui-text-soft); font-size: 9px; }
-.overview-obligation-due { text-align: right; white-space: nowrap; }
-.overview-obligation-due b { display: block; color: var(--ui-text); font-size: 11px; }
-.overview-obligation-due em { display: block; margin-top: 2px; font-size: 9px; font-style: normal; font-weight: 700; color: var(--ui-text-soft); }
-.overview-obligation.warning .overview-obligation-due em { color: var(--ui-warning); }
-.overview-obligation.overdue .overview-obligation-due em { color: var(--ui-danger); }
+/* A borda esquerda repete o estado de SLA que o quadro já usa. Cor sozinha não
+   carrega o dado: a etiqueta escrita continua na última coluna. */
+.overview-table tbody tr.sla-warning td:first-child { box-shadow: inset 3px 0 0 var(--ui-warning); }
+.overview-table tbody tr.sla-overdue td:first-child { box-shadow: inset 3px 0 0 var(--ui-danger); }
+.overview-table tbody tr.sla-paused td:first-child { box-shadow: inset 3px 0 0 var(--ui-text-soft); }
 
-@media (prefers-reduced-motion: reduce) { .overview-flow-card { transition: none; } }
-
-/* Abaixo do tablet os dois painéis empilham — a grade de duas colunas do
-   `.overview-pair` já faz isso, mas o cartão de fluxo precisa soltar o rodapé
-   em duas linhas para o nome do responsável não ser cortado. */
+/* Abaixo do tablet a tabela rola dentro do próprio painel, e não empurra a
+   página: o `overflow-x` do invólucro já resolve, mas as colunas precisam parar
+   de encolher para o texto não virar uma letra por linha. */
 @media (max-width: 760px) {
-  .overview-flow-foot { flex-direction: column; align-items: flex-start; gap: 2px; }
-  .overview-obligation { grid-template-columns: minmax(0, 1fr); }
-  .overview-obligation-due { text-align: left; }
+  .overview-table th, .overview-table td { white-space: nowrap; }
+  .overview-table-link { max-width: 190px; }
 }
 
-.status-chart { min-height: 195px; padding: 23px 20px 17px; display: flex; align-items: end; gap: 18px; }
-.status-chart > div { min-width: 48px; height: 150px; flex: 1; display: grid; grid-template-rows: 1fr auto auto; align-items: end; gap: 6px; text-align: center; }
-.status-chart span { max-width: 58px; width: 100%; justify-self: center; min-height: 8px; display: block; border-radius: var(--ui-radius-sm) var(--ui-radius-sm) 0 0; background: var(--ui-mint); }
-.status-chart > div:nth-child(2n) span { background: #8eb8aa; }
-.status-chart > div:nth-child(3n) span { background: #F4A261; }
-.status-chart strong { color: var(--ui-text); font-size: 12px; }
-.status-chart small { overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-
-.overview-bottom-grid { grid-template-columns: minmax(0, 1.32fr) minmax(320px, .68fr); }
 .board-preview-columns { padding: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .board-preview-columns > section { min-width: 0; padding: 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface-muted); }
 .board-preview-columns section > header { min-height: auto; padding: 0 0 9px; display: flex; justify-content: space-between; border: 0; color: var(--ui-text-soft); font-size: 9px; }
@@ -3328,23 +3339,7 @@
 .mini-demand-card small { width: 100%; margin-top: 4px; overflow: hidden; color: var(--ui-text-soft); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .mini-demand-card em { margin-top: auto; color: var(--ui-text-soft); font-size: 8px; font-style: normal; }
 .mini-column-empty { margin: 14px 0; color: var(--ui-text-soft); font-size: 9px; text-align: center; }
-.recent-activity-list { padding: 5px 16px 13px; }
-.recent-activity-list article { min-height: 61px; padding: 11px 0; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 9px; align-items: start; border-bottom: 1px solid var(--ui-border); }
-.recent-activity-list article:last-child { border-bottom: 0; }
-/* Iniciais do autor sobre o círculo suave. `--ui-primary` é o tom de
-   preenchimento: no tema escuro ele rende 4.3:1 aqui, medido — abaixo do
-   mínimo 4.5. `--ui-accent-text` existe exatamente para este papel e rende
-   7.52:1 sobre a mesma superfície.
-
-   Isto só apareceu quando o ensaio de ponta a ponta passou a criar demandas: a
-   lista de atividades recentes nunca tinha sido pintada com conteúdo, então a
-   conferência nunca a mediu. É o mesmo padrão dos rótulos de processo, que
-   ficaram em 4.37:1 enquanto a semente era inteiramente vazia. */
-.recent-activity-list article > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); font-size: 8px; font-weight: 850; }
-.recent-activity-list strong { display: block; color: var(--ui-text); font-size: 10px; }
-.recent-activity-list strong small { color: var(--ui-text-soft); font-size: 9px; font-weight: 500; }
-.recent-activity-list p { margin: 4px 0 0; overflow: hidden; color: var(--ui-text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.recent-activity-list time { color: var(--ui-text-soft); font-size: 8px; white-space: nowrap; }
+.recent-activity-list { padding: 4px 0 6px; }
 
 .dashboard-board-head { gap: 14px; }
 .dashboard-filters { align-items: end; flex-wrap: wrap; }
@@ -3404,7 +3399,7 @@
 @media (max-width: 1120px) {
   .dashboard-header-actions .global-search-trigger { width: 40px; padding: 0; justify-content: center; }
   .global-search-trigger span, .global-search-trigger kbd { display: none; }
-  .overview-grid, .overview-bottom-grid { grid-template-columns: 1fr; }
+  .overview-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 780px) {
@@ -3413,10 +3408,9 @@
   .dashboard-header-actions .header-company-select { min-width: 38px; width: 38px; padding: 0; justify-content: center; }
   .header-company-select select { display: none; }
   .dashboard-header-actions .help-button, .dashboard-header-actions .header-profile { display: none; }
-  .overview-sla-band { grid-template-columns: 1fr; gap: 14px; }
-  .overview-sla-summary { justify-content: flex-start; }
-  .status-chart { overflow-x: auto; }
-  .status-chart > div { min-width: 60px; }
+  .overview-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .overview-kpi { min-height: 100px; }
+  .overview-kpi-value { font-size: 23px; }
   .board-preview-columns { grid-auto-columns: minmax(220px, 76vw); grid-auto-flow: column; overflow-x: auto; }
   .dashboard-filters { flex-wrap: nowrap; }
   .dashboard-filters label { min-width: 140px; }
@@ -4593,8 +4587,8 @@
   --ui-state-danger-bg: #3d1e1c;
 }
 
-/* O selo âmbar da visão geral: no escuro o marrom original dava 2.76:1. */
-.theme-dark .overview-context.requires-attention > header h2 { color: var(--ui-state-warn-text); }
+/* O número âmbar da visão geral: no escuro o marrom original dava 2.76:1. */
+.theme-dark .overview-kpi.requires-attention .overview-kpi-value { color: var(--ui-state-warn-text); }
 
 /* Rótulos de apoio da folha ficavam abaixo de 4.5:1 sobre o painel da tela. */
 .payroll-toolbar > label,
@@ -4720,7 +4714,7 @@
 
 /* --- Cartões e superfícies ------------------------------------------------ */
 .dashboard-task,
-.overview-context,
+.overview-kpi,
 .dashboard-stats article {
   transition: transform var(--motion-fast) var(--motion-ease),
     box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
@@ -5187,8 +5181,8 @@
 .dashboard-sla,
 .dashboard-check,
 .dashboard-comments,
-.overview-context-row dd,
-.overview-obligation-due b,
+.overview-kpi-value,
+.overview-quando,
 .history-table time,
 .history-card-link b,
 .dashboard-task p small {
