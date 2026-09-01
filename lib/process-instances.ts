@@ -894,6 +894,9 @@ export function availableTransitions(input: {
     return {
       flowId: flow.id,
       flowName: flow.name,
+      // Contrato explícito do painel; os aliases antigos ficam para integrações.
+      targetStepId: flow.target,
+      targetLabel: evaluation.targetLabel,
       stepId: flow.target,
       stepLabel: evaluation.targetLabel,
       terminal: evaluation.terminal,
