@@ -478,8 +478,11 @@ test("a confirmação destrutiva exige dizer o que vai acontecer", async () => {
   // interrupção que exige resposta.
   assert.match(assinatura, /role="alertdialog" aria-modal="true"/u);
   assert.match(assinatura, /aria-describedby="confirm-consequence"/u);
-  // Esc não escapa no meio de uma ação já enviada.
+  /* Esc não escapa no meio de uma ação já enviada. O `busy` chega por
+     referência desde que o efeito de foco deixou de remontar a cada render do
+     pai — ver `tests/dialog-focus.test.mts`; o que importa aqui é a guarda,
+     não por onde o valor vem. */
   const motion = await readFile(new URL("../app/painel/features/shared/motion.tsx", import.meta.url), "utf8");
-  assert.match(motion, /event\.key === "Escape" && !busy/u);
+  assert.match(motion, /event\.key === "Escape" && !(?:atual\.current\.)?busy/u);
   assert.match(motion, /previous\?\.focus\?\.\(\)/u, "o foco volta para onde estava");
 });
