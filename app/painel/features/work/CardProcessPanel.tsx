@@ -30,6 +30,7 @@ import styles from "./work.module.css";
  */
 
 type Transition = {
+  flowName: string;
   targetStepId: string;
   targetLabel: string;
   allowed: boolean;
@@ -98,6 +99,7 @@ function normalize(payload: Record<string, unknown>): ProcessState {
       const item = (row ?? {}) as Record<string, unknown>;
       const blockers = Array.isArray(item.blockers) ? item.blockers : [];
       return {
+        flowName: text(item.flowName),
         targetStepId: text(item.targetStepId),
         targetLabel: text(item.targetLabel),
         allowed: item.allowed === true,
@@ -240,7 +242,10 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
           </p> : null}
           <h4 className={styles.groupHeading}>Para onde esta etapa pode seguir</h4>
           <div className={styles.list}>
-            {transitions.map((transition) => <article key={transition.targetStepId}
+            {transitions.map((transition) => {
+              const rejects = /reprov|rejeit|devolver|corrigir|\\bn[aã]o\\b/iu
+                .test(`${transition.flowName} ${transition.targetLabel}`);
+              return <article key={transition.targetStepId}
               className={styles.item} data-tone={transition.allowed ? "neutral" : "warning"}>
               <span className={styles.rail} aria-hidden="true" />
               <div className={styles.itemBody}>
@@ -266,12 +271,13 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
                     : transition.blockers.map((blocker) => blocker.message).join(" ")}
                   onClick={() => void advance(transition)}>
                   {busy === transition.targetStepId
-                    ? (instance.requiresApproval ? "Aprovando…" : "Avançando…")
-                    : (instance.requiresApproval ? "Aprovar e avançar" : "Avançar")}<ArrowRight aria-hidden="true" />
+                    ? (instance.requiresApproval ? (rejects ? "Reprovando…" : "Aprovando…") : "Avançando…")
+                    : (instance.requiresApproval ? (rejects ? "Reprovar" : "Aprovar e avançar") : "Avançar")}<ArrowRight aria-hidden="true" />
                 </button>
                 {!canAdvance ? <span className={styles.nextAction}>Você não tem permissão para avançar a etapa.</span> : null}
               </div>
-            </article>)}
+            </article>;
+            })}
           </div>
         </>}
   </section>;
