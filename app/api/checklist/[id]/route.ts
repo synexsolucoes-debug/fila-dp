@@ -72,13 +72,19 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
     }
 
-    await d1.prepare(`UPDATE fdp_checklist_items
+    /* A mudança é condicional ao estado observado. Duas requisições iguais em
+       paralelo não disparam duas automações nem duplicam o histórico: somente a
+       conexão que realmente altera a tarefa continua para os efeitos colaterais. */
+    const changed = await d1.prepare(`UPDATE fdp_checklist_items
         SET completed = ?,
             completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END,
             completed_by = CASE WHEN ? = 1 THEN ? ELSE '' END
-      WHERE workspace_id = ? AND id = ?`)
-      .bind(completed ? 1 : 0, completed ? 1 : 0, completed ? 1 : 0, completed ? auth.user.email : "", workspace.id, id)
+      WHERE workspace_id = ? AND id = ? AND completed IS DISTINCT FROM ?`)
+      .bind(completed ? 1 : 0, completed ? 1 : 0, completed ? 1 : 0, completed ? auth.user.email : "", workspace.id, id, completed ? 1 : 0)
       .run();
+    if (Number(changed.meta?.changes ?? 0) === 0) {
+      return Response.json(await getWorkspaceSnapshot(auth.user));
+    }
 
     const remaining = await d1.prepare("SELECT COUNT(*) AS count FROM fdp_checklist_items WHERE card_id = ? AND completed = 0").bind(item.card_id).first<{ count: number }>();
     if (Number(remaining?.count ?? 0) === 0) await runAutomations(workspace.id, board.id, item.card_id, "checklist.completed", auth.user.email, { allItems: true });
