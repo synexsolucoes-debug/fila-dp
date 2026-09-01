@@ -288,7 +288,7 @@ async function twoStageAdvances() {
 /* 9. Dois autosaves da mesma revisão do processo. */
 async function twoProcessVersionSaves() {
   const save = (summary) => query(`SELECT fdp_save_process_version_draft(
-      $1, $2, 0, '', '', jsonb_build_object('summary', $3), '[]'::jsonb, $4) AS revision`,
+      $1, $2, 0, '', '', jsonb_build_object('summary', $3::text), '[]'::jsonb, $4) AS revision`,
     [id("w"), id("pv"), summary, id("u")]);
   const { a, b } = await inParallel(() => save("A"), () => save("B"));
   const applied = [a, b].filter((result) => result.rowCount === 1).length;
