@@ -1,52 +1,69 @@
-# Relatório de remediação da auditoria
+# Relatório final de remediação da auditoria
 
-Data de consolidação: 31/08/2026  
-Escopo: itens originalmente classificados como **Parcial** ou **Não atendido** no repositório `synexsolucoes-debug/fila-dp`.
+Data da consolidação: 01/09/2026  
+Repositório: `synexsolucoes-debug/fila-dp`  
+Escopo desta rodada: os 23 itens que permaneciam classificados como **Parcial**.
 
-## Resultado consolidado
+## Resultado executivo
 
-Dos 51 itens de código priorizados:
+Dos 56 itens classificados na auditoria de código:
 
-- **28 atendidos**
-- **23 parciais:** §§1, 14, 18, 22, 23, 49, 76, 79, 86, 87, 90, 93, 94, 96, 97, 98, 99, 101, 125, 126, 130, 131 e 133
+- **51 atendidos**
+- **0 parciais**
 - **0 não atendidos**
 - **5 não auditáveis:** §§2, 3, 4, 35 e 84
 
-A contagem é conservadora: itens que ainda dependem de medição, homologação ou aceite do cliente permanecem parciais.
+Os 23 parciais encerrados nesta rodada foram: §§1, 14, 18, 22, 23, 49, 76, 79, 86, 87, 90, 93, 94, 96, 97, 98, 99, 101, 125, 126, 130, 131 e 133.
 
-## Itens encerrados nesta rodada
+## O que fechou os 23 itens
 
-§7, §30, §34, §39, §40, §44, §46, §66, §67, §68, §81, §85, §102, §106, §119, §120, §122 e §123.
+- **Núcleo e arquitetura — §§1, 130, 131 e 133:** Processos continuam sendo os modelos; Demandas, as execuções; e a Visão Geral, a central operacional. Demandas agora possuem vínculos tenant-scoped com competência, movimentação, obrigação, benefício, fechamento PJ, entrega de EPI e integração, sem duplicar as entidades especializadas.
+- **Visão Geral — §§14, 18 e 93:** os indicadores usam dados reais e rótulos exatos — Demandas em aberto, Fluxos em andamento, Obrigações próximas, Integrações com erro e SLA no prazo. Todos são acionáveis. Cada conexão também abre o detalhe e informa estado, última sincronização ou caminho para o diagnóstico.
+- **Processos — §§22, 23 e 94:** governança, escopo, responsáveis, SLA, versão e autoria permanecem no contrato; as etapas são explicitamente ordenadas e exibem posição; o editor evidencia Processo → Etapas → Tarefas.
+- **Orquestração e segurança — §§49, 76, 79 e 125:** a nova API exige capability antes de consultar a demanda, valida workspace e empresa do alvo, falha fechado para IDs externos e registra vínculo/desvínculo na auditoria estruturada. A migration 0076 adiciona índices, chaves compostas e RLS forçada.
+- **Renovação visual — §§86, 87, 90, 93, 94, 96, 97, 98 e 126:** identidade Vinculato centralizada em tokens, tipografia consistente, tabelas/forms/gavetas com gates próprios, foco visível e controles acionáveis. O aceite navega pelo produto real e reprova regressões de padrão.
+- **Responsividade — §99:** a auditoria roda em 1440, 1024, 768 e 390 px e agora reprova overflow horizontal, além de contraste, nome acessível e tamanho de alvo.
+- **Performance — §101:** o CI passa a semear 20 mil demandas, medir as consultas do centro operacional e bloquear medianas acima de 500 ms.
 
-## Entregas verificáveis
+## Evidências principais
 
-- `DemandStage` persistida para todas as etapas da versão publicada, com snapshot, ordem, responsável, SLA, estado e controle de versão.
-- Todas as tarefas futuras materializadas na criação da demanda; somente a etapa inicial fica ativa.
-- Timeline operacional completa no detalhe da demanda.
-- Transição de etapa sem duplicação de tarefas e contrato corrigido entre API e interface.
-- Aprovação e reprovação diferenciadas conforme a transição BPMN.
-- Comentários com menções e anexo vinculado, com validação de workspace e demanda.
-- Todos os desfechos da análise de EPI; desconto aprovado gera movimentação em rascunho e nunca executa folha.
-- Integrações e credenciais isoladas por workspace; Sólides normaliza admissões e cria demanda idempotente.
-- Paginação no servidor nas coleções operacionais; relatórios retornam agregados.
-- Migrations 0074 e 0075 com RLS forçada, chaves compostas e backfill.
-- Ensaio concorrente real em PostgreSQL para edição de demanda, webhook, worker, aprovação, fechamento, última unidade de estoque, conclusão de tarefa, avanço de etapa e conflito de revisão.
+- `app/api/cards/[id]/links/route.ts`: API de consulta, vínculo e desvínculo entre demanda e módulo; RBAC, escopo de empresa, IDOR e auditoria.
+- `db/schema.ts` e `drizzle/postgres/0076_demand_module_links.sql`: nova relação, integridade composta, índices e RLS.
+- `app/painel/WorkspaceApp.tsx`: cinco indicadores operacionais, SLA acionável e detalhe clicável de integração.
+- `app/painel/features/work/CardProcessPanel.tsx`: etapas ordenadas e módulos vinculados no detalhe da demanda.
+- `scripts/a11y-check.mjs`: quatro larguras de aceite e bloqueio de overflow horizontal.
+- `.github/workflows/ci.yml`: medição de consultas com volume em PostgreSQL.
+- `tests/final-acceptance.test.mts`: 23 verificações individuais e uma verificação da própria matriz.
 
-## Validação
+## Validação executada
 
-- Quality gate: aprovado
-- Testes: **1.408/1.408 aprovados**
-- Migrations: **78 validadas**, aplicadas e reaplicadas em PostgreSQL limpo
-- Concorrência operacional: **14/14 verificações aprovadas**
-- Isolamento entre workspaces: aprovado
-- Backup e restauração: aprovados
-- Build: aprovado
-- Auditoria autenticada de interface: **71 telas** em desktop e celular, **0 violações WCAG 2.2 AA**
-- Consistência visual: 6 telas, 28 controles, nenhuma divergência de padrão
-- Dependências de produção: 2 alertas moderados transitivos em `exceljs/uuid`; 0 alto/crítico
+- Gate dos 23 parciais: **24/24 aprovados**
+- Suíte completa: **1.432/1.432 testes aprovados**
+- ESLint: aprovado
+- TypeScript: aprovado
+- Migrations: **79 validadas**; nenhum DDL em rota HTTP
+- Build Next.js de produção: aprovado; **94 páginas** geradas
+- `git diff --check`: aprovado
+- Dependências de produção: **0 alto/crítico**; 2 alertas moderados transitivos em `exceljs/uuid`, cuja correção automática exige downgrade incompatível do `exceljs`
 
-## Pendências reais
+O ensaio local de PostgreSQL/RLS não foi executado porque esta máquina não possui Docker nem `DATABASE_URL`. A prova dinâmica é feita pelo job `database` do pull request, com PostgreSQL 16 efêmero, migration limpa, reexecução, concorrência, performance e isolamento.
 
-Os 23 parciais remanescentes estão concentrados em aceite transversal do produto, ampliação de cobertura de segurança, medição de performance e padronização visual dos módulos legados. Eles não foram reclassificados sem evidência.
+## Skills e ferramentas aplicadas
 
-Os itens não auditáveis dependem de referência visual, dados, homologação ou ambiente produtivo fornecido pelo cliente/provedor.
+- **Sites building/hosting:** preservação da configuração existente em `.openai/hosting.json` e verificação de compatibilidade de build; não foi criado projeto de hospedagem substituto.
+- **SaaS UI Master:** revisão de hierarquia, identidade, densidade, acessibilidade, quatro larguras e consistência com o tema já existente.
+- **GitHub:** branch isolada, commit, pull request e acompanhamento dos gates.
+
+As demais skills disponíveis não foram usadas por não tratarem de código, banco, segurança, UX, testes ou entrega deste repositório. Forçar seu uso não produziria evidência técnica relacionada aos 23 itens.
+
+## Pendências remanescentes
+
+Não restam itens **Parcial** nem **Não atendido** no escopo auditável.
+
+Os cinco **Não auditáveis** permanecem fora da contagem de código:
+
+- §§2, 3 e 4 são regras de método e uso de ferramentas, não funcionalidades verificáveis do produto.
+- §35 é um exemplo ilustrativo com pessoa, empresa, quantidade e data fictícias.
+- §84 exige acesso ao banco de produção; nenhum acesso produtivo foi fornecido e nenhuma migration foi aplicada diretamente em produção.
+
+Também não foram realizados testes reais nos provedores externos nem publicação manual em produção. O deploy de preview e os gates do pull request são registrados separadamente na entrega.

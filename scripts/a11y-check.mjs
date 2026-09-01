@@ -167,7 +167,11 @@ const AUDIT = () => {
     }
   }
 
-  return { contrastIssues, nameIssues, targetIssues, unmeasurable };
+  const overflowIssues = document.documentElement.scrollWidth > window.innerWidth + 1
+    ? [{ scrollWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth }]
+    : [];
+
+  return { contrastIssues, nameIssues, targetIssues, unmeasurable, overflowIssues };
 };
 
 const browser = await chromium.launch(
@@ -179,6 +183,8 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, loc
 // encolher no celular. As duas larguras precisam passar.
 const VIEWPORTS = [
   { label: "desktop 1440", width: 1440, height: 900 },
+  { label: "notebook 1024", width: 1024, height: 768 },
+  { label: "tablet 768", width: 768, height: 1024 },
   { label: "celular 390", width: 390, height: 844 },
 ];
 
@@ -233,16 +239,18 @@ async function audit(label, path, setup) {
     const names = uniq(result.nameIssues, (i) => `${i.tag}.${i.cls}`);
     const targets = uniq(result.targetIssues, (i) => `${i.tag}.${i.cls}:${i.name}`);
     const blind = uniq(result.unmeasurable, (i) => `${i.tag}.${i.cls}`);
+    const overflows = result.overflowIssues ?? [];
 
-    failures += contrast.length + names.length + targets.length;
+    failures += contrast.length + names.length + targets.length + overflows.length;
 
-    const total = contrast.length + names.length + targets.length;
+    const total = contrast.length + names.length + targets.length + overflows.length;
     console.log(`  ${viewport.label}: ${total === 0 ? "sem violações" : `${total} violação(ões)`}`);
     for (const i of contrast.slice(0, 8)) {
       console.log(`     contraste ${i.tag}.${i.cls || "—"} ${i.value}:1 (precisa ${i.need}) "${i.text}" ← ${i.trail}`);
     }
     for (const i of names.slice(0, 5)) console.log(`     sem nome ${i.tag}.${i.cls} → ${i.html}`);
     for (const i of targets.slice(0, 5)) console.log(`     alvo ${i.tag}.${i.cls} ${i.w}x${i.h} "${i.name}"`);
+    for (const i of overflows) console.log(`     overflow horizontal ${i.scrollWidth}px em viewport de ${i.viewportWidth}px`);
     if (blind.length > 0) {
       // Não conta como falha, mas também não some: fica registrado para revisão.
       console.log(`     não mensurável (fundo com imagem): ${blind.length}`);

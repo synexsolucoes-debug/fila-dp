@@ -3625,6 +3625,15 @@
 .sidebar-collapsed .sidebar-process-views { display: none; }
 .sidebar-collapsed .sidebar-process-item.open { border-color: transparent; }
 
+/* No trilho compacto, os submódulos sem ícone encolhiam para 19px: além de
+   invisíveis, ficavam abaixo do alvo mínimo de 24px da WCAG 2.5.8. O processo
+   continua levando ao primeiro módulo e os demais permanecem no cabeçalho
+   contextual, já desenhado para esta largura. Este override fica depois da
+   declaração-base de `.sidebar-process-views` para vencer a cascata. */
+@media (max-width: 1180px) and (min-width: 761px) {
+  .sidebar-process-views { display: none; }
+}
+
 /* ==========================================================================
    Cabeçalho contextual do processo (§70)
    ==========================================================================
@@ -4854,7 +4863,10 @@
 .connection-map-graph { position: relative; margin-top: 18px; }
 .connection-map-hub { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); box-shadow: var(--ui-shadow-card); z-index: 2; }
 .connection-map-graph > ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 88px; }
-.connection-map-graph > ul > li { position: relative; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 7px 11px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
+.connection-map-graph > ul > li { position: relative; min-height: 40px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
+.connection-map-graph > ul > li > button { width: 100%; min-height: 40px; padding: 7px 11px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: inherit; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.connection-map-graph > ul > li > button:hover { background: var(--ui-surface-muted); }
+.connection-map-graph > ul > li > button:focus-visible { outline-offset: 2px; }
 
 /* O fio até o centro. Nasce na borda interna do cartão e morre antes do hub. */
 .connection-map-graph > ul > li::after { content: ""; position: absolute; top: 50%; width: 44px; height: 0; border-top: 2px solid var(--ui-border-strong); }
@@ -4864,11 +4876,11 @@
 .connection-map-graph > ul > li[data-tone="warn"]::after { border-top-style: dashed; border-top-color: var(--ui-warning); }
 .connection-map-graph > ul > li[data-tone="bad"]::after { border-top-style: dotted; border-top-color: var(--ui-danger); }
 
-.connection-map-graph > ul > li > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
-.connection-map-graph > ul > li[data-tone="ok"] > i { border-color: var(--ui-done); background: var(--ui-done); }
-.connection-map-graph > ul > li[data-tone="warn"] > i { border-color: var(--ui-warning); }
-.connection-map-graph > ul > li[data-tone="bad"] > i { border-color: var(--ui-danger); background: var(--ui-danger); }
-.connection-map-graph > ul > li > span { min-width: 0; }
+.connection-map-graph > ul > li > button > i { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; border: 2px solid var(--ui-border-strong); }
+.connection-map-graph > ul > li[data-tone="ok"] > button > i { border-color: var(--ui-done); background: var(--ui-done); }
+.connection-map-graph > ul > li[data-tone="warn"] > button > i { border-color: var(--ui-warning); }
+.connection-map-graph > ul > li[data-tone="bad"] > button > i { border-color: var(--ui-danger); background: var(--ui-danger); }
+.connection-map-graph > ul > li > button > span { min-width: 0; }
 .connection-map-graph > ul > li strong { display: block; font-size: 12.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connection-map-graph > ul > li small { display: block; font-size: 10.5px; color: var(--ui-text-soft); }
 

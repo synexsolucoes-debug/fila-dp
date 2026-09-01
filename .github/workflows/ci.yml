@@ -34,7 +34,7 @@ jobs:
   # schema resultante.
   database:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -85,6 +85,11 @@ jobs:
       # gerais de demanda, webhook, worker e fechamento.
       - name: Ensaiar concorrência operacional
         run: npm run db:rehearse-concurrency
+
+      # §101 só fecha com medição. O ensaio semeia 20 mil demandas, mede os
+      # planos das consultas centrais e reprova qualquer mediana acima de 500 ms.
+      - name: Medir consultas operacionais com volume
+        run: npm run db:measure-work
 
       # Isolamento multi-tenant provado, não afirmado. O ensaio usa o mesmo
       # adaptador da aplicação e um papel SEM superusuário — superusuário ignora
@@ -145,8 +150,8 @@ jobs:
 
   # Conferência WCAG 2.2 AA contra o produto rodando de verdade: contraste
   # medido pixel a pixel (inclusive sobre gradiente), nome acessível de cada
-  # controle e tamanho de alvo. Roda nos dois temas e em duas larguras, o que
-  # também cobre a responsividade a 390 px.
+  # controle e tamanho de alvo. Roda nos dois temas e nas quatro larguras de
+  # aceite: desktop, notebook, tablet e celular.
   #
   # O ensaio já existia e nunca rodava, porque não havia como criar a conta que
   # ele usa — cada execução dependia de alguém montar o ambiente à mão.

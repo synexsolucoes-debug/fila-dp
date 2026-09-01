@@ -83,6 +83,7 @@ export const expectedMigrations = [
   "0073_demand_context.sql",
   "0074_demand_stage_instances.sql",
   "0075_comment_attachments.sql",
+  "0076_demand_module_links.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
