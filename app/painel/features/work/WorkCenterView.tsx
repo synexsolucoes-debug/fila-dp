@@ -6,6 +6,8 @@ import {
   Inbox, ListChecks, RefreshCw, Workflow,
 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader } from "../shared";
+import { ActionCenter } from "../action-center";
+import type { ActionTarget } from "@/lib/action-center";
 import { dueLabel, formatDateTime, normalizeWorkPayload, requestJson } from "./work.api";
 import type { WorkItem, WorkPayload } from "./work.types";
 import styles from "./work.module.css";
@@ -75,7 +77,13 @@ function buildQuery(filters: Filters, cursor: string) {
   return search.toString();
 }
 
-export function WorkCenterView({ onOpenCompanyFilter }: { onOpenCompanyFilter?: (companyId: string) => void }) {
+export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
+  onOpenCompanyFilter?: (companyId: string) => void;
+  /** Destino de cada pendência da central de ação. */
+  onNavigate?: (target: ActionTarget) => void;
+  /** Empresa do recorte do topo; vazio = todas as autorizadas. */
+  companyId?: string;
+}) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [payload, setPayload] = useState<WorkPayload | null>(null);
   const [items, setItems] = useState<WorkItem[]>([]);
@@ -170,6 +178,13 @@ export function WorkCenterView({ onOpenCompanyFilter }: { onOpenCompanyFilter?: 
     />
 
     {error ? <ErrorBanner message={error} onDismiss={() => setError("")} /> : null}
+
+    {/* A central de ação mudou de tela.
+        Ela morava na Visão geral, que a maquete refez com quatro blocos e sem
+        ela. Aqui é o lugar certo: "o que está comigo hoje" e "o que precisa ser
+        feito agora" são a mesma pergunta, e mantê-las em telas diferentes
+        obrigava a pessoa a conferir as duas para saber se tinha acabado. */}
+    {onNavigate ? <ActionCenter onNavigate={onNavigate} companyId={companyId ?? ""} /> : null}
 
     {counts ? <div className={styles.counters} role="group" aria-label="Resumo do seu trabalho">
       <Counter label="Comigo" value={counts.total} active={!filters.due && !filters.source} onClick={() => setFilters({ ...filters, due: "", source: "" })} />

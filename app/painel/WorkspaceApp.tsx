@@ -17,7 +17,6 @@ import {
   Cable,
   HardHat,
   History,
-  Check,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -72,7 +71,7 @@ import { capabilitiesForRole, workspaceRoles } from "@/lib/authorization";
 import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
-import { AnimatedTabs, competenceLabel, ProcessTabsProvider, useShortcuts, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
+import { AnimatedTabs, competenceLabel, ProcessTabsProvider, useShortcuts, connectionStatusLabel, connectionTone, lastSyncLabel, MemberModules, PageTransition } from "./features/shared";
 import { RequestError, requestErrorFrom, supportReference } from "./request-error";
 import { AssistantPanel } from "./features/assistant/AssistantPanel";
 import { RegistrationsView } from "./features/registrations";
@@ -83,7 +82,6 @@ import { IntegrationsView } from "./features/integrations";
 import { PaymentsView, contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments";
 import { TimeTrackingView } from "./features/time";
 import { EpiControlView } from "./features/epi";
-import { ActionCenter } from "./features/action-center";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
 
@@ -1267,12 +1265,10 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     ...list,
     cards: list.cards.filter((card) => (companyFilter === "all" || card.companyId === companyFilter) && inPeriod(card.dueAt)),
   })), [snapshot?.lists, companyFilter, inPeriod]);
-  /* O fluxo da competência respeita o seletor de empresa, como todo o resto da
-     Visão geral desde `db5300b`. Com uma empresa escolhida, o ciclo mostrado é
-     o dela; sem, é o do grupo, e o avanço é o do ciclo menos adiantado. */
-  const scopedCycles = useMemo(() => (snapshot?.payrollCycles ?? [])
-    .filter((cycle) => companyFilter === "all" || cycle.companyId === companyFilter),
-  [snapshot?.payrollCycles, companyFilter]);
+  /* O ciclo da competência saiu da Visão geral com o bloco que o mostrava: a
+     maquete refez a tela com quatro blocos, e nenhum deles é a competência. Ela
+     continua em Operação DP, onde é recortada pelo seletor de empresa próprio
+     daquela tela — o recorte não se perdeu, mudou de controle. */
 
   /* Fluxos em andamento (§15), vencimentos (§16) e movimentações (§19) sob os
      mesmos dois filtros do topo. O servidor já entregou tudo recortado por
@@ -1402,13 +1398,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     return { favorites, recents };
   }, [shortcuts.favorites, shortcuts.recents, visibleViews]);
 
-  /* Os mesmos atalhos, prontos para a home. O rótulo e o ícone vêm do catálogo
-     de telas, que é da casca — a home recebe a lista montada em vez de uma
-     cópia do catálogo. */
-  const homeShortcuts = useMemo(() => [
-    ...shortcutViews.favorites.map((id) => ({ id, label: viewCatalog[id].label, icon: viewCatalog[id].icon, fixed: true })),
-    ...shortcutViews.recents.map((id) => ({ id, label: viewCatalog[id].label, icon: viewCatalog[id].icon, fixed: false })),
-  ], [shortcutViews]);
+  /* A faixa de atalhos da home saiu com a maquete, que refez a Visão geral com
+     quatro blocos. Os atalhos continuam onde sempre estiveram alcançáveis: no
+     grupo ATALHOS da barra lateral, que lê o mesmo `shortcutViews`. */
 
   const stats = useMemo(() => {
     const active = scopedCards.filter((card) => card.slaStatus !== "completed");
@@ -2386,9 +2378,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>}
 
-          {view === "overview" && <OverviewView cycles={scopedCycles} integrations={snapshot.integrations}
-            processes={navGroups} processBadges={navBadges} onOpenProcess={(target) => setView(target as View)}
-            shortcuts={homeShortcuts}
+          {view === "overview" && <OverviewView integrations={snapshot.integrations}
             flows={scopedFlows} obligations={scopedObligations} periodLabel={overviewPeriodLabel(periodFilter)}
             onOpenCard={(cardId) => { const card = activeCards.find((item) => item.id === cardId); if (card) openCard(card); }}
             onFocus={(target, sla) => {
@@ -2399,7 +2389,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               setAssigneeFilter("all"); setProcessFilter("all"); setDueFilter("all");
               setSlaFilter(sla); setView(target as View);
             }}
-            onNavigate={(target) => setView(target)} cards={scopedCards} companies={snapshot.companies} lists={scopedLists} activities={scopedActivities} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
+            onNavigate={(target) => setView(target)} cards={scopedCards} lists={scopedLists} activities={scopedActivities} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} scopeLabel={companyFilter === "all" ? companyScopeLabel : (snapshot.companies.find((company) => company.id === companyFilter)?.tradeName || snapshot.companies.find((company) => company.id === companyFilter)?.legalName || "Empresa selecionada")} />}
 
           {view === "processManagement" && <ProcessManagementView role={snapshot.workspace.role} />}
 
@@ -2421,7 +2411,8 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {/* As três centrais operacionais. Elas são camadas de leitura sobre o
               que já existe: nenhuma delas cria objeto de trabalho novo, e cada
               item que mostram é resolvido na tela do módulo dono dele. */}
-          {view === "work" && <WorkCenterView onOpenCompanyFilter={(companyId) => setCompanyFilter(companyId || "all")} />}
+          {view === "work" && <WorkCenterView onOpenCompanyFilter={(companyId) => setCompanyFilter(companyId || "all")}
+            onNavigate={(target) => setView(target)} companyId={companyFilter === "all" ? "" : companyFilter} />}
 
           {view === "triage" && <TriageView initialItemId={initialLocation.view === "triage" ? initialLocation.recordId : ""} />}
 
@@ -3176,51 +3167,7 @@ const processTypeOptions = ["CONCILIAÇÃO CADASTRAL", "RESCISÃO", "FÉRIAS", "
 
 const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
 
-function CompetenceFlow({ cycles, scopeLabel, active, onNew, onNavigate }: {
-  cycles: WorkspaceSnapshot["payrollCycles"];
-  scopeLabel: string;
-  active: number;
-  onNew?: () => void;
-  onNavigate: (target: ActionTarget) => void;
-}) {
-  const progresso = cycleProgress(cycles);
-  const competencia = cycles[0]?.competence ?? "";
-
-  return <section className="competence-flow" aria-label="Fluxo da competência">
-    <header>
-      <div>
-        <span>COMPETÊNCIA · {scopeLabel.toUpperCase()}</span>
-        <strong>{competencia ? competenceLabel(competencia) : "Nenhuma competência aberta"}</strong>
-        {/* "1 ciclo(s) concluído(s)" é ruído de gerador, não texto de produto —
-            a mesma coisa que a §44 já tinha tirado da página de planos. */}
-        <p>{progresso
-          ? progresso.completa
-            ? `${plural(progresso.total, "ciclo concluído", "ciclos concluídos")}. Nada pendente nesta competência.`
-            : `${progresso.concluidos} de ${plural(progresso.total, "ciclo concluído", "ciclos concluídos")} · ${plural(active, "demanda em andamento", "demandas em andamento")}.`
-          : "Abra a competência em Operação DP para acompanhar o fechamento por aqui."}</p>
-      </div>
-      <div className="competence-flow-actions">
-        <button type="button" className="secondary-button" onClick={() => onNavigate("processes")}>Ver fechamento</button>
-        {onNew && <button type="button" className="primary-button" onClick={onNew}><Plus aria-hidden="true" /> Nova demanda</button>}
-      </div>
-    </header>
-
-    {progresso
-      ? <ol className="competence-flow-track">
-          {cycleStages.map((stage, index) => {
-            const estado = index < progresso.atual ? "done" : index === progresso.atual ? "current" : "todo";
-            return <li key={stage.status} data-state={estado}
-              aria-current={estado === "current" ? "step" : undefined}>
-              <i aria-hidden="true">{estado === "done" ? <Check /> : null}</i>
-              <span><strong>{stage.label}</strong><small>{estado === "done" ? "Concluída" : estado === "current" ? stage.note : "Pendente"}</small></span>
-            </li>;
-          })}
-        </ol>
-      : null}
-  </section>;
-}
-
-function OverviewView({ onNavigate, cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit, companyId, scopeLabel, cycles, integrations, processes, processBadges, onOpenProcess, shortcuts, flows, obligations, periodLabel, onOpenCard, onFocus }: {
+function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onOpenBoard, scopeLabel, integrations, flows, obligations, periodLabel, onOpenCard, onFocus }: {
   onNavigate: (target: ActionTarget) => void;
   /** Demandas em execução, já sob os filtros do topo (§15). */
   flows: WorkspaceSnapshot["processFlows"];
@@ -3237,32 +3184,15 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
    * indicador apagaria a razão de ele existir.
    */
   onFocus: (target: OverviewFocusTarget, sla: "all" | "overdue") => void;
-  /** Processos que esta pessoa alcança, no mesmo recorte do menu (§30). */
-  processes: ReadonlyArray<{ id: string; label: string; description: string; views: readonly string[] }>;
-  /** Contagens já apuradas pelo painel — o cartão do processo não consulta nada. */
-  processBadges: Partial<Record<string, number>>;
-  onOpenProcess: (view: string) => void;
-  /** Atalhos já montados pela casca: rótulo e ícone vêm do catálogo de telas,
-   *  que é dela. `fixed` separa o que a pessoa fixou do que ela só visitou. */
-  shortcuts: ReadonlyArray<{ id: string; label: string; icon: LucideIcon; fixed: boolean }>;
   cards: Card[];
-  companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
   activities: ActivityEvent[];
-  cycles: WorkspaceSnapshot["payrollCycles"];
   integrations: WorkspaceSnapshot["integrations"];
   stats: { active: number; attention: number; waiting: number; onTime: number | null; completed: number; documentsPending: number; activeCompanies: number };
   onOpen: (card: Card) => void;
   onOpenBoard: () => void;
-  onNew: () => void;
-  canEdit: boolean;
-  /** Empresa do recorte; vazio = todas as autorizadas. */
-  companyId: string;
   scopeLabel: string;
 }) {
-  const attention = cards.filter((card) => card.slaStatus === "overdue" || card.slaStatus === "warning").sort((a, b) => (a.slaStatus === "overdue" ? -1 : 1) - (b.slaStatus === "overdue" ? -1 : 1));
-  const companyById = new Map(companies.map((company) => [company.id, company]));
-  const visibleColumns = lists.slice(0, 3);
   /* Demanda por id, para a linha do histórico dizer a que ela se refere.
      `activities` e `cards` já vêm do mesmo snapshot e do mesmo recorte, então
      não há consulta nova; o evento cuja demanda o recorte não alcança fica sem
@@ -3453,124 +3383,127 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         para isso compara — a coluna alinhada deixa "etapa" embaixo de "etapa" e
         "responsável" embaixo de "responsável", que é o que o cartão não fazia.
 
-        Empilhados em largura inteira, e não lado a lado como eram enquanto
-        eram cartões: cinco colunas num painel de meia largura cortavam a
-        última — a tela mostrou "SITU…" no lugar de "SITUAÇÃO", que é a coluna
-        que diz se a demanda está atrasada. O invólucro rolava, mas rolagem
-        lateral escondida dentro de um painel é informação que ninguém acha. */}
-    <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
-      <header>
-        <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
-        <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
-      </header>
-      <div className="overview-flow-list">
-        {flows.length === 0 && <div className="overview-empty">
-          <GitBranch aria-hidden="true" />
-          <strong>Nenhum processo em execução.</strong>
-          {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
-              o recorte escolhido é que não alcança nenhuma. */}
-          <p>{periodLabel === "Todo o período"
-            ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
-            : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
-        </div>}
-        {flows.length > 0 && <div className="overview-table-scroll">
-          <table className="overview-table overview-flow-table">
-            <thead><tr>
-              <th scope="col">Processo</th>
-              <th scope="col">Etapa atual</th>
-              <th scope="col">Progresso</th>
-              <th scope="col">Responsável</th>
-              <th scope="col">Situação</th>
-            </tr></thead>
-            <tbody>
-              {flows.slice(0, 6).map((flow) => <tr key={flow.cardId} className={`sla-${flow.slaStatus}`}>
-                <td>
-                  {/* A linha inteira não vira clicável: `<tr onClick>` não
-                      recebe foco nem é anunciado como destino. O caminho para
-                      a demanda é este botão, que é um elemento de verdade. */}
-                  <button type="button" className="overview-table-link" onClick={() => onOpenCard(flow.cardId)}>
-                    <strong>{flow.definitionName}</strong>
-                    <small>{flow.cardTitle}</small>
-                  </button>
-                  {flow.versionNumber && <em className="overview-version-tag"
-                    title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
-                </td>
-                <td>{flow.stepLabel || "Não iniciada"}</td>
-                {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas
-                    porque percentual sozinho não diz o tamanho do processo:
-                    50% de duas tarefas e 50% de quarenta pedem decisões
-                    diferentes. */}
-                <td className="overview-progress-cell">
-                  {/* Barra sem número para representar não é desenhada: com
-                      `tasksTotal` em zero ela ficava vazia na tela, e barra
-                      vazia se lê como "0% concluído" — que é afirmar um
-                      progresso onde não há nem denominador. */}
-                  {flow.tasksTotal > 0 && <span className="overview-flow-progress" role="img"
-                    aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
-                    <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
-                  </span>}
-                  <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas · ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
-                </td>
-                <td>{flow.responsibleName || "Sem responsável"}</td>
-                {/* Cor sozinha não carrega o dado: o estado do prazo continua
-                    escrito, com as mesmas palavras do cartão do quadro. */}
-                <td><span className={`overview-sla-tag sla-${flow.slaStatus}`}>{compactSlaLabel(flow.slaStatus, flow.dueAt)}</span></td>
-              </tr>)}
-            </tbody>
-          </table>
-        </div>}
-      </div>
-    </section>
+        Lado a lado, como a maquete põe. Eles já estiveram assim, viraram
+        largura inteira quando cinco colunas num painel de meia largura cortavam
+        a última — "SITU…" no lugar de "SITUAÇÃO" —, e voltam agora com a
+        largura das colunas resolvida no lugar certo: as células apertam o recuo
+        e o título da demanda cede espaço, porque ele já tem reticências
+        previstas e a etiqueta de prazo não tem. */}
+    <div className="overview-pair">
+        <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
+        <header>
+          <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
+          <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
+        </header>
+        <div className="overview-flow-list">
+          {flows.length === 0 && <div className="overview-empty">
+            <GitBranch aria-hidden="true" />
+            <strong>Nenhum processo em execução.</strong>
+            {/* O vazio diz qual dos dois casos é: não há demanda instanciada, ou
+                o recorte escolhido é que não alcança nenhuma. */}
+            <p>{periodLabel === "Todo o período"
+              ? "Demandas criadas a partir de um processo publicado aparecem aqui com a etapa atual."
+              : `Nenhuma demanda de processo com prazo em ${periodLabel.toLowerCase()}.`}</p>
+          </div>}
+          {flows.length > 0 && <div className="overview-table-scroll">
+            <table className="overview-table overview-flow-table">
+              <thead><tr>
+                <th scope="col">Processo</th>
+                <th scope="col">Etapa atual</th>
+                <th scope="col">Progresso</th>
+                <th scope="col">Responsável</th>
+                <th scope="col">Situação</th>
+              </tr></thead>
+              <tbody>
+                {flows.slice(0, 6).map((flow) => <tr key={flow.cardId} className={`sla-${flow.slaStatus}`}>
+                  <td>
+                    {/* A linha inteira não vira clicável: `<tr onClick>` não
+                        recebe foco nem é anunciado como destino. O caminho para
+                        a demanda é este botão, que é um elemento de verdade. */}
+                    <button type="button" className="overview-table-link" onClick={() => onOpenCard(flow.cardId)}>
+                      <strong>{flow.definitionName}</strong>
+                      <small>{flow.cardTitle}</small>
+                    </button>
+                    {flow.versionNumber && <em className="overview-version-tag"
+                      title={`Versão instanciada nesta demanda: ${flow.versionNumber}`}>v{flow.versionNumber}</em>}
+                  </td>
+                  <td>{flow.stepLabel || "Não iniciada"}</td>
+                  {/* A barra e o "7 de 18" dizem a mesma coisa de duas formas
+                      porque percentual sozinho não diz o tamanho do processo:
+                      50% de duas tarefas e 50% de quarenta pedem decisões
+                      diferentes. */}
+                  <td className="overview-progress-cell">
+                    {/* Barra sem número para representar não é desenhada: com
+                        `tasksTotal` em zero ela ficava vazia na tela, e barra
+                        vazia se lê como "0% concluído" — que é afirmar um
+                        progresso onde não há nem denominador. */}
+                    {flow.tasksTotal > 0 && <span className="overview-flow-progress" role="img"
+                      aria-label={`${flow.progress}% concluído, ${flow.tasksDone} de ${flow.tasksTotal} tarefas`}>
+                      <i style={{ width: `${Math.max(0, Math.min(100, flow.progress))}%` }} />
+                    </span>}
+                    <small>{flow.tasksTotal ? `${flow.tasksDone} de ${flow.tasksTotal} tarefas · ${flow.progress}%` : "Sem tarefas instanciadas"}</small>
+                  </td>
+                  <td>{flow.responsibleName || "Sem responsável"}</td>
+                  {/* Cor sozinha não carrega o dado: o estado do prazo continua
+                      escrito, com as mesmas palavras do cartão do quadro. */}
+                  <td><span className={`overview-sla-tag sla-${flow.slaStatus}`}>{compactSlaLabel(flow.slaStatus, flow.dueAt)}</span></td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>}
+        </div>
+      </section>
 
-    <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
-      <header>
-        <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
-        <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
-      </header>
-      <div className="overview-obligation-list">
-        {obligations.length === 0 && <div className="overview-empty">
-          <CheckCircle2 aria-hidden="true" />
-          <strong>Nenhuma obrigação em aberto.</strong>
-          <p>{periodLabel === "Todo o período"
-            ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
-            : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
-        </div>}
-        {obligations.length > 0 && <div className="overview-table-scroll">
-          <table className="overview-table overview-obligation-table">
-            <thead><tr>
-              <th scope="col">Obrigação</th>
-              <th scope="col">Empresa</th>
-              <th scope="col">Competência</th>
-              <th scope="col">Vencimento</th>
-              <th scope="col">Situação</th>
-            </tr></thead>
-            <tbody>
-              {groupObligations(obligations).slice(0, 6).map((item) => <tr key={item.id}
-                className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
-                <td><strong>{item.title}</strong></td>
-                {/* A consulta devolve uma linha por empresa; doze filiais com o
-                    mesmo eSocial ocupariam as seis vagas com o mesmo prazo. */}
-                <td>{item.companies > 1 ? `${item.companies} empresas` : item.company || "Sem empresa"}</td>
-                <td>{item.competence || "—"}</td>
-                <td>{formatDate(item.dueDate)}</td>
-                {/* "Vence em -2 dias" é o tipo de frase que só um sistema
-                    escreve. O atraso é dito como atraso. */}
-                <td><span className="overview-obligation-due">{item.daysRemaining < 0
-                  ? `${Math.abs(item.daysRemaining)} dia(s) em atraso`
-                  : item.daysRemaining === 0 ? "Vence hoje" : `Em ${item.daysRemaining} dia(s)`}</span></td>
-              </tr>)}
-            </tbody>
-          </table>
-        </div>}
-      </div>
-    </section>
+      <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
+        <header>
+          <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
+          <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
+        </header>
+        <div className="overview-obligation-list">
+          {obligations.length === 0 && <div className="overview-empty">
+            <CheckCircle2 aria-hidden="true" />
+            <strong>Nenhuma obrigação em aberto.</strong>
+            <p>{periodLabel === "Todo o período"
+              ? "eSocial, FGTS Digital, DCTFWeb e demais obrigações aparecem aqui conforme o vencimento."
+              : `Nenhum vencimento em ${periodLabel.toLowerCase()}.`}</p>
+          </div>}
+          {obligations.length > 0 && <div className="overview-table-scroll">
+            <table className="overview-table overview-obligation-table">
+              <thead><tr>
+                <th scope="col">Obrigação</th>
+                <th scope="col">Empresa</th>
+                <th scope="col">Competência</th>
+                <th scope="col">Vencimento</th>
+                <th scope="col">Situação</th>
+              </tr></thead>
+              <tbody>
+                {groupObligations(obligations).slice(0, 6).map((item) => <tr key={item.id}
+                  className={`overview-obligation ${item.daysRemaining < 0 ? "overdue" : item.daysRemaining <= 3 ? "warning" : "safe"}`}>
+                  <td><strong>{item.title}</strong></td>
+                  {/* A consulta devolve uma linha por empresa; doze filiais com o
+                      mesmo eSocial ocupariam as seis vagas com o mesmo prazo. */}
+                  <td>{item.companies > 1 ? `${item.companies} empresas` : item.company || "Sem empresa"}</td>
+                  <td>{item.competence || "—"}</td>
+                  <td>{formatDate(item.dueDate)}</td>
+                  {/* "Vence em -2 dias" é o tipo de frase que só um sistema
+                      escreve. O atraso é dito como atraso. */}
+                  <td><span className="overview-obligation-due">{item.daysRemaining < 0
+                    ? `${Math.abs(item.daysRemaining)} dia(s) em atraso`
+                    : item.daysRemaining === 0 ? "Vence hoje" : `Em ${item.daysRemaining} dia(s)`}</span></td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>}
+        </div>
+      </section>
+    </div>
 
+    {/* Demandas por status e saúde das integrações lado a lado, como a
+        maquete põe. "Atenção hoje" saiu daqui: ele repetia, em cartões, as
+        mesmas demandas que a tabela de status mostra em linha — e a maquete
+        não o tem. Quem precisa do recorte de atraso chega por ele pelo
+        indicador de SLA, que leva ao quadro já filtrado. */}
     <div className="overview-grid">
-      <section className="overview-panel attention-panel"><header><div><span>ATENÇÃO HOJE</span><h2>O que exige ação</h2></div><button onClick={onOpenBoard}>Ver quadro <ArrowRight aria-hidden="true" /></button></header><div className="overview-attention-list">
-        {attention.length === 0 && <div className="overview-empty"><CheckCircle2 aria-hidden="true" /><strong>Nenhuma demanda crítica agora.</strong><p>Os prazos em aberto estão dentro da política definida.</p></div>}
-        {attention.slice(0, 4).map((card) => <button className={`overview-attention-card ${card.slaStatus}`} key={card.id} onClick={() => onOpen(card)}><i /><span><strong>{card.title}</strong><small>{card.company || "Sem empresa"} • {card.assigneeName || "Sem responsável"}</small></span><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>)}
-      </div></section>
-
       {/* Demandas por status: uma aba por coluna, tabela embaixo.
           O bloco era um gráfico de barras — respondia "quantas em cada coluna" e
           parava aí. A pergunta seguinte, "quais são", exigia sair da tela. As
@@ -3637,26 +3570,9 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
               </div>}
             </>}
       </section>
-    </div>
 
-
-    <CompetenceFlow cycles={cycles} scopeLabel={scopeLabel} active={stats.active}
-      onNew={canEdit ? onNew : undefined} onNavigate={onNavigate} />
-
-    {/* Lado a lado, como o Modelo 2 põe: o que precisa de você e o que está
-        ligado. Antes a central de ação abria a tela sozinha, em largura
-        inteira, para dizer quase sempre "nenhuma pendência" — o estado mais
-        comum ocupando o lugar mais nobre. */}
-    <div className="overview-pair">
-      <ActionCenter onNavigate={onNavigate} companyId={companyId} />
       <ConnectionMap integrations={integrations} onNavigate={onNavigate} />
     </div>
-
-    {/* Consulta, não operação: a prévia repete o quadro e o histórico conta o
-        que já passou. Por isso fecham a tela, depois do que exige ação. */}
-    <section className="overview-panel board-preview"><header><div><span>PRÉVIA DO QUADRO</span><h2>Próximas demandas</h2></div><button onClick={onOpenBoard}>Ver todas <ArrowRight aria-hidden="true" /></button></header><div className="board-preview-columns">
-      {visibleColumns.map((list) => <section key={list.id}><header><strong>{list.name}</strong><b>{list.cards.length}</b></header>{list.cards.slice(0, 2).map((card) => { const company = card.companyId ? companyById.get(card.companyId) : undefined; return <button className={`mini-demand-card sla-${card.slaStatus}`} onClick={() => onOpen(card)} key={card.id}><span>{card.processType}</span><strong>{card.title}</strong><small>{card.company || "Sem empresa"}{company?.taxId ? ` • ${company.taxId}` : ""}</small><em>{compactSlaLabel(card.slaStatus, card.dueAt)}</em></button>; })}{list.cards.length === 0 && <p className="mini-column-empty">Nenhuma demanda</p>}</section>)}
-    </div></section>
 
     {/* Últimas movimentações (§19), em largura inteira.
         O botão entrou junto com a tela de histórico. Ele tinha ficado de fora
@@ -3705,75 +3621,6 @@ function OverviewView({ onNavigate, cards, companies, lists, activities, stats, 
         </table>
       </div>}
     </div></section>
-
-    {/* Retomar de onde parou (§67).
-        Fica acima de "Meus processos" de propósito: quem abre a home no meio
-        do expediente quase sempre está voltando a algo, não escolhendo um
-        processo do zero. E não aparece no primeiro dia de uso, quando ainda
-        não há nada a retomar — uma faixa vazia prometendo atalhos é pior que
-        faixa nenhuma. */}
-    {shortcuts.length > 0 && (
-      <section className="workspace-shortcuts" aria-labelledby="workspace-shortcuts-title">
-        <header>
-          <div>
-            <span>ATALHOS</span>
-            <h2 id="workspace-shortcuts-title">Continue de onde parou</h2>
-          </div>
-        </header>
-        <StaggerContainer className="workspace-shortcut-row">
-          {shortcuts.map((item, index) => {
-            const ItemIcon = item.icon;
-            return <StaggerItem key={`${item.fixed ? "fav" : "recent"}-${item.id}`} index={index}>
-              <button type="button" className="workspace-shortcut" data-fixed={item.fixed ? "true" : "false"}
-                onClick={() => onOpenProcess(item.id)}>
-                <span aria-hidden="true"><ItemIcon /></span>
-                <strong>{item.label}</strong>
-                <small>{item.fixed ? "Fixado" : "Recente"}</small>
-              </button>
-            </StaggerItem>;
-          })}
-        </StaggerContainer>
-      </section>
-    )}
-
-    {/* "Meus processos" (§29).
-        A §28 lista quatro perguntas que a home precisa responder, e esta é a
-        terceira: quais processos eu posso acessar. Antes não havia resposta —
-        para descobrir o que existia, a pessoa percorria o menu item a item.
-
-        A lista vem recortada de `visibleProcessGroups`, o mesmo caminho do
-        menu, então processo sem tela alcançável não aparece aqui tampouco
-        (§30). Nenhum número inventado: o rodapé de cada cartão conta os
-        módulos que a pessoa realmente abre, e nada além disso. */}
-
-    {processes.length > 0 && <section className="workspace-processes" aria-labelledby="workspace-processes-title">
-      <header>
-        <div>
-          <span>MEUS PROCESSOS</span>
-          <h2 id="workspace-processes-title">Onde a operação acontece</h2>
-        </div>
-        <p>{plural(processes.length, "processo disponível para o seu acesso", "processos disponíveis para o seu acesso")}</p>
-      </header>
-      <StaggerContainer className="workspace-process-grid">
-        {processes.map((group, index) => {
-          const GroupIcon = processGroupIcons[group.id] ?? Blocks;
-          const pending = group.views.reduce((total, id) => total + (processBadges[id] ?? 0), 0);
-          return <StaggerItem key={group.id} index={index}>
-            <MotionCard
-              icon={GroupIcon}
-              title={group.label}
-              description={group.description}
-              onClick={() => onOpenProcess(group.views[0])}
-              meta={<>
-                <span>{plural(group.views.length, "módulo", "módulos")}</span>
-                {pending ? <b className="workspace-process-pending">{pending} na triagem</b> : null}
-              </>}
-            />
-          </StaggerItem>;
-        })}
-      </StaggerContainer>
-    </section>}
-
   </div>;
 }
 

@@ -94,13 +94,19 @@ test("a lista de telas conhecidas cobre o menu inteiro, e só ele", () => {
   assert.equal(new Set(todas).size, todas.length, "há tela repetida entre processos");
 });
 
-test("os atalhos aparecem nos dois lugares, e nenhum deles aparece vazio", () => {
+test("os atalhos têm porta, e ela não aparece vazia", () => {
   /* Um rótulo "ATALHOS" sobre nada anuncia uma seção que não existe — e no
-     primeiro dia de uso é exatamente isso que haveria nos dois lugares. */
+     primeiro dia de uso é exatamente isso que haveria.
+
+     A faixa de atalhos da home saiu com a maquete, que refez a Visão geral com
+     quatro blocos. Sobrou a da barra lateral, que é onde ela sempre esteve à
+     mão em qualquer tela — a da home só valia enquanto a pessoa estivesse na
+     home. A guarda continua: se o grupo da barra lateral também sumir, os
+     favoritos viram um recurso sem porta. */
   assert.match(shell, /\{\(shortcutViews\.favorites\.length > 0 \|\| shortcutViews\.recents\.length > 0\) && \(/u);
   assert.match(shell, /className="sidebar-nav-group sidebar-shortcuts"/u);
-  assert.match(shell, /\{shortcuts\.length > 0 && \(/u);
-  assert.match(shell, /className="workspace-shortcuts"/u);
+  assert.doesNotMatch(shell, /className="workspace-shortcuts"/u,
+    "a faixa da home voltou: ou ela some, ou a maquete não é mais a referência");
   // E há onde fixar: sem o botão, favorito seria um recurso sem porta.
   assert.match(shell, /className="process-context-pin"/u);
   assert.match(shell, /aria-pressed=\{shortcuts\.isFavorite\(view\)\}/u);

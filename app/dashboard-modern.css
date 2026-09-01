@@ -3277,14 +3277,29 @@
 .overview-status-tabs > button[aria-selected="true"] b { background: color-mix(in srgb, var(--ui-primary) 18%, var(--ui-surface)); color: var(--ui-accent-text, var(--ui-primary)); }
 .overview-status-tabs > button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
 .overview-status-body { padding: 10px 0 4px; }
-/* O bloco de status divide a linha com "Atenção hoje", então a tabela tem
-   metade da largura para quatro colunas. Medido: o título da demanda em 260px
-   empurrava a coluna PRAZO 30px para fora, e "Vence hoje" aparecia como
-   "Vence ho…" — a etiqueta que existe justamente para dizer o prazo. O título
-   cede a largura porque ele já tem reticências previstas; a etiqueta não. */
-.overview-status-table th, .overview-status-table td { padding-right: 8px; padding-left: 8px; }
+/* Todas as quatro tabelas dividem a linha com outra, como a maquete põe: cinco
+   colunas em meia largura. Medido antes: o título da demanda em 260px empurrava
+   a coluna de prazo 30px para fora, e "Vence hoje" saía como "Vence ho…" — a
+   etiqueta que existe justamente para dizer o prazo.
+
+   O recuo aperta e o título cede a largura, porque ele já tem reticências
+   previstas e a etiqueta não. Onde ainda assim não couber, o invólucro rola —
+   mas a conta é para caber. */
+.overview-status-table th, .overview-status-table td,
+.overview-flow-table th, .overview-flow-table td,
+.overview-obligation-table th, .overview-obligation-table td { padding-right: 8px; padding-left: 8px; }
 .overview-status-table .overview-table-link { max-width: 168px; }
-.overview-status-table th:first-child, .overview-status-table td:first-child { padding-left: 12px; }
+/* A de fluxos tem a coluna de progresso além das outras quatro; medido, ela
+   ainda passava 16px do painel. O nome do processo é quem cede — ele tem
+   reticências previstas, e a etiqueta de situação não tem. */
+.overview-flow-table .overview-table-link { max-width: 132px; }
+.overview-flow-table .overview-version-tag { margin-top: 2px; font-size: 7px; padding: 0 4px; }
+.overview-flow-table .overview-sla-tag { padding: 2px 5px; font-size: 8px; }
+.overview-status-table th:first-child, .overview-status-table td:first-child,
+.overview-flow-table th:first-child, .overview-flow-table td:first-child,
+.overview-obligation-table th:first-child, .overview-obligation-table td:first-child { padding-left: 12px; }
+.overview-flow-table .overview-progress-cell { min-width: 96px; }
+.overview-flow-table .overview-progress-cell small { font-size: 8px; }
 .overview-status-vazio { margin: 0; padding: 14px; color: var(--ui-text-soft); font-size: 10px; text-align: center; }
 
 .overview-grid { display: grid; grid-template-columns: minmax(0, 1.14fr) minmax(360px, .86fr); gap: 18px; }
