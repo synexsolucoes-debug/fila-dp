@@ -448,7 +448,8 @@ export const cardComments = pgTable("fdp_card_comments", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
-  index("fdp_comments_card_created_idx").on(table.cardId, table.createdAt),
+  uniqueIndex("fdp_card_comments_workspace_id_uq").on(table.workspaceId, table.id),
+    index("fdp_comments_card_created_idx").on(table.cardId, table.createdAt),
   index("fdp_card_comments_checklist_item_idx")
     .on(table.workspaceId, table.checklistItemId, table.createdAt)
     .where(sql`${table.checklistItemId} IS NOT NULL`),
