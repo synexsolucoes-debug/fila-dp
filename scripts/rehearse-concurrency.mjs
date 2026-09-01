@@ -213,7 +213,7 @@ async function twoStockConsumers() {
       (id, workspace_id, name, epi_type, ca_number, size, brand, model,
        unit_value, stock_quantity, registered_on, status, registration_reason, created_by, updated_by)
     VALUES ($1, $2, 'Capacete Ensaio', 'head', $3, 'U', 'Ensaio', 'E1',
-      10, 0, CURRENT_DATE, 'in_stock', 'initial_purchase', $4, $4)
+      10, 0, CURRENT_DATE, 'active', 'initial_purchase', $4, $4)
     ON CONFLICT (id) DO NOTHING`, [id("epi"), id("w"), id("ca"), id("u")]);
 
   await workspaceQuery("SELECT fdp_apply_stock_change($1, $2, $3, 1, $4)",
