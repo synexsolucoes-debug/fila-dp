@@ -243,7 +243,7 @@ export function CardProcessPanel({ cardId, canAdvance, onAdvanced }: {
           <h4 className={styles.groupHeading}>Para onde esta etapa pode seguir</h4>
           <div className={styles.list}>
             {transitions.map((transition) => {
-              const rejects = /reprov|rejeit|devolver|corrigir|\\bn[aã]o\\b/iu
+              const rejects = /reprov|rejeit|devolver|corrigir|\bn[aã]o\b/iu
                 .test(`${transition.flowName} ${transition.targetLabel}`);
               return <article key={transition.targetStepId}
               className={styles.item} data-tone={transition.allowed ? "neutral" : "warning"}>
