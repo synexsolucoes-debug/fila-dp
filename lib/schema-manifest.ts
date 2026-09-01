@@ -80,6 +80,9 @@ export const expectedMigrations = [
   "0070_card_reference_number.sql",
   "0071_card_cancellation.sql",
   "0072_process_tasks_and_evidence.sql",
+  "0073_demand_context.sql",
+  "0074_demand_stage_instances.sql",
+  "0075_comment_attachments.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

@@ -665,6 +665,8 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,
     company: String(row.company ?? ""),
+    employeeId: row.employee_id ? String(row.employee_id) : null,
+    requesterUserId: row.requester_user_id ? String(row.requester_user_id) : null,
     requesterAreaId: row.requester_area_id ? String(row.requester_area_id) : null,
     responsibleAreaId: row.responsible_area_id ? String(row.responsible_area_id) : null,
     processType: String(row.process_type ?? "OUTROS"),
@@ -711,6 +713,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     customValues: Object.fromEntries(customValueRows.filter((item) => item.card_id === row.id).map((item) => [String(item.field_key), String(item.value_text)])),
     attachments: attachmentRows.filter((item) => item.card_id === row.id).map((item) => ({
       id: String(item.id), filename: String(item.filename), contentType: String(item.content_type), sizeBytes: Number(item.size_bytes), uploadedBy: String(item.uploaded_by), createdAt: String(item.created_at), downloadUrl: `/api/attachments/${encodeURIComponent(String(item.id))}`,
+      commentId: item.comment_id ? String(item.comment_id) : null,
     })),
     solidesAttachments: (() => {
       const authorization = tangerinoAttachmentAuthorizationByCard.get(String(row.id));

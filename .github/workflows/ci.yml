@@ -80,6 +80,12 @@ jobs:
       - name: Provar que o extrato analítico fecha com a apuração
         run: npm run db:rehearse-statement
 
+      # Duas conexões reais disputam os mesmos registros. O ensaio cobre
+      # estoque, tarefa, etapa, aprovação e revisão de processo, além dos casos
+      # gerais de demanda, webhook, worker e fechamento.
+      - name: Ensaiar concorrência operacional
+        run: npm run db:rehearse-concurrency
+
       # Isolamento multi-tenant provado, não afirmado. O ensaio usa o mesmo
       # adaptador da aplicação e um papel SEM superusuário — superusuário ignora
       # RLS e faria tudo passar sem provar nada, por isso o próprio ensaio

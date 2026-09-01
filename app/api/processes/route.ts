@@ -45,14 +45,16 @@ async function requireMember(d1: WorkspaceD1, workspaceId: string, userId: strin
   if (!await d1.prepare("SELECT 1 FROM fdp_workspace_members WHERE workspace_id = ? AND user_id = ?").bind(workspaceId, userId).first()) throw ApiError.badRequest("O responsável informado não pertence a este workspace.", "PROCESS_OWNER_INVALID");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "processes.read", "consultar a Biblioteca de Processos");
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
-    const [rows, versionRows] = await Promise.all([
-      d1.prepare(`SELECT p.*, a.name AS owner_department_name, owner.name AS owner_user_name, updater.name AS updated_by_name,
+    const url = new URL(request.url);
+    const cursor = cleanText(url.searchParams.get("cursor"), 120);
+    const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 100, 1), 100);
+    const rows = await d1.prepare(`SELECT p.*, a.name AS owner_department_name, owner.name AS owner_user_name, updater.name AS updated_by_name,
           v.id AS current_version_id_effective, v.version AS current_version, v.version_major, v.version_minor, v.status AS version_status,
           v.revision AS version_revision, v.bpmn_xml, v.svg_preview, v.updated_at AS version_updated_at, v.published_at,
           (SELECT COUNT(*) FROM fdp_process_step_configs sc WHERE sc.workspace_id = p.workspace_id AND sc.process_version_id = v.id) AS step_count,
@@ -64,20 +66,23 @@ export async function GET() {
         LEFT JOIN fdp_users owner ON owner.id = p.owner_user_id LEFT JOIN fdp_users updater ON updater.id = p.updated_by
         LEFT JOIN LATERAL (SELECT pv.* FROM fdp_process_versions pv WHERE pv.workspace_id = p.workspace_id AND pv.definition_id = p.id
           ORDER BY CASE WHEN pv.id = p.current_version_id THEN 0 ELSE 1 END, pv.version_major DESC, pv.version_minor DESC, pv.version DESC LIMIT 1) v ON true
-        WHERE p.workspace_id = ? ORDER BY p.updated_at DESC, p.name`).bind(workspace.id).all<Row>(),
-      d1.prepare(`SELECT v.*, p.name AS process_name, creator.name AS created_by_name FROM fdp_process_versions v
-        JOIN fdp_process_definitions p ON p.workspace_id = v.workspace_id AND p.id = v.definition_id
-        LEFT JOIN fdp_users creator ON creator.id = v.created_by WHERE v.workspace_id = ?
-        ORDER BY v.created_at DESC, v.version_major DESC, v.version_minor DESC`).bind(workspace.id).all<Row>(),
-    ]);
-    const processes = rows.results.map(processOf).filter((process) => process.isCorporate || access.unrestricted || process.companies.some((company) => access.companyIds.has(company.id)));
+        WHERE p.workspace_id = ? AND (? = '' OR p.id > ?) ORDER BY p.id LIMIT ?`)
+      .bind(workspace.id, cursor, cursor, limit + 1).all<Row>();
+    const pageRows = rows.results.slice(0, limit);
+    const processes = pageRows.map(processOf).filter((process) => process.isCorporate || access.unrestricted || process.companies.some((company) => access.companyIds.has(company.id)));
     const visibleIds = new Set(processes.map((process) => process.id));
-    const versions = versionRows.results.filter((row) => visibleIds.has(text(row.definition_id))).map((row) => ({
+    const versionRows = visibleIds.size ? await d1.prepare(`SELECT v.*, p.name AS process_name, creator.name AS created_by_name FROM fdp_process_versions v
+        JOIN fdp_process_definitions p ON p.workspace_id = v.workspace_id AND p.id = v.definition_id
+        LEFT JOIN fdp_users creator ON creator.id = v.created_by
+        WHERE v.workspace_id = ? AND v.definition_id IN (${[...visibleIds].map(()=>"?").join(",")})
+        ORDER BY v.created_at DESC, v.version_major DESC, v.version_minor DESC`)
+      .bind(workspace.id,...visibleIds).all<Row>() : {results:[] as Row[]};
+    const versions = versionRows.results.map((row) => ({
       id: text(row.id), processId: text(row.definition_id), processName: text(row.process_name), version: Number(row.version), versionMajor: Number(row.version_major ?? 1), versionMinor: Number(row.version_minor ?? 0),
       status: text(row.status), revision: Number(row.revision ?? 0), changeSummary: text(row.change_summary), createdBy: text(row.created_by), createdByName: text(row.created_by_name),
       createdAt: text(row.created_at), updatedAt: text(row.updated_at), publishedBy: text(row.published_by), publishedAt: text(row.published_at),
     }));
-    return Response.json({ processes, versions, currentUserId: user.id, permissions: { view: true, manage: hasCapability(workspace, "processes.manage"), publish: hasCapability(workspace, "processes.publish") } });
+    return Response.json({ processes, versions, nextCursor: rows.results.length > limit ? text(pageRows.at(-1)?.id) : null, currentUserId: user.id, permissions: { view: true, manage: hasCapability(workspace, "processes.manage"), publish: hasCapability(workspace, "processes.publish") } });
   } catch (error) { return apiError(error); }
 }
 

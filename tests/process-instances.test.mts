@@ -6,7 +6,7 @@ import {
   allowedTargets, initialStepId, isTerminalStep, outgoingFlows, parseBpmnGraph, stepLabel,
 } from "../lib/bpmn-graph.ts";
 import {
-  evaluateStepRequirements, evaluateTransition, loadProcessInstance, stepChecklist,
+  demandStageSnapshots, evaluateStepRequirements, evaluateTransition, loadProcessInstance, stepChecklist,
   type ProcessInstanceRow, type ProcessStepConfig, type PublishedProcessVersion, type TransitionActor,
 } from "../lib/process-instances.ts";
 
@@ -101,6 +101,47 @@ const version = (steps: Record<string, ProcessStepConfig> = {}): PublishedProces
   isCorporate: true, defaultPriority: "normal",
   versionId: "ver-4", versionNumber: "4.0", bpmnXml: ADMISSION_BPMN, graph,
   steps: new Map(Object.entries(steps)),
+});
+
+test("a demanda materializa todas as etapas da versão na ordem do BPMN", () => {
+  const snapshots = demandStageSnapshots(version({
+    Task_documentos: stepConfig({
+      id: "cfg-doc", responsibleDepartmentId: "area-dp", responsibleUserId: "user-dp",
+    }),
+  }));
+  assert.deepEqual(snapshots.map((stage) => stage.bpmnElementId), [
+    "Task_documentos", "Gateway_1", "Task_registro", "Task_pendencia", "End_1",
+  ]);
+  assert.equal(snapshots[0].title, "Conferir documentos");
+  assert.equal(snapshots[0].processStepConfigId, "cfg-doc");
+  assert.equal(snapshots[0].responsibleAreaId, "area-dp");
+  assert.equal(snapshots.at(-1)?.title, "Fim");
+});
+
+test("instanciação cria etapas e tarefas futuras uma única vez", async () => {
+  const motor = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
+  assert.match(motor, /\.\.\.prepareStageInserts\(d1/u);
+  assert.match(motor, /\.\.\.stages\.flatMap\(\(stage\) => prepareTaskInserts/u);
+  assert.match(motor, /active: stage\.bpmnElementId === initial\.stepId/u);
+
+  const rota = await readFile(new URL("../app/api/cards/[id]/process/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /prepareStageTransitionStatements/u);
+  assert.match(rota, /prepareTaskActivationStatements/u);
+  assert.doesNotMatch(rota, /\.\.\.prepareTaskInserts\(d1/u,
+    "a transição ativa a tarefa já criada; não deve duplicá-la");
+});
+
+test("timeline persistida é isolada por workspace e aparece no detalhe", async () => {
+  const migration = await readFile(
+    new URL("../drizzle/postgres/0074_demand_stage_instances.sql", import.meta.url), "utf8");
+  assert.match(migration, /FORCE ROW LEVEL SECURITY/u);
+  assert.match(migration, /fdp_demand_stages_workspace_isolation/u);
+  assert.match(migration, /ON CONFLICT \("workspace_id", "card_id", "bpmn_element_id"\) DO NOTHING/u);
+
+  const painel = await readFile(
+    new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
+  assert.match(painel, /Etapas desta demanda/u);
+  assert.match(painel, /aria-current=\{current \? "step" : undefined\}/u);
 });
 
 const instance = (overrides: Partial<ProcessInstanceRow> = {}): ProcessInstanceRow => ({
@@ -579,8 +620,8 @@ test("etapa que exige aval diz isso na tela, antes do clique", async () => {
 
   const painel = await readFile(
     new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
-  assert.match(painel, /instance\.requiresApproval \? "Aprovar e avançar" : "Avançar"/u,
-    "quando a etapa exige aval, avançar É aprovar, e o botão precisa dizer");
+  assert.match(painel, /instance\.requiresApproval \? \(rejects \? "Reprovar" : "Aprovar e avançar"\) : "Avançar"/u,
+    "quando a etapa exige aval, o botão distingue aprovação e reprovação");
   assert.match(painel, /Esta etapa exige aprovação/u,
     "o aviso vem antes da lista: quem chega precisa saber que o clique é um aval");
 });
@@ -592,4 +633,18 @@ test("a recusa de autoaprovação continua sendo do motor, não da tela", async 
   assert.match(motor, /PROCESS_STEP_SELF_APPROVAL/u);
   assert.match(motor, /Quem abriu a demanda não pode aprovar a própria etapa\./u);
   assert.match(motor, /PROCESS_STEP_APPROVAL_REQUIRED/u);
+});
+
+
+test("o contrato de transição entrega o destino que o painel envia", async () => {
+  const transitions = (await import("../lib/process-instances.ts")).availableTransitions({
+    version: version(), instance: instance(), actor: actor(), ...clean,
+  });
+  assert.equal(transitions[0].targetStepId, "Gateway_1");
+  assert.equal(transitions[0].targetLabel, "Documentos ok?");
+
+  const painel = await readFile(
+    new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
+  assert.match(painel, /flowName: text\(item\.flowName\)/u);
+  assert.match(painel, /rejects \? "Reprovar" : "Aprovar e avançar"/u);
 });

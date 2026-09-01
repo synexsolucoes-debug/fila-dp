@@ -117,3 +117,24 @@ test("keeps critical workspace and integration security boundaries", async () =>
   assert.match(webhookRoute, /assertWebhookSecret/);
   assert.match(webhookRoute, /Payload do webhook excede 64 KB/);
 });
+
+
+test("comentário suporta menção, anexo e histórico contextualizado (§44)", async () => {
+  const [comments, attachments, storage, painel, database, schema] = await Promise.all([
+    source("app/api/cards/[id]/comments/route.ts"),
+    source("app/api/cards/[id]/attachments/route.ts"),
+    source("lib/card-attachments.ts"),
+    source("app/painel/WorkspaceApp.tsx"),
+    source("lib/fila-dp-db.ts"),
+    source("db/schema.ts"),
+  ]);
+  assert.match(comments, /matchAll\(\/@\(/u, "menções continuam extraídas no servidor");
+  assert.match(comments, /createdCommentId: commentId/u);
+  assert.match(attachments, /FROM fdp_card_comments WHERE workspace_id = \? AND id = \? AND card_id = \?/u,
+    "um id de comentário de outra demanda ou workspace não pode receber o arquivo");
+  assert.match(storage, /process_step_id, checklist_item_id, comment_id/u);
+  assert.match(schema, /fdp_card_attachments_comment_fk/u);
+  assert.match(database, /commentId: item\.comment_id/u);
+  assert.match(painel, /form\.set\("commentId", payload\.createdCommentId\)/u);
+  assert.match(painel, /attachment\.commentId === comment\.id/u);
+});
