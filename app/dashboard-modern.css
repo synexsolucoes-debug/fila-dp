@@ -1108,6 +1108,14 @@
     padding-inline: 0;
   }
 
+  /* No trilho compacto, os submódulos sem ícone encolhiam para 19px: além de
+     invisíveis, ficavam abaixo do alvo mínimo de 24px da WCAG 2.5.8. O
+     processo continua levando ao primeiro módulo e os demais permanecem no
+     cabeçalho contextual, já desenhado para esta largura. */
+  .sidebar-process-views {
+    display: none;
+  }
+
   .dashboard-sidebar nav button b {
     position: absolute;
     top: 4px;
