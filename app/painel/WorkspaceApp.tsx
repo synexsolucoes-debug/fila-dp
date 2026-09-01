@@ -67,6 +67,8 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
+import { capabilitiesForRole, workspaceRoles } from "@/lib/authorization";
+import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
 import { AnimatedTabs, competenceLabel, ProcessTabsProvider, useShortcuts, connectionStatusLabel, connectionTone, cycleProgress, cycleStages, lastSyncLabel, MemberModules, MotionCard, PageTransition, StaggerContainer, StaggerItem } from "./features/shared";
@@ -873,7 +875,19 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [newComment, setNewComment] = useState("");
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(Boolean(initialLocation.settings));
-  const [workspaceName, setWorkspaceName] = useState("");
+  /* O nome do grupo em edição, ou `null` quando ninguém digitou nada ainda.
+     O estado guardava a string direto e só era preenchido por
+     `openWorkspaceSettings`. Desde a §46 a modal também abre pelo endereço —
+     `/painel/configuracoes/grupo`, que é o link que se manda para alguém e o
+     que sobrevive a um F5 —, e por esse caminho aquela função não roda: o
+     administrador chegava a "Nome do workspace" em branco, num campo
+     `required`. Parecia que o grupo tinha perdido o nome, e salvar dali o
+     renomearia para o que a pessoa digitasse.
+
+     Derivar do snapshot em vez de sincronizar por efeito resolve os dois
+     caminhos de abertura de uma vez, e sem a chance de o efeito apagar o que
+     está sendo digitado. */
+  const [workspaceNameEdit, setWorkspaceNameEdit] = useState<string | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [slaFilter, setSlaFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState(initialLocation.companyId || "all");
@@ -1293,6 +1307,8 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const assignees = useMemo(() => Array.from(new Set(activeCards.flatMap((card) => card.assignees.length ? card.assignees.map((assignee) => assignee.name) : [card.assigneeName]).filter(Boolean))).sort(), [activeCards]);
   const processTypes = useMemo(() => Array.from(new Set(activeCards.map((card) => card.processType).filter(Boolean))).sort(), [activeCards]);
   const workspaceInitials = initials(snapshot?.workspace.name ?? "Synex DP");
+  /** O valor do campo: o que está sendo digitado, ou o nome vigente do grupo. */
+  const workspaceName = workspaceNameEdit ?? snapshot?.workspace.name ?? "";
   const userInitials = initials(user.displayName);
   const canEdit = snapshot ? ["admin", "member"].includes(snapshot.workspace.role) : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
@@ -1683,7 +1699,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   }
 
   function openWorkspaceSettings() {
-    setWorkspaceName(snapshot?.workspace.name ?? "");
+    setWorkspaceNameEdit(null);
     setWorkspaceModalOpen(true);
   }
 
@@ -1838,7 +1854,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     if (workspaceId === snapshot?.workspace.id) return;
     const next = await mutate("/api/workspaces/select", { method: "POST", body: JSON.stringify({ workspaceId }) }, "Workspace alterado.");
     if (next) {
-      setWorkspaceName(next.workspace.name);
+      setWorkspaceNameEdit(null);
       setWorkspaceModalOpen(false);
       setView("board");
     }
@@ -2689,7 +2705,75 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 ])}
               </nav>
               <div className="workspace-settings-content">
-                {settingsSection === "general" && <><form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceName(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form><div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>{snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher"><header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header><div>{snapshot.availableWorkspaces.map((item) => <button className={item.id === snapshot.workspace.id ? "active" : ""} disabled={busy || item.id === snapshot.workspace.id} onClick={() => void switchWorkspace(item.id)} key={item.id}><i>{initials(item.name)}</i><span><strong>{item.name}</strong><small>{roleLabels[item.role]}</small></span><b>{item.id === snapshot.workspace.id ? "Atual" : "Abrir"}</b></button>)}</div></section>}{<section className="board-manager"><header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header><div>{snapshot.boards.map((board) => <button className={board.id === snapshot.board.id ? "active" : ""} key={board.id} onClick={() => void switchBoard(board.id)}><i>{initials(board.name)}</i><span><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></span><b>{board.id === snapshot.board.id ? "Atual" : "Abrir"}</b></button>)}</div>{isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}</section>}</>}
+                {settingsSection === "general" && <>
+                  {/* Os números antes dos formulários, como a maquete põe: quem
+                      abre a administração precisa saber o tamanho do que vai
+                      alterar antes de alterar. */}
+                  <AdminIndicators snapshot={snapshot} />
+                  <form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceNameEdit(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form>
+                  <div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>
+
+                  {/* Workspaces e quadros viraram tabela (maquete 3).
+                      Eram duas listas de botões onde o estado só aparecia no
+                      rótulo do próprio botão. A tabela separa o que é dado do
+                      que é ação: papel, situação e tamanho ficam em coluna, e o
+                      botão da última coluna faz uma coisa só. A situação do
+                      grupo — arquivado, em análise — não cabia em botão algum e
+                      simplesmente não era mostrada. */}
+                  {snapshot.availableWorkspaces.length > 1 && <section className="workspace-switcher">
+                    <header><div><strong>Seus workspaces</strong><span>Alterne entre as operações às quais você tem acesso.</span></div></header>
+                    <div className="overview-table-scroll">
+                      <table className="overview-table admin-table">
+                        <thead><tr>
+                          <th scope="col">Workspace</th>
+                          <th scope="col">Seu papel</th>
+                          <th scope="col">Situação</th>
+                          <th scope="col"><span className="sr-only">Ação</span></th>
+                        </tr></thead>
+                        <tbody>
+                          {snapshot.availableWorkspaces.map((item) => <tr key={item.id} aria-current={item.id === snapshot.workspace.id ? "true" : undefined}>
+                            <th scope="row"><strong>{item.name}</strong>{item.isOwner && <small>Você é o titular</small>}</th>
+                            <td>{roleLabels[item.role]}</td>
+                            {/* `statusReason` explica por que o grupo saiu de
+                                operação; sem ele "Arquivado" é um rótulo que
+                                não diz o que fazer a respeito. */}
+                            <td>{item.operational
+                              ? <span className="admin-tag ok">Em operação</span>
+                              : <span className="admin-tag idle" title={item.statusReason || undefined}>{item.statusReason || item.status}</span>}</td>
+                            <td className="admin-acao">{item.id === snapshot.workspace.id
+                              ? <span className="admin-tag atual">Atual</span>
+                              : <button type="button" className="secondary-button" disabled={busy} onClick={() => void switchWorkspace(item.id)}>Abrir</button>}</td>
+                          </tr>)}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>}
+
+                  <section className="board-manager">
+                    <header><div><strong>Quadros da operação</strong><span>{plural(snapshot.boards.length, "quadro disponível", "quadros disponíveis")}</span></div></header>
+                    <div className="overview-table-scroll">
+                      <table className="overview-table admin-table">
+                        <thead><tr>
+                          <th scope="col">Quadro</th>
+                          <th scope="col">Tipo</th>
+                          <th scope="col">Etapas</th>
+                          <th scope="col"><span className="sr-only">Ação</span></th>
+                        </tr></thead>
+                        <tbody>
+                          {snapshot.boards.map((board) => <tr key={board.id} aria-current={board.id === snapshot.board.id ? "true" : undefined}>
+                            <th scope="row"><strong>{board.name}</strong><small>{board.description || "Sem descrição"}</small></th>
+                            <td>{board.boardType || "—"}</td>
+                            <td>{board.stages.length}</td>
+                            <td className="admin-acao">{board.id === snapshot.board.id
+                              ? <span className="admin-tag atual">Atual</span>
+                              : <button type="button" className="secondary-button" onClick={() => void switchBoard(board.id)}>Abrir</button>}</td>
+                          </tr>)}
+                        </tbody>
+                      </table>
+                    </div>
+                    {isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}
+                  </section>
+                </>}
                 {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
                 {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onUpdateCompany={updateCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
                 {settingsSection === "team" && <>
@@ -2736,6 +2820,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                       </article>
                     ))}</div>
                   </section>
+
+                  {/* A matriz fica logo abaixo da lista, e antes do formulário
+                      que cria usuário: os dois lugares em que se escolhe um
+                      papel são o seletor de cada linha acima e o `<select>` do
+                      formulário abaixo. Ela precisa estar entre os dois, e não
+                      numa seção que ninguém abre no momento de decidir. */}
+                  <PermissionMatrix />
+
                   {isAdmin && <form className="workspace-invite-form" onSubmit={addMember}>
                     <header><div><strong>Criar e liberar usuário</strong><span>Defina a lotação e os módulos antes de gerar o acesso.</span></div><b>1. Identidade · 2. Departamento · 3. Módulos · 4. Ativação</b></header>
                     <div>
@@ -3704,6 +3796,147 @@ function DemandCalendarView({ cards, onOpen }: { cards: Card[]; onOpen: (card: C
       {cards.every((card) => !card.dueAt) && <div className="calendar-empty-note">Defina prazos nas demandas para visualizá-las no calendário.</div>}
     </section>
   );
+}
+
+/**
+ * A faixa de indicadores da Administração (maquete 3).
+ *
+ * Os cinco números que dizem o tamanho do que está sendo administrado, antes
+ * dos formulários que o alteram. Todos saem do snapshot que a modal já tem em
+ * mãos — nenhuma consulta nova, e nenhum valor escrito no código.
+ *
+ * A maquete traz também "Plano e utilização" com barras de consumo. Ele não
+ * entra: a tela de plano foi tirada do painel de propósito (§44), e há teste
+ * guardando essa retirada. Ressuscitá-la de lado, como faixa de progresso sem
+ * a tela por trás, seria mostrar consumo sem lugar nenhum para agir sobre ele.
+ */
+function AdminIndicators({ snapshot }: { snapshot: WorkspaceSnapshot }) {
+  const ativas = snapshot.companies.filter((company) => company.status === "active").length;
+  const comErro = snapshot.integrations.filter((item) => item.status === "error").length;
+  const conectadas = snapshot.integrations.filter((item) => item.status === "connected").length;
+  const semAtivar = snapshot.members.filter((member) => !member.isActivated).length;
+  const etapas = snapshot.boards.reduce((total, board) => total + board.stages.length, 0);
+
+  const indicadores = [
+    {
+      key: "members", icon: Users, label: "Usuários com acesso",
+      value: String(snapshot.members.length),
+      support: semAtivar ? `${semAtivar} ainda sem ativar o acesso` : "Todos com acesso ativado",
+      alert: semAtivar > 0,
+    },
+    {
+      key: "companies", icon: Building2, label: "Empresas do grupo",
+      value: String(snapshot.companies.length),
+      support: `${ativas} em operação`,
+      alert: false,
+    },
+    {
+      key: "workspaces", icon: LayoutDashboard, label: "Workspaces acessíveis",
+      value: String(snapshot.availableWorkspaces.length),
+      support: snapshot.workspace.companyScope === "restricted"
+        ? "Seu acesso é restrito a algumas empresas"
+        : "Seu acesso alcança todas as empresas",
+      alert: false,
+    },
+    {
+      key: "boards", icon: ClipboardList, label: "Quadros da operação",
+      value: String(snapshot.boards.length),
+      support: plural(etapas, "etapa configurada", "etapas configuradas"),
+      alert: false,
+    },
+    {
+      key: "integrations", icon: Cable, label: "Integrações com erro",
+      value: String(comErro),
+      support: `${conectadas} conectada(s) de ${snapshot.integrations.length} configurada(s)`,
+      alert: comErro > 0,
+    },
+  ];
+
+  return <section className="admin-indicators" aria-label={`Indicadores da administração — ${snapshot.workspace.name}`}>
+    {indicadores.map((item) => {
+      const ItemIcon = item.icon;
+      return <article key={item.key} className={`admin-indicator${item.alert ? " requires-attention" : ""}`}>
+        <span className="admin-indicator-top">
+          <span>{item.label}</span>
+          <i aria-hidden="true"><ItemIcon /></i>
+        </span>
+        <strong>{item.value}</strong>
+        <small>{item.support}</small>
+      </article>;
+    })}
+  </section>;
+}
+
+/**
+ * A matriz de permissões (maquete 3).
+ *
+ * O modelo já existia inteiro e nunca chegou a uma tela: `capabilitiesForRole`
+ * nasceu com o comentário "a tela de usuários precisa mostrar o que cada papel
+ * concede — sem isso o administrador escolhe 'Membro' ou 'Observador' no
+ * escuro", e nenhum componente jamais o chamou. O seletor de papel logo acima
+ * desta matriz é exatamente essa escolha no escuro.
+ *
+ * As linhas são as capacidades reais, agrupadas pelas áreas do catálogo e
+ * escritas na linguagem dele — `competences.transition` não diz nada a quem
+ * administra; "Avançar a competência entre as etapas do fechamento" diz.
+ *
+ * A maquete desenha três estados por célula: concedido, parcial e negado. O
+ * "parcial" não existe no modelo — uma capacidade é do papel ou não é — então
+ * ele não é desenhado. Inventar um meio-termo numa matriz de permissão é o
+ * tipo de enfeite que faz alguém conceder acesso achando que concedeu menos.
+ */
+function PermissionMatrix() {
+  const [aberta, setAberta] = useState<CapabilityArea | "">("");
+  const papeis = workspaceRoles;
+  const concedidas = new Map(papeis.map((papel) => [papel, new Set<string>(capabilitiesForRole(papel))]));
+
+  return <section className="permission-matrix" aria-labelledby="permission-matrix-title">
+    <header>
+      <div>
+        <strong id="permission-matrix-title">O que cada papel permite</strong>
+        <span>Lista completa, direto do modelo de autorização — não é um resumo escrito à mão.</span>
+      </div>
+    </header>
+    {capabilityAreas.map((area) => {
+      const itens = capabilitiesOfArea(area.key);
+      if (itens.length === 0) return null;
+      const expandida = aberta === area.key;
+      return <div className="permission-area" key={area.key}>
+        <button type="button" aria-expanded={expandida}
+          onClick={() => setAberta(expandida ? "" : area.key)}>
+          <span>{area.label}</span>
+          <b>{plural(itens.length, "permissão", "permissões")}</b>
+          <ChevronDown aria-hidden="true" data-open={expandida ? "true" : "false"} />
+        </button>
+        {expandida && <div className="overview-table-scroll">
+          <table className="overview-table permission-table">
+            <thead><tr>
+              <th scope="col">Permissão</th>
+              {papeis.map((papel) => <th scope="col" key={papel}>{roleLabels[papel]}</th>)}
+            </tr></thead>
+            <tbody>
+              {itens.map((capability) => <tr key={capability}>
+                <th scope="row">{capabilityCatalog[capability].label}</th>
+                {papeis.map((papel) => {
+                  const tem = concedidas.get(papel)?.has(capability) ?? false;
+                  /* O símbolo sozinho não basta: quem usa leitor de tela ouve
+                     "check" sem saber de quê, e quem não distingue verde de
+                     cinza vê duas marcas parecidas. O texto acessível diz o
+                     par inteiro — papel e permissão. */
+                  return <td key={papel} className={tem ? "concedida" : "negada"}>
+                    <span aria-hidden="true">{tem ? "\u2713" : "\u2014"}</span>
+                    <span className="sr-only">
+                      {roleLabels[papel]}: {tem ? "permitido" : "não permitido"}
+                    </span>
+                  </td>;
+                })}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+      </div>;
+    })}
+  </section>;
 }
 
 function ListsSettings({ snapshot, busy, isAdmin, onMutate, onConfirm }: { snapshot: WorkspaceSnapshot; busy: boolean; isAdmin: boolean; onMutate: SnapshotMutation; onConfirm: ConfirmHandler }) {

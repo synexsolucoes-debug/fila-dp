@@ -1280,40 +1280,55 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 .theme-dark .dashboard-mini-avatar { background: #1d5148; color: #9af3d6; }
 
 /* Settings modal contrast: every child surface follows the selected theme. */
+/* A Administração no tema do produto.
+ *
+ * Este bloco foi escrito antes do redesenho e ficou com uma paleta propria:
+ * marinho (#162536, #111d2b, #0f1b29) com verde-agua no item ativo (#1d4b42
+ * sobre #a8f2d6). Dentro de um painel tinta-e-latao, a coluna de navegacao das
+ * configuracoes era a unica superficie azul da tela inteira, e o item ativo era
+ * o unico verde — a mesma marca que em todo o resto do painel e latao.
+ *
+ * A correcao nao inventa cor nenhuma: cada hexadecimal vira o token que ja
+ * governa a mesma funcao no resto do painel. O que era `#162536` de fundo de
+ * coluna vira a superficie surda; o que era `#eef5f4` de titulo vira o texto; o
+ * que era `#91a4b6` de apoio vira o texto de apoio. Assim a modal passa a
+ * acompanhar o tema em vez de manter uma copia dele. */
 .theme-dark .workspace-modal > header {
-  background: #111d2b;
+  background: var(--ui-surface);
   border-color: var(--ui-border);
 }
-.theme-dark .workspace-modal > header h2 { color: #eef5f4; }
+.theme-dark .workspace-modal > header h2 { color: var(--ui-text); }
 .theme-dark .workspace-modal > header > button {
   border-color: var(--ui-border-strong);
-  background: #162536;
-  color: #b9c8d6;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
 }
 .theme-dark .workspace-settings-layout,
-.theme-dark .workspace-settings-content { background: #0f1b29; }
+.theme-dark .workspace-settings-content { background: var(--ui-bg); }
 .theme-dark .settings-nav {
   border-color: var(--ui-border);
-  background: #162536;
+  background: var(--ui-surface-muted);
 }
-.theme-dark .settings-nav button { color: #a8b8c8; }
+.theme-dark .settings-nav button { color: var(--ui-text-soft); }
+/* Ativo e sobrevoo com o mesmo par de acento que a barra lateral do painel
+   usa: o veu do latao com o tom de texto que rende contraste sobre ele. */
 .theme-dark .settings-nav button.active,
-.theme-dark .settings-nav button:hover { background: #1d4b42; color: #a8f2d6; }
+.theme-dark .settings-nav button:hover { background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 .theme-dark .workspace-name-form label,
-.theme-dark .workspace-invite-form label { color: #b9c8d6; }
+.theme-dark .workspace-invite-form label { color: var(--ui-text-soft); }
 .theme-dark .workspace-name-form input,
 .theme-dark .workspace-invite-form input,
 .theme-dark .workspace-invite-form select,
 .theme-dark .workspace-member-list select,
 .theme-dark .board-create-form input {
   border-color: var(--ui-border-strong);
-  background: #162536;
-  color: #eef5f4;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text);
 }
-.theme-dark .workspace-name-form input:disabled { background: #1c2c3d; color: #a8b8c8; }
+.theme-dark .workspace-name-form input:disabled { background: var(--ui-surface); color: var(--ui-text-soft); }
 .theme-dark .board-manager {
   border-color: var(--ui-border);
-  background: #111d2b;
+  background: var(--ui-surface);
 }
 .theme-dark .board-manager > header,
 .theme-dark .workspace-switcher > header,
@@ -1322,27 +1337,16 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 .theme-dark .board-manager > header strong,
 .theme-dark .workspace-switcher > header strong,
 .theme-dark .workspace-team > header strong,
-.theme-dark .workspace-invite-form > header strong { color: #eef5f4; }
+.theme-dark .workspace-invite-form > header strong { color: var(--ui-text); }
 .theme-dark .board-manager > header span,
 .theme-dark .workspace-switcher > header span,
 .theme-dark .workspace-team > header span,
 .theme-dark .workspace-invite-form > header span,
-.theme-dark .workspace-team > header > p { color: #91a4b6; }
-.theme-dark .board-manager > div > button,
-.theme-dark .workspace-switcher > div > button {
-  border-color: var(--ui-border-strong);
-  background: #162536;
-  color: #eef5f4;
-}
-.theme-dark .board-manager > div > button.active,
-.theme-dark .workspace-switcher > div > button.active { border-color: #56c9aa; background: #183b39; }
-.theme-dark .board-manager button span small,
-.theme-dark .workspace-switcher button span small,
-.theme-dark .workspace-member-list article > div small { color: #91a4b6; }
-.theme-dark .board-create-form { border-color: var(--ui-border); background: #111d2b; }
+.theme-dark .workspace-team > header > p { color: var(--ui-text-soft); }
+.theme-dark .board-create-form { border-color: var(--ui-border); background: var(--ui-surface); }
 .theme-dark .workspace-member-list article { border-color: var(--ui-border); }
-.theme-dark .workspace-member-list article > b { color: #b9c8d6; }
-.theme-dark .workspace-member-list article > button { border-color: var(--ui-border-strong); background: #162536; }
+.theme-dark .workspace-member-list article > b { color: var(--ui-text-soft); }
+.theme-dark .workspace-member-list article > button { border-color: var(--ui-border-strong); background: var(--ui-surface-muted); }
 
 @media (max-width: 1050px) {
   .dashboard-content { padding-inline: clamp(16px, 3vw, 28px); }

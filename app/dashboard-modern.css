@@ -3215,13 +3215,17 @@
    painel de 360px empurram a página inteira para o lado. */
 .overview-table-scroll { overflow-x: auto; }
 .overview-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.overview-table th {
+/* Só o cabeçalho de COLUNA vira caixa alta. Aplicado a `th` em geral, ele
+   pegava tambem o `th[scope="row"]` das tabelas de administração — e ali o
+   rótulo é uma frase ("Avançar a competência entre as etapas do fechamento"),
+   que em versalete vira um bloco que ninguém lê. */
+.overview-table thead th {
   padding: 8px 12px; border-bottom: 1px solid var(--ui-border);
   color: var(--ui-text-soft); font-size: 9px; font-weight: 800; letter-spacing: .07em;
   text-align: left; text-transform: uppercase; white-space: nowrap;
 }
-.overview-table td { padding: 10px 12px; border-bottom: 1px solid var(--ui-border); color: var(--ui-text-soft); vertical-align: middle; }
-.overview-table tbody tr:last-child td { border-bottom: 0; }
+.overview-table td, .overview-table tbody th { padding: 10px 12px; border-bottom: 1px solid var(--ui-border); color: var(--ui-text-soft); vertical-align: middle; }
+.overview-table tbody tr:last-child td, .overview-table tbody tr:last-child th { border-bottom: 0; }
 .overview-table tbody tr:hover td { background: var(--ui-surface-muted); }
 
 /* A linha inteira não é clicável — `<tr onClick>` não recebe foco nem é
@@ -3882,7 +3886,12 @@
 .settings-nav button span, .settings-nav button small { display: block; }
 .settings-nav button span { color: inherit; font-size: 10px; font-weight: 800; }
 .settings-nav button small { margin-top: 3px; color: var(--ui-text-soft); font-size: 8px; font-weight: 600; }
-.settings-nav button.active, .settings-nav button:hover { background: color-mix(in srgb, var(--ui-mint) 23%, var(--ui-surface)); color: var(--ui-primary); }
+/* Veu do proprio acento, e nao do menta.
+   Medido: latao #D9973F sobre o veu de menta a 23% (#264336) rende 4,36:1 —
+   abaixo do minimo de 4,5. Sobre `--ui-primary-soft`, que e o veu do mesmo
+   latao, rende 6,36:1. E o par que a barra lateral do painel ja usa para o
+   item ativo, entao a modal deixa de ter um verde que so existe nela. */
+.settings-nav button.active, .settings-nav button:hover { background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 .settings-nav button.active svg, .settings-nav button:hover svg { opacity: 1; }
 
 .workspace-settings-content { padding: 23px 25px; overflow: auto; background: var(--ui-surface); }
@@ -4773,6 +4782,8 @@
   .dashboard-sidebar nav button:hover:not(.active),
   .dashboard-task:hover,
   .dashboard-shell button:active:not(:disabled) { transform: none; }
+
+  .permission-area > button svg { transition: none; }
 }
 
 /* Duas exportações lado a lado na tela de relatórios (§50): o CSV das demandas
@@ -5188,4 +5199,139 @@
 .dashboard-task p small {
   font-family: var(--font-dados);
   font-variant-numeric: tabular-nums;
+}
+
+
+/* ==========================================================================
+   ADMINISTRAÇÃO DO WORKSPACE (maquete 3)
+   Tudo aqui é escopado por classe própria e usada só dentro da modal de
+   configurações: nenhum seletor genérico sobre `table`, `button` ou `input`,
+   para que nenhuma outra tela mude por causa deste bloco.
+   ========================================================================== */
+
+/* A faixa de cinco indicadores, com o mesmo desenho da faixa da Visão geral —
+   é a mesma peça respondendo a mesma pergunta noutro assunto, e desenhá-la
+   diferente faria a pessoa aprender duas vezes a mesma coisa. */
+.admin-indicators { margin-bottom: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.admin-indicator {
+  min-height: 96px; padding: 12px 13px; display: flex; flex-direction: column; gap: 5px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface);
+}
+.admin-indicator-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.admin-indicator-top > span { color: var(--ui-text-soft); font-size: 10px; font-weight: 600; line-height: 1.35; }
+.admin-indicator-top i { flex: 0 0 auto; width: 22px; height: 22px; display: grid; place-items: center; border-radius: var(--ui-radius-md); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+.admin-indicator-top i svg { width: 12px; height: 12px; }
+.admin-indicator > strong { margin-top: auto; color: var(--ui-text); font-size: 22px; font-weight: 750; letter-spacing: -.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.admin-indicator > small { color: var(--ui-text-soft); font-size: 9px; line-height: 1.4; }
+/* Como na Visão geral, o alerta se marca pela borda e pelo número: fundo
+   quente em dois de cinco cartões vira faixa listrada onde nada se destaca. */
+.admin-indicator.requires-attention { border-color: color-mix(in srgb, #F4A261 72%, var(--ui-border)); }
+.admin-indicator.requires-attention > strong { color: var(--ui-warning); }
+
+/* As listas de botões viraram tabela. O invólucro é um `<div>` filho direto de
+   `.workspace-switcher` e `.board-manager`, que a folha antiga pinta como grade
+   com recuo — aqui ele volta a ser só um invólucro que rola. */
+.workspace-switcher > .overview-table-scroll,
+.board-manager > .overview-table-scroll { padding: 0; display: block; gap: 0; }
+.admin-table th[scope="row"] { color: var(--ui-text); font-weight: 600; text-align: left; }
+.admin-table th[scope="row"] strong { display: block; font-size: 11px; }
+.admin-table th[scope="row"] small { display: block; margin-top: 2px; color: var(--ui-text-soft); font-size: 9px; font-weight: 400; }
+.admin-table td { font-size: 10px; }
+.admin-acao { text-align: right; white-space: nowrap; }
+.admin-acao .secondary-button { min-height: 28px; padding: 0 12px; font-size: 10px; }
+/* A linha do item vigente se marca por traço além da cor: forma continua
+   legível para quem não distingue matiz. */
+.admin-table tbody tr[aria-current="true"] th[scope="row"] { box-shadow: inset 3px 0 0 var(--ui-primary); }
+
+.admin-tag { padding: 2px 7px; display: inline-block; border-radius: 99px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 9px; font-weight: 700; white-space: nowrap; }
+.admin-tag.ok { background: color-mix(in srgb, var(--ui-mint) 16%, var(--ui-surface)); color: var(--ui-mint-text, var(--ui-mint)); }
+.admin-tag.idle { background: color-mix(in srgb, var(--ui-warning) 16%, var(--ui-surface)); color: var(--ui-warning); }
+.admin-tag.atual { background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+
+/* ── A matriz de permissões ────────────────────────────────────────────────
+   São quase cinquenta permissões em oito áreas. Abertas todas de uma vez, a
+   matriz enterra o formulário de criar usuário que vem logo abaixo — por isso
+   cada área abre sozinha, e nenhuma abre por padrão: quem chega aqui está
+   procurando uma área específica, não lendo as oito. */
+.permission-matrix { margin: 14px 0; overflow: hidden; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
+.permission-matrix > header { min-height: 57px; padding: 13px 15px; display: flex; align-items: center; border-bottom: 1px solid var(--ui-border); }
+.permission-matrix > header strong { display: block; color: var(--ui-text); font-size: 11px; }
+.permission-matrix > header span { display: block; margin-top: 3px; color: var(--ui-text-soft); font-size: 9px; }
+.permission-area + .permission-area { border-top: 1px solid var(--ui-border); }
+.permission-area > button {
+  width: 100%; min-height: 42px; padding: 0 15px;
+  display: flex; align-items: center; gap: 10px;
+  border: 0; background: transparent; color: var(--ui-text); font: inherit; font-size: 10px; font-weight: 600;
+  text-align: left; cursor: pointer;
+}
+.permission-area > button:hover { background: var(--ui-surface-muted); }
+.permission-area > button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
+.permission-area > button > span { flex: 1; }
+.permission-area > button > b { color: var(--ui-text-soft); font-size: 9px; font-weight: 600; }
+.permission-area > button svg { width: 14px; height: 14px; color: var(--ui-text-soft); transition: transform .16s ease; }
+.permission-area > button svg[data-open="true"] { transform: rotate(180deg); }
+
+.permission-table th[scope="row"] { max-width: 320px; padding: 9px 12px; color: var(--ui-text); font-size: 10px; font-weight: 400; text-align: left; }
+.permission-table thead th:not(:first-child), .permission-table tbody td { width: 84px; text-align: center; }
+/* O símbolo é acompanhado de texto acessível; a cor só reforça o que a forma
+   já diz, porque ✓ e — não se confundem sem ela. */
+.permission-table td.concedida { color: var(--ui-mint-text, var(--ui-mint)); font-size: 13px; font-weight: 800; }
+.permission-table td.negada { color: var(--ui-text-soft); font-size: 13px; }
+.permission-table tbody tr:hover th[scope="row"] { background: var(--ui-surface-muted); }
+
+@media (max-width: 760px) {
+  .admin-indicators { grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); }
+  .permission-table th[scope="row"] { max-width: 200px; }
+}
+
+
+/* A Administração no tema do produto — os restos medidos na tela.
+ *
+ * O bloco fica escopado em `.workspace-settings-modal` de proposito: as classes
+ * abaixo (`.danger-link`, `.secondary-button`, `legend`, `--brand`) aparecem em
+ * outras telas, e corrigi-las na origem mudaria o que nao esta em questao aqui.
+ * Escopado, so a Administracao muda.
+ *
+ * Os tres primeiros vieram de medicao no navegador, secao por secao, e nao de
+ * leitura de codigo — as outras cinco secoes ja estavam corretas, e so medindo
+ * deu para saber quais eram quais. */
+.theme-dark .workspace-settings-modal {
+  /* `--brand` ainda e o azul #365CF5 de antes do redesenho, e ele pinta os
+     contadores e as etiquetas dos catalogos daqui. Nao reprova contraste — e
+     identidade: azul num painel de tinta e latao. Redefinido no escopo, cada
+     `color: var(--brand)` la dentro passa a ser o acento do painel, sem tocar
+     em nenhuma regra da folha clara. */
+  --brand: var(--ui-accent-text, var(--ui-primary));
+}
+
+/* "Excluir" em #B14A4A sobre a superficie da modal: 3,20:1, medido. O token de
+   estado do tema escuro existe exatamente para este papel. */
+.theme-dark .workspace-settings-modal .danger-link { color: var(--ui-state-danger-text); }
+
+/* O "×" que remove alguem da lista de usuarios: #A14C4C sobre a superficie
+   surda, 2,81:1 — e um controle destrutivo, o pior lugar para texto apagado. */
+.theme-dark .workspace-settings-modal .workspace-member-list article > button { color: var(--ui-state-danger-text); }
+
+/* "Dias uteis", a legenda do fieldset do calendario: #687689 sobre a superficie,
+   3,68:1. As outras legendas da modal ja recebiam o token; esta ficou de fora
+   por ser `legend`, e nao `label`. */
+.theme-dark .workspace-settings-modal .calendar-settings-form legend,
+.theme-dark .workspace-settings-modal fieldset > legend { color: var(--ui-text-soft); }
+
+/* As tres etiquetas de veu claro que sobraram na modal.
+ *
+ * Elas guardavam o fundo da folha clara (#DCF7EE, #EDF5F2, #E7EDF2) e o texto
+ * `--brand`. Enquanto `--brand` era o azul antigo, azul sobre menta clara
+ * passava; com o acento do painel no lugar, latao sobre menta clara mede
+ * 1,75:1 — medido no navegador, secao por secao. O veu tinha de acompanhar o
+ * texto, e nao so o texto mudar.
+ *
+ * `--ui-primary-soft` e o veu do proprio acento: e o par que a barra lateral e
+ * o menu das configuracoes ja usam, e rende 7,98:1 com `--ui-accent-text`. */
+.theme-dark .workspace-settings-modal .workspace-account-summary em,
+.theme-dark .workspace-settings-modal .catalog-section > header > b,
+.theme-dark .workspace-settings-modal .field-catalog em,
+.theme-dark .workspace-settings-modal .workspace-member-list article > div strong em {
+  background: var(--ui-primary-soft);
+  color: var(--ui-accent-text, var(--ui-primary));
 }
