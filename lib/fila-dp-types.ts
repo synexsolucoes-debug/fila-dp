@@ -38,6 +38,7 @@ export type CardAttachment = {
   uploadedBy: string;
   createdAt: string;
   downloadUrl: string;
+  commentId: string | null;
 };
 
 export type SolidesAttachmentSync = {
