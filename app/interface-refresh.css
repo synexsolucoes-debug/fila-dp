@@ -245,7 +245,7 @@
 
 .dashboard-task,
 .overview-panel,
-.overview-context,
+.overview-kpi,
 .dashboard-column {
   transition:
     border-color var(--motion-base) var(--motion-standard),
@@ -443,10 +443,10 @@
   color: var(--tone-danger-text);
 }
 
-/* O bloco que pede ação continua se marcando pelo traço; o fundo saiu junto
-   com os sete cartões. Numa caixa de 120px o véu quente era acento; num bloco
-   de quatro linhas ele vira parede colorida atrás dos números. */
-.overview-context.requires-attention {
+/* O indicador que pede ação se marca pelo traço, e não por um fundo quente:
+   com cinco cartões lado a lado, dois deles em véu ocre viram uma faixa
+   listrada onde nenhum se destaca. O traço marca um sem tingir a faixa. */
+.overview-kpi.requires-attention {
   border-color: color-mix(in srgb, var(--ui-warning) 55%, var(--ui-border));
 }
 
@@ -505,7 +505,7 @@
 /* ========================================================================== */
 
 /* Elevação coerente: o cartão descansa em 1, o painel em 2, a modal em 3. */
-.overview-context,
+.overview-kpi,
 .dashboard-stats article,
 .dashboard-task { box-shadow: var(--elevation-1); }
 

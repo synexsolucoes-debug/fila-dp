@@ -280,11 +280,13 @@ test("a visão geral diz de quem são os números que mostra", () => {
   // mesmo: o recorte precisa estar escrito na tela, não subentendido.
   assert.match(source, /COMPETÊNCIA · \{scopeLabel\.toUpperCase\(\)\}/u);
   /* O recorte também precisa estar escrito na própria faixa de números, e não
-     só no bloco da competência mais abaixo. Antes isso era um oitavo cartão
-     ("Empresa em foco") ao lado dos outros sete; com os três contextos do §7.2
-     ele virou o título do bloco OPERAÇÃO — o recorte passou a encabeçar os
-     números que ele recorta, em vez de disputar espaço com eles. */
-  assert.match(source, /<header><span>OPERAÇÃO<\/span><h2>\{scopeLabel\}<\/h2><\/header>/u);
+     só no bloco da competência mais abaixo. Ele já foi um oitavo cartão
+     ("Empresa em foco") disputando espaço com os outros sete, e depois o título
+     do bloco OPERAÇÃO nos três contextos do §7.2. Com os cinco indicadores da
+     maquete não há mais bloco onde escrevê-lo sem gastar uma das cinco colunas,
+     então ele passa a nomear a própria faixa: o nome acessível da seção é lido
+     antes dos números que ela contém, que é exatamente a ordem certa. */
+  assert.match(source, /aria-label=\{`Indicadores da operação — \$\{scopeLabel\}`\}/u);
 });
 
 test("o fluxo da competência respeita a empresa escolhida", () => {
