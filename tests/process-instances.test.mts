@@ -620,8 +620,8 @@ test("etapa que exige aval diz isso na tela, antes do clique", async () => {
 
   const painel = await readFile(
     new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
-  assert.match(painel, /instance\.requiresApproval \? "Aprovar e avançar" : "Avançar"/u,
-    "quando a etapa exige aval, avançar É aprovar, e o botão precisa dizer");
+  assert.match(painel, /instance\.requiresApproval \? \(rejects \? "Reprovar" : "Aprovar e avançar"\) : "Avançar"/u,
+    "quando a etapa exige aval, o botão distingue aprovação e reprovação");
   assert.match(painel, /Esta etapa exige aprovação/u,
     "o aviso vem antes da lista: quem chega precisa saber que o clique é um aval");
 });
