@@ -1108,14 +1108,6 @@
     padding-inline: 0;
   }
 
-  /* No trilho compacto, os submódulos sem ícone encolhiam para 19px: além de
-     invisíveis, ficavam abaixo do alvo mínimo de 24px da WCAG 2.5.8. O
-     processo continua levando ao primeiro módulo e os demais permanecem no
-     cabeçalho contextual, já desenhado para esta largura. */
-  .sidebar-process-views {
-    display: none;
-  }
-
   .dashboard-sidebar nav button b {
     position: absolute;
     top: 4px;
@@ -3632,6 +3624,15 @@
    cabe em 76px e continua alcançável abrindo a barra ou pelo processo. */
 .sidebar-collapsed .sidebar-process-views { display: none; }
 .sidebar-collapsed .sidebar-process-item.open { border-color: transparent; }
+
+/* No trilho compacto, os submódulos sem ícone encolhiam para 19px: além de
+   invisíveis, ficavam abaixo do alvo mínimo de 24px da WCAG 2.5.8. O processo
+   continua levando ao primeiro módulo e os demais permanecem no cabeçalho
+   contextual, já desenhado para esta largura. Este override fica depois da
+   declaração-base de `.sidebar-process-views` para vencer a cascata. */
+@media (max-width: 1180px) and (min-width: 761px) {
+  .sidebar-process-views { display: none; }
+}
 
 /* ==========================================================================
    Cabeçalho contextual do processo (§70)

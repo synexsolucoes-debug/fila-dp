@@ -48,6 +48,15 @@ test("a navegação rola dentro da barra, sem levar marca e conta junto", async 
     "marca e conta ficam ancoradas");
 });
 
+test("o segundo nível não vira alvo invisível de 19px no notebook", async () => {
+  const css = (await lerCss("app/dashboard-modern.css")).replace(/\r\n?/gu, "\n");
+  const base = css.indexOf(".sidebar-process-views {");
+  const compacto = css.lastIndexOf("@media (max-width: 1180px) and (min-width: 761px)");
+  assert.ok(compacto > base, "o override compacto precisa vir depois da declaração-base para vencer a cascata");
+  assert.match(css.slice(compacto), /\.sidebar-process-views \{ display: none; \}/u,
+    "submódulos sem ícone devem sair do trilho compacto; continuam no cabeçalho contextual");
+});
+
 test("o layout de celular continua rolando pelo documento", async () => {
   const css = (await lerCss("app/dashboard-modern.css")).replace(/\r\n?/gu, "\n");
   const bloco = css.slice(css.indexOf("@media (min-width: 761px)"));
