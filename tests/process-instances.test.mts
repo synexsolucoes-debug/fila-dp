@@ -634,3 +634,17 @@ test("a recusa de autoaprovação continua sendo do motor, não da tela", async 
   assert.match(motor, /Quem abriu a demanda não pode aprovar a própria etapa\./u);
   assert.match(motor, /PROCESS_STEP_APPROVAL_REQUIRED/u);
 });
+
+
+test("o contrato de transição entrega o destino que o painel envia", async () => {
+  const transitions = (await import("../lib/process-instances.ts")).availableTransitions({
+    version: version(), instance: instance(), actor: actor(), ...clean,
+  });
+  assert.equal(transitions[0].targetStepId, "Gateway_1");
+  assert.equal(transitions[0].targetLabel, "Documentos ok?");
+
+  const painel = await readFile(
+    new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
+  assert.match(painel, /flowName: text\(item\.flowName\)/u);
+  assert.match(painel, /rejects \? "Reprovar" : "Aprovar e avançar"/u);
+});
