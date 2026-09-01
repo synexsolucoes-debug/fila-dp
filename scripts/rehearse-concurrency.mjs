@@ -210,11 +210,11 @@ async function twoStockConsumers() {
     VALUES ($1, $2, 'ENSAIO', 'Estoque Ensaio', 'active', 1, $3, $3)
     ON CONFLICT (workspace_id, code) DO NOTHING`, [id("loc"), id("w"), id("u")]);
   await query(`INSERT INTO fdp_epi_products
-      (id, workspace_id, company_id, name, epi_type, ca_number, size, brand, model,
+      (id, workspace_id, name, epi_type, ca_number, size, brand, model,
        unit_value, stock_quantity, registered_on, status, registration_reason, created_by, updated_by)
-    VALUES ($1, $2, $3, 'Capacete Ensaio', 'head', $4, 'U', 'Ensaio', 'E1',
-      10, 0, CURRENT_DATE, 'in_stock', 'initial_purchase', $5, $5)
-    ON CONFLICT (id) DO NOTHING`, [id("epi"), id("w"), id("co"), id("ca"), id("u")]);
+    VALUES ($1, $2, 'Capacete Ensaio', 'head', $3, 'U', 'Ensaio', 'E1',
+      10, 0, CURRENT_DATE, 'in_stock', 'initial_purchase', $4, $4)
+    ON CONFLICT (id) DO NOTHING`, [id("epi"), id("w"), id("ca"), id("u")]);
 
   await workspaceQuery("SELECT fdp_apply_stock_change($1, $2, $3, 1, $4)",
     [id("w"), id("epi"), id("loc"), id("u")]);
