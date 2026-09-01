@@ -128,6 +128,16 @@ export type ProcessStepConfig = {
  */
 export type StepTaskSource = Partial<ProcessStepConfig>;
 
+export type DemandStageSnapshot = {
+  bpmnElementId: string;
+  title: string;
+  position: number;
+  processStepConfigId: string | null;
+  responsibleAreaId: string | null;
+  responsibleUserId: string | null;
+  config: ProcessStepConfig | null;
+};
+
 export type PublishedProcessVersion = {
   definitionId: string;
   definitionName: string;
@@ -355,6 +365,90 @@ export function stepChecklist(config: StepTaskSource | null): string[] {
   return [...new Set(stepTasks(config).map((task) => task.name))].slice(0, 120);
 }
 
+/** Todas as etapas da versão, na ordem estável do documento BPMN. */
+export function demandStageSnapshots(version: PublishedProcessVersion): DemandStageSnapshot[] {
+  return [...version.graph.nodes.values()]
+    .filter((node) => node.role !== "start")
+    .map((node, index) => {
+      const config = version.steps.get(node.id) ?? null;
+      return {
+        bpmnElementId: node.id,
+        title: cleanText(config?.name || node.name, 160) || (node.role === "end" ? "Fim" : node.id),
+        position: (index + 1) * 1000,
+        processStepConfigId: config?.id || null,
+        responsibleAreaId: config?.responsibleDepartmentId || config?.departmentId || null,
+        responsibleUserId: config?.responsibleUserId || null,
+        config,
+      };
+    });
+}
+
+/** Materializa a fotografia completa das etapas na criação da demanda. */
+export function prepareStageInserts(d1: Database, input: {
+  workspaceId: string;
+  cardId: string;
+  version: PublishedProcessVersion;
+  initialStepId: string;
+  initialDueAt: string | null;
+}) {
+  return demandStageSnapshots(input.version).map((stage) => {
+    const active = stage.bpmnElementId === input.initialStepId;
+    return d1.prepare(`INSERT INTO fdp_demand_stages
+      (id, workspace_id, card_id, process_version_id, process_step_config_id,
+       bpmn_element_id, title, status, position, responsible_area_id,
+       responsible_user_id, due_at, snapshot_json, started_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(
+        crypto.randomUUID(), input.workspaceId, input.cardId, input.version.versionId,
+        stage.processStepConfigId, stage.bpmnElementId, stage.title,
+        active ? "in_progress" : "pending", stage.position,
+        stage.responsibleAreaId, stage.responsibleUserId,
+        active ? input.initialDueAt : null,
+        JSON.stringify(stage.config ?? {}), active ? new Date().toISOString() : null,
+      );
+  });
+}
+
+/** Fecha a etapa atual e abre a próxima junto com a transição da demanda. */
+export function prepareStageTransitionStatements(d1: Database, input: {
+  workspaceId: string;
+  cardId: string;
+  fromStepId: string;
+  toStepId: string;
+  dueAt: string | null;
+  terminal: boolean;
+}) {
+  return [
+    d1.prepare(`UPDATE fdp_demand_stages
+      SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND card_id = ? AND bpmn_element_id = ?`)
+      .bind(input.workspaceId, input.cardId, input.fromStepId),
+    d1.prepare(`UPDATE fdp_demand_stages
+      SET status = ?, started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+          completed_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END,
+          due_at = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND card_id = ? AND bpmn_element_id = ?`)
+      .bind(input.terminal ? "completed" : "in_progress", input.terminal,
+        input.dueAt, input.workspaceId, input.cardId, input.toStepId),
+  ];
+}
+
+/** Ativa as tarefas já materializadas quando a demanda entra na etapa. */
+export function prepareTaskActivationStatements(d1: Database, input: {
+  workspaceId: string;
+  cardId: string;
+  stepId: string;
+  tasks: readonly TaskTemplate[];
+  stepDueAt: string | null;
+}) {
+  const startedAt = new Date().toISOString();
+  return input.tasks.map((task) => d1.prepare(`UPDATE fdp_checklist_items
+      SET started_at = COALESCE(started_at, ?), due_at = COALESCE(due_at, ?)
+      WHERE workspace_id = ? AND card_id = ? AND process_step_id = ? AND template_key = ?`)
+    .bind(startedAt, taskDeadline(task, input.stepDueAt),
+      input.workspaceId, input.cardId, input.stepId, task.key));
+}
+
 /**
  * Statements que materializam as tarefas de uma etapa numa demanda.
  *
@@ -372,14 +466,17 @@ export function prepareTaskInserts(d1: Database, input: {
   stepDueAt: string | null;
   /** Área responsável da etapa, herdada pela tarefa que não nomeia a sua. */
   fallbackAreaId?: string | null;
+  /** Etapas futuras já existem, mas suas tarefas ainda não começaram. */
+  active?: boolean;
 }) {
+  const startedAt = input.active === false ? null : new Date().toISOString();
   return input.tasks.map((task) => d1.prepare(
     `INSERT INTO fdp_checklist_items
        (id, workspace_id, card_id, title, description, instructions, completed, position,
         process_step_id, template_key, area_id, assignee_user_id, assignee_role,
         sla_value, sla_unit, started_at, due_at, required, blocks_advance,
         evidence_required, document_required, completion_rule, depends_on_json)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     crypto.randomUUID(), input.workspaceId, input.cardId,
     task.name, task.description, task.instructions,
@@ -387,7 +484,7 @@ export function prepareTaskInserts(d1: Database, input: {
     task.areaId || input.fallbackAreaId || null,
     task.assigneeUserId || null, task.assigneeRole,
     task.slaValue, task.slaUnit,
-    taskDeadline(task, input.stepDueAt),
+    startedAt, input.active === false ? null : taskDeadline(task, input.stepDueAt),
     task.required ? 1 : 0, task.blocksAdvance ? 1 : 0,
     task.evidenceRequired ? 1 : 0, task.documentRequired, task.completionRule,
     JSON.stringify(task.dependsOn),
@@ -797,6 +894,9 @@ export function availableTransitions(input: {
     return {
       flowId: flow.id,
       flowName: flow.name,
+      // Contrato explícito do painel; os aliases antigos ficam para integrações.
+      targetStepId: flow.target,
+      targetLabel: evaluation.targetLabel,
       stepId: flow.target,
       stepLabel: evaluation.targetLabel,
       terminal: evaluation.terminal,
@@ -855,6 +955,10 @@ export type StartInstanceInput = {
   description?: string;
   companyId?: string | null;
   companyName?: string;
+  employeeId?: string | null;
+  requesterUserId?: string | null;
+  requesterAreaId?: string | null;
+  responsibleAreaId?: string | null;
   competence?: string;
   priority?: string;
   sourceType?: string;
@@ -875,6 +979,8 @@ export type StartedInstance = {
   versionNumber: string;
   dueAt: string | null;
   checklist: string[];
+  stageCount: number;
+  taskCount: number;
 };
 
 /**
@@ -889,6 +995,7 @@ export type StartedInstance = {
 export async function prepareProcessInstance(d1: Database, input: StartInstanceInput) {
   const { version } = input;
   const initial = resolveInitialStep(version);
+  const stages = demandStageSnapshots(version);
   const tasks = stepTasks(initial.config);
   const checklist = tasks.map((task) => task.name);
   const dueAt = await resolveStepDeadline(d1, input.workspaceId, initial.config, input.globalSlaMinutes ?? 0);
@@ -903,16 +1010,17 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
 
   const statements = [
     d1.prepare(`INSERT INTO fdp_cards
-      (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority,
+      (id, workspace_id, board_id, list_id, title, description, company_id, company, employee_id, requester_user_id, process_type, priority,
        assignee_name, due_at, sla_status, position, source_type, created_by, competence,
        requester_area_id, responsible_area_id,
        process_definition_id, process_version_id, process_version_number, current_step_id, instantiated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`)
       .bind(
         cardId, input.workspaceId, input.boardId, input.listId,
         cleanText(input.title, 180) || `${version.definitionName} — ${initial.label}`,
         cleanText(input.description, 4000),
         input.companyId ?? null, cleanText(input.companyName, 160),
+        input.employeeId ?? null, input.requesterUserId ?? input.actor.userId,
         // O tipo de processo da demanda passa a ser o código da definição: é o
         // vocabulário do processo publicado, e não mais uma string solta.
         cleanText(version.definitionCode, 40).toUpperCase() || "PROCESSO",
@@ -922,19 +1030,28 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
         cleanText(input.sourceType, 40) || "process",
         input.actor.email,
         cleanText(input.competence, 7),
-        initial.config?.requesterDepartmentId || null,
-        initial.config?.responsibleDepartmentId || initial.config?.departmentId || null,
+        input.requesterAreaId ?? initial.config?.requesterDepartmentId ?? null,
+        input.responsibleAreaId ?? initial.config?.responsibleDepartmentId ?? initial.config?.departmentId ?? null,
         version.definitionId, version.versionId, version.versionNumber, initial.stepId,
       ),
-    ...prepareTaskInserts(d1, {
-      workspaceId: input.workspaceId, cardId, stepId: initial.stepId, tasks, stepDueAt: dueAt,
-      fallbackAreaId: initial.config?.responsibleDepartmentId || initial.config?.departmentId || null,
+    ...prepareStageInserts(d1, {
+      workspaceId: input.workspaceId, cardId, version,
+      initialStepId: initial.stepId, initialDueAt: dueAt,
     }),
+    ...stages.flatMap((stage) => prepareTaskInserts(d1, {
+      workspaceId: input.workspaceId, cardId,
+      stepId: stage.bpmnElementId, tasks: stepTasks(stage.config),
+      stepDueAt: stage.bpmnElementId === initial.stepId ? dueAt : null,
+      fallbackAreaId: stage.responsibleAreaId,
+      active: stage.bpmnElementId === initial.stepId,
+    })),
   ];
 
   const result: StartedInstance = {
     cardId, stepId: initial.stepId, stepLabel: initial.label,
     versionNumber: version.versionNumber, dueAt, checklist,
+    stageCount: stages.length,
+    taskCount: stages.reduce((total, stage) => total + stepTasks(stage.config).length, 0),
   };
   return { statements, result };
 }

@@ -8,7 +8,8 @@ import { prepareAdoptionIncrement } from "@/lib/adoption-metrics";
 import { prepareDomainEventEnvelope } from "@/lib/outbox";
 import {
   availableTransitions, evaluateTransition, loadProcessInstance, loadPublishedVersion,
-  prepareTaskInserts, prepareTransitionStatement, resolveStepDeadline, stepTasks,
+  prepareStageTransitionStatements, prepareTaskActivationStatements,
+  prepareTransitionStatement, resolveStepDeadline, stepTasks,
   type TransitionActor,
 } from "@/lib/process-instances";
 import { prepareStepAutomations } from "@/lib/process-automations";
@@ -43,7 +44,7 @@ async function loadContext(request: Request, cardId: string) {
   await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, instance.companyId);
   const version = await loadPublishedVersion(d1, workspace.id, instance.processVersionId);
 
-  const [areas, blocking, attachments] = await Promise.all([
+  const [areas, blocking, attachments, stages] = await Promise.all([
     d1.prepare("SELECT area_id FROM fdp_area_members WHERE workspace_id = ? AND user_id = ?")
       .bind(workspace.id, user.id).all<{ area_id: string }>(),
     /* As tarefas que travam a saída da etapa (§42).
@@ -63,6 +64,12 @@ async function loadContext(request: Request, cardId: string) {
       .bind(workspace.id, cardId, instance.currentStepId).all<{ id: string; title: string }>(),
     d1.prepare("SELECT COUNT(*)::int AS total FROM fdp_card_attachments WHERE workspace_id = ? AND card_id = ?")
       .bind(workspace.id, cardId).first<{ total: number }>(),
+    d1.prepare(`SELECT bpmn_element_id, title, status, position, responsible_area_id,
+        responsible_user_id, due_at, started_at, completed_at
+      FROM fdp_demand_stages
+      WHERE workspace_id = ? AND card_id = ?
+      ORDER BY position, bpmn_element_id`)
+      .bind(workspace.id, cardId).all<Record<string, unknown>>(),
   ]);
   const blockingTasks = blocking.results.map((row) => ({ title: String(row.title ?? "") }));
 
@@ -79,6 +86,7 @@ async function loadContext(request: Request, cardId: string) {
     pendingChecklist: blockingTasks.length,
     blockingTasks,
     attachmentCount: Number(attachments?.total ?? 0),
+    stages: stages.results,
     requestId: request.headers.get("x-fila-dp-request-id"),
   } as const;
 }
@@ -105,6 +113,17 @@ function payload(context: Extract<Loaded, { instance: unknown }>) {
       requiresApproval: Boolean(version.steps.get(instance.currentStepId)?.requiresApproval),
       version: instance.version,
     },
+    stages: context.stages.map((row) => ({
+      bpmnElementId: text(row.bpmn_element_id, 160),
+      title: text(row.title, 160),
+      status: text(row.status, 40),
+      position: Number(row.position ?? 0),
+      responsibleAreaId: text(row.responsible_area_id, 160),
+      responsibleUserId: text(row.responsible_user_id, 160),
+      dueAt: row.due_at ? String(row.due_at) : null,
+      startedAt: row.started_at ? String(row.started_at) : null,
+      completedAt: row.completed_at ? String(row.completed_at) : null,
+    })),
     transitions: availableTransitions({
       version, instance, actor: context.actor,
       pendingChecklist: context.pendingChecklist,
@@ -232,10 +251,14 @@ export async function POST(request: Request, { params }: RouteContext) {
          transição (§80): ou a demanda avança com as tarefas da etapa nova, ou
          não avança. Etapa avançada sem as tarefas dela é o estado em que
          ninguém sabe o que falta fazer. */
-      ...prepareTaskInserts(d1, {
-        workspaceId: workspace.id, cardId: instance.id, stepId: evaluation.targetStepId,
-        tasks, stepDueAt: dueAt,
-        fallbackAreaId: nextConfig?.responsibleDepartmentId || nextConfig?.departmentId || null,
+      ...prepareStageTransitionStatements(d1, {
+        workspaceId: workspace.id, cardId: instance.id,
+        fromStepId, toStepId: evaluation.targetStepId,
+        dueAt, terminal: evaluation.terminal,
+      }),
+      ...prepareTaskActivationStatements(d1, {
+        workspaceId: workspace.id, cardId: instance.id,
+        stepId: evaluation.targetStepId, tasks, stepDueAt: dueAt,
       }),
       prepareActivity(workspace.id, instance.id, auth.user.email, "process.step_advanced", {
         fromStepId, toStepId: evaluation.targetStepId, toStepLabel: evaluation.targetLabel,

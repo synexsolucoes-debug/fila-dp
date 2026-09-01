@@ -174,6 +174,9 @@ type RecoveryLink = { name: string; url: string; expiresAt: string };
 type AuthSession = { id: string; deviceLabel: string; createdAt: string; lastSeenAt: string; expiresAt: string; current: boolean };
 type CardForm = {
   boardId: string;
+  employeeId: string;
+  requesterUserId: string;
+  competence: string;
   title: string;
   description: string;
   companyId: string;
@@ -194,6 +197,9 @@ type CardForm = {
 
 const emptyCardForm: CardForm = {
   boardId: "",
+  employeeId: "",
+  requesterUserId: "",
+  competence: "",
   title: "",
   description: "",
   companyId: "",
@@ -224,6 +230,10 @@ const emptyCardForm: CardForm = {
  */
 type StartableProcess = {
   id: string; name: string; areaName: string; versionId: string; versionLabel: string; stepCount: number;
+};
+type EmployeeStartOption = {
+  id: string; company_id: string; full_name: string; social_name: string;
+  registration_number: string; employment_status: string;
 };
 
 const processColors: Record<string, string> = {
@@ -869,10 +879,12 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
      o catálogo cresce com a operação e quase toda visita ao painel não abre
      esta modal — é o mesmo motivo pelo qual o histórico carrega sob demanda. */
   const [startableProcesses, setStartableProcesses] = useState<StartableProcess[] | null>(null);
+  const [employeeStartOptions, setEmployeeStartOptions] = useState<EmployeeStartOption[] | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [cardForm, setCardForm] = useState<CardForm>(emptyCardForm);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(Boolean(initialLocation.settings));
   /* O nome do grupo em edição, ou `null` quando ninguém digitou nada ainda.
@@ -1008,6 +1020,21 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     })();
     return () => { cancelado = true; };
   }, [cardModalOpen, startableProcesses]);
+
+  /* Colaboradores ativos para vincular a demanda ao titular correto. */
+  useEffect(() => {
+    if (!cardModalOpen || selectedCardId || employeeStartOptions !== null) return;
+    let cancelled = false;
+    void fetch("/api/employees?status=active&limit=100", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() : { employees: [] })
+      .then((payload: Record<string, unknown>) => {
+        if (cancelled) return;
+        const employees = Array.isArray(payload.employees) ? payload.employees as EmployeeStartOption[] : [];
+        setEmployeeStartOptions(employees.filter((employee) => employee.employment_status !== "terminated"));
+      })
+      .catch(() => { if (!cancelled) setEmployeeStartOptions([]); });
+    return () => { cancelled = true; };
+  }, [cardModalOpen, selectedCardId, employeeStartOptions]);
 
   /* ---------------------------------------------------------------------- *
    * Endereço do painel (§43, §44)
@@ -1479,6 +1506,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     setSelectedCardId(card.id);
     setCardForm({
       boardId: card.boardId,
+      employeeId: card.employeeId ?? "",
+      requesterUserId: card.requesterUserId ?? "",
+      competence: "",
       title: card.title,
       description: card.description,
       companyId: card.companyId ?? "",
@@ -1534,6 +1564,11 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               title: cardForm.title,
               description: cardForm.description,
               companyId: cardForm.companyId,
+              employeeId: cardForm.employeeId,
+              requesterUserId: cardForm.requesterUserId,
+              requesterAreaId: cardForm.requesterAreaId,
+              responsibleAreaId: cardForm.responsibleAreaId,
+              competence: cardForm.competence,
               priority: cardForm.priority,
               trigger: "manual",
             }) },
@@ -1654,8 +1689,35 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   async function addComment(event: FormEvent) {
     event.preventDefault();
     if (!selectedCardId || !newComment.trim()) return;
-    const next = await mutate(`/api/cards/${selectedCardId}/comments`, { method: "POST", body: JSON.stringify({ body: newComment }) }, "Comentário publicado.");
-    if (next) setNewComment("");
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/cards/${selectedCardId}/comments`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: newComment }),
+      });
+      const payload = await response.json() as WorkspaceSnapshot & { error?: string; createdCommentId?: string };
+      if (!response.ok || !payload.createdCommentId) {
+        throw new Error(payload.error || "Não foi possível publicar o comentário.");
+      }
+      applySnapshot(normalizeWorkspaceSnapshot(payload));
+      if (commentAttachment) {
+        const form = new FormData();
+        form.set("file", commentAttachment);
+        form.set("commentId", payload.createdCommentId);
+        const upload = await fetch(`/api/cards/${selectedCardId}/attachments`, { method: "POST", body: form });
+        const uploaded = await upload.json() as WorkspaceSnapshot & { error?: string };
+        if (!upload.ok) throw new Error(uploaded.error || "O comentário foi publicado, mas o anexo não foi enviado.");
+        applySnapshot(normalizeWorkspaceSnapshot(uploaded));
+      }
+      setNewComment("");
+      setCommentAttachment(null);
+      setToast(commentAttachment ? "Comentário e anexo publicados." : "Comentário publicado.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível publicar o comentário.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function editComment(commentId: string, currentBody: string) {
@@ -1872,13 +1934,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     if (next) { setNewBoardName(""); setNewBoardDescription(""); }
   }
 
-  async function uploadAttachment(file: File) {
+  async function uploadAttachment(file: File, commentId?: string) {
     if (!selectedCardId) return;
     setBusy(true);
     setError("");
     try {
       const form = new FormData();
       form.set("file", file);
+      if (commentId) form.set("commentId", commentId);
       const response = await fetch(`/api/cards/${selectedCardId}/attachments`, { method: "POST", body: form });
       const payload = await response.json() as WorkspaceSnapshot & { error?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível enviar o arquivo.");
@@ -2588,7 +2651,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                       ))}
                     </select>
                     <small className="card-form-hint">{cardForm.processVersionId
-                      ? "As etapas, tarefas e o SLA vêm da versão publicada deste processo."
+                      ? "A etapa inicial, suas tarefas e o SLA vêm da versão publicada deste processo."
                       : "Sem processo, a demanda nasce solta: você define as etapas à mão."}</small>
                   </label>
                 )}
@@ -2599,9 +2662,12 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 {!cardForm.processVersionId &&
                   <label>Tipo de processo<select value={cardForm.processType} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, processType: event.target.value })}><option>CONCILIAÇÃO CADASTRAL</option><option>RESCISÃO</option><option>FÉRIAS</option><option>BENEFÍCIOS</option><option>FOLHA</option><option>CADASTRO</option><option>OUTROS</option></select></label>}
                 <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
+                {!selectedCard && <label>Colaborador<select value={cardForm.employeeId} disabled={!canEdit || employeeStartOptions === null} onChange={(event) => setCardForm({ ...cardForm, employeeId: event.target.value })}><option value="">{employeeStartOptions === null ? "Carregando..." : "Não informado"}</option>{(employeeStartOptions ?? []).filter((employee) => !cardForm.companyId || employee.company_id === cardForm.companyId).map((employee) => <option key={employee.id} value={employee.id}>{employee.social_name || employee.full_name} • {employee.registration_number}</option>)}</select></label>}
+                {!selectedCard && <label>Solicitante<select value={cardForm.requesterUserId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterUserId: event.target.value })}><option value="">Usuário atual</option>{snapshot.members.map((member) => <option key={member.userId} value={member.userId}>{member.name} • {member.email}</option>)}</select></label>}
+                {!selectedCard && <label>Competência<input type="month" value={cardForm.competence} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, competence: event.target.value })} /></label>}
                 <label>Área solicitante<select value={cardForm.requesterAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.requesterAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 <label>Área responsável<select value={cardForm.responsibleAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, responsibleAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.responsibleAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
-                <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>
+                {!cardForm.processVersionId && <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>}
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}><option value="low">Baixa</option><option value="normal">Normal</option><option value="high">Alta</option><option value="urgent">Urgente</option></select></label>
                 {!cardForm.processVersionId && <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>}
@@ -2646,7 +2712,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 </div>
               </section>}
 
-              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
+              {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{selectedCard.attachments.filter((attachment) => attachment.commentId === comment.id).map((attachment) => <a key={attachment.id} href={attachment.downloadUrl} className="comment-attachment"><Paperclip aria-hidden="true" />{attachment.filename}</a>)}{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><label className="upload-button">Anexar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => setCommentAttachment(event.target.files?.[0] ?? null)} /></label>{commentAttachment ? <small>Arquivo: {commentAttachment.name}</small> : null}<button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
             </div>
           </section>
         </div>

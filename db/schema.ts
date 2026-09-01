@@ -256,6 +256,8 @@ export const cards = pgTable("fdp_cards", {
   description: text("description").notNull().default(""),
   companyId: text("company_id").references(() => companies.id, { onDelete: "set null" }),
   company: text("company").notNull().default(""),
+  employeeId: text("employee_id"),
+  requesterUserId: text("requester_user_id"),
   requesterAreaId: text("requester_area_id"),
   responsibleAreaId: text("responsible_area_id"),
   processType: text("process_type").notNull().default("OUTROS"),
@@ -305,6 +307,12 @@ export const cards = pgTable("fdp_cards", {
     columns: [table.workspaceId, table.companyId],
     foreignColumns: [companies.workspaceId, companies.id],
   }),
+  foreignKey({ name: "fdp_cards_workspace_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }),
+  foreignKey({ name: "fdp_cards_workspace_requester_user_fk", columns: [table.workspaceId, table.requesterUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  index("fdp_cards_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.createdAt)
+    .where(sql`${table.employeeId} IS NOT NULL`),
+  index("fdp_cards_workspace_requester_user_idx").on(table.workspaceId, table.requesterUserId, table.createdAt)
+    .where(sql`${table.requesterUserId} IS NOT NULL`),
   foreignKey({ name: "fdp_cards_requester_area_fk", columns: [table.workspaceId, table.requesterAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   foreignKey({ name: "fdp_cards_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
   index("fdp_cards_workspace_requester_area_idx").on(table.workspaceId, table.requesterAreaId, table.createdAt),
@@ -319,6 +327,45 @@ export const cards = pgTable("fdp_cards", {
     .where(sql`${table.processDefinitionId} IS NOT NULL`),
   check("fdp_cards_version_check", sql`${table.version} > 0`),
   check("fdp_cards_process_instance_check", sql`(${table.processVersionId} IS NULL AND ${table.processDefinitionId} IS NULL AND ${table.currentStepId} = '' AND ${table.processVersionNumber} = '' AND ${table.instantiatedAt} IS NULL) OR (${table.processVersionId} IS NOT NULL AND ${table.processDefinitionId} IS NOT NULL AND ${table.currentStepId} <> '' AND ${table.instantiatedAt} IS NOT NULL)`),
+]);
+
+/**
+ * Fotografia imutável das etapas que a versão publicada entregou à demanda.
+ * A demanda aponta para a versão e também materializa todas as etapas: assim a
+ * operação enxerga passado, presente e futuro sem reinterpretar o BPMN a cada
+ * leitura, e a publicação de outra versão não altera uma execução em curso.
+ */
+export const demandStages = pgTable("fdp_demand_stages", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  cardId: text("card_id").notNull(),
+  processVersionId: text("process_version_id").notNull(),
+  processStepConfigId: text("process_step_config_id"),
+  bpmnElementId: text("bpmn_element_id").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("pending"),
+  position: doublePrecision("position").notNull(),
+  responsibleAreaId: text("responsible_area_id"),
+  responsibleUserId: text("responsible_user_id"),
+  dueAt: timestamp("due_at", { withTimezone: true, mode: "string" }),
+  snapshotJson: jsonb("snapshot_json").$type<Record<string, unknown>>().notNull().default({}),
+  startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+  completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_demand_stages_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_demand_stages_card_element_uq").on(table.workspaceId, table.cardId, table.bpmnElementId),
+  index("fdp_demand_stages_card_position_idx").on(table.workspaceId, table.cardId, table.position),
+  index("fdp_demand_stages_workspace_status_due_idx").on(table.workspaceId, table.status, table.dueAt),
+  foreignKey({ name: "fdp_demand_stages_workspace_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_demand_stages_workspace_version_fk", columns: [table.workspaceId, table.processVersionId], foreignColumns: [processVersions.workspaceId, processVersions.id] }),
+  foreignKey({ name: "fdp_demand_stages_workspace_config_fk", columns: [table.workspaceId, table.processStepConfigId], foreignColumns: [processStepConfigs.workspaceId, processStepConfigs.id] }),
+  foreignKey({ name: "fdp_demand_stages_workspace_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_demand_stages_workspace_user_fk", columns: [table.workspaceId, table.responsibleUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_demand_stages_status_check", sql`${table.status} IN ('pending', 'in_progress', 'completed', 'skipped', 'cancelled')`),
+  check("fdp_demand_stages_version_check", sql`${table.version} > 0`),
 ]);
 
 /**
@@ -401,7 +448,8 @@ export const cardComments = pgTable("fdp_card_comments", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
-  index("fdp_comments_card_created_idx").on(table.cardId, table.createdAt),
+  uniqueIndex("fdp_card_comments_workspace_id_uq").on(table.workspaceId, table.id),
+    index("fdp_comments_card_created_idx").on(table.cardId, table.createdAt),
   index("fdp_card_comments_checklist_item_idx")
     .on(table.workspaceId, table.checklistItemId, table.createdAt)
     .where(sql`${table.checklistItemId} IS NOT NULL`),
@@ -511,6 +559,8 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
   processStepId: text("process_step_id").notNull().default(""),
   /** Tarefa a que o arquivo serve de prova (§43). Nulo é anexo da demanda ou da etapa. */
   checklistItemId: text("checklist_item_id"),
+  /** Comentário que contextualiza o arquivo (§44). */
+  commentId: text("comment_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_attachments_object_key_uq").on(table.objectKey),
@@ -521,6 +571,9 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
   index("fdp_card_attachments_checklist_item_idx")
     .on(table.workspaceId, table.checklistItemId)
     .where(sql`${table.checklistItemId} IS NOT NULL`),
+  index("fdp_card_attachments_comment_idx")
+    .on(table.workspaceId, table.commentId)
+    .where(sql`${table.commentId} IS NOT NULL`),
   foreignKey({
     name: "fdp_card_attachments_workspace_card_fk",
     columns: [table.workspaceId, table.cardId],
@@ -530,6 +583,11 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
     name: "fdp_card_attachments_checklist_item_fk",
     columns: [table.workspaceId, table.checklistItemId],
     foreignColumns: [checklistItems.workspaceId, checklistItems.id],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "fdp_card_attachments_comment_fk",
+    columns: [table.workspaceId, table.commentId],
+    foreignColumns: [cardComments.workspaceId, cardComments.id],
   }).onDelete("cascade"),
 ]);
 
