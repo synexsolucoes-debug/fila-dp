@@ -288,38 +288,57 @@ test("o contrato dos dois blocos está declarado no tipo do snapshot", () => {
 
 /* ── A tela como central de operação (§93) e o cartão (§38, §95) ────────── */
 
-test("a Visão geral abre com os números, não com o menu (§93)", async () => {
+test("a Visão geral é a central de operação da maquete, e nada além dela (§93)", async () => {
   /* Medido antes de mexer, com 15 demandas reais no banco: a página tinha
      2738px e o indicador "Demandas em aberto" ficava em y=1610 — quase duas
-     telas abaixo do topo. Os 1610px anteriores eram a competência, três blocos
-     quase sempre vazios e 480px de cartões que repetem o menu lateral.
+     telas abaixo do topo. A §93 pede "central de operação" e proíbe "dashboard
+     genérico de cards", e a primeira correção foi de ordem: os indicadores
+     subiram para o topo.
 
-     A §93 pede "central de operação" e proíbe "dashboard genérico de cards".
-     A correção é de ordem: a faixa de indicadores precisa vir antes de tudo
-     que é contexto ou navegação. Depois da troca, o mesmo indicador mede
-     y=170. */
+     A maquete foi além da ordem. Ela não tem competência, central de ação,
+     prévia do quadro, atalhos nem cartões de módulo — os dois últimos repetem,
+     dentro da página, a navegação que já está na barra lateral, que é o
+     "dashboard genérico" que a §93 nomeia. A tela passa a ter quatro blocos, e
+     este teste guarda os dois lados: os que entram e os que não voltam. */
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   const layout = app.slice(app.indexOf('<div className="overview-layout">'),
-    app.indexOf('function MemberCompanyAccess'));
+    app.indexOf("function MemberCompanyAccess"));
 
   const posicao = (marca: string) => layout.indexOf(marca);
   const metricas = posicao('className="overview-kpis"');
   assert.ok(metricas > 0, "a faixa de indicadores sumiu da Visão geral");
 
+  // Os quatro blocos da maquete, na ordem dela.
   for (const [marca, nome] of [
-    ['<CompetenceFlow', "competência"],
-    ['<ActionCenter', "central de ação"],
-    ['className="workspace-shortcuts"', "atalhos"],
-    ['className="workspace-processes"', "cartões de módulo"],
+    ["flows-panel", "fluxos em andamento"],
+    ["obligations-panel", "próximos vencimentos"],
+    ["status-panel", "demandas por status"],
+    ["<ConnectionMap", "saúde das integrações"],
+    ["activity-panel", "últimas movimentações"],
   ] as const) {
-    assert.ok(posicao(marca) > metricas,
-      `${nome} voltou a ficar antes dos indicadores — a §93 pede a operação primeiro`);
+    assert.ok(posicao(marca) > metricas, `${nome} precisa vir depois dos indicadores`);
   }
+  // Fluxos e vencimentos lado a lado; status e integrações lado a lado.
+  assert.ok(posicao("flows-panel") < posicao("obligations-panel"));
+  assert.ok(posicao("status-panel") < posicao("<ConnectionMap"));
+  // E o histórico fecha a tela: é consulta, não operação.
+  assert.ok(posicao("activity-panel") > posicao("<ConnectionMap"));
 
-  // E o que exige ação vem logo depois dos números: é o que faz alguém agir.
-  assert.ok(posicao('flows-panel') > metricas);
-  assert.ok(posicao('attention-panel') < posicao('<CompetenceFlow'),
-    "o que exige ação precisa vir antes do contexto do mês");
+  /* Os seis que saíram. Cada um continua alcançável em outro lugar — a
+     competência em Operação DP, a central de ação em "Meu trabalho", os
+     atalhos na barra lateral, o quadro e os módulos no próprio menu —, e é
+     por isso que sair daqui não os perde. */
+  for (const [marca, onde] of [
+    ["<CompetenceFlow", "Operação DP"],
+    ["<ActionCenter", "Meu trabalho"],
+    ['className="overview-panel board-preview"', "o próprio quadro"],
+    ['className="workspace-shortcuts"', "a barra lateral"],
+    ['className="workspace-processes"', "o menu"],
+    ["attention-panel", "o indicador de SLA, que leva ao quadro filtrado"],
+  ] as const) {
+    assert.equal(posicao(marca), -1,
+      `${marca} voltou à Visão geral; a maquete o tirou daqui e ele vive em ${onde}`);
+  }
 });
 
 test("o cartão da demanda mostra a etapa do processo (§38, §95)", async () => {

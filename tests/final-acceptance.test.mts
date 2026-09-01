@@ -131,9 +131,29 @@ accepts(90, "a interface evita os sinais artificiais proibidos", () => {
   assert.match(interfaceCheck, /EMOJI/u); assert.match(interfaceCheck, /não parecer IA/iu); assert.match(globalCss, /--ui-font/u);
 });
 
-accepts(93, "a Visão Geral começa pela operação", () => {
-  assert.match(overviewTests, /a Visão geral abre com os números, não com o menu/u);
-  assert.ok(workspace.indexOf('className="overview-contexts"') < workspace.indexOf("<CompetenceFlow"));
+accepts(93, "a Visão Geral começa pela operação, e é só operação", () => {
+  /* A §93 pede "central de operação" e proíbe "dashboard genérico de cards".
+     A primeira correção foi de ordem — os indicadores subiram para o topo — e
+     este portão a conferia comparando duas posições.
+
+     A maquete foi além da ordem: tirou da tela os blocos que repetiam, dentro
+     da página, a navegação que já está na barra lateral, que é o "dashboard
+     genérico" que a §93 nomeia. Comparar posições deixou de bastar, porque as
+     duas marcas antigas somem juntas e `-1 < -1` é falso. O portão passa a
+     cobrar o que a §93 realmente quer: os indicadores primeiro, e nenhum bloco
+     de navegação depois. */
+  assert.match(overviewTests, /a Visão geral é a central de operação da maquete/u);
+  const layout = workspace.slice(workspace.indexOf('<div className="overview-layout">'),
+    workspace.indexOf("function MemberCompanyAccess"));
+  const indicadores = layout.indexOf('className="overview-kpis"');
+  assert.ok(indicadores > 0, "a faixa de indicadores sumiu da Visão geral");
+  for (const bloco of ["flows-panel", "obligations-panel", "status-panel", "activity-panel"]) {
+    assert.ok(layout.indexOf(bloco) > indicadores, `${bloco} precisa vir depois dos indicadores`);
+  }
+  for (const navegacao of ['className="workspace-shortcuts"', 'className="workspace-processes"', 'className="overview-panel board-preview"']) {
+    assert.equal(layout.indexOf(navegacao), -1,
+      `${navegacao} repete a navegação da barra lateral dentro da página`);
+  }
 });
 
 accepts(94, "o editor evidencia Processo → Etapas → Tarefas", () => {

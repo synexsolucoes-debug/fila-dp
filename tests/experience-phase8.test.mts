@@ -102,14 +102,21 @@ test("a busca por CPF usa HMAC e nunca devolve o documento em claro", async () =
 });
 
 test("a central de ação é clicável, acessível e não inventa números", async () => {
-  const [component, workspace] = await Promise.all([
+  const [component, workspace, trabalho] = await Promise.all([
     readFile(new URL("../app/painel/features/action-center/ActionCenter.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/work/WorkCenterView.tsx", import.meta.url), "utf8"),
   ]);
-  // A central recebe o recorte de empresa da barra superior. A rota já aceitava
-  // `companyId` e conferia o acesso; era o painel que nunca enviava, e o
-  // seletor ficava aparente em toda tela sem mexer em número nenhum.
-  assert.match(workspace, /<ActionCenter onNavigate=\{onNavigate\} companyId=\{companyId\} \/>/);
+  /* A central mudou de tela. Ela morava na Visão geral, que a maquete refez com
+     quatro blocos e sem ela; passou para "Meu trabalho", onde responde a mesma
+     pergunta que a tela já faz — "o que está comigo hoje" e "o que precisa ser
+     feito agora" eram duas telas para a mesma coisa.
+
+     O que este teste continua exigindo é o que importava antes: que ela exista
+     numa tela de verdade, receba o recorte de empresa e navegue. */
+  assert.match(trabalho, /<ActionCenter onNavigate=\{onNavigate\} companyId=\{companyId \?\? ""\} \/>/u);
+  assert.match(workspace, /<WorkCenterView[\s\S]{0,200}companyId=\{companyFilter === "all" \? "" : companyFilter\}/u,
+    "a central voltou a receber o grupo inteiro, ignorando o seletor de empresa");
   assert.match(component, /\/api\/dashboard\/action-center\$\{query\}/u);
   assert.match(workspace, /onNavigate=\{\(target\) => setView\(target\)\}/);
   // Cada indicador é um botão que navega para o módulo responsável.

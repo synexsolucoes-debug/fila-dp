@@ -278,7 +278,10 @@ test("a visão geral diz de quem são os números que mostra", () => {
   // O rótulo migrou da faixa "RESUMO OPERACIONAL" para o cabeçalho do fluxo da
   // competência, quando a faixa marinho saiu no redesenho. O requisito é o
   // mesmo: o recorte precisa estar escrito na tela, não subentendido.
-  assert.match(source, /COMPETÊNCIA · \{scopeLabel\.toUpperCase\(\)\}/u);
+  /* O recorte era dito duas vezes: no cabeçalho do bloco de competência e no
+     nome da faixa de indicadores. A competência saiu da Visão geral com a
+     maquete, e sobrou o lugar certo — o nome acessível da seção que contém os
+     números é lido antes deles. */
   /* O recorte também precisa estar escrito na própria faixa de números, e não
      só no bloco da competência mais abaixo. Ele já foi um oitavo cartão
      ("Empresa em foco") disputando espaço com os outros sete, e depois o título
@@ -289,25 +292,37 @@ test("a visão geral diz de quem são os números que mostra", () => {
   assert.match(source, /aria-label=\{`Indicadores da operação — \$\{scopeLabel\}`\}/u);
 });
 
-test("o fluxo da competência respeita a empresa escolhida", () => {
-  // O seletor de empresa já foi enfeite fora do quadro uma vez. Elemento novo
-  // na visão geral entra recortado, ou repete o defeito.
-  assert.match(source, /const scopedCycles = useMemo\(/u);
-  assert.match(source, /companyFilter === "all" \|\| cycle\.companyId === companyFilter/u);
-  assert.match(source, /<OverviewView cycles=\{scopedCycles\}/u);
+test("a competência saiu da Visão geral sem perder o recorte de empresa", async () => {
+  /* O bloco da competência morava aqui e era recortado por `scopedCycles`. A
+     maquete refez a Visão geral com quatro blocos, e nenhum deles é a
+     competência: ela continua em Operação DP.
+
+     O recorte não podia sumir junto — o seletor de empresa já foi enfeite fora
+     do quadro uma vez, e esta é a guarda contra a repetição. Ele mudou de
+     controle: lá a tela tem o seletor próprio dela, e TODA consulta passa por
+     ele. */
+  assert.doesNotMatch(source, /const scopedCycles = useMemo\(/u,
+    "o recorte voltou à Visão geral, que não mostra mais a competência");
+  const operacao = await readFile(new URL("../app/painel/features/operations/OperationsView.tsx", import.meta.url), "utf8");
+  assert.match(operacao, /const \[companyId, setCompanyId\] = useState\(""\)/u);
+  assert.match(operacao, /new URLSearchParams\(\{ companyId: selectedCompany, competence: selectedCompetence \}\)/u,
+    "a competência deixou de ser consultada por empresa");
 });
 
-test("as etapas do ciclo têm uma definição só", () => {
+test("as etapas do ciclo têm uma definição só", async () => {
   // `cycleStages` era privado de OperationsView. Copiar a lista para a visão
   // geral criaria a segunda definição — o defeito que a §16 gastou um commit
   // inteiro para eliminar (cabeçalho 3×, selo 5×, aviso de erro 10×).
   assert.doesNotMatch(source, /status: "pre_closing", label:/u,
     "a visão geral não pode ter cópia própria das etapas");
-  // A exigência é a ORIGEM, não a lista exata: fixar a linha inteira fez este
-  // teste reprovar assim que o diagrama de conexões acrescentou auxiliares ao
-  // mesmo import — reprovando por mudança, não por defeito.
-  assert.match(source, /import \{[^}]*\bcycleStages\b[^}]*\} from "\.\/features\/shared"/u);
-  assert.match(source, /import \{[^}]*\bcycleProgress\b[^}]*\} from "\.\/features\/shared"/u);
+  /* A exigência é a ORIGEM, não a lista exata. Com a competência fora da Visão
+     geral, o painel não importa mais `cycleStages` — e a guarda que importa
+     passa a ser sobre quem a usa: a definição continua uma só, no módulo
+     compartilhado, e Operação DP a lê de lá em vez de manter cópia. */
+  const operacao = await readFile(new URL("../app/painel/features/operations/OperationsView.tsx", import.meta.url), "utf8");
+  assert.match(operacao, /import \{[^}]*\bcycleStages\b[^}]*\} from "\.\.\/shared"/u);
+  assert.doesNotMatch(operacao, /status: "pre_closing", label:/u,
+    "Operação DP passou a ter cópia própria das etapas");
 });
 
 test("a verificação de navegador roda na CI, não só na máquina de quem lembrar", async () => {

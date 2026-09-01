@@ -73,12 +73,18 @@ test("todo ramo do conteúdo corresponde a uma seção declarada", () => {
   }
 });
 
-test("o cabeçalho do modal nomeia a seção aberta, e não duas dentre nove", () => {
-  // Antes eram dois textos escritos à mão: um para "security" e outro para todo
-  // o resto. Com uma seção só além dela, passava despercebido; com nove, sete
-  // telas anunciariam "Usuários e acessos" no título.
-  assert.match(source, /<h2 id="workspace-modal-title">\{settingsSectionMeta\[settingsSection\]\.title\}<\/h2>/u);
-  assert.match(source, /<span>\{settingsSectionMeta\[settingsSection\]\.group\}<\/span>/u);
+test("o cabeçalho da tela nomeia a seção aberta, e não duas dentre nove", () => {
+  /* Antes eram dois textos escritos à mão: um para "security" e outro para todo
+     o resto. Com uma seção só além dela, passava despercebido; com nove, sete
+     telas anunciariam "Usuários e acessos" no título.
+
+     A Administração deixou de ser modal e virou tela, então o cabeçalho é o da
+     página — com o caminho de volta, que a janela não precisava ter porque
+     havia o painel por baixo. A exigência é a mesma: o nome vem do catálogo, e
+     não de um texto escrito à mão para cada ramo. */
+  assert.match(source, /<h1 id="admin-page-title">\{settingsSectionMeta\[settingsSection\]\.title\}<\/h1>/u);
+  assert.match(source, /<span className="dashboard-eyebrow">\{settingsSectionMeta\[settingsSection\]\.group\}<\/span>/u);
+  assert.match(source, /\{settingsSectionMeta\[settingsSection\]\.description\}/u);
   const meta = source.slice(source.indexOf("const settingsSectionMeta"), source.indexOf("\n};", source.indexOf("const settingsSectionMeta")));
   const titulos = [...meta.matchAll(/title: "([^"]+)"/gu)].map((match) => match[1]);
   assert.equal(titulos.length, declaradas.length, "há seção sem nome no cabeçalho");
@@ -115,9 +121,16 @@ test("cada botão do menu tem nome acessível mesmo quando o CSS mostra só o í
   assert.match(source, /<button key=\{item\.section\} aria-label=\{settingsSectionMeta\[item\.section\]\.title\}/u);
 });
 
-test("o modal abre por um caminho só, e o botão do topo diz o que há atrás dele", () => {
-  const aberturas = source.match(/setWorkspaceModalOpen\(true\)/gu) ?? [];
-  assert.equal(aberturas.length, 1, "mais de um caminho abre o modal: a seção pode divergir do menu");
+test("a tela abre por um caminho só, e o botão do topo diz o que há atrás dele", () => {
+  /* O estado mudou de nome junto com a natureza: `administrationOpen`, porque
+     não é mais uma janela. O que ele guarda é o mesmo — um caminho só para
+     abrir, senão a seção mostrada pode divergir da que o menu marca. */
+  const aberturas = source.match(/setAdministrationOpen\(true\)/gu) ?? [];
+  assert.equal(aberturas.length, 1, "mais de um caminho abre a Administração: a seção pode divergir do menu");
+  /* E trocar de tela fecha a Administração. Ela ocupa a área principal, a mesma
+     das outras telas: sem isso, clicar em "Demandas" continuaria mostrando a
+     Administração, porque a condição de renderização vence a do `view`. */
+  assert.match(source, /const setView = useCallback\(\(next: View\) => \{\s*\n\s*setAdministrationOpen\(false\);/u);
   assert.match(source, /function openSecuritySettings\(\) \{\s*setSettingsSection\("security"\);/u);
   // A seção passou a poder vir do endereço (§46, /painel/configuracoes/...),
   // e "security" continua sendo o padrão de quem chega sem seção nenhuma.
