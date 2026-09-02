@@ -87,7 +87,7 @@ export const processGroups: readonly ProcessGroup[] = [
     label: "Pagamentos e competências",
     description: "Prestadores, psicólogos, benefícios e folha: da apuração ao encerramento.",
     kind: "process",
-    /* O Pagamento PJ ocupa oito destas entradas (§74).
+    /* O Pagamento PJ ocupa nove destas entradas (§74).
      *
      * Era uma tela só, rolando: totais, lançamentos fixos, exportação Caju e a
      * tabela de fechamentos com treze colunas, um embaixo do outro. Quem
@@ -98,7 +98,7 @@ export const processGroups: readonly ProcessGroup[] = [
      * existe a entidade. */
     views: [
       "contractorPayments", "contractorProviders", "contractorCycles", "contractorClosings",
-      "contractorAdjustments", "contractorLimits", "contractorCaju", "contractorArchive",
+      "contractorInvoices", "contractorAdjustments", "contractorLimits", "contractorCaju", "contractorArchive",
       "psychologistPayments", "auxiliary", "payroll",
     ],
   },

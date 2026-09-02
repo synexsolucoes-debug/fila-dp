@@ -72,6 +72,12 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
   contractor_payments: [
     "contractors.payments.manage", "contractors.payments.close", "contractors.limits.manage",
     "contractors.export_caju", "payments.reopen",
+    // O controle de notas fiscais é uma etapa do Pagamento PJ, não um módulo à
+    // parte: negar o módulo à pessoa precisa fechar também a porta de anexar,
+    // conferir e aprovar nota — senão ela perde a tela e continua decidindo
+    // sobre o dinheiro por outra rota.
+    "invoice.create", "invoice.upload", "invoice.update", "invoice.review",
+    "invoice.approve", "invoice.reject", "invoice.replace", "invoice.export",
   ],
   registrations: [
     "companies.manage", "employees.manage", "registrations.catalogs.manage",

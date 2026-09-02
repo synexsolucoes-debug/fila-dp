@@ -53,6 +53,8 @@ export type ContractorClosing = {
   invoiceLimitAmount: number | null; invoiceLimitSource: string; invoiceExpectedAmount: number;
   complementAmount: number; complementMethod: string; cajuAmount: number;
   status: string; invoiceNumber: string; invoiceReceivedAmount: number; invoiceStatus: string;
+  /** Situação da conferência da nota e o motivo do travamento, quando há um. */
+  invoiceReviewStatus: string; invoicePaymentBlock: string;
   cajuStatus: string; cajuBatchReference: string; complementPaidAmount: number;
   reconciliationStatus: string; reconciliationDifference: number; calcVersion: string; closedAt: string;
 };
@@ -101,12 +103,131 @@ export type ContractorMonthlyEntry = {
   origin: string; documentReference: string; status: string;
 };
 
+/* -------------------------------------------------------------------------- */
+/* Notas fiscais                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Uma linha da aba de Notas Fiscais.
+ *
+ * Cada linha é um pagamento da competência — não uma nota. A distinção é o
+ * ponto da tela: o pagamento sem nota é a linha que interessa a quem cobra, e
+ * uma lista de notas simplesmente não o conteria.
+ */
+export type InvoiceRow = {
+  closingId: string;
+  providerId: string;
+  providerName: string;
+  providerTradeName: string;
+  providerDocument: string;
+  contractReference: string;
+  companyId: string;
+  companyName: string;
+  companyDocument: string;
+  competence: string;
+  netAmount: number;
+  expectedAmount: number;
+  invoiceLimitAmount: number | null;
+  closingStatus: string;
+  reviewStatus: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  series: string;
+  issueDate: string;
+  issuerDocument: string;
+  issuerName: string;
+  informedAmount: number;
+  differenceAmount: number;
+  invoiceStatus: string;
+  documentId: string;
+  documentContentType: string;
+  documentFilename: string;
+  uploadedAt: string;
+  uploadedByName: string;
+  reviewedAt: string;
+  reviewedByUserId: string;
+  reviewedByName: string;
+  rejectionReason: string;
+  attempt: number;
+  hasInvoice: boolean;
+  /** Vazio quando o pagamento pode sair; o motivo por extenso quando não pode. */
+  paymentBlock: string;
+};
+
+export type InvoiceSummary = {
+  requiredCount: number; receivedCount: number; pendingCount: number; awaitingReviewCount: number;
+  approvedCount: number; rejectedCount: number; correctionCount: number; divergentCount: number;
+  readyCount: number; expectedAmount: number; approvedAmount: number; receivedAmount: number; progress: number;
+};
+
+export type InvoicePolicy = { reviewPolicy: "required" | "optional"; requiredChecks: string[] };
+
+export type InvoicePermissions = {
+  read: boolean; create: boolean; upload: boolean; update: boolean;
+  review: boolean; approve: boolean; reject: boolean; replace: boolean; export: boolean;
+};
+
+export type InvoicePanel = {
+  competence: string;
+  cycle: CycleOption | null;
+  cycles: CycleOption[];
+  rows: InvoiceRow[];
+  reviewers: { id: string; name: string }[];
+  summary: InvoiceSummary;
+  policy: InvoicePolicy;
+  permissions: InvoicePermissions;
+};
+
+/** Uma versão da nota do pagamento — a vigente e as substituídas. */
+export type InvoiceVersion = {
+  id: string; attempt: number; invoiceNumber: string; series: string; issueDate: string;
+  amount: number; expectedAmount: number; differenceAmount: number; status: string;
+  documentId: string; documentFilename: string; documentContentType: string;
+  rejectionReason: string; rejectionDetail: string;
+  uploadedAt: string; uploadedByName: string; reviewedAt: string; reviewedByName: string;
+  supersededAt: string;
+};
+
+export type InvoiceEvent = {
+  id: string; invoiceId: string; action: string; summary: string; createdAt: string; actorName: string;
+};
+
+export type InvoiceDetail = {
+  invoice: {
+    id: string; closingId: string; providerId: string; competence: string; attempt: number;
+    invoiceNumber: string; series: string; issueDate: string; issuerDocument: string; issuerName: string;
+    receiverDocument: string; serviceDescription: string; amount: number; expectedAmount: number;
+    differenceAmount: number; status: string; documentId: string; notes: string;
+    checklist: Record<string, boolean>;
+    uploadedAt: string; reviewedAt: string; reviewNote: string;
+    rejectionReason: string; rejectionDetail: string; supersededAt: string;
+  };
+  comparison: { expectedAmount: number; informedAmount: number; difference: number; matches: boolean };
+  closing: {
+    id: string; status: string; competence: string; netAmount: number; baseAmount: number;
+    creditsAmount: number; debitsAmount: number; expectedAmount: number;
+    invoiceLimitAmount: number | null; invoiceLimitSource: string; complementAmount: number;
+    reviewStatus: string; providerName: string; providerTradeName: string; providerDocument: string;
+    contractReference: string; roleTitle: string; companyName: string; companyDocument: string;
+  };
+  document: { id: string; filename: string; contentType: string; sizeBytes: number; createdAt: string } | null;
+  versions: InvoiceVersion[];
+  events: InvoiceEvent[];
+  policy: InvoicePolicy;
+  isCurrent: boolean;
+  paymentBlock: string;
+  permissions: { update: boolean; review: boolean; approve: boolean; reject: boolean; replace: boolean };
+};
+
 export type ContractorOverview = {
   module: "contractors"; competence: string; cycle: CycleOption | null; cycles: CycleOption[];
   closings: ContractorClosing[]; contractors: Contractor[]; fixedItems: ContractorFixedItem[];
   monthlyEntries: ContractorMonthlyEntry[];
   invoiceLimitPolicies: InvoiceLimitPolicy[];
   totals: { netAmount: number; invoiceExpectedAmount: number; complementAmount: number; cajuAmount: number; divergentCount: number };
+  /** Andamento das notas da competência, para o resumo da tela de pagamentos (§17). */
+  invoiceSummary: InvoiceSummary;
+  invoicePolicy: InvoicePolicy;
   permissions: PaymentPermissions;
 };
 

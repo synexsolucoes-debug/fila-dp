@@ -1,6 +1,7 @@
 import {
   type AnyPgColumn,
   bigint,
+  boolean,
   check,
   date,
   doublePrecision,
@@ -645,10 +646,19 @@ export const workspaceSettings = pgTable("fdp_workspace_settings", {
      de ambiente, porque parar uma automação problemática não pode depender de
      deploy. O padrão é pedir confirmação humana. */
   agentAutomation: text("agent_automation").notNull().default("suggest_only"),
+  /* Política de nota fiscal PJ. Fica aqui, e não em código, porque "pagamento
+     só sai com nota aprovada" é decisão de quem opera o financeiro do grupo —
+     e mudar de ideia não pode depender de deploy. O padrão exige aprovação. */
+  invoiceReviewPolicy: text("invoice_review_policy").notNull().default("required"),
+  /* Itens do checklist de conferência que são obrigatórios para aprovar. Vazio
+     significa checklist só de apoio, que é o padrão. */
+  invoiceRequiredChecksJson: jsonb("invoice_required_checks_json").$type<string[]>().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   check("fdp_workspace_settings_agent_automation_check",
     sql`${table.agentAutomation} IN ('off', 'suggest_only', 'trusted')`),
+  check("fdp_workspace_settings_invoice_review_policy_check",
+    sql`${table.invoiceReviewPolicy} IN ('required', 'optional')`),
 ]);
 
 export const businessHolidays = pgTable("fdp_business_holidays", {
@@ -2144,6 +2154,18 @@ export const contractorClosings = pgTable("fdp_contractor_closings", {
   invoiceReceivedAmount: numeric("invoice_received_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
   invoiceIssueDate: date("invoice_issue_date", { mode: "string" }),
   invoiceStatus: text("invoice_status").notNull().default("pending"),
+  /**
+   * Situação da conferência da nota, ao lado da comparação de valores.
+   *
+   * `invoiceStatus` responde "o valor bate?"; este responde "alguém conferiu e
+   * o que decidiu?". São perguntas diferentes e uma não substitui a outra: uma
+   * nota com valor idêntico ao esperado continua precisando de aprovação
+   * humana — aprovar sozinho porque os números coincidem é exatamente o que a
+   * conferência existe para não fazer.
+   */
+  invoiceReviewStatus: text("invoice_review_status").notNull().default("not_required"),
+  /** Nota vigente do fechamento. As anteriores continuam em `fdp_contractor_invoices`. */
+  invoiceCurrentId: text("invoice_current_id"),
   invoiceAttachmentReference: text("invoice_attachment_reference").notNull().default(""),
   cajuStatus: text("caju_status").notNull().default("not_required"),
   cajuBatchReference: text("caju_batch_reference").notNull().default(""),
@@ -2181,6 +2203,7 @@ export const contractorClosings = pgTable("fdp_contractor_closings", {
   check("fdp_contractor_closings_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
   check("fdp_contractor_closings_status_check", sql`${table.status} IN ('open', 'review', 'approval', 'approved', 'invoice_pending', 'ready_to_pay', 'paid', 'closed', 'reopened')`),
   check("fdp_contractor_closings_invoice_status_check", sql`${table.invoiceStatus} IN ('not_required', 'pending', 'received', 'validated', 'divergent')`),
+  check("fdp_contractor_closings_invoice_review_status_check", sql`${table.invoiceReviewStatus} IN ('not_required', 'awaiting_issue', 'received', 'under_review', 'approved', 'rejected', 'correction_requested')`),
   check("fdp_contractor_closings_caju_status_check", sql`${table.cajuStatus} IN ('not_required', 'pending', 'approved', 'sent', 'processed', 'error', 'canceled')`),
   check("fdp_contractor_closings_reconciliation_check", sql`${table.reconciliationStatus} IN ('pending', 'reconciled', 'divergent')`),
   check("fdp_contractor_closings_limit_source_check", sql`${table.invoiceLimitSource} IN ('none', 'workspace', 'company', 'contract', 'provider')`),
@@ -2261,6 +2284,136 @@ export const contractorDocuments = pgTable("fdp_contractor_documents", {
   check("fdp_contractor_documents_kind_check", sql`${table.documentKind} IN ('invoice')`),
   check("fdp_contractor_documents_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
   check("fdp_contractor_documents_size_check", sql`${table.sizeBytes} > 0`),
+]);
+
+/**
+ * A nota fiscal do prestador na competência, como registro próprio.
+ *
+ * O fechamento já guardava número, valor e data numa trinca de colunas
+ * sobrescrita a cada envio. Isso responde "qual é a nota"; nunca "quem
+ * conferiu, quando, e o que havia antes". Documento financeiro não se
+ * sobrescreve em silêncio — cada envio é uma linha, a anterior é marcada como
+ * substituída em vez de apagada, e a decisão da conferência fica com nome e
+ * hora.
+ *
+ * A nota nasce do pagamento: não existe cadastro paralelo de "quem deve emitir
+ * nota". Quem deve é quem tem `invoice_expected_amount > 0` no fechamento da
+ * competência, e o valor esperado vem do mesmo cálculo PJ que decide o
+ * complemento — congelado aqui no momento do envio, para que reapurar depois
+ * não reescreva o que já foi conferido.
+ */
+export const contractorInvoices = pgTable("fdp_contractor_invoices", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  payrollCycleId: text("payroll_cycle_id").notNull(),
+  closingId: text("closing_id").notNull(),
+  competence: text("competence").notNull(),
+  /** Ordem do envio dentro do fechamento: 1 é a primeira nota, 2 a substituta. */
+  attempt: integer("attempt").notNull().default(1),
+  invoiceNumber: text("invoice_number").notNull(),
+  series: text("series").notNull().default(""),
+  issueDate: date("issue_date", { mode: "string" }).notNull(),
+  issuerDocument: text("issuer_document").notNull().default(""),
+  issuerName: text("issuer_name").notNull().default(""),
+  receiverDocument: text("receiver_document").notNull().default(""),
+  serviceDescription: text("service_description").notNull().default(""),
+  amount: numeric("amount", { precision: 18, scale: 2, mode: "number" }).notNull(),
+  expectedAmount: numeric("expected_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  differenceAmount: numeric("difference_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("received"),
+  documentId: text("document_id"),
+  checklistJson: jsonb("checklist_json").$type<Record<string, boolean>>().notNull().default({}),
+  notes: text("notes").notNull().default(""),
+  /** Envio aceito apesar do alerta de duplicidade, com quem aceitou no histórico. */
+  duplicateAck: boolean("duplicate_ack").notNull().default(false),
+  uploadedBy: text("uploaded_by").notNull(),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  uploadedIp: text("uploaded_ip").notNull().default(""),
+  uploadedUserAgent: text("uploaded_user_agent").notNull().default(""),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "string" }),
+  reviewNote: text("review_note").notNull().default(""),
+  rejectionReason: text("rejection_reason").notNull().default(""),
+  rejectionDetail: text("rejection_detail").notNull().default(""),
+  replacesInvoiceId: text("replaces_invoice_id"),
+  replacedByInvoiceId: text("replaced_by_invoice_id"),
+  /** Nota que deixou de ser a vigente do fechamento. Nunca apagada. */
+  supersededAt: timestamp("superseded_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_contractor_invoices_workspace_id_uq").on(table.workspaceId, table.id),
+  // Um fechamento tem uma nota vigente por vez; as anteriores ficam com
+  // `superseded_at` preenchido. É assim que o histórico de versões existe sem
+  // que duas notas disputem o mesmo pagamento.
+  uniqueIndex("fdp_contractor_invoices_current_uq").on(table.workspaceId, table.closingId)
+    .where(sql`${table.supersededAt} IS NULL`),
+  // Duplicidade: mesmo emissor, mesmo número, mesma série. Parcial porque uma
+  // nota recusada pode ser reemitida com o mesmo número depois de corrigida —
+  // o que não pode é haver duas valendo ao mesmo tempo.
+  uniqueIndex("fdp_contractor_invoices_duplicate_uq")
+    .on(table.workspaceId, table.providerId, table.issuerDocument, table.invoiceNumber, table.series)
+    .where(sql`${table.supersededAt} IS NULL AND ${table.status} NOT IN ('rejected', 'canceled', 'replaced')`),
+  index("fdp_contractor_invoices_competence_idx").on(table.workspaceId, table.competence, table.status),
+  index("fdp_contractor_invoices_cycle_idx").on(table.workspaceId, table.payrollCycleId, table.status),
+  index("fdp_contractor_invoices_closing_idx").on(table.workspaceId, table.closingId, table.attempt),
+  index("fdp_contractor_invoices_provider_idx").on(table.workspaceId, table.providerId, table.competence),
+  index("fdp_contractor_invoices_reviewer_idx").on(table.workspaceId, table.reviewedBy),
+  index("fdp_contractor_invoices_document_idx").on(table.workspaceId, table.documentId),
+  index("fdp_contractor_invoices_replaces_idx").on(table.workspaceId, table.replacesInvoiceId),
+  index("fdp_contractor_invoices_replaced_by_idx").on(table.workspaceId, table.replacedByInvoiceId),
+  index("fdp_contractor_invoices_uploader_idx").on(table.workspaceId, table.uploadedBy),
+  foreignKey({ name: "fdp_contractor_invoices_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_contractor_invoices_provider_fk", columns: [table.workspaceId, table.providerId], foreignColumns: [auxiliaryProviders.workspaceId, auxiliaryProviders.id] }),
+  foreignKey({ name: "fdp_contractor_invoices_cycle_fk", columns: [table.workspaceId, table.companyId, table.payrollCycleId], foreignColumns: [payrollCycles.workspaceId, payrollCycles.companyId, payrollCycles.id] }),
+  foreignKey({ name: "fdp_contractor_invoices_closing_fk", columns: [table.workspaceId, table.closingId], foreignColumns: [contractorClosings.workspaceId, contractorClosings.id] }),
+  foreignKey({ name: "fdp_contractor_invoices_document_fk", columns: [table.workspaceId, table.documentId], foreignColumns: [contractorDocuments.workspaceId, contractorDocuments.id] }),
+  foreignKey({ name: "fdp_contractor_invoices_uploader_fk", columns: [table.workspaceId, table.uploadedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_contractor_invoices_reviewer_fk", columns: [table.workspaceId, table.reviewedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_contractor_invoices_replaces_fk", columns: [table.workspaceId, table.replacesInvoiceId], foreignColumns: [table.workspaceId, table.id] }),
+  foreignKey({ name: "fdp_contractor_invoices_replaced_by_fk", columns: [table.workspaceId, table.replacedByInvoiceId], foreignColumns: [table.workspaceId, table.id] }),
+  check("fdp_contractor_invoices_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_contractor_invoices_status_check", sql`${table.status} IN ('received', 'under_review', 'approved', 'rejected', 'correction_requested', 'replaced', 'canceled')`),
+  check("fdp_contractor_invoices_number_check", sql`length(trim(${table.invoiceNumber})) BETWEEN 1 AND 80`),
+  check("fdp_contractor_invoices_amount_check", sql`${table.amount} >= 0 AND ${table.expectedAmount} >= 0`),
+  check("fdp_contractor_invoices_difference_check", sql`${table.differenceAmount} = ${table.amount} - ${table.expectedAmount}`),
+  check("fdp_contractor_invoices_attempt_check", sql`${table.attempt} >= 1`),
+  // Recusar sem motivo é recusar sem explicação: a nota volta para o prestador
+  // e ninguém sabe o que corrigir.
+  check("fdp_contractor_invoices_rejection_check",
+    sql`${table.status} NOT IN ('rejected', 'correction_requested') OR length(trim(${table.rejectionReason})) > 0`),
+  check("fdp_contractor_invoices_rejection_detail_check",
+    sql`${table.rejectionReason} <> 'other' OR length(trim(${table.rejectionDetail})) >= 5`),
+  check("fdp_contractor_invoices_review_check",
+    sql`${table.status} NOT IN ('approved', 'rejected', 'correction_requested') OR (${table.reviewedBy} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL)`),
+]);
+
+/** Histórico da nota: uma linha por fato, nunca atualizada. */
+export const contractorInvoiceEvents = pgTable("fdp_contractor_invoice_events", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  invoiceId: text("invoice_id").notNull(),
+  closingId: text("closing_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  competence: text("competence").notNull(),
+  action: text("action").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  summary: text("summary").notNull().default(""),
+  beforeJson: jsonb("before_json").$type<Record<string, unknown>>().notNull().default({}),
+  afterJson: jsonb("after_json").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_contractor_invoice_events_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_contractor_invoice_events_invoice_idx").on(table.workspaceId, table.invoiceId, table.createdAt),
+  index("fdp_contractor_invoice_events_closing_idx").on(table.workspaceId, table.closingId, table.createdAt),
+  index("fdp_contractor_invoice_events_actor_idx").on(table.workspaceId, table.actorUserId),
+  foreignKey({ name: "fdp_contractor_invoice_events_invoice_fk", columns: [table.workspaceId, table.invoiceId], foreignColumns: [contractorInvoices.workspaceId, contractorInvoices.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_contractor_invoice_events_actor_fk", columns: [table.workspaceId, table.actorUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_contractor_invoice_events_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_contractor_invoice_events_action_check",
+    sql`${table.action} IN ('uploaded', 'submitted', 'approved', 'rejected', 'correction_requested', 'replaced', 'superseded', 'reviewer_assigned', 'updated', 'canceled')`),
 ]);
 
 /* -------------------------------------------------------------------------- */

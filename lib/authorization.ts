@@ -81,6 +81,21 @@ export const capabilities = [
   "contractors.payments.close",
   "contractors.limits.manage",
   "contractors.export_caju",
+  /* Controle de notas fiscais PJ.
+     Separado de `contractors.payments.manage` porque conferir a nota e lançar o
+     pagamento são trabalhos de pessoas diferentes na maioria dos grupos: quem
+     apura não deveria aprovar a própria nota. Aprovar, rejeitar e substituir
+     têm permissões próprias pelo mesmo motivo que `epi.dispose` tem — são as
+     ações com consequência sobre dinheiro que já saiu ou vai sair. */
+  "invoice.read",
+  "invoice.create",
+  "invoice.upload",
+  "invoice.update",
+  "invoice.review",
+  "invoice.approve",
+  "invoice.reject",
+  "invoice.replace",
+  "invoice.export",
   "payments.reopen",
   "time.read",
   "time.manage",
@@ -170,6 +185,11 @@ const roleCapabilities = {
     "contractors.read", "contractors.manage", "auxiliary.approvals.request", "auxiliary.approvals.decide", "auxiliary.close",
     "psychology.payments.read", "psychology.payments.manage", "psychology.payments.close",
     "contractors.payments.read", "contractors.payments.manage", "contractors.payments.close",
+    // O analista de DP recebe, confere e decide sobre a nota — é o trabalho
+    // dele no fechamento. Substituir uma nota já aprovada fica de fora: é a
+    // ação que reescreve um documento financeiro que já liberou pagamento.
+    "invoice.read", "invoice.create", "invoice.upload", "invoice.update",
+    "invoice.review", "invoice.approve", "invoice.reject", "invoice.export",
     "time.read", "time.manage", "time.approve", "time.export",
     // O analista de DP opera o EPI inteiro: é ele quem entrega, recebe de
     // volta, trata a troca e leva o caso de desconto ao parecer. O que fica
@@ -183,7 +203,7 @@ const roleCapabilities = {
     "integrations.status.read", "integrations.view",
     "companies.read", "employees.read", "departments.view",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
-    "benefits.read", "contractors.read", "contractors.payments.read", "time.read",
+    "benefits.read", "contractors.read", "contractors.payments.read", "invoice.read", "time.read",
     "epi.view",
   ]),
   guest: new Set<Capability>([

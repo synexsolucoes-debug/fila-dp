@@ -4,6 +4,8 @@ import { hasCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { validCompetence } from "@/lib/operations";
+import { invoicePaymentBlock, summarizeInvoiceCompetence } from "@/lib/contractor-invoices";
+import { loadInvoicePolicy } from "@/lib/contractor-invoice-service";
 
 const modules = ["psychology", "contractors"] as const;
 type PaymentModule = typeof modules[number];
@@ -82,7 +84,8 @@ export async function GET(request: Request) {
         ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.contract_base_amount,
             c.proration_days, c.proration_total_days, c.proration_end_date, c.credits_amount, c.debits_amount, c.net_amount,
             c.invoice_limit_amount, c.invoice_limit_source, c.invoice_expected_amount, c.complement_amount, c.complement_method,
-            c.caju_amount, c.status, c.invoice_number, c.invoice_received_amount, c.invoice_status, c.caju_status, c.caju_batch_reference,
+            c.caju_amount, c.status, c.invoice_number, c.invoice_received_amount, c.invoice_status,
+            c.invoice_review_status, c.invoice_current_id, c.caju_status, c.caju_batch_reference,
             c.complement_paid_amount, c.reconciliation_status, c.reconciliation_difference, c.calc_version, c.closed_at,
             a.legal_name AS contractor_name, a.code AS contractor_code, p.contract_reference, p.role_title
           FROM fdp_contractor_closings c
@@ -125,11 +128,31 @@ export async function GET(request: Request) {
     ]);
 
     const rows = closings.results as Record<string, unknown>[];
+    /* A situação da nota aparece na tela de pagamentos, não só na aba de Notas
+       Fiscais (§10). Quem está decidindo o que pagar precisa ver ali mesmo que
+       um prestador está travado — e o motivo, por extenso, para não precisar
+       trocar de tela para descobrir. */
+    const invoicePolicy = await loadInvoicePolicy(d1, workspace.id);
+    for (const row of rows) {
+      row.invoice_payment_block = invoicePaymentBlock({
+        expectedAmount: Number(row.invoice_expected_amount ?? 0),
+        reviewStatus: String(row.invoice_review_status ?? ""),
+        policy: invoicePolicy.reviewPolicy,
+      });
+    }
+
     return Response.json({
       module: moduleType, competence, cycle, cycles: cycles.results,
       closings: rows, contractors: contractors.results, fixedItems: fixedItems.results,
       monthlyEntries: monthlyEntries.results,
       invoiceLimitPolicies: policies.results,
+      invoicePolicy,
+      invoiceSummary: summarizeInvoiceCompetence(rows.map((row) => ({
+        expectedAmount: Number(row.invoice_expected_amount ?? 0),
+        reviewStatus: String(row.invoice_review_status ?? ""),
+        informedAmount: Number(row.invoice_received_amount ?? 0),
+        hasInvoice: Boolean(row.invoice_current_id),
+      })), invoicePolicy.reviewPolicy),
       totals: {
         netAmount: rows.reduce((total, row) => total + Number(row.net_amount ?? 0), 0),
         invoiceExpectedAmount: rows.reduce((total, row) => total + Number(row.invoice_expected_amount ?? 0), 0),
