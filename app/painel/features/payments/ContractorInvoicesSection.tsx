@@ -38,7 +38,6 @@ import styles from "./payments.module.css";
  */
 
 const dateTime = (value: string) => (value ? new Date(value).toLocaleString("pt-BR") : "—");
-const day = (value: string) => (value ? value.slice(0, 10).split("-").reverse().join("/") : "—");
 const digits = (value: string) => value.replace(/\D/gu, "");
 
 /** Situação do pagamento em linguagem da tela de pagamentos. */
@@ -466,11 +465,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
                 <th scope="col">Empresa pagadora</th>
                 <th scope="col">Previsto</th>
                 <th scope="col">Limite NF</th>
-                <th scope="col">NF</th>
-                <th scope="col">Emissão</th>
-                <th scope="col">Valor da NF</th>
-                <th scope="col">Diferença</th>
-                <th scope="col">Recebida em</th>
                 <th scope="col">Status NF</th>
                 <th scope="col">Pagamento</th>
                 <th scope="col">Conferência</th>
@@ -479,7 +473,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
             </thead>
             <tbody>
               {visible.map((row) => {
-                const divergent = row.hasInvoice && row.differenceAmount !== 0;
                 return (
                   <tr key={row.closingId}>
                     <td className={styles.invoiceSelectCell}>
@@ -506,15 +499,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
                     <td>{row.companyName}<small>{row.companyDocument}</small></td>
                     <td><strong>{money(row.expectedAmount)}</strong></td>
                     <td>{row.invoiceLimitAmount === null ? "—" : money(row.invoiceLimitAmount)}</td>
-                    <td>{row.invoiceNumber || "—"}{row.series ? <small>Série {row.series}</small> : null}</td>
-                    <td>{day(row.issueDate)}</td>
-                    <td>{row.hasInvoice ? money(row.informedAmount) : "—"}</td>
-                    <td className={divergent ? styles.negative : undefined}>
-                      {!row.hasInvoice ? "—" : divergent
-                        ? `${row.differenceAmount > 0 ? "+" : "−"}${money(Math.abs(row.differenceAmount))}`
-                        : "Confere"}
-                    </td>
-                    <td>{row.uploadedAt ? dateTime(row.uploadedAt) : "—"}<small>{row.uploadedByName}</small></td>
                     <td>
                       <span className={styles.badge} data-tone={row.reviewStatus}>
                         {invoiceReviewStatusLabels[row.reviewStatus as keyof typeof invoiceReviewStatusLabels] ?? row.reviewStatus}

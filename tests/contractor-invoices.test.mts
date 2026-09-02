@@ -565,6 +565,44 @@ test("a situação da nota aparece no detalhamento do pagamento (§10)", async (
   assert.match(secoes, /invoiceSummary\.approvedCount/u);
 });
 
+test("a lista compacta tira os detalhes redundantes e mantém as decisões operacionais", async () => {
+  const tela = await source("app/painel/features/payments/ContractorInvoicesSection.tsx");
+  const cabecalho = tela.match(/<thead>[\s\S]*?<\/thead>/u)?.[0] ?? "";
+  for (const removida of ["NF", "Emissão", "Valor da NF", "Diferença", "Recebida em"]) {
+    assert.doesNotMatch(cabecalho, new RegExp(`>\\s*${removida}\\s*<`, "u"),
+      `a coluna ${removida} voltou a alargar a tabela`);
+  }
+  for (const essencial of ["Prestador", "Empresa pagadora", "Previsto", "Status NF", "Pagamento", "Conferência", "Ações"]) {
+    assert.match(cabecalho, new RegExp(`>\\s*${essencial}\\s*<`, "u"),
+      `a decisão operacional ${essencial} sumiu da tabela`);
+  }
+  assert.match(tela, /Visualizar NF/u,
+    "os detalhes retirados da tabela precisam continuar acessíveis na gaveta da nota");
+});
+
+test("notas e anexos antigos de Pagamentos são vinculados à tela de Notas Fiscais", async () => {
+  const [migration, paymentRoute, invoiceRoute, service] = await Promise.all([
+    source("drizzle/postgres/0078_link_legacy_payment_invoices.sql"),
+    source("app/api/payments/contractors/closings/[id]/invoice/route.ts"),
+    source("app/api/payments/contractors/invoices/route.ts"),
+    source("lib/contractor-invoice-service.ts"),
+  ]);
+
+  // O legado não copia o arquivo: o document_id da nota aponta para a mesma
+  // linha que a tela de Pagamentos já havia criado.
+  assert.match(migration, /invoice_attachment_reference/u);
+  assert.match(migration, /legacy_document_id/u);
+  assert.match(migration, /SET document_id = document\.id/u);
+  assert.match(migration, /invoice_current_id = invoice\.id/u);
+  assert.match(migration, /ON CONFLICT DO NOTHING/u, "a reconciliação precisa ser idempotente");
+
+  // Nos dois caminhos novos a entidade registrada é a mesma, e a listagem lê
+  // o arquivo dessa entidade — não de uma cópia paralela.
+  assert.match(paymentRoute, /registerInvoice\(d1,/u);
+  assert.match(invoiceRoute, /registerInvoice\(d1,/u);
+  assert.match(service, /LEFT JOIN fdp_contractor_documents document[\s\S]+document\.id = i\.document_id/u);
+});
+
 test("o relatório da competência traz as duas pontas de cada nota (§20)", async () => {
   const reports = await source("lib/payment-reports.ts");
   assert.match(reports, /"contractor-invoices": \{/u);
