@@ -263,6 +263,42 @@
 .resultGrid article[data-emphasis="true"] strong { color: var(--pay-success); }
 .paymentResult > p { margin: 0; color: var(--pay-soft); font-size: .68rem; line-height: 1.45; }
 
+.invoiceTracking {
+  display: grid; gap: 11px; padding: 13px; border: 1px solid var(--pay-border);
+  border-radius: 10px; background: var(--pay-surface);
+}
+.invoiceTracking > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.invoiceTracking > header > div { display: flex; align-items: flex-start; gap: 8px; }
+.invoiceTracking > header svg { flex: 0 0 auto; width: 18px; height: 18px; color: var(--pay-accent-text); }
+.invoiceTracking h4 { margin: 0; font-size: .8rem; }
+.invoiceTracking header p { margin: 3px 0 0; color: var(--pay-soft); font-size: .66rem; line-height: 1.4; }
+.invoiceFacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 7px; }
+.invoiceFacts > div { display: grid; gap: 3px; padding: 9px 10px; border: 1px solid var(--pay-border); border-radius: 8px; background: var(--pay-muted); }
+.invoiceFacts span { color: var(--pay-soft); font-size: .62rem; font-weight: 720; }
+.invoiceFacts strong { font-size: .78rem; }
+.invoiceFacts > div[data-tone="attention"] strong { color: var(--pay-danger); }
+.invoiceFacts > div[data-tone="success"] strong { color: var(--pay-success); }
+.invoiceJourney { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 0; padding: 0; list-style: none; }
+.invoiceJourney li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px 10px; border: 1px solid var(--pay-border); border-radius: 8px; background: var(--pay-muted); }
+.invoiceJourney li > svg { width: 17px; height: 17px; }
+.invoiceJourney li > span { display: grid; gap: 2px; min-width: 0; }
+.invoiceJourney small { color: var(--pay-soft); font-size: .59rem; font-weight: 720; text-transform: uppercase; letter-spacing: .04em; }
+.invoiceJourney strong { overflow-wrap: anywhere; font-size: .7rem; }
+.invoiceJourney li[data-tone="success"] { border-color: color-mix(in srgb, var(--pay-success) 38%, var(--pay-border)); }
+.invoiceJourney li[data-tone="success"] > svg { color: var(--pay-success); }
+.invoiceJourney li[data-tone="pending"] { border-color: color-mix(in srgb, var(--pay-warning) 38%, var(--pay-border)); }
+.invoiceJourney li[data-tone="pending"] > svg { color: var(--pay-warning); }
+.invoiceJourney li[data-tone="attention"] { border-color: color-mix(in srgb, var(--pay-danger) 40%, var(--pay-border)); }
+.invoiceJourney li[data-tone="attention"] > svg { color: var(--pay-danger); }
+.invoiceRelease { margin: 0; padding: 9px 10px; border-radius: 8px; background: color-mix(in srgb, var(--pay-danger) 8%, transparent); color: var(--pay-danger); font-size: .68rem; font-weight: 680; line-height: 1.4; }
+.invoiceRelease[data-ready="true"] { background: color-mix(in srgb, var(--pay-success) 8%, transparent); color: var(--pay-success); }
+
+@media (max-width: 620px) {
+  .invoiceTracking > header { align-items: stretch; flex-direction: column; }
+  .invoiceTracking > header > .badge { width: fit-content; }
+  .invoiceJourney { grid-template-columns: 1fr; }
+}
+
 .detailLockedNote {
   margin: 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--pay-warning) 45%, transparent);
   border-radius: 9px; color: var(--pay-warning); background: color-mix(in srgb, var(--pay-warning) 8%, transparent); font-size: .7rem;

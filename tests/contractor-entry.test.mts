@@ -144,10 +144,10 @@ test("a empresa do aviso é emitente, e por isso não entra no WHERE", async () 
   assert.match(rota, /companyIsIssuer[\s\S]{0,400}!access\.unrestricted[\s\S]{0,200}IN \(/u);
 });
 
-test("a tabela de Pagamentos não mostra mais as três situações retiradas", async () => {
-  /* Status do complemento, conciliação e fechamento saíram da tabela por
-     pedido de quem confere: eram três colunas disputando largura com os
-     números que se olha todo dia. Continuam no banco e no extrato analítico.
+test("a tabela de Pagamentos não repete situações disponíveis no detalhamento", async () => {
+  /* Status do complemento, conciliação, fechamento, nota fiscal e liberação do
+     pagamento saíram da tabela por pedido de quem confere: disputavam largura
+     com os números que se olha todo dia. Continuam no extrato analítico.
 
      O status do fechamento segue governando os botões da linha — ele decide o
      que se pode fazer com aquele prestador; só não ocupa mais uma coluna para
@@ -161,13 +161,10 @@ test("a tabela de Pagamentos não mostra mais as três situações retiradas", a
   const seguinte = secoes.indexOf("\nfunction ", inicio + 1);
   const tabela = inicio < 0 ? "" : secoes.slice(inicio, seguinte < 0 ? undefined : seguinte);
   assert.ok(tabela, "a tabela de apuração precisa existir");
-  for (const coluna of ["Status complemento", "Conciliação", "Fechamento"]) {
+  for (const coluna of ["Status complemento", "Conciliação", "Fechamento", "Nota fiscal", "Pagamento"]) {
     assert.ok(!tabela.includes(`>${coluna}<`), `a coluna ${coluna} voltou`);
   }
-  /* "Status NF" virou "Nota fiscal", e ganhou ao lado a coluna "Pagamento" com
-     o que a nota trava (§10) — que não é o status do fechamento retirado
-     acima, e sim o motivo por extenso de o prestador não estar apto a receber. */
-  for (const coluna of ["Líquido", "Limite NF", "NF esperada", "Complemento", "Nota fiscal", "Pagamento"]) {
+  for (const coluna of ["Líquido", "Limite NF", "NF esperada", "Complemento"]) {
     assert.ok(tabela.includes(`>${coluna}<`), `a coluna ${coluna} sumiu junto`);
   }
   // As ações continuam decidindo pelo status, mesmo sem a coluna.

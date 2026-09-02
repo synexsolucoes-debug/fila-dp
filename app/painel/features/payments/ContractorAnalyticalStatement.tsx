@@ -1,6 +1,9 @@
 "use client";
 
-import { Download, FileText, WalletCards } from "lucide-react";
+import {
+  CircleAlert, CircleCheckBig, Clock3, Download, FileText, ReceiptText, ShieldCheck, WalletCards,
+} from "lucide-react";
+import { invoiceReviewStatusLabels } from "@/lib/contractor-invoices";
 import type { ContractorPaymentDetail as Detail } from "./payments.types";
 import styles from "./payments.module.css";
 
@@ -26,15 +29,6 @@ function formatCnpj(value: string) {
   );
 }
 
-const invoiceStatusLabels: Record<string, string> = {
-  pending: "Pendente",
-  received: "Recebida",
-  validated: "Conferida",
-  divergent: "Divergente",
-  not_required: "Não se aplica",
-  canceled: "Cancelada",
-};
-
 function csvCell(value: string | number) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
@@ -55,21 +49,50 @@ export function ContractorAnalyticalStatement({
   const totalEarnings =
     detail.closing.baseAmount + detail.closing.creditsAmount;
 
-  const invoiceReceived =
-    detail.closing.invoiceStatus === "received" ||
-    detail.closing.invoiceStatus === "validated" ||
-    detail.closing.invoiceStatus === "divergent";
+  const reviewStatus = detail.closing.invoiceReviewStatus;
+  const invoiceNotRequired = reviewStatus === "not_required";
+  const invoiceReceived = Boolean(detail.closing.invoiceNumber) || ![
+    "", "not_required", "awaiting_issue",
+  ].includes(reviewStatus);
 
   const invoiceDifference = invoiceReceived
-    ? detail.closing.invoiceExpectedAmount -
-      detail.closing.invoiceReceivedAmount
+    ? detail.closing.invoiceReceivedAmount -
+      detail.closing.invoiceExpectedAmount
     : null;
 
-  const conferenceStatus = !invoiceReceived
-    ? "Pendente NF"
-    : Math.abs(invoiceDifference ?? 0) <= 0.01
-      ? "OK"
-      : "Divergente";
+  const reviewStatusLabel = invoiceReviewStatusLabels[
+    reviewStatus as keyof typeof invoiceReviewStatusLabels
+  ] ?? (invoiceReceived ? "Nota anexada" : "Aguardando nota");
+  const reviewTone = reviewStatus === "approved" || invoiceNotRequired
+    ? "success"
+    : reviewStatus === "rejected" || reviewStatus === "correction_requested"
+      ? "attention"
+      : "pending";
+  const paymentReady = !detail.closing.invoicePaymentBlock;
+  const invoiceJourney = [
+    {
+      label: "Lançamento",
+      value: invoiceNotRequired
+        ? "Não se aplica"
+        : invoiceReceived
+          ? `Lançada${detail.closing.invoiceNumber ? ` · NF ${detail.closing.invoiceNumber}` : ""}`
+          : "Não lançada",
+      tone: invoiceNotRequired || invoiceReceived ? "success" : "pending",
+      Icon: invoiceReceived ? CircleCheckBig : ReceiptText,
+    },
+    {
+      label: "Conferência",
+      value: reviewStatusLabel,
+      tone: reviewTone,
+      Icon: reviewTone === "success" ? CircleCheckBig : reviewTone === "attention" ? CircleAlert : Clock3,
+    },
+    {
+      label: "Pagamento",
+      value: paymentReady ? "Liberado" : "Bloqueado pela nota",
+      tone: paymentReady ? "success" : "attention",
+      Icon: paymentReady ? ShieldCheck : CircleAlert,
+    },
+  ] as const;
 
   function downloadCsv() {
     const rows: Array<Array<string | number>> = [
@@ -123,10 +146,9 @@ export function ContractorAnalyticalStatement({
       [
         "NOTA FISCAL",
         "Status da NF",
-        invoiceStatusLabels[detail.closing.invoiceStatus] ||
-          detail.closing.invoiceStatus,
+        reviewStatusLabel,
       ],
-      ["CONFERÊNCIA", "Status", conferenceStatus],
+      ["PAGAMENTO", "Liberação", paymentReady ? "Liberado" : detail.closing.invoicePaymentBlock],
     ];
 
     const csv =
@@ -193,48 +215,58 @@ export function ContractorAnalyticalStatement({
           <strong>{money(detail.closing.cajuAmount)}</strong>
         </article>
 
-        <article>
-          <span>Valor em Nota Fiscal</span>
-          <strong>
-            {money(detail.closing.invoiceExpectedAmount)}
-          </strong>
-        </article>
-
-        <article>
-          <span>Valor da NF recebida</span>
-          <strong>
-            {invoiceReceived
-              ? money(detail.closing.invoiceReceivedAmount)
-              : "Pendente"}
-          </strong>
-        </article>
-
-        <article
-          data-tone={
-            invoiceDifference !== null &&
-            Math.abs(invoiceDifference) > 0.01
-              ? "debit"
-              : undefined
-          }
-        >
-          <span>Diferença da NF</span>
-          <strong>
-            {invoiceDifference === null
-              ? "—"
-              : money(invoiceDifference)}
-          </strong>
-        </article>
-
-        <article>
-          <span>Número da NF</span>
-          <strong>{detail.closing.invoiceNumber || "Pendente"}</strong>
-        </article>
-
-        <article>
-          <span>Status da conferência</span>
-          <strong>{conferenceStatus}</strong>
-        </article>
       </div>
+
+      <section className={styles.invoiceTracking} aria-labelledby="invoice-tracking-title">
+        <header>
+          <div>
+            <ReceiptText aria-hidden="true" />
+            <div>
+              <h4 id="invoice-tracking-title">Acompanhamento da nota fiscal</h4>
+              <p>Veja o que já foi lançado, o que ainda falta conferir e se o pagamento está liberado.</p>
+            </div>
+          </div>
+          <span className={styles.badge} data-tone={reviewStatus}>{reviewStatusLabel}</span>
+        </header>
+
+        <div className={styles.invoiceFacts}>
+          <div>
+            <span>Valor em Nota Fiscal</span>
+            <strong>{money(detail.closing.invoiceExpectedAmount)}</strong>
+          </div>
+          <div>
+            <span>Valor da NF recebida</span>
+            <strong>{invoiceReceived ? money(detail.closing.invoiceReceivedAmount) : "Não lançada"}</strong>
+          </div>
+          <div data-tone={invoiceDifference !== null && Math.abs(invoiceDifference) > 0.01 ? "attention" : undefined}>
+            <span>Diferença da NF</span>
+            <strong>{invoiceDifference === null ? "—" : money(invoiceDifference)}</strong>
+          </div>
+          <div>
+            <span>Número da NF</span>
+            <strong>{detail.closing.invoiceNumber || "Não lançado"}</strong>
+          </div>
+          <div data-tone={reviewTone}>
+            <span>Status da conferência</span>
+            <strong>{reviewStatusLabel}</strong>
+          </div>
+        </div>
+
+        <ol className={styles.invoiceJourney} aria-label="Etapas da nota fiscal">
+          {invoiceJourney.map(({ label, value, tone, Icon }) => (
+            <li key={label} data-tone={tone}>
+              <Icon aria-hidden="true" />
+              <span><small>{label}</small><strong>{value}</strong></span>
+            </li>
+          ))}
+        </ol>
+
+        <p className={styles.invoiceRelease} data-ready={paymentReady ? "true" : "false"}>
+          {paymentReady
+            ? "A nota fiscal não impede o avanço deste pagamento."
+            : detail.closing.invoicePaymentBlock}
+        </p>
+      </section>
 
       <button
         type="button"

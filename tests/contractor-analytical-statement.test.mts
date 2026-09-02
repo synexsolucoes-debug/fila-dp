@@ -45,6 +45,10 @@ test("extrato PJ apresenta valores essenciais da conferencia", () => {
   assert.match(statement, /Diferença da NF/u);
   assert.match(statement, /Número da NF/u);
   assert.match(statement, /Status da conferência/u);
+  assert.match(statement, /Acompanhamento da nota fiscal/u);
+  assert.match(statement, /Não lançada/u);
+  assert.match(statement, /Bloqueado pela nota/u);
+  assert.match(statement, /invoicePaymentBlock/u);
 });
 
 test("extrato mostra somente complemento referente ao Caju", () => {

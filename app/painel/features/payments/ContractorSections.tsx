@@ -10,7 +10,6 @@ import { ContractorInvoicesSection } from "./ContractorInvoicesSection";
 import type {
   ContractorClosing, ContractorOverview, CycleOption, PaymentDialog, PaymentPermissions,
 } from "./payments.types";
-import { invoiceReviewStatusLabels } from "@/lib/contractor-invoices";
 import type { ContractorSectionId } from "./contractor-sections";
 import { EmptyState } from "../shared";
 import styles from "./payments.module.css";
@@ -663,11 +662,10 @@ function ArchiveSection(props: SectionProps) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A apuração PJ tem muita coluna de verdade: base, créditos, descontos,
- * líquido, limite, nota esperada e complemento. O que saiu foram as três
- * situações que não se acompanha aqui — status do complemento, conciliação e
- * fechamento. Elas continuam no banco e no extrato analítico; o que deixaram
- * de fazer é disputar largura com os números que se confere todo dia.
+ * A apuração PJ mantém na tabela apenas os valores usados na conferência:
+ * base, créditos, descontos, líquido, limite, nota esperada e complemento.
+ * As situações detalhadas da nota e do pagamento ficam no extrato do
+ * prestador, aberto pelo nome, e deixam de duplicar as ações da última coluna.
  *
  * O status do fechamento continua governando os botões da linha: ele decide o
  * que se pode fazer com aquele prestador, só não ocupa mais uma coluna para
@@ -685,8 +683,7 @@ function ClosingsTable({
           <tr>
             <th scope="col">Prestador</th><th scope="col">Base</th><th scope="col">Créditos</th>
             <th scope="col">Descontos</th><th scope="col">Líquido</th><th scope="col">Limite NF</th>
-            <th scope="col">NF esperada</th><th scope="col">Complemento</th><th scope="col">Nota fiscal</th>
-            <th scope="col">Pagamento</th>
+            <th scope="col">NF esperada</th><th scope="col">Complemento</th>
             {showActions && <th scope="col">Ações</th>}
           </tr>
         </thead>
@@ -717,18 +714,6 @@ function ClosingsTable({
               <td>
                 <strong>{money(row.complementAmount)}</strong>
                 <small>{complementLabels[row.complementMethod] ?? row.complementMethod}</small>
-              </td>
-              {/* A situação da nota e o que ela trava aparecem aqui, e não só
-                  na aba de Notas Fiscais (§10): quem decide o que pagar precisa
-                  ver o bloqueio na mesma linha, com o motivo por extenso. */}
-              <td><span className={styles.badge} data-tone={row.invoiceReviewStatus}>
-                {invoiceReviewStatusLabels[row.invoiceReviewStatus as keyof typeof invoiceReviewStatusLabels] ?? statusLabels[row.invoiceStatus] ?? row.invoiceStatus}
-              </span>{row.invoiceNumber && <small>NF {row.invoiceNumber}</small>}</td>
-              <td>
-                <span className={styles.badge} data-tone={row.invoicePaymentBlock ? "pending" : "validated"}>
-                  {row.invoicePaymentBlock ? "Aguardando NF" : "Pronto para pagamento"}
-                </span>
-                {row.invoicePaymentBlock && <small>{row.invoicePaymentBlock}</small>}
               </td>
               {showActions && (
                 <td className={styles.rowActions}>

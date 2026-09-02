@@ -551,10 +551,16 @@ test("a tela traz visualizador interno, filtros, estados vazios e exportação",
   assert.match(envio, /Possível nota fiscal duplicada/u);
 });
 
-test("a situação da nota aparece também na tela de pagamentos (§10)", async () => {
-  const secoes = await source("app/painel/features/payments/ContractorSections.tsx");
-  assert.match(secoes, /invoiceReviewStatusLabels/u);
-  assert.match(secoes, /row\.invoicePaymentBlock \? "Aguardando NF" : "Pronto para pagamento"/u);
+test("a situação da nota aparece no detalhamento do pagamento (§10)", async () => {
+  const [secoes, extrato] = await Promise.all([
+    source("app/painel/features/payments/ContractorSections.tsx"),
+    source("app/painel/features/payments/ContractorAnalyticalStatement.tsx"),
+  ]);
+  assert.match(extrato, /invoiceReviewStatusLabels/u);
+  assert.match(extrato, /invoicePaymentBlock/u);
+  assert.match(extrato, /Acompanhamento da nota fiscal/u);
+  assert.doesNotMatch(secoes, /<th scope="col">Nota fiscal<\/th>/u);
+  assert.doesNotMatch(secoes, /<th scope="col">Pagamento<\/th>/u);
   // E a competência mostra o retrato das notas sem abrir pagamento por pagamento (§17).
   assert.match(secoes, /invoiceSummary\.approvedCount/u);
 });
