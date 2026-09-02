@@ -338,12 +338,12 @@ function ContractorApprovalPanel({ rows, permissions, busy, competence, competen
       <header>
         <div>
           <span className={styles.eyebrow}>CONFERÊNCIA E APROVAÇÃO</span>
-          <h3 id="contractor-approval-title">Aprovação da competência</h3>
-          <p>Emita o PDF para colocar pagamentos abertos em conferência. Depois aprove todos ou somente os selecionados.</p>
+          <h3 id="contractor-approval-title">Recibos e aprovação da competência</h3>
+          <p>Emita os recibos de pagamento para colocar os valores abertos em conferência. Depois aprove todos ou somente os selecionados.</p>
         </div>
         {permissions?.manage ? (
           <button className={styles.secondaryButton} type="button" onClick={onIssueStatements} disabled={busy}>
-            <FileDown aria-hidden="true" /> Emitir extratos PDF
+            <FileDown aria-hidden="true" /> Emitir recibos de pagamento
           </button>
         ) : null}
       </header>

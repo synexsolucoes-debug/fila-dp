@@ -19,6 +19,9 @@ export const processResponsibilityModes = [
   "USER", "DEPARTMENT", "DEPARTMENT_MANAGER", "REQUESTER",
   "EMPLOYEE_MANAGER", "PROCESS_OWNER", "DYNAMIC",
 ] as const;
+export const processTaskResponsibilityModes = [
+  "INHERIT", "USER", "DEPARTMENT", "REQUESTER", "EMPLOYEE_MANAGER", "PROCESS_OWNER",
+] as const;
 export const processStepTypes = [
   "TASK", "USER_TASK", "APPROVAL", "SYSTEM_TASK", "NOTIFICATION", "FORM",
   "DOCUMENT_REQUEST", "DEMAND_CREATION", "CONDITION", "SUBPROCESS",
@@ -29,6 +32,7 @@ export type ProcessLifecycleStatus = typeof processLifecycleStatuses[number];
 export type ProcessVersionStatus = typeof processVersionStatuses[number];
 export type ProcessStepType = typeof processStepTypes[number];
 export type ProcessResponsibilityMode = typeof processResponsibilityModes[number];
+export type ProcessTaskResponsibilityMode = typeof processTaskResponsibilityModes[number];
 
 const objectValue = (value: unknown) =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -163,6 +167,15 @@ export type ProcessStepConfigInput = {
     blockingIntegrations: string[];
     /** Como a etapa confere documento obrigatório (§26). */
     documentProof: DocumentProof;
+    tasks: Array<{
+      id: string;
+      title: string;
+      instructions: string;
+      responsibilityMode: ProcessTaskResponsibilityMode;
+      responsibleUserId: string;
+      responsibleAreaId: string;
+      evidenceRequired: boolean;
+    }>;
   };
 };
 
@@ -176,6 +189,18 @@ export function sanitizeProcessStepConfigs(value: unknown): ProcessStepConfigInp
     const id = cleanText(item.id, 120) || crypto.randomUUID();
     const cutoffTime = cleanText(item.cutoffTime, 5);
     const escalation = objectValue(item.escalation);
+    const tasks = Array.isArray(settings.tasks) ? settings.tasks.slice(0, 50).map((rawTask, index) => {
+      const task = objectValue(rawTask);
+      return {
+        id: cleanText(task.id, 120) || `task-${index + 1}`,
+        title: cleanText(task.title, 180),
+        instructions: cleanText(task.instructions, 4000),
+        responsibilityMode: enumValue(task.responsibilityMode, processTaskResponsibilityModes, "INHERIT"),
+        responsibleUserId: cleanText(task.responsibleUserId, 120),
+        responsibleAreaId: cleanText(task.responsibleAreaId, 120),
+        evidenceRequired: Boolean(task.evidenceRequired),
+      };
+    }).filter((task) => task.title) : [];
     return {
       id,
       bpmnElementId,
@@ -218,6 +243,7 @@ export function sanitizeProcessStepConfigs(value: unknown): ProcessStepConfigInp
         transitions: parseTransitionConditions(settings.transitions),
         blockingIntegrations: stringArray(settings.blockingIntegrations, 12, 60).map((item) => item.toLowerCase()),
         documentProof: parseDocumentProof(settings.documentProof),
+        tasks,
       },
     };
   });

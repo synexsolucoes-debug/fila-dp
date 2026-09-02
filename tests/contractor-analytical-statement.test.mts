@@ -138,7 +138,7 @@ test("emissão em lote inicia conferência, aprovação coletiva e documentos do
   assert.match(migration, /FORCE ROW LEVEL SECURITY/u);
   assert.match(migration, /fdp_contractor_documents_workspace_provider_fk/u);
   assert.match(sections, /Aprovar todos/u);
-  assert.match(sections, /Emitir extratos PDF/u);
+  assert.match(sections, /Emitir recibos de pagamento/u);
   assert.match(sections, /onOpenDocuments/u);
   assert.match(dialogs, /name="invoiceFile"/u);
 });

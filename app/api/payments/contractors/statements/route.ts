@@ -155,7 +155,7 @@ export async function POST(request: Request) {
       audit,
     ]);
 
-    const filename = `extratos-pj-${cycle.competence}.pdf`;
+    const filename = `recibos-pj-${cycle.competence}.pdf`;
     const bodyBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     return new Response(bodyBytes, {
       headers: {

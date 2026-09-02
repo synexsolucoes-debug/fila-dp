@@ -200,6 +200,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         currentStepLabel: result.stepLabel,
         dueAt: result.dueAt,
         checklist: result.checklist,
+        stageCount: result.stageCount,
+        taskCount: result.taskCount,
       },
       duplicate: false,
     }, { status: 201 });

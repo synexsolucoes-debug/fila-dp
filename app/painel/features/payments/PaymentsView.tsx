@@ -306,22 +306,22 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
-        throw new Error(payload.message || payload.error || "Não foi possível emitir os extratos.");
+        throw new Error(payload.message || payload.error || "Não foi possível emitir os recibos de pagamento.");
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `extratos-pj-${competence}.pdf`;
+      link.download = `recibos-pj-${competence}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
       setError("");
-      setToast("Extratos emitidos. Os pagamentos abertos entraram em conferência.");
+      setToast("Recibos emitidos. Os pagamentos abertos entraram em conferência.");
       await loadOverview(companyId, competence, true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível emitir os extratos.");
+      setError(cause instanceof Error ? cause.message : "Não foi possível emitir os recibos de pagamento.");
     } finally {
       setBusy(false);
     }

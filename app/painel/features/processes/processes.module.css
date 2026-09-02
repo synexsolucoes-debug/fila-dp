@@ -749,6 +749,18 @@
 .conditionRows { display: grid; gap: 6px; }
 .conditionEmpty { margin: 0; color: var(--muted); font-size: 11px; font-style: italic; }
 
+.taskTemplates { display: grid; gap: 9px; }
+.taskTemplate { padding: 9px; display: grid; gap: 8px; border: 1px solid var(--b); border-radius: var(--ui-radius-sm); background: var(--m); }
+.taskTemplate > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.taskTemplate > header strong { color: var(--t); font-size: 12px; }
+.taskTemplate > header button { width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border: 1px solid var(--b); border-radius: var(--ui-radius-sm); background: var(--s); color: var(--soft); cursor: pointer; }
+.taskTemplate > header button:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.taskTemplate > header svg { width: 14px; height: 14px; }
+.taskAdd { min-height: 34px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px dashed var(--b-strong); border-radius: var(--ui-radius-sm); background: transparent; color: var(--p-text); font-size: 11.5px; font-weight: 700; cursor: pointer; }
+.taskAdd:hover:not(:disabled) { border-color: var(--p); background: var(--m); }
+.taskAdd:disabled { opacity: .45; cursor: not-allowed; }
+.taskAdd svg { width: 14px; height: 14px; }
+
 /* Campo → operador → valor → remover. A linha lê como uma frase, e é por isso
    que o operador fica no meio e não numa coluna separada. */
 .conditionRow { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 26px; gap: 5px; align-items: center; }
