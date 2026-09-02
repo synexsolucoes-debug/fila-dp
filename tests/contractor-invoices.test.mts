@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import test from "node:test";
 import { capabilities, hasCapability } from "../lib/authorization.ts";
 import { capabilityCatalog } from "../lib/capability-catalog.ts";
 import { capabilityOwners } from "../lib/modules.ts";
+import { createStoredZip } from "../lib/stored-zip.ts";
 import {
   assertChecklistComplete,
   checkInvoiceFile,
@@ -565,19 +567,67 @@ test("a situação da nota aparece no detalhamento do pagamento (§10)", async (
   assert.match(secoes, /invoiceSummary\.approvedCount/u);
 });
 
-test("a lista compacta tira os detalhes redundantes e mantém as decisões operacionais", async () => {
+test("a lista compacta tira os detalhes redundantes e mantém as ações", async () => {
   const tela = await source("app/painel/features/payments/ContractorInvoicesSection.tsx");
   const cabecalho = tela.match(/<thead>[\s\S]*?<\/thead>/u)?.[0] ?? "";
-  for (const removida of ["NF", "Emissão", "Valor da NF", "Diferença", "Recebida em"]) {
+  for (const removida of ["NF", "Emissão", "Valor da NF", "Diferença", "Recebida em", "Status NF", "Pagamento", "Conferência"]) {
     assert.doesNotMatch(cabecalho, new RegExp(`>\\s*${removida}\\s*<`, "u"),
       `a coluna ${removida} voltou a alargar a tabela`);
   }
-  for (const essencial of ["Prestador", "Empresa pagadora", "Previsto", "Status NF", "Pagamento", "Conferência", "Ações"]) {
+  for (const essencial of ["Prestador", "Empresa pagadora", "Previsto", "Limite NF", "Ações"]) {
     assert.match(cabecalho, new RegExp(`>\\s*${essencial}\\s*<`, "u"),
-      `a decisão operacional ${essencial} sumiu da tabela`);
+      `a coluna essencial ${essencial} sumiu da tabela`);
   }
   assert.match(tela, /Visualizar NF/u,
     "os detalhes retirados da tabela precisam continuar acessíveis na gaveta da nota");
+});
+
+test("a área de relatório oferece CSV e todas as notas da competência em ZIP", async () => {
+  const [tela, rota] = await Promise.all([
+    source("app/painel/features/payments/ContractorInvoicesSection.tsx"),
+    source("app/api/payments/contractors/invoices/archive/route.ts"),
+  ]);
+
+  assert.match(tela, /Relatório de notas fiscais/u);
+  assert.match(tela, /Baixar relatório \(CSV\)/u);
+  assert.match(tela, /Baixar todas as notas \(ZIP\)/u);
+  assert.match(tela, /invoices\/archive\?companyId=/u);
+  assert.match(tela, /archivedDocuments > 0/u, "o ZIP vazio deve aparecer desabilitado");
+
+  assert.match(rota, /requireCapability\(workspace, "invoice\.export"\)/u);
+  assert.match(rota, /requireCompanyAccess/u);
+  assert.match(rota, /closing\.company_id = \? AND closing\.competence = \?/u);
+  assert.match(rota, /invoice\.id = closing\.invoice_current_id/u,
+    "o pacote deve conter as notas vigentes, não versões substituídas");
+  assert.match(rota, /contractor_invoices\.archive_exported/u,
+    "o download coletivo precisa entrar na auditoria");
+  assert.match(rota, /Content-Type": "application\/zip"/u);
+});
+
+test("o gerador cria um ZIP legível em fluxo e preserva nomes UTF-8", async () => {
+  const entradas = [
+    { name: "Prestador Ágil - NF 123.pdf", content: "conteúdo da primeira nota" },
+    { name: "Prestador Dois - NF 456.xml", content: "<nota id=\"456\" />" },
+  ];
+  const archive = createStoredZip(entradas.map((entry) => ({
+    name: entry.name,
+    size: new TextEncoder().encode(entry.content).length,
+    body: new Blob([entry.content]).stream(),
+    modifiedAt: new Date("2026-09-02T12:00:00Z"),
+  })));
+  const bytes = Buffer.from(await new Response(archive.stream).arrayBuffer());
+  assert.equal(bytes.length, archive.size);
+
+  const require = createRequire(import.meta.url);
+  const unzipper = require("unzipper") as {
+    Open: { buffer(value: Buffer): Promise<{ files: { path: string; buffer(): Promise<Buffer> }[] }> };
+  };
+  const opened = await unzipper.Open.buffer(bytes);
+  assert.deepEqual(opened.files.map((file) => file.path), entradas.map((entry) => entry.name));
+  assert.deepEqual(
+    await Promise.all(opened.files.map(async (file) => (await file.buffer()).toString("utf8"))),
+    entradas.map((entry) => entry.content),
+  );
 });
 
 test("notas e anexos antigos de Pagamentos são vinculados à tela de Notas Fiscais", async () => {
