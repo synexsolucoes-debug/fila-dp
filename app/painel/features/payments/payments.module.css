@@ -170,6 +170,18 @@
 
 .reportBar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 
+.invoiceReportBar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin-top: 12px; padding: 14px 16px;
+  border: 1px solid var(--pay-border); border-radius: 12px; background: var(--pay-surface);
+}
+.invoiceReportIntro { display: grid; gap: 3px; min-width: 220px; }
+.invoiceReportIntro strong { font-size: .82rem; }
+.invoiceReportIntro small { color: var(--pay-soft); font-size: .68rem; }
+.invoiceReportActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.invoiceReportActions a { text-decoration: none; }
+.invoiceReportActions .primaryButton, .invoiceReportActions .secondaryButton { min-height: 36px; }
+
 .noteLine, .loadingLine, .warningState, .privacyNotice {
   display: flex; align-items: center; gap: 9px; padding: 13px 15px; margin: 0 0 12px;
   border: 1px solid var(--pay-border); border-radius: 11px; background: var(--pay-surface);
@@ -575,6 +587,12 @@
 
 .invoiceSelectCell { width: 34px; }
 .invoiceSelectCell input { width: 16px; height: 16px; accent-color: var(--pay-accent); }
+
+@media (max-width: 640px) {
+  .invoiceReportBar { align-items: stretch; }
+  .invoiceReportIntro, .invoiceReportActions { width: 100%; }
+  .invoiceReportActions > * { flex: 1 1 100%; justify-content: center; }
+}
 
 /* Gaveta de conferência */
 .invoiceDrawer { display: flex; flex-direction: column; }

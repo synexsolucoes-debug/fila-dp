@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CheckCheck, ClipboardCheck, Eye, FileSpreadsheet, FileUp, Filter, RefreshCw, Search, X,
+  CheckCheck, ClipboardCheck, Download, Eye, FileSpreadsheet, FileUp, Filter, RefreshCw, Search, X,
 } from "lucide-react";
 import {
   invoiceQuickFilterLabels,
@@ -37,7 +37,6 @@ import styles from "./payments.module.css";
  * ganhar nada.
  */
 
-const dateTime = (value: string) => (value ? new Date(value).toLocaleString("pt-BR") : "—");
 const digits = (value: string) => value.replace(/\D/gu, "");
 
 /** Situação do pagamento em linguagem da tela de pagamentos. */
@@ -131,6 +130,8 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
   const rows = useMemo(() => panel?.rows ?? [], [panel?.rows]);
   const policy = panel?.policy.reviewPolicy ?? "required";
   const permissions = panel?.permissions;
+  const archivedDocuments = rows.filter((row) => Boolean(row.documentId)).length;
+  const archiveUrl = `/api/payments/contractors/invoices/archive?companyId=${encodeURIComponent(companyId)}&competence=${encodeURIComponent(competence)}`;
 
   const visible = useMemo(() => rows.filter((row) => {
     if (!matchesQuickFilter(row, quick, policy)) return false;
@@ -465,9 +466,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
                 <th scope="col">Empresa pagadora</th>
                 <th scope="col">Previsto</th>
                 <th scope="col">Limite NF</th>
-                <th scope="col">Status NF</th>
-                <th scope="col">Pagamento</th>
-                <th scope="col">Conferência</th>
                 <th scope="col">Ações</th>
               </tr>
             </thead>
@@ -499,21 +497,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
                     <td>{row.companyName}<small>{row.companyDocument}</small></td>
                     <td><strong>{money(row.expectedAmount)}</strong></td>
                     <td>{row.invoiceLimitAmount === null ? "—" : money(row.invoiceLimitAmount)}</td>
-                    <td>
-                      <span className={styles.badge} data-tone={row.reviewStatus}>
-                        {invoiceReviewStatusLabels[row.reviewStatus as keyof typeof invoiceReviewStatusLabels] ?? row.reviewStatus}
-                      </span>
-                      {row.rejectionReason && (
-                        <small>{invoiceRejectionReasonLabels[row.rejectionReason as keyof typeof invoiceRejectionReasonLabels] ?? row.rejectionReason}</small>
-                      )}
-                    </td>
-                    <td>
-                      <span className={styles.badge} data-tone={row.paymentBlock ? "pending" : "validated"}>
-                        {row.paymentBlock ? "Bloqueado" : "Liberado"}
-                      </span>
-                      <small>{row.paymentBlock || closingStatusLabels[row.closingStatus] || row.closingStatus}</small>
-                    </td>
-                    <td>{row.reviewedByName || "—"}<small>{row.reviewedAt ? dateTime(row.reviewedAt) : ""}</small></td>
                     <td className={styles.rowActions}>
                       {row.hasInvoice && (
                         <button type="button" onClick={() => void openDetail(row.invoiceId)} disabled={busy}>
@@ -536,10 +519,27 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
       )}
 
       {permissions?.export && (
-        <footer className={styles.reportBar}>
-          <a className={styles.secondaryButton} href={reportUrl("contractor-invoices")}>
-            <FileSpreadsheet aria-hidden="true" /> Relatório de notas fiscais (CSV)
-          </a>
+        <footer className={styles.invoiceReportBar} aria-labelledby="invoice-report-title">
+          <div className={styles.invoiceReportIntro}>
+            <span className={styles.eyebrow}>EXPORTAÇÃO</span>
+            <strong id="invoice-report-title">Relatório de notas fiscais</strong>
+            <small>Exporte os dados ou reúna os documentos de {competenceLabel(competence)}.</small>
+          </div>
+          <div className={styles.invoiceReportActions}>
+            <a className={styles.secondaryButton} href={reportUrl("contractor-invoices")}>
+              <FileSpreadsheet aria-hidden="true" /> Baixar relatório (CSV)
+            </a>
+            {archivedDocuments > 0 ? (
+              <a className={styles.primaryButton} href={archiveUrl}>
+                <Download aria-hidden="true" /> Baixar todas as notas (ZIP)
+              </a>
+            ) : (
+              <button type="button" className={styles.primaryButton} disabled
+                title="Nenhuma nota fiscal possui arquivo anexado nesta competência">
+                <Download aria-hidden="true" /> Baixar todas as notas (ZIP)
+              </button>
+            )}
+          </div>
         </footer>
       )}
 
