@@ -217,6 +217,28 @@ export function MotionCard({ icon: Icon, title, description, meta, onClick, disa
 export function useDialogFocus(active: boolean, onClose: () => void, busy = false) {
   const ref = useRef<HTMLDivElement>(null);
 
+  /* `onClose` e `busy` entram por referência, e não pela lista de dependências.
+   *
+   * Quem chama escreve `onClose={() => setAlgo(false)}` direto no JSX — uma
+   * função nova a cada render do componente que abre o diálogo. Com ela na
+   * lista, TODO render do pai desmontava e remontava o efeito abaixo: a
+   * limpeza devolvia o foco a quem o tinha antes da janela abrir, e o corpo
+   * dava foco ao primeiro controle dela.
+   *
+   * Defeito real, medido no navegador. No lançamento de evento PJ, ao abrir a
+   * lista de Prestador ou de Rubrica, ela se fechava sozinha poucos segundos
+   * depois — tempo de a verificação periódica do painel achar uma alteração de
+   * um colega e recarregar o instantâneo, o que renderiza a tela de pagamentos
+   * de novo. A lista de um `<select>` é desenhada pelo navegador e se fecha
+   * quando o elemento perde o foco: quem estava escolhendo o prestador via a
+   * lista sumir e o foco saltar para o primeiro botão de rádio da janela.
+   *
+   * O foco inicial e a devolução são coisas da ABERTURA e do FECHAMENTO, não de
+   * cada render; a tecla precisa do valor mais recente, e é isso que a
+   * referência dá. */
+  const atual = useRef({ onClose, busy });
+  useEffect(() => { atual.current = { onClose, busy }; });
+
   useEffect(() => {
     if (!active) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -234,7 +256,7 @@ export function useDialogFocus(active: boolean, onClose: () => void, busy = fals
     const onKeyDown = (event: KeyboardEvent) => {
       // Esc não escapa no meio de uma ação já enviada: fechar aqui deixaria a
       // pessoa sem saber se a exclusão que ela pediu chegou a acontecer.
-      if (event.key === "Escape" && !busy) { event.stopPropagation(); onClose(); return; }
+      if (event.key === "Escape" && !atual.current.busy) { event.stopPropagation(); atual.current.onClose(); return; }
       if (event.key !== "Tab") return;
       const nodes = focusables();
       if (nodes.length === 0) return;
@@ -249,7 +271,7 @@ export function useDialogFocus(active: boolean, onClose: () => void, busy = fals
       document.removeEventListener("keydown", onKeyDown, true);
       previous?.focus?.();
     };
-  }, [active, busy, onClose]);
+  }, [active]);
 
   return ref;
 }
