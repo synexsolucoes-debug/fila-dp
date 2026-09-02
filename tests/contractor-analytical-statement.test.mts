@@ -67,6 +67,7 @@ test("proventos e descontos continuam analiticos", () => {
     detail,
     /<ContractorAnalyticalStatement detail=\{detail\} \/>/u,
   );
+  assert.match(detail, /Gerar recibo de pagamento/u);
 });
 
 test("CNPJ do PJ chega ao extrato", () => {
@@ -141,4 +142,19 @@ test("emissão em lote inicia conferência, aprovação coletiva e documentos do
   assert.match(sections, /Emitir recibos de pagamento/u);
   assert.match(sections, /onOpenDocuments/u);
   assert.match(dialogs, /name="invoiceFile"/u);
+});
+
+test("detalhamento do PJ permite baixar apenas o recibo daquela pessoa", async () => {
+  const [receiptRoute, view] = await Promise.all([
+    readFile(new URL("../app/api/payments/contractors/closings/[id]/receipt/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(receiptRoute, /contractors\.payments\.read/u);
+  assert.match(receiptRoute, /requireCompanyAccess/u);
+  assert.match(receiptRoute, /status = 'active'/u);
+  assert.match(receiptRoute, /generateContractorStatementsPdf\(\[statement\]\)/u);
+  assert.match(receiptRoute, /contractor_receipt\.downloaded/u);
+  assert.doesNotMatch(receiptRoute, /UPDATE fdp_contractor_closings/u);
+  assert.match(view, /closings\/\$\{closingId\}\/receipt/u);
+  assert.match(view, /onDownloadReceipt/u);
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowDownRight, ArrowUpRight, Pencil, Trash2, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Download, Pencil, Trash2, X } from "lucide-react";
 import type { ContractorComponent, ContractorPaymentDetail as Detail } from "./payments.types";
 import { ContractorAnalyticalStatement } from "./ContractorAnalyticalStatement";
 import styles from "./payments.module.css";
@@ -31,6 +31,7 @@ type Props = {
   onUpdateComponent: (componentId: string, input: { amount: string; description: string }) => Promise<boolean>;
   onCancelComponent: (componentId: string, reason: string) => Promise<boolean>;
   onDeleteClosing: (reason: string) => Promise<boolean>;
+  onDownloadReceipt: () => Promise<void>;
 };
 
 export function ContractorPaymentDetail({
@@ -40,6 +41,7 @@ export function ContractorPaymentDetail({
   onUpdateComponent,
   onCancelComponent,
   onDeleteClosing,
+  onDownloadReceipt,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -317,7 +319,10 @@ export function ContractorPaymentDetail({
               <Trash2 aria-hidden="true" /> Excluir pagamento
             </button>
           ) : <span />}
-          <button className={styles.primaryButton} type="button" onClick={onClose}>Fechar</button>
+          <button className={styles.secondaryButton} type="button" onClick={() => void onDownloadReceipt()} disabled={busy}>
+            <Download aria-hidden="true" /> Gerar recibo de pagamento
+          </button>
+          <button className={styles.primaryButton} type="button" onClick={onClose} disabled={busy}>Fechar</button>
         </footer>
       </div>
     </div>
