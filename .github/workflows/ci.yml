@@ -227,6 +227,16 @@ jobs:
           # demanda pela interface e a prova de que o seletor de empresa
           # recorta de verdade a visão geral.
           npm run browser-check
+          # Sessão, isolamento entre grupos e autorização no servidor. Fica
+          # DEPOIS do `browser-check` de propósito: o ensaio troca de grupo, e
+          # a troca grava preferência no banco. Antes, ele mediria o grupo certo
+          # e deixaria o seguinte medindo o errado — foi assim que a conferência
+          # de EPI quebrou durante a auditoria que criou este passo.
+          export JOURNEY_ADMIN_EMAIL=admin@vinculato.test
+          export JOURNEY_ADMIN_PASSWORD="$FIXTURE_PASSWORD"
+          export JOURNEY_MEMBER_EMAIL=membro@vinculato.test
+          export JOURNEY_MEMBER_PASSWORD="$FIXTURE_PASSWORD"
+          npm run journey-check
           # A §86-§98 vinha sendo classificada como "julgamento visual: precisa
           # de olho humano". Parte dela e, e continua sendo; a parte mecanica —
           # altura, raio e token de controle, emoji em texto de interface — a

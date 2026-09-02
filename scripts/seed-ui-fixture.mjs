@@ -94,9 +94,19 @@ try {
      só, que era o dono. O efeito: nenhuma dessas interfaces era desenhada, e
      portanto nenhuma era medida pela conferência de contraste. É a mesma
      armadilha do rótulo de processo e do ciclo de fechamento. */
+  /* O membro também entra pela tela, e por isso também precisa de senha.
+     Sem ela não há como provar autorização de verdade: a recusa a quem não tem
+     a permissão só vale se vier do servidor para uma sessão real, e não de um
+     botão escondido. `journey-check.mjs` entra com esta conta e chama a API
+     direto. A senha é a mesma da administradora de propósito — banco descartável,
+     e uma variável a menos para o ensaio errar. */
+  const memberSalt = randomBytes(16).toString("hex");
+  const memberHash = (await scryptAsync(password, memberSalt, 64)).toString("hex");
   await client.query(
-    `INSERT INTO fdp_users (id, email, name) VALUES ('u-ui-2', 'membro@vinculato.test', 'Membro do Ensaio')
-     ON CONFLICT (id) DO NOTHING`,
+    `INSERT INTO fdp_users (id, email, name, password_hash, password_salt)
+     VALUES ('u-ui-2', 'membro@vinculato.test', 'Membro do Ensaio', $1, $2)
+     ON CONFLICT (id) DO UPDATE SET password_hash = EXCLUDED.password_hash, password_salt = EXCLUDED.password_salt`,
+    [memberHash, memberSalt],
   );
   await client.query(
     `INSERT INTO fdp_workspace_members (workspace_id, user_id, role) VALUES ('ws-ui', 'u-ui-2', 'member')
