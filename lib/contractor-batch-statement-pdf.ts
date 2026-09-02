@@ -1,4 +1,6 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFFont, type PDFPage } from "pdf-lib";
 
 export type ContractorStatementComponent = {
   direction: "credit" | "debit" | string;
@@ -91,22 +93,22 @@ function fitText(value: string, font: PDFFont, size: number, width: number) {
   return `${result.trimEnd()}…`;
 }
 
-function drawHeader(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: ContractorStatement, continuation = false) {
-  page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 92, width: PAGE_WIDTH, height: 92, color: navy });
-  page.drawRectangle({ x: MARGIN, y: PAGE_HEIGHT - 57, width: 30, height: 30, color: blue });
-  page.drawText("V", { x: MARGIN + 9, y: PAGE_HEIGHT - 48, size: 15, font: bold, color: rgb(1, 1, 1) });
-  page.drawText("VINCULATO", { x: MARGIN + 41, y: PAGE_HEIGHT - 43, size: 14, font: bold, color: rgb(1, 1, 1) });
-  page.drawText(continuation ? "EXTRATO ANALÍTICO · CONTINUAÇÃO" : "EXTRATO ANALÍTICO DE PAGAMENTO PJ", {
+function drawHeader(page: PDFPage, regular: PDFFont, bold: PDFFont, logo: PDFImage, statement: ContractorStatement, continuation = false) {
+  page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 96, width: PAGE_WIDTH, height: 96, color: navy });
+  const logoWidth = 128;
+  const logoHeight = logoWidth * (logo.height / logo.width);
+  page.drawImage(logo, { x: MARGIN, y: PAGE_HEIGHT - 27 - logoHeight, width: logoWidth, height: logoHeight });
+  page.drawText(continuation ? "RECIBO DE PAGAMENTO · CONTINUAÇÃO" : "RECIBO DE PAGAMENTO PJ", {
     x: MARGIN,
-    y: PAGE_HEIGHT - 73,
+    y: PAGE_HEIGHT - 79,
     size: continuation ? 8.5 : 9.5,
     font: bold,
     color: cyan,
   });
   const label = competenceLabel(statement.competence).toUpperCase();
   const labelWidth = bold.widthOfTextAtSize(label, 9) + 22;
-  page.drawRectangle({ x: PAGE_WIDTH - MARGIN - labelWidth, y: PAGE_HEIGHT - 59, width: labelWidth, height: 26, color: rgb(0.07, 0.24, 0.39) });
-  page.drawText(label, { x: PAGE_WIDTH - MARGIN - labelWidth + 11, y: PAGE_HEIGHT - 50, size: 9, font: bold, color: rgb(1, 1, 1) });
+  page.drawRectangle({ x: PAGE_WIDTH - MARGIN - labelWidth, y: PAGE_HEIGHT - 61, width: labelWidth, height: 26, color: rgb(0.07, 0.24, 0.39) });
+  page.drawText(label, { x: PAGE_WIDTH - MARGIN - labelWidth + 11, y: PAGE_HEIGHT - 52, size: 9, font: bold, color: rgb(1, 1, 1) });
 
   page.drawText(fitText(statement.contractor.legalName, bold, 15, CONTENT_WIDTH - 120), {
     x: MARGIN,
@@ -128,11 +130,10 @@ function drawInfoCard(page: PDFPage, regular: PDFFont, bold: PDFFont, statement:
   page.drawRectangle({ x: MARGIN, y: y - 68, width: CONTENT_WIDTH, height: 68, color: surface, borderColor: line, borderWidth: 0.8 });
   const fields = [
     ["CNPJ", formatTaxId(statement.contractor.taxId)],
-    ["CONTRATO", statement.contractor.contractReference || "Não informado"],
     ["CÓDIGO", statement.contractor.code || "Não informado"],
     ["EMPRESA", statement.companyName],
   ];
-  const columnWidth = CONTENT_WIDTH / 4;
+  const columnWidth = CONTENT_WIDTH / fields.length;
   fields.forEach(([label, value], index) => {
     const x = MARGIN + 14 + index * columnWidth;
     page.drawText(label, { x, y: y - 19, size: 7, font: bold, color: blue });
@@ -157,39 +158,37 @@ function drawRow(page: PDFPage, regular: PDFFont, bold: PDFFont, label: string, 
   page.drawLine({ start: { x: MARGIN, y: y - 23 }, end: { x: PAGE_WIDTH - MARGIN, y: y - 23 }, thickness: 0.45, color: line });
 }
 
-function drawSummary(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: ContractorStatement, totals: ReturnType<typeof contractorStatementTotals>, y: number) {
-  const cards = [
-    ["TOTAL DE PROVENTOS", totals.totalEarnings, ink],
-    ["TOTAL DE DESCONTOS", totals.totalDiscounts, danger],
-    ["LÍQUIDO DEVIDO", statement.closing.netAmount, blue],
-  ] as const;
-  const gap = 8;
-  const width = (CONTENT_WIDTH - gap * 2) / 3;
-  cards.forEach(([label, amount, color], index) => {
-    const x = MARGIN + index * (width + gap);
-    page.drawRectangle({ x, y: y - 58, width, height: 58, color: surface, borderColor: line, borderWidth: 0.8 });
-    page.drawText(label, { x: x + 11, y: y - 20, size: 6.8, font: bold, color: muted });
-    page.drawText(money(amount), { x: x + 11, y: y - 43, size: 12, font: bold, color });
-  });
+function drawSummary(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: ContractorStatement, y: number) {
+  page.drawRectangle({ x: MARGIN, y: y - 62, width: CONTENT_WIDTH, height: 62, color: rgb(0.93, 0.97, 1), borderColor: blue, borderWidth: 0.9 });
+  page.drawText("VALOR TOTAL DO RECIBO", { x: MARGIN + 16, y: y - 23, size: 7.4, font: bold, color: muted });
+  page.drawText("Líquido a receber", { x: MARGIN + 16, y: y - 43, size: 10, font: regular, color: ink });
+  const net = money(statement.closing.netAmount);
+  page.drawText(net, { x: PAGE_WIDTH - MARGIN - 16 - bold.widthOfTextAtSize(net, 18), y: y - 43, size: 18, font: bold, color: blue });
 
-  const paymentY = y - 76;
+  const paymentY = y - 83;
   page.drawText("COMPOSIÇÃO DO PAGAMENTO", { x: MARGIN, y: paymentY, size: 8, font: bold, color: muted });
   const items = [
-    ["Valor da nota fiscal", statement.closing.invoiceExpectedAmount],
-    ["Complemento salarial Caju", statement.closing.cajuAmount],
+    ["VALOR DE DEPÓSITO", statement.closing.invoiceExpectedAmount],
+    ["VALOR DO COMPLEMENTO CAJU", statement.closing.cajuAmount],
   ] as const;
+  const gap = 10;
+  const cardWidth = (CONTENT_WIDTH - gap) / 2;
   items.forEach(([label, amount], index) => {
-    const x = MARGIN + index * (CONTENT_WIDTH / 2);
+    const x = MARGIN + index * (cardWidth + gap);
     const value = money(amount);
-    page.drawText(label, { x, y: paymentY - 22, size: 9, font: regular, color: ink });
-    page.drawText(value, { x: x + CONTENT_WIDTH / 2 - 10 - bold.widthOfTextAtSize(value, 9), y: paymentY - 22, size: 9, font: bold, color: ink });
+    page.drawRectangle({ x, y: paymentY - 63, width: cardWidth, height: 49, color: surface, borderColor: line, borderWidth: 0.8 });
+    page.drawText(label, { x: x + 12, y: paymentY - 31, size: 6.7, font: bold, color: muted });
+    page.drawText(value, { x: x + 12, y: paymentY - 51, size: 12.5, font: bold, color: ink });
   });
-  page.drawLine({ start: { x: MARGIN, y: paymentY - 30 }, end: { x: PAGE_WIDTH - MARGIN, y: paymentY - 30 }, thickness: 0.8, color: line });
 
-  if (statement.closing.invoiceNumber) {
-    const invoice = `NF ${statement.closing.invoiceNumber} · recebida em ${money(statement.closing.invoiceReceivedAmount)}`;
-    page.drawText(fitText(invoice, regular, 8, CONTENT_WIDTH), { x: MARGIN, y: paymentY - 48, size: 8, font: regular, color: muted });
-  }
+  const acknowledgementY = paymentY - 88;
+  page.drawText("Declaro que recebi os valores descritos neste recibo.", { x: MARGIN, y: acknowledgementY, size: 8.4, font: regular, color: ink });
+  const signatureY = acknowledgementY - 36;
+  const signatureWidth = 214;
+  page.drawLine({ start: { x: MARGIN, y: signatureY }, end: { x: MARGIN + signatureWidth, y: signatureY }, thickness: 0.7, color: muted });
+  page.drawLine({ start: { x: PAGE_WIDTH - MARGIN - 130, y: signatureY }, end: { x: PAGE_WIDTH - MARGIN, y: signatureY }, thickness: 0.7, color: muted });
+  page.drawText("Assinatura do prestador", { x: MARGIN, y: signatureY - 12, size: 7.2, font: regular, color: muted });
+  page.drawText("Data", { x: PAGE_WIDTH - MARGIN - 130, y: signatureY - 12, size: 7.2, font: regular, color: muted });
 }
 
 function drawFooter(page: PDFPage, regular: PDFFont, statement: ContractorStatement, pageNumber: number) {
@@ -204,13 +203,14 @@ export async function generateContractorStatementsPdf(statements: ContractorStat
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const logo = await pdf.embedPng(await readFile(join(process.cwd(), "public", "brand", "vinculato-logo-light.png")));
   let pageNumber = 0;
 
   for (const statement of statements) {
     const totals = contractorStatementTotals(statement);
     let page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     pageNumber += 1;
-    drawHeader(page, regular, bold, statement);
+    drawHeader(page, regular, bold, logo, statement);
     drawInfoCard(page, regular, bold, statement, PAGE_HEIGHT - 158);
     let y = PAGE_HEIGHT - 244;
 
@@ -218,7 +218,7 @@ export async function generateContractorStatementsPdf(statements: ContractorStat
       drawFooter(page, regular, statement, pageNumber);
       page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       pageNumber += 1;
-      drawHeader(page, regular, bold, statement, true);
+      drawHeader(page, regular, bold, logo, statement, true);
       y = PAGE_HEIGHT - 166;
     };
 
@@ -250,8 +250,8 @@ export async function generateContractorStatementsPdf(statements: ContractorStat
 
     section("Proventos", totals.credits, totals.totalEarnings, "credit", true);
     section("Descontos", totals.debits, totals.totalDiscounts, "debit");
-    if (y - 150 < 45) newContinuationPage();
-    drawSummary(page, regular, bold, statement, totals, y);
+    if (y - 220 < 45) newContinuationPage();
+    drawSummary(page, regular, bold, statement, y);
     drawFooter(page, regular, statement, pageNumber);
   }
 
