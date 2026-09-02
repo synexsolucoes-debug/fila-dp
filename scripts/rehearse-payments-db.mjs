@@ -83,6 +83,10 @@ $$;
 psql(guardFile);
 psql(migrationsFile);
 psql(join(root, "scripts", "payments-db-rehearsal.sql"));
+/* O controle de notas fiscais roda logo depois do pagamento e reaproveita a
+   semente dele: a nota nasce do fechamento, e ensaiá-la contra um banco vazio
+   exigiria recriar a competência inteira só para chegar ao mesmo ponto. */
+psql(join(root, "scripts", "contractor-invoices-db-rehearsal.sql"));
 psql(join(root, "scripts", "scale-db-rehearsal.sql"));
 psql(join(root, "scripts", "time-db-rehearsal.sql"));
-console.log("Ensaio concluído: migrations, constraints de pagamento, regra do §22 no ponto, outbox/webhooks/API e isolamento multi-tenant verificados.");
+console.log("Ensaio concluído: migrations, constraints de pagamento, controle de notas fiscais, regra do §22 no ponto, outbox/webhooks/API e isolamento multi-tenant verificados.");

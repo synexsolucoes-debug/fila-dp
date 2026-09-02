@@ -4,6 +4,8 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { assertTransition, contractorClosingStatuses, contractorTransitions, requiredPaymentEnum, requiredReason } from "@/lib/payments";
 import { contractorClosingSnapshot, findContractorClosing, refreshContractorReconciliation } from "@/lib/payment-service";
+import { invoicePaymentBlock } from "@/lib/contractor-invoices";
+import { loadInvoicePolicy } from "@/lib/contractor-invoice-service";
 import { prepareDomainEvent } from "@/lib/outbox";
 
 type Params = { params: Promise<{ id: string }> };
@@ -37,9 +39,18 @@ export async function POST(request: Request, { params }: Params) {
           "COMPLEMENT_METHOD_REQUIRED",
         );
       }
-      if (Number(closing.invoice_expected_amount) > 0 && closing.invoice_status !== "validated") {
-        throw ApiError.badRequest("A nota fiscal recebida precisa ser conferida antes do pagamento.", "INVOICE_VALIDATION_REQUIRED");
-      }
+      /* A nota trava o pagamento — e o motivo do travamento é dito por extenso.
+         A regra e a mensagem vêm do módulo de notas, e não de uma condição
+         escrita aqui: a tela de Notas Fiscais, a de Pagamentos e esta rota
+         precisam responder a mesma coisa, e a política de exigir aprovação é
+         configuração do grupo (§10). */
+      const policy = await loadInvoicePolicy(d1, workspace.id);
+      const block = invoicePaymentBlock({
+        expectedAmount: Number(closing.invoice_expected_amount),
+        reviewStatus: String(closing.invoice_review_status ?? ""),
+        policy: policy.reviewPolicy,
+      });
+      if (block) throw ApiError.badRequest(`${block} O pagamento não pode ser liberado.`, "INVOICE_APPROVAL_REQUIRED");
     }
 
     const reason = target === "reopened" ? requiredReason(body.reason, "REOPEN_REASON_REQUIRED") : "";

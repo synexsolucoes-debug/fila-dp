@@ -411,7 +411,11 @@ test("as APIs de pagamento validam tenant, competência fechada, permissão e au
   assert.match(adjustments, /ADJUSTMENT_REASON_REQUIRED/);
   assert.match(adjustments, /PAYMENT_CLOSING_LOCKED/);
   assert.match(transition, /COMPLEMENT_METHOD_REQUIRED/);
-  assert.match(transition, /INVOICE_VALIDATION_REQUIRED/);
+  // A trava da nota deixou de ser uma condição escrita dentro da rota: ela é a
+  // mesma regra que a aba de Notas Fiscais e a tela de Pagamentos consultam,
+  // e a recusa passou a dizer por extenso o que falta.
+  assert.match(transition, /INVOICE_APPROVAL_REQUIRED/);
+  assert.match(transition, /invoicePaymentBlock\(/);
   assert.match(transition, /RECONCILIATION_DIVERGENT/);
   assert.match(transition, /REOPEN_REASON_REQUIRED/);
   assert.match(transition, /requireCapability\(workspace, "payments\.reopen"\)/);
@@ -524,14 +528,14 @@ test("a interface de pagamento é modular, acessível e sem controle decorativo"
   assert.match(sections, /onOpenDetail\(row\.id\)/);
 });
 
-test("o Pagamento PJ tem oito destinos, e cada um mostra dado que o servidor entrega (§74, §75)", async () => {
+test("o Pagamento PJ tem nove destinos, e cada um mostra dado que o servidor entrega (§74, §75)", async () => {
   /* Era uma tela só, rolando: totais, lançamentos fixos, exportação Caju e uma
      tabela de treze colunas, um embaixo do outro. Dois assuntos com dados
      próprios no servidor não tinham lugar nenhum — as políticas de limite
      existiam só dentro de um diálogo, e o histórico de competências só como
      opção de um `<select>`.
 
-     O que este teste prende não é o número oito: é que nenhum destino seja
+     O que este teste prende não é o número: é que nenhum destino seja
      casca. Cada um lê um campo que a resposta do servidor de fato traz, e
      "Contratos" continua fora justamente porque a entidade não existe. */
   const [catalogo, secoes, navegacao, casca] = await Promise.all([
@@ -542,8 +546,8 @@ test("o Pagamento PJ tem oito destinos, e cada um mostra dado que o servidor ent
   ]);
 
   const destinos = [...catalogo.matchAll(/^\s{4}id: "(contractor\w+)",$/gmu)].map((match) => match[1]);
-  assert.equal(destinos.length, 8, "o Pagamento PJ deixou de ter oito destinos");
-  assert.deepEqual(new Set(destinos).size, 8, "há destino repetido no catálogo");
+  assert.equal(destinos.length, 9, "o Pagamento PJ deixou de ter nove destinos");
+  assert.deepEqual(new Set(destinos).size, 9, "há destino repetido no catálogo");
 
   // Sem "Contratos": não existe a entidade, e página vazia esperando conteúdo
   // é exatamente o que a §75 proíbe.
@@ -570,6 +574,17 @@ test("o Pagamento PJ tem oito destinos, e cada um mostra dado que o servidor ent
       `${destino} não lê ${campo} — é tela sem dado`,
     );
   }
+
+  /* Notas Fiscais é o único destino que pergunta ao servidor por conta
+     própria: a competência de notas tem indicadores, filtros e histórico que
+     a resposta do painel PJ não carrega. O que se cobra dele é o mesmo — que
+     não seja casca —, só que contra a rota que ele consome. */
+  assert.match(secoes, /<ContractorInvoicesSection\b/u);
+  const notas = await readFile(
+    new URL("../app/painel/features/payments/ContractorInvoicesSection.tsx", import.meta.url), "utf8");
+  assert.match(notas, /\/api\/payments\/contractors\/invoices\?/u);
+  assert.match(notas, /summary\.requiredCount/u);
+  assert.match(notas, /normalizeInvoicePanel/u);
 
   // O cabeçalho e as ações falam do destino, não do módulo inteiro: numa tela
   // de limites, "Crédito/desconto" é uma ação sem o que fazer ali.

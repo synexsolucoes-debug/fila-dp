@@ -458,3 +458,210 @@
    rodapé. Aqui o painel é o modal; isto é só o arranjo em três faixas. */
 .modalForm { display: flex; flex-direction: column; min-height: 0; flex: 1; }
 .modalForm .dialogBody { min-height: 0; flex: 1; }
+
+/* -------------------------------------------------------------------------- */
+/* Notas fiscais                                                               */
+/* -------------------------------------------------------------------------- */
+
+/* O indicador é o filtro do seu próprio número: ele precisa parecer clicável
+   sem virar um botão colorido a mais na fila. A caixa continua sendo a mesma
+   do resto do módulo; o que muda é o realce quando o recorte está ativo. */
+.invoiceIndicatorButton {
+  display: grid; gap: 4px; width: 100%; padding: 0; border: 0; background: none;
+  text-align: left; cursor: pointer;
+}
+.invoiceIndicatorButton span { color: var(--pay-soft); font-size: .68rem; font-weight: 700; letter-spacing: .04em; }
+.invoiceIndicatorButton strong { font-size: 1.02rem; }
+.summaryGrid article[data-active="true"] {
+  border-color: color-mix(in srgb, var(--pay-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--pay-accent) 6%, var(--pay-surface));
+}
+.summaryGrid article[data-active="true"] .invoiceIndicatorButton strong { color: var(--pay-accent-text); }
+
+.invoiceProgress {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
+  padding: 14px 16px; margin-bottom: 12px;
+  border: 1px solid var(--pay-border); border-radius: 12px; background: var(--pay-surface);
+}
+.invoiceProgress h3 { margin: 3px 0; font-size: .94rem; }
+.invoiceProgress p { margin: 0; color: var(--pay-soft); font-size: .73rem; }
+.invoiceProgressBar {
+  flex: 1 1 220px; min-width: 180px; height: 8px; border-radius: 999px;
+  background: var(--pay-muted); overflow: hidden;
+}
+.invoiceProgressBar > span { display: block; height: 100%; background: var(--pay-accent); border-radius: 999px; }
+
+.invoiceAlerts {
+  display: grid; gap: 6px; margin: 0 0 12px; padding: 12px 14px; list-style: none;
+  border: 1px solid color-mix(in srgb, var(--pay-warning) 40%, transparent); border-radius: 11px;
+  background: color-mix(in srgb, var(--pay-warning) 7%, transparent); color: var(--pay-warning);
+  font-size: .73rem; font-weight: 600;
+}
+
+.invoiceToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.invoiceQuickFilters { display: flex; flex-wrap: wrap; gap: 6px; }
+.invoiceQuickFilters button {
+  min-height: 30px; padding: 0 11px; border: 1px solid var(--pay-border); border-radius: 999px;
+  background: var(--pay-surface); font-size: .68rem; font-weight: 720; cursor: pointer;
+}
+.invoiceQuickFilters button:hover { border-color: var(--pay-accent-text); color: var(--pay-accent-text); }
+.invoiceQuickFilters button[data-active="true"] {
+  border-color: var(--pay-accent); background: var(--pay-accent); color: var(--pay-on-accent);
+}
+.invoiceToolbarActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.invoiceSearch {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px;
+  border: 1px solid var(--pay-border); border-radius: 8px; background: var(--pay-surface);
+}
+.invoiceSearch > svg { color: var(--pay-soft); }
+.invoiceSearch input { min-width: 240px; border: 0; background: none; color: inherit; outline: none; font-size: .74rem; }
+.invoiceSearch button { display: grid; place-items: center; border: 0; background: none; color: var(--pay-soft); cursor: pointer; }
+
+.invoiceFilters {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;
+  padding: 14px 16px; margin-bottom: 12px;
+  border: 1px solid var(--pay-border); border-radius: 12px; background: var(--pay-muted);
+}
+.invoiceFilters label { display: grid; gap: 5px; font-size: .69rem; font-weight: 700; color: var(--pay-soft); }
+.invoiceFilters input, .invoiceFilters select {
+  min-height: 34px; padding: 6px 9px; border: 1px solid var(--pay-border); border-radius: 7px;
+  background: var(--pay-surface); color: var(--pay-text); font-weight: 500;
+}
+.invoiceFiltersFooter { display: flex; align-items: flex-end; }
+
+.invoiceBatchBar {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 11px 14px; margin-bottom: 10px;
+  border: 1px solid color-mix(in srgb, var(--pay-accent) 45%, transparent); border-radius: 11px;
+  background: color-mix(in srgb, var(--pay-accent) 6%, var(--pay-surface));
+}
+.invoiceBatchBar > span { margin-right: auto; font-size: .73rem; font-weight: 740; }
+
+.invoiceSelectCell { width: 34px; }
+.invoiceSelectCell input { width: 16px; height: 16px; accent-color: var(--pay-accent); }
+
+/* Gaveta de conferência */
+.invoiceDrawer { display: flex; flex-direction: column; }
+.invoiceDrawerLoading {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 220px; color: var(--pay-soft); font-size: .78rem;
+}
+.invoiceDrawerBody { display: grid; gap: 14px; padding: 16px 18px; overflow-y: auto; flex: 1; min-height: 0; }
+.invoiceFacts { display: grid; gap: 10px; }
+.invoiceFacts h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: .86rem; }
+.invoiceSectionHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.invoiceSectionHeader h3 { margin: 0; }
+
+.invoiceDataList { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 0; }
+.invoiceDataList > div {
+  display: grid; gap: 3px; padding: 9px 11px;
+  border: 1px solid var(--pay-border); border-radius: 9px; background: var(--pay-surface);
+}
+.invoiceDataList dt { color: var(--pay-soft); font-size: .64rem; font-weight: 720; letter-spacing: .03em; }
+.invoiceDataList dd { margin: 0; font-size: .76rem; font-weight: 600; overflow-wrap: anywhere; }
+
+.invoiceViewerFrame { width: 100%; height: 460px; border: 1px solid var(--pay-border); border-radius: 10px; background: var(--pay-muted); }
+.invoiceViewerImage { width: 100%; max-height: 460px; object-fit: contain; border: 1px solid var(--pay-border); border-radius: 10px; background: var(--pay-muted); }
+.invoiceViewerEmpty {
+  display: grid; justify-items: center; gap: 8px; padding: 32px 18px; text-align: center;
+  border: 1px dashed var(--pay-border); border-radius: 10px; color: var(--pay-soft);
+}
+.invoiceViewerEmpty > svg { width: 32px; height: 32px; color: var(--pay-accent-text); }
+.invoiceViewerEmpty strong { color: var(--pay-text); font-size: .8rem; }
+.invoiceViewerEmpty p { max-width: 420px; margin: 0; font-size: .7rem; line-height: 1.5; }
+
+.invoiceChecklist { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.invoiceChecklist label {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border: 1px solid var(--pay-border); border-radius: 8px; background: var(--pay-surface);
+  font-size: .73rem; font-weight: 600; cursor: pointer;
+}
+.invoiceChecklist input { width: 16px; height: 16px; accent-color: var(--pay-accent); }
+.invoiceChecklist b { color: var(--pay-danger); }
+
+.invoiceTimeline { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.invoiceTimeline > li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px;
+  padding: 9px 11px; border: 1px solid var(--pay-border); border-radius: 9px; background: var(--pay-surface);
+}
+.invoiceTimeline strong { display: block; font-size: .73rem; font-weight: 640; line-height: 1.45; }
+.invoiceTimeline small { color: var(--pay-soft); font-size: .64rem; }
+
+.invoiceDrawerFooter {
+  display: grid; gap: 9px; padding: 13px 18px;
+  border-top: 1px solid var(--pay-border); background: var(--pay-muted);
+}
+.invoiceDrawerActions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.invoiceDecisionForm { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(200px, 2fr); gap: 10px; align-items: end; }
+.invoiceDecisionForm label { display: grid; gap: 5px; font-size: .69rem; font-weight: 700; color: var(--pay-soft); }
+.invoiceDecisionForm input, .invoiceDecisionForm select {
+  min-height: 34px; padding: 6px 9px; border: 1px solid var(--pay-border); border-radius: 7px;
+  background: var(--pay-surface); color: var(--pay-text); font-weight: 500;
+}
+.invoiceDecisionActions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.invoiceNoteField { display: grid; gap: 5px; font-size: .69rem; font-weight: 700; color: var(--pay-soft); }
+.invoiceNoteField input {
+  min-height: 34px; padding: 6px 9px; border: 1px solid var(--pay-border); border-radius: 7px;
+  background: var(--pay-surface); color: var(--pay-text); font-weight: 500;
+}
+.invoiceDecidedNote { display: inline-flex; align-items: center; gap: 6px; color: var(--pay-success); font-size: .73rem; font-weight: 720; }
+
+.invoiceBlockNote, .invoiceRejectionNote, .invoiceReplaceNote, .invoiceFormError {
+  display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px;
+  border-radius: 9px; font-size: .72rem; font-weight: 600; line-height: 1.45;
+}
+.invoiceBlockNote, .invoiceReplaceNote {
+  border: 1px solid color-mix(in srgb, var(--pay-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--pay-warning) 8%, transparent); color: var(--pay-warning);
+}
+.invoiceRejectionNote, .invoiceFormError {
+  border: 1px solid color-mix(in srgb, var(--pay-danger) 45%, transparent);
+  background: color-mix(in srgb, var(--pay-danger) 8%, transparent); color: var(--pay-danger);
+}
+.invoiceComparison { margin: 0; padding: 9px 11px; border-radius: 9px; font-size: .73rem; font-weight: 700; }
+.invoiceComparison[data-tone="match"] {
+  border: 1px solid color-mix(in srgb, var(--pay-success) 45%, transparent);
+  background: color-mix(in srgb, var(--pay-success) 8%, transparent); color: var(--pay-success);
+}
+.invoiceComparison[data-tone="divergent"] {
+  border: 1px solid color-mix(in srgb, var(--pay-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--pay-warning) 8%, transparent); color: var(--pay-warning);
+}
+.invoiceDuplicateWarning {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--pay-warning) 50%, transparent); border-radius: 10px;
+  background: color-mix(in srgb, var(--pay-warning) 8%, transparent); color: var(--pay-warning);
+}
+.invoiceDuplicateWarning strong { font-size: .76rem; }
+.invoiceDuplicateWarning p { margin: 4px 0 7px; font-size: .71rem; line-height: 1.45; }
+.invoiceDuplicateWarning label { display: flex; align-items: center; gap: 7px; font-size: .71rem; font-weight: 700; color: inherit; }
+.invoiceDuplicateWarning input { width: 16px; height: 16px; accent-color: var(--pay-warning); }
+
+/* As situações da nota falam por texto e ícone; a cor é reforço, não a
+   informação (§4). O tom segue o vocabulário compartilhado do módulo. */
+.badge[data-tone="approved"] {
+  border-color: color-mix(in srgb, var(--pay-success) 40%, transparent); color: var(--pay-success);
+  background: color-mix(in srgb, var(--pay-success) 10%, transparent);
+}
+.badge[data-tone="rejected"], .badge[data-tone="correction_requested"] {
+  border-color: color-mix(in srgb, var(--pay-danger) 45%, transparent); color: var(--pay-danger);
+  background: color-mix(in srgb, var(--pay-danger) 10%, transparent);
+}
+.badge[data-tone="awaiting_issue"], .badge[data-tone="under_review"], .badge[data-tone="received"] {
+  border-color: color-mix(in srgb, var(--pay-warning) 45%, transparent); color: var(--pay-warning);
+  background: color-mix(in srgb, var(--pay-warning) 10%, transparent);
+}
+
+@media (max-width: 760px) {
+  .invoiceDecisionForm { grid-template-columns: 1fr; }
+  .invoiceSearch input { min-width: 0; }
+  .invoiceViewerFrame { height: 340px; }
+}
+
+.invoiceEmptyNotice {
+  display: flex; align-items: flex-start; gap: 10px; margin: 0 0 10px; padding: 12px 14px;
+  border: 1px dashed var(--pay-border); border-radius: 11px; background: var(--pay-surface);
+  color: var(--pay-soft); font-size: .73rem; line-height: 1.5;
+}
+.invoiceEmptyNotice > svg { flex: none; margin-top: 1px; color: var(--pay-accent-text); }
+.invoiceEmptyNotice strong { display: block; color: var(--pay-text); font-size: .8rem; margin-bottom: 2px; }

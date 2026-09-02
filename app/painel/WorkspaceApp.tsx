@@ -90,7 +90,7 @@ import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 
 /** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
@@ -415,7 +415,7 @@ const viewCatalog: Record<View, ViewEntry> = {
     eyebrow: "CONTROLE FINANCEIRO", title: "Pagamento de Psicólogos",
     description: "Apure as consultas válidas da competência e controle quanto pagar a cada psicólogo. O módulo é exclusivamente administrativo e financeiro.",
   },
-  /* Os oito destinos do Pagamento PJ (§74). Escritos um a um pelo mesmo motivo
+  /* Os nove destinos do Pagamento PJ (§74). Escritos um a um pelo mesmo motivo
      que a união acima: quem confere que toda tela tem porta no menu lê este
      catálogo. O rótulo e a descrição vêm do catálogo do módulo — repetir a
      frase aqui seria criar a segunda cópia que diverge da primeira. Todos
@@ -425,6 +425,7 @@ const viewCatalog: Record<View, ViewEntry> = {
   contractorProviders: { ...contractorEntry("contractorProviders") },
   contractorCycles: { ...contractorEntry("contractorCycles") },
   contractorClosings: { ...contractorEntry("contractorClosings") },
+  contractorInvoices: { ...contractorEntry("contractorInvoices") },
   contractorAdjustments: { ...contractorEntry("contractorAdjustments") },
   contractorLimits: { ...contractorEntry("contractorLimits") },
   contractorCaju: { ...contractorEntry("contractorCaju") },

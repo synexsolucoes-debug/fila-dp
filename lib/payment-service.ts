@@ -219,12 +219,14 @@ export type ContractorClosingRow = {
   net_amount: string | number; invoice_expected_amount: string | number; complement_amount: string | number;
   invoice_received_amount: string | number; complement_paid_amount: string | number; caju_amount: string | number;
   complement_method: string; invoice_status: string; caju_status: string;
+  /** Situação da conferência da nota vigente; ver `lib/contractor-invoices.ts`. */
+  invoice_review_status: string; invoice_current_id: string | null;
 };
 
 export async function findContractorClosing(d1: Database, workspaceId: string, closingId: string) {
   const closing = await d1.prepare(`SELECT id, company_id, provider_id, payroll_cycle_id, competence, status, net_amount,
       invoice_expected_amount, complement_amount, invoice_received_amount, complement_paid_amount, caju_amount,
-      complement_method, invoice_status, caju_status
+      complement_method, invoice_status, caju_status, invoice_review_status, invoice_current_id
     FROM fdp_contractor_closings WHERE workspace_id = ? AND id = ? AND excluded_at IS NULL`)
     .bind(workspaceId, closingId).first<ContractorClosingRow>();
   if (!closing) throw ApiError.notFound("Fechamento PJ não encontrado.", "CONTRACTOR_CLOSING_NOT_FOUND");
@@ -418,6 +420,13 @@ export async function upsertContractorClosing(d1: Database, input: {
         invoice_limit_amount = ?, invoice_limit_source = ?, invoice_limit_policy_id = ?, invoice_expected_amount = ?,
         complement_amount = ?, complement_method = ?, fixed_caju_amount = ?, caju_amount = ?, calc_version = ?,
         invoice_status = CASE WHEN invoice_number = '' THEN ? ELSE invoice_status END,
+        /* Reapurar não apaga uma conferência já feita: só ajusta a situação de
+           quem ainda não tem nota — e zera a exigência quando o cálculo deixa
+           de pedir nota nesta competência. */
+        invoice_review_status = CASE
+          WHEN ? <= 0 THEN 'not_required'
+          WHEN invoice_current_id IS NULL THEN 'awaiting_issue'
+          ELSE invoice_review_status END,
         caju_status = CASE WHEN caju_status IN ('sent', 'processed') THEN caju_status ELSE ? END,
         updated_at = now()
       WHERE workspace_id = ? AND id = ?`)
@@ -425,18 +434,20 @@ export async function upsertContractorClosing(d1: Database, input: {
         calculation.prorationEndDate, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
         calculation.invoiceLimitAmount, calculation.invoiceLimitSource, limitPolicyId, calculation.invoiceExpectedAmount,
         calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, calculation.calcVersion,
-        invoiceStatus, cajuStatus, input.workspaceId, closingId).run();
+        invoiceStatus, calculation.invoiceExpectedAmount, cajuStatus, input.workspaceId, closingId).run();
   } else {
     await d1.prepare(`INSERT INTO fdp_contractor_closings (id, workspace_id, company_id, provider_id, payroll_cycle_id, competence,
         base_amount, contract_base_amount, proration_days, proration_total_days, proration_end_date,
         credits_amount, debits_amount, net_amount, invoice_limit_amount, invoice_limit_source, invoice_limit_policy_id,
-        invoice_expected_amount, complement_amount, complement_method, fixed_caju_amount, caju_amount, status, invoice_status, caju_status, calc_version, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`)
+        invoice_expected_amount, complement_amount, complement_method, fixed_caju_amount, caju_amount, status, invoice_status,
+        invoice_review_status, caju_status, calc_version, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)`)
       .bind(closingId, input.workspaceId, input.cycle.company_id, input.profile.provider_id, input.cycle.id, input.cycle.competence,
         calculation.baseAmount, calculation.contractBaseAmount, calculation.prorationDays, calculation.prorationTotalDays,
         calculation.prorationEndDate, calculation.creditsAmount, calculation.debitsAmount, calculation.netAmount,
         calculation.invoiceLimitAmount, calculation.invoiceLimitSource, limitPolicyId, calculation.invoiceExpectedAmount,
-        calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, invoiceStatus, cajuStatus,
+        calculation.complementAmount, calculation.complementMethod, calculation.fixedCajuAmount, calculation.cajuAmount, invoiceStatus,
+        calculation.invoiceExpectedAmount > 0 ? "awaiting_issue" : "not_required", cajuStatus,
         calculation.calcVersion, input.userId).run();
   }
   await d1.prepare(`UPDATE fdp_contractor_components SET closing_id = ?

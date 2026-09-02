@@ -6,15 +6,17 @@ import {
   FolderOpen, MessageSquare, Plus, ReceiptText, RotateCcw, ShieldCheck, Users,
 } from "lucide-react";
 import { CajuExportPanel } from "./CajuExportPanel";
+import { ContractorInvoicesSection } from "./ContractorInvoicesSection";
 import type {
   ContractorClosing, ContractorOverview, CycleOption, PaymentDialog, PaymentPermissions,
 } from "./payments.types";
+import { invoiceReviewStatusLabels } from "@/lib/contractor-invoices";
 import type { ContractorSectionId } from "./contractor-sections";
 import { EmptyState } from "../shared";
 import styles from "./payments.module.css";
 
 /**
- * Os oito recortes do Pagamento PJ.
+ * Os nove recortes do Pagamento PJ.
  *
  * Todos leem o mesmo `ContractorOverview` que o módulo já carrega — a divisão
  * é de leitura, não de requisição: quebrar em oito chamadas ao servidor faria
@@ -31,6 +33,9 @@ export type SectionProps = {
   section: ContractorSectionId;
   overview: ContractorOverview;
   cycle: CycleOption;
+  /** A empresa em tela. A aba de Notas Fiscais carrega os próprios dados por
+   *  ela — é a única que precisa perguntar ao servidor por conta própria. */
+  companyId: string;
   competence: string;
   competenceLabel: (value: string) => string;
   money: (value: number) => string;
@@ -61,6 +66,15 @@ export function ContractorSectionView(props: SectionProps) {
     case "contractorProviders": return <ProvidersSection {...props} />;
     case "contractorCycles": return <CyclesSection {...props} />;
     case "contractorClosings": return <ClosingsSection {...props} />;
+    case "contractorInvoices": return (
+      <ContractorInvoicesSection
+        companyId={props.companyId}
+        competence={props.competence}
+        competenceLabel={props.competenceLabel}
+        money={props.money}
+        reportUrl={props.reportUrl}
+      />
+    );
     case "contractorAdjustments": return <AdjustmentsSection {...props} />;
     case "contractorLimits": return <LimitsSection {...props} />;
     case "contractorCaju": return <CajuSection {...props} />;
@@ -82,7 +96,7 @@ export function ContractorSectionView(props: SectionProps) {
  * traz alguém ao módulo no dia 3 do mês.
  */
 function OverviewSection({ overview, money, statusLabels, competence, competenceLabel }: SectionProps) {
-  const { totals, closings } = overview;
+  const { totals, closings, invoiceSummary } = overview;
   const byStatus = new Map<string, number>();
   for (const row of closings) byStatus.set(row.status, (byStatus.get(row.status) ?? 0) + 1);
   const pending = closings.filter((row) => row.status !== "paid" && row.status !== "closed").length;
@@ -98,6 +112,30 @@ function OverviewSection({ overview, money, statusLabels, competence, competence
           <span>Divergências</span><strong>{totals.divergentCount}</strong>
         </article>
       </div>
+
+      {/* A situação das notas da competência, sem abrir pagamento por pagamento
+          (§17). O detalhe fica na aba de Notas Fiscais; aqui é só o retrato. */}
+      {invoiceSummary.requiredCount > 0 && (
+        <section className={styles.fixedItemsPanel} aria-labelledby="pj-invoices-title">
+          <header>
+            <div>
+              <span className={styles.eyebrow}>NOTAS FISCAIS</span>
+              <h3 id="pj-invoices-title">
+                {invoiceSummary.approvedCount} de {invoiceSummary.requiredCount} notas aprovadas
+              </h3>
+              <p>
+                {invoiceSummary.receivedCount} recebida(s) · {invoiceSummary.awaitingReviewCount} aguardando conferência ·
+                {" "}{invoiceSummary.rejectedCount + invoiceSummary.correctionCount} rejeitada(s) ·
+                {" "}{invoiceSummary.pendingCount} pendente(s) em {competenceLabel(competence)}.
+              </p>
+            </div>
+          </header>
+          <p className={styles.fixedItemsEmpty}>
+            {invoiceSummary.readyCount} prestador(es) apto(s) para pagamento; {money(invoiceSummary.approvedAmount)} de
+            {" "}{money(invoiceSummary.expectedAmount)} cobertos por nota aprovada.
+          </p>
+        </section>
+      )}
 
       <section className={styles.fixedItemsPanel} aria-labelledby="pj-progress-title">
         <header>
@@ -647,7 +685,8 @@ function ClosingsTable({
           <tr>
             <th scope="col">Prestador</th><th scope="col">Base</th><th scope="col">Créditos</th>
             <th scope="col">Descontos</th><th scope="col">Líquido</th><th scope="col">Limite NF</th>
-            <th scope="col">NF esperada</th><th scope="col">Complemento</th><th scope="col">Status NF</th>
+            <th scope="col">NF esperada</th><th scope="col">Complemento</th><th scope="col">Nota fiscal</th>
+            <th scope="col">Pagamento</th>
             {showActions && <th scope="col">Ações</th>}
           </tr>
         </thead>
@@ -679,7 +718,18 @@ function ClosingsTable({
                 <strong>{money(row.complementAmount)}</strong>
                 <small>{complementLabels[row.complementMethod] ?? row.complementMethod}</small>
               </td>
-              <td><span className={styles.badge} data-tone={row.invoiceStatus}>{statusLabels[row.invoiceStatus] ?? row.invoiceStatus}</span></td>
+              {/* A situação da nota e o que ela trava aparecem aqui, e não só
+                  na aba de Notas Fiscais (§10): quem decide o que pagar precisa
+                  ver o bloqueio na mesma linha, com o motivo por extenso. */}
+              <td><span className={styles.badge} data-tone={row.invoiceReviewStatus}>
+                {invoiceReviewStatusLabels[row.invoiceReviewStatus as keyof typeof invoiceReviewStatusLabels] ?? statusLabels[row.invoiceStatus] ?? row.invoiceStatus}
+              </span>{row.invoiceNumber && <small>NF {row.invoiceNumber}</small>}</td>
+              <td>
+                <span className={styles.badge} data-tone={row.invoicePaymentBlock ? "pending" : "validated"}>
+                  {row.invoicePaymentBlock ? "Aguardando NF" : "Pronto para pagamento"}
+                </span>
+                {row.invoicePaymentBlock && <small>{row.invoicePaymentBlock}</small>}
+              </td>
               {showActions && (
                 <td className={styles.rowActions}>
                   <button type="button" onClick={() => onOpenDocuments(row.providerId)} disabled={busy}><FolderOpen aria-hidden="true" /> Arquivos</button>
@@ -736,6 +786,9 @@ export function contractorActionsFor(section: ContractorSectionId): {
     case "contractorProviders": return { provider: true, limit: false, component: false, recalculate: false };
     case "contractorLimits": return { provider: false, limit: true, component: false, recalculate: false };
     case "contractorAdjustments": return { provider: false, limit: false, component: true, recalculate: true };
+    // A aba de notas tem as próprias ações, na linha do prestador: reapurar a
+    // competência inteira a partir dela seria uma ação de outro assunto.
+    case "contractorInvoices": return { provider: false, limit: false, component: false, recalculate: false };
     case "contractorClosings": return { provider: false, limit: false, component: true, recalculate: true };
     case "contractorCycles": return { provider: false, limit: false, component: false, recalculate: false };
     case "contractorCaju": return { provider: false, limit: false, component: false, recalculate: true };

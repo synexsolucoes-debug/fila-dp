@@ -166,6 +166,43 @@ export const reports = {
     companyColumn: "c.company_id",
     order: "ORDER BY a.legal_name",
   },
+  /* O relatório de notas fiscais da competência.
+   *
+   * É o documento que o financeiro leva para fora do sistema — para a
+   * contabilidade, para o cliente, para a conferência de quem não tem acesso à
+   * tela. Por isso ele traz as duas pontas de cada linha: o que era esperado e
+   * o que chegou, a diferença já calculada, quem aprovou e quando, e a
+   * situação do pagamento que a nota destrava.
+   *
+   * Entram os pagamentos que exigem nota, tenham nota ou não: a linha em
+   * branco é justamente a que interessa a quem cobra. E a nota que aparece é a
+   * vigente — as substituídas continuam no histórico, que é onde se pergunta
+   * "o que havia antes", não num relatório de conferência do mês. */
+  "contractor-invoices": {
+    capability: "invoice.export",
+    columns: ["prestador", "cnpj", "empresa", "competencia", "nf_numero", "serie", "data_emissao",
+      "valor_esperado", "valor_nf", "diferenca", "status_nf", "data_recebimento", "data_aprovacao",
+      "responsavel_aprovacao", "motivo_recusa", "status_pagamento"],
+    query: `SELECT a.legal_name AS prestador, a.tax_id AS cnpj,
+        coalesce(nullif(company.trade_name, ''), company.legal_name) AS empresa,
+        c.competence AS competencia,
+        coalesce(i.invoice_number, '') AS nf_numero, coalesce(i.series, '') AS serie,
+        i.issue_date AS data_emissao, c.invoice_expected_amount AS valor_esperado,
+        coalesce(i.amount, 0) AS valor_nf, coalesce(i.difference_amount, 0) AS diferenca,
+        c.invoice_review_status AS status_nf, i.uploaded_at AS data_recebimento,
+        CASE WHEN i.status = 'approved' THEN i.reviewed_at END AS data_aprovacao,
+        coalesce(reviewer.name, '') AS responsavel_aprovacao,
+        coalesce(i.rejection_reason, '') AS motivo_recusa, c.status AS status_pagamento
+      FROM fdp_contractor_closings c
+      JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
+      JOIN fdp_companies company ON company.workspace_id = c.workspace_id AND company.id = c.company_id
+      LEFT JOIN fdp_contractor_invoices i ON i.workspace_id = c.workspace_id AND i.id = c.invoice_current_id
+      LEFT JOIN fdp_users reviewer ON reviewer.id = i.reviewed_by
+      WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL
+        AND c.invoice_expected_amount > 0`,
+    companyColumn: "c.company_id",
+    order: "ORDER BY a.legal_name",
+  },
   "contractor-divergences": {
     capability: "contractors.payments.read",
     columns: ["prestador", "competencia", "liquido", "nf_esperada", "nf_recebida", "complemento", "complemento_pago", "diferenca", "conciliacao"],

@@ -1,8 +1,8 @@
-import { Archive, CreditCard, FileSpreadsheet, LayoutDashboard, ReceiptText, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
+import { Archive, CreditCard, FileCheck2, FileSpreadsheet, LayoutDashboard, ReceiptText, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /**
- * Os oito destinos do Pagamento PJ (§74).
+ * Os nove destinos do Pagamento PJ (§74).
  *
  * O módulo era uma tela só, rolando: totais no topo, lançamentos fixos no
  * meio, exportação Caju condicional e, no fim, uma tabela de fechamentos com
@@ -26,6 +26,7 @@ export type ContractorSectionId =
   | "contractorProviders"
   | "contractorCycles"
   | "contractorClosings"
+  | "contractorInvoices"
   | "contractorAdjustments"
   | "contractorLimits"
   | "contractorCaju"
@@ -63,6 +64,12 @@ export const contractorSections: readonly ContractorSection[] = [
     label: "Pagamentos",
     icon: ReceiptText,
     description: "A apuração de cada prestador: base, créditos, descontos, nota esperada e complemento.",
+  },
+  {
+    id: "contractorInvoices",
+    label: "Notas Fiscais",
+    icon: FileCheck2,
+    description: "Quem precisa emitir nota, quem já enviou, o que ainda falta conferir e quem está apto a receber.",
   },
   {
     id: "contractorAdjustments",

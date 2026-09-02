@@ -164,7 +164,10 @@ test("a tabela de Pagamentos não mostra mais as três situações retiradas", a
   for (const coluna of ["Status complemento", "Conciliação", "Fechamento"]) {
     assert.ok(!tabela.includes(`>${coluna}<`), `a coluna ${coluna} voltou`);
   }
-  for (const coluna of ["Líquido", "Limite NF", "NF esperada", "Complemento", "Status NF"]) {
+  /* "Status NF" virou "Nota fiscal", e ganhou ao lado a coluna "Pagamento" com
+     o que a nota trava (§10) — que não é o status do fechamento retirado
+     acima, e sim o motivo por extenso de o prestador não estar apto a receber. */
+  for (const coluna of ["Líquido", "Limite NF", "NF esperada", "Complemento", "Nota fiscal", "Pagamento"]) {
     assert.ok(tabela.includes(`>${coluna}<`), `a coluna ${coluna} sumiu junto`);
   }
   // As ações continuam decidindo pelo status, mesmo sem a coluna.

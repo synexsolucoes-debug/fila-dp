@@ -554,6 +554,13 @@
       "when": 1787900000019,
       "tag": "0076_demand_module_links",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1787900000020,
+      "tag": "0077_contractor_invoice_control",
+      "breakpoints": true
     }
   ]
 }

@@ -593,6 +593,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           section={section}
           overview={contractors}
           cycle={cycle}
+          companyId={companyId}
           competence={competence}
           competenceLabel={competenceLabel}
           money={money}

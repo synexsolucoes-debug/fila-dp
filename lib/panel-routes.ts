@@ -29,7 +29,7 @@
 export const panelViews = [
   "overview", "work", "board", "inbox", "planner", "processManagement", "processes",
   "auxiliary", "psychologistPayments", "contractorPayments", "contractorProviders",
-  "contractorCycles", "contractorClosings", "contractorAdjustments", "contractorLimits",
+  "contractorCycles", "contractorClosings", "contractorInvoices", "contractorAdjustments", "contractorLimits",
   "contractorCaju", "contractorArchive", "timeTracking", "epi", "integrations",
   "agents", "triage", "registrations", "payroll", "indicators", "history",
 ] as const;
@@ -55,6 +55,7 @@ const VIEW_PATHS: Record<PanelView, string> = {
   contractorProviders: "pj/prestadores",
   contractorCycles: "pj/competencias",
   contractorClosings: "pj/fechamentos",
+  contractorInvoices: "pj/notas-fiscais",
   contractorAdjustments: "pj/ajustes",
   contractorLimits: "pj/limites",
   contractorCaju: "pj/caju",
