@@ -94,9 +94,19 @@ try {
      só, que era o dono. O efeito: nenhuma dessas interfaces era desenhada, e
      portanto nenhuma era medida pela conferência de contraste. É a mesma
      armadilha do rótulo de processo e do ciclo de fechamento. */
+  /* O membro também entra pela tela, e por isso também precisa de senha.
+     Sem ela não há como provar autorização de verdade: a recusa a quem não tem
+     a permissão só vale se vier do servidor para uma sessão real, e não de um
+     botão escondido. `journey-check.mjs` entra com esta conta e chama a API
+     direto. A senha é a mesma da administradora de propósito — banco descartável,
+     e uma variável a menos para o ensaio errar. */
+  const memberSalt = randomBytes(16).toString("hex");
+  const memberHash = (await scryptAsync(password, memberSalt, 64)).toString("hex");
   await client.query(
-    `INSERT INTO fdp_users (id, email, name) VALUES ('u-ui-2', 'membro@vinculato.test', 'Membro do Ensaio')
-     ON CONFLICT (id) DO NOTHING`,
+    `INSERT INTO fdp_users (id, email, name, password_hash, password_salt)
+     VALUES ('u-ui-2', 'membro@vinculato.test', 'Membro do Ensaio', $1, $2)
+     ON CONFLICT (id) DO UPDATE SET password_hash = EXCLUDED.password_hash, password_salt = EXCLUDED.password_salt`,
+    [memberHash, memberSalt],
   );
   await client.query(
     `INSERT INTO fdp_workspace_members (workspace_id, user_id, role) VALUES ('ws-ui', 'u-ui-2', 'member')
@@ -276,7 +286,68 @@ try {
     );
   }
 
-  console.log(`Semente da interface pronta: ${email} no grupo "Operação Piloto".`);
+  /* Segundo grupo, com a MESMA pessoa dentro e com dado próprio.
+     Sem ele não há como provar isolamento entre grupos nem troca de contexto:
+     `journey-check.mjs` compara as demandas e as empresas dos dois lados, e uma
+     interseção vazia contra um grupo vazio não prova nada — é aritmética, não
+     segurança. O grupo também é o que permite verificar que arquivar um não
+     tranca a pessoa fora do outro. */
+  await client.query("SELECT set_config('app.workspace_id', 'ws-ui-2', false)");
+  await client.query(
+    `INSERT INTO fdp_workspaces (id, name, slug, status, owner_user_id)
+     VALUES ('ws-ui-2', 'Segundo Grupo', 'segundo-grupo', 'active', 'u-ui') ON CONFLICT DO NOTHING`,
+  );
+  await client.query(
+    `INSERT INTO fdp_workspace_members (workspace_id, user_id, role) VALUES ('ws-ui-2', 'u-ui', 'admin') ON CONFLICT DO NOTHING`,
+  );
+  await client.query(`INSERT INTO fdp_workspace_settings (workspace_id) VALUES ('ws-ui-2') ON CONFLICT DO NOTHING`);
+  /* O segundo grupo também precisa do local de estoque padrão, pela mesma razão
+     do primeiro: a migration `0045` e o provisionamento dão esse local a todo
+     grupo real, e sem ele qualquer movimentação de EPI é recusada. Um grupo de
+     ensaio sem o local mede um produto que nenhum cliente tem. */
+  await client.query(
+    `INSERT INTO fdp_stock_locations (id, workspace_id, code, name, description, status, is_default, created_by, updated_by)
+     VALUES ('ws-ui-2:stock:default', 'ws-ui-2', 'PRINCIPAL', 'Estoque principal', 'Local padrão da semente de interface.', 'active', 1, 'u-ui', 'u-ui')
+     ON CONFLICT (workspace_id, code) DO NOTHING`,
+  );
+  await client.query(
+    `INSERT INTO fdp_boards (id, workspace_id, name, board_type)
+     VALUES ('b-ui-2', 'ws-ui-2', 'Demandas do Segundo Grupo', 'general') ON CONFLICT DO NOTHING`,
+  );
+  // Mesma resolução por `kind` do quadro principal: o id proposto pode colidir
+  // com as colunas que o produto cria sozinho ao abrir um quadro.
+  const segundaLista = {};
+  for (const [index, [id, name, kind]] of [["l-ui-2-1", "Novas demandas", "new"], ["l-ui-2-2", "Concluído", "done"]].entries()) {
+    await client.query(
+      `INSERT INTO fdp_lists (id, board_id, workspace_id, name, kind, position)
+       VALUES ($1, 'b-ui-2', 'ws-ui-2', $2, $3, $4) ON CONFLICT DO NOTHING`,
+      [id, name, kind, (index + 1) * 1000],
+    );
+    const { rows } = await client.query(`SELECT id FROM fdp_lists WHERE board_id = 'b-ui-2' AND kind = $1`, [kind]);
+    if (!rows.length) throw new Error(`a coluna "${kind}" não existe no segundo quadro do ensaio`);
+    segundaLista[id] = rows[0].id;
+  }
+  await client.query(
+    `INSERT INTO fdp_companies (id, workspace_id, legal_name, trade_name, tax_id, is_principal)
+     VALUES ('co-ui-3', 'ws-ui-2', 'Segundo Grupo LTDA', 'Segundo', '44555666000177', 1) ON CONFLICT DO NOTHING`,
+  );
+  await client.query(
+    `INSERT INTO fdp_cards (id, board_id, workspace_id, list_id, title, description, company_id, company,
+       process_type, priority, position, created_by, competence)
+     VALUES ('c-ui-2-1', 'b-ui-2', 'ws-ui-2', $1, 'Demanda exclusiva do Segundo Grupo',
+       'Existe para provar que não aparece no outro grupo.', 'co-ui-3', 'Segundo', 'OUTROS', 'normal', 1000, 'u-ui', '2026-08')
+     ON CONFLICT DO NOTHING`,
+    [segundaLista["l-ui-2-1"]],
+  );
+  if (plan.rows[0]) {
+    await client.query(
+      `INSERT INTO fdp_workspace_subscriptions (id, workspace_id, plan_id, status)
+       VALUES ('sub-ui-2', 'ws-ui-2', $1, 'active') ON CONFLICT DO NOTHING`,
+      [plan.rows[0].id],
+    );
+  }
+
+  console.log(`Semente da interface pronta: ${email} nos grupos "Operação Piloto" e "Segundo Grupo".`);
 } finally {
   await client.end();
 }

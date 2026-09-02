@@ -21,6 +21,7 @@
     "schema:manifest": "node scripts/generate-schema-manifest.mjs",
     "smoke": "node scripts/smoke-http.mjs",
     "browser-check": "node scripts/browser-check.mjs",
+    "journey-check": "node scripts/journey-check.mjs",
     "interface-check": "node scripts/interface-consistency.mjs",
     "a11y-check": "node scripts/a11y-check.mjs",
     "tangerino:fixtures": "node --experimental-strip-types scripts/tangerino-fixture-check.mjs",

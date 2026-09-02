@@ -44,7 +44,17 @@ export async function GET() {
         integrations: { total: total("total", "integrations"), active: total("active", "integrations"), attention: total("attention", "integrations") },
         services: {
           databaseConfigured: Boolean(String(process.env.DATABASE_URL ?? "").trim()),
-          credentialsEncryptionConfigured: Boolean(String(process.env.FDP_CREDENTIALS_ENCRYPTION_KEY ?? "").trim()),
+          /* O cofre de credenciais de integração é `FDP_INTEGRATION_VAULT_KEYS`
+             (rotação) ou `FDP_INTEGRATION_VAULT_KEY` — as mesmas variáveis que
+             `lib/integrations.ts` exige antes de selar qualquer segredo.
+             Este indicador apontava para `FDP_CREDENTIALS_ENCRYPTION_KEY`, que
+             não existe em lugar nenhum do produto: nada cifra com ela e ela não
+             está documentada. O efeito era uma luz que mentia nos dois sentidos
+             — vermelha em todo deployment correto, e verde para quem definisse
+             qualquer valor, sem que isso provasse nada. */
+          credentialsEncryptionConfigured: Boolean(
+            String(process.env.FDP_INTEGRATION_VAULT_KEYS ?? process.env.FDP_INTEGRATION_VAULT_KEY ?? "").trim(),
+          ),
           sankhyaVaultConfigured: Boolean(String(process.env.FDP_SANKHYA_VAULT_KEYS ?? process.env.FDP_SANKHYA_VAULT_KEY ?? "").trim()),
           authSecretConfigured: Boolean(String(process.env.FDP_AUTH_SECRET ?? "").trim()),
           platformAdminsConfigured: Boolean(String(process.env.FDP_PLATFORM_ADMIN_EMAILS ?? "").trim()),
