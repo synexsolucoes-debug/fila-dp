@@ -87,16 +87,23 @@ const profile = () => d1.prepare(`SELECT p.provider_id, p.company_id, p.contract
   FROM fdp_contractor_profiles p JOIN fdp_auxiliary_providers a ON a.workspace_id = p.workspace_id AND a.id = p.provider_id
   WHERE p.workspace_id = ? AND p.provider_id = ?`).bind(workspaceId, providerId).first();
 
+/* Uma instrução por tabela, na ordem inversa das dependências.
+   O laço sobre uma lista de nomes seria mais curto, mas interpolar o nome da
+   tabela tira a consulta do alcance do `verify:sql` — e o verificador reprova
+   quando a conta de consultas fora do alcance sobe. Um ensaio não deveria
+   custar cobertura ao resto do produto. */
 async function limpar() {
-  // Ordem inversa das dependências; o grupo inteiro sai junto.
-  for (const tabela of [
-    "fdp_contractor_components", "fdp_contractor_closings", "fdp_contractor_profiles",
-    "fdp_auxiliary_providers", "fdp_payroll_cycles", "fdp_companies",
-  ]) {
-    await d1.prepare(`DELETE FROM ${tabela} WHERE workspace_id = ?`).bind(workspaceId).run().catch(() => undefined);
-  }
-  await d1.prepare("DELETE FROM fdp_workspaces WHERE id = ?").bind(workspaceId).run().catch(() => undefined);
-  await d1.prepare("DELETE FROM fdp_users WHERE id = ?").bind(ownerId).run().catch(() => undefined);
+  const escrito = [
+    d1.prepare("DELETE FROM fdp_contractor_components WHERE workspace_id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_contractor_closings WHERE workspace_id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_contractor_profiles WHERE workspace_id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_auxiliary_providers WHERE workspace_id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_payroll_cycles WHERE workspace_id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_companies WHERE workspace_id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_workspaces WHERE id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_users WHERE id = ?").bind(ownerId),
+  ];
+  for (const instrucao of escrito) await instrucao.run().catch(() => undefined);
 }
 
 async function main() {
