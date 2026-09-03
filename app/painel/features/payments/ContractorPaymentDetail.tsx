@@ -87,7 +87,23 @@ export function ContractorPaymentDetail({
   const [cancelReason, setCancelReason] = useState("");
   const [deleteMode, setDeleteMode] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
-  const [receiptCompanyId, setReceiptCompanyId] = useState(defaultReceiptCompanyId);
+  const [chosenCompanyId, setChosenCompanyId] = useState("");
+
+  /**
+   * O CNPJ pagador do recibo: o escolhido enquanto ele existir na lista, e a
+   * empresa da competência — ou a primeira disponível — enquanto ninguém
+   * escolheu.
+   *
+   * É calculado no render, e não sincronizado por efeito. Um efeito que chama
+   * `setState` para copiar prop em estado renderiza duas vezes a cada troca de
+   * empresa e deixa um quadro com o valor velho no seletor; é o mesmo caminho
+   * que a janela de lançamento já segue por escrito.
+   */
+  const receiptCompanyId = receiptCompanies.some((company) => company.id === chosenCompanyId)
+    ? chosenCompanyId
+    : receiptCompanies.some((company) => company.id === defaultReceiptCompanyId)
+      ? defaultReceiptCompanyId
+      : receiptCompanies[0]?.id ?? "";
 
   const credits = useMemo(() => detail.components.filter((item) => item.direction === "credit"), [detail.components]);
   const debits = useMemo(() => detail.components.filter((item) => item.direction === "debit"), [detail.components]);
@@ -98,11 +114,6 @@ export function ContractorPaymentDetail({
   const canDelete = detail.permissions.manage && (!locked || detail.permissions.reopen);
 
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
-  useEffect(() => {
-    setReceiptCompanyId((current) => receiptCompanies.some((company) => company.id === current)
-      ? current
-      : (receiptCompanies.some((company) => company.id === defaultReceiptCompanyId) ? defaultReceiptCompanyId : receiptCompanies[0]?.id ?? ""));
-  }, [defaultReceiptCompanyId, receiptCompanies]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const panel = panelRef.current;
@@ -394,7 +405,7 @@ export function ContractorPaymentDetail({
           ) : <span />}
           <label className={styles.receiptCompanyPicker}>
             <span>CNPJ pagador</span>
-            <select value={receiptCompanyId} onChange={(event) => setReceiptCompanyId(event.target.value)} disabled={busy || receiptCompanies.length === 0}>
+            <select value={receiptCompanyId} onChange={(event) => setChosenCompanyId(event.target.value)} disabled={busy || receiptCompanies.length === 0}>
               {receiptCompanies.map((company) => <option key={company.id} value={company.id}>{company.legalName || company.name} · {formatCnpj(company.taxId)}</option>)}
             </select>
           </label>
