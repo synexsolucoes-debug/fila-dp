@@ -36,6 +36,26 @@ type ComponentRow = {
   status: string;
 };
 
+type CompanyRow = {
+  legal_name: string;
+  trade_name: string;
+  tax_id: string;
+  street: string;
+  street_number: string;
+  address_complement: string;
+  district: string;
+  city: string;
+  state: string;
+  postal_code: string;
+};
+
+function companyAddress(company: CompanyRow) {
+  const street = [company.street, company.street_number && `nº ${company.street_number}`].filter(Boolean).join(", ");
+  return [street, company.address_complement, company.district, [company.city, company.state].filter(Boolean).join(" - "), company.postal_code && `CEP ${company.postal_code}`]
+    .filter(Boolean)
+    .join("; ");
+}
+
 /** Gera um recibo somente para o PJ que está sendo conferido, sem mudar o fechamento. */
 export async function POST(request: Request, { params }: Params) {
   const auth = await getApiUser();
@@ -49,9 +69,10 @@ export async function POST(request: Request, { params }: Params) {
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, closing.company_id);
 
     const [company, receiptClosing, components] = await Promise.all([
-      d1.prepare(`SELECT legal_name, trade_name FROM fdp_companies WHERE workspace_id = ? AND id = ?`)
+      d1.prepare(`SELECT legal_name, trade_name, tax_id, street, street_number, address_complement,
+          district, city, state, postal_code FROM fdp_companies WHERE workspace_id = ? AND id = ?`)
         .bind(workspace.id, closing.company_id)
-        .first<{ legal_name: string; trade_name: string }>(),
+        .first<CompanyRow>(),
       d1.prepare(`SELECT c.id, c.competence, c.base_amount, c.credits_amount, c.debits_amount, c.net_amount,
           c.invoice_expected_amount, c.complement_amount, c.caju_amount, c.invoice_number,
           c.invoice_received_amount, c.invoice_status, a.code, a.legal_name, a.trade_name, a.tax_id,
@@ -73,7 +94,12 @@ export async function POST(request: Request, { params }: Params) {
     if (!receiptClosing) throw ApiError.notFound("Fechamento PJ não encontrado.", "CONTRACTOR_CLOSING_NOT_FOUND");
 
     const statement: ContractorStatement = {
-      companyName: company.trade_name || company.legal_name,
+      company: {
+        legalName: company.legal_name,
+        tradeName: company.trade_name,
+        taxId: company.tax_id,
+        address: companyAddress(company),
+      },
       competence: receiptClosing.competence,
       issuedAt: new Date(),
       contractor: {

@@ -35,6 +35,11 @@ const api = await readFile(
   "utf8",
 );
 
+const receiptPdf = await readFile(
+  new URL("../lib/contractor-batch-statement-pdf.ts", import.meta.url),
+  "utf8",
+);
+
 test("extrato PJ apresenta valores essenciais da conferencia", () => {
   assert.match(statement, /Total de proventos/u);
   assert.match(statement, /Total de descontos/u);
@@ -90,7 +95,12 @@ test("extrato pode ser exportado para CSV", () => {
 
 test("novo PDF preserva os totais e remove lançamentos cancelados", async () => {
   const input: ContractorStatement = {
-    companyName: "Empresa de Teste",
+    company: {
+      legalName: "LC Provedores de Acesso às Redes de Comunicação e Informática Ltda",
+      tradeName: "OpyT",
+      taxId: "43944672000320",
+      address: "Rua 09, nº 1647, QD-E12 LT-11, Setor Marista - Goiânia - GO",
+    },
     competence: "2026-05",
     issuedAt: new Date("2026-06-01T12:00:00-03:00"),
     contractor: {
@@ -118,6 +128,15 @@ test("novo PDF preserva os totais e remove lançamentos cancelados", async () =>
   assert.ok(pdf.byteLength > 2_000);
 });
 
+test("recibo traz marca OpyT, marca-d'água Vinculato e declaração com pagadora", () => {
+  assert.match(receiptPdf, /drawOpytLogo/u);
+  assert.match(receiptPdf, /drawWatermark/u);
+  assert.match(receiptPdf, /vinculato-logo\.png/u);
+  assert.match(receiptPdf, /RECEBI DA EMPRESA/u);
+  assert.match(receiptPdf, /amountInWords/u);
+  assert.match(receiptPdf, /QUITAÇÃO EXCLUSIVAMENTE/u);
+});
+
 test("emissão em lote inicia conferência, aprovação coletiva e documentos do contrato", async () => {
   const [route, approval, invoice, documents, migration, sections, dialogs] = await Promise.all([
     readFile(new URL("../app/api/payments/contractors/statements/route.ts", import.meta.url), "utf8"),
@@ -129,6 +148,7 @@ test("emissão em lote inicia conferência, aprovação coletiva e documentos do
     readFile(new URL("../app/painel/features/payments/PaymentDialogs.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(route, /component\.status = 'active'/u);
+  assert.match(route, /tax_id, street, street_number/u);
   assert.match(route, /status IN \('open', 'reopened'\)/u);
   assert.match(route, /generateContractorStatementsPdf/u);
   assert.match(approval, /status IN \('review', 'approval'\)/u);
@@ -152,6 +172,7 @@ test("detalhamento do PJ permite baixar apenas o recibo daquela pessoa", async (
   assert.match(receiptRoute, /contractors\.payments\.read/u);
   assert.match(receiptRoute, /requireCompanyAccess/u);
   assert.match(receiptRoute, /status = 'active'/u);
+  assert.match(receiptRoute, /tax_id, street, street_number/u);
   assert.match(receiptRoute, /generateContractorStatementsPdf\(\[statement\]\)/u);
   assert.match(receiptRoute, /contractor_receipt\.downloaded/u);
   assert.doesNotMatch(receiptRoute, /UPDATE fdp_contractor_closings/u);

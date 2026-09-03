@@ -11,7 +11,12 @@ export type ContractorStatementComponent = {
 };
 
 export type ContractorStatement = {
-  companyName: string;
+  company: {
+    legalName: string;
+    tradeName: string;
+    taxId: string;
+    address: string;
+  };
   competence: string;
   issuedAt: Date;
   contractor: {
@@ -70,6 +75,55 @@ const formatTaxId = (value: string) => {
   return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
 };
 
+const units = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove"];
+const teens = ["dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove"];
+const tens = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+const hundreds = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
+
+function wordsBelowThousand(value: number) {
+  if (value === 0) return "";
+  if (value === 100) return "cem";
+  const parts: string[] = [];
+  const hundred = Math.floor(value / 100);
+  const remainder = value % 100;
+  if (hundred) parts.push(hundreds[hundred]);
+  if (remainder >= 20) {
+    parts.push(tens[Math.floor(remainder / 10)]);
+    if (remainder % 10) parts.push(units[remainder % 10]);
+  } else if (remainder >= 10) {
+    parts.push(teens[remainder - 10]);
+  } else if (remainder) {
+    parts.push(units[remainder]);
+  }
+  return parts.join(" e ");
+}
+
+function amountInWords(value: number) {
+  const cents = Math.round((Number(value) || 0) * 100);
+  const whole = Math.floor(cents / 100);
+  const fractional = cents % 100;
+  const groups = [
+    { divisor: 1_000_000_000, singular: "bilhão", plural: "bilhões" },
+    { divisor: 1_000_000, singular: "milhão", plural: "milhões" },
+    { divisor: 1_000, singular: "mil", plural: "mil" },
+    { divisor: 1, singular: "", plural: "" },
+  ];
+  let remaining = whole;
+  const parts: string[] = [];
+  for (const group of groups) {
+    const amount = Math.floor(remaining / group.divisor);
+    remaining %= group.divisor;
+    if (!amount) continue;
+    if (group.divisor === 1) parts.push(wordsBelowThousand(amount));
+    else if (group.divisor === 1_000 && amount === 1) parts.push("mil");
+    else parts.push(`${wordsBelowThousand(amount)} ${amount === 1 ? group.singular : group.plural}`);
+  }
+  const wholeWords = parts.join(" ") || "zero";
+  const currency = whole === 1 ? "real" : "reais";
+  if (!fractional) return `${wholeWords} ${currency}`;
+  return `${wholeWords} ${currency} e ${wordsBelowThousand(fractional)} ${fractional === 1 ? "centavo" : "centavos"}`;
+}
+
 const activeComponents = (statement: ContractorStatement) =>
   statement.components.filter((component) => component.status === "active");
 
@@ -93,22 +147,57 @@ function fitText(value: string, font: PDFFont, size: number, width: number) {
   return `${result.trimEnd()}…`;
 }
 
-function drawHeader(page: PDFPage, regular: PDFFont, bold: PDFFont, logo: PDFImage, statement: ContractorStatement, continuation = false) {
-  page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 96, width: PAGE_WIDTH, height: 96, color: navy });
-  const logoWidth = 128;
-  const logoHeight = logoWidth * (logo.height / logo.width);
-  page.drawImage(logo, { x: MARGIN, y: PAGE_HEIGHT - 27 - logoHeight, width: logoWidth, height: logoHeight });
-  page.drawText(continuation ? "RECIBO DE PAGAMENTO · CONTINUAÇÃO" : "RECIBO DE PAGAMENTO PJ", {
-    x: MARGIN,
-    y: PAGE_HEIGHT - 79,
-    size: continuation ? 8.5 : 9.5,
-    font: bold,
-    color: cyan,
+function wrapText(value: string, font: PDFFont, size: number, width: number) {
+  const words = value.replace(/\s+/g, " ").trim().split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && font.widthOfTextAtSize(candidate, size) > width) {
+      lines.push(line);
+      line = word;
+    } else line = candidate;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawOpytLogo(page: PDFPage, italic: PDFFont) {
+  const orange = rgb(1, 0.54, 0.05);
+  const gray = rgb(0.7, 0.72, 0.74);
+  page.drawText("opyt", { x: MARGIN, y: PAGE_HEIGHT - 58, size: 33, font: italic, color: orange });
+  page.drawLine({ start: { x: MARGIN + 55, y: PAGE_HEIGHT - 16 }, end: { x: MARGIN + 102, y: PAGE_HEIGHT - 16 }, thickness: 4, color: gray });
+  page.drawCircle({ x: MARGIN + 108, y: PAGE_HEIGHT - 16, size: 6, color: gray });
+}
+
+function drawWatermark(page: PDFPage, logo: PDFImage) {
+  const width = 365;
+  const height = width * (logo.height / logo.width);
+  page.drawImage(logo, {
+    x: (PAGE_WIDTH - width) / 2,
+    y: (PAGE_HEIGHT - height) / 2 - 28,
+    width,
+    height,
+    opacity: 0.055,
   });
+}
+
+function drawHeader(page: PDFPage, regular: PDFFont, bold: PDFFont, italic: PDFFont, statement: ContractorStatement, continuation = false) {
+  page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 96, width: PAGE_WIDTH, height: 96, color: rgb(1, 1, 1) });
+  page.drawLine({ start: { x: MARGIN, y: PAGE_HEIGHT - 96 }, end: { x: PAGE_WIDTH - MARGIN, y: PAGE_HEIGHT - 96 }, thickness: 0.8, color: line });
+  drawOpytLogo(page, italic);
+  page.drawText(continuation ? "RECIBO DE PAGAMENTO - CONTINUAÇÃO" : "RECIBO DE PAGAMENTO", {
+    x: 307,
+    y: PAGE_HEIGHT - 42,
+    size: continuation ? 10 : 12,
+    font: bold,
+    color: navy,
+  });
+  page.drawText("PRESTAÇÃO DE SERVIÇOS", { x: 307, y: PAGE_HEIGHT - 59, size: 7.4, font: regular, color: muted });
   const label = competenceLabel(statement.competence).toUpperCase();
   const labelWidth = bold.widthOfTextAtSize(label, 9) + 22;
-  page.drawRectangle({ x: PAGE_WIDTH - MARGIN - labelWidth, y: PAGE_HEIGHT - 61, width: labelWidth, height: 26, color: rgb(0.07, 0.24, 0.39) });
-  page.drawText(label, { x: PAGE_WIDTH - MARGIN - labelWidth + 11, y: PAGE_HEIGHT - 52, size: 9, font: bold, color: rgb(1, 1, 1) });
+  page.drawRectangle({ x: PAGE_WIDTH - MARGIN - labelWidth, y: PAGE_HEIGHT - 83, width: labelWidth, height: 20, color: rgb(0.93, 0.97, 1), borderColor: rgb(0.65, 0.8, 0.96), borderWidth: 0.6 });
+  page.drawText(label, { x: PAGE_WIDTH - MARGIN - labelWidth + 11, y: PAGE_HEIGHT - 76, size: 8, font: bold, color: blue });
 
   page.drawText(fitText(statement.contractor.legalName, bold, 15, CONTENT_WIDTH - 120), {
     x: MARGIN,
@@ -129,9 +218,9 @@ function drawHeader(page: PDFPage, regular: PDFFont, bold: PDFFont, logo: PDFIma
 function drawInfoCard(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: ContractorStatement, y: number) {
   page.drawRectangle({ x: MARGIN, y: y - 68, width: CONTENT_WIDTH, height: 68, color: surface, borderColor: line, borderWidth: 0.8 });
   const fields = [
-    ["CNPJ", formatTaxId(statement.contractor.taxId)],
-    ["CÓDIGO", statement.contractor.code || "Não informado"],
-    ["EMPRESA", statement.companyName],
+    ["RECEBEDOR", statement.contractor.legalName],
+    ["CNPJ DO RECEBEDOR", formatTaxId(statement.contractor.taxId)],
+    ["REFERÊNCIA", statement.contractor.contractReference || "Prestação de serviços"],
   ];
   const columnWidth = CONTENT_WIDTH / fields.length;
   fields.forEach(([label, value], index) => {
@@ -139,6 +228,31 @@ function drawInfoCard(page: PDFPage, regular: PDFFont, bold: PDFFont, statement:
     page.drawText(label, { x, y: y - 19, size: 7, font: bold, color: blue });
     page.drawText(fitText(value, regular, 8.5, columnWidth - 24), { x, y: y - 37, size: 8.5, font: regular, color: ink });
   });
+}
+
+function drawReceiptDeclaration(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: ContractorStatement, y: number) {
+  const payerName = statement.company.legalName || statement.company.tradeName || "EMPRESA PAGADORA";
+  const payerTaxId = formatTaxId(statement.company.taxId);
+  const payerAddress = statement.company.address || "ENDEREÇO NÃO INFORMADO";
+  const amount = money(statement.closing.netAmount);
+  const sentence = `RECEBI DA EMPRESA ${payerName}, INSCRITA NO CNPJ SOB O Nº ${payerTaxId}, LOCALIZADA EM ${payerAddress}, A IMPORTÂNCIA DE ${amount} (${amountInWords(statement.closing.netAmount).toUpperCase()}), REFERENTE À PRESTAÇÃO DE SERVIÇOS NA COMPETÊNCIA ${competenceLabel(statement.competence).toUpperCase()}.`;
+  const note = "DOU QUITAÇÃO EXCLUSIVAMENTE AO VALOR E À COMPETÊNCIA ACIMA INDICADOS. A QUITAÇÃO SE APERFEIÇOA COM A ASSINATURA DO RECEBEDOR E A EFETIVA LIQUIDAÇÃO DO PAGAMENTO.";
+  const sentenceLines = wrapText(sentence, regular, 8.5, CONTENT_WIDTH - 32);
+  const noteLines = wrapText(note, regular, 7.4, CONTENT_WIDTH - 32);
+  const height = 39 + sentenceLines.length * 11 + noteLines.length * 9;
+  page.drawRectangle({ x: MARGIN, y: y - height, width: CONTENT_WIDTH, height, color: rgb(1, 1, 1), borderColor: line, borderWidth: 0.8, opacity: 0.94 });
+  page.drawText("DECLARAÇÃO DE RECEBIMENTO", { x: MARGIN + 16, y: y - 20, size: 8, font: bold, color: blue });
+  let textY = y - 36;
+  for (const item of sentenceLines) {
+    page.drawText(item, { x: MARGIN + 16, y: textY, size: 8.5, font: regular, color: ink });
+    textY -= 11;
+  }
+  textY -= 4;
+  for (const item of noteLines) {
+    page.drawText(item, { x: MARGIN + 16, y: textY, size: 7.4, font: regular, color: muted });
+    textY -= 9;
+  }
+  return y - height - 16;
 }
 
 function drawSectionTitle(page: PDFPage, bold: PDFFont, title: string, total: number, y: number, tone: "credit" | "debit") {
@@ -161,7 +275,7 @@ function drawRow(page: PDFPage, regular: PDFFont, bold: PDFFont, label: string, 
 function drawSummary(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: ContractorStatement, y: number) {
   page.drawRectangle({ x: MARGIN, y: y - 62, width: CONTENT_WIDTH, height: 62, color: rgb(0.93, 0.97, 1), borderColor: blue, borderWidth: 0.9 });
   page.drawText("VALOR TOTAL DO RECIBO", { x: MARGIN + 16, y: y - 23, size: 7.4, font: bold, color: muted });
-  page.drawText("Líquido a receber", { x: MARGIN + 16, y: y - 43, size: 10, font: regular, color: ink });
+  page.drawText("Valor líquido recebido", { x: MARGIN + 16, y: y - 43, size: 10, font: regular, color: ink });
   const net = money(statement.closing.netAmount);
   page.drawText(net, { x: PAGE_WIDTH - MARGIN - 16 - bold.widthOfTextAtSize(net, 18), y: y - 43, size: 18, font: bold, color: blue });
 
@@ -182,7 +296,7 @@ function drawSummary(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: 
   });
 
   const acknowledgementY = paymentY - 88;
-  page.drawText("Declaro que recebi os valores descritos neste recibo.", { x: MARGIN, y: acknowledgementY, size: 8.4, font: regular, color: ink });
+  page.drawText("Assine após a efetiva liquidação do pagamento.", { x: MARGIN, y: acknowledgementY, size: 8.4, font: regular, color: ink });
   const signatureY = acknowledgementY - 36;
   const signatureWidth = 214;
   page.drawLine({ start: { x: MARGIN, y: signatureY }, end: { x: MARGIN + signatureWidth, y: signatureY }, thickness: 0.7, color: muted });
@@ -203,22 +317,25 @@ export async function generateContractorStatementsPdf(statements: ContractorStat
   const pdf = await PDFDocument.create();
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const logo = await pdf.embedPng(await readFile(join(process.cwd(), "public", "brand", "vinculato-logo-light.png")));
+  const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
+  const watermark = await pdf.embedPng(await readFile(join(process.cwd(), "public", "brand", "vinculato-logo.png")));
   let pageNumber = 0;
 
   for (const statement of statements) {
     const totals = contractorStatementTotals(statement);
     let page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     pageNumber += 1;
-    drawHeader(page, regular, bold, logo, statement);
+    drawWatermark(page, watermark);
+    drawHeader(page, regular, bold, italic, statement);
     drawInfoCard(page, regular, bold, statement, PAGE_HEIGHT - 158);
-    let y = PAGE_HEIGHT - 244;
+    let y = drawReceiptDeclaration(page, regular, bold, statement, PAGE_HEIGHT - 244);
 
     const newContinuationPage = () => {
       drawFooter(page, regular, statement, pageNumber);
       page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       pageNumber += 1;
-      drawHeader(page, regular, bold, logo, statement, true);
+      drawWatermark(page, watermark);
+      drawHeader(page, regular, bold, italic, statement, true);
       y = PAGE_HEIGHT - 166;
     };
 

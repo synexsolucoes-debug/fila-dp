@@ -36,6 +36,26 @@ type ComponentRow = {
   status: string;
 };
 
+type CompanyRow = {
+  legal_name: string;
+  trade_name: string;
+  tax_id: string;
+  street: string;
+  street_number: string;
+  address_complement: string;
+  district: string;
+  city: string;
+  state: string;
+  postal_code: string;
+};
+
+function companyAddress(company: CompanyRow) {
+  const street = [company.street, company.street_number && `nº ${company.street_number}`].filter(Boolean).join(", ");
+  return [street, company.address_complement, company.district, [company.city, company.state].filter(Boolean).join(" - "), company.postal_code && `CEP ${company.postal_code}`]
+    .filter(Boolean)
+    .join("; ");
+}
+
 /**
  * Emite um PDF único da competência e coloca somente fechamentos ainda abertos
  * em conferência. Estados posteriores (aprovado, pago ou fechado) nunca são
@@ -62,10 +82,11 @@ export async function POST(request: Request) {
       .first<{ id: string; competence: string }>();
     if (!cycle) throw ApiError.notFound("Competência não encontrada.", "PAYROLL_CYCLE_NOT_FOUND");
 
-    const company = await d1.prepare(`SELECT legal_name, trade_name FROM fdp_companies
+    const company = await d1.prepare(`SELECT legal_name, trade_name, tax_id, street, street_number, address_complement,
+        district, city, state, postal_code FROM fdp_companies
       WHERE workspace_id = ? AND id = ?`)
       .bind(workspace.id, companyId)
-      .first<{ legal_name: string; trade_name: string }>();
+      .first<CompanyRow>();
     if (!company) throw ApiError.notFound("Empresa não encontrada.", "COMPANY_NOT_FOUND");
 
     const closings = await d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.credits_amount,
@@ -101,7 +122,12 @@ export async function POST(request: Request) {
 
     const issuedAt = new Date();
     const statements: ContractorStatement[] = closings.results.map((closing) => ({
-      companyName: company.trade_name || company.legal_name,
+      company: {
+        legalName: company.legal_name,
+        tradeName: company.trade_name,
+        taxId: company.tax_id,
+        address: companyAddress(company),
+      },
       competence: closing.competence,
       issuedAt,
       contractor: {
