@@ -249,3 +249,24 @@
 .dangerAction:hover:not(:disabled) { background: #321d28; }
 .dangerZone > ul { color: #e5b7b5; }
 .dangerZone .dangerGate { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+
+/* As grades internas ainda declaravam branco diretamente. Ao trocar apenas a
+   casca do console, esses blocos ficaram claros com texto claro; este mapa
+   fecha as superfícies de cada módulo e conserva contraste em estado normal,
+   aviso, erro e sucesso. */
+.featureHeader > div:first-child > span, .integrationGrid > article > header span { color: #b9c8ff; }
+.featureHeader button, .headerAction { border-color: var(--border); background: #10233a; color: var(--text); }
+.metricCard, .cardGrid > article, .integrationGrid > article,
+.cardGrid dl > div, .integrationGrid dl > div, .serviceGrid article,
+.attentionList button, .filterBar .checkFilter, .integrationGrid footer button,
+.featureState button, .plansPanel article > button { background: var(--surface); color: var(--text); }
+.metricCard > span, .metricCard > small, .cardGrid p, .integrationGrid p,
+.cardGrid dt, .integrationGrid dt, .checkFilter, .healthBlock p,
+.attentionList button span { color: var(--soft); }
+.status[data-tone="safe"] { border-color: #3e8069; background: #123a35; color: #aef2d4; }
+.status[data-tone="warning"] { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+.status[data-tone="danger"] { border-color: #7d4047; background: #321d28; color: #ffc5c3; }
+.scopeStrip { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+.inlineWarning { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+.itemError { background: #321d28; color: #ffc5c3 !important; }
+.auditEvents details > dl { background: #10233a; }
