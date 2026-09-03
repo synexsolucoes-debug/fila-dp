@@ -582,6 +582,13 @@
       "when": 1788400000000,
       "tag": "0080_saas_self_signup_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1788440000000,
+      "tag": "0081_contractor_start_proration",
+      "breakpoints": true
     }
   ]
 }
