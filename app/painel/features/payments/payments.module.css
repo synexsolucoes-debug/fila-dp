@@ -557,13 +557,31 @@
   border-color: var(--pay-accent); background: var(--pay-accent); color: var(--pay-on-accent);
 }
 .invoiceToolbarActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.invoiceSearch {
-  display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px;
-  border: 1px solid var(--pay-border); border-radius: 8px; background: var(--pay-surface);
+/* A caixa é do próprio campo, não de um invólucro em volta dele.
+ *
+ * A primeira versão punha a borda e a altura no invólucro e deixava o `input`
+ * nu por dentro: o campo *parecia* ter 34px, e o alvo real media 240x18. A
+ * auditoria de acessibilidade da CI reprovou nos quatro tamanhos de tela —
+ * a WCAG 2.2 §2.5.8 mede o retângulo do elemento que recebe o toque, não o do
+ * desenho ao redor. É a mesma forma que `.searchField` usa em Cadastros: ícone
+ * e botão posicionados sobre o campo, e o campo com a altura inteira. */
+.invoiceSearch { position: relative; display: inline-flex; align-items: center; min-width: 240px; }
+.invoiceSearch > svg {
+  position: absolute; left: 10px; width: 15px; height: 15px;
+  color: var(--pay-soft); pointer-events: none;
 }
-.invoiceSearch > svg { color: var(--pay-soft); }
-.invoiceSearch input { min-width: 240px; border: 0; background: none; color: inherit; outline: none; font-size: .74rem; }
-.invoiceSearch button { display: grid; place-items: center; border: 0; background: none; color: var(--pay-soft); cursor: pointer; }
+.invoiceSearch input {
+  width: 100%; min-height: 34px; padding: 0 34px 0 32px;
+  border: 1px solid var(--pay-border); border-radius: 8px;
+  background: var(--pay-surface); color: inherit; font-size: .74rem;
+}
+.invoiceSearch input::placeholder { color: var(--pay-soft); }
+.invoiceSearch button {
+  position: absolute; right: 4px; display: grid; place-items: center;
+  width: 26px; height: 26px; border: 0; border-radius: 6px;
+  background: none; color: var(--pay-soft); cursor: pointer;
+}
+.invoiceSearch button:hover { color: var(--pay-accent-text); }
 
 .invoiceFilters {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px;
@@ -585,8 +603,12 @@
 }
 .invoiceBatchBar > span { margin-right: auto; font-size: .73rem; font-weight: 740; }
 
-.invoiceSelectCell { width: 34px; }
-.invoiceSelectCell input { width: 16px; height: 16px; accent-color: var(--pay-accent); }
+.invoiceSelectCell { width: 42px; }
+/* 24x24 é o mínimo que a WCAG 2.2 §2.5.8 aceita para um alvo, e a auditoria da
+   CI mede o retângulo do próprio `input`. Há espaço de sobra na célula e na
+   linha do checklist — encolher para 16px economizaria pixels que ninguém
+   pediu e devolveria a violação assim que a competência tivesse linhas. */
+.invoiceSelectCell input { width: 24px; height: 24px; accent-color: var(--pay-accent); }
 
 @media (max-width: 640px) {
   .invoiceReportBar { align-items: stretch; }
@@ -630,7 +652,7 @@
   border: 1px solid var(--pay-border); border-radius: 8px; background: var(--pay-surface);
   font-size: .73rem; font-weight: 600; cursor: pointer;
 }
-.invoiceChecklist input { width: 16px; height: 16px; accent-color: var(--pay-accent); }
+.invoiceChecklist input { width: 24px; height: 24px; accent-color: var(--pay-accent); }
 .invoiceChecklist b { color: var(--pay-danger); }
 
 .invoiceTimeline { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -689,7 +711,7 @@
 .invoiceDuplicateWarning strong { font-size: .76rem; }
 .invoiceDuplicateWarning p { margin: 4px 0 7px; font-size: .71rem; line-height: 1.45; }
 .invoiceDuplicateWarning label { display: flex; align-items: center; gap: 7px; font-size: .71rem; font-weight: 700; color: inherit; }
-.invoiceDuplicateWarning input { width: 16px; height: 16px; accent-color: var(--pay-warning); }
+.invoiceDuplicateWarning input { width: 24px; height: 24px; accent-color: var(--pay-warning); }
 
 /* As situações da nota falam por texto e ícone; a cor é reforço, não a
    informação (§4). O tom segue o vocabulário compartilhado do módulo. */
@@ -708,7 +730,7 @@
 
 @media (max-width: 760px) {
   .invoiceDecisionForm { grid-template-columns: 1fr; }
-  .invoiceSearch input { min-width: 0; }
+  .invoiceSearch { min-width: 0; width: 100%; }
   .invoiceViewerFrame { height: 340px; }
 }
 
