@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
+import { cookieUsage, legalPendingFields } from "@/lib/marketing";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/privacidade" },
@@ -103,11 +104,26 @@ export default function PrivacidadePage() {
           observam as garantias contratuais desses fornecedores e as hipóteses da LGPD.
         </p>
 
-        <h2>10. Encarregado</h2>
+        <h2>10. Cookies</h2>
+        <p>{cookieUsage.summary}</p>
+        <p>{cookieUsage.absent}</p>
+        <p>{cookieUsage.change}</p>
+
+        <h2>11. Encarregado</h2>
         <p>
-          O canal de contato com o encarregado pelo tratamento de dados é a página de <Link href="/contato">Contato</Link>,
-          com o assunto de suporte. A identificação nominal do encarregado é informada no contrato e no DPA.
+          O canal de contato com o encarregado pelo tratamento de dados é a página de{" "}
+          <Link href="/contato?assunto=privacidade">Contato, com o assunto de privacidade</Link>. A identificação nominal
+          do encarregado é informada no contrato e no DPA.
         </p>
+
+        <h2>12. Informações a completar antes da publicação</h2>
+        <p>
+          Os itens abaixo dependem do proprietário do Vinculato e não são preenchidos por suposição. Enquanto estiverem
+          em aberto, esta política é válida no que descreve e incompleta no que identifica:
+        </p>
+        <ul>
+          {legalPendingFields.map((item) => <li key={item}>{item}</li>)}
+        </ul>
       </section>
     </SiteShell>
   );
