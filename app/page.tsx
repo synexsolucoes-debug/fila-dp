@@ -187,10 +187,15 @@ export default async function Home() {
         <div className="hero-product"><ClosingPanel /></div>
       </section>
 
-      <section className="proof-bar" aria-label="Garantias da plataforma">
+      {/* As três garantias desta faixa valem em qualquer plano, inclusive no
+          gratuito — é o que as separa de recurso comercial. "API e webhooks"
+          estava aqui e não podia: o módulo de Integrações começa no plano que o
+          catálogo diz, e a faixa prometia a todo visitante o que só parte deles
+          contrata. A exportação, essa sim, é de todo mundo. */}
+      <section className="proof-bar" aria-label="Garantias válidas em qualquer plano">
         <p><LockKeyhole className="mini-icon" aria-hidden="true" /> Isolamento entre clientes aplicado no banco</p>
         <p><FileCheck2 className="mini-icon" aria-hidden="true" /> Trilha de auditoria com antes e depois</p>
-        <p><Plug className="mini-icon" aria-hidden="true" /> API e webhooks assinados</p>
+        <p><Plug className="mini-icon" aria-hidden="true" /> Exportação dos seus dados a qualquer momento</p>
       </section>
 
       <section className="section problem-section">

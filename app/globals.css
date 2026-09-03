@@ -198,7 +198,11 @@ button, summary { font: inherit; }
 }
 .site-menu-panel nav { display: grid; gap: 2px; }
 .site-menu-panel nav a {
-  min-height: 40px; display: flex; align-items: center; padding: 0 12px; border-radius: var(--radius-sm);
+  /* `justify-content` explícito: `.site-header nav a` centraliza os itens da
+     barra horizontal, e o painel herdava aquilo — uma lista de destinos
+     centralizada, com cada linha começando num lugar diferente. */
+  min-height: 40px; display: flex; align-items: center; justify-content: flex-start;
+  padding: 0 12px; border-radius: var(--radius-sm);
   color: var(--ui-text); font-size: 14px; font-weight: 620;
 }
 .site-menu-panel nav a:hover { background: var(--brand-soft); color: var(--brand-strong); }

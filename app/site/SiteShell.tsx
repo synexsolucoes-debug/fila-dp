@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { legalNavigation, siteNavigation } from "@/lib/marketing";
 import styles from "./site.module.css";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
+import { SiteMenu } from "@/app/components/SiteMenu";
 
 /**
  * Moldura das páginas comerciais: cabeçalho, navegação, rodapé e área de
@@ -31,6 +32,13 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
                 formulário próprios, e mandar para /contato pedia ao visitante
                 que escolhesse o assunto de novo. */}
             <Link className={styles.primaryButton} href="/demonstracao">Agendar demonstração</Link>
+            {/* O mesmo menu da home. Sem ele, o cabeçalho das páginas internas
+                empilhava seis links e dois botões em três fileiras no celular —
+                funcionava, mas era outro produto a cada página. */}
+            <SiteMenu actions={<>
+              <Link className={styles.ghostButton} href="/login">Entrar</Link>
+              <Link className={styles.primaryButton} href="/demonstracao">Agendar demonstração</Link>
+            </>} />
           </div>
         </div>
       </header>

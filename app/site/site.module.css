@@ -152,7 +152,9 @@
 }
 .form textarea { min-height: 110px; resize: vertical; }
 .formRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-.consent { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; font-size: .82rem; color: var(--site-soft); }
+/* `.form label` pesa mais que `.consent` sozinho e deixava o consentimento em
+   negrito, competindo com os rótulos dos campos. */
+.form .consent { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: .82rem; color: var(--site-soft); }
 /* 24px é o mínimo da WCAG 2.5.8, e o consentimento é justamente a caixa que
    ninguém pode errar: sem ela marcada o formulário não envia. */
 .consent input { min-height: 24px; width: 24px; height: 24px; margin-top: 0; flex: 0 0 auto; }
@@ -182,9 +184,21 @@
   color: var(--site-soft); font-size: .78rem;
 }
 
+@media (max-width: 560px) {
+  /* Numa coluna de ~120px, a descrição do módulo empurra o nome dele para
+     quatro linhas e a tabela inteira fica ilegível. O nome basta: a descrição
+     de cada módulo já está em /funcionalidades. */
+  .tableHint { display: none; }
+  .table th, .table td { padding: 9px 10px; }
+}
+
 @media (max-width: 820px) {
   .headerInner { gap: 12px; }
-  .nav { order: 3; width: 100%; }
+  /* Abaixo desta largura a navegação e os dois botões vão para o menu do
+     cabeçalho — o mesmo da home. Empilhados, ocupavam três fileiras e faziam
+     cada página parecer um produto diferente. */
+  .nav { display: none; }
+  .headerActions > .ghostButton, .headerActions > .primaryButton { display: none; }
   .headerActions { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
