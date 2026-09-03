@@ -224,6 +224,8 @@
 .dialogSummary { margin: 0; padding: 10px 12px; border-radius: 9px; background: var(--pay-muted); font-size: .75rem; }
 .hint { margin: 0; color: var(--pay-soft); font-size: .69rem; line-height: 1.45; }
 .dialogFooter { display: flex; justify-content: flex-end; gap: 9px; padding: 13px 18px; border-top: 1px solid var(--pay-border); background: var(--pay-muted); }
+.receiptCompanyPicker { display: grid; gap: 3px; min-width: 220px; margin-left: auto; color: var(--pay-soft); font-size: .62rem; font-weight: 760; letter-spacing: .03em; }
+.receiptCompanyPicker select { min-height: 34px; max-width: 310px; padding: 0 8px; border: 1px solid var(--pay-border); border-radius: 7px; background: var(--pay-surface); color: var(--pay-text); font-size: .68rem; font-weight: 600; }
 
 .documentsDialog { width: min(780px, 100%); }
 .documentsBody { min-height: 220px; padding: 16px 18px; overflow-y: auto; }

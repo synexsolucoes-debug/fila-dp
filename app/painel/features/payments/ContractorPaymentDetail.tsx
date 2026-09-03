@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowDownRight, ArrowUpRight, Download, Pencil, Trash2, X } from "lucide-react";
-import type { ContractorComponent, ContractorPaymentDetail as Detail } from "./payments.types";
+import type { CompanyOption, ContractorComponent, ContractorPaymentDetail as Detail } from "./payments.types";
 import { ContractorAnalyticalStatement } from "./ContractorAnalyticalStatement";
 import styles from "./payments.module.css";
 import { contractorComponentLabel } from "@/lib/payments";
@@ -24,6 +24,11 @@ const date = (value: string) => value
   ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T00:00:00Z`))
   : "";
 
+const formatCnpj = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  return digits.length === 14 ? digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : value || "CNPJ não informado";
+};
+
 type Props = {
   detail: Detail;
   busy: boolean;
@@ -31,7 +36,9 @@ type Props = {
   onUpdateComponent: (componentId: string, input: { amount: string; description: string }) => Promise<boolean>;
   onCancelComponent: (componentId: string, reason: string) => Promise<boolean>;
   onDeleteClosing: (reason: string) => Promise<boolean>;
-  onDownloadReceipt: () => Promise<void>;
+  receiptCompanies: CompanyOption[];
+  defaultReceiptCompanyId: string;
+  onDownloadReceipt: (companyId: string) => Promise<void>;
 };
 
 export function ContractorPaymentDetail({
@@ -41,6 +48,8 @@ export function ContractorPaymentDetail({
   onUpdateComponent,
   onCancelComponent,
   onDeleteClosing,
+  receiptCompanies,
+  defaultReceiptCompanyId,
   onDownloadReceipt,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -52,6 +61,7 @@ export function ContractorPaymentDetail({
   const [cancelReason, setCancelReason] = useState("");
   const [deleteMode, setDeleteMode] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
+  const [receiptCompanyId, setReceiptCompanyId] = useState(defaultReceiptCompanyId);
 
   const credits = useMemo(() => detail.components.filter((item) => item.direction === "credit"), [detail.components]);
   const debits = useMemo(() => detail.components.filter((item) => item.direction === "debit"), [detail.components]);
@@ -62,6 +72,11 @@ export function ContractorPaymentDetail({
   const canDelete = detail.permissions.manage && (!locked || detail.permissions.reopen);
 
   useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    setReceiptCompanyId((current) => receiptCompanies.some((company) => company.id === current)
+      ? current
+      : (receiptCompanies.some((company) => company.id === defaultReceiptCompanyId) ? defaultReceiptCompanyId : receiptCompanies[0]?.id ?? ""));
+  }, [defaultReceiptCompanyId, receiptCompanies]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const panel = panelRef.current;
@@ -319,7 +334,13 @@ export function ContractorPaymentDetail({
               <Trash2 aria-hidden="true" /> Excluir pagamento
             </button>
           ) : <span />}
-          <button className={styles.secondaryButton} type="button" onClick={() => void onDownloadReceipt()} disabled={busy}>
+          <label className={styles.receiptCompanyPicker}>
+            <span>CNPJ pagador</span>
+            <select value={receiptCompanyId} onChange={(event) => setReceiptCompanyId(event.target.value)} disabled={busy || receiptCompanies.length === 0}>
+              {receiptCompanies.map((company) => <option key={company.id} value={company.id}>{company.legalName || company.name} · {formatCnpj(company.taxId)}</option>)}
+            </select>
+          </label>
+          <button className={styles.secondaryButton} type="button" onClick={() => void onDownloadReceipt(receiptCompanyId)} disabled={busy || !receiptCompanyId}>
             <Download aria-hidden="true" /> Gerar recibo de pagamento
           </button>
           <button className={styles.primaryButton} type="button" onClick={onClose} disabled={busy}>Fechar</button>

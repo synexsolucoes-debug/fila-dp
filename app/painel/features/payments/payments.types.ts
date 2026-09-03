@@ -1,6 +1,6 @@
 export type PaymentModule = "psychology" | "contractors";
 
-export type CompanyOption = { id: string; name: string; legalName: string; status: string };
+export type CompanyOption = { id: string; name: string; legalName: string; taxId: string; status: string };
 export type EmployeeOption = { id: string; name: string; registrationNumber: string };
 export type CycleOption = { id: string; competence: string; status: string; paymentDate: string; closedAt: string };
 

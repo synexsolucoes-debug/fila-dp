@@ -131,7 +131,7 @@ test("novo PDF preserva os totais e remove lançamentos cancelados", async () =>
 test("recibo traz marca OpyT, marca-d'água Vinculato e declaração com pagadora", () => {
   assert.match(receiptPdf, /drawOpytLogo/u);
   assert.match(receiptPdf, /drawWatermark/u);
-  assert.match(receiptPdf, /vinculato-logo\.png/u);
+  assert.match(receiptPdf, /vinculato-mark\.png/u);
   assert.match(receiptPdf, /RECEBI DA EMPRESA/u);
   assert.match(receiptPdf, /amountInWords/u);
   assert.match(receiptPdf, /QUITAÇÃO EXCLUSIVAMENTE/u);
@@ -165,17 +165,24 @@ test("emissão em lote inicia conferência, aprovação coletiva e documentos do
 });
 
 test("detalhamento do PJ permite baixar apenas o recibo daquela pessoa", async () => {
-  const [receiptRoute, view] = await Promise.all([
+  const [receiptRoute, view, detailView] = await Promise.all([
     readFile(new URL("../app/api/payments/contractors/closings/[id]/receipt/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorPaymentDetail.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(receiptRoute, /contractors\.payments\.read/u);
   assert.match(receiptRoute, /requireCompanyAccess/u);
   assert.match(receiptRoute, /status = 'active'/u);
   assert.match(receiptRoute, /tax_id, street, street_number/u);
+  assert.match(receiptRoute, /payerCompanyId/u);
+  assert.match(receiptRoute, /requireCompanyAccess\(d1, workspace\.id, user\.id, workspace\.role, payerCompanyId\)/u);
   assert.match(receiptRoute, /generateContractorStatementsPdf\(\[statement\]\)/u);
   assert.match(receiptRoute, /contractor_receipt\.downloaded/u);
   assert.doesNotMatch(receiptRoute, /UPDATE fdp_contractor_closings/u);
   assert.match(view, /closings\/\$\{closingId\}\/receipt/u);
+  assert.match(view, /companyId: receiptCompanyId/u);
   assert.match(view, /onDownloadReceipt/u);
+  assert.match(detailView, /CNPJ pagador/u);
+  assert.match(detailView, /receiptCompanies/u);
+  assert.match(detailView, /formatCnpj/u);
 });

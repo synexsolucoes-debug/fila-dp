@@ -327,10 +327,14 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     }
   }
 
-  async function downloadContractorReceipt(closingId: string) {
+  async function downloadContractorReceipt(closingId: string, receiptCompanyId: string) {
     setBusy(true);
     try {
-      const response = await fetch(`/api/payments/contractors/closings/${closingId}/receipt`, { method: "POST" });
+      const response = await fetch(`/api/payments/contractors/closings/${closingId}/receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId: receiptCompanyId }),
+      });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
         throw new Error(payload.message || payload.error || "Não foi possível gerar o recibo de pagamento.");
@@ -736,7 +740,9 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           onUpdateComponent={(componentId, input) => updateContractorComponent(componentId, paymentDetail.closing.id, input)}
           onCancelComponent={(componentId, reason) => cancelContractorComponent(componentId, paymentDetail.closing.id, reason)}
           onDeleteClosing={(reason) => deleteContractorClosing(paymentDetail.closing.id, reason)}
-          onDownloadReceipt={() => downloadContractorReceipt(paymentDetail.closing.id)}
+          receiptCompanies={companies}
+          defaultReceiptCompanyId={companyId}
+          onDownloadReceipt={(receiptCompanyId) => downloadContractorReceipt(paymentDetail.closing.id, receiptCompanyId)}
         />
       ) : null}
       {dialog && <PaymentDialogView dialog={dialog} busy={busy} onClose={() => setDialog(null)} onSubmit={submitDialog} />}

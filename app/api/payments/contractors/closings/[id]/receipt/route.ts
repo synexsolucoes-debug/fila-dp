@@ -1,4 +1,4 @@
-import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
@@ -67,11 +67,14 @@ export async function POST(request: Request, { params }: Params) {
 
     const closing = await findContractorClosing(d1, workspace.id, id);
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, closing.company_id);
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const payerCompanyId = text(body.companyId, 120) || closing.company_id;
+    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, payerCompanyId);
 
     const [company, receiptClosing, components] = await Promise.all([
       d1.prepare(`SELECT legal_name, trade_name, tax_id, street, street_number, address_complement,
           district, city, state, postal_code FROM fdp_companies WHERE workspace_id = ? AND id = ?`)
-        .bind(workspace.id, closing.company_id)
+        .bind(workspace.id, payerCompanyId)
         .first<CompanyRow>(),
       d1.prepare(`SELECT c.id, c.competence, c.base_amount, c.credits_amount, c.debits_amount, c.net_amount,
           c.invoice_expected_amount, c.complement_amount, c.caju_amount, c.invoice_number,
@@ -139,7 +142,7 @@ export async function POST(request: Request, { params }: Params) {
       entityType: "contractor_closing",
       entityId: id,
       after: { competence: receiptClosing.competence, providerId: closing.provider_id },
-      metadata: { canceledComponentsIncluded: false },
+      metadata: { canceledComponentsIncluded: false, payerCompanyId },
       requestId: request.headers.get("x-fila-dp-request-id"),
     })]);
 

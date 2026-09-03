@@ -35,6 +35,7 @@ export function normalizeCompany(row: Row): CompanyOption {
     id: text(row.id),
     name: text(pick(row, "tradeName", "trade_name")) || text(pick(row, "legalName", "legal_name")),
     legalName: text(pick(row, "legalName", "legal_name")),
+    taxId: text(pick(row, "taxId", "tax_id")),
     status: text(row.status),
   };
 }

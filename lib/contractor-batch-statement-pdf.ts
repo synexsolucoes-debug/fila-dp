@@ -171,14 +171,14 @@ function drawOpytLogo(page: PDFPage, italic: PDFFont) {
 }
 
 function drawWatermark(page: PDFPage, logo: PDFImage) {
-  const width = 365;
+  const width = 250;
   const height = width * (logo.height / logo.width);
   page.drawImage(logo, {
     x: (PAGE_WIDTH - width) / 2,
-    y: (PAGE_HEIGHT - height) / 2 - 28,
+    y: (PAGE_HEIGHT - height) / 2 - 18,
     width,
     height,
-    opacity: 0.055,
+    opacity: 0.095,
   });
 }
 
@@ -318,7 +318,7 @@ export async function generateContractorStatementsPdf(statements: ContractorStat
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
-  const watermark = await pdf.embedPng(await readFile(join(process.cwd(), "public", "brand", "vinculato-logo.png")));
+  const watermark = await pdf.embedPng(await readFile(join(process.cwd(), "public", "brand", "vinculato-mark.png")));
   let pageNumber = 0;
 
   for (const statement of statements) {
