@@ -5301,10 +5301,14 @@
 .history-table tr:last-child td { border-bottom: 0; }
 .history-table time { color: var(--ui-text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .history-table small { color: var(--ui-text-soft); }
+/* O azul puro do acento não sobrevive à tinta do painel: `--ui-primary` rende
+   3,61:1 sobre a superfície da tabela de histórico, abaixo do mínimo de 4,5.
+   `--ui-accent-text` existe exatamente para isto — é o mesmo acento na versão
+   que se lê sobre fundo escuro (8,9:1) — e é o que o resto do painel já usa. */
 .history-card-link {
   display: inline-flex; gap: 6px; align-items: baseline;
   padding: 0; border: 0; background: none;
-  color: var(--ui-primary); cursor: pointer; font: inherit; text-align: left;
+  color: var(--ui-accent-text, var(--ui-primary)); cursor: pointer; font: inherit; text-align: left;
 }
 .history-card-link:hover { text-decoration: underline; }
 .history-card-link b { font-variant-numeric: tabular-nums; }

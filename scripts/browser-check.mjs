@@ -23,15 +23,17 @@ const record = (name, ok, detail = "") => {
   console.log(`${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
-// O caminho do Chromium pré-instalado varia com a versão empacotada; a busca
-// evita fixar um número de build que quebra o ensaio no próximo ambiente.
-const { readdirSync, existsSync } = await import("node:fs");
-const browsersRoot = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers";
-const chromiumDirectory = existsSync(browsersRoot)
-  ? readdirSync(browsersRoot).find((entry) => /^chromium-\d+$/u.test(entry))
-  : undefined;
-const executablePath = chromiumDirectory ? `${browsersRoot}/${chromiumDirectory}/chrome-linux/chrome` : undefined;
-const browser = await chromium.launch(executablePath ? { executablePath } : {});
+/* O navegador é o que o Playwright instalou, e não um caminho adivinhado.
+   A versão anterior procurava `chromium-<revisão>` em PLAYWRIGHT_BROWSERS_PATH e
+   montava `chrome-linux/chrome` na mão. Isso quebra de duas formas, e as duas
+   aconteceram: o layout do pacote virou `chrome-linux64/` nas revisões novas, e
+   `find()` devolve a PRIMEIRA revisão encontrada — com uma instalação antiga ao
+   lado da atual, a conferência roda num Chromium que não é o do projeto. Foi
+   assim que esta varredura passou local no Chromium 141 e reprovou na CI no 151,
+   com 53 violações reais que a versão velha não media. Sem executablePath, o
+   Playwright resolve o binário que ele mesmo fixou; faltando, ele falha dizendo
+   para instalar, em vez de medir com outro motor em silêncio. */
+const browser = await chromium.launch();
 // `acceptDownloads` para conferir o CSV exportado: o arquivo é o único
 // artefato do produto que sai do navegador e vai para a mão de alguém.
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "pt-BR", acceptDownloads: true });

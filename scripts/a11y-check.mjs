@@ -16,16 +16,12 @@
  * Uso: npm run a11y-check   (requer o app em http://localhost:3000)
  */
 import { chromium } from "playwright";
-import { readdirSync, existsSync } from "node:fs";
 
 const BASE = process.env.A11Y_BASE_URL ?? "http://localhost:3000";
 const EMAIL = process.env.A11Y_EMAIL ?? "admin@vinculato.test";
 const PASSWORD = process.env.A11Y_PASSWORD ?? "EnsaioLocal!2026";
 
-const browsersRoot = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers";
-const installed = existsSync(browsersRoot)
-  ? readdirSync(browsersRoot).find((entry) => /^chromium-\d+$/u.test(entry))
-  : undefined;
+
 
 const AUDIT = () => {
   const luminance = (rgb) => {
@@ -174,9 +170,17 @@ const AUDIT = () => {
   return { contrastIssues, nameIssues, targetIssues, unmeasurable, overflowIssues };
 };
 
-const browser = await chromium.launch(
-  installed ? { executablePath: `${browsersRoot}/${installed}/chrome-linux/chrome` } : {},
-);
+/* O navegador é o que o Playwright instalou, e não um caminho adivinhado.
+   A versão anterior procurava `chromium-<revisão>` em PLAYWRIGHT_BROWSERS_PATH e
+   montava `chrome-linux/chrome` na mão. Isso quebra de duas formas, e as duas
+   aconteceram: o layout do pacote virou `chrome-linux64/` nas revisões novas, e
+   `find()` devolve a PRIMEIRA revisão encontrada — com uma instalação antiga ao
+   lado da atual, a conferência roda num Chromium que não é o do projeto. Foi
+   assim que esta varredura passou local no Chromium 141 e reprovou na CI no 151,
+   com 53 violações reais que a versão velha não media. Sem executablePath, o
+   Playwright resolve o binário que ele mesmo fixou; faltando, ele falha dizendo
+   para instalar, em vez de medir com outro motor em silêncio. */
+const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "pt-BR" });
 
 // Alvo e contraste mudam com o layout: um botão que tem folga no desktop pode
