@@ -178,7 +178,7 @@ function drawWatermark(page: PDFPage, logo: PDFImage) {
     y: (PAGE_HEIGHT - height) / 2 - 18,
     width,
     height,
-    opacity: 0.095,
+    opacity: 0.15,
   });
 }
 
@@ -233,9 +233,9 @@ function drawInfoCard(page: PDFPage, regular: PDFFont, bold: PDFFont, statement:
 function drawReceiptDeclaration(page: PDFPage, regular: PDFFont, bold: PDFFont, statement: ContractorStatement, y: number) {
   const payerName = statement.company.legalName || statement.company.tradeName || "EMPRESA PAGADORA";
   const payerTaxId = formatTaxId(statement.company.taxId);
-  const payerAddress = statement.company.address || "ENDEREÇO NÃO INFORMADO";
+  const payerAddress = statement.company.address ? `, LOCALIZADA EM ${statement.company.address}` : "";
   const amount = money(statement.closing.netAmount);
-  const sentence = `RECEBI DA EMPRESA ${payerName}, INSCRITA NO CNPJ SOB O Nº ${payerTaxId}, LOCALIZADA EM ${payerAddress}, A IMPORTÂNCIA DE ${amount} (${amountInWords(statement.closing.netAmount).toUpperCase()}), REFERENTE À PRESTAÇÃO DE SERVIÇOS NA COMPETÊNCIA ${competenceLabel(statement.competence).toUpperCase()}.`;
+  const sentence = `RECEBI DA EMPRESA ${payerName}, INSCRITA NO CNPJ SOB O Nº ${payerTaxId}${payerAddress}, A IMPORTÂNCIA DE ${amount} (${amountInWords(statement.closing.netAmount).toUpperCase()}), REFERENTE À PRESTAÇÃO DE SERVIÇOS NA COMPETÊNCIA ${competenceLabel(statement.competence).toUpperCase()}.`;
   const note = "DOU QUITAÇÃO EXCLUSIVAMENTE AO VALOR E À COMPETÊNCIA ACIMA INDICADOS. A QUITAÇÃO SE APERFEIÇOA COM A ASSINATURA DO RECEBEDOR E A EFETIVA LIQUIDAÇÃO DO PAGAMENTO.";
   const sentenceLines = wrapText(sentence, regular, 8.5, CONTENT_WIDTH - 32);
   const noteLines = wrapText(note, regular, 7.4, CONTENT_WIDTH - 32);

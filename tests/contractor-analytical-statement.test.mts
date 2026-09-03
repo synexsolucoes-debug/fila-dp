@@ -135,6 +135,7 @@ test("recibo traz marca OpyT, marca-d'água Vinculato e declaração com pagador
   assert.match(receiptPdf, /RECEBI DA EMPRESA/u);
   assert.match(receiptPdf, /amountInWords/u);
   assert.match(receiptPdf, /QUITAÇÃO EXCLUSIVAMENTE/u);
+  assert.match(receiptPdf, /company\.address \? `, LOCALIZADA EM/u);
 });
 
 test("emissão em lote inicia conferência, aprovação coletiva e documentos do contrato", async () => {
