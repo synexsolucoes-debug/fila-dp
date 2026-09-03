@@ -86,6 +86,7 @@ export const expectedMigrations = [
   "0076_demand_module_links.sql",
   "0077_contractor_invoice_control.sql",
   "0078_link_legacy_payment_invoices.sql",
+  "0079_demand_task_instances.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

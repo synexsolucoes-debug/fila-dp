@@ -606,7 +606,7 @@
 
 .dashboard-tabs button.active {
   border-bottom-color: var(--ui-primary);
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
 }
 
 .dashboard-tabs .archive-trigger {
@@ -662,13 +662,13 @@
 .dashboard-filters .filter-chip.active {
   border-color: color-mix(in srgb, var(--ui-primary) 58%, var(--ui-border));
   background: var(--ui-primary-soft);
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
 }
 
 .dashboard-filters .filter-clear {
   border-color: transparent;
   background: transparent;
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
 }
 
 .dashboard-filters label {
@@ -2109,7 +2109,7 @@
   padding-inline: 11px;
   border: 1px solid var(--ui-border);
   background: var(--ui-surface);
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
   cursor: pointer;
 }
 
@@ -3102,7 +3102,7 @@
 
 .dashboard-content { max-width: 1680px; margin: 0 auto; padding: 34px clamp(20px, 3vw, 46px) 52px; }
 .dashboard-heading { margin-bottom: 26px; }
-.dashboard-eyebrow { color: var(--ui-primary); font-weight: 800; }
+.dashboard-eyebrow { color: var(--ui-accent-text, var(--ui-primary)); font-weight: 800; }
 .dashboard-heading h1 { letter-spacing: -.052em; }
 .dashboard-heading p { max-width: 620px; }
 
@@ -3123,7 +3123,7 @@
    junto — o seletor compartilhado é justamente o que torna a remoção
    cega perigosa. */
 .overview-panel header > div > span,
-.overview-panel header > div > span { color: var(--ui-primary); }
+.overview-panel header > div > span { color: var(--ui-accent-text, var(--ui-primary)); }
 
 /* ==========================================================================
    Meus processos (§29)
@@ -3308,7 +3308,7 @@
 .overview-panel { min-width: 0; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
 .overview-panel > header { min-height: 69px; padding: 15px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--ui-border); }
 .overview-panel header h2 { margin: 4px 0 0; color: var(--ui-text); font-size: 15px; letter-spacing: -.025em; }
-.overview-panel header > button { padding: 0; display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--ui-primary); font-size: 10px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.overview-panel header > button { padding: 0; display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--ui-accent-text, var(--ui-primary)); font-size: 10px; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .overview-panel header > button svg { width: 13px; height: 13px; }
 .overview-attention-list { padding: 8px 14px 14px; display: grid; gap: 4px; }
 .overview-attention-card { width: 100%; min-height: 61px; padding: 10px 8px; display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 0; border-radius: var(--ui-radius-lg); background: transparent; color: var(--ui-text); text-align: left; cursor: pointer; }

@@ -105,7 +105,7 @@
 .localTabs::-webkit-scrollbar { display: none; }
 .localTabs button { display: inline-flex; align-items: center; gap: 7px; min-height: 48px; padding: 0 13px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ops-soft); font-size: .69rem; font-weight: 690; white-space: nowrap; cursor: pointer; }
 .localTabs button:hover { background: var(--ops-surface); color: var(--ops-text); }
-.localTabs .activeTab { border-bottom-color: var(--ops-mint); background: var(--ops-surface); color: var(--ops-mint); }
+.localTabs .activeTab { border-bottom-color: var(--ops-mint); background: var(--ops-surface); color: var(--ops-mint-text); }
 .localTabs b { min-width: 18px; padding: 2px 5px; border-radius: 4px; background: color-mix(in srgb, var(--ops-danger) 10%, var(--ops-surface)); color: var(--ops-danger); font-size: .56rem; text-align: center; }
 .tabSurface { min-height: 410px; border: 1px solid var(--ops-border); border-radius: 0 0 10px 10px; background: var(--ops-surface); box-shadow: var(--ui-shadow-card); }
 

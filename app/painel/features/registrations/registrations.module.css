@@ -50,8 +50,8 @@
 }
 .tabs button:hover { color: var(--reg-text); background: color-mix(in srgb, var(--reg-muted) 62%, transparent); }
 .tabs button span { min-width: 22px; padding: 2px 6px; border-radius: 5px; background: var(--reg-muted); font-size: .68rem; text-align: center; }
-.tabs .activeTab { border-bottom-color: var(--reg-mint); color: var(--reg-mint); }
-.tabs .activeTab span { background: var(--reg-mint-soft); color: var(--reg-mint); }
+.tabs .activeTab { border-bottom-color: var(--reg-mint); color: var(--reg-mint-text); }
+.tabs .activeTab span { background: var(--reg-mint-soft); color: var(--reg-mint-text); }
 
 .primaryButton,
 .secondaryButton,
@@ -128,7 +128,7 @@
 .companyIdentity { display: flex; align-items: center; gap: 15px; min-width: 0; }
 .companyIdentity > span { display: grid; place-items: center; flex: 0 0 auto; width: 54px; height: 54px; border: 1px solid color-mix(in srgb, var(--reg-mint) 22%, var(--reg-border)); border-radius: 10px; background: var(--reg-mint-soft); color: var(--reg-mint); font-size: 1rem; font-weight: 820; }
 .companyIdentity > div { min-width: 0; }
-.companyIdentity small { color: var(--reg-mint); font-size: .62rem; font-weight: 800; letter-spacing: .12em; }
+.companyIdentity small { color: var(--reg-mint-text); font-size: .62rem; font-weight: 800; letter-spacing: .12em; }
 .companyIdentity h2 { margin: 4px 0; font-size: clamp(1.2rem, 2vw, 1.55rem); letter-spacing: -.025em; }
 .companyIdentity p { margin: 0; color: var(--reg-soft); font-size: .78rem; }
 .detailBand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 28px 0; overflow: hidden; border: 1px solid var(--reg-border); border-radius: 9px; background: var(--reg-border); }
@@ -185,7 +185,7 @@
 .catalogNav > button span { display: grid; gap: 4px; }
 .catalogNav > button strong { font-size: .78rem; }
 .catalogNav > button small { color: var(--reg-soft); font-size: .65rem; }
-.catalogNav .catalogActive { background: var(--reg-mint-soft); color: var(--reg-mint); box-shadow: inset 3px 0 var(--reg-mint); }
+.catalogNav .catalogActive { background: var(--reg-mint-soft); color: var(--reg-mint-text); box-shadow: inset 3px 0 var(--reg-mint); }
 .catalogHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 90px; padding: 17px 20px; border-bottom: 1px solid var(--reg-border); }
 .catalogHeader h2 { margin: 4px 0; font-size: 1.08rem; }
 .catalogHeader p { margin: 0; color: var(--reg-soft); font-size: .72rem; }
