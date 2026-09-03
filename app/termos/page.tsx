@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
+import { legalPendingFields } from "@/lib/marketing";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/termos" },
@@ -61,8 +62,10 @@ export default function TermosPage() {
         <h2>6. Planos, cobrança e cancelamento</h2>
         <ul>
           <li>As condições comerciais são as publicadas em <Link href="/planos">Planos</Link> ou as acordadas em contrato.</li>
-          <li>O cancelamento encerra a renovação seguinte e mantém o acesso até o fim do período contratado.</li>
+          <li>Contratação, mudança de plano e cancelamento são solicitados à equipe pela página de <Link href="/contato?assunto=planos">Contato</Link>. A troca de plano pelo próprio painel ainda não está disponível.</li>
+          <li>O cancelamento encerra a renovação seguinte e mantém o acesso até o fim do período contratado. Não há multa de encerramento nem prazo mínimo de permanência nos planos publicados.</li>
           <li>Inadimplência pode suspender o acesso após comunicação; a suspensão não apaga dados dentro do prazo de retenção.</li>
+          <li>Após o encerramento há 30 dias em que o grupo pode ser restaurado e seus dados exportados; depois disso os dados do workspace são eliminados ou anonimizados.</li>
         </ul>
 
         <h2>7. Dados do cliente</h2>
@@ -88,6 +91,15 @@ export default function TermosPage() {
 
         <h2>11. Contato</h2>
         <p>Dúvidas sobre estes termos podem ser enviadas pela página de <Link href="/contato">Contato</Link>.</p>
+
+        <h2>12. Informações a completar antes da publicação</h2>
+        <p>
+          Os itens abaixo dependem do proprietário do Vinculato e não são preenchidos por suposição — um documento legal
+          com identificação inventada vale menos que um que declara a lacuna:
+        </p>
+        <ul>
+          {legalPendingFields.map((item) => <li key={item}>{item}</li>)}
+        </ul>
       </section>
     </SiteShell>
   );

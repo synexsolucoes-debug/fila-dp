@@ -6,9 +6,10 @@ import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { getD1 } from "@/db";
 import { selfSignupEnabled } from "@/lib/saas";
 import type { Metadata } from "next";
+import { SiteMenu } from "@/app/components/SiteMenu";
 import {
-  faqEntries, featureHighlights, integrationCatalog, integrationStateLabels, pluralize, productBoundaries,
-  productPositioning, siteNavigation,
+  commercialCommitments, describePlanOffer, faqEntries, featureHighlights, integrationCatalog,
+  integrationStateLabels, productBoundaries, productPositioning, siteNavigation, SIGNUP_PATH, type PlanCatalogRow,
 } from "@/lib/marketing";
 
 /** A home é a única página cuja canônica é a raiz — as outras declaram a sua. */
@@ -19,15 +20,6 @@ export const dynamic = "force-dynamic";
 const Chevron = () => <ArrowRight className="inline-icon" aria-hidden="true" />;
 const CheckIcon = () => <Check className="mini-icon" aria-hidden="true" />;
 
-type PlanRow = {
-  code: string; name: string; description: string; currency: string;
-  monthly_price_cents: number; included_seats: number; company_limit: number;
-  integration_limit: number; storage_limit_mb: number; stripe_monthly_price_id: string;
-};
-
-const money = (cents: number, currency: string) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
-
 /**
  * A home lê o mesmo catálogo que a página de planos e que a cobrança.
  *
@@ -35,15 +27,15 @@ const money = (cents: number, currency: string) =>
  * muda junto. Sem banco disponível na renderização, a seção não inventa
  * condição comercial — ela remete à página de planos.
  */
-async function loadPlans(): Promise<PlanRow[]> {
+async function loadPlans(): Promise<{ available: boolean; plans: PlanCatalogRow[] }> {
   try {
     const d1 = getD1();
-    const rows = await d1.prepare(`SELECT code, name, description, currency, monthly_price_cents,
-        included_seats, company_limit, integration_limit, storage_limit_mb, stripe_monthly_price_id
-      FROM fdp_saas_plans WHERE status = 'active' ORDER BY position, monthly_price_cents`).all<PlanRow>();
-    return rows.results;
+    const rows = await d1.prepare(`SELECT code, name, description, currency, monthly_price_cents, annual_price_cents,
+        trial_days, included_seats, company_limit, integration_limit, storage_limit_mb, stripe_monthly_price_id
+      FROM fdp_saas_plans WHERE status = 'active' ORDER BY position, monthly_price_cents`).all<PlanCatalogRow>();
+    return { available: true, plans: rows.results };
   } catch {
-    return [];
+    return { available: false, plans: [] };
   }
 }
 
@@ -138,13 +130,13 @@ function ClosingPanel() {
 }
 
 export default async function Home() {
-  const plans = await loadPlans();
+  const catalog = await loadPlans();
   const signupOpen = selfSignupEnabled();
-  const freePlan = plans.find((plan) => plan.monthly_price_cents === 0);
+  const offers = catalog.plans.map((plan) => describePlanOffer(plan, { signupOpen }));
   // A oferta sem custo só aparece quando existe plano de preço zero publicado no
   // catálogo E a criação de conta está habilitada. Fora disso a home não promete
   // um caminho que o produto recusaria.
-  const freeSignup = signupOpen && Boolean(freePlan);
+  const freeSignup = offers.some((offer) => offer.contracting === "free");
 
   return (
     <main className="home">
@@ -152,14 +144,22 @@ export default async function Home() {
 
       <header className="site-header">
         <Link className="brand" href="/" aria-label="Vinculato — início">
-          <VinculatoLogo size={30} priority />
+          {/* Mesma razão do rodapé logo abaixo, que já usava a variante clara:
+              o cabeçalho é superfície escura. */}
+          <VinculatoLogo size={30} tone="light" priority />
         </Link>
         <nav aria-label="Navegação principal">
           {siteNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
         </nav>
         <div className="header-actions">
           <Link className="login-link" href="/login">Entrar</Link>
-          <Link className="button button-small" href="/contato?assunto=demonstracao">Falar com um especialista</Link>
+          <Link className="button button-small" href="/demonstracao">Agendar demonstração</Link>
+          {/* Os mesmos destinos, para quando a barra encolhe e a navegação
+              horizontal sai da tela. */}
+          <SiteMenu actions={<>
+            <Link className="login-link" href="/login">Entrar</Link>
+            <Link className="button button-small" href="/demonstracao">Agendar demonstração</Link>
+          </>} />
         </div>
       </header>
 
@@ -174,11 +174,11 @@ export default async function Home() {
           </p>
           <div className="hero-actions">
             {freeSignup
-              ? <Link className="button" href="/login?modo=criar">Começar grátis <Chevron /></Link>
-              : <Link className="button" href="/contato?assunto=demonstracao">Falar com um especialista <Chevron /></Link>}
-            {freeSignup
-              ? <Link className="button button-secondary" href="/contato?assunto=demonstracao">Falar com um especialista</Link>
-              : <Link className="button button-secondary" href="/planos">Ver planos</Link>}
+              ? <Link className="button" href={SIGNUP_PATH}>Começar grátis <Chevron /></Link>
+              : <Link className="button" href="/demonstracao">Agendar demonstração <Chevron /></Link>}
+            <Link className="button button-secondary" href={freeSignup ? "/demonstracao" : "/planos"}>
+              {freeSignup ? "Agendar demonstração" : "Ver planos e limites"}
+            </Link>
             <Link className="hero-login" href="/login">Entrar</Link>
           </div>
           <div className="hero-notes">
@@ -189,10 +189,15 @@ export default async function Home() {
         <div className="hero-product"><ClosingPanel /></div>
       </section>
 
-      <section className="proof-bar" aria-label="Garantias da plataforma">
+      {/* As três garantias desta faixa valem em qualquer plano, inclusive no
+          gratuito — é o que as separa de recurso comercial. "API e webhooks"
+          estava aqui e não podia: o módulo de Integrações começa no plano que o
+          catálogo diz, e a faixa prometia a todo visitante o que só parte deles
+          contrata. A exportação, essa sim, é de todo mundo. */}
+      <section className="proof-bar" aria-label="Garantias válidas em qualquer plano">
         <p><LockKeyhole className="mini-icon" aria-hidden="true" /> Isolamento entre clientes aplicado no banco</p>
         <p><FileCheck2 className="mini-icon" aria-hidden="true" /> Trilha de auditoria com antes e depois</p>
-        <p><Plug className="mini-icon" aria-hidden="true" /> API e webhooks assinados</p>
+        <p><Plug className="mini-icon" aria-hidden="true" /> Exportação dos seus dados a qualquer momento</p>
       </section>
 
       <section className="section problem-section">
@@ -320,7 +325,16 @@ export default async function Home() {
           </p>
         </div>
 
-        {plans.length === 0 ? (
+        {!catalog.available ? (
+          <div className="plans-empty" role="status">
+            <h3>Condição temporariamente indisponível</h3>
+            <p>
+              Não foi possível consultar o catálogo agora. Preferimos não exibir preço nenhum a exibir um que não veio
+              do catálogo — tente de novo em alguns minutos ou fale com a equipe.
+            </p>
+            <Link className="button" href="/contato?assunto=planos">Falar sobre planos <Chevron /></Link>
+          </div>
+        ) : offers.length === 0 ? (
           <div className="plans-empty">
             <h3>Condições sob consulta</h3>
             <p>Nenhum plano está publicado no catálogo neste momento. As condições são definidas com a equipe conforme empresas, volume e integrações.</p>
@@ -328,42 +342,37 @@ export default async function Home() {
           </div>
         ) : (
           <div className="plans-grid">
-            {plans.map((plan) => {
-              const free = plan.monthly_price_cents === 0;
-              // O preço vem do catálogo e é exibido como está publicado. O que
-              // depende do provedor de pagamento é a contratação direta: sem
-              // preço configurado lá, o plano existe mas é contratado com a
-              // equipe — a página não simula um checkout que não funciona.
-              const payable = plan.monthly_price_cents > 0 && Boolean(plan.stripe_monthly_price_id);
-              const selfServe = signupOpen && (free || payable);
-              return (
-                <article key={plan.code} className="plan-card">
-                  <span className="plan-name">{plan.name}</span>
-                  <strong className="plan-price">
-                    {free ? "Grátis" : money(plan.monthly_price_cents, plan.currency)}
-                    <small>{free ? "para começar" : payable ? "por mês" : "por mês · contratação com a equipe"}</small>
-                  </strong>
-                  {plan.description && <p className="plan-description">{plan.description}</p>}
-                  <ul className="plan-list">
-                    <li><CheckIcon /> {pluralize(plan.included_seats, "usuário incluído", "usuários incluídos")}</li>
-                    <li><CheckIcon /> {pluralize(plan.company_limit, "empresa", "empresas")}</li>
-                    <li><CheckIcon /> {pluralize(plan.integration_limit, "integração", "integrações")}</li>
-                    <li><CheckIcon /> {Math.round(plan.storage_limit_mb / 1024 * 10) / 10} GB de anexos</li>
-                  </ul>
-                  <Link
-                    className="plan-action"
-                    href={selfServe ? "/login" : `/contato?assunto=planos&plano=${encodeURIComponent(plan.code)}`}
-                  >
-                    {selfServe ? (free ? "Criar conta" : "Contratar") : "Falar com a equipe"} <Chevron />
-                  </Link>
-                </article>
-              );
-            })}
+            {offers.map((offer) => (
+              <article key={offer.code} className="plan-card" data-recommended={offer.recommended ? "true" : undefined}>
+                <span className="plan-name">{offer.name}</span>
+                {offer.recommended && <span className="plan-flag">Mais escolhido</span>}
+                <strong className="plan-price">
+                  {offer.price}
+                  <small>{offer.priceNote}</small>
+                </strong>
+                {offer.description && <p className="plan-description">{offer.description}</p>}
+                <ul className="plan-list">
+                  {offer.limits.map((limit) => (
+                    <li key={limit.label}><CheckIcon /> {limit.value} — {limit.label.toLowerCase()}</li>
+                  ))}
+                </ul>
+                <Link className="plan-action" href={offer.ctaHref}>{offer.ctaLabel} <Chevron /></Link>
+              </article>
+            ))}
           </div>
         )}
 
+        <div className="commitment-grid">
+          {commercialCommitments.map((item) => (
+            <article key={item.title}>
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </article>
+          ))}
+        </div>
+
         <p className="plans-note">
-          <Link href="/planos">Ver limites completos de cada plano <Chevron /></Link>
+          <Link href="/planos">Ver limites, módulos por plano e condições <Chevron /></Link>
         </p>
       </section>
 
@@ -390,8 +399,8 @@ export default async function Home() {
         </div>
         <div className="final-cta-actions">
           {freeSignup
-            ? <Link className="button button-light" href="/login?modo=criar">Começar grátis <Chevron /></Link>
-            : <Link className="button button-light" href="/contato?assunto=demonstracao">Falar com um especialista <Chevron /></Link>}
+            ? <Link className="button button-light" href={SIGNUP_PATH}>Começar grátis <Chevron /></Link>
+            : <Link className="button button-light" href="/demonstracao">Agendar demonstração <Chevron /></Link>}
           <Link className="demo-link" href="/login">Já sou cliente — entrar</Link>
           <p>A conversa começa pela sua operação, com o produto aberto e sem usar dados reais do seu DP.</p>
         </div>
@@ -404,9 +413,10 @@ export default async function Home() {
         <p>Gestão, integração e conferência operacional para Departamento Pessoal.</p>
         <div>
           {siteNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}
-          <Link href="/termos">Termos</Link>
+          <Link href="/termos">Termos de uso</Link>
           <Link href="/privacidade">Privacidade</Link>
-          <Link href="/subprocessadores">Subprocessadores</Link>
+          <Link href="/subprocessadores">Subprocessadores e DPA</Link>
+          <Link href="/recuperar">Recuperar acesso</Link>
           <a href="#conteudo">Voltar ao topo <ArrowUp className="inline-icon" aria-hidden="true" /></a>
         </div>
         <p className="site-boundary-note">

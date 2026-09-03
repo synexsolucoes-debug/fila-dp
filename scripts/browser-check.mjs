@@ -23,15 +23,17 @@ const record = (name, ok, detail = "") => {
   console.log(`${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
-// O caminho do Chromium pré-instalado varia com a versão empacotada; a busca
-// evita fixar um número de build que quebra o ensaio no próximo ambiente.
-const { readdirSync, existsSync } = await import("node:fs");
-const browsersRoot = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers";
-const chromiumDirectory = existsSync(browsersRoot)
-  ? readdirSync(browsersRoot).find((entry) => /^chromium-\d+$/u.test(entry))
-  : undefined;
-const executablePath = chromiumDirectory ? `${browsersRoot}/${chromiumDirectory}/chrome-linux/chrome` : undefined;
-const browser = await chromium.launch(executablePath ? { executablePath } : {});
+/* O navegador é o que o Playwright instalou, e não um caminho adivinhado.
+   A versão anterior procurava `chromium-<revisão>` em PLAYWRIGHT_BROWSERS_PATH e
+   montava `chrome-linux/chrome` na mão. Isso quebra de duas formas, e as duas
+   aconteceram: o layout do pacote virou `chrome-linux64/` nas revisões novas, e
+   `find()` devolve a PRIMEIRA revisão encontrada — com uma instalação antiga ao
+   lado da atual, a conferência roda num Chromium que não é o do projeto. Foi
+   assim que esta varredura passou local no Chromium 141 e reprovou na CI no 151,
+   com 53 violações reais que a versão velha não media. Sem executablePath, o
+   Playwright resolve o binário que ele mesmo fixou; faltando, ele falha dizendo
+   para instalar, em vez de medir com outro motor em silêncio. */
+const browser = await chromium.launch();
 // `acceptDownloads` para conferir o CSV exportado: o arquivo é o único
 // artefato do produto que sai do navegador e vai para a mão de alguém.
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "pt-BR", acceptDownloads: true });
@@ -119,13 +121,35 @@ if (catalog?.plans) {
     JSON.stringify(planNames.map((name) => name.trim().toLocaleLowerCase("pt-BR")))
       === JSON.stringify(expected.map((name) => name.toLocaleLowerCase("pt-BR"))),
     `home: ${planNames.join(", ")} | catálogo: ${expected.join(", ")}`);
+  /* O preço exibido tem duas formas legítimas e nenhuma terceira.
+     Ou o cartão mostra o valor do catálogo, ou declara que a condição é
+     fechada em contrato ("Sob consulta") ou gratuita — e um plano negociado
+     não pode mostrar número nenhum: o catálogo guarda um valor para o
+     Enterprise porque a cobrança precisa dele, mas publicá-lo como preço
+     fechado venderia uma condição que ninguém contratou assim.
+     A conferência que importa é a terceira: nenhum cartão pode exibir um
+     número que não esteja no catálogo. Era isso que a versão anterior media,
+     e é isso que continua medido — agora sem obrigar todo plano pago a
+     estampar o valor. */
   const prices = await page.locator(".plan-card .plan-price").allInnerTexts();
-  const paidInCatalog = catalog.plans.filter((plan) => plan.monthlyPriceCents > 0);
-  record("o preço exibido é o preço do catálogo, em centavos convertidos",
-    paidInCatalog.every((plan) => {
-      const shown = prices[catalog.plans.indexOf(plan)] ?? "";
-      return shown.replace(/\s/gu, "").includes(String(Math.trunc(plan.monthlyPriceCents / 100)));
-    }) && paidInCatalog.length > 0,
+  const semPreco = /^(grátis|sob consulta)$/iu;
+  const inventados = [];
+  let comValorPublicado = 0;
+  for (const [index, plan] of catalog.plans.entries()) {
+    const mostrado = (prices[index] ?? "").split("\n")[0].trim();
+    const reais = String(Math.trunc(plan.monthlyPriceCents / 100));
+    if (semPreco.test(mostrado)) continue;
+    if (mostrado.replace(/\s/gu, "").includes(reais) && plan.monthlyPriceCents > 0) {
+      comValorPublicado += 1;
+      continue;
+    }
+    inventados.push(`${plan.name}: "${mostrado}" ≠ catálogo ${reais}`);
+  }
+  record("nenhum cartão exibe preço fora do catálogo",
+    inventados.length === 0,
+    inventados.length > 0 ? inventados.join(" | ") : prices.map((price) => price.split("\n")[0]).join(" | "));
+  record("ao menos um plano publica o preço do catálogo",
+    comValorPublicado > 0,
     prices.map((price) => price.split("\n")[0]).join(" | "));
 }
 
@@ -920,8 +944,12 @@ record("o login usa o logotipo oficial na variante clara",
   brandSources.join(" ").slice(0, 120));
 await page.goto(`${base}/`, { waitUntil: "networkidle" });
 const siteSources = await page.evaluate(() => [...document.querySelectorAll("img")].map((img) => img.getAttribute("src") ?? ""));
-record("o site usa o logotipo oficial colorido",
-  siteSources.some((src) => src.includes("vinculato-logo")),
+/* A conferência dizia "colorido" e aceitava qualquer `vinculato-logo`, então
+   passava com as duas variantes — inclusive com a azul-marinho sobre o
+   cabeçalho escuro, onde ela some. O comentário acima já pedia branco sobre
+   fundo escuro; agora a asserção cobra isso. */
+record("o site usa o logotipo oficial na variante clara, legível sobre a superfície escura",
+  siteSources.some((src) => src.includes("vinculato-logo-light")),
   siteSources.join(" ").slice(0, 120));
 
 record("nenhum erro de JavaScript no console do navegador", consoleErrors.length === 0,

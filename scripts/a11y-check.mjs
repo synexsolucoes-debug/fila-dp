@@ -16,16 +16,12 @@
  * Uso: npm run a11y-check   (requer o app em http://localhost:3000)
  */
 import { chromium } from "playwright";
-import { readdirSync, existsSync } from "node:fs";
 
 const BASE = process.env.A11Y_BASE_URL ?? "http://localhost:3000";
 const EMAIL = process.env.A11Y_EMAIL ?? "admin@vinculato.test";
 const PASSWORD = process.env.A11Y_PASSWORD ?? "EnsaioLocal!2026";
 
-const browsersRoot = process.env.PLAYWRIGHT_BROWSERS_PATH ?? "/opt/pw-browsers";
-const installed = existsSync(browsersRoot)
-  ? readdirSync(browsersRoot).find((entry) => /^chromium-\d+$/u.test(entry))
-  : undefined;
+
 
 const AUDIT = () => {
   const luminance = (rgb) => {
@@ -145,7 +141,17 @@ const AUDIT = () => {
           // Pior parada do gradiente: aprovar pela média esconderia a borda ruim.
           const value = Math.min(...surfaces.map((bg) => ratio(fg.rgb, bg)));
           if (value < need) {
-            contrastIssues.push({ tag: el.tagName, cls, trail, text: text.slice(0, 40), value, need, size });
+            /* A cor medida vai junto do número.
+               Sem ela, "1.64:1" não diz o que aconteceu: se o texto perdeu a
+               cor, se o fundo não aplicou, ou se a medição pegou outra
+               superfície. Isso custou uma investigação inteira — a varredura
+               acusava um contraste que o navegador local não reproduzia, e o
+               relatório não trazia nada com que comparar. */
+            const pior = surfaces.reduce((a, b) => (ratio(fg.rgb, a) <= ratio(fg.rgb, b) ? a : b));
+            contrastIssues.push({
+              tag: el.tagName, cls, trail, text: text.slice(0, 40), value, need, size,
+              fg: `rgb(${fg.rgb.join(", ")})`, bg: `rgb(${pior.join(", ")})`,
+            });
           }
         }
       }
@@ -174,9 +180,17 @@ const AUDIT = () => {
   return { contrastIssues, nameIssues, targetIssues, unmeasurable, overflowIssues };
 };
 
-const browser = await chromium.launch(
-  installed ? { executablePath: `${browsersRoot}/${installed}/chrome-linux/chrome` } : {},
-);
+/* O navegador é o que o Playwright instalou, e não um caminho adivinhado.
+   A versão anterior procurava `chromium-<revisão>` em PLAYWRIGHT_BROWSERS_PATH e
+   montava `chrome-linux/chrome` na mão. Isso quebra de duas formas, e as duas
+   aconteceram: o layout do pacote virou `chrome-linux64/` nas revisões novas, e
+   `find()` devolve a PRIMEIRA revisão encontrada — com uma instalação antiga ao
+   lado da atual, a conferência roda num Chromium que não é o do projeto. Foi
+   assim que esta varredura passou local no Chromium 141 e reprovou na CI no 151,
+   com 53 violações reais que a versão velha não media. Sem executablePath, o
+   Playwright resolve o binário que ele mesmo fixou; faltando, ele falha dizendo
+   para instalar, em vez de medir com outro motor em silêncio. */
+const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "pt-BR" });
 
 // Alvo e contraste mudam com o layout: um botão que tem folga no desktop pode
@@ -215,13 +229,25 @@ let screensAudited = 0;
  * volta a tolerar exatamente o colapso que ele existe para acusar — as três
  * telas novas poderiam sumir da varredura inteira sem baixar de 55.
  *
- * O número continua folgado de propósito — 64 contra 74 medidas — para acusar
+ * Subiu de 64 para 75 quando o site comercial entrou na varredura. Até aqui ela
+ * media a home e o login e mais nada de fora do produto: /planos, /solucao,
+ * /funcionalidades, /integracoes, /demonstracao, /contato, /faq, /termos,
+ * /privacidade, /subprocessadores e /recuperar — onze telas públicas, as que o
+ * cliente vê antes de contratar — nunca haviam sido medidas, e o relatório
+ * dizia "0 violações" sobre elas do mesmo jeito que já disse sobre metade do
+ * painel. Tela que ninguém mede é tela que ninguém conserta.
+ *
+ * O número continua folgado de propósito — 75 contra 86 medidas — para acusar
  * um colapso de cobertura sem quebrar quando um módulo sai do plano.
  */
-const MINIMO_DE_TELAS = 64;
+const MINIMO_DE_TELAS = 75;
 
-/** `path === null` audita a tela já aberta, sem recarregar — usado nas visões do painel. */
-async function audit(label, path, setup) {
+/**
+ * `path === null` audita a tela já aberta, sem recarregar — usado nas visões do
+ * painel. `viewports` permite medir uma superfície que só existe em uma largura,
+ * como o menu do cabeçalho público, sem inventar uma tela nas outras três.
+ */
+async function audit(label, path, setup, viewports = VIEWPORTS) {
   if (path !== null) {
     await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
     if (setup) await setup();
@@ -230,12 +256,12 @@ async function audit(label, path, setup) {
   console.log(`\n### ${label}${path === null ? "" : ` (${path})`}`);
   screensAudited += 1;
 
-  for (const viewport of VIEWPORTS) {
+  for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.waitForTimeout(500);
     const result = await page.evaluate(AUDIT);
     const uniq = (list, key) => [...new Map(list.map((item) => [key(item), item])).values()];
-    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.trail}:${i.value}`);
+    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.trail}:${i.value}:${i.fg}:${i.bg}`);
     const names = uniq(result.nameIssues, (i) => `${i.tag}.${i.cls}`);
     const targets = uniq(result.targetIssues, (i) => `${i.tag}.${i.cls}:${i.name}`);
     const blind = uniq(result.unmeasurable, (i) => `${i.tag}.${i.cls}`);
@@ -246,7 +272,7 @@ async function audit(label, path, setup) {
     const total = contrast.length + names.length + targets.length + overflows.length;
     console.log(`  ${viewport.label}: ${total === 0 ? "sem violações" : `${total} violação(ões)`}`);
     for (const i of contrast.slice(0, 8)) {
-      console.log(`     contraste ${i.tag}.${i.cls || "—"} ${i.value}:1 (precisa ${i.need}) "${i.text}" ← ${i.trail}`);
+      console.log(`     contraste ${i.tag}.${i.cls || "—"} ${i.value}:1 (precisa ${i.need}) ${i.fg} sobre ${i.bg} "${i.text}" ← ${i.trail}`);
     }
     for (const i of names.slice(0, 5)) console.log(`     sem nome ${i.tag}.${i.cls} → ${i.html}`);
     for (const i of targets.slice(0, 5)) console.log(`     alvo ${i.tag}.${i.cls} ${i.w}x${i.h} "${i.name}"`);
@@ -457,9 +483,53 @@ async function auditPlatformAreas(theme = "") {
   }
 }
 
+/**
+ * O site comercial inteiro, não só a home.
+ *
+ * A lista precisa acompanhar `lib/site-map.ts` — é o mesmo conjunto que alimenta
+ * o sitemap. `tests/site-launch.test.mts` compara as duas e reprova a divergência:
+ * uma página nova que entra no sitemap e não entra aqui nasce sem auditoria, que
+ * é exatamente o silêncio que o piso de cobertura existe para acusar.
+ */
+const PAGINAS_PUBLICAS = [
+  ["Home pública", "/"],
+  ["Solução", "/solucao"],
+  ["Funcionalidades", "/funcionalidades"],
+  ["Integrações", "/integracoes"],
+  ["Planos", "/planos"],
+  ["FAQ", "/faq"],
+  ["Contato", "/contato"],
+  ["Demonstração", "/demonstracao"],
+  ["Privacidade", "/privacidade"],
+  ["Termos de uso", "/termos"],
+  ["Subprocessadores", "/subprocessadores"],
+];
+
+/**
+ * O menu do cabeçalho público fica recolhido, e só existe abaixo de 1180px.
+ * Medir a home fechada nunca o alcançaria — a mesma razão pela qual o assistente
+ * do painel é aberto de propósito antes de ser auditado.
+ */
+async function auditSiteMenu() {
+  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(900);
+  const toggle = page.locator(".site-menu-toggle");
+  if (await toggle.count() === 0) {
+    console.log("\n### Home pública › Menu — botão não encontrado em 390px");
+    failures += 1;
+    return;
+  }
+  await toggle.first().click();
+  await page.waitForTimeout(500);
+  await audit("Home pública › Menu aberto", null, undefined, [{ label: "celular 390", width: 390, height: 844 }]);
+}
+
 try {
-  await audit("Home pública", "/");
+  for (const [label, path] of PAGINAS_PUBLICAS) await audit(label, path);
+  await auditSiteMenu();
   await audit("Login", "/login");
+  await audit("Recuperar acesso", "/recuperar");
   await audit("Painel", "/painel", async () => {
     await signIn();
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });

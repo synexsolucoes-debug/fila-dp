@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SiteHero, SiteShell, siteStyles as styles } from "../site/SiteShell";
+import { legalPendingFields } from "@/lib/marketing";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/subprocessadores" },
@@ -99,8 +100,14 @@ export default function SubprocessadoresPage() {
         <h2>7. Solicitações</h2>
         <p>
           Pedidos relacionados a este documento, incluindo cópia assinada do DPA, podem ser feitos pela página de
-          <Link href="/contato"> Contato</Link>.
+          <Link href="/contato?assunto=privacidade"> Contato</Link>.
         </p>
+
+        <h2>8. Informações a completar antes da publicação</h2>
+        <p>Os itens abaixo dependem do proprietário do Vinculato e ficam declarados como pendentes em vez de supostos:</p>
+        <ul>
+          {legalPendingFields.map((item) => <li key={item}>{item}</li>)}
+        </ul>
       </section>
     </SiteShell>
   );
