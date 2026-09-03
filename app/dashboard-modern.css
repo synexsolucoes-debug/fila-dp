@@ -4485,6 +4485,200 @@
   }
 }
 
+/* ==========================================================================
+   Central de comando — direção visual escolhida
+   ==========================================================================
+   A casca inteira passa a trabalhar como uma central operacional: tinta mais
+   profunda no plano de fundo, superfícies em degraus perceptíveis e o azul
+   reservado para a ação que muda o trabalho. Os módulos consomem estes tokens,
+   portanto Folha, Pagamentos PJ, Ponto, EPI, Integrações e Agentes acompanham
+   a mudança sem ganhar temas paralelos.
+   ========================================================================== */
+.dashboard-shell.theme-dark {
+  --ui-bg: #07111f;
+  --ui-surface: #0d1b2d;
+  --ui-surface-elevated: #14243a;
+  --ui-surface-muted: #102238;
+  --ui-border: #233852;
+  --ui-border-strong: #38526f;
+  --ui-text: #f4f7fb;
+  --ui-text-soft: #bdcad9;
+  --ui-text-muted: #8fa2b8;
+  --ui-primary: #365cf5;
+  --ui-primary-hover: #5274ff;
+  --ui-primary-soft: #1b3265;
+  --ui-mint: #8ea5ff;
+  --ui-mint-text: #b9c8ff;
+  --ui-on-mint: #07111f;
+  --ui-accent: #365cf5;
+  --ui-accent-text: #b9c8ff;
+  --ui-on-accent: #ffffff;
+  --ui-accent-soft: #1b3265;
+  --ui-rail: #081526;
+  --ui-rail-border: #1b3048;
+  --ui-rail-context: #0e2035;
+  --ui-rail-hover: #102642;
+  --ui-rail-active: #173b8b;
+  --ui-rail-active-text: #f7f9ff;
+  --ui-rail-text: #c7d3e2;
+  --ui-rail-icon: #94a7bd;
+  --ui-rail-section: #94a7bd;
+  --ui-avatar-bg: #1b3265;
+  --ui-avatar-text: #dce5ff;
+  --ui-state-neutral-bg: #18283b;
+  --ui-state-neutral-text: #c7d3e2;
+  --ui-state-ok-bg: #103c31;
+  --ui-state-ok-text: #79dfb9;
+  --ui-state-warn-bg: #402d12;
+  --ui-state-warn-text: #f3c87d;
+  --ui-state-danger-bg: #431d22;
+  --ui-state-danger-text: #ffaaa8;
+  --ui-shadow-card: none;
+  --ui-shadow-modal: 0 28px 90px rgba(0, 0, 0, .58);
+}
+
+.theme-dark .dashboard-sidebar {
+  padding: 18px 14px 14px;
+  background: var(--ui-rail);
+}
+
+.theme-dark .sidebar-group-context {
+  margin-top: 14px;
+  border-color: var(--ui-rail-border);
+  background: var(--ui-rail-context);
+}
+
+.theme-dark .dashboard-sidebar nav {
+  margin-top: 24px;
+  gap: 4px;
+}
+
+.theme-dark .dashboard-sidebar nav button {
+  min-height: 43px;
+  border-radius: var(--ui-radius-md);
+  transition: background-color var(--motion-hover), color var(--motion-hover), border-color var(--motion-hover);
+}
+
+.theme-dark .dashboard-sidebar nav button:hover {
+  background: var(--ui-rail-hover);
+  color: var(--ui-rail-active-text);
+  transform: none;
+}
+
+.theme-dark .dashboard-sidebar nav button.active,
+.theme-dark .dashboard-sidebar nav button[aria-current="page"] {
+  background: var(--ui-rail-active);
+  color: var(--ui-rail-active-text);
+  box-shadow: inset 3px 0 0 #82a0ff;
+}
+
+.theme-dark .dashboard-sidebar nav button.active > span,
+.theme-dark .dashboard-sidebar nav button[aria-current="page"] > span {
+  color: #dbe5ff;
+}
+
+.theme-dark .dashboard-header {
+  height: 64px;
+  border-bottom-color: var(--ui-border);
+  background: color-mix(in srgb, #0a1728 94%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.theme-dark .dashboard-header-actions {
+  gap: 8px;
+}
+
+.theme-dark .dashboard-header-actions :is(.header-company-select, .header-period-select),
+.theme-dark .dashboard-header-actions button:not(.header-profile) {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+
+.theme-dark .dashboard-header-actions :is(.header-company-select, .header-period-select):hover,
+.theme-dark .dashboard-header-actions button:not(.header-profile):hover {
+  border-color: var(--ui-border-strong);
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text);
+}
+
+.theme-dark .dashboard-header-actions .global-search-trigger {
+  width: min(340px, 28vw);
+  border-color: #29425f;
+  background: #0a182a;
+}
+
+.theme-dark .global-search-trigger kbd {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-muted);
+}
+
+.theme-dark .dashboard-header-actions .new-demand,
+.theme-dark .dashboard-header-actions .new-demand:hover {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: #ffffff;
+}
+
+.theme-dark .dashboard-header-actions .new-demand:hover {
+  background: var(--ui-primary-hover);
+}
+
+.theme-dark .dashboard-content {
+  padding-top: 26px;
+}
+
+.theme-dark .dashboard-heading {
+  margin-bottom: 20px;
+}
+
+.theme-dark .dashboard-heading h1 {
+  font-size: clamp(23px, 1.55vw, 29px);
+  letter-spacing: -.035em;
+}
+
+.theme-dark .dashboard-stats article,
+.theme-dark .overview-panel,
+.theme-dark .dashboard-column,
+.theme-dark .dashboard-task {
+  border-color: var(--ui-border);
+  box-shadow: none;
+}
+
+.theme-dark .dashboard-stats article:hover,
+.theme-dark .overview-kpi:hover,
+.theme-dark .dashboard-task:hover {
+  border-color: var(--ui-border-strong);
+  background: color-mix(in srgb, var(--ui-primary) 5%, var(--ui-surface));
+  transform: none;
+}
+
+.theme-dark .overview-panel > header,
+.theme-dark .dashboard-column > header {
+  border-bottom-color: var(--ui-border);
+  background: color-mix(in srgb, var(--ui-surface-elevated) 42%, transparent);
+}
+
+.theme-dark .overview-table tbody tr:hover td {
+  background: #10243c;
+}
+
+.theme-dark :is(button, [role="button"], select) {
+  cursor: pointer;
+}
+
+.theme-dark :is(button, select):disabled {
+  cursor: not-allowed;
+}
+
+@media (max-width: 1180px) {
+  .theme-dark .dashboard-header-actions .global-search-trigger {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
 
 /* ==========================================================================
    Destaque com foreground próprio
@@ -5501,4 +5695,21 @@
 @media (max-width: 1050px) {
   .view-transition > .workspace-settings-layout { grid-template-columns: minmax(0, 1fr); }
   .view-transition > .workspace-settings-layout > .settings-nav { position: static; }
+}
+
+/* Última camada de tokens: os módulos carregam depois de partes da casca e não
+   podem recuperar uma paleta antiga por ordem de cascata. */
+.dashboard-shell.theme-dark {
+  --ui-accent: #365cf5;
+  --ui-accent-text: #b9c8ff;
+  --ui-on-accent: #ffffff;
+  --ui-accent-soft: #1b3265;
+  --ui-state-neutral-bg: #18283b;
+  --ui-state-neutral-text: #c7d3e2;
+  --ui-state-ok-bg: #103c31;
+  --ui-state-ok-text: #79dfb9;
+  --ui-state-warn-bg: #402d12;
+  --ui-state-warn-text: #f3c87d;
+  --ui-state-danger-bg: #431d22;
+  --ui-state-danger-text: #ffaaa8;
 }
