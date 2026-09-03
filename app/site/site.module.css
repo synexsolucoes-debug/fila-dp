@@ -6,7 +6,17 @@
      barra de rolagem no esquema escuro sobre superfície branca — controle
      ilegível em formulário que a pessoa precisa preencher. */
   color-scheme: light;
-  /* Os tokens da identidade, e não os apelidos semânticos.
+  /* Três regras desta folha leem `--vin-*` direto, sem passar por `--site-*`:
+     o link de pular, o selo do plano e a pílula "Parcial". Não é preferência de
+     estilo, é o que a medição mostrou. Quando o mesmo desacoplamento foi feito
+     nos dois lugares — aqui, redefinindo os `--site-*`, e em globals.css,
+     trocando a cor direto no seletor — a CI parou de acusar o selo da home
+     (globals) e continuou acusando estes três (esta folha), com as mesmas cores
+     de antes. A diferença entre o que sarou e o que não sarou é exatamente a
+     indireção pela propriedade personalizada intermediária, então ela sai de
+     onde falhava e fica onde funciona.
+
+     Os tokens da identidade, e não os apelidos semânticos.
      `--brand`, `--ui-surface`, `--ui-warning` e companhia são redefinidos pela
      casca do painel — é exatamente para isso que ela existe. Enquanto o site
      lia esses nomes, ele dependia de nunca cruzar com aquelas redefinições, e
@@ -46,7 +56,7 @@
 
 .skipLink {
   position: absolute; left: -9999px; top: 8px; z-index: 20; padding: 10px 14px;
-  border-radius: 8px; background: var(--site-accent); color: var(--brand-contrast); font-weight: 700;
+  border-radius: 8px; background: var(--vin-blue); color: var(--brand-contrast); font-weight: 700;
 }
 .skipLink:focus { left: 12px; }
 
@@ -113,7 +123,7 @@
 /* O âmbar de aviso rende 5,19:1 sobre branco, mas o próprio preenchimento da
    pílula o derruba para 4,4:1 — abaixo do mínimo. O tom forte devolve a folga
    sem mudar o significado da cor. */
-.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--site-warning-strong); background: color-mix(in srgb, var(--site-warning) 10%, var(--site-surface)); }
+.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--vin-warning) 45%, transparent); color: var(--vin-warning-strong); background: color-mix(in srgb, var(--vin-warning) 10%, var(--vin-surface)); }
 .badge[data-state="assisted"] { border-color: color-mix(in srgb, var(--site-accent) 35%, transparent); color: var(--site-accent); background: color-mix(in srgb, var(--site-accent) 8%, var(--site-surface)); }
 .badge[data-state="planned"] { color: var(--site-soft); }
 
@@ -128,7 +138,7 @@
 .plan[data-recommended="true"] { border-color: var(--site-accent); box-shadow: 0 0 0 1px var(--site-accent); }
 .planFlag {
   align-self: flex-start; padding: 3px 9px; border-radius: 999px;
-  background: var(--site-accent); color: var(--brand-contrast);
+  background: var(--vin-blue); color: var(--brand-contrast);
   font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
 }
 .plan h3 { margin: 0; font-size: 1.1rem; }
