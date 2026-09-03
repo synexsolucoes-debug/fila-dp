@@ -721,7 +721,7 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
   assert.match(paymentService, /calculateContractorBaseProration/);
   assert.match(paymentService, /calculation\.prorationDays/);
   assert.match(contractorRoute, /upsertContractorClosing/);
-  assert.match(contractorRoute, /status = 'open'/);
+  assert.match(contractorRoute, /status NOT IN \('closed', 'paid'\)/);
   assert.match(overview, /c\.proration_total_days/);
   assert.match(componentRoute, /upsertContractorClosing/);
   assert.match(componentRoute, /FIXED_COMPONENT_EDIT_REQUIRES_SOURCE/);

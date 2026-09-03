@@ -207,7 +207,7 @@ export async function PATCH(request: Request, { params }: Params) {
     const updatedProfile = await requireContractorProfile(d1, workspace.id, id);
     const openClosings = await d1.prepare(`SELECT payroll_cycle_id, company_id
       FROM fdp_contractor_closings
-      WHERE workspace_id = ? AND provider_id = ? AND status = 'open' AND excluded_at IS NULL`)
+      WHERE workspace_id = ? AND provider_id = ? AND status NOT IN ('closed', 'paid') AND excluded_at IS NULL`)
       .bind(workspace.id, id)
       .all<{ payroll_cycle_id: string; company_id: string }>();
     const recalculated = [];
