@@ -1035,8 +1035,15 @@
 .access-recovery-link button { min-height: 31px; padding: 0 9px; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-primary); cursor: pointer; font: 700 9px var(--font-geist-sans), sans-serif; white-space: nowrap; }
 .access-recovery-link input { width: 100%; min-height: 36px; margin-top: 11px; padding: 0 9px; border: 1px solid var(--ui-border-strong); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-soft); font: 400 10px var(--font-geist-mono), monospace; }
 
-.auth-recovery-hint { margin: 12px 0 0; color: #758297; font-size: 11px; line-height: 1.45; }
-.recovery-state { display: grid; gap: 13px; }.recovery-state h2, .recovery-state p { margin: 0; }.recovery-state h2 { color: #11233b; font-size: 25px; }.recovery-state p { color: #718095; font-size: 13px; line-height: 1.55; }
+/* Os dois cinzas destas telas eram HEX soltos, herdados de antes dos tokens, e
+   nenhum dos dois passava no piso de texto pequeno: `#718095` rende 3,78:1 e
+   `#758297`, 3,89:1. A varredura só os alcançou quando /recuperar entrou na
+   auditoria — enquanto ela media a home e o login e mais nada, a tela de
+   recuperação de acesso ficou anos sem ser medida. Os tokens de texto
+   secundário já existem e rendem 5,78:1. */
+.auth-recovery-hint { margin: 12px 0 0; color: var(--ui-text-soft); font-size: 11px; line-height: 1.45; }
+.auth-recovery-hint a { color: var(--brand); font-weight: 700; text-decoration: underline; }
+.recovery-state { display: grid; gap: 13px; }.recovery-state h2, .recovery-state p { margin: 0; }.recovery-state h2 { color: var(--brand-strong); font-size: 25px; }.recovery-state p { color: var(--ui-text-soft); font-size: 13px; line-height: 1.55; }
 
 @media (max-width: 760px) {
   .access-recovery-link > header { flex-direction: column; }

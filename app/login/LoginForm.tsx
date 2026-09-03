@@ -57,7 +57,10 @@ export function LoginForm() {
         {error && <p className="auth-login-error" role="alert">{error}</p>}
         <button className="button auth-primary" disabled={busy}>{busy ? "Aguarde…" : "Entrar"}<ArrowRight aria-hidden="true" /></button>
       </form>
-      <p className="auth-recovery-hint">Primeiro acesso ou senha esquecida? Peça ao administrador do grupo um novo link de ativação.</p>
+      <p className="auth-recovery-hint">
+        Esqueceu a senha? <a href="/recuperar">Recuperar acesso</a>. No primeiro acesso, o link de ativação é enviado pelo
+        administrador do grupo.
+      </p>
       <div className="auth-security-note"><CheckCircle2 aria-hidden="true" /><p>O administrador define o papel, as empresas permitidas e pode revogar o acesso a qualquer momento.</p></div>
     </>
   );

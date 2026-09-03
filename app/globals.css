@@ -71,6 +71,9 @@
   --ui-text-muted: #626C7A;
   --ui-success: #137a4f;
   --ui-warning: #a15c07;
+  /* O mesmo âmbar, escurecido para sobreviver ao próprio preenchimento: sobre a
+     pílula tingida, `--ui-warning` cai para 4,4:1; este rende 6,6:1. */
+  --ui-warning-strong: #7d4705;
   --ui-danger: #b42318;
 
   /* Escala de raio — três degraus, e só três (§90).
@@ -175,6 +178,34 @@ button, summary { font: inherit; }
 .site-header nav a:hover, .login-link:hover { color: var(--brand); }
 .header-actions { display: flex; align-items: center; gap: 20px; }
 
+/* -------------------------------------------------------------------------- */
+/* Menu do cabeçalho em tela estreita                                          */
+/* -------------------------------------------------------------------------- */
+/* A regra de 1180px escondia a navegação e não colocava nada no lugar: no
+   celular as seis páginas comerciais ficavam inalcançáveis. O botão abaixo é o
+   substituto — some no desktop, aparece quando a barra encolhe. */
+.site-menu { position: relative; display: none; }
+.site-menu-toggle {
+  min-height: 40px; min-width: 40px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--ui-border); border-radius: var(--radius-sm); background: var(--ui-surface);
+  color: var(--brand-strong); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.site-menu-toggle:hover { border-color: var(--brand); color: var(--brand); }
+.site-menu-panel {
+  position: absolute; right: 0; top: calc(100% + 10px); z-index: 60; min-width: 232px; padding: 10px;
+  display: grid; gap: 4px; border: 1px solid var(--ui-border); border-radius: var(--radius-md);
+  background: var(--ui-surface); box-shadow: var(--shadow-soft);
+}
+.site-menu-panel nav { display: grid; gap: 2px; }
+.site-menu-panel nav a {
+  min-height: 40px; display: flex; align-items: center; padding: 0 12px; border-radius: var(--radius-sm);
+  color: var(--ui-text); font-size: 14px; font-weight: 620;
+}
+.site-menu-panel nav a:hover { background: var(--brand-soft); color: var(--brand-strong); }
+.site-menu-actions { display: grid; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--ui-border); }
+.site-menu-actions .button { width: 100%; }
+.site-menu-actions .login-link { display: inline-flex; justify-content: center; min-height: 40px; color: var(--brand); font-weight: 700; }
+
 .button {
   min-height: 50px;
   padding: 0 22px;
@@ -201,6 +232,12 @@ button, summary { font: inherit; }
 /* -------------------------------------------------------------------------- */
 /* Página inicial                                                              */
 /* -------------------------------------------------------------------------- */
+
+/* O layout declara `color-scheme: dark` porque o painel é escuro. A home e as
+   telas de acesso são claras, e sem esta linha o navegador desenha os controles
+   nativos — campo, caixa de seleção, barra de rolagem — no esquema escuro sobre
+   superfície branca. */
+.home, .auth-page { color-scheme: light; }
 
 .home-skip { position: absolute; left: -9999px; top: 8px; z-index: 60; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--brand-strong); color: var(--brand-contrast); font-weight: 700; }
 .home-skip:focus { left: 12px; }
@@ -345,6 +382,23 @@ button, summary { font: inherit; }
 .plans-empty h3 { margin: 0 0 12px; font-size: 22px; letter-spacing: -.03em; color: var(--brand-strong); }
 .plans-empty p { margin: 0 0 22px; color: var(--ui-text-soft); font-size: 14px; line-height: 1.65; }
 .plans-note { margin: 30px 0 0; text-align: center; font-size: 13px; font-weight: 700; color: var(--brand); }
+
+/* O plano recomendado se distingue por traço, não por fundo colorido: fundo de
+   cor obriga a reescrever o contraste de todo o texto de dentro, e é assim que
+   o cartão em destaque acaba sendo o único ilegível da fileira. */
+.plan-card[data-recommended="true"] { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand); }
+.plan-flag {
+  align-self: flex-start; margin-top: 10px; padding: 4px 9px; border-radius: 99px;
+  background: var(--brand); color: var(--brand-contrast);
+  font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+}
+
+/* Cancelamento, mudança de plano, saída com os dados e suporte: as quatro
+   perguntas que aparecem depois do preço e antes da assinatura. */
+.commitment-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 14px; margin-top: 34px; }
+.commitment-grid article { padding: 20px; border: 1px solid var(--ui-border); border-radius: var(--radius-md); background: var(--ui-bg); }
+.commitment-grid h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: -.02em; color: var(--brand-strong); }
+.commitment-grid p { margin: 0; color: var(--ui-text-soft); font-size: 13px; line-height: 1.6; }
 /* Link de "ver mais" no rodapé de seção. Um único lugar para as três variantes,
  * com o alvo de 24px que a WCAG 2.5.8 exige. */
 .feature-note a, .plans-note a, .integration-note a { display: inline-flex; align-items: center; min-height: 24px; gap: 8px; }
@@ -388,7 +442,10 @@ button, summary { font: inherit; }
 .site-boundary-note { grid-column: 1 / -1; margin: 0; padding-top: 20px; border-top: 1px solid var(--on-brand-line); color: var(--on-brand-soft); font-size: 11.5px; line-height: 1.6; }
 
 @media (max-width: 1180px) {
-  .site-header nav { display: none; }
+  /* Filho direto: a navegação de dentro do painel do menu precisa continuar
+     visível justamente aqui, que é onde ela é a única navegação existente. */
+  .site-header > nav { display: none; }
+  .site-menu { display: block; }
   .hero { grid-template-columns: 1fr; padding: 72px 5vw 76px; gap: 44px; }
   .hero-copy { max-width: none; }
   .pain-grid, .plans-grid, .feature-grid { grid-template-columns: repeat(2, 1fr); }
@@ -397,7 +454,9 @@ button, summary { font: inherit; }
 
 @media (max-width: 860px) {
   .site-header { min-height: 64px; padding: 0 20px; }
-  .login-link { display: none; }
+  /* "Entrar" e o botão de contato passam a viver dentro do menu: escondê-los
+     sem oferecer outro caminho era o que tirava o acesso do celular. */
+  .header-actions > .login-link, .header-actions > .button { display: none; }
   .button-small { min-height: 38px; padding: 0 14px; }
   .hero { padding: 56px 20px 60px; }
   .proof-bar { padding: 22px 20px; grid-template-columns: 1fr; gap: 14px; }

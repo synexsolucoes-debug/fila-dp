@@ -1,6 +1,11 @@
 .site {
   /* As páginas comerciais consomem a identidade pelos tokens globais da marca:
      nenhum valor de cor é redefinido aqui. */
+  /* O layout declara `color-scheme: dark` porque o painel é escuro. O site é
+     claro, e sem esta linha o navegador desenha select, caixa de seleção e
+     barra de rolagem no esquema escuro sobre superfície branca — controle
+     ilegível em formulário que a pessoa precisa preencher. */
+  color-scheme: light;
   --site-bg: var(--ui-bg);
   --site-surface: var(--ui-surface);
   --site-border: var(--ui-border);
@@ -18,7 +23,13 @@
   font-size: 15px;
   line-height: 1.6;
 }
-.site a { color: inherit; }
+/* `:where()` zera a especificidade do seletor: a regra continua valendo para o
+   link de texto corrido, mas deixa de vencer as cores dos componentes.
+   Enquanto era `.site a`, ela ganhava de `.primaryButton` e de `.skipLink` — o
+   botão azul do cabeçalho ficava com o texto escuro do corpo, 3,1:1 sobre o
+   próprio preenchimento, em todas as nove páginas internas. Não era um caso de
+   uma tela: era o botão principal do site inteiro. */
+.site :where(a) { color: inherit; }
 .site h1, .site h2, .site h3 { line-height: 1.25; text-wrap: balance; }
 .site :focus-visible { outline: 3px solid color-mix(in srgb, var(--site-accent) 35%, transparent); outline-offset: 3px; }
 
@@ -66,23 +77,60 @@
 
 .boundaryCard { border-left: 4px solid var(--site-warning); }
 
-.tableWrap { overflow-x: auto; border: 1px solid var(--site-border); border-radius: 12px; background: var(--site-surface); }
+/* A tabela larga rola dentro da própria caixa, nunca empurrando a página.
+   `tabindex` na caixa é o que permite rolar essa região pelo teclado — sem ele
+   o conteúdo que passa da borda fica inalcançável para quem não usa mouse. */
+/* `contain: paint` fecha a conta da rolagem.
+   Só com `overflow-x: auto` a página não rola de lado — `window.scrollX` fica
+   em zero —, mas o Chromium continua somando a largura intrínseca da tabela ao
+   `scrollWidth` do documento: 441px medidos numa janela de 390px, com a tabela
+   real em 513px dentro de uma caixa de 350px. A conferência de acessibilidade
+   lê esse número e acusa transbordo horizontal, e ela está certa em acusar: o
+   documento *declara* ser mais largo que a janela. A contenção de pintura diz
+   ao navegador o que o `overflow` já fazia na prática — nada desta caixa é
+   desenhado fora dela — e o número passa a bater com o comportamento. */
+.tableWrap { overflow-x: auto; contain: paint; border: 1px solid var(--site-border); border-radius: 12px; background: var(--site-surface); }
+.tableWrap:focus-visible { outline: 3px solid color-mix(in srgb, var(--site-accent) 45%, transparent); outline-offset: 2px; }
+.tableCaption { padding: 11px 14px; text-align: left; color: var(--site-soft); font-size: .78rem; border-bottom: 1px solid var(--site-border); }
+.tableHint { display: block; margin-top: 3px; font-weight: 500; color: var(--site-soft); font-size: .76rem; }
+.cellMark { font-size: 1rem; line-height: 1; color: var(--site-accent); }
 .table { width: 100%; border-collapse: collapse; font-size: .87rem; }
 .table th, .table td { padding: 11px 14px; text-align: left; border-top: 1px solid var(--site-border); vertical-align: top; }
 .table thead th { border-top: 0; background: var(--ui-surface-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--site-soft); }
 .badge { display: inline-block; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--site-border); font-size: .7rem; font-weight: 720; white-space: nowrap; }
 .badge[data-state="available"] { border-color: color-mix(in srgb, var(--site-accent) 45%, transparent); color: var(--site-accent); background: var(--site-accent-soft); }
-.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--site-warning); background: color-mix(in srgb, var(--site-warning) 12%, var(--site-surface)); }
+/* O âmbar de aviso rende 5,19:1 sobre branco, mas o próprio preenchimento da
+   pílula o derruba para 4,4:1 — abaixo do mínimo. O tom forte devolve a folga
+   sem mudar o significado da cor. */
+.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--ui-warning-strong); background: color-mix(in srgb, var(--site-warning) 10%, var(--site-surface)); }
 .badge[data-state="assisted"] { border-color: color-mix(in srgb, var(--site-accent) 35%, transparent); color: var(--site-accent); background: color-mix(in srgb, var(--site-accent) 8%, var(--site-surface)); }
 .badge[data-state="planned"] { color: var(--site-soft); }
 
-.planGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(272px, 1fr)); gap: 14px; }
-.plan { display: flex; flex-direction: column; gap: 10px; padding: 20px; border: 1px solid var(--site-border); border-radius: 14px; background: var(--site-surface); }
+.planGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); gap: 14px; align-items: stretch; }
+.plan {
+  position: relative; display: flex; flex-direction: column; gap: 10px; padding: 20px;
+  border: 1px solid var(--site-border); border-radius: 14px; background: var(--site-surface);
+}
+/* O recomendado se distingue por traço e rótulo, não por cor de fundo: fundo
+   colorido em um cartão de quatro obriga a reescrever o contraste de todo o
+   texto de dentro, e é assim que um cartão destacado vira o único ilegível. */
+.plan[data-recommended="true"] { border-color: var(--site-accent); box-shadow: 0 0 0 1px var(--site-accent); }
+.planFlag {
+  align-self: flex-start; padding: 3px 9px; border-radius: 999px;
+  background: var(--site-accent); color: var(--brand-contrast);
+  font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+}
 .plan h3 { margin: 0; font-size: 1.1rem; }
 .planPrice { font-size: 1.6rem; font-weight: 800; }
-.planPrice small { display: block; font-size: .74rem; font-weight: 600; color: var(--site-soft); }
+.planPrice small { display: block; margin-top: 4px; font-size: .74rem; font-weight: 600; color: var(--site-soft); }
+.planDescription { margin: 0; color: var(--site-soft); font-size: .86rem; }
 .planList { margin: 0; padding-left: 18px; color: var(--site-soft); font-size: .86rem; display: grid; gap: 4px; }
+/* O botão encosta no fim do cartão para que os quatro alinhem, independentemente
+   de quantas linhas o texto de cima ocupou. */
+.plan > a { margin-top: auto; }
+.planFootnote { margin: 0; color: var(--site-soft); font-size: .76rem; line-height: 1.5; }
 .planNote { margin-top: 16px; color: var(--site-soft); font-size: .82rem; }
+.cardAction { margin: 14px 0 0; }
 
 .faqList { display: grid; gap: 10px; }
 .faqItem { padding: 16px 18px; border: 1px solid var(--site-border); border-radius: 12px; background: var(--site-surface); }
@@ -105,7 +153,16 @@
 .form textarea { min-height: 110px; resize: vertical; }
 .formRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .consent { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; font-size: .82rem; color: var(--site-soft); }
-.consent input { min-height: 0; width: 17px; height: 17px; margin-top: 2px; }
+/* 24px é o mínimo da WCAG 2.5.8, e o consentimento é justamente a caixa que
+   ninguém pode errar: sem ela marcada o formulário não envia. */
+.consent input { min-height: 24px; width: 24px; height: 24px; margin-top: 0; flex: 0 0 auto; }
+/* A mensagem fica colada no campo que ela explica, e não numa lista no topo:
+   quem usa leitor de tela a encontra pelo `aria-describedby`, e quem enxerga a
+   encontra onde já está olhando. */
+.fieldError { color: var(--site-danger); font-size: .78rem; font-weight: 620; line-height: 1.45; }
+.form input[aria-invalid="true"], .form select[aria-invalid="true"], .form textarea[aria-invalid="true"] {
+  border-color: var(--site-danger);
+}
 .formStatus { margin: 0; padding: 12px 14px; border-radius: 9px; font-size: .86rem; }
 .formStatus[data-tone="success"] { border: 1px solid color-mix(in srgb, var(--site-accent) 45%, transparent); background: var(--site-accent-soft); color: var(--site-accent); }
 .formStatus[data-tone="error"] { border: 1px solid color-mix(in srgb, var(--site-danger) 45%, transparent); background: color-mix(in srgb, var(--site-danger) 10%, var(--site-surface)); color: var(--site-danger); }
