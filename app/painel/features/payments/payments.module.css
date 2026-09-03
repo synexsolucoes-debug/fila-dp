@@ -113,6 +113,24 @@
 .approvalPanel header p { margin: 0; color: var(--pay-soft); font-size: .72rem; }
 .approvalEmpty { margin: 0; padding: 10px 12px; border: 1px dashed var(--pay-border); border-radius: 8px; color: var(--pay-soft); font-size: .72rem; }
 
+/* Apurar uma pessoa só. Fica ao lado da tabela, não no topo da tela: é ação de
+   quem já está olhando a competência e precisa refazer um caso pontual. */
+.singleClosingPanel {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  margin-top: 14px; padding: 13px 15px;
+  border: 1px solid var(--pay-border); border-radius: 12px; background: var(--pay-surface);
+}
+.singleClosingPanel > div:first-child { display: flex; align-items: flex-start; gap: 9px; }
+.singleClosingPanel h3 { margin: 0 0 3px; font-size: .88rem; }
+.singleClosingPanel p { margin: 0; max-width: 62ch; color: var(--pay-soft); font-size: .7rem; line-height: 1.45; }
+.singleClosingActions { display: flex; align-items: flex-end; gap: 9px; flex-wrap: wrap; }
+.singleClosingActions > label { display: grid; gap: 5px; }
+.singleClosingActions span { color: var(--pay-soft); font-size: .65rem; font-weight: 720; }
+.singleClosingActions select {
+  min-height: 38px; min-width: 210px; padding: 0 10px; border: 1px solid var(--pay-border);
+  border-radius: 7px; background: var(--pay-surface); color: inherit;
+}
+
 /* O que saiu da competência. A borda tracejada e a cor apagada dizem, antes de
    qualquer texto, que estas linhas não são pagamento a fazer. */
 .excludedPanel {

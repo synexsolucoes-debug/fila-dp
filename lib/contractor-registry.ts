@@ -204,14 +204,25 @@ export type FixedItem = {
  * Item encerrado sai sozinho quando a vigência passa — é justamente para isso
  * que ele existe. Relançar todo mês na mão erra por esquecimento, e o
  * esquecimento só aparece quando o prestador reclama.
+ *
+ * **Quem decide é a vigência, não o marcador.** Encerrar um valor recorrente
+ * grava a competência final e marca o item como `ended` no mesmo instante —
+ * inclusive quando essa competência final ainda está à frente. Enquanto a
+ * decisão era do marcador, um lançamento "determinado" parava de entrar na
+ * folha no dia em que alguém datou o fim dele, e não no fim que foi datado:
+ * o prestador perdia as competências que ainda estavam dentro do combinado, e
+ * a folha ficava sem a linha sem nenhum erro aparecer.
+ *
+ * Sem competência final, `ended` continua tirando o item de circulação na
+ * hora: não há data para respeitar, e o encerramento é o único sinal que
+ * existe.
  */
 export function fixedItemsForCompetence(items: readonly FixedItem[], competence: string) {
   assertCompetence(competence);
   return items.filter((item) => {
-    if (item.status !== "active") return false;
     if (item.effectiveFrom > competence) return false;
-    if (item.effectiveTo && item.effectiveTo < competence) return false;
-    return true;
+    if (item.effectiveTo) return item.effectiveTo >= competence;
+    return item.status === "active";
   });
 }
 

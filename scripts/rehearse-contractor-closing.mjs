@@ -44,6 +44,7 @@ const companyId = `${workspaceId}-co`;
 const cycleId = `${workspaceId}-cy`;
 const providerId = `${workspaceId}-pj`;
 const ownerId = `${workspaceId}-user`;
+const itemDeterminadoId = `${workspaceId}-fixo`;
 
 const d1 = getScopedD1({ workspaceId, userId: ownerId });
 const falhas = [];
@@ -56,7 +57,14 @@ const falhas = [];
    redonda, "3000" atravessa como inteiro válido e a instrução passa. */
 const baseAmount = 6000;
 const descontoComCentavos = 59.93;
-const liquidoEsperado = 5940.07;
+
+/* E, na mesma folha, um lançamento recorrente "determinado" já encerrado com
+   competência final no futuro. Encerrar grava a data e marca o item como
+   `ended` no mesmo instante; enquanto o marcador decidia, o lançamento sumia
+   da folha antes da data que ele mesmo definiu — sem erro nenhum aparecer,
+   que é o pior jeito de um valor desaparecer. */
+const descontoDeterminado = 100;
+const liquidoEsperado = 5840.07;
 
 async function semear() {
   await d1.prepare("INSERT INTO fdp_users (id, email, name) VALUES (?, ?, 'Dono do ensaio')")
@@ -79,6 +87,11 @@ async function semear() {
        direction, component_type, description, component_quantity, amount, origin, status, created_by)
     VALUES (?, ?, ?, ?, ?, ?, 'debit', 'other_debit', 'Desconto com centavos', 1, ?, 'manual', 'active', 'ensaio')`)
     .bind(randomUUID(), workspaceId, companyId, providerId, cycleId, competence, descontoComCentavos).run();
+  await d1.prepare(`INSERT INTO fdp_contractor_fixed_items
+      (id, workspace_id, company_id, provider_id, direction, component_type, description, amount,
+       effective_from, effective_to, status, note, created_by)
+    VALUES (?, ?, ?, ?, 'debit', 'other_debit', 'Determinado encerrado com data futura', ?, ?, ?, 'ended', '', 'ensaio')`)
+    .bind(itemDeterminadoId, workspaceId, companyId, providerId, descontoDeterminado, "2099-01", "2099-06").run();
 }
 
 const profile = () => d1.prepare(`SELECT p.provider_id, p.company_id, p.contract_reference, p.base_amount, p.fixed_caju_difference,
@@ -95,6 +108,7 @@ const profile = () => d1.prepare(`SELECT p.provider_id, p.company_id, p.contract
 async function limpar() {
   const escrito = [
     d1.prepare("DELETE FROM fdp_contractor_components WHERE workspace_id = ?").bind(workspaceId),
+    d1.prepare("DELETE FROM fdp_contractor_fixed_items WHERE workspace_id = ?").bind(workspaceId),
     d1.prepare("DELETE FROM fdp_contractor_closings WHERE workspace_id = ?").bind(workspaceId),
     d1.prepare("DELETE FROM fdp_contractor_profiles WHERE workspace_id = ?").bind(workspaceId),
     d1.prepare("DELETE FROM fdp_auxiliary_providers WHERE workspace_id = ?").bind(workspaceId),
@@ -151,7 +165,21 @@ async function main() {
     falhas.push(`situação da conferência ${gravado.invoice_review_status} — esperado awaiting_issue com nota a emitir`);
   }
 
-  console.log(`apurado ${Number(gravado.net_amount).toFixed(2)}; nota ${nota.toFixed(2)} + complemento ${complemento.toFixed(2)}; conferência ${gravado.invoice_review_status}`);
+  /* 4. E o lançamento determinado está na folha, materializado como componente
+        da competência — não só somado por fora. É pela linha que a conferência
+        explica o valor. */
+  const materializado = await d1.prepare(`SELECT amount, status FROM fdp_contractor_components
+    WHERE workspace_id = ? AND payroll_cycle_id = ? AND fixed_item_id = ?`)
+    .bind(workspaceId, cycleId, itemDeterminadoId).first();
+  if (!materializado) {
+    falhas.push("o lançamento determinado não entrou na folha, mesmo com a competência final ainda à frente");
+  } else if (materializado.status !== "active") {
+    falhas.push(`o lançamento determinado entrou como ${materializado.status} em vez de ativo`);
+  } else if (Math.abs(Number(materializado.amount) - descontoDeterminado) > 0.005) {
+    falhas.push(`o lançamento determinado entrou por ${materializado.amount} em vez de ${descontoDeterminado}`);
+  }
+
+  console.log(`apurado ${Number(gravado.net_amount).toFixed(2)}; nota ${nota.toFixed(2)} + complemento ${complemento.toFixed(2)}; conferência ${gravado.invoice_review_status}; determinado na folha: ${materializado ? "sim" : "não"}`);
 }
 
 try {

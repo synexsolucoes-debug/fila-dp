@@ -145,8 +145,13 @@ export async function POST(request: Request) {
     }
 
     const closings: Record<string, unknown>[] = [...removed];
-    for (const id of providerIds) {
+    let apurados = 0;
+    /** O nome já lido, para a linha de recusa não sair com o identificador cru. */
+    const nomes = new Map<string, string>();
+
+    const apurarPrestador = async (id: string) => {
       const profile = await requireContractorProfile(d1, workspace.id, id);
+      nomes.set(id, profile.legal_name ?? id);
       const outraEmpresa = jaApurados.get(id);
       if (outraEmpresa) {
         closings.push({
@@ -156,7 +161,7 @@ export async function POST(request: Request) {
           removed: false,
           blockedReason: `já apurado nesta competência por ${outraEmpresa}`,
         });
-        continue;
+        return;
       }
 
       const blocked = operationalBlock(
@@ -173,7 +178,7 @@ export async function POST(request: Request) {
           removed: false,
           blockedReason: blocked,
         });
-        continue;
+        return;
       }
 
       const result = await upsertContractorClosing(d1, {
@@ -199,14 +204,55 @@ export async function POST(request: Request) {
         metadata: { calcVersion: result.calculation.calcVersion, componentCount: result.componentCount, limitPolicyId: result.limitPolicyId },
         requestId: request.headers.get("x-fila-dp-request-id"),
       }).run();
+      apurados += 1;
       closings.push({
         id: result.closingId, providerId: id, contractorName: profile.legal_name, competence: cycle.competence,
         ...result.calculation,
         restored: result.restored,
         blockedReason: result.calculation.requiresComplementMethod ? "COMPLEMENT_METHOD_REQUIRED" : null,
       });
+    };
+
+    for (const id of providerIds) {
+      /*
+       * Um prestador com problema não derruba a competência inteira.
+       *
+       * O laço apura em sequência, e qualquer recusa aqui dentro — contrato
+       * sem saldo, fechamento travado, um valor que o banco não aceita — subia
+       * como erro da requisição inteira. Quem clicava em "Apurar competência"
+       * via a tela falhar por completo, sem saber de quem era o problema, e
+       * sem apurar os outros trinta que estavam em ordem.
+       *
+       * Agora a recusa vira linha explicada, com nome e motivo, e o laço
+       * segue. A exceção é o pedido nominal: quando alguém pede a apuração de
+       * um prestador só, o erro dele é a resposta — engolir viraria um
+       * "pronto" para um pedido que não foi atendido.
+       */
+      try {
+        await apurarPrestador(id);
+      } catch (falha) {
+        if (providerId) throw falha;
+        closings.push({
+          providerId: id,
+          contractorName: nomes.get(id) ?? id,
+          competence: cycle.competence,
+          removed: false,
+          failed: true,
+          blockedReason: falha instanceof Error ? falha.message : "não foi possível apurar este prestador",
+        });
+      }
     }
-    return Response.json({ closings, removedCount: removed.length });
+    return Response.json({
+      closings,
+      removedCount: removed.length,
+      // O que a tela precisa dizer sem reprocessar a lista: quantos apuraram e
+      // quantos ficaram para trás com motivo.
+      apuradosCount: apurados,
+      /* Só quem ficou sem fechamento. A linha que apurou e pede forma de
+         complemento também traz motivo, mas ela apurou — contá-la aqui faria a
+         tela anunciar um problema que não existe. */
+      blockedCount: closings.filter((row) => !row.removed && !row.id && row.blockedReason).length,
+    });
   } catch (error) {
     return apiError(error);
   }

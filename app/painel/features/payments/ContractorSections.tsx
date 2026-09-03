@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  Archive, ArrowRight, CalendarClock, CheckCheck, CreditCard, Download, FileDown, FileSpreadsheet, FileText,
+  Archive, ArrowRight, CalendarClock, Calculator, CheckCheck, CreditCard, Download, FileDown, FileSpreadsheet, FileText,
   FolderOpen, MessageSquare, Plus, ReceiptText, RotateCcw, ShieldCheck, Users,
 } from "lucide-react";
 import { CajuExportPanel } from "./CajuExportPanel";
@@ -291,6 +291,9 @@ function ClosingsSection(props: SectionProps) {
             </button>
           ) : undefined}
         />
+        {/* Sem nenhum fechamento na competência, este é o caminho para apurar
+            uma pessoa só sem varrer o grupo inteiro. */}
+        <SingleClosingPanel {...props} />
         {/* Também aqui: se todos os pagamentos da competência foram excluídos,
             a tela fica vazia — e era justamente quando não havia caminho de
             volta para nenhum deles. */}
@@ -303,6 +306,7 @@ function ClosingsSection(props: SectionProps) {
       <ContractorApprovalPanel {...props} rows={rows} />
       <ClosingsTable {...props} rows={rows}
         caption={`Fechamento PJ de ${competenceLabel(competence)}`} showActions />
+      <SingleClosingPanel {...props} />
       <ExcludedClosingsPanel {...props} />
       {/* Conferir é perguntar de onde o número veio, e o número da tabela já
           vem somado. O extrato analítico abre a soma: uma linha por rubrica,
@@ -328,6 +332,60 @@ function ClosingsSection(props: SectionProps) {
         </button>
       </footer>
     </>
+  );
+}
+
+/**
+ * Apurar um prestador só.
+ *
+ * "Apurar competência" varre todo mundo, e era o único caminho: quem precisava
+ * refazer a folha de uma pessoa — porque lançou um desconto agora, porque o
+ * cadastro mudou, porque o pagamento dela foi excluído por engano — tinha de
+ * reprocessar o grupo inteiro para chegar num prestador. E quem ainda não
+ * tinha fechamento nenhum não aparecia na tabela, então não havia sequer um
+ * botão de reapurar para clicar.
+ *
+ * O botão da linha continua onde estava, para quem já está na tabela. Este
+ * painel é o caminho de quem não está.
+ */
+function SingleClosingPanel({ overview, permissions, busy, competence, competenceLabel, onRecalculate }: SectionProps) {
+  const [providerId, setProviderId] = useState("");
+  const ativos = useMemo(
+    () => overview.contractors.filter((item) => item.status === "active"),
+    [overview.contractors],
+  );
+  if (!permissions?.manage || ativos.length === 0) return null;
+
+  return (
+    <section className={styles.singleClosingPanel} aria-labelledby="contractor-single-title">
+      <div>
+        <Calculator aria-hidden="true" />
+        <div>
+          <h3 id="contractor-single-title">Apurar um prestador</h3>
+          <p>
+            Calcula a folha de {competenceLabel(competence)} só para quem você escolher, sem
+            reprocessar os demais.
+          </p>
+        </div>
+      </div>
+      <div className={styles.singleClosingActions}>
+        <label>
+          <span>Prestador</span>
+          <select value={providerId} onChange={(event) => setProviderId(event.target.value)} disabled={busy}>
+            <option value="">Selecione</option>
+            {ativos.map((item) => <option key={item.id} value={item.id}>{item.legalName}</option>)}
+          </select>
+        </label>
+        <button
+          className={styles.secondaryButton}
+          type="button"
+          disabled={busy || !providerId}
+          onClick={() => onRecalculate(providerId)}
+        >
+          <Calculator aria-hidden="true" /> Apurar este prestador
+        </button>
+      </div>
+    </section>
   );
 }
 

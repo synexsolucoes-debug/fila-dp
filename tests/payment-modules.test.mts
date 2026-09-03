@@ -811,6 +811,47 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
   assert.match(detail, /Cancelar lançamento/);
 });
 
+test("um prestador com problema não derruba a apuração da competência inteira", async () => {
+  /* O laço apura em sequência. Qualquer recusa lá dentro — contrato sem saldo,
+     fechamento travado, um valor que o banco não aceita — subia como erro da
+     requisição inteira: a tela falhava por completo, sem dizer de quem era o
+     problema e sem apurar os outros que estavam em ordem. */
+  const [route, view] = await Promise.all([
+    readFile(new URL("../app/api/payments/contractors/closings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(route, /try \{\s*await apurarPrestador\(id\);/u);
+  // O pedido nominal é a exceção: o erro de quem foi pedido é a resposta.
+  assert.match(route, /if \(providerId\) throw falha;/u);
+  assert.match(route, /failed: true/u);
+  assert.match(route, /apuradosCount: apurados/u);
+
+  // E a tela para de dizer "pronto" quando alguém ficou para trás.
+  assert.match(view, /blockedCount/u);
+  assert.match(view, /pendentes\.length === 0/u);
+  assert.match(view, /Competência apurada/u);
+});
+
+test("dá para apurar a folha de um prestador só, inclusive quem ainda não tem fechamento", async () => {
+  /* "Apurar competência" varre todo mundo, e era o único caminho: refazer a
+     folha de uma pessoa custava reprocessar o grupo. Pior, quem ainda não
+     tinha fechamento não aparecia na tabela — e o botão de reapurar da linha
+     era o único atalho existente. */
+  const sections = await readFile(
+    new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(sections, /function SingleClosingPanel/u);
+  assert.match(sections, /Apurar este prestador/u);
+  assert.match(sections, /onRecalculate\(providerId\)/u);
+  // Precisa existir também quando a competência não tem nenhum fechamento —
+  // que é exatamente o caso de quem nunca foi apurado.
+  const secao = sections.slice(sections.indexOf("function ClosingsSection"), sections.indexOf("function SingleClosingPanel"));
+  assert.equal((secao.match(/<SingleClosingPanel /gu) ?? []).length, 2,
+    "o painel precisa aparecer com a tabela cheia e com ela vazia");
+});
+
 test("pagamento excluído volta pela reapuração daquele prestador, e não pela da competência", async () => {
   /* Excluir era porta de mão única: a linha saía da tela e levava junto o
      botão de reapurar daquele prestador, enquanto "Apurar competência"

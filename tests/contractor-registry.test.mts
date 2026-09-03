@@ -156,7 +156,24 @@ test("valor fixo entra e sai da competência pela vigência, sem relançamento m
   // Aqui está o ponto do recurso: em junho o item "b" sai sozinho.
   assert.deepEqual(ids("2026-06"), ["a", "c"]);
   assert.equal(fixedItemsForCompetence(items, "2026-01").some((row) => row.id === "d"), false,
-    "item encerrado não entra em competência nenhuma");
+    "item encerrado sem competência final não entra em competência nenhuma");
+});
+
+test("encerrar com competência final futura mantém o lançamento até a data marcada", () => {
+  /* Encerrar grava a competência final e marca o item como `ended` no mesmo
+     instante, inclusive quando essa competência ainda está à frente. Enquanto
+     o marcador decidia, o lançamento "determinado" — que é, por definição,
+     "repete até a competência final" — parava de entrar na folha no dia em que
+     alguém datou o fim, e não no fim datado. O prestador perdia as
+     competências que ainda estavam dentro do combinado, e a folha ficava sem a
+     linha sem erro nenhum aparecer. */
+  const determinado = item({ id: "nata", effectiveFrom: "2026-01", effectiveTo: "2026-06", status: "ended" });
+  const vigentes = (competence: string) => fixedItemsForCompetence([determinado], competence).map((row) => row.id);
+
+  assert.deepEqual(vigentes("2026-03"), ["nata"], "dentro da vigência, o encerramento marcado não antecipa a saída");
+  assert.deepEqual(vigentes("2026-06"), ["nata"], "a competência final ainda é competência paga");
+  assert.deepEqual(vigentes("2026-07"), [], "passada a competência final, o item sai sozinho");
+  assert.deepEqual(vigentes("2025-12"), [], "antes do início, não vale");
 });
 
 test("competência inválida é recusada em vez de devolver lista vazia", () => {

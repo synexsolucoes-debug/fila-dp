@@ -227,11 +227,38 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     }
   }
 
+  /**
+   * Apura a competência inteira, ou um prestador só quando o nome vem junto.
+   *
+   * O resultado deixou de ser um "pronto" fixo. A apuração pode terminar com
+   * prestadores para trás — contrato encerrado, competência já apurada por
+   * outra empresa, um valor que o banco recusou — e antes esses ficavam
+   * invisíveis: a resposta trazia o motivo de cada um e a tela dizia
+   * "Apuração atualizada" do mesmo jeito. Quem conferia só descobria a falta
+   * ao procurar o prestador na tabela e não achar.
+   */
   async function recalculate(providerId?: string) {
     const path = module === "psychology" ? "/api/payments/psychology/closings" : "/api/payments/contractors/closings";
     const body: Record<string, unknown> = { companyId, competenceId: cycle?.id };
     if (providerId) body[module === "psychology" ? "psychologistId" : "contractorId"] = providerId;
-    await mutate(path, { method: "POST", body: JSON.stringify(body) }, "Apuração atualizada.");
+    const result = await mutate<{
+      closings?: Row[]; apuradosCount?: number; blockedCount?: number; removedCount?: number;
+    }>(path, { method: "POST", body: JSON.stringify(body) }, "Apuração atualizada.");
+    if (!result || module === "psychology") return;
+
+    const pendentes = (result.closings ?? []).filter((row) => !row.removed && !row.id && row.blockedReason);
+    const apurados = Number(result.apuradosCount ?? 0);
+    if (pendentes.length === 0) {
+      setToast(providerId
+        ? "Prestador apurado."
+        : `Competência apurada: ${apurados} prestador(es).`);
+      return;
+    }
+    /* O motivo do primeiro fica no aviso, e não só a contagem: com um
+       prestador para trás, "1 ficou de fora" manda a pessoa caçar qual. */
+    const primeiro = pendentes[0];
+    const restantes = pendentes.length - 1;
+    setToast(`${apurados} apurado(s). ${String(primeiro.contractorName ?? "Um prestador")}: ${String(primeiro.blockedReason)}${restantes > 0 ? ` (e mais ${restantes})` : ""}.`);
   }
 
   const openContractorDetail = useCallback(async (closingId: string) => {
