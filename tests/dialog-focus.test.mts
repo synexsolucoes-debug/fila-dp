@@ -32,7 +32,10 @@ import test from "node:test";
  * volta sozinha em qualquer conserto automático de `exhaustive-deps`.
  */
 
-const motion = await readFile(new URL("../app/painel/features/shared/motion.tsx", import.meta.url), "utf8");
+// O recorte do hook usa quebras de linha literais; o contrato não pode variar
+// entre checkouts LF e CRLF.
+const motion = (await readFile(new URL("../app/painel/features/shared/motion.tsx", import.meta.url), "utf8"))
+  .replaceAll("\r\n", "\n");
 
 function hook() {
   const de = motion.indexOf("export function useDialogFocus");

@@ -15,7 +15,11 @@ import { capabilityAreas, capabilitiesOfArea } from "../lib/capability-catalog.t
  * faltando.
  */
 
-const painel = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+// Os testes abaixo recortam o fonte por delimitadores de linha. Normalizar o
+// fim de linha evita que um checkout no Windows transforme uma garantia de
+// comportamento em uma falha de formatação.
+const painel = (await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"))
+  .replaceAll("\r\n", "\n");
 
 function bloco(inicio: string, fim: string) {
   const de = painel.indexOf(inicio);

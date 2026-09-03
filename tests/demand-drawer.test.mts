@@ -14,7 +14,8 @@ import { PRIORITY_LABELS } from "../lib/work-items.ts";
  * de tela.
  */
 
-const painel = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+const painel = (await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"))
+  .replaceAll("\r\n", "\n");
 const css = await readFile(new URL("../app/dashboard-modern.css", import.meta.url), "utf8");
 const processoPanel = await readFile(new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
 

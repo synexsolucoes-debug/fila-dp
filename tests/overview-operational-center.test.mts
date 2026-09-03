@@ -23,7 +23,7 @@ import {
 const painel = new URL("../app/painel/WorkspaceApp.tsx", import.meta.url);
 const dados = new URL("../lib/fila-dp-db.ts", import.meta.url);
 const tipos = new URL("../lib/fila-dp-types.ts", import.meta.url);
-const source = await readFile(painel, "utf8");
+const source = (await readFile(painel, "utf8")).replaceAll("\r\n", "\n");
 const dbSource = await readFile(dados, "utf8");
 const typesSource = await readFile(tipos, "utf8");
 
