@@ -17,7 +17,8 @@ import { log } from "./observability.ts";
  * estruturado, onde acende sem trancar a porta.
  */
 
-export type AuthAction = "login" | "logout" | "password_reset" | "session_revoked";
+export type AuthAction = "login" | "logout" | "password_reset" | "session_revoked"
+  | "signup_requested" | "signup_confirmed" | "signup_confirmation_resent";
 export type AuthOutcome = "success" | "denied" | "failure";
 
 /**
