@@ -26,6 +26,7 @@ export const users = pgTable("fdp_users", {
   name: text("name").notNull(),
   passwordHash: text("password_hash"),
   passwordSalt: text("password_salt"),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_users_email_uq").on(table.email),
@@ -145,6 +146,37 @@ export const authRateLimits = pgTable("fdp_auth_rate_limits", {
   blockedUntil: timestamp("blocked_until", { withTimezone: true, mode: "string" }),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [index("fdp_auth_rate_limits_blocked_idx").on(table.blockedUntil)]);
+
+export const signupRequests = pgTable("fdp_signup_requests", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  passwordSalt: text("password_salt").notNull(),
+  workspaceName: text("workspace_name").notNull(),
+  workspaceSlug: text("workspace_slug").notNull(),
+  provisionedUserId: text("provisioned_user_id").notNull(),
+  provisionedWorkspaceId: text("provisioned_workspace_id").notNull(),
+  provisionedBoardId: text("provisioned_board_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true, mode: "string" }).notNull(),
+  termsVersion: text("terms_version").notNull(),
+  privacyVersion: text("privacy_version").notNull(),
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true, mode: "string" }).notNull(),
+  privacyAcceptedAt: timestamp("privacy_accepted_at", { withTimezone: true, mode: "string" }).notNull(),
+  status: text("status").notNull().default("pending"),
+  confirmationNonce: text("confirmation_nonce").notNull().default(""),
+  usedAt: timestamp("used_at", { withTimezone: true, mode: "string" }),
+  requestFingerprint: text("request_fingerprint").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_signup_requests_email_uq").on(table.email),
+  uniqueIndex("fdp_signup_requests_token_hash_uq").on(table.tokenHash),
+  uniqueIndex("fdp_signup_requests_workspace_uq").on(table.provisionedWorkspaceId),
+  index("fdp_signup_requests_pending_expiry_idx").on(table.tokenExpiresAt),
+  check("fdp_signup_requests_status_check", sql`${table.status} IN ('pending', 'confirmed', 'canceled')`),
+]);
 
 export const bootstrapGuard = pgTable("fdp_bootstrap_guard", {
   id: integer("id").primaryKey(),
@@ -1712,6 +1744,8 @@ export const saasPlans = pgTable("fdp_saas_plans", {
   featuresJson: jsonb("features_json").notNull().default(sql`'[]'::jsonb`),
   stripeMonthlyPriceId: text("stripe_monthly_price_id").notNull().default(""),
   stripeAnnualPriceId: text("stripe_annual_price_id").notNull().default(""),
+  checkoutEnabled: integer("checkout_enabled").notNull().default(1),
+  customLimits: integer("custom_limits").notNull().default(0),
   position: integer("position").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -1722,12 +1756,36 @@ export const saasPlans = pgTable("fdp_saas_plans", {
   check("fdp_saas_plans_currency_check", sql`${table.currency} ~ '^[a-z]{3}$'`),
   check("fdp_saas_plans_prices_check", sql`${table.monthlyPriceCents} >= 0 AND ${table.annualPriceCents} >= 0`),
   check("fdp_saas_plans_limits_check", sql`${table.trialDays} BETWEEN 0 AND 90 AND ${table.includedSeats} > 0 AND ${table.companyLimit} > 0 AND ${table.integrationLimit} >= 0 AND ${table.storageLimitMb} > 0`),
+  check("fdp_saas_plans_checkout_enabled_check", sql`${table.checkoutEnabled} IN (0, 1)`),
+  check("fdp_saas_plans_custom_limits_check", sql`${table.customLimits} IN (0, 1)`),
+]);
+
+export const saasPlanPrices = pgTable("fdp_saas_plan_prices", {
+  id: text("id").primaryKey(),
+  planId: text("plan_id").notNull().references(() => saasPlans.id, { onDelete: "cascade" }),
+  currency: text("currency").notNull().default("brl"),
+  monthlyPriceCents: integer("monthly_price_cents").notNull().default(0),
+  annualPriceCents: integer("annual_price_cents").notNull().default(0),
+  includedSeats: integer("included_seats").notNull().default(1),
+  effectiveFrom: timestamp("effective_from", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  note: text("note").notNull().default(""),
+  createdBy: text("created_by").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_saas_plan_prices_plan_effective_uq").on(table.planId, table.effectiveFrom),
+  index("fdp_saas_plan_prices_plan_idx").on(table.planId, table.effectiveFrom),
+  check("fdp_saas_plan_prices_amount_check", sql`${table.monthlyPriceCents} >= 0 AND ${table.annualPriceCents} >= 0`),
+  check("fdp_saas_plan_prices_seats_check", sql`${table.includedSeats} > 0`),
 ]);
 
 export const workspaceSubscriptions = pgTable("fdp_workspace_subscriptions", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
   planId: text("plan_id").notNull().references(() => saasPlans.id, { onDelete: "restrict" }),
+  planPriceId: text("plan_price_id").references(() => saasPlanPrices.id, { onDelete: "no action" }),
+  contractedMonthlyPriceCents: integer("contracted_monthly_price_cents").notNull().default(0),
+  contractedPriceCents: integer("contracted_price_cents").notNull().default(0),
+  contractedCurrency: text("contracted_currency").notNull().default("brl"),
   status: text("status").notNull().default("trialing"),
   billingInterval: text("billing_interval").notNull().default("monthly"),
   seatQuantity: integer("seat_quantity").notNull().default(1),
@@ -1752,7 +1810,15 @@ export const workspaceSubscriptions = pgTable("fdp_workspace_subscriptions", {
   check("fdp_workspace_subscriptions_interval_check", sql`${table.billingInterval} IN ('monthly', 'annual')`),
   check("fdp_workspace_subscriptions_provider_check", sql`${table.provider} IN ('stripe', 'manual')`),
   check("fdp_workspace_subscriptions_seats_check", sql`${table.seatQuantity} > 0`),
+  check("fdp_workspace_subscriptions_contracted_price_check", sql`${table.contractedPriceCents} >= 0`),
+  check("fdp_workspace_subscriptions_contracted_currency_check", sql`${table.contractedCurrency} ~ '^[a-z]{3}$'`),
 ]);
+
+export const starterOwners = pgTable("fdp_starter_owners", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "restrict" }),
+  ownedWorkspaceId: text("owned_workspace_id").notNull().references(() => workspaces.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("fdp_starter_owners_workspace_uq").on(table.ownedWorkspaceId)]);
 
 export const workspaceOnboarding = pgTable("fdp_workspace_onboarding", {
   workspaceId: text("workspace_id").primaryKey().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),

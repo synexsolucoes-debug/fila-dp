@@ -225,3 +225,13 @@
 @media (prefers-reduced-motion: reduce) {
   .site * { transition: none !important; }
 }
+
+/* Páginas públicas: mesma linguagem de superfície, contraste e destaque. */
+.site { --site-bg: #07111f; --site-surface: #0d1b2d; --site-border: #243b55; --site-text: #f4f7fb; --site-soft: #c4cfdd; --site-accent: #b9c8ff; --site-accent-soft: #172d50; --site-warning: #f3c87d; --site-danger: #ffaaa8; }
+.header { background: rgb(7 17 31 / 92%); }
+.primaryButton { border-color: #365cf5; background: #365cf5; color: #fff; }
+.primaryButton:hover { border-color: #5274ff; background: #5274ff; }
+.ghostButton { background: #0d1b2d; }
+.table thead th, .configSubsection > header { background: #10233a; }
+.form input, .form select, .form textarea { background: #10233a; }
+.badge[data-state="available"], .formStatus[data-tone="success"] { color: #aef2d4; background: #123a35; }

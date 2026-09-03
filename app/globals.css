@@ -498,3 +498,63 @@ button, summary { font: inherit; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition-duration: .01ms !important; }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Central de comando — identidade única fora e dentro do produto             */
+/* -------------------------------------------------------------------------- */
+/* O painel já nasce nessa linguagem. Este bloco leva o mesmo ambiente para a
+   home, páginas institucionais e fluxos de acesso, sem depender de uma classe
+   exclusiva do dashboard. Os tons claros continuam reservados a texto e dados,
+   nunca a uma superfície inteira. */
+:root {
+  --vin-bg: #07111f;
+  --vin-surface: #0d1b2d;
+  --vin-text: #f4f7fb;
+  --vin-slate: #a5b4c7;
+  --vin-slate-aa: #c4cfdd;
+  --vin-text-soft: #c4cfdd;
+  --vin-border: #243b55;
+  --vin-teal: #79dfb9;
+  --brand: #b9c8ff;
+  --brand-strong: #f4f7fb;
+  --brand-deep: #07111f;
+  --brand-accent: #79dfb9;
+  --brand-contrast: #fff;
+  --brand-soft: #172d50;
+  --brand-soft-border: #365575;
+  --accent-teal-soft: #123a35;
+  --ui-surface-muted: #10233a;
+  --ui-text-muted: #9eafc2;
+  --ui-success: #79dfb9;
+  --ui-warning: #f3c87d;
+  --ui-danger: #ffaaa8;
+  --ui-status-doing: #91b6ff;
+  --on-brand-text: #f4f7fb;
+  --on-brand-soft: #c4cfdd;
+  --brand-accent-on-dark: #9fe9ce;
+  --on-brand-line: rgb(185 200 255 / 25%);
+  --shadow-soft: 0 16px 38px rgb(0 0 0 / 20%);
+  --shadow-strong: 0 28px 78px rgb(0 0 0 / 34%);
+}
+
+body { background: var(--ui-bg); }
+body:has(.dashboard-shell.theme-dark) { background: #07111f; }
+
+.site-header { background: rgb(7 17 31 / 92%); }
+.home-skip { background: #365cf5; color: #fff; }
+.button { border-color: #365cf5; background: #365cf5; color: #fff; }
+.button:hover { background: #5274ff; border-color: #5274ff; box-shadow: 0 16px 34px rgb(54 92 245 / 28%); }
+.button-secondary { background: #0d1b2d; color: var(--ui-text); border-color: var(--ui-border); }
+.button-secondary:hover { background: #172d50; border-color: #5274ff; color: var(--ui-text); }
+.hero { background: linear-gradient(145deg, #07111f 0%, #0b1b31 56%, #122b45 100%); }
+.hero h1, .product-metric strong, .plans-empty h3, .faq-list summary { color: var(--ui-text); }
+.product-panel, .plans-empty { background: var(--ui-surface); }
+.product-panel-bar { background: #0b1a2d; }
+.product-panel-tag { color: #dfffee; background: rgb(121 223 185 / 16%); }
+.pain-grid .solution-card { background: #10233a; }
+.workflow-section { background: #0b1a2d; }
+.pain-grid .solution-card h3, .workflow-intro h2, .workflow-list h3 { color: #f4f7fb; }
+.pain-grid .solution-card p, .workflow-intro > p, .workflow-list p { color: #c4cfdd; }
+.final-cta { background: linear-gradient(135deg, #0b1a2d 0%, #162f52 100%); }
+.button-light { background: #f4f7fb; border-color: #f4f7fb; color: #0b1a2d; }
+.button-light:hover { background: #b9c8ff; border-color: #b9c8ff; color: #07111f; }

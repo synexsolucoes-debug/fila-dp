@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       customerId: projection.customerId,
       subscriptionId: projection.subscriptionId,
       planCode: projection.planCode,
+      planPriceId: projection.planPriceId,
       billingInterval: projection.billingInterval,
       invoiceId: projection.invoice?.id ?? "",
       amountDueCents: projection.invoice?.amountDueCents ?? 0,
@@ -91,10 +92,23 @@ export async function POST(request: Request) {
           ON CONFLICT (external_event_id) DO NOTHING RETURNING id
         )
         UPDATE fdp_workspace_subscriptions subscription SET
-          plan_id = COALESCE((SELECT id FROM fdp_saas_plans WHERE code = ?), subscription.plan_id),
+          plan_id = COALESCE((SELECT price.plan_id FROM fdp_saas_plan_prices price
+            JOIN fdp_saas_plans plan ON plan.id = price.plan_id
+            WHERE price.id = ? AND plan.code = ?), subscription.plan_id),
+          plan_price_id = COALESCE((SELECT price.id FROM fdp_saas_plan_prices price
+            JOIN fdp_saas_plans plan ON plan.id = price.plan_id
+            WHERE price.id = ? AND plan.code = ?), subscription.plan_price_id),
+          contracted_monthly_price_cents = COALESCE((SELECT price.monthly_price_cents FROM fdp_saas_plan_prices price
+            WHERE price.id = ?), subscription.contracted_monthly_price_cents),
+          contracted_price_cents = COALESCE((SELECT CASE WHEN ? = 'annual' THEN price.annual_price_cents ELSE price.monthly_price_cents END
+            FROM fdp_saas_plan_prices price WHERE price.id = ?), subscription.contracted_price_cents),
+          contracted_currency = COALESCE((SELECT price.currency FROM fdp_saas_plan_prices price
+            WHERE price.id = ?), subscription.contracted_currency),
+          provider = CASE WHEN ? = '' THEN subscription.provider ELSE 'stripe' END,
           status = CASE WHEN ? = '' THEN subscription.status ELSE ? END,
           billing_interval = CASE WHEN ? = '' THEN subscription.billing_interval ELSE ? END,
-          seat_quantity = ?,
+          seat_quantity = COALESCE((SELECT price.included_seats FROM fdp_saas_plan_prices price
+            WHERE price.id = ?), subscription.seat_quantity),
           external_customer_id = CASE WHEN ? = '' THEN subscription.external_customer_id ELSE ? END,
           external_subscription_id = CASE WHEN ? = '' THEN subscription.external_subscription_id ELSE ? END,
           current_period_starts_at = COALESCE(?::timestamptz, subscription.current_period_starts_at),
@@ -107,8 +121,11 @@ export async function POST(request: Request) {
         .bind(
           crypto.randomUUID(), projection.workspaceId, projection.eventId, projection.eventType, isSupported ? "processed" : "ignored",
           projection.objectType, projection.objectId, summary,
-          projection.planCode, projection.subscriptionStatus, projection.subscriptionStatus,
-          projection.billingInterval, projection.billingInterval, projection.seatQuantity,
+          projection.planPriceId, projection.planCode, projection.planPriceId, projection.planCode,
+          projection.planPriceId, projection.billingInterval, projection.planPriceId, projection.planPriceId,
+          projection.subscriptionId,
+          projection.subscriptionStatus, projection.subscriptionStatus,
+          projection.billingInterval, projection.billingInterval, projection.planPriceId,
           projection.customerId, projection.customerId, projection.subscriptionId, projection.subscriptionId,
           projection.currentPeriodStartsAt, projection.currentPeriodEndsAt, projection.cancelAtPeriodEnd ? 1 : 0,
           projection.subscriptionStatus, projection.workspaceId,

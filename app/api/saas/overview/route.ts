@@ -15,7 +15,9 @@ export async function GET() {
     const [plans, subscription, onboarding, invoices, usage] = await Promise.all([
       d1.prepare(`SELECT id, code, name, description, status, currency, monthly_price_cents, annual_price_cents,
           trial_days, included_seats, company_limit, integration_limit, storage_limit_mb, features_json,
-          stripe_monthly_price_id, stripe_annual_price_id
+          stripe_monthly_price_id, stripe_annual_price_id, checkout_enabled, custom_limits,
+          (SELECT COALESCE(jsonb_agg(plan_module.module_key ORDER BY plan_module.module_key), '[]'::jsonb)
+            FROM fdp_plan_modules plan_module WHERE plan_module.plan_id = fdp_saas_plans.id) AS modules_json
         FROM fdp_saas_plans
         WHERE status = 'active' OR id = (SELECT plan_id FROM fdp_workspace_subscriptions WHERE workspace_id = ?)
         ORDER BY position`).bind(workspace.id).all<Record<string, unknown>>(),
