@@ -1626,3 +1626,27 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
   .vin-intro-glow { opacity: .72; }
   .vin-intro-lockup { opacity: 1; transform: none; clip-path: none; }
 }
+
+/* Autenticação na mesma Central de comando do produto. */
+.auth-brand-panel { background: radial-gradient(circle at 90% 65%, rgb(121 223 185 / 14%), transparent 34%), linear-gradient(145deg, #07111f 0%, #102b4a 100%); }
+.auth-message p { color: #c4cfdd; }
+.auth-form-panel { background: #07111f; color: #f4f7fb; }
+.auth-back, .auth-status.neutral, .auth-form-card > p, .auth-security-note,
+.auth-secondary-link, .auth-help, .auth-login-form label, .auth-login-form small {
+  color: #c4cfdd;
+}
+.auth-form-card > p strong, .auth-form-card h2 { color: #f4f7fb; }
+.auth-security-note { border-color: #243b55; background: #0d1b2d; }
+.auth-login-form input { border-color: #365575; background: #0d1b2d; color: #f4f7fb; }
+.auth-login-form input::placeholder { color: #9eafc2; }
+.auth-mode-switch { border-color: #365575; background: #10233a; }
+.auth-mode-switch button { color: #c4cfdd; }
+.auth-mode-switch button[aria-pressed="true"] { background: #172d50; color: #b9c8ff; box-shadow: none; }
+.auth-login-error { border-color: #7d4047; background: #321d28; color: #ffc5c3; }
+.auth-preview { border-color: #243b55; background: #0d1b2d; color: #f4f7fb; }
+.auth-preview-top { border-color: #243b55; background: #10233a; }
+.auth-preview article { border-color: #243b55; background: #10233a; box-shadow: none; }
+.auth-preview article small { color: #a5b4c7; }
+.auth-tag.blue { color: #c8d5ff; background: #1a3262; }
+.auth-tag.green { color: #aef2d4; background: #123a35; }
+.auth-tag.gray { color: #c4cfdd; background: #23344a; }

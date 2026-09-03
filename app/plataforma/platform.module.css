@@ -203,3 +203,70 @@
   .featureStage, .dialogBackdrop, .actionDialog, .detailOverlay, .detailPane { animation-duration: 1ms; }
   .sideNav nav button::before, .metricCard, .smallAction, .headerAction { transition-duration: 1ms; }
 }
+
+/* Central de comando em todos os módulos administrativos. Os componentes do
+   console usam estes tokens, portanto clientes, integrações, permissões,
+   auditoria, faturamento e configurações recebem a mesma superfície. */
+.console {
+  --navy: #081526;
+  --blue: #5274ff;
+  --green: #79dfb9;
+  --amber: #f3c87d;
+  --red: #ffaaa8;
+  --surface: #0d1b2d;
+  --muted: #10233a;
+  --border: #243b55;
+  --text: #f4f7fb;
+  --soft: #c4cfdd;
+  background: #07111f;
+}
+.topbar { background: #081526; box-shadow: 0 1px 0 rgb(185 200 255 / 18%); }
+.topbar > a > small, .topbar > div > svg { color: #9fe9ce; }
+.topbar > div small { color: #c4cfdd; }
+.sideNav { background: #081526; }
+.sideNav nav button { color: #c4cfdd; }
+.sideNav nav button:hover { border-color: #365575; background: #10233a; }
+.sideNav nav button[aria-current="page"] { border-color: #3e61a0; background: #172d50; color: #d9e2ff; }
+.sideNav nav button::before { background: #79dfb9; }
+.sideNav footer { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+.featurePanel, .metricCard, .workspacesPanel, .plansPanel, .auditPanel,
+.configSubsection, .areaAdminCard, .memberAccessCard, .tableWrap,
+.actionDialog, .detailPane, .drawerBody, .state, .empty, .notice { background: var(--surface); }
+.featurePanel, .metricCard, .workspacesPanel, .plansPanel, .auditPanel,
+.configSubsection, .areaAdminCard, .memberAccessCard, .tableWrap,
+.actionDialog, .detailPane, .drawerBody, .state, .empty, .notice { border-color: var(--border); }
+.featurePanel header, .panelHeader, .featureHeader, .configSubsection > header,
+.areaAdminHeading, .areaAdminForm, .tableWrap thead tr { background: var(--muted); }
+.console :is(input, select, textarea) { border-color: var(--border); background: #10233a; color: var(--text); }
+.console :is(input, select, textarea)::placeholder { color: #9eafc2; }
+.console :is(.smallAction, .headerAction, .pagination button) { border-color: var(--border); background: #10233a; color: var(--text); }
+.console :is(.smallAction, .headerAction, .pagination button):hover:not(:disabled) { border-color: #5274ff; background: #172d50; color: #d9e2ff; }
+.metricCard:hover { box-shadow: 0 12px 28px rgb(0 0 0 / 24%); }
+.tableWrap tbody tr:hover, .areaAdminCard > summary:hover { background: #10233a; }
+.memberAccessCard > header > span { background: #172d50; color: #c8d5ff; }
+.areaModuleOptions > label:has(input:checked), .memberModuleFieldset label:has(input:checked) { border-color: #3e61a0; background: #172d50; }
+.ownerAccessNote { border-color: #365575; background: #172d50; color: #c8d5ff; }
+.dangerAction:hover:not(:disabled) { background: #321d28; }
+.dangerZone > ul { color: #e5b7b5; }
+.dangerZone .dangerGate { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+
+/* As grades internas ainda declaravam branco diretamente. Ao trocar apenas a
+   casca do console, esses blocos ficaram claros com texto claro; este mapa
+   fecha as superfícies de cada módulo e conserva contraste em estado normal,
+   aviso, erro e sucesso. */
+.featureHeader > div:first-child > span, .integrationGrid > article > header span { color: #b9c8ff; }
+.featureHeader button, .headerAction { border-color: var(--border); background: #10233a; color: var(--text); }
+.metricCard, .cardGrid > article, .integrationGrid > article,
+.cardGrid dl > div, .integrationGrid dl > div, .serviceGrid article,
+.attentionList button, .filterBar .checkFilter, .integrationGrid footer button,
+.featureState button, .plansPanel article > button { background: var(--surface); color: var(--text); }
+.metricCard > span, .metricCard > small, .cardGrid p, .integrationGrid p,
+.cardGrid dt, .integrationGrid dt, .checkFilter, .healthBlock p,
+.attentionList button span { color: var(--soft); }
+.status[data-tone="safe"] { border-color: #3e8069; background: #123a35; color: #aef2d4; }
+.status[data-tone="warning"] { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+.status[data-tone="danger"] { border-color: #7d4047; background: #321d28; color: #ffc5c3; }
+.scopeStrip { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+.inlineWarning { border-color: #745e36; background: #2b2517; color: #f3d79f; }
+.itemError { background: #321d28; color: #ffc5c3 !important; }
+.auditEvents details > dl { background: #10233a; }
