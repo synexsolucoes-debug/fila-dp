@@ -194,7 +194,14 @@ accepts(125, "segurança é um gate, não uma lista documental", () => {
 });
 
 accepts(126, "aceite visual percorre toda a navegação e quatro larguras", () => {
-  assert.match(a11y, /MINIMO_DE_TELAS = 64/u); assert.match(a11y, /for \(const viewport of VIEWPORTS\)/u);
+  /* O piso é conferido por mínimo, não por igualdade.
+     Enquanto esta linha exigia exatamente 64, aumentar a cobertura da varredura
+     reprovava o aceite — o teste passava a punir justamente o que ele existe
+     para incentivar. O que precisa ser garantido é que o piso exista e não
+     regrida: ele subiu para 75 quando as onze telas públicas entraram. */
+  const piso = Number(a11y.match(/MINIMO_DE_TELAS = (\d+)/u)?.[1]);
+  assert.ok(piso >= 75, `piso de cobertura da varredura visual regrediu: ${piso}`);
+  assert.match(a11y, /for \(const viewport of viewports\)/u);
   assert.match(navigationTests, /menu|barra superior/iu); assert.match(interfaceCheck, /nenhuma divergência de padrão/iu);
 });
 

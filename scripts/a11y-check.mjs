@@ -215,13 +215,25 @@ let screensAudited = 0;
  * volta a tolerar exatamente o colapso que ele existe para acusar — as três
  * telas novas poderiam sumir da varredura inteira sem baixar de 55.
  *
- * O número continua folgado de propósito — 64 contra 74 medidas — para acusar
+ * Subiu de 64 para 75 quando o site comercial entrou na varredura. Até aqui ela
+ * media a home e o login e mais nada de fora do produto: /planos, /solucao,
+ * /funcionalidades, /integracoes, /demonstracao, /contato, /faq, /termos,
+ * /privacidade, /subprocessadores e /recuperar — onze telas públicas, as que o
+ * cliente vê antes de contratar — nunca haviam sido medidas, e o relatório
+ * dizia "0 violações" sobre elas do mesmo jeito que já disse sobre metade do
+ * painel. Tela que ninguém mede é tela que ninguém conserta.
+ *
+ * O número continua folgado de propósito — 75 contra 86 medidas — para acusar
  * um colapso de cobertura sem quebrar quando um módulo sai do plano.
  */
-const MINIMO_DE_TELAS = 64;
+const MINIMO_DE_TELAS = 75;
 
-/** `path === null` audita a tela já aberta, sem recarregar — usado nas visões do painel. */
-async function audit(label, path, setup) {
+/**
+ * `path === null` audita a tela já aberta, sem recarregar — usado nas visões do
+ * painel. `viewports` permite medir uma superfície que só existe em uma largura,
+ * como o menu do cabeçalho público, sem inventar uma tela nas outras três.
+ */
+async function audit(label, path, setup, viewports = VIEWPORTS) {
   if (path !== null) {
     await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded" });
     if (setup) await setup();
@@ -230,7 +242,7 @@ async function audit(label, path, setup) {
   console.log(`\n### ${label}${path === null ? "" : ` (${path})`}`);
   screensAudited += 1;
 
-  for (const viewport of VIEWPORTS) {
+  for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.waitForTimeout(500);
     const result = await page.evaluate(AUDIT);
@@ -457,9 +469,53 @@ async function auditPlatformAreas(theme = "") {
   }
 }
 
+/**
+ * O site comercial inteiro, não só a home.
+ *
+ * A lista precisa acompanhar `lib/site-map.ts` — é o mesmo conjunto que alimenta
+ * o sitemap. `tests/site-launch.test.mts` compara as duas e reprova a divergência:
+ * uma página nova que entra no sitemap e não entra aqui nasce sem auditoria, que
+ * é exatamente o silêncio que o piso de cobertura existe para acusar.
+ */
+const PAGINAS_PUBLICAS = [
+  ["Home pública", "/"],
+  ["Solução", "/solucao"],
+  ["Funcionalidades", "/funcionalidades"],
+  ["Integrações", "/integracoes"],
+  ["Planos", "/planos"],
+  ["FAQ", "/faq"],
+  ["Contato", "/contato"],
+  ["Demonstração", "/demonstracao"],
+  ["Privacidade", "/privacidade"],
+  ["Termos de uso", "/termos"],
+  ["Subprocessadores", "/subprocessadores"],
+];
+
+/**
+ * O menu do cabeçalho público fica recolhido, e só existe abaixo de 1180px.
+ * Medir a home fechada nunca o alcançaria — a mesma razão pela qual o assistente
+ * do painel é aberto de propósito antes de ser auditado.
+ */
+async function auditSiteMenu() {
+  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(900);
+  const toggle = page.locator(".site-menu-toggle");
+  if (await toggle.count() === 0) {
+    console.log("\n### Home pública › Menu — botão não encontrado em 390px");
+    failures += 1;
+    return;
+  }
+  await toggle.first().click();
+  await page.waitForTimeout(500);
+  await audit("Home pública › Menu aberto", null, undefined, [{ label: "celular 390", width: 390, height: 844 }]);
+}
+
 try {
-  await audit("Home pública", "/");
+  for (const [label, path] of PAGINAS_PUBLICAS) await audit(label, path);
+  await auditSiteMenu();
   await audit("Login", "/login");
+  await audit("Recuperar acesso", "/recuperar");
   await audit("Painel", "/painel", async () => {
     await signIn();
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
