@@ -6,11 +6,13 @@ import {
   type ComplementMethod,
   type ContractorComponentDirection,
   type ContractorComponentType,
+  type ContractorSettlementTarget,
   type InvoiceLimitCandidate,
   type PaymentOrigin,
   calculateContractorBaseProration,
   calculateContractorClosing,
   calculatePsychologyClosing,
+  contractorSettlementTarget,
   invoiceComparison,
   reconcileContractorClosing,
   resolveInvoiceLimit,
@@ -282,12 +284,13 @@ export async function contractorBalance(d1: Database, workspaceId: string, profi
 export async function materializeFixedItems(d1: Database, input: {
   workspaceId: string; profile: ContractorProfileRow; cycle: CycleRow; userId: string;
 }) {
-  const rows = await d1.prepare(`SELECT id, direction, component_type, description, amount, effective_from, effective_to, status
+  const rows = await d1.prepare(`SELECT id, direction, component_type, description, amount, settlement_target,
+      effective_from, effective_to, status
     FROM fdp_contractor_fixed_items WHERE workspace_id = ? AND provider_id = ?`)
     .bind(input.workspaceId, input.profile.provider_id)
     .all<{
       id: string; direction: string; component_type: string; description: string;
-      amount: string | number; effective_from: string; effective_to: string | null; status: string;
+      amount: string | number; settlement_target: string; effective_from: string; effective_to: string | null; status: string;
     }>();
 
   const items: FixedItem[] = rows.results.map((row) => ({
@@ -296,6 +299,7 @@ export async function materializeFixedItems(d1: Database, input: {
     componentType: String(row.component_type),
     description: String(row.description),
     amountCents: centsFromDatabase(row.amount, "Valor fixo"),
+    settlementTarget: contractorSettlementTarget(row.settlement_target, row.direction === "debit" ? "debit" : "credit"),
     effectiveFrom: String(row.effective_from),
     effectiveTo: row.effective_to === null ? null : String(row.effective_to),
     status: row.status === "ended" ? "ended" : "active",
@@ -314,18 +318,19 @@ export async function materializeFixedItems(d1: Database, input: {
     const current = existingByItem.get(item.id);
     if (current) {
       statements.push(d1.prepare(`UPDATE fdp_contractor_components
-          SET direction = ?, component_type = ?, description = ?, amount = ?, status = 'active', canceled_reason = '', updated_at = now()
+          SET direction = ?, component_type = ?, description = ?, amount = ?, settlement_target = ?, status = 'active',
+              canceled_reason = '', updated_at = now()
         WHERE workspace_id = ? AND id = ?`)
         .bind(item.direction, item.componentType, item.description, fromCents(item.amountCents),
-          input.workspaceId, current.id));
+          item.settlementTarget ?? "auto", input.workspaceId, current.id));
     } else {
       statements.push(d1.prepare(`INSERT INTO fdp_contractor_components
           (id, workspace_id, company_id, provider_id, payroll_cycle_id, competence, direction, component_type,
-           description, component_quantity, amount, origin, fixed_item_id, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'fixed_item', ?, ?)`)
+           description, component_quantity, amount, settlement_target, origin, fixed_item_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 'fixed_item', ?, ?)`)
         .bind(crypto.randomUUID(), input.workspaceId, input.cycle.company_id, input.profile.provider_id,
           input.cycle.id, input.cycle.competence, item.direction, item.componentType, item.description,
-          fromCents(item.amountCents), item.id, input.userId));
+          fromCents(item.amountCents), item.settlementTarget ?? "auto", item.id, input.userId));
     }
   }
   for (const row of existing.results) {
@@ -343,10 +348,10 @@ export async function materializeFixedItems(d1: Database, input: {
 
 /** Aplica a ordem obrigatória do cálculo PJ sobre os componentes vigentes da competência. */
 export async function computeContractorClosing(d1: Database, workspaceId: string, profile: ContractorProfileRow, cycle: CycleRow) {
-  const components = await d1.prepare(`SELECT direction, component_type, amount, status FROM fdp_contractor_components
+  const components = await d1.prepare(`SELECT direction, component_type, amount, settlement_target, status FROM fdp_contractor_components
     WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?`)
     .bind(workspaceId, profile.provider_id, cycle.id)
-    .all<{ direction: string; component_type: string; amount: string | number; status: string }>();
+    .all<{ direction: string; component_type: string; amount: string | number; settlement_target: string; status: string }>();
   const candidates = await invoiceLimitCandidates(d1, workspaceId, profile, cycle.competence, cycle.company_id);
   const limit = resolveInvoiceLimit(candidates);
   const proration = calculateContractorBaseProration({
@@ -361,6 +366,7 @@ export async function computeContractorClosing(d1: Database, workspaceId: string
       components: components.results.map((row) => ({
         direction: row.direction as ContractorComponentDirection,
         amount: Number(row.amount),
+        settlementTarget: contractorSettlementTarget(row.settlement_target, row.direction as ContractorComponentDirection),
         status: row.status === "canceled" ? "canceled" : "active",
       })),
       invoiceLimit: limit,
@@ -472,6 +478,8 @@ export async function createContractorComponent(d1: Database, input: {
   amount: number;
   description?: string;
   quantity?: number;
+  /** Onde o desconto é abatido; ignorado em provento, que nunca escolhe. */
+  settlementTarget?: ContractorSettlementTarget;
   origin?: PaymentOrigin;
   documentReference?: string;
   note?: string;
@@ -491,26 +499,34 @@ export async function createContractorComponent(d1: Database, input: {
   // Reenvio do mesmo identificador externo devolve o lançamento já criado.
   const externalId = input.externalId ?? "";
   if (externalId) {
-    const duplicate = await d1.prepare("SELECT id, direction, component_type, amount FROM fdp_contractor_components WHERE workspace_id = ? AND external_id = ?")
-      .bind(input.workspaceId, externalId).first<{ id: string; direction: string; component_type: string; amount: string | number }>();
+    const duplicate = await d1.prepare(`SELECT id, direction, component_type, amount, settlement_target
+      FROM fdp_contractor_components WHERE workspace_id = ? AND external_id = ?`)
+      .bind(input.workspaceId, externalId)
+      .first<{ id: string; direction: string; component_type: string; amount: string | number; settlement_target: string }>();
     if (duplicate) {
       return {
         id: String(duplicate.id), direction: String(duplicate.direction), componentType: String(duplicate.component_type),
-        amount: Number(duplicate.amount), competence: input.cycle.competence, duplicated: true,
+        amount: Number(duplicate.amount),
+        settlementTarget: contractorSettlementTarget(duplicate.settlement_target, duplicate.direction as ContractorComponentDirection),
+        competence: input.cycle.competence, duplicated: true,
       };
     }
   }
 
   const id = crypto.randomUUID();
+  const settlementTarget = contractorSettlementTarget(input.settlementTarget, direction);
   await d1.prepare(`INSERT INTO fdp_contractor_components (id, workspace_id, company_id, provider_id, payroll_cycle_id, closing_id, competence,
-      direction, component_type, description, component_quantity, amount, origin, document_reference, note, status, external_id, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`)
+      direction, component_type, description, component_quantity, amount, settlement_target, origin, document_reference, note, status, external_id, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`)
     .bind(id, input.workspaceId, input.cycle.company_id, input.profile.provider_id, input.cycle.id, closing?.id ?? null,
       input.cycle.competence, direction, input.componentType, input.description ?? "", Math.max(input.quantity ?? 1, 0),
-      input.amount, input.origin ?? "manual", input.documentReference ?? "", input.note ?? "", externalId, input.createdBy)
+      input.amount, settlementTarget, input.origin ?? "manual", input.documentReference ?? "", input.note ?? "", externalId, input.createdBy)
     .run();
 
-  return { id, direction, componentType: input.componentType, amount: input.amount, competence: input.cycle.competence, duplicated: false };
+  return {
+    id, direction, componentType: input.componentType, amount: input.amount, settlementTarget,
+    competence: input.cycle.competence, duplicated: false,
+  };
 }
 
 /** Conciliação PJ: nota recebida + complemento pago devem fechar o líquido devido. */
@@ -536,7 +552,7 @@ export async function refreshContractorReconciliation(d1: Database, workspaceId:
 export async function contractorClosingSnapshot(d1: Database, workspaceId: string, closingId: string) {
   const [closing, components] = await Promise.all([
     d1.prepare("SELECT * FROM fdp_contractor_closings WHERE workspace_id = ? AND id = ?").bind(workspaceId, closingId).first<Record<string, unknown>>(),
-    d1.prepare(`SELECT id, direction, component_type, amount, status, description FROM fdp_contractor_components
+    d1.prepare(`SELECT id, direction, component_type, amount, settlement_target, status, description FROM fdp_contractor_components
       WHERE workspace_id = ? AND closing_id = ? ORDER BY direction, component_type`).bind(workspaceId, closingId).all<Record<string, unknown>>(),
   ]);
   return {

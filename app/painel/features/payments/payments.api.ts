@@ -181,6 +181,7 @@ export function normalizeComponent(row: Row): ContractorComponent {
     componentType: text(pick(row, "componentType", "component_type")), description: text(row.description),
     quantity: number(pick(row, "quantity", "component_quantity")) || 1,
     amount: number(row.amount), origin: text(row.origin),
+    settlementTarget: text(pick(row, "settlementTarget", "settlement_target")) || "auto",
     documentReference: text(pick(row, "documentReference", "document_reference")), status: text(row.status),
   };
 }
@@ -194,6 +195,7 @@ export function normalizeFixedItem(row: Row): ContractorFixedItem {
     amount: number(row.amount), effectiveFrom: text(pick(row, "effectiveFrom", "effective_from")),
     effectiveTo: text(pick(row, "effectiveTo", "effective_to")) || null,
     status: text(row.status), note: text(row.note),
+    settlementTarget: text(pick(row, "settlementTarget", "settlement_target")) || "auto",
   };
 }
 
@@ -207,6 +209,7 @@ export function normalizeMonthlyEntry(row: Row): ContractorMonthlyEntry {
     quantity: number(pick(row, "quantity", "component_quantity")) || 1,
     origin: text(row.origin), documentReference: text(pick(row, "documentReference", "document_reference")),
     status: text(row.status),
+    settlementTarget: text(pick(row, "settlementTarget", "settlement_target")) || "auto",
   };
 }
 

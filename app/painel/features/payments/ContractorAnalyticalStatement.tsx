@@ -16,6 +16,13 @@ const money = (value: number) =>
 const decimal = (value: number) =>
   Number(value || 0).toFixed(2).replace(".", ",");
 
+/** Onde o desconto foi abatido, como o extrato precisa dizer por extenso. */
+const settlementLabels: Record<string, string> = {
+  auto: "Automática",
+  invoice: "Dentro da nota fiscal",
+  complement: "No complemento",
+};
+
 function formatCnpj(value: string) {
   const digits = value.replace(/\D/g, "");
 
@@ -48,6 +55,16 @@ export function ContractorAnalyticalStatement({
 
   const totalEarnings =
     detail.closing.baseAmount + detail.closing.creditsAmount;
+
+  /* Quanto do desconto foi abatido de cada lado do pagamento.
+     Sem isto, o resumo mostra "- R$ 59,93" e não diz de onde saiu — que é
+     exatamente a dúvida de quem confere uma nota menor do que o limite. */
+  const debitsOn = (target: string) => debits
+    .filter((item) => (item.settlementTarget || "auto") === target)
+    .reduce((total, item) => total + item.amount, 0);
+  const debitsOnInvoice = debitsOn("invoice");
+  const debitsOnComplement = debitsOn("complement");
+  const splitPayment = detail.closing.complementAmount > 0 || detail.closing.invoiceExpectedAmount < detail.closing.netAmount;
 
   const reviewStatus = detail.closing.invoiceReviewStatus;
   const invoiceNotRequired = reviewStatus === "not_required";
@@ -103,12 +120,13 @@ export function ContractorAnalyticalStatement({
       ["Competência", detail.closing.competence],
       ["Contrato", detail.provider.contractReference],
       [],
-      ["TIPO", "RUBRICA", "VALOR"],
-      ["PROVENTO", detail.closing.prorationDays !== null ? "Valor contratual proporcional" : "Valor contratual", decimal(detail.closing.baseAmount)],
+      ["TIPO", "RUBRICA", "VALOR", "INCIDÊNCIA"],
+      ["PROVENTO", detail.closing.prorationDays !== null ? "Valor contratual proporcional" : "Valor contratual", decimal(detail.closing.baseAmount), ""],
       ...credits.map((item) => [
         "PROVENTO",
         item.description || item.componentType,
         decimal(item.amount),
+        "",
       ]),
       ["", "TOTAL DE PROVENTOS", decimal(totalEarnings)],
       [],
@@ -116,8 +134,11 @@ export function ContractorAnalyticalStatement({
         "DESCONTO",
         item.description || item.componentType,
         decimal(item.amount),
+        settlementLabels[item.settlementTarget || "auto"] ?? settlementLabels.auto,
       ]),
       ["", "TOTAL DE DESCONTOS", decimal(detail.closing.debitsAmount)],
+      ["", "DESCONTOS DENTRO DA NOTA", decimal(debitsOnInvoice)],
+      ["", "DESCONTOS NO COMPLEMENTO", decimal(debitsOnComplement)],
       [],
       ["RESUMO", "Líquido devido", decimal(detail.closing.netAmount)],
       ["CAJU", "Complemento Caju", decimal(detail.closing.cajuAmount)],
@@ -201,6 +222,13 @@ export function ContractorAnalyticalStatement({
         <article data-tone="debit">
           <span>Total de descontos</span>
           <strong>- {money(detail.closing.debitsAmount)}</strong>
+          {debitsOnInvoice > 0 || debitsOnComplement > 0 ? (
+            <small>
+              {debitsOnInvoice > 0 ? `${money(debitsOnInvoice)} dentro da nota` : ""}
+              {debitsOnInvoice > 0 && debitsOnComplement > 0 ? " · " : ""}
+              {debitsOnComplement > 0 ? `${money(debitsOnComplement)} no complemento` : ""}
+            </small>
+          ) : null}
         </article>
 
         <article data-emphasis="true">
@@ -216,6 +244,16 @@ export function ContractorAnalyticalStatement({
         </article>
 
       </div>
+
+      {/* A dica só aparece quando há de fato dois lados para escolher e ninguém
+          escolheu: com o pagamento inteiro na nota, a incidência não muda nada
+          e o aviso seria ruído. */}
+      {splitPayment && detail.closing.debitsAmount > 0 && debitsOnInvoice === 0 && debitsOnComplement === 0 ? (
+        <p>
+          Este pagamento se divide entre nota fiscal e complemento, e os descontos estão saindo do complemento.
+          Se o desconto foi feito dentro do valor da nota, mude a incidência do lançamento na lista de descontos acima.
+        </p>
+      ) : null}
 
       <section className={styles.invoiceTracking} aria-labelledby="invoice-tracking-title">
         <header>

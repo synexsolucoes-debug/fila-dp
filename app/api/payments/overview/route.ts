@@ -97,7 +97,7 @@ export async function GET(request: Request) {
       d1.prepare(`SELECT a.id, a.code, a.legal_name, p.base_amount, p.invoice_limit_override, p.complement_method, p.contract_reference, p.status
         FROM fdp_contractor_profiles p JOIN fdp_auxiliary_providers a ON a.workspace_id = p.workspace_id AND a.id = p.provider_id
         WHERE p.workspace_id = ? AND p.company_id = ? AND p.status = 'active' ORDER BY a.legal_name`).bind(workspace.id, companyId).all(),
-      d1.prepare(`SELECT f.id, f.provider_id, f.direction, f.component_type, f.description, f.amount,
+      d1.prepare(`SELECT f.id, f.provider_id, f.direction, f.component_type, f.description, f.amount, f.settlement_target,
           f.effective_from, f.effective_to, f.status, f.note, a.legal_name AS contractor_name
         FROM fdp_contractor_fixed_items f
         JOIN fdp_auxiliary_providers a ON a.workspace_id = f.workspace_id AND a.id = f.provider_id
@@ -115,7 +115,7 @@ export async function GET(request: Request) {
          parecer que foi lançado em dobro. */
       cycleId
         ? d1.prepare(`SELECT k.id, k.provider_id, k.direction, k.component_type, k.description, k.amount,
-            k.component_quantity, k.origin, k.document_reference, k.status, k.created_at,
+            k.settlement_target, k.component_quantity, k.origin, k.document_reference, k.status, k.created_at,
             a.legal_name AS contractor_name
           FROM fdp_contractor_components k
           JOIN fdp_auxiliary_providers a ON a.workspace_id = k.workspace_id AND a.id = k.provider_id

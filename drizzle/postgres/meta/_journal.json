@@ -589,6 +589,13 @@
       "when": 1788440000000,
       "tag": "0081_contractor_start_proration",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1788440040000,
+      "tag": "0082_contractor_discount_settlement",
+      "breakpoints": true
     }
   ]
 }

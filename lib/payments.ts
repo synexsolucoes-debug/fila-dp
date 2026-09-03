@@ -11,7 +11,7 @@ import { cleanText } from "./registrations.ts";
  * isoladamente, e os fechamentos guardam a versão usada no cálculo.
  */
 export const PSYCHOLOGY_CALC_VERSION = "psychology-payment-1.0.0";
-export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.2.0";
+export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.3.0";
 
 const MAX_MONEY = 1_000_000_000;
 
@@ -281,6 +281,51 @@ export type ContractorComponentDirection = typeof contractorComponentDirections[
 export const complementMethods = ["none", "caju_saldo_livre", "other_benefit_card", "manual_transfer"] as const;
 export type ComplementMethod = typeof complementMethods[number];
 
+/**
+ * Onde um desconto é abatido quando o pagamento se divide entre nota fiscal e
+ * complemento.
+ *
+ * Só existe porque a divisão é real: com limite de nota, um líquido de 5.940,07
+ * sai como 3.000,00 de nota e 2.940,07 de complemento. Abater o desconto do
+ * líquido e deixar a nota no teto — o que o cálculo fazia sempre — significa
+ * que quem absorve o desconto é o complemento. Nem sempre é o que aconteceu: um
+ * desconto negociado dentro do serviço prestado precisa aparecer na nota, e
+ * então é o complemento que fica cheio.
+ *
+ *  - `auto`: o desconto reduz o líquido e a nota acompanha o limite. Continua
+ *    sendo o comportamento de sempre, e é o que vale para todo lançamento
+ *    existente.
+ *  - `invoice`: o desconto é abatido do valor da nota fiscal.
+ *  - `complement`: o desconto é abatido do complemento.
+ *
+ * Sem divisão — líquido abaixo do limite, ou sem limite — as três opções dão o
+ * mesmo número: não há duas partes para escolher entre elas.
+ */
+export const contractorSettlementTargets = ["auto", "invoice", "complement"] as const;
+export type ContractorSettlementTarget = typeof contractorSettlementTargets[number];
+
+export const contractorSettlementTargetLabels: Record<ContractorSettlementTarget, string> = {
+  auto: "Automática",
+  invoice: "Dentro da nota fiscal",
+  complement: "No complemento",
+};
+
+/**
+ * A incidência gravada, já normalizada.
+ *
+ * Provento não escolhe incidência: aumentar a nota acima do limite configurado
+ * é justamente o que o limite existe para impedir. Um valor desconhecido volta
+ * como `auto` porque a alternativa — recusar o cálculo — deixaria a competência
+ * inteira sem apuração por causa de uma linha.
+ */
+export function contractorSettlementTarget(value: unknown, direction?: ContractorComponentDirection): ContractorSettlementTarget {
+  if (direction === "credit") return "auto";
+  const candidate = cleanText(value, 20);
+  return (contractorSettlementTargets as readonly string[]).includes(candidate)
+    ? candidate as ContractorSettlementTarget
+    : "auto";
+}
+
 export const contractorClosingStatuses = [
   "open", "review", "approval", "approved", "invoice_pending", "ready_to_pay", "paid", "closed", "reopened",
 ] as const;
@@ -302,6 +347,8 @@ export type ContractorComponentInput = {
   componentType?: ContractorComponentType;
   amount: number;
   status?: typeof contractorComponentStatuses[number];
+  /** Onde o desconto é abatido; ver `contractorSettlementTargets`. */
+  settlementTarget?: ContractorSettlementTarget;
 };
 
 export type ContractorClosingCalculation = {
@@ -314,6 +361,10 @@ export type ContractorClosingCalculation = {
   invoiceExpectedAmount: number;
   complementAmount: number;
   complementMethod: ComplementMethod;
+  /** Descontos abatidos dentro da nota fiscal por escolha explícita. */
+  debitsOnInvoiceAmount: number;
+  /** Descontos abatidos do complemento por escolha explícita. */
+  debitsOnComplementAmount: number;
   fixedCajuAmount: number;
   cajuAmount: number;
   requiresComplementMethod: boolean;
@@ -405,12 +456,18 @@ export function calculateContractorBaseProration(input: {
  * Ordem obrigatória do cálculo PJ:
  *
  *   1. líquido regular = base + créditos - descontos
- *   2. nota fiscal     = mínimo(líquido regular, limite configurado)
+ *   2. nota fiscal     = mínimo(líquido regular sem os descontos direcionados,
+ *                       limite configurado) - descontos direcionados à nota
  *   3. complemento     = líquido regular - nota + diferença fixa do Caju
  *   4. Caju            = diferença fixa + complemento regular quando o meio for Caju
  *
  * Inverter os passos 1 e 2 produz nota e complemento errados; os testes
  * cobrem explicitamente os exemplos da especificação do produto.
+ *
+ * O líquido devido não muda com a incidência escolhida — o total pago é o mesmo
+ * qualquer que seja o lado que absorve o desconto. O que muda é quanto se pede
+ * de nota e quanto sobra para o complemento, e é exatamente essa divisão que a
+ * conferência precisa espelhar do que foi negociado.
  */
 export function calculateContractorClosing(input: {
   baseAmount: number;
@@ -429,9 +486,14 @@ export function calculateContractorClosing(input: {
   const creditsCents = active
     .filter((component) => component.direction === "credit")
     .reduce((total, component) => total + Math.abs(toCents(component.amount, "Valor do crédito")), 0);
-  const debitsCents = active
-    .filter((component) => component.direction === "debit")
+  const debitsBy = (target: ContractorSettlementTarget) => active
+    .filter((component) => component.direction === "debit"
+      && contractorSettlementTarget(component.settlementTarget, component.direction) === target)
     .reduce((total, component) => total + Math.abs(toCents(component.amount, "Valor do desconto")), 0);
+  const autoDebitsCents = debitsBy("auto");
+  const invoiceDebitsCents = debitsBy("invoice");
+  const complementDebitsCents = debitsBy("complement");
+  const debitsCents = autoDebitsCents + invoiceDebitsCents + complementDebitsCents;
 
   // 1. líquido regular — créditos e descontos SEMPRE antes do limite da nota.
   // A diferença fixa do Caju é uma obrigação adicional e não participa da nota.
@@ -439,8 +501,19 @@ export function calculateContractorClosing(input: {
   const regularPayableCents = Math.max(regularNetCents, 0);
 
   // 2. nota fiscal esperada, calculada apenas sobre o líquido regular.
+  //
+  // O desconto com incidência escolhida sai depois do limite, e não antes: é o
+  // que faz a escolha ter efeito. Descontar antes deixaria o limite recompor a
+  // nota no teto e o desconto cairia de novo no complemento — o resultado que a
+  // escolha existe para evitar. O desconto direcionado ao complemento não entra
+  // aqui pelo mesmo motivo, na outra direção.
   const limitCents = input.invoiceLimit.amount === null ? null : toCents(input.invoiceLimit.amount, "Limite da nota");
-  const invoiceCents = limitCents === null ? regularPayableCents : Math.min(regularPayableCents, limitCents);
+  const beforeTargetedCents = Math.max(baseCents + creditsCents - autoDebitsCents, 0);
+  const cappedInvoiceCents = limitCents === null ? beforeTargetedCents : Math.min(beforeTargetedCents, limitCents);
+  // A nota nunca passa do líquido devido nem fica negativa: um desconto maior
+  // que a própria nota zera a nota e o que sobrar dele vem do complemento, que
+  // é o único lugar que resta.
+  const invoiceCents = Math.min(Math.max(cappedInvoiceCents - invoiceDebitsCents, 0), regularPayableCents);
 
   // 3. complemento total e 4. Caju. A diferença fixa sempre vai para o Caju;
   // o excedente regular só vai para lá quando essa for a forma configurada.
@@ -460,6 +533,8 @@ export function calculateContractorClosing(input: {
     invoiceExpectedAmount: fromCents(invoiceCents),
     complementAmount: fromCents(complementCents),
     complementMethod: input.complementMethod,
+    debitsOnInvoiceAmount: fromCents(invoiceDebitsCents),
+    debitsOnComplementAmount: fromCents(complementDebitsCents),
     fixedCajuAmount: fromCents(fixedCajuCents),
     cajuAmount: fromCents(cajuCents),
     requiresComplementMethod: regularComplementCents > 0 && input.complementMethod === "none",

@@ -114,6 +114,16 @@ const document = {
           },
           amount: { type: "number", minimum: 0.01 },
           description: { type: "string", maxLength: 240 },
+          settlementTarget: {
+            type: "string",
+            enum: ["auto", "invoice", "complement"],
+            default: "auto",
+            description: [
+              "Onde o desconto é abatido quando o pagamento se divide entre nota fiscal e complemento:",
+              "`auto` reduz o líquido e a nota acompanha o limite, `invoice` abate dentro da nota,",
+              "`complement` abate do complemento. Ignorado em proventos.",
+            ].join(" "),
+          },
           quantity: { type: "number", minimum: 0 },
           documentReference: { type: "string", maxLength: 160 },
           externalId: { type: "string", maxLength: 160, description: "Identificador no sistema de origem; reenvio devolve o lançamento existente." },

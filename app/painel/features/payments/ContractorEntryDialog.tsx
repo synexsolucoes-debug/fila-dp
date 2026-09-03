@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarClock, Plus, Users } from "lucide-react";
+import { CalendarClock, Plus, ReceiptText, Users, WalletCards } from "lucide-react";
 import { AnimatedModal } from "../shared";
 import type { Contractor } from "./payments.types";
 import styles from "./payments.module.css";
@@ -50,11 +50,36 @@ const natureHelp: Record<Nature, string> = {
   determinado: "Repete a partir desta competência até a competência final informada.",
 };
 
+/**
+ * De qual lado do pagamento o desconto sai.
+ *
+ * Só aparece para desconto, e só porque o pagamento se divide: com limite de
+ * nota, parte sai como nota fiscal e parte como complemento. Descontar do
+ * líquido e deixar a nota no teto — o que o sistema fazia sempre — faz o
+ * complemento absorver tudo, e nem sempre foi assim que a coisa aconteceu.
+ */
+type Settlement = "auto" | "invoice" | "complement";
+
+const settlementHelp: Record<Settlement, string> = {
+  auto: "Reduz o líquido devido; a nota continua acompanhando o limite e a diferença sai do complemento.",
+  invoice: "O desconto sai de dentro do valor da nota fiscal. O complemento não muda.",
+  complement: "O desconto sai do complemento. O valor da nota não muda.",
+};
+
+const settlementLabels: Record<Settlement, string> = {
+  auto: "Automática",
+  invoice: "Dentro da nota fiscal",
+  complement: "No complemento",
+};
+
+const debitTypes = new Set(debitLabels.map(([value]) => value));
+
 export type EntrySubmission = {
   nature: Nature;
   componentType: string;
   description: string;
   effectiveTo: string;
+  settlementTarget: Settlement;
   entries: Array<{ providerId: string; amount: number }>;
 };
 
@@ -76,6 +101,7 @@ export function ContractorEntryDialog({
   const [mode, setMode] = useState<Mode>("prestador");
   const [nature, setNature] = useState<Nature>(initialNature);
   const [componentType, setComponentType] = useState("health_plan");
+  const [settlementTarget, setSettlementTarget] = useState<Settlement>("auto");
   const [description, setDescription] = useState("");
   const [effectiveTo, setEffectiveTo] = useState("");
   const [providerId, setProviderId] = useState("");
@@ -98,6 +124,7 @@ export function ContractorEntryDialog({
       setMode("prestador");
       setNature(initialNature);
       setComponentType("health_plan");
+      setSettlementTarget("auto");
       setDescription("");
       setEffectiveTo("");
       setProviderId("");
@@ -113,6 +140,8 @@ export function ContractorEntryDialog({
     [amounts],
   );
 
+  const isDebit = debitTypes.has(componentType);
+
   const podeEnviar = mode === "prestador"
     ? Boolean(providerId) && Number(singleAmount.replace(",", ".")) > 0
     : preenchidos > 0;
@@ -125,7 +154,11 @@ export function ContractorEntryDialog({
       : Object.entries(amounts)
         .map(([id, value]) => ({ providerId: id, amount: Number(value.replace(",", ".")) }))
         .filter((entry) => entry.amount > 0);
-    onSubmit({ nature, componentType, description, effectiveTo, entries });
+    onSubmit({
+      nature, componentType, description, effectiveTo, entries,
+      // Provento não escolhe incidência: a nota nunca passa do limite.
+      settlementTarget: isDebit ? settlementTarget : "auto",
+    });
   }
 
   return (
@@ -180,6 +213,23 @@ export function ContractorEntryDialog({
             </optgroup>
           </select>
         </label>
+
+        {isDebit && (
+          <fieldset className={styles.choiceGroup}>
+            <legend>Incidência do desconto</legend>
+            {(["auto", "invoice", "complement"] as const).map((item) => (
+              <label key={item} data-selected={settlementTarget === item}>
+                <input type="radio" name="settlementTarget" checked={settlementTarget === item}
+                  onChange={() => setSettlementTarget(item)} />
+                <span>
+                  {item === "invoice" ? <ReceiptText aria-hidden="true" /> : item === "complement" ? <WalletCards aria-hidden="true" /> : null}
+                  {settlementLabels[item]}
+                </span>
+                <small>{settlementHelp[item]}</small>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         <label>Descrição
           <input value={description} onChange={(event) => setDescription(event.target.value)}

@@ -66,12 +66,14 @@ export type InvoiceLimitPolicy = {
 export type ContractorComponent = {
   id: string; providerId: string; direction: string; componentType: string; description: string;
   quantity: number; amount: number; origin: string; documentReference: string; status: string;
+  /** Onde o desconto é abatido: `auto`, `invoice` ou `complement`. */
+  settlementTarget: string;
 };
 
 export type ContractorFixedItem = {
   id: string; providerId: string; contractorName: string; direction: "credit" | "debit";
   componentType: string; description: string; amount: number; effectiveFrom: string;
-  effectiveTo: string | null; status: string; note: string;
+  effectiveTo: string | null; status: string; note: string; settlementTarget: string;
 };
 
 export type ContractorPaymentDetail = {
@@ -100,7 +102,7 @@ export type ContractorDocument = {
 export type ContractorMonthlyEntry = {
   id: string; providerId: string; contractorName: string; direction: "credit" | "debit";
   componentType: string; description: string; amount: number; quantity: number;
-  origin: string; documentReference: string; status: string;
+  origin: string; documentReference: string; status: string; settlementTarget: string;
 };
 
 /* -------------------------------------------------------------------------- */

@@ -15,6 +15,31 @@ const originLabels: Record<string, string> = {
   integration: "Integração",
 };
 
+/**
+ * De onde o desconto sai quando o pagamento se divide entre nota e complemento.
+ *
+ * A dica curta ao lado do nome existe porque a consequência é justamente o que
+ * a pessoa precisa conferir: dizer só "automática" não responde qual dos dois
+ * valores muda.
+ */
+const settlementLabels: Record<string, string> = {
+  auto: "Automática",
+  invoice: "Dentro da nota",
+  complement: "No complemento",
+};
+
+const settlementHint: Record<string, string> = {
+  auto: "Reduz o líquido; a diferença sai do complemento",
+  invoice: "Abatido do valor da nota fiscal",
+  complement: "Abatido do complemento",
+};
+
+const settlementOptions: Array<[string, string]> = [
+  ["auto", "Automática"],
+  ["invoice", "Dentro da nota fiscal"],
+  ["complement", "No complemento"],
+];
+
 const money = (value: number) => new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -33,7 +58,7 @@ type Props = {
   detail: Detail;
   busy: boolean;
   onClose: () => void;
-  onUpdateComponent: (componentId: string, input: { amount: string; description: string }) => Promise<boolean>;
+  onUpdateComponent: (componentId: string, input: { amount: string; description: string; settlementTarget: string }) => Promise<boolean>;
   onCancelComponent: (componentId: string, reason: string) => Promise<boolean>;
   onDeleteClosing: (reason: string) => Promise<boolean>;
   receiptCompanies: CompanyOption[];
@@ -57,6 +82,7 @@ export function ContractorPaymentDetail({
   const [editingId, setEditingId] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editSettlement, setEditSettlement] = useState("auto");
   const [cancelingId, setCancelingId] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [deleteMode, setDeleteMode] = useState(false);
@@ -105,12 +131,17 @@ export function ContractorPaymentDetail({
     setEditingId(item.id);
     setEditDescription(item.description || contractorComponentLabel(item.componentType));
     setEditAmount(String(item.amount).replace(".", ","));
+    setEditSettlement(item.settlementTarget || "auto");
   }
 
   async function saveEdit(event: FormEvent, item: ContractorComponent) {
     event.preventDefault();
     if (!editAmount.trim()) return;
-    const ok = await onUpdateComponent(item.id, { amount: editAmount, description: editDescription });
+    const ok = await onUpdateComponent(item.id, {
+      amount: editAmount,
+      description: editDescription,
+      settlementTarget: item.direction === "debit" ? editSettlement : "auto",
+    });
     if (ok) setEditingId("");
   }
 
@@ -124,9 +155,11 @@ export function ContractorPaymentDetail({
     }
   }
 
-  function rows(items: ContractorComponent[]) {
+  /** `settlement` liga a coluna de incidência, que só existe para desconto. */
+  function rows(items: ContractorComponent[], settlement = false) {
+    const columns = settlement ? 6 : 5;
     if (items.length === 0) {
-      return <tr><td colSpan={5} className={styles.detailEmpty}>Nenhum lançamento nesta competência.</td></tr>;
+      return <tr><td colSpan={columns} className={styles.detailEmpty}>Nenhum lançamento nesta competência.</td></tr>;
     }
     return items.map((item) => {
       const fixed = item.origin === "fixed_item";
@@ -148,6 +181,26 @@ export function ContractorPaymentDetail({
               )}
             </td>
             <td>{originLabels[item.origin] || item.origin}</td>
+            {settlement ? (
+              <td>
+                {editingId === item.id ? (
+                  <select
+                    className={styles.inlineInput}
+                    value={editSettlement}
+                    onChange={(event) => setEditSettlement(event.target.value)}
+                    aria-label="Incidência do desconto"
+                    disabled={busy}
+                  >
+                    {settlementOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                ) : (
+                  <>
+                    {settlementLabels[item.settlementTarget] ?? settlementLabels.auto}
+                    <small className={styles.detailRowMeta}>{settlementHint[item.settlementTarget] ?? settlementHint.auto}</small>
+                  </>
+                )}
+              </td>
+            ) : null}
             <td>{item.status === "canceled" ? "Cancelado" : "Ativo"}</td>
             <td>
               {editingId === item.id ? (
@@ -189,7 +242,7 @@ export function ContractorPaymentDetail({
           </tr>
           {cancelingId === item.id ? (
             <tr className={styles.inlineActionRow}>
-              <td colSpan={5}>
+              <td colSpan={columns}>
                 <form onSubmit={(event) => void confirmCancel(event, item)}>
                   <label>
                     Motivo do cancelamento
@@ -286,8 +339,13 @@ export function ContractorPaymentDetail({
             </header>
             <div className={styles.tableScroll}>
               <table className={styles.detailTable}>
-                <thead><tr><th scope="col">Rubrica</th><th scope="col">Origem</th><th scope="col">Situação</th><th scope="col">Valor</th><th scope="col">Ações</th></tr></thead>
-                <tbody>{rows(debits)}</tbody>
+                <thead>
+                  <tr>
+                    <th scope="col">Rubrica</th><th scope="col">Origem</th><th scope="col">Incidência</th>
+                    <th scope="col">Situação</th><th scope="col">Valor</th><th scope="col">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>{rows(debits, true)}</tbody>
               </table>
             </div>
           </section>
