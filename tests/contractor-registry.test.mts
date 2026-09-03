@@ -283,6 +283,8 @@ test("cadastrar e editar PJ exige capacidade, acesso à empresa e não vaza docu
   assert.match(detail, /taxIdMasked/u);
   assert.match(detail, /dateFromDatabase/u, "datas do PostgreSQL precisam chegar canônicas ao formulário");
   assert.match(detail, /currentIdentity[\s\S]+taxId/u, "documento mascarado em branco não pode apagar o cadastro");
+  assert.match(detail, /upsertContractorClosing/u, "salvar a data do contrato precisa reapurar fechamento aberto");
+  assert.match(detail, /status = 'open'/u);
   const form = await readFile(new URL("../app/painel/features/registrations/ContractorsPanel.tsx", import.meta.url), "utf8");
   assert.match(form, /inputDate\(current\?\.contractStart\)/u);
   assert.match(form, /name="contractSignedAt"/u);

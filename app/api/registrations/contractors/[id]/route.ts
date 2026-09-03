@@ -2,7 +2,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { hasCapability, requireCapability } from "@/lib/authorization";
 import { centsFromDatabase, fromCents } from "@/lib/payments";
-import { contractorBalance, requireContractorProfile } from "@/lib/payment-service";
+import { contractorBalance, requireContractorProfile, requireCycle, upsertContractorClosing } from "@/lib/payment-service";
 import { assertContractValueNotBelowConsumed, movementLabels, type MovementType } from "@/lib/contractor-registry";
 import { readContractorInput } from "@/lib/contractor-input";
 import { dateFromDatabase } from "@/lib/registrations";
@@ -200,7 +200,24 @@ export async function PATCH(request: Request, { params }: Params) {
       }),
     ]);
 
-    return Response.json({ ok: true });
+    /* A ficha de Cadastro PJ é a fonte dos dados contratuais. Reapurar os
+       fechamentos ainda abertos aqui impede que um valor integral gravado antes
+       da data de início continue aparecendo no extrato após a correção do
+       contrato. Pagamentos fechados ou pagos permanecem imutáveis. */
+    const updatedProfile = await requireContractorProfile(d1, workspace.id, id);
+    const openClosings = await d1.prepare(`SELECT payroll_cycle_id, company_id
+      FROM fdp_contractor_closings
+      WHERE workspace_id = ? AND provider_id = ? AND status = 'open' AND excluded_at IS NULL`)
+      .bind(workspace.id, id)
+      .all<{ payroll_cycle_id: string; company_id: string }>();
+    const recalculated = [];
+    for (const closing of openClosings.results) {
+      const cycle = await requireCycle(d1, workspace.id, closing.company_id, closing.payroll_cycle_id);
+      const result = await upsertContractorClosing(d1, { workspaceId: workspace.id, profile: updatedProfile, cycle, userId: user.id });
+      recalculated.push({ id: result.closingId, competence: cycle.competence, baseAmount: result.calculation.baseAmount });
+    }
+
+    return Response.json({ ok: true, recalculated });
   } catch (error) {
     return apiError(error);
   }
