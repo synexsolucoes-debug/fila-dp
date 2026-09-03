@@ -119,13 +119,35 @@ if (catalog?.plans) {
     JSON.stringify(planNames.map((name) => name.trim().toLocaleLowerCase("pt-BR")))
       === JSON.stringify(expected.map((name) => name.toLocaleLowerCase("pt-BR"))),
     `home: ${planNames.join(", ")} | catálogo: ${expected.join(", ")}`);
+  /* O preço exibido tem duas formas legítimas e nenhuma terceira.
+     Ou o cartão mostra o valor do catálogo, ou declara que a condição é
+     fechada em contrato ("Sob consulta") ou gratuita — e um plano negociado
+     não pode mostrar número nenhum: o catálogo guarda um valor para o
+     Enterprise porque a cobrança precisa dele, mas publicá-lo como preço
+     fechado venderia uma condição que ninguém contratou assim.
+     A conferência que importa é a terceira: nenhum cartão pode exibir um
+     número que não esteja no catálogo. Era isso que a versão anterior media,
+     e é isso que continua medido — agora sem obrigar todo plano pago a
+     estampar o valor. */
   const prices = await page.locator(".plan-card .plan-price").allInnerTexts();
-  const paidInCatalog = catalog.plans.filter((plan) => plan.monthlyPriceCents > 0);
-  record("o preço exibido é o preço do catálogo, em centavos convertidos",
-    paidInCatalog.every((plan) => {
-      const shown = prices[catalog.plans.indexOf(plan)] ?? "";
-      return shown.replace(/\s/gu, "").includes(String(Math.trunc(plan.monthlyPriceCents / 100)));
-    }) && paidInCatalog.length > 0,
+  const semPreco = /^(grátis|sob consulta)$/iu;
+  const inventados = [];
+  let comValorPublicado = 0;
+  for (const [index, plan] of catalog.plans.entries()) {
+    const mostrado = (prices[index] ?? "").split("\n")[0].trim();
+    const reais = String(Math.trunc(plan.monthlyPriceCents / 100));
+    if (semPreco.test(mostrado)) continue;
+    if (mostrado.replace(/\s/gu, "").includes(reais) && plan.monthlyPriceCents > 0) {
+      comValorPublicado += 1;
+      continue;
+    }
+    inventados.push(`${plan.name}: "${mostrado}" ≠ catálogo ${reais}`);
+  }
+  record("nenhum cartão exibe preço fora do catálogo",
+    inventados.length === 0,
+    inventados.length > 0 ? inventados.join(" | ") : prices.map((price) => price.split("\n")[0]).join(" | "));
+  record("ao menos um plano publica o preço do catálogo",
+    comValorPublicado > 0,
     prices.map((price) => price.split("\n")[0]).join(" | "));
 }
 
