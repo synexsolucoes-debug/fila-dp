@@ -944,8 +944,12 @@ record("o login usa o logotipo oficial na variante clara",
   brandSources.join(" ").slice(0, 120));
 await page.goto(`${base}/`, { waitUntil: "networkidle" });
 const siteSources = await page.evaluate(() => [...document.querySelectorAll("img")].map((img) => img.getAttribute("src") ?? ""));
-record("o site usa o logotipo oficial colorido",
-  siteSources.some((src) => src.includes("vinculato-logo")),
+/* A conferência dizia "colorido" e aceitava qualquer `vinculato-logo`, então
+   passava com as duas variantes — inclusive com a azul-marinho sobre o
+   cabeçalho escuro, onde ela some. O comentário acima já pedia branco sobre
+   fundo escuro; agora a asserção cobra isso. */
+record("o site usa o logotipo oficial na variante clara, legível sobre a superfície escura",
+  siteSources.some((src) => src.includes("vinculato-logo-light")),
   siteSources.join(" ").slice(0, 120));
 
 record("nenhum erro de JavaScript no console do navegador", consoleErrors.length === 0,

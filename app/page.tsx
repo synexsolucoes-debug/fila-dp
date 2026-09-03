@@ -144,7 +144,9 @@ export default async function Home() {
 
       <header className="site-header">
         <Link className="brand" href="/" aria-label="Vinculato — início">
-          <VinculatoLogo size={30} priority />
+          {/* Mesma razão do rodapé logo abaixo, que já usava a variante clara:
+              o cabeçalho é superfície escura. */}
+          <VinculatoLogo size={30} tone="light" priority />
         </Link>
         <nav aria-label="Navegação principal">
           {siteNavigation.map((item) => <Link key={item.href} href={item.href}>{item.label}</Link>)}

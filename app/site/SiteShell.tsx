@@ -17,7 +17,10 @@ export function SiteShell({ children, active }: { children: ReactNode; active?: 
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <Link className={styles.brand} href="/" aria-label="Vinculato — início">
-            <VinculatoLogo size={28} priority />
+            {/* Variante clara: o cabeçalho público virou superfície escura com a
+                Central de comando, e o logotipo azul-marinho não se lê nela —
+                é o que o próprio componente avisa. */}
+            <VinculatoLogo size={28} tone="light" priority />
           </Link>
           <nav className={styles.nav} aria-label="Navegação do site">
             {siteNavigation.map((item) => (
