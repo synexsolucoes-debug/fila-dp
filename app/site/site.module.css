@@ -6,15 +6,26 @@
      barra de rolagem no esquema escuro sobre superfície branca — controle
      ilegível em formulário que a pessoa precisa preencher. */
   color-scheme: light;
-  --site-bg: var(--ui-bg);
-  --site-surface: var(--ui-surface);
-  --site-border: var(--ui-border);
-  --site-text: var(--ui-text);
-  --site-soft: var(--ui-text-soft);
-  --site-accent: var(--brand);
+  /* Os tokens da identidade, e não os apelidos semânticos.
+     `--brand`, `--ui-surface`, `--ui-warning` e companhia são redefinidos pela
+     casca do painel — é exatamente para isso que ela existe. Enquanto o site
+     lia esses nomes, ele dependia de nunca cruzar com aquelas redefinições, e
+     a auditoria da CI mostrou o site resolvendo valores do painel: o selo do
+     plano medido como branco sobre `rgb(185, 200, 255)`, que é o acento do
+     tema escuro, e a pílula "Parcial" sobre `rgb(36, 44, 53)`, que é
+     superfície escura. Aqui os dois medem 5,24:1 e 6,6:1, e não consegui
+     reproduzir a divergência — mas a dependência que a torna possível é real,
+     e some lendo a fonte da identidade, que casca nenhuma repinta. */
+  --site-bg: var(--vin-bg);
+  --site-surface: var(--vin-surface);
+  --site-border: var(--vin-border);
+  --site-text: var(--vin-text);
+  --site-soft: var(--vin-text-soft);
+  --site-accent: var(--vin-blue);
   --site-accent-soft: var(--brand-soft);
-  --site-warning: var(--ui-warning);
-  --site-danger: var(--ui-danger);
+  --site-warning: var(--vin-warning);
+  --site-warning-strong: var(--vin-warning-strong);
+  --site-danger: var(--vin-danger);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -96,13 +107,13 @@
 .cellMark { font-size: 1rem; line-height: 1; color: var(--site-accent); }
 .table { width: 100%; border-collapse: collapse; font-size: .87rem; }
 .table th, .table td { padding: 11px 14px; text-align: left; border-top: 1px solid var(--site-border); vertical-align: top; }
-.table thead th { border-top: 0; background: var(--ui-surface-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--site-soft); }
+.table thead th { border-top: 0; background: color-mix(in srgb, var(--site-border) 45%, var(--site-surface)); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--site-soft); }
 .badge { display: inline-block; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--site-border); font-size: .7rem; font-weight: 720; white-space: nowrap; }
 .badge[data-state="available"] { border-color: color-mix(in srgb, var(--site-accent) 45%, transparent); color: var(--site-accent); background: var(--site-accent-soft); }
 /* O âmbar de aviso rende 5,19:1 sobre branco, mas o próprio preenchimento da
    pílula o derruba para 4,4:1 — abaixo do mínimo. O tom forte devolve a folga
    sem mudar o significado da cor. */
-.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--ui-warning-strong); background: color-mix(in srgb, var(--site-warning) 10%, var(--site-surface)); }
+.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--site-warning-strong); background: color-mix(in srgb, var(--site-warning) 10%, var(--site-surface)); }
 .badge[data-state="assisted"] { border-color: color-mix(in srgb, var(--site-accent) 35%, transparent); color: var(--site-accent); background: color-mix(in srgb, var(--site-accent) 8%, var(--site-surface)); }
 .badge[data-state="planned"] { color: var(--site-soft); }
 

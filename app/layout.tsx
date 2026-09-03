@@ -97,10 +97,24 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  // Um tema só. Declarar `dark light` faria o navegador oferecer controles
-  // nativos claros para quem tem o sistema no claro, dentro de uma interface
-  // que é escura em todo o resto.
-  colorScheme: "dark",
+  /* O documento não declara esquema de cor, e cada casca declara o seu.
+   *
+   * `colorScheme: "dark"` aqui era herdado de quando só existia o painel. Ele
+   * vale para o documento inteiro — inclusive para as onze páginas públicas,
+   * que são claras — e o produto passou a afirmar duas coisas contraditórias:
+   * a raiz dizendo "esta página é escura" e o conteúdo pintando branco.
+   *
+   * A consequência apareceu de dois jeitos. O visível: campo, caixa de seleção
+   * e barra de rolagem nativos do formulário de contato desenhados no esquema
+   * escuro sobre superfície branca. O caro: a auditoria WCAG da CI reprovando
+   * quatro elementos das páginas públicas que aqui mediam 5,24:1 — o relatório
+   * acusou branco sobre `rgb(185, 200, 255)` e âmbar sobre `rgb(36, 44, 53)`,
+   * tons do tema escuro do painel, num navegador ajustando por conta própria
+   * uma página que se declarava escura e não era.
+   *
+   * As duas cascas já declaram o que são — `.dashboard-shell` claro,
+   * `.dashboard-shell.theme-dark` escuro, `.site`/`.home`/`.auth-page` claras.
+   * Esta linha só podia contradizê-las. */
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
