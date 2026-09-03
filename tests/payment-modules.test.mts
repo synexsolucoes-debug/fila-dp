@@ -810,3 +810,81 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
   assert.match(detail, /Editar/);
   assert.match(detail, /Cancelar lançamento/);
 });
+
+test("um prestador com problema não derruba a apuração da competência inteira", async () => {
+  /* O laço apura em sequência. Qualquer recusa lá dentro — contrato sem saldo,
+     fechamento travado, um valor que o banco não aceita — subia como erro da
+     requisição inteira: a tela falhava por completo, sem dizer de quem era o
+     problema e sem apurar os outros que estavam em ordem. */
+  const [route, view] = await Promise.all([
+    readFile(new URL("../app/api/payments/contractors/closings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(route, /try \{\s*await apurarPrestador\(id\);/u);
+  // O pedido nominal é a exceção: o erro de quem foi pedido é a resposta.
+  assert.match(route, /if \(providerId\) throw falha;/u);
+  assert.match(route, /failed: true/u);
+  assert.match(route, /apuradosCount: apurados/u);
+
+  // E a tela para de dizer "pronto" quando alguém ficou para trás.
+  assert.match(view, /blockedCount/u);
+  assert.match(view, /pendentes\.length === 0/u);
+  assert.match(view, /Competência apurada/u);
+});
+
+test("dá para apurar a folha de um prestador só, inclusive quem ainda não tem fechamento", async () => {
+  /* "Apurar competência" varre todo mundo, e era o único caminho: refazer a
+     folha de uma pessoa custava reprocessar o grupo. Pior, quem ainda não
+     tinha fechamento não aparecia na tabela — e o botão de reapurar da linha
+     era o único atalho existente. */
+  const sections = await readFile(
+    new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(sections, /function SingleClosingPanel/u);
+  assert.match(sections, /Apurar este prestador/u);
+  assert.match(sections, /onRecalculate\(providerId\)/u);
+  // Precisa existir também quando a competência não tem nenhum fechamento —
+  // que é exatamente o caso de quem nunca foi apurado.
+  const secao = sections.slice(sections.indexOf("function ClosingsSection"), sections.indexOf("function SingleClosingPanel"));
+  assert.equal((secao.match(/<SingleClosingPanel /gu) ?? []).length, 2,
+    "o painel precisa aparecer com a tabela cheia e com ela vazia");
+});
+
+test("pagamento excluído volta pela reapuração daquele prestador, e não pela da competência", async () => {
+  /* Excluir era porta de mão única: a linha saía da tela e levava junto o
+     botão de reapurar daquele prestador, enquanto "Apurar competência"
+     respeitava a exclusão de propósito. A reapuração encontrava a linha
+     excluída, regravava os valores nela e dizia que deu certo — e nada
+     aparecia, porque a linha seguia excluída. */
+  const [paymentService, closingRoute, overview, sections, api, types] = await Promise.all([
+    readFile(new URL("../lib/payment-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/closings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/overview/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/payments.api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/payments.types.ts", import.meta.url), "utf8"),
+  ]);
+
+  // Reapurar sem consentimento recusa em voz alta em vez de gravar no escuro.
+  assert.match(paymentService, /restoreExcluded\?: boolean/u);
+  assert.match(paymentService, /CONTRACTOR_CLOSING_EXCLUDED/u);
+  assert.match(paymentService, /SET excluded_at = NULL, excluded_by = NULL, exclusion_reason = ''/u);
+
+  /* O pedido nominal restaura; a competência inteira, não. As duas metades
+     precisam continuar juntas: filtrar o prestador informado devolveria a
+     porta de mão única, e não filtrar a lista geral ressuscitaria em silêncio
+     tudo o que alguém tirou de lá. */
+  assert.match(closingRoute, /restoreExcluded: Boolean\(providerId\) && excludedProviders\.has\(id\)/u);
+  assert.match(closingRoute, /contractor_closing\.restored/u);
+  assert.match(closingRoute, /\.filter\(\(id\) => !excludedProviders\.has\(id\)\)/u);
+
+  // E o excluído reaparece em lista própria, fora dos totais, com o caminho de volta.
+  assert.match(overview, /c\.excluded_at IS NOT NULL/u);
+  assert.match(overview, /excludedClosings: excludedClosings\.results/u);
+  assert.match(types, /excludedClosings: ContractorExcludedClosing\[\]/u);
+  assert.match(api, /payload\.excludedClosings/u);
+  assert.match(sections, /Pagamentos excluídos desta competência/u);
+  assert.match(sections, /Restaurar e reapurar/u);
+});

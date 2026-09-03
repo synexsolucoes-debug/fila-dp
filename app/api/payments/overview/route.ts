@@ -79,7 +79,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const [closings, contractors, fixedItems, monthlyEntries, policies] = await Promise.all([
+    const [closings, excludedClosings, contractors, fixedItems, monthlyEntries, policies] = await Promise.all([
       cycleId
         ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.contract_base_amount,
             c.proration_days, c.proration_total_days, c.proration_end_date, c.credits_amount, c.debits_amount, c.net_amount,
@@ -92,6 +92,19 @@ export async function GET(request: Request) {
           JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
           LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = c.workspace_id AND p.provider_id = c.provider_id
           WHERE c.workspace_id = ? AND c.company_id = ? AND c.payroll_cycle_id = ? AND c.excluded_at IS NULL
+          ORDER BY a.legal_name`).bind(workspace.id, companyId, cycleId).all()
+        : Promise.resolve({ results: [] }),
+      /* Os pagamentos excluídos desta competência.
+         Exclusão aqui é lógica — a linha continua no banco —, mas ela sumia de
+         toda tela, e com ela a única forma de reapurar aquele prestador: não
+         havia linha para clicar. Voltam numa lista à parte, fora dos totais,
+         com o motivo e o caminho de volta. */
+      cycleId
+        ? d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.net_amount, c.status, c.exclusion_reason, c.excluded_at,
+            a.legal_name AS contractor_name, a.code AS contractor_code
+          FROM fdp_contractor_closings c
+          JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
+          WHERE c.workspace_id = ? AND c.company_id = ? AND c.payroll_cycle_id = ? AND c.excluded_at IS NOT NULL
           ORDER BY a.legal_name`).bind(workspace.id, companyId, cycleId).all()
         : Promise.resolve({ results: [] }),
       d1.prepare(`SELECT a.id, a.code, a.legal_name, p.base_amount, p.invoice_limit_override, p.complement_method, p.contract_reference, p.status
@@ -143,7 +156,8 @@ export async function GET(request: Request) {
 
     return Response.json({
       module: moduleType, competence, cycle, cycles: cycles.results,
-      closings: rows, contractors: contractors.results, fixedItems: fixedItems.results,
+      closings: rows, excludedClosings: excludedClosings.results,
+      contractors: contractors.results, fixedItems: fixedItems.results,
       monthlyEntries: monthlyEntries.results,
       invoiceLimitPolicies: policies.results,
       invoicePolicy,

@@ -1,5 +1,5 @@
 import type {
-  CompanyOption, Contractor, ContractorClosing, ContractorComponent, ContractorFixedItem,
+  CompanyOption, Contractor, ContractorClosing, ContractorComponent, ContractorExcludedClosing, ContractorFixedItem,
   ContractorMonthlyEntry,
   ContractorOverview, ContractorPaymentDetail, CycleOption,
   InvoiceDetail, InvoiceEvent, InvoiceLimitPolicy, InvoicePanel, InvoicePermissions, InvoicePolicy,
@@ -247,6 +247,15 @@ export function normalizeContractorOverview(payload: Row): ContractorOverview {
     cycle: payload.cycle ? normalizeCycle(payload.cycle as Row) : null,
     cycles: ((payload.cycles ?? []) as Row[]).map(normalizeCycle),
     closings: ((payload.closings ?? []) as Row[]).map(normalizeContractorClosing),
+    excludedClosings: ((payload.excludedClosings ?? []) as Row[]).map((row): ContractorExcludedClosing => ({
+      id: text(row.id), providerId: text(pick(row, "providerId", "provider_id")),
+      contractorName: text(pick(row, "contractorName", "contractor_name")),
+      contractorCode: text(pick(row, "contractorCode", "contractor_code")),
+      competence: text(row.competence), netAmount: number(pick(row, "netAmount", "net_amount")),
+      status: text(row.status),
+      exclusionReason: text(pick(row, "exclusionReason", "exclusion_reason")),
+      excludedAt: text(pick(row, "excludedAt", "excluded_at")),
+    })),
     contractors: ((payload.contractors ?? []) as Row[]).map(normalizeContractor),
     fixedItems: ((payload.fixedItems ?? []) as Row[]).map(normalizeFixedItem),
     monthlyEntries: ((payload.monthlyEntries ?? []) as Row[]).map(normalizeMonthlyEntry),

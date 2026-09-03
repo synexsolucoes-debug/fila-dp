@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  Archive, ArrowRight, CalendarClock, CheckCheck, CreditCard, Download, FileDown, FileSpreadsheet, FileText,
+  Archive, ArrowRight, CalendarClock, Calculator, CheckCheck, CreditCard, Download, FileDown, FileSpreadsheet, FileText,
   FolderOpen, MessageSquare, Plus, ReceiptText, RotateCcw, ShieldCheck, Users,
 } from "lucide-react";
 import { CajuExportPanel } from "./CajuExportPanel";
@@ -279,17 +279,26 @@ function ClosingsSection(props: SectionProps) {
   const rows = overview.closings;
   if (rows.length === 0) {
     return (
-      <EmptyState
-        icon={ReceiptText}
-        title={`Nenhum fechamento apurado em ${competenceLabel(competence)}`}
-        text="Lance os créditos e descontos e use “Apurar competência” para calcular quanto cada prestador tem a receber."
-        action={permissions?.manage ? (
-          <button className={styles.primaryButton} type="button"
-            onClick={() => onDialog({ kind: "component", contractors: overview.contractors })}>
-            <Plus aria-hidden="true" /> Lançar crédito ou desconto
-          </button>
-        ) : undefined}
-      />
+      <>
+        <EmptyState
+          icon={ReceiptText}
+          title={`Nenhum fechamento apurado em ${competenceLabel(competence)}`}
+          text="Lance os créditos e descontos e use “Apurar competência” para calcular quanto cada prestador tem a receber."
+          action={permissions?.manage ? (
+            <button className={styles.primaryButton} type="button"
+              onClick={() => onDialog({ kind: "component", contractors: overview.contractors })}>
+              <Plus aria-hidden="true" /> Lançar crédito ou desconto
+            </button>
+          ) : undefined}
+        />
+        {/* Sem nenhum fechamento na competência, este é o caminho para apurar
+            uma pessoa só sem varrer o grupo inteiro. */}
+        <SingleClosingPanel {...props} />
+        {/* Também aqui: se todos os pagamentos da competência foram excluídos,
+            a tela fica vazia — e era justamente quando não havia caminho de
+            volta para nenhum deles. */}
+        <ExcludedClosingsPanel {...props} />
+      </>
     );
   }
   return (
@@ -297,6 +306,8 @@ function ClosingsSection(props: SectionProps) {
       <ContractorApprovalPanel {...props} rows={rows} />
       <ClosingsTable {...props} rows={rows}
         caption={`Fechamento PJ de ${competenceLabel(competence)}`} showActions />
+      <SingleClosingPanel {...props} />
+      <ExcludedClosingsPanel {...props} />
       {/* Conferir é perguntar de onde o número veio, e o número da tabela já
           vem somado. O extrato analítico abre a soma: uma linha por rubrica,
           de todos os prestadores da competência.
@@ -321,6 +332,122 @@ function ClosingsSection(props: SectionProps) {
         </button>
       </footer>
     </>
+  );
+}
+
+/**
+ * Apurar um prestador só.
+ *
+ * "Apurar competência" varre todo mundo, e era o único caminho: quem precisava
+ * refazer a folha de uma pessoa — porque lançou um desconto agora, porque o
+ * cadastro mudou, porque o pagamento dela foi excluído por engano — tinha de
+ * reprocessar o grupo inteiro para chegar num prestador. E quem ainda não
+ * tinha fechamento nenhum não aparecia na tabela, então não havia sequer um
+ * botão de reapurar para clicar.
+ *
+ * O botão da linha continua onde estava, para quem já está na tabela. Este
+ * painel é o caminho de quem não está.
+ */
+function SingleClosingPanel({ overview, permissions, busy, competence, competenceLabel, onRecalculate }: SectionProps) {
+  const [providerId, setProviderId] = useState("");
+  const ativos = useMemo(
+    () => overview.contractors.filter((item) => item.status === "active"),
+    [overview.contractors],
+  );
+  if (!permissions?.manage || ativos.length === 0) return null;
+
+  return (
+    <section className={styles.singleClosingPanel} aria-labelledby="contractor-single-title">
+      <div>
+        <Calculator aria-hidden="true" />
+        <div>
+          <h3 id="contractor-single-title">Apurar um prestador</h3>
+          <p>
+            Calcula a folha de {competenceLabel(competence)} só para quem você escolher, sem
+            reprocessar os demais.
+          </p>
+        </div>
+      </div>
+      <div className={styles.singleClosingActions}>
+        <label>
+          <span>Prestador</span>
+          <select value={providerId} onChange={(event) => setProviderId(event.target.value)} disabled={busy}>
+            <option value="">Selecione</option>
+            {ativos.map((item) => <option key={item.id} value={item.id}>{item.legalName}</option>)}
+          </select>
+        </label>
+        <button
+          className={styles.secondaryButton}
+          type="button"
+          disabled={busy || !providerId}
+          onClick={() => onRecalculate(providerId)}
+        >
+          <Calculator aria-hidden="true" /> Apurar este prestador
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Os pagamentos que alguém tirou desta competência.
+ *
+ * Excluir é decisão legítima e reversível por natureza — a linha continua no
+ * banco —, mas ela sumia de toda a tela e levava junto o botão de reapurar
+ * daquele prestador. Quem excluiu por engano não tinha caminho de volta:
+ * "Apurar competência" respeita a exclusão de propósito, para não ressuscitar
+ * em silêncio o que foi tirado de lá.
+ *
+ * A lista fica fora dos totais e da tabela de apuração — ela não é pagamento
+ * da competência —, e traz o motivo registrado na exclusão, que costuma ser a
+ * informação que decide se vale restaurar.
+ */
+function ExcludedClosingsPanel({ overview, money, permissions, busy, onRecalculate }: SectionProps) {
+  const excluded = overview.excludedClosings;
+  if (excluded.length === 0) return null;
+
+  return (
+    <section className={styles.excludedPanel} aria-labelledby="contractor-excluded-title">
+      <header>
+        <div>
+          <Archive aria-hidden="true" />
+          <div>
+            <h3 id="contractor-excluded-title">Pagamentos excluídos desta competência</h3>
+            <p>
+              Não entram em totais, relatórios nem no Caju. Restaurar reapura o prestador com os
+              lançamentos que estiverem valendo agora.
+            </p>
+          </div>
+        </div>
+      </header>
+      <div className={styles.tableScroll}>
+        <table className={styles.table}>
+          <caption className={styles.tableCaption}>Pagamentos fora da apuração</caption>
+          <thead>
+            <tr>
+              <th scope="col">Prestador</th><th scope="col">Líquido na exclusão</th>
+              <th scope="col">Motivo</th>{permissions?.manage && <th scope="col">Ações</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {excluded.map((row) => (
+              <tr key={row.id}>
+                <th scope="row">{row.contractorName}<small>{row.contractorCode}</small></th>
+                <td>{money(row.netAmount)}</td>
+                <td>{row.exclusionReason || "—"}</td>
+                {permissions?.manage && (
+                  <td className={styles.rowActions}>
+                    <button type="button" onClick={() => onRecalculate(row.providerId)} disabled={busy}>
+                      <RotateCcw aria-hidden="true" /> Restaurar e reapurar
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

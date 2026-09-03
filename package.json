@@ -38,6 +38,7 @@
     "db:rehearse": "node scripts/rehearse-payments-db.mjs",
     "db:rehearse-restore": "node scripts/rehearse-backup-restore.mjs",
     "db:rehearse-statement": "node --experimental-strip-types scripts/rehearse-contractor-statement.mjs",
+    "db:rehearse-closing": "node --experimental-strip-types scripts/rehearse-contractor-closing.mjs",
     "db:rehearse-invoices": "node --experimental-strip-types scripts/rehearse-contractor-invoices.mjs",
     "db:rehearse-events": "node scripts/rehearse-integration-events.mjs",
     "worker:sankhya": "tsx worker/sankhya/index.ts",

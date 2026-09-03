@@ -59,6 +59,18 @@ export type ContractorClosing = {
   reconciliationStatus: string; reconciliationDifference: number; calcVersion: string; closedAt: string;
 };
 
+/**
+ * Um pagamento retirado da competência.
+ *
+ * A exclusão é lógica: a linha continua no banco, fora dos totais e dos
+ * relatórios. Ela aparece nesta lista à parte para que dê para desfazer o que
+ * foi excluído por engano — sem isso, excluir era uma porta de mão única.
+ */
+export type ContractorExcludedClosing = {
+  id: string; providerId: string; contractorName: string; contractorCode: string; competence: string;
+  netAmount: number; status: string; exclusionReason: string; excludedAt: string;
+};
+
 export type InvoiceLimitPolicy = {
   id: string; scope: string; companyId: string; providerId: string; contractReference: string; amount: number; effectiveFrom: string;
 };
@@ -223,7 +235,8 @@ export type InvoiceDetail = {
 
 export type ContractorOverview = {
   module: "contractors"; competence: string; cycle: CycleOption | null; cycles: CycleOption[];
-  closings: ContractorClosing[]; contractors: Contractor[]; fixedItems: ContractorFixedItem[];
+  closings: ContractorClosing[]; excludedClosings: ContractorExcludedClosing[];
+  contractors: Contractor[]; fixedItems: ContractorFixedItem[];
   monthlyEntries: ContractorMonthlyEntry[];
   invoiceLimitPolicies: InvoiceLimitPolicy[];
   totals: { netAmount: number; invoiceExpectedAmount: number; complementAmount: number; cajuAmount: number; divergentCount: number };

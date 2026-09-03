@@ -385,11 +385,30 @@ export async function computeContractorClosing(d1: Database, workspaceId: string
 /** Cria ou atualiza o fechamento PJ da competência com os valores recalculados. */
 export async function upsertContractorClosing(d1: Database, input: {
   workspaceId: string; profile: ContractorProfileRow; cycle: CycleRow; userId: string;
+  /**
+   * Traz de volta um pagamento excluído da competência.
+   *
+   * A exclusão é lógica: a linha continua no banco, fora da tela e dos totais.
+   * Sem este consentimento explícito, reapurar encontrava essa linha e
+   * regravava os valores nela — a apuração dizia que deu certo e nada
+   * aparecia, porque a linha seguia excluída. Restaurar é decisão de quem
+   * opera, então só a reapuração pedida para aquele prestador pede a
+   * restauração; a apuração da competência inteira continua respeitando o que
+   * alguém tirou de lá.
+   */
+  restoreExcluded?: boolean;
 }) {
-  const existing = await d1.prepare("SELECT id, status FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?")
-    .bind(input.workspaceId, input.profile.provider_id, input.cycle.id).first<{ id: string; status: string }>();
+  const existing = await d1.prepare(`SELECT id, status, excluded_at FROM fdp_contractor_closings
+    WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?`)
+    .bind(input.workspaceId, input.profile.provider_id, input.cycle.id)
+    .first<{ id: string; status: string; excluded_at: string | null }>();
   if (existing && (existing.status === "closed" || existing.status === "paid")) {
     throw ApiError.badRequest("O fechamento está concluído e não pode ser recalculado. Reabra com justificativa.", "PAYMENT_CLOSING_LOCKED");
+  }
+  if (existing?.excluded_at && !input.restoreExcluded) {
+    // Recusar em voz alta é melhor do que gravar numa linha que ninguém vê.
+    throw new ApiError(409, "CONTRACTOR_CLOSING_EXCLUDED",
+      `O pagamento de ${contractorLabel(input.profile)} foi excluído desta competência. Restaure-o para reapurar.`);
   }
 
   // Contrato suspenso, encerrado ou fora de vigência não vira apuração. Sem esta
@@ -421,7 +440,35 @@ export async function upsertContractorClosing(d1: Database, input: {
   const cajuStatus = calculation.cajuAmount > 0 ? "pending" : "not_required";
   const invoiceStatus = calculation.invoiceExpectedAmount > 0 ? "pending" : "not_required";
 
+  /* A restauração acontece só depois que o cálculo passou por todas as
+     recusas — contrato, saldo, competência. Trazer a linha de volta antes
+     deixaria o pagamento visível com os valores velhos se alguma delas
+     reprovasse no meio do caminho. */
+  const restored = Boolean(existing?.excluded_at);
+  if (restored) {
+    await d1.prepare(`UPDATE fdp_contractor_closings
+      SET excluded_at = NULL, excluded_by = NULL, exclusion_reason = '', updated_at = now()
+      WHERE workspace_id = ? AND id = ?`).bind(input.workspaceId, closingId).run();
+  }
+
   if (existing) {
+    /*
+     * O `::numeric` na comparação da situação da nota não é enfeite: sem ele a
+     * reapuração morre com centavos.
+     *
+     * O PostgreSQL infere o tipo do parâmetro pelo outro lado da comparação, e
+     * o outro lado é o literal `0` — um `integer`. O driver manda todo
+     * parâmetro como texto, então uma nota esperada de 5.102,46 chega como
+     * "5102.46" e o banco recusa a instrução inteira com `invalid input syntax
+     * for type integer`. Um valor redondo passava: 6000,00 vira "6000", que é
+     * inteiro válido. Daí o defeito parecer aleatório — quebrava exatamente
+     * nos prestadores cujo valor tinha centavos, e a apuração da competência
+     * inteira caía junto com o primeiro deles.
+     *
+     * A mesma armadilha vale para qualquer parâmetro de dinheiro comparado a
+     * literal numérico: onde o tipo não vem de uma coluna, ele precisa vir de
+     * um cast explícito.
+     */
     await d1.prepare(`UPDATE fdp_contractor_closings SET base_amount = ?, contract_base_amount = ?, proration_days = ?,
         proration_total_days = ?, proration_end_date = ?, credits_amount = ?, debits_amount = ?, net_amount = ?,
         invoice_limit_amount = ?, invoice_limit_source = ?, invoice_limit_policy_id = ?, invoice_expected_amount = ?,
@@ -429,9 +476,10 @@ export async function upsertContractorClosing(d1: Database, input: {
         invoice_status = CASE WHEN invoice_number = '' THEN ? ELSE invoice_status END,
         /* Reapurar não apaga uma conferência já feita: só ajusta a situação de
            quem ainda não tem nota — e zera a exigência quando o cálculo deixa
-           de pedir nota nesta competência. */
+           de pedir nota nesta competência. O ::numeric abaixo é obrigatório;
+           ver o comentário acima da consulta. */
         invoice_review_status = CASE
-          WHEN ? <= 0 THEN 'not_required'
+          WHEN ?::numeric <= 0 THEN 'not_required'
           WHEN invoice_current_id IS NULL THEN 'awaiting_issue'
           ELSE invoice_review_status END,
         caju_status = CASE WHEN caju_status IN ('sent', 'processed') THEN caju_status ELSE ? END,
@@ -460,7 +508,7 @@ export async function upsertContractorClosing(d1: Database, input: {
   await d1.prepare(`UPDATE fdp_contractor_components SET closing_id = ?
     WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ? AND closing_id IS DISTINCT FROM ?`)
     .bind(closingId, input.workspaceId, input.profile.provider_id, input.cycle.id, closingId).run();
-  return { closingId, calculation, limitPolicyId, componentCount, created: !existing };
+  return { closingId, calculation, limitPolicyId, componentCount, created: !existing, restored };
 }
 
 /**
