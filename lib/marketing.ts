@@ -167,7 +167,23 @@ export const faqEntries = [
   },
   {
     question: "Existe API e webhook?",
-    answer: "Sim. A API pública usa chave com escopos, limite por minuto e idempotência nas escritas. Os webhooks de saída são assinados com HMAC e possuem repetição com log de entrega.",
+    answer: "Sim, no plano que inclui o módulo de Integrações. A API pública usa chave com escopos, limite por minuto e idempotência nas escritas, e os webhooks de saída são assinados com HMAC, com repetição e log de entrega. A comparação por plano está na página de planos.",
+  },
+  {
+    question: "O plano gratuito expira ou vira cobrança automática?",
+    answer: "Não. O Starter é gratuito por tempo indeterminado dentro dos limites publicados: nenhum cartão é pedido para começar e nenhuma cobrança é iniciada sem uma contratação explícita.",
+  },
+  {
+    question: "O que acontece quando eu atinjo um limite do plano?",
+    answer: "A ação que ultrapassaria o limite é recusada com a explicação — quantos usuários o plano permite e quantos estão em uso, por exemplo. O que já existe continua acessível: o sistema não apaga usuário, empresa, integração nem anexo por causa de limite.",
+  },
+  {
+    question: "Como faço upgrade ou cancelo?",
+    answer: "Upgrade, downgrade e cancelamento são solicitados à equipe pelo formulário de contato e passam a valer no ciclo seguinte; o cancelamento encerra a renovação e mantém o acesso até o fim do período já pago. A troca de plano pelo próprio painel ainda não está disponível, e não anunciamos como pronta.",
+  },
+  {
+    question: "O armazenamento é por workspace? E se eu precisar de mais?",
+    answer: "É por workspace e soma os anexos de demandas, EPI e documentos de prestadores. Ao atingir o limite, o envio é recusado com o uso atual e o tamanho do arquivo; remover anexos desnecessários libera espaço, e mudar de plano aumenta o limite.",
   },
 ] as const;
 
@@ -180,6 +196,258 @@ export const faqEntries = [
 export function pluralize(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
+
+
+/* -------------------------------------------------------------------------- */
+/* Catálogo comercial: do registro persistido ao que a página mostra           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A linha do catálogo, exatamente como `fdp_saas_plans` a guarda.
+ *
+ * A home, a página de planos e `/api/site/plans` liam o mesmo SELECT e repetiam
+ * a mesma derivação — três cópias da regra de "este plano pode ser contratado
+ * sozinho?". Cópia de regra comercial não sobrevive: basta uma das três mudar
+ * para o site anunciar um checkout que a outra recusa. A regra passa a morar
+ * aqui, e as páginas só a consomem.
+ */
+export type PlanCatalogRow = {
+  code: string;
+  name: string;
+  description: string;
+  currency: string;
+  monthly_price_cents: number;
+  annual_price_cents: number;
+  trial_days: number;
+  included_seats: number;
+  company_limit: number;
+  integration_limit: number;
+  storage_limit_mb: number;
+  stripe_monthly_price_id: string;
+};
+
+/** Plano destacado como recomendação. Um só, e sempre o mesmo em todas as páginas. */
+export const RECOMMENDED_PLAN_CODE = "standard";
+
+/**
+ * Planos cujo preço e limites fecham em contrato.
+ *
+ * O catálogo guarda um valor para o Enterprise porque a cobrança e o console
+ * precisam de um número — mas ele é referência interna, não oferta publicada:
+ * assentos, empresas, integrações e armazenamento são dimensionados caso a
+ * caso. Publicar aquele número como preço faria o site prometer uma condição
+ * fechada que ninguém contratou assim.
+ *
+ * Enquanto o catálogo não tiver coluna própria para "negociado", esta lista é a
+ * única fonte da distinção — e por isso mora junto do resto do conteúdo
+ * comercial, não espalhada nas páginas.
+ */
+export const negotiatedPlanCodes: readonly string[] = ["enterprise"];
+
+/**
+ * Destino do cadastro gratuito.
+ *
+ * O botão que aponta para cá só é renderizado quando `selfSignupEnabled()`
+ * devolve `true`. Hoje ela devolve `false` — nenhuma página do site oferece
+ * este caminho, justamente para não abrir um link quebrado. Ligar o cadastro
+ * público e publicar a página são a mesma entrega, e `tests/site-launch.test.mts`
+ * cobra as duas juntas.
+ */
+export const SIGNUP_PATH = "/cadastro";
+
+/**
+ * Como um plano é contratado hoje.
+ *
+ * - `free`      — conta criada pelo próprio cliente, sem cobrança.
+ * - `checkout`  — contratação direta, com preço configurado no provedor.
+ * - `specialist` — condição fechada com a equipe. É o padrão, não a exceção:
+ *   um plano só sai daqui quando o catálogo prova que dá para cobrá-lo.
+ */
+export type PlanContracting = "free" | "checkout" | "specialist";
+
+export type PlanLimit = { label: string; value: string; short: string };
+
+export type PlanOffer = {
+  code: string;
+  name: string;
+  description: string;
+  /** "Grátis", "R$ 97,00" ou "Sob consulta". */
+  price: string;
+  /** A linha miúda embaixo do preço. */
+  priceNote: string;
+  contracting: PlanContracting;
+  ctaLabel: string;
+  ctaHref: string;
+  recommended: boolean;
+  negotiated: boolean;
+  limits: PlanLimit[];
+  /** Nota sobre os limites, quando eles são ponto de partida e não teto fixo. */
+  limitsNote: string;
+};
+
+const money = (cents: number, currency: string) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: (currency || "brl").toUpperCase() }).format(cents / 100);
+
+const storageLabel = (megabytes: number) => (megabytes >= 1024
+  ? `${Math.round(megabytes / 1024 * 10) / 10} GB`
+  : `${megabytes} MB`);
+
+/**
+ * Traduz uma linha do catálogo no que a página mostra.
+ *
+ * Nenhum preço, limite ou nome de plano é escrito nas páginas: se o catálogo
+ * mudar, o site muda junto. O que **não** vem do catálogo é a política de
+ * lançamento — quais planos já podem ser contratados sozinhos —, e ela é
+ * derivada de fatos verificáveis: preço zero com cadastro aberto, ou preço
+ * configurado no provedor de pagamento. Sem essa prova, o plano é conversa com
+ * a equipe, e o site não desenha um checkout que não existe.
+ */
+export function describePlanOffer(plan: PlanCatalogRow, options: { signupOpen: boolean }): PlanOffer {
+  const negotiated = negotiatedPlanCodes.includes(plan.code);
+  const free = plan.monthly_price_cents === 0;
+  const payable = plan.monthly_price_cents > 0 && Boolean(plan.stripe_monthly_price_id);
+
+  const contracting: PlanContracting = negotiated
+    ? "specialist"
+    : free && options.signupOpen
+      ? "free"
+      : payable && options.signupOpen
+        ? "checkout"
+        : "specialist";
+
+  const limits: PlanLimit[] = [
+    { label: "Usuários incluídos", value: pluralize(plan.included_seats, "usuário", "usuários"), short: String(plan.included_seats) },
+    { label: "Empresas", value: pluralize(plan.company_limit, "empresa", "empresas"), short: String(plan.company_limit) },
+    { label: "Integrações conectadas", value: pluralize(plan.integration_limit, "integração", "integrações"), short: String(plan.integration_limit) },
+    { label: "Armazenamento de anexos", value: storageLabel(plan.storage_limit_mb), short: storageLabel(plan.storage_limit_mb) },
+  ];
+  if (plan.trial_days > 0 && !free) {
+    limits.push({
+      label: "Avaliação",
+      value: pluralize(plan.trial_days, "dia", "dias"),
+      short: pluralize(plan.trial_days, "dia", "dias"),
+    });
+  }
+
+  return {
+    code: plan.code,
+    name: plan.name,
+    description: plan.description,
+    negotiated,
+    recommended: plan.code === RECOMMENDED_PLAN_CODE,
+    price: negotiated ? "Sob consulta" : free ? "Grátis" : money(plan.monthly_price_cents, plan.currency),
+    priceNote: negotiated
+      ? "Limites e condições definidos em contrato"
+      : free
+        ? "para começar, sem cartão"
+        : contracting === "checkout"
+          ? "por mês, por workspace"
+          : "por mês · contratação com a equipe",
+    contracting,
+    ctaLabel: contracting === "free"
+      ? "Começar grátis"
+      : contracting === "checkout"
+        ? `Assinar ${plan.name}`
+        : "Falar com especialista",
+    ctaHref: contracting === "free"
+      ? SIGNUP_PATH
+      : contracting === "checkout"
+        // Contratar exige estar autenticado: a assinatura pertence a um
+        // workspace, não a um visitante. O código do plano viaja junto para que
+        // a tela de assinatura abra já na condição escolhida.
+        ? `/login?return_to=${encodeURIComponent(`/painel?assinar=${plan.code}`)}`
+        : `/contato?assunto=planos&plano=${encodeURIComponent(plan.code)}`,
+    limits,
+    limitsNote: negotiated
+      ? "Os números do catálogo são o ponto de partida do dimensionamento, não um teto fixo."
+      : "",
+  };
+}
+
+/**
+ * O que acontece quando um limite do plano é atingido.
+ *
+ * Cada linha corresponde a uma recusa que existe no código, não a uma promessa
+ * de comportamento: o convite de usuário, a criação de empresa, a conexão de
+ * integração e o envio de anexo têm cada um a sua verificação antes de gravar.
+ * Nenhuma delas apaga o que já existe — o que estava lá continua acessível.
+ */
+export const planLimitBehaviour = [
+  {
+    limit: "Usuários",
+    behaviour: "O convite é recusado com a mensagem dizendo o plano, quantos usuários ele permite e quantos já estão em uso. Quem já tem acesso continua trabalhando.",
+  },
+  {
+    limit: "Empresas",
+    behaviour: "O cadastro de uma nova empresa é recusado enquanto o número de empresas ativas estiver no limite. Inativar uma empresa libera a vaga.",
+  },
+  {
+    limit: "Integrações",
+    behaviour: "Uma nova conexão não é ativada além do limite. As integrações já conectadas seguem sincronizando normalmente.",
+  },
+  {
+    limit: "Armazenamento",
+    behaviour: "O envio do anexo é recusado com o uso atual, o limite e o tamanho do arquivo. Nenhum anexo existente é apagado pelo sistema.",
+  },
+] as const;
+
+/**
+ * Compromissos comerciais publicados.
+ *
+ * Estão aqui, e não escritos na página, porque o mesmo texto precisa valer nos
+ * planos, no FAQ e no rodapé. Cada item descreve o que o produto faz hoje —
+ * inclusive quando o que ele faz é "pela equipe, não pelo painel".
+ */
+export const commercialCommitments = [
+  {
+    title: "Cancelamento",
+    text: "O cancelamento encerra a renovação seguinte e o acesso permanece até o fim do período já pago. Não há multa por encerramento e não há fidelidade mínima nos planos publicados.",
+  },
+  {
+    title: "Mudança de plano",
+    text: "Upgrade e downgrade são solicitados à equipe e passam a valer no ciclo seguinte, mantendo o histórico financeiro do workspace. A troca pelo próprio painel ainda não está disponível.",
+  },
+  {
+    title: "Saída com os dados",
+    text: "O administrador do grupo exporta os dados do workspace em arquivo único a qualquer momento, sem depender de pedido. Após o encerramento há 30 dias de recuperação antes da eliminação.",
+  },
+  {
+    title: "Suporte",
+    text: "Atendimento em dias úteis pelo formulário de contato, com o assunto de suporte. O acesso da nossa equipe aos dados do cliente é autorizado, temporário, justificado e auditado.",
+  },
+] as const;
+
+/**
+ * Dados jurídicos que dependem do proprietário do Vinculato.
+ *
+ * Razão social, CNPJ, endereço e o nome do encarregado não estão no repositório
+ * e não podem ser inventados: um documento legal com identificação fictícia é
+ * pior que um documento que declara a lacuna. Cada página legal exibe esta lista
+ * para que a pendência apareça para quem lê e para quem publica, em vez de ficar
+ * num comentário de código.
+ */
+export const legalPendingFields = [
+  "Razão social e CNPJ do fornecedor",
+  "Endereço da sede",
+  "Nome e e-mail do encarregado pelo tratamento de dados (DPO)",
+  "Foro eleito para os Termos de uso",
+] as const;
+
+/**
+ * Cookies em uso.
+ *
+ * A varredura do código encontra um cookie só: o de sessão, `httpOnly`,
+ * `SameSite=Lax`, gravado no login e apagado na saída. Não há analytics, pixel
+ * de anúncio, mapa de calor nem script de terceiros — e é por isso que não há
+ * banner de consentimento: pedir consentimento para o que é estritamente
+ * necessário treina a pessoa a clicar em "aceitar" sem ler.
+ */
+export const cookieUsage = {
+  essentialOnly: true,
+  summary: "O site e o produto usam um único cookie, o de sessão, necessário para manter quem entrou autenticado. Ele é httpOnly, restrito ao mesmo site e apagado na saída.",
+  absent: "Não há cookie de análise, de publicidade, de mapa de calor nem de rede social, e nenhum script de terceiros é carregado nas páginas públicas. Por isso não existe banner de consentimento: ele só seria devido se houvesse cookie não essencial.",
+  change: "Se um cookie não essencial passar a existir, esta política será atualizada e o consentimento será pedido antes da gravação.",
+} as const;
 
 /* -------------------------------------------------------------------------- */
 /* Captação de contato                                                         */

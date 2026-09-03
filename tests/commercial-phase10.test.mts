@@ -87,10 +87,18 @@ test("a home lê o catálogo real e não escreve preço no código", async () =>
 
 test("a home só oferece cadastro grátis quando existe plano sem custo e autocadastro habilitado", async () => {
   const home = await readPage("../app/page.tsx");
-  // A oferta é condicional às duas verdades, não um texto solto no herói.
-  assert.match(home, /const freePlan = plans\.find\(\(plan\) => plan\.monthly_price_cents === 0\)/);
-  assert.match(home, /const freeSignup = signupOpen && Boolean\(freePlan\)/);
-  assert.match(home, /freeSignup[\s\S]{0,120}Começar grátis/u);
+  // A oferta continua condicional às duas verdades — plano de preço zero no
+  // catálogo E autocadastro habilitado —, só que a regra deixou de estar
+  // escrita aqui: ela mora em `describePlanOffer`, que a home, /planos e
+  // /api/site/plans consomem. Enquanto cada superfície tinha a sua cópia, era
+  // questão de tempo até uma delas divergir e oferecer um caminho que a outra
+  // recusa. As duas conferências abaixo cobram a mesma coisa nos dois lugares.
+  assert.match(home, /describePlanOffer\(plan, \{ signupOpen \}\)/u);
+  assert.match(home, /const freeSignup = offers\.some\(\(offer\) => offer\.contracting === "free"\)/u);
+  const marketing = await readPage("../lib/marketing.ts");
+  assert.match(marketing, /free && options\.signupOpen/u, "a oferta grátis precisa depender do autocadastro");
+  assert.match(marketing, /const free = plan\.monthly_price_cents === 0/u, "e do preço zero publicado no catálogo");
+  assert.match(home, /freeSignup[\s\S]{0,160}Começar grátis/u);
   // "Começar grátis" nunca aparece fora da condição.
   const offers = [...home.matchAll(/Começar grátis/gu)];
   assert.equal(offers.length, 2, "a oferta grátis deve existir só nos dois CTAs condicionais");
@@ -115,15 +123,21 @@ test("a home entrega o posicionamento Vinculato, não o texto anterior", async (
 
 test("a página de planos lê o catálogo persistido e não inventa preço", async () => {
   const source = await readPage("../app/planos/page.tsx");
+  const marketing = await readPage("../lib/marketing.ts");
   assert.match(source, /FROM fdp_saas_plans WHERE status = 'active'/);
-  // O preço vem do catálogo; o que depende do provedor de pagamento é a
-  // contratação direta, não a exibição do valor publicado.
-  assert.match(source, /const payable = plan\.monthly_price_cents > 0 && Boolean\(plan\.stripe_monthly_price_id\)/);
-  assert.match(source, /contratação com a equipe/);
-  assert.match(source, /Falar com a equipe/);
   assert.match(source, /selfSignupEnabled/);
-  // Sem catálogo, a página não mostra tabela de preços fabricada.
+  // O preço vem do catálogo; o que depende do provedor de pagamento é a
+  // contratação direta, não a exibição do valor publicado. A regra saiu da
+  // página e foi para `describePlanOffer` — a página consome, não decide.
+  assert.match(source, /describePlanOffer\(plan, \{ signupOpen \}\)/u);
+  assert.match(marketing, /const payable = plan\.monthly_price_cents > 0 && Boolean\(plan\.stripe_monthly_price_id\)/u);
+  assert.match(marketing, /contratação com a equipe/u);
+  assert.match(marketing, /Falar com especialista/u);
+  // Sem catálogo, a página não mostra tabela de preços fabricada — e distingue
+  // "não há plano publicado" de "não consegui consultar", que não são a mesma
+  // notícia para quem está decidindo contratar.
   assert.match(source, /Condições sob consulta/);
+  assert.match(source, /Condição temporariamente indisponível/);
   assert.doesNotMatch(source, /R\$\s?\d/u);
 });
 
