@@ -141,7 +141,17 @@ const AUDIT = () => {
           // Pior parada do gradiente: aprovar pela média esconderia a borda ruim.
           const value = Math.min(...surfaces.map((bg) => ratio(fg.rgb, bg)));
           if (value < need) {
-            contrastIssues.push({ tag: el.tagName, cls, trail, text: text.slice(0, 40), value, need, size });
+            /* A cor medida vai junto do número.
+               Sem ela, "1.64:1" não diz o que aconteceu: se o texto perdeu a
+               cor, se o fundo não aplicou, ou se a medição pegou outra
+               superfície. Isso custou uma investigação inteira — a varredura
+               acusava um contraste que o navegador local não reproduzia, e o
+               relatório não trazia nada com que comparar. */
+            const pior = surfaces.reduce((a, b) => (ratio(fg.rgb, a) <= ratio(fg.rgb, b) ? a : b));
+            contrastIssues.push({
+              tag: el.tagName, cls, trail, text: text.slice(0, 40), value, need, size,
+              fg: `rgb(${fg.rgb.join(", ")})`, bg: `rgb(${pior.join(", ")})`,
+            });
           }
         }
       }
@@ -251,7 +261,7 @@ async function audit(label, path, setup, viewports = VIEWPORTS) {
     await page.waitForTimeout(500);
     const result = await page.evaluate(AUDIT);
     const uniq = (list, key) => [...new Map(list.map((item) => [key(item), item])).values()];
-    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.trail}:${i.value}`);
+    const contrast = uniq(result.contrastIssues, (i) => `${i.tag}.${i.cls}:${i.trail}:${i.value}:${i.fg}:${i.bg}`);
     const names = uniq(result.nameIssues, (i) => `${i.tag}.${i.cls}`);
     const targets = uniq(result.targetIssues, (i) => `${i.tag}.${i.cls}:${i.name}`);
     const blind = uniq(result.unmeasurable, (i) => `${i.tag}.${i.cls}`);
@@ -262,7 +272,7 @@ async function audit(label, path, setup, viewports = VIEWPORTS) {
     const total = contrast.length + names.length + targets.length + overflows.length;
     console.log(`  ${viewport.label}: ${total === 0 ? "sem violações" : `${total} violação(ões)`}`);
     for (const i of contrast.slice(0, 8)) {
-      console.log(`     contraste ${i.tag}.${i.cls || "—"} ${i.value}:1 (precisa ${i.need}) "${i.text}" ← ${i.trail}`);
+      console.log(`     contraste ${i.tag}.${i.cls || "—"} ${i.value}:1 (precisa ${i.need}) ${i.fg} sobre ${i.bg} "${i.text}" ← ${i.trail}`);
     }
     for (const i of names.slice(0, 5)) console.log(`     sem nome ${i.tag}.${i.cls} → ${i.html}`);
     for (const i of targets.slice(0, 5)) console.log(`     alvo ${i.tag}.${i.cls} ${i.w}x${i.h} "${i.name}"`);
