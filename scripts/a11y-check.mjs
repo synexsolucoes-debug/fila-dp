@@ -237,10 +237,17 @@ let screensAudited = 0;
  * dizia "0 violações" sobre elas do mesmo jeito que já disse sobre metade do
  * painel. Tela que ninguém mede é tela que ninguém conserta.
  *
- * O número continua folgado de propósito — 75 contra 86 medidas — para acusar
+ * Subiu de 75 para 77 quando as duas gavetas de configuração da integração
+ * global entraram. Elas não são telas: só existem depois de um clique, e por
+ * isso a varredura media a listagem por trás e declarava a área sem violações
+ * enquanto o formulário em cima dela tinha rótulo a 1,58:1 e cabeçalho de seção
+ * a 1,03:1 — vinte e cinco violações reais numa área que o relatório dava como
+ * limpa.
+ *
+ * O número continua folgado de propósito — 77 contra 88 medidas — para acusar
  * um colapso de cobertura sem quebrar quando um módulo sai do plano.
  */
-const MINIMO_DE_TELAS = 75;
+const MINIMO_DE_TELAS = 77;
 
 /**
  * `path === null` audita a tela já aberta, sem recarregar — usado nas visões do
@@ -480,6 +487,59 @@ async function auditPlatformAreas(theme = "") {
     await nav.filter({ hasText: label }).first().click().catch(() => undefined);
     await page.waitForTimeout(1100);
     await audit(`Plataforma › ${label}${theme ? ` [${theme}]` : ""}`, null);
+    if (label.startsWith("Integrações")) await auditIntegrationDrawer(theme);
+  }
+}
+
+/**
+ * A gaveta de configuração da integração global.
+ *
+ * Ela é a superfície mais densa do console — motivo administrativo, endpoint,
+ * rotina, agendamento, credencial dedicada — e nunca havia sido medida, porque
+ * só existe depois de um clique. A varredura media a listagem por trás e
+ * declarava a área sem violações; a gaveta em cima dela ficava com cabeçalho de
+ * seção quase preto sobre superfície escura, botão de salvar em lavanda clara
+ * com texto branco e o resumo da credencial ilegível. Mesma classe de ponto
+ * cego do assistente do painel e do menu do site, que já entraram por isso.
+ *
+ * Duas gavetas são abertas de propósito: a de um conector comum e a do Sankhya,
+ * que traz o formulário administrativo completo e não compartilha as regras do
+ * primeiro.
+ */
+async function auditIntegrationDrawer(theme = "") {
+  const sufixo = theme ? ` [${theme}]` : "";
+  const abrir = page.getByRole("button", { name: /^Configurar/u });
+  const total = await abrir.count();
+  if (total === 0) {
+    console.log("\n### Plataforma › Integrações › gaveta — nenhum botão de configuração; a varredura não rodou");
+    failures += 1;
+    return;
+  }
+
+  /* A gaveta do Sankhya é a que carrega o formulário administrativo inteiro, e
+     é por isso que ela é procurada pelo nome em vez de pela posição: abrir "a
+     primeira" mediria duas vezes o mesmo conector se a ordem mudasse. */
+  const cartoes = page.locator(".integrationGrid > article, [class*='integrationGrid'] > article");
+  const alvos = [{ rotulo: "conector", indice: 0 }];
+  const sankhya = cartoes.filter({ hasText: /Sankhya/u });
+  if (await sankhya.count() > 0) alvos.push({ rotulo: "Sankhya", cartao: sankhya.first() });
+
+  for (const alvo of alvos) {
+    const botao = alvo.cartao
+      ? alvo.cartao.getByRole("button", { name: /^Configurar/u }).first()
+      : abrir.nth(alvo.indice);
+    await botao.click().catch(() => undefined);
+    await page.locator('[role="dialog"]').first().waitFor({ state: "visible", timeout: 10000 }).catch(() => undefined);
+    await page.waitForTimeout(1400);
+    if (await page.locator('[role="dialog"]').count() === 0) {
+      console.log(`\n### Plataforma › Integrações › gaveta (${alvo.rotulo}) — não abriu`);
+      failures += 1;
+      continue;
+    }
+    await audit(`Plataforma › Integrações › gaveta (${alvo.rotulo})${sufixo}`, null);
+    await page.getByRole("button", { name: /^Fechar$/u }).first().click().catch(() => undefined);
+    await page.keyboard.press("Escape").catch(() => undefined);
+    await page.waitForTimeout(700);
   }
 }
 

@@ -270,3 +270,45 @@
 .inlineWarning { border-color: #745e36; background: #2b2517; color: #f3d79f; }
 .itemError { background: #321d28; color: #ffc5c3 !important; }
 .auditEvents details > dl { background: #10233a; }
+
+/* A gaveta de configuração da integração global.
+   ----------------------------------------------------------------------------
+   O mapa escuro acima fechou as cascas do console — painéis, tabelas, cartões —
+   e parou na borda da gaveta. Ela não é uma tela: só existe depois de um clique,
+   então a varredura media a listagem por trás e declarava a área sem violações
+   enquanto o formulário em cima dela ficava ilegível. As superfícies internas
+   continuavam declarando branco fixo (`#fff`, `#f8fafc`, `#f0f8ff`) enquanto o
+   texto virava claro — medido: 1,03:1 no cabeçalho de seção, 1,07:1 em
+   "Credencial ativa", 1,47:1 no aviso administrativo e 1,58:1 em todo rótulo de
+   campo. É a superfície que estava errada, não a tinta: por isso o conserto é
+   apontar cada uma para o degrau que o console já usa. */
+.detailSection, .detailSection article { background: var(--surface); border-color: var(--border); }
+.detailSectionHeader, .detailSection h3 { background: var(--muted); border-color: var(--border); }
+.detailSectionHeader button, .detailTable button,
+.sankhyaSecretSummary button { border-color: var(--border); background: #10233a; color: var(--text); }
+.detailSectionHeader button:hover:not(:disabled), .detailTable button:hover:not(:disabled),
+.sankhyaSecretSummary button:hover:not(:disabled) { border-color: #5274ff; background: #172d50; color: #d9e2ff; }
+.sankhyaAdminIntro { background: #172d50; border-color: var(--border); color: #c8d5ff; }
+.sankhyaAdminIntro strong { color: #d9e2ff; }
+.sankhyaAdminIntro svg { color: #b9c8ff; }
+
+/* Ação primária da gaveta.
+   `#5274ff` com texto branco rende 3,96:1 — perto, e abaixo do piso. Num fundo
+   escuro a saída não é escurecer o azul até ele sumir, é clarear e inverter a
+   tinta: o azul claro com tinta do fundo rende 5,91:1 e continua sendo o botão
+   mais visível da gaveta, que é o papel dele.
+
+   Vale para o estado desabilitado também, e essa foi a primeira tentativa
+   errada: escopar por `:not(:disabled)` deixou os dois botões de salvar de
+   fora, porque eles nascem desabilitados — só liberam depois do motivo
+   administrativo. Um botão desabilitado continua sendo lido, e a opacidade do
+   estado não muda a cor computada que a conferência mede. */
+.configForm > button, .compactForm button, .accessRow > button, .moduleRow button {
+  border-color: #6f8dff; background: #6f8dff; color: #07182a;
+}
+
+/* A caixa de "ativar sincronização automática" media 13x24: `width: auto`
+   devolve o tamanho padrão do agente de usuário, que é menor que os 24px da
+   WCAG 2.5.8 — e esta é a caixa que decide se a integração roda sozinha. */
+.dayChecks input, .confirmCheck input { width: 24px !important; height: 24px; min-height: 24px !important; }
+.confirmCheck { border-color: #745e36; background: #2b2517; color: #f3d79f !important; }
