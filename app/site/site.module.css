@@ -1,11 +1,12 @@
 .site {
   /* As páginas comerciais consomem a identidade pelos tokens globais da marca:
      nenhum valor de cor é redefinido aqui. */
-  /* O layout declara `color-scheme: dark` porque o painel é escuro. O site é
-     claro, e sem esta linha o navegador desenha select, caixa de seleção e
-     barra de rolagem no esquema escuro sobre superfície branca — controle
-     ilegível em formulário que a pessoa precisa preencher. */
-  color-scheme: light;
+  /* O esquema declarado precisa ser o da superfície de fato, senão o navegador
+     desenha select, caixa de seleção e barra de rolagem no esquema oposto e o
+     formulário fica com controle ilegível. Era `light` enquanto o site era
+     claro; a Central de comando levou a mesma linguagem escura para as páginas
+     públicas (bloco no fim desta folha), e a declaração acompanha. */
+  color-scheme: dark;
   /* Três regras desta folha leem `--vin-*` direto, sem passar por `--site-*`:
      o link de pular, o selo do plano e a pílula "Parcial". Não é preferência de
      estilo, é o que a medição mostrou. Quando o mesmo desacoplamento foi feito
@@ -34,7 +35,6 @@
   --site-accent: var(--vin-blue);
   --site-accent-soft: var(--brand-soft);
   --site-warning: var(--vin-warning);
-  --site-warning-strong: var(--vin-warning-strong);
   --site-danger: var(--vin-danger);
   min-height: 100vh;
   display: flex;
@@ -123,7 +123,12 @@
 /* O âmbar de aviso rende 5,19:1 sobre branco, mas o próprio preenchimento da
    pílula o derruba para 4,4:1 — abaixo do mínimo. O tom forte devolve a folga
    sem mudar o significado da cor. */
-.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--vin-warning) 45%, transparent); color: var(--vin-warning-strong); background: color-mix(in srgb, var(--vin-warning) 10%, var(--vin-surface)); }
+/* O âmbar segue a superfície, e não o contrário.
+   Enquanto o site era claro, este selo precisava do âmbar escurecido para
+   sobreviver ao próprio preenchimento. Com a superfície escura da Central de
+   comando, aquele mesmo tom cai para 2,12:1 — o tom de aviso do tema é que se
+   lê aqui, e `--site-warning` já é repontado no fim desta folha. */
+.badge[data-state="partial"] { border-color: color-mix(in srgb, var(--site-warning) 45%, transparent); color: var(--site-warning); background: color-mix(in srgb, var(--site-warning) 12%, var(--site-surface)); }
 .badge[data-state="assisted"] { border-color: color-mix(in srgb, var(--site-accent) 35%, transparent); color: var(--site-accent); background: color-mix(in srgb, var(--site-accent) 8%, var(--site-surface)); }
 .badge[data-state="planned"] { color: var(--site-soft); }
 

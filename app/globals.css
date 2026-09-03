@@ -245,11 +245,11 @@ button, summary { font: inherit; }
 /* Página inicial                                                              */
 /* -------------------------------------------------------------------------- */
 
-/* O layout declara `color-scheme: dark` porque o painel é escuro. A home e as
-   telas de acesso são claras, e sem esta linha o navegador desenha os controles
-   nativos — campo, caixa de seleção, barra de rolagem — no esquema escuro sobre
-   superfície branca. */
-.home, .auth-page { color-scheme: light; }
+/* O esquema declarado acompanha a superfície de fato: a Central de comando
+   levou a linguagem escura para a home e para as telas de acesso, e um
+   `light` aqui faria o navegador desenhar campo, caixa de seleção e barra de
+   rolagem no esquema oposto ao da tela. */
+.home, .auth-page { color-scheme: dark; }
 
 .home-skip { position: absolute; left: -9999px; top: 8px; z-index: 60; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--brand-strong); color: var(--brand-contrast); font-weight: 700; }
 .home-skip:focus { left: 12px; }
