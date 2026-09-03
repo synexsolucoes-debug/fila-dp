@@ -385,11 +385,30 @@ export async function computeContractorClosing(d1: Database, workspaceId: string
 /** Cria ou atualiza o fechamento PJ da competência com os valores recalculados. */
 export async function upsertContractorClosing(d1: Database, input: {
   workspaceId: string; profile: ContractorProfileRow; cycle: CycleRow; userId: string;
+  /**
+   * Traz de volta um pagamento excluído da competência.
+   *
+   * A exclusão é lógica: a linha continua no banco, fora da tela e dos totais.
+   * Sem este consentimento explícito, reapurar encontrava essa linha e
+   * regravava os valores nela — a apuração dizia que deu certo e nada
+   * aparecia, porque a linha seguia excluída. Restaurar é decisão de quem
+   * opera, então só a reapuração pedida para aquele prestador pede a
+   * restauração; a apuração da competência inteira continua respeitando o que
+   * alguém tirou de lá.
+   */
+  restoreExcluded?: boolean;
 }) {
-  const existing = await d1.prepare("SELECT id, status FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?")
-    .bind(input.workspaceId, input.profile.provider_id, input.cycle.id).first<{ id: string; status: string }>();
+  const existing = await d1.prepare(`SELECT id, status, excluded_at FROM fdp_contractor_closings
+    WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?`)
+    .bind(input.workspaceId, input.profile.provider_id, input.cycle.id)
+    .first<{ id: string; status: string; excluded_at: string | null }>();
   if (existing && (existing.status === "closed" || existing.status === "paid")) {
     throw ApiError.badRequest("O fechamento está concluído e não pode ser recalculado. Reabra com justificativa.", "PAYMENT_CLOSING_LOCKED");
+  }
+  if (existing?.excluded_at && !input.restoreExcluded) {
+    // Recusar em voz alta é melhor do que gravar numa linha que ninguém vê.
+    throw new ApiError(409, "CONTRACTOR_CLOSING_EXCLUDED",
+      `O pagamento de ${contractorLabel(input.profile)} foi excluído desta competência. Restaure-o para reapurar.`);
   }
 
   // Contrato suspenso, encerrado ou fora de vigência não vira apuração. Sem esta
@@ -420,6 +439,17 @@ export async function upsertContractorClosing(d1: Database, input: {
   const closingId = existing?.id ?? crypto.randomUUID();
   const cajuStatus = calculation.cajuAmount > 0 ? "pending" : "not_required";
   const invoiceStatus = calculation.invoiceExpectedAmount > 0 ? "pending" : "not_required";
+
+  /* A restauração acontece só depois que o cálculo passou por todas as
+     recusas — contrato, saldo, competência. Trazer a linha de volta antes
+     deixaria o pagamento visível com os valores velhos se alguma delas
+     reprovasse no meio do caminho. */
+  const restored = Boolean(existing?.excluded_at);
+  if (restored) {
+    await d1.prepare(`UPDATE fdp_contractor_closings
+      SET excluded_at = NULL, excluded_by = NULL, exclusion_reason = '', updated_at = now()
+      WHERE workspace_id = ? AND id = ?`).bind(input.workspaceId, closingId).run();
+  }
 
   if (existing) {
     /*
@@ -478,7 +508,7 @@ export async function upsertContractorClosing(d1: Database, input: {
   await d1.prepare(`UPDATE fdp_contractor_components SET closing_id = ?
     WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ? AND closing_id IS DISTINCT FROM ?`)
     .bind(closingId, input.workspaceId, input.profile.provider_id, input.cycle.id, closingId).run();
-  return { closingId, calculation, limitPolicyId, componentCount, created: !existing };
+  return { closingId, calculation, limitPolicyId, componentCount, created: !existing, restored };
 }
 
 /**

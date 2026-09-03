@@ -110,15 +110,21 @@ export async function POST(request: Request) {
     /* Sem prestador informado, carrega os PJ operacionais do grupo — não os de
        uma empresa. O prestador é do grupo: é ele quem presta serviço para as
        empresas, e a empresa que apura é quem paga naquela competência.
-       Um pagamento excluído não volta a nascer silenciosamente na reapuração. */
-    const providerIds = (providerId
+       Um pagamento excluído não volta a nascer silenciosamente na apuração da
+       competência inteira.
+       Já a reapuração pedida para um prestador em particular é o oposto de
+       silenciosa: é um pedido nominal, e é por ele que um pagamento excluído
+       por engano volta. Sem essa porta, excluir era irreversível — a linha
+       sumia da tela e nenhum caminho do produto a trazia de volta. */
+    const providerIds = providerId
       ? [providerId]
       : (await d1.prepare(`SELECT provider_id FROM fdp_contractor_profiles
           WHERE workspace_id = ? AND status IN ('active', 'inactive')
             AND (contract_start IS NULL OR contract_start <= ?) AND (contract_end IS NULL OR contract_end >= ?)`)
         .bind(workspace.id, `${cycle.competence}-01`, `${cycle.competence}-01`)
-        .all<{ provider_id: string }>()).results.map((row) => String(row.provider_id)))
-      .filter((id) => !excludedProviders.has(id));
+        .all<{ provider_id: string }>()).results
+        .map((row) => String(row.provider_id))
+        .filter((id) => !excludedProviders.has(id));
 
     /* Quem já foi apurado nesta competência por outra empresa do grupo fica de
        fora: o prestador recebe uma vez por mês, e é a primeira apuração que
@@ -170,10 +176,17 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const result = await upsertContractorClosing(d1, { workspaceId: workspace.id, profile, cycle, userId: user.id });
+      const result = await upsertContractorClosing(d1, {
+        workspaceId: workspace.id, profile, cycle, userId: user.id,
+        // Só o pedido nominal restaura, e a restauração fica na trilha com
+        // nome próprio: não é uma reapuração comum.
+        restoreExcluded: Boolean(providerId) && excludedProviders.has(id),
+      });
       await prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
-        action: result.created ? "contractor_closing.created" : "contractor_closing.recalculated",
+        action: result.restored
+          ? "contractor_closing.restored"
+          : result.created ? "contractor_closing.created" : "contractor_closing.recalculated",
         entityType: "contractor_closing", entityId: result.closingId,
         after: {
           providerId: id, competence: cycle.competence, contractBaseAmount: result.calculation.contractBaseAmount,
@@ -189,6 +202,7 @@ export async function POST(request: Request) {
       closings.push({
         id: result.closingId, providerId: id, contractorName: profile.legal_name, competence: cycle.competence,
         ...result.calculation,
+        restored: result.restored,
         blockedReason: result.calculation.requiresComplementMethod ? "COMPLEMENT_METHOD_REQUIRED" : null,
       });
     }

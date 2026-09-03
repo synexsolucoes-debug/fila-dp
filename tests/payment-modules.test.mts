@@ -810,3 +810,40 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
   assert.match(detail, /Editar/);
   assert.match(detail, /Cancelar lançamento/);
 });
+
+test("pagamento excluído volta pela reapuração daquele prestador, e não pela da competência", async () => {
+  /* Excluir era porta de mão única: a linha saía da tela e levava junto o
+     botão de reapurar daquele prestador, enquanto "Apurar competência"
+     respeitava a exclusão de propósito. A reapuração encontrava a linha
+     excluída, regravava os valores nela e dizia que deu certo — e nada
+     aparecia, porque a linha seguia excluída. */
+  const [paymentService, closingRoute, overview, sections, api, types] = await Promise.all([
+    readFile(new URL("../lib/payment-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/closings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/overview/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/payments.api.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/payments.types.ts", import.meta.url), "utf8"),
+  ]);
+
+  // Reapurar sem consentimento recusa em voz alta em vez de gravar no escuro.
+  assert.match(paymentService, /restoreExcluded\?: boolean/u);
+  assert.match(paymentService, /CONTRACTOR_CLOSING_EXCLUDED/u);
+  assert.match(paymentService, /SET excluded_at = NULL, excluded_by = NULL, exclusion_reason = ''/u);
+
+  /* O pedido nominal restaura; a competência inteira, não. As duas metades
+     precisam continuar juntas: filtrar o prestador informado devolveria a
+     porta de mão única, e não filtrar a lista geral ressuscitaria em silêncio
+     tudo o que alguém tirou de lá. */
+  assert.match(closingRoute, /restoreExcluded: Boolean\(providerId\) && excludedProviders\.has\(id\)/u);
+  assert.match(closingRoute, /contractor_closing\.restored/u);
+  assert.match(closingRoute, /\.filter\(\(id\) => !excludedProviders\.has\(id\)\)/u);
+
+  // E o excluído reaparece em lista própria, fora dos totais, com o caminho de volta.
+  assert.match(overview, /c\.excluded_at IS NOT NULL/u);
+  assert.match(overview, /excludedClosings: excludedClosings\.results/u);
+  assert.match(types, /excludedClosings: ContractorExcludedClosing\[\]/u);
+  assert.match(api, /payload\.excludedClosings/u);
+  assert.match(sections, /Pagamentos excluídos desta competência/u);
+  assert.match(sections, /Restaurar e reapurar/u);
+});

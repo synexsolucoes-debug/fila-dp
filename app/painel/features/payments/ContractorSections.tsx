@@ -279,17 +279,23 @@ function ClosingsSection(props: SectionProps) {
   const rows = overview.closings;
   if (rows.length === 0) {
     return (
-      <EmptyState
-        icon={ReceiptText}
-        title={`Nenhum fechamento apurado em ${competenceLabel(competence)}`}
-        text="Lance os créditos e descontos e use “Apurar competência” para calcular quanto cada prestador tem a receber."
-        action={permissions?.manage ? (
-          <button className={styles.primaryButton} type="button"
-            onClick={() => onDialog({ kind: "component", contractors: overview.contractors })}>
-            <Plus aria-hidden="true" /> Lançar crédito ou desconto
-          </button>
-        ) : undefined}
-      />
+      <>
+        <EmptyState
+          icon={ReceiptText}
+          title={`Nenhum fechamento apurado em ${competenceLabel(competence)}`}
+          text="Lance os créditos e descontos e use “Apurar competência” para calcular quanto cada prestador tem a receber."
+          action={permissions?.manage ? (
+            <button className={styles.primaryButton} type="button"
+              onClick={() => onDialog({ kind: "component", contractors: overview.contractors })}>
+              <Plus aria-hidden="true" /> Lançar crédito ou desconto
+            </button>
+          ) : undefined}
+        />
+        {/* Também aqui: se todos os pagamentos da competência foram excluídos,
+            a tela fica vazia — e era justamente quando não havia caminho de
+            volta para nenhum deles. */}
+        <ExcludedClosingsPanel {...props} />
+      </>
     );
   }
   return (
@@ -297,6 +303,7 @@ function ClosingsSection(props: SectionProps) {
       <ContractorApprovalPanel {...props} rows={rows} />
       <ClosingsTable {...props} rows={rows}
         caption={`Fechamento PJ de ${competenceLabel(competence)}`} showActions />
+      <ExcludedClosingsPanel {...props} />
       {/* Conferir é perguntar de onde o número veio, e o número da tabela já
           vem somado. O extrato analítico abre a soma: uma linha por rubrica,
           de todos os prestadores da competência.
@@ -321,6 +328,68 @@ function ClosingsSection(props: SectionProps) {
         </button>
       </footer>
     </>
+  );
+}
+
+/**
+ * Os pagamentos que alguém tirou desta competência.
+ *
+ * Excluir é decisão legítima e reversível por natureza — a linha continua no
+ * banco —, mas ela sumia de toda a tela e levava junto o botão de reapurar
+ * daquele prestador. Quem excluiu por engano não tinha caminho de volta:
+ * "Apurar competência" respeita a exclusão de propósito, para não ressuscitar
+ * em silêncio o que foi tirado de lá.
+ *
+ * A lista fica fora dos totais e da tabela de apuração — ela não é pagamento
+ * da competência —, e traz o motivo registrado na exclusão, que costuma ser a
+ * informação que decide se vale restaurar.
+ */
+function ExcludedClosingsPanel({ overview, money, permissions, busy, onRecalculate }: SectionProps) {
+  const excluded = overview.excludedClosings;
+  if (excluded.length === 0) return null;
+
+  return (
+    <section className={styles.excludedPanel} aria-labelledby="contractor-excluded-title">
+      <header>
+        <div>
+          <Archive aria-hidden="true" />
+          <div>
+            <h3 id="contractor-excluded-title">Pagamentos excluídos desta competência</h3>
+            <p>
+              Não entram em totais, relatórios nem no Caju. Restaurar reapura o prestador com os
+              lançamentos que estiverem valendo agora.
+            </p>
+          </div>
+        </div>
+      </header>
+      <div className={styles.tableScroll}>
+        <table className={styles.table}>
+          <caption className={styles.tableCaption}>Pagamentos fora da apuração</caption>
+          <thead>
+            <tr>
+              <th scope="col">Prestador</th><th scope="col">Líquido na exclusão</th>
+              <th scope="col">Motivo</th>{permissions?.manage && <th scope="col">Ações</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {excluded.map((row) => (
+              <tr key={row.id}>
+                <th scope="row">{row.contractorName}<small>{row.contractorCode}</small></th>
+                <td>{money(row.netAmount)}</td>
+                <td>{row.exclusionReason || "—"}</td>
+                {permissions?.manage && (
+                  <td className={styles.rowActions}>
+                    <button type="button" onClick={() => onRecalculate(row.providerId)} disabled={busy}>
+                      <RotateCcw aria-hidden="true" /> Restaurar e reapurar
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
