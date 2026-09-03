@@ -352,6 +352,7 @@ export async function computeContractorClosing(d1: Database, workspaceId: string
   const proration = calculateContractorBaseProration({
     baseAmount: Number(profile.base_amount),
     competence: cycle.competence,
+    contractStart: profile.contract_start,
     contractEnd: profile.contract_end,
   });
   const calculation = {

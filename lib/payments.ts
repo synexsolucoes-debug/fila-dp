@@ -333,16 +333,19 @@ export type ContractorBaseProration = {
 };
 
 /**
- * Proporcionaliza o valor mensal na competência em que o contrato termina.
+ * Proporcionaliza o valor mensal na competência em que o contrato começa ou
+ * termina, sempre pela convenção de 30 dias.
  *
- * A contagem usa dias corridos do próprio mês e inclui o último dia do
- * contrato. Assim, um encerramento em 15/03 paga 15 de 31 dias. Créditos,
+ * A contagem inclui o primeiro e o último dia vigentes. Assim, um início em
+ * 16/03 paga 15 de 30 dias; sem data de início, a mensalidade é integral.
+ * Créditos,
  * descontos e valores recorrentes continuam explícitos e não são alterados por
  * esta regra: só o valor-base contratual é proporcionalizado.
  */
 export function calculateContractorBaseProration(input: {
   baseAmount: number;
   competence: string;
+  contractStart: string | Date | null;
   contractEnd: string | Date | null;
 }): ContractorBaseProration {
   const contractBaseCents = toCents(input.baseAmount, "Valor base");
@@ -351,10 +354,11 @@ export function calculateContractorBaseProration(input: {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/u.exec(input.competence);
   if (!match) throw ApiError.badRequest("Competência inválida.", "INVALID_COMPETENCE");
 
-  const endDate = input.contractEnd instanceof Date
-    ? input.contractEnd.toISOString().slice(0, 10)
-    : String(input.contractEnd ?? "").slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(endDate) || endDate.slice(0, 7) !== input.competence) {
+  const dateText = (value: string | Date | null) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? "").slice(0, 10);
+  const startDate = dateText(input.contractStart);
+  const endDate = dateText(input.contractEnd);
+  const sameCompetence = (date: string) => /^\d{4}-\d{2}-\d{2}$/u.test(date) && date.slice(0, 7) === input.competence;
+  if (!sameCompetence(startDate) && !sameCompetence(endDate)) {
     return {
       contractBaseAmount: fromCents(contractBaseCents),
       baseAmount: fromCents(contractBaseCents),
@@ -367,15 +371,15 @@ export function calculateContractorBaseProration(input: {
 
   const year = Number(match[1]);
   const month = Number(match[2]);
-  const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const endDay = Number(endDate.slice(8, 10));
-  if (!Number.isInteger(endDay) || endDay < 1 || endDay > totalDays) {
-    throw ApiError.badRequest("Data de encerramento inválida.", "INVALID_DATE");
-  }
-
-  // Encerrar no último dia mantém a mensalidade integral e não precisa gerar
-  // uma marca de proporcionalidade na memória do fechamento.
-  if (endDay === totalDays) {
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const dayOf = (date: string, label: string) => {
+    const day = Number(date.slice(8, 10));
+    if (!Number.isInteger(day) || day < 1 || day > daysInMonth) throw ApiError.badRequest(`Data de ${label} inválida.`, "INVALID_DATE");
+    return Math.min(day, 30);
+  };
+  const firstPayableDay = sameCompetence(startDate) ? dayOf(startDate, "início") : 1;
+  const lastPayableDay = sameCompetence(endDate) ? dayOf(endDate, "encerramento") : 30;
+  if (firstPayableDay === 1 && lastPayableDay === 30) {
     return {
       contractBaseAmount: fromCents(contractBaseCents),
       baseAmount: fromCents(contractBaseCents),
@@ -386,13 +390,14 @@ export function calculateContractorBaseProration(input: {
     };
   }
 
+  const payableDays = Math.max(0, lastPayableDay - firstPayableDay + 1);
   return {
     contractBaseAmount: fromCents(contractBaseCents),
-    baseAmount: fromCents(Math.round((contractBaseCents * endDay) / totalDays)),
+    baseAmount: fromCents(Math.round((contractBaseCents * payableDays) / 30)),
     prorationApplied: true,
-    prorationDays: endDay,
-    prorationTotalDays: totalDays,
-    prorationEndDate: endDate,
+    prorationDays: payableDays,
+    prorationTotalDays: 30,
+    prorationEndDate: sameCompetence(endDate) && lastPayableDay < 30 ? endDate : null,
   };
 }
 

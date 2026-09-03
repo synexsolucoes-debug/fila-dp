@@ -247,7 +247,7 @@ export function ContractorPaymentDetail({
                       {prorated ? "Valor contratual proporcional" : "Valor contratual"}
                       {prorated ? (
                         <small className={styles.detailRowMeta}>
-                          {detail.closing.prorationDays} de {detail.closing.prorationTotalDays} dias · encerramento em {date(detail.closing.prorationEndDate)}
+                          {detail.closing.prorationDays} de {detail.closing.prorationTotalDays} dias proporcionais{detail.closing.prorationEndDate ? ` · encerramento em ${date(detail.closing.prorationEndDate)}` : ""}
                         </small>
                       ) : null}
                     </td>

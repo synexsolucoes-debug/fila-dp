@@ -24,40 +24,54 @@ const limit = (amount: number | null) => (
   amount === null ? { amount: null, source: "none" as const, policyId: null } : { amount, source: "workspace" as const, policyId: "policy" }
 );
 
-test("encerramento proporcionaliza a base pelos dias corridos da competência", () => {
+test("início e encerramento proporcionalizam a base em 30 dias", () => {
   const march = calculateContractorBaseProration({
     baseAmount: 6200,
     competence: "2026-03",
+    contractStart: null,
     contractEnd: "2026-03-15",
   });
   assert.deepEqual(march, {
     contractBaseAmount: 6200,
-    baseAmount: 3000,
+    baseAmount: 3100,
     prorationApplied: true,
     prorationDays: 15,
-    prorationTotalDays: 31,
+    prorationTotalDays: 30,
     prorationEndDate: "2026-03-15",
   });
 
   const february = calculateContractorBaseProration({
     baseAmount: 2800,
     competence: "2026-02",
+    contractStart: null,
     contractEnd: "2026-02-10",
   });
-  assert.equal(february.baseAmount, 1000);
-  assert.equal(february.prorationTotalDays, 28);
+  assert.equal(february.baseAmount, 933.33);
+  assert.equal(february.prorationTotalDays, 30);
+
+  const start = calculateContractorBaseProration({
+    baseAmount: 6000,
+    competence: "2026-03",
+    contractStart: "2026-03-16",
+    contractEnd: null,
+  });
+  assert.equal(start.baseAmount, 3000);
+  assert.equal(start.prorationDays, 15);
+  assert.equal(start.prorationTotalDays, 30);
 });
 
 test("proporcionalidade arredonda em centavos e não altera outros meses", () => {
   assert.equal(calculateContractorBaseProration({
     baseAmount: 1000,
     competence: "2026-03",
+    contractStart: null,
     contractEnd: "2026-03-15",
-  }).baseAmount, 483.87);
+  }).baseAmount, 500);
 
   const previousMonth = calculateContractorBaseProration({
     baseAmount: 6200,
     competence: "2026-02",
+    contractStart: null,
     contractEnd: "2026-03-15",
   });
   assert.equal(previousMonth.baseAmount, 6200);
@@ -67,6 +81,7 @@ test("proporcionalidade arredonda em centavos e não altera outros meses", () =>
   const lastDay = calculateContractorBaseProration({
     baseAmount: 6200,
     competence: "2026-03",
+    contractStart: null,
     contractEnd: "2026-03-31",
   });
   assert.equal(lastDay.baseAmount, 6200);
