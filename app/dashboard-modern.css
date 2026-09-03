@@ -1673,6 +1673,8 @@
 }
 
 .hr-indicator-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-top: 16px;
   gap: 10px;
 }
@@ -1701,6 +1703,14 @@
 .hr-indicator-grid article span {
   color: var(--ui-text-soft);
   font-size: 10px;
+}
+
+.hr-indicator-grid article small {
+  display: block;
+  margin-top: 5px;
+  color: var(--ui-warning);
+  font-size: 9px;
+  font-style: normal;
 }
 
 .hr-indicator-note {
@@ -2739,6 +2749,25 @@
 .overview-metric-card.healthy > header i { color: var(--ui-success); }
 .theme-dark .overview-metric-card.requires-attention { background: color-mix(in srgb, #F4A261 11%, var(--ui-surface)); }
 
+.overview-people-strip { overflow: hidden; border: 1px solid var(--ui-border); border-radius: 17px; background: var(--ui-surface); }
+.overview-people-strip > header { min-height: 78px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid var(--ui-border); background: linear-gradient(110deg, color-mix(in srgb, var(--ui-primary) 7%, var(--ui-surface)), var(--ui-surface) 68%); }
+.overview-people-strip > header span { color: var(--ui-primary); font-size: 8px; font-weight: 850; letter-spacing: .11em; }
+.overview-people-strip > header strong { display: block; margin-top: 5px; color: var(--ui-text); font-size: 15px; letter-spacing: -.025em; }
+.overview-people-strip > header p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 9px; }
+.overview-people-strip > header button { padding: 0; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--ui-primary); font-size: 9px; font-weight: 850; cursor: pointer; white-space: nowrap; }
+.overview-people-strip > header button svg { width: 13px; height: 13px; }
+.overview-people-strip > div { padding: 13px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.overview-people-strip > div > button { min-width: 0; min-height: 92px; padding: 14px; display: grid; grid-template-columns: 39px minmax(0, 1fr) 15px; align-items: center; gap: 11px; border: 1px solid var(--ui-border); border-radius: 13px; background: var(--ui-surface-muted); color: var(--ui-text); text-align: left; cursor: pointer; }
+.overview-people-strip > div > button:hover { border-color: color-mix(in srgb, var(--ui-mint) 70%, var(--ui-border)); background: color-mix(in srgb, var(--ui-mint) 7%, var(--ui-surface)); }
+.overview-people-strip > div > button > i { width: 39px; height: 39px; display: grid; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--ui-mint) 24%, var(--ui-surface)); color: var(--ui-primary); }
+.overview-people-strip > div > button > i svg { width: 18px; height: 18px; }
+.overview-people-strip > div > button > span { min-width: 0; }
+.overview-people-strip > div > button small, .overview-people-strip > div > button strong, .overview-people-strip > div > button em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.overview-people-strip > div > button small { color: var(--ui-text-soft); font-size: 8px; font-weight: 800; }
+.overview-people-strip > div > button strong { margin-top: 5px; font-size: 17px; letter-spacing: -.035em; }
+.overview-people-strip > div > button em { margin-top: 4px; color: var(--ui-text-soft); font-size: 8px; font-style: normal; }
+.overview-people-strip > div > button > svg { width: 14px; height: 14px; color: var(--ui-primary); }
+
 .overview-sla-band { min-height: 156px; padding: 20px 23px; display: grid; grid-template-columns: 106px minmax(250px, 1fr) minmax(300px, .82fr); align-items: center; gap: 24px; border: 1px solid color-mix(in srgb, var(--ui-mint) 46%, var(--ui-border)); border-radius: 17px; background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 13%, var(--ui-surface)), var(--ui-surface) 58%); }
 .overview-sla-gauge { width: 96px; height: 96px; padding: 9px; display: grid; place-items: center; border-radius: 50%; }
 .overview-sla-gauge > div { width: 100%; height: 100%; display: grid; place-content: center; border-radius: 50%; background: var(--ui-surface); text-align: center; box-shadow: 0 0 0 1px var(--ui-border); }
@@ -2849,6 +2878,10 @@
   .overview-next-action > button { width: 100%; justify-content: center; }
   .overview-metrics { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
   .overview-metrics article { min-width: min(76vw, 260px); scroll-snap-align: start; }
+  .overview-people-strip > header { align-items: flex-start; flex-direction: column; }
+  .overview-people-strip > header p { line-height: 1.45; }
+  .overview-people-strip > div { grid-auto-columns: minmax(245px, 79vw); grid-auto-flow: column; grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; }
+  .overview-people-strip > div > button { scroll-snap-align: start; }
   .overview-sla-band { padding: 17px; grid-template-columns: 82px minmax(0, 1fr); gap: 14px; }
   .overview-sla-gauge { width: 78px; height: 78px; padding: 7px; }
   .overview-sla-gauge strong { font-size: 17px; }
@@ -3435,4 +3468,119 @@
   .payroll-form-section, .payroll-live-totals { grid-template-columns: 1fr; }
   .payroll-live-totals > span { padding: 0 0 8px; border-bottom: 1px solid var(--ui-border); }
   .payroll-live-totals > span:last-child { padding-bottom: 0; border-bottom: 0; }
+}
+
+/* Central de funcionários, benefícios e fechamento PJ. */
+.dashboard-sidebar nav { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.people-module { display: grid; gap: 17px; }
+.people-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+.people-kpis article { min-height: 126px; padding: 15px 16px; display: flex; flex-direction: column; border: 1px solid var(--ui-border); border-radius: 14px; background: var(--ui-surface); }
+.people-kpis article > i { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 9px; background: color-mix(in srgb, var(--ui-mint) 22%, var(--ui-surface)); color: var(--ui-primary); }
+.people-kpis article > i svg { width: 15px; height: 15px; }
+.people-kpis article > span { margin-top: 10px; color: var(--ui-text-soft); font-size: 9px; font-weight: 750; }
+.people-kpis article > strong { margin-top: 4px; overflow: hidden; color: var(--ui-text); font-size: clamp(21px, 2vw, 30px); letter-spacing: -.05em; text-overflow: ellipsis; white-space: nowrap; }
+.people-kpis article > small { margin-top: auto; color: var(--ui-text-soft); font-size: 8px; }
+.people-toolbar { min-height: 91px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1px solid color-mix(in srgb, var(--ui-primary) 30%, var(--ui-border)); border-radius: 16px; background: linear-gradient(112deg, color-mix(in srgb, var(--ui-mint) 10%, var(--ui-surface)), var(--ui-surface) 60%); }
+.people-toolbar > div:first-child > span, .people-form-panel > header span { color: var(--ui-primary); font-size: 8px; font-weight: 850; letter-spacing: .11em; }
+.people-toolbar h2, .people-form-panel h2 { margin: 5px 0 0; color: var(--ui-text); font-size: 18px; letter-spacing: -.035em; }
+.people-toolbar p { margin: 5px 0 0; color: var(--ui-text-soft); font-size: 9px; line-height: 1.5; }
+.people-toolbar > div:last-child { display: flex; gap: 7px; }
+.people-toolbar button { min-height: 36px; justify-content: center; }
+.people-toolbar button svg { width: 14px; height: 14px; }
+
+.employee-source-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) minmax(180px, .35fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 17px 18px;
+  border: 1px solid color-mix(in srgb, var(--ui-primary) 32%, var(--ui-border));
+  border-radius: var(--ui-radius-lg);
+  background: color-mix(in srgb, var(--ui-primary) 6%, var(--ui-surface));
+}
+.employee-source-card > i { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 14px; color: var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 14%, transparent); }
+.employee-source-card > i svg, .employee-source-upload svg { width: 19px; height: 19px; }
+.employee-source-card > div span { color: var(--ui-primary); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.employee-source-card > div strong { display: block; margin-top: 3px; color: var(--ui-text); font-size: 14px; }
+.employee-source-card > div p { margin: 4px 0 0; color: var(--ui-text-soft); font-size: 10px; line-height: 1.55; }
+.employee-source-card > aside { padding-left: 16px; border-left: 1px solid var(--ui-border); }
+.employee-source-card > aside strong { display: block; color: var(--ui-text); font-size: 22px; }
+.employee-source-card > aside span, .employee-source-card > aside small { display: block; color: var(--ui-text-soft); font-size: 9px; line-height: 1.5; }
+.employee-source-upload { position: relative; cursor: pointer; white-space: nowrap; }
+.employee-source-upload input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.employee-source-upload.disabled { cursor: wait; opacity: .62; }
+.people-form-panel, .people-directory { overflow: hidden; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-surface); }
+.people-form-panel > header { min-height: 67px; padding: 15px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--ui-border); background: var(--ui-surface-muted); }
+.people-form-panel > header aside { text-align: right; }
+.people-form-panel > header aside span, .people-form-panel > header aside strong, .people-form-panel > header aside small { display: block; }
+.people-form-panel > header aside span { color: var(--ui-text-soft); font-size: 8px; font-weight: 750; }
+.people-form-panel > header aside strong { margin-top: 3px; color: var(--ui-primary); font-size: 17px; }
+.people-form-panel > header aside small { margin-top: 3px; color: var(--ui-text-soft); font-size: 8px; }
+.people-form-panel form { padding: 17px 18px 19px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
+.people-form-panel label { min-width: 0; display: grid; gap: 5px; color: var(--ui-text-soft); font-size: 8px; font-weight: 800; }
+.people-form-panel input, .people-form-panel select { width: 100%; min-width: 0; height: 39px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface-muted); color: var(--ui-text); font: 650 10px Manrope, "Plus Jakarta Sans", sans-serif; outline: none; }
+.people-form-panel input:focus, .people-form-panel select:focus { border-color: var(--ui-mint); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-mint) 20%, transparent); }
+.people-form-panel label.wide { grid-column: span 2; }
+.people-form-panel form > .primary-button { min-height: 39px; align-self: end; justify-content: center; }
+.people-directory > header { min-height: 69px; padding: 13px 17px; display: flex; align-items: center; justify-content: space-between; gap: 15px; border-bottom: 1px solid var(--ui-border); }
+.people-directory > header strong, .people-directory > header span { display: block; }
+.people-directory > header strong { color: var(--ui-text); font-size: 12px; }
+.people-directory > header span { margin-top: 4px; color: var(--ui-text-soft); font-size: 8px; }
+.people-filters { display: flex; gap: 7px; }
+.people-filters label { width: min(330px, 29vw); min-height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface-muted); }
+.people-filters label svg { width: 14px; height: 14px; color: var(--ui-text-soft); }
+.people-filters input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ui-text); font: 650 9px Manrope, "Plus Jakarta Sans", sans-serif; outline: none; }
+.people-filters select, .period-filter input { min-height: 36px; padding: 0 9px; border: 1px solid var(--ui-border); border-radius: 9px; background: var(--ui-surface-muted); color: var(--ui-text); font: 700 9px Manrope, "Plus Jakarta Sans", sans-serif; }
+.period-filter { display: grid; gap: 4px; color: var(--ui-text-soft); font-size: 8px; font-weight: 800; }
+.people-table { padding: 9px; display: grid; gap: 6px; }
+.people-table article { min-height: 68px; padding: 9px 10px; display: grid; grid-template-columns: 35px minmax(155px, 1.15fr) minmax(120px, .85fr) minmax(135px, .9fr) auto auto; align-items: center; gap: 10px; border: 1px solid var(--ui-border); border-radius: 11px; background: var(--ui-surface-muted); }
+.people-table article > i { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--ui-mint) 24%, var(--ui-surface)); color: var(--ui-primary); font-size: 9px; font-style: normal; font-weight: 900; }
+.people-table article > i svg { width: 16px; height: 16px; }
+.people-table article > div, .people-table article > span { min-width: 0; }
+.people-table article strong, .people-table article small, .people-table article span > b, .people-table article span > em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.people-table article strong, .people-table article span > b { color: var(--ui-text); font-size: 10px; }
+.people-table article small { margin-top: 4px; color: var(--ui-text-soft); font-size: 8px; }
+.people-table article span > small { margin: 0 0 4px; }
+.people-table article span > em { margin-top: 3px; color: var(--ui-text-soft); font-size: 8px; font-style: normal; }
+.employment-regime, .employment-status { width: max-content; padding: 5px 7px; border-radius: 99px; font-size: 7px; font-weight: 900; white-space: nowrap; }
+.employment-regime { background: var(--ui-primary-soft); color: var(--ui-primary); }
+.employment-regime.pj { background: color-mix(in srgb, #8b5cf6 15%, var(--ui-surface)); color: #7650ce; }
+.employment-status.active { background: color-mix(in srgb, var(--ui-mint) 25%, var(--ui-surface)); color: var(--ui-success); }
+.employment-status.on_leave { background: color-mix(in srgb, var(--ui-warning) 18%, var(--ui-surface)); color: #9a591f; }
+.employment-status.inactive { background: color-mix(in srgb, var(--ui-danger) 12%, var(--ui-surface)); color: var(--ui-danger); }
+.people-empty { min-height: 160px; padding: 28px; display: grid; place-content: center; justify-items: center; color: var(--ui-text-soft); text-align: center; }
+.people-empty svg { width: 27px; height: 27px; color: var(--ui-primary); }
+.people-empty strong { margin-top: 8px; color: var(--ui-text); font-size: 11px; }
+.people-empty p { margin: 5px 0 0; font-size: 9px; }
+
+@media (max-width: 1100px) {
+  .employee-source-card { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .employee-source-card > aside { grid-column: 2 / -1; padding: 12px 0 0; border-top: 1px solid var(--ui-border); border-left: 0; }
+  .people-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .people-form-panel form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .people-table article { grid-template-columns: 35px minmax(150px, 1fr) minmax(120px, .8fr) auto auto; }
+  .people-table article > span:nth-of-type(2) { display: none; }
+}
+
+@media (max-width: 760px) {
+  .employee-source-card { grid-template-columns: 42px minmax(0, 1fr); align-items: start; }
+  .employee-source-card > i { width: 42px; height: 42px; }
+  .employee-source-card > aside, .employee-source-card > .employee-source-upload { grid-column: 1 / -1; width: 100%; }
+  .employee-source-card > .employee-source-upload { justify-content: center; }
+  .people-kpis { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; }
+  .people-kpis article { min-width: min(74vw, 250px); scroll-snap-align: start; }
+  .people-toolbar { align-items: flex-start; flex-direction: column; }
+  .people-toolbar > div:last-child, .people-toolbar button { width: 100%; }
+  .people-form-panel > header { align-items: flex-start; flex-direction: column; }
+  .people-form-panel > header aside { text-align: left; }
+  .people-form-panel form { grid-template-columns: 1fr; }
+  .people-form-panel label.wide { grid-column: auto; }
+  .people-directory > header { align-items: stretch; flex-direction: column; }
+  .people-filters { width: 100%; }
+  .people-filters label { width: 100%; }
+  .people-table article { grid-template-columns: 35px minmax(0, 1fr) auto; }
+  .people-table article > span { grid-column: 2 / -1; }
+  .people-table article > span:nth-of-type(2) { display: block; }
+  .people-table article > .employment-regime { grid-column: 2; }
+  .people-table article > .employment-status { grid-column: 3; }
 }

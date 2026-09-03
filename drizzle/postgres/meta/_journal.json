@@ -43,6 +43,13 @@
       "when": 1785787200000,
       "tag": "0003_operational_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785792000000,
+      "tag": "0004_people_benefits_pj",
+      "breakpoints": true
     }
   ]
 }

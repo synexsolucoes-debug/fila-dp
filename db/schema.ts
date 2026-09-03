@@ -53,6 +53,106 @@ export const companies = pgTable("fdp_companies", {
   index("fdp_companies_workspace_parent_idx").on(table.workspaceId, table.parentCompanyId),
 ]);
 
+export const people = pgTable("fdp_people", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  fullName: text("full_name").notNull(),
+  preferredName: text("preferred_name").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_people_workspace_name_idx").on(table.workspaceId, table.fullName),
+  index("fdp_people_workspace_email_idx").on(table.workspaceId, table.email),
+]);
+
+export const employments = pgTable("fdp_employments", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  personId: text("person_id").notNull().references(() => people.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  employeeCode: text("employee_code").notNull().default(""),
+  regime: text("regime").notNull().default("clt"),
+  jobTitle: text("job_title").notNull().default(""),
+  department: text("department").notNull().default(""),
+  costCenter: text("cost_center").notNull().default(""),
+  managerName: text("manager_name").notNull().default(""),
+  startDate: date("start_date", { mode: "string" }),
+  endDate: date("end_date", { mode: "string" }),
+  monthlyValue: numeric("monthly_value", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("active"),
+  source: text("source").notNull().default("manual"),
+  externalId: text("external_id").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_employments_workspace_company_status_idx").on(table.workspaceId, table.companyId, table.status),
+  index("fdp_employments_workspace_regime_idx").on(table.workspaceId, table.regime),
+  index("fdp_employments_person_idx").on(table.personId),
+]);
+
+export const benefitPolicies = pgTable("fdp_benefit_policies", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  benefitType: text("benefit_type").notNull(),
+  eligibleRegime: text("eligible_regime").notNull().default("all"),
+  monthlyValue: numeric("monthly_value", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  employeeDiscount: numeric("employee_discount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  channel: text("channel").notNull().default("payroll"),
+  effectiveFrom: date("effective_from", { mode: "string" }),
+  effectiveTo: date("effective_to", { mode: "string" }),
+  active: integer("active").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  index("fdp_benefit_policies_workspace_company_idx").on(table.workspaceId, table.companyId, table.active),
+]);
+
+export const benefitMovements = pgTable("fdp_benefit_movements", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  policyId: text("policy_id").notNull().references(() => benefitPolicies.id, { onDelete: "cascade" }),
+  employmentId: text("employment_id").notNull().references(() => employments.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  period: text("period").notNull(),
+  amount: numeric("amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  employeeDiscount: numeric("employee_discount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("calculated"),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_benefit_movements_employment_policy_period_uq").on(table.employmentId, table.policyId, table.period),
+  index("fdp_benefit_movements_workspace_company_period_idx").on(table.workspaceId, table.companyId, table.period),
+]);
+
+export const pjClosings = pgTable("fdp_pj_closings", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  employmentId: text("employment_id").notNull().references(() => employments.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  period: text("period").notNull(),
+  contractAmount: numeric("contract_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  variableAmount: numeric("variable_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  reimbursementAmount: numeric("reimbursement_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  deductionsAmount: numeric("deductions_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  invoiceLimit: numeric("invoice_limit", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  invoiceAmount: numeric("invoice_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  cajuExcess: numeric("caju_excess", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  netAmount: numeric("net_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("draft"),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_pj_closings_employment_period_uq").on(table.employmentId, table.period),
+  index("fdp_pj_closings_workspace_company_period_idx").on(table.workspaceId, table.companyId, table.period),
+]);
+
 export const workspaceMembers = pgTable("fdp_workspace_members", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

@@ -6,10 +6,29 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const startedAt = Date.now();
   try {
-    await getD1().prepare("SELECT 1 AS healthy").first();
+    const schema = await getD1().prepare(`SELECT
+      to_regclass('public.fdp_workspaces') AS workspaces,
+      to_regclass('public.fdp_people') AS people,
+      to_regclass('public.fdp_employments') AS employments,
+      to_regclass('public.fdp_benefit_policies') AS benefit_policies,
+      to_regclass('public.fdp_benefit_movements') AS benefit_movements,
+      to_regclass('public.fdp_pj_closings') AS pj_closings`).first<Record<string, unknown>>();
+    const requiredTables = ["workspaces", "people", "employments", "benefit_policies", "benefit_movements", "pj_closings"];
+    const missingTables = requiredTables.filter((table) => !schema?.[table]);
+    if (missingTables.length) {
+      return Response.json({
+        status: "unhealthy",
+        database: "connected",
+        schema: "migration_required",
+        missingTables,
+        responseTimeMs: Date.now() - startedAt,
+        commit: process.env.VERCEL_GIT_COMMIT_SHA ?? "local",
+      }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    }
     return Response.json({
       status: "healthy",
       database: "connected",
+      schema: "current",
       attachments: process.env.BLOB_READ_WRITE_TOKEN ? "configured" : "not_configured",
       transactionalEmail: process.env.RESEND_API_KEY ? "configured" : "not_configured",
       slaScheduler: process.env.CRON_SECRET ? "configured" : "not_configured",
@@ -26,4 +45,3 @@ export async function GET() {
     return Response.json({ status: "unhealthy", database: "unavailable", requestId, responseTimeMs: Date.now() - startedAt }, { status: 503, headers: { "Cache-Control": "no-store", "X-Request-Id": requestId } });
   }
 }
-

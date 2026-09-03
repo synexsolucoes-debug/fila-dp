@@ -151,6 +151,71 @@ export type HrMetric = {
   notes: string;
 };
 
+export type Employment = {
+  id: string;
+  personId: string;
+  companyId: string;
+  fullName: string;
+  preferredName: string;
+  email: string;
+  phone: string;
+  employeeCode: string;
+  regime: "clt" | "pj" | "intern" | "temporary";
+  jobTitle: string;
+  department: string;
+  costCenter: string;
+  managerName: string;
+  startDate: string | null;
+  endDate: string | null;
+  monthlyValue: number;
+  status: "active" | "inactive" | "on_leave";
+  source: string;
+  externalId: string;
+};
+
+export type BenefitPolicy = {
+  id: string;
+  companyId: string;
+  name: string;
+  benefitType: string;
+  eligibleRegime: "all" | "clt" | "pj" | "intern" | "temporary";
+  monthlyValue: number;
+  employeeDiscount: number;
+  channel: string;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  active: boolean;
+};
+
+export type BenefitMovement = {
+  id: string;
+  policyId: string;
+  employmentId: string;
+  companyId: string;
+  period: string;
+  amount: number;
+  employeeDiscount: number;
+  status: "calculated" | "approved" | "exported" | "cancelled";
+  notes: string;
+};
+
+export type PjClosing = {
+  id: string;
+  employmentId: string;
+  companyId: string;
+  period: string;
+  contractAmount: number;
+  variableAmount: number;
+  reimbursementAmount: number;
+  deductionsAmount: number;
+  invoiceLimit: number;
+  invoiceAmount: number;
+  cajuExcess: number;
+  netAmount: number;
+  status: "draft" | "review" | "approved" | "paid" | "blocked";
+  notes: string;
+};
+
 export type Card = {
   id: string;
   boardId: string;
@@ -239,6 +304,8 @@ export type AvailableWorkspace = {
 };
 
 export type WorkspaceSnapshot = {
+  operationMessage?: string;
+  importSummary?: { source: string; rows: number; created: number; updated: number; skipped: number; companiesCreated: number; benefitMovements: number; warningCount: number; period: string };
   workspace: { id: string; name: string; timezone: string; role: WorkspaceRole; companyScope: "all" | "restricted" };
   board: { id: string; name: string; description: string };
   boards: BoardSummary[];
@@ -260,5 +327,9 @@ export type WorkspaceSnapshot = {
   calendarConnections: CalendarConnection[];
   companies: Company[];
   hrMetrics: HrMetric[];
+  employments: Employment[];
+  benefitPolicies: BenefitPolicy[];
+  benefitMovements: BenefitMovement[];
+  pjClosings: PjClosing[];
   recentActivity: ActivityEvent[];
 };

@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArrowRight,
+  BadgeDollarSign,
   BarChart3,
   Bell,
   Building2,
@@ -17,6 +18,7 @@ import {
   Clock3,
   Download,
   Inbox,
+  HeartHandshake,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -35,14 +37,16 @@ import {
   Smartphone,
   Sun,
   Trash2,
+  UserRound,
   Users,
   WalletCards,
   X,
 } from "lucide-react";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
+import { BenefitsView, EmployeesView, PjClosingsView } from "./PeopleOperationsViews";
 
-type View = "overview" | "board" | "inbox" | "planner" | "processes" | "payroll" | "indicators";
+type View = "overview" | "board" | "inbox" | "planner" | "processes" | "employees" | "pj" | "benefits" | "payroll" | "indicators";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type Theme = "light" | "dark";
 type CardTab = "details" | "checklist" | "attachments" | "activity";
@@ -110,6 +114,9 @@ const viewContent: Record<View, { eyebrow: string; title: string; description: s
   inbox: { eyebrow: "TRIAGEM MULTICANAL", title: "Caixa de entrada", description: "Transforme solicitações recebidas em demandas rastreáveis." },
   planner: { eyebrow: "AGENDA DO ANALISTA", title: "Meu planner", description: "Organize sua execução a partir dos prazos da operação." },
   processes: { eyebrow: "PROCESSOS OPERACIONAIS", title: "Processos de DP", description: "Crie fluxos próprios para cada rotina e mantenha cada demanda nas colunas do seu processo." },
+  employees: { eyebrow: "PESSOAS E VÍNCULOS", title: "Funcionários", description: "Consulte pessoas, vínculos CLT, PJs, cargos e empresas do grupo." },
+  pj: { eyebrow: "PRESTADORES", title: "Fechamento PJ", description: "Calcule contratos, notas, ajustes e excedentes por competência." },
+  benefits: { eyebrow: "BENEFÍCIOS", title: "Benefícios", description: "Gerencie políticas, elegibilidade e lançamentos individuais por competência." },
   payroll: { eyebrow: "FOLHA E INDICADORES", title: "Folha de pagamento", description: "Registre a competência e acompanhe custos, headcount e turnover automaticamente." },
   indicators: { eyebrow: "RELATÓRIOS", title: "Relatórios da operação", description: "Monitore SLAs, volume, produtividade e regras ativas do workspace." },
 };
@@ -122,9 +129,10 @@ const roleLabels: Record<WorkspaceRole, string> = {
 };
 
 async function requestSnapshot(url: string, options?: RequestInit): Promise<WorkspaceSnapshot> {
+  const isFormData = options?.body instanceof FormData;
   const response = await fetch(url, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers ?? {}) },
+    headers: { ...(isFormData ? {} : { "Content-Type": "application/json" }), ...(options?.headers ?? {}) },
   });
   const payload = await response.json() as WorkspaceSnapshot & { error?: string };
   if (!response.ok) throw new Error(payload.error || "Não foi possível concluir a operação.");
@@ -195,6 +203,10 @@ function normalizeWorkspaceSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnaps
       otherCosts: Number(metric.otherCosts ?? 0),
       payrollCost: Number(metric.payrollCost ?? 0),
     })) : [],
+    employments: Array.isArray(snapshot.employments) ? snapshot.employments.map((employment) => ({ ...employment, monthlyValue: Number(employment.monthlyValue ?? 0) })) : [],
+    benefitPolicies: Array.isArray(snapshot.benefitPolicies) ? snapshot.benefitPolicies.map((policy) => ({ ...policy, monthlyValue: Number(policy.monthlyValue ?? 0), employeeDiscount: Number(policy.employeeDiscount ?? 0) })) : [],
+    benefitMovements: Array.isArray(snapshot.benefitMovements) ? snapshot.benefitMovements.map((movement) => ({ ...movement, amount: Number(movement.amount ?? 0), employeeDiscount: Number(movement.employeeDiscount ?? 0) })) : [],
+    pjClosings: Array.isArray(snapshot.pjClosings) ? snapshot.pjClosings.map((closing) => ({ ...closing, contractAmount: Number(closing.contractAmount ?? 0), variableAmount: Number(closing.variableAmount ?? 0), reimbursementAmount: Number(closing.reimbursementAmount ?? 0), deductionsAmount: Number(closing.deductionsAmount ?? 0), invoiceLimit: Number(closing.invoiceLimit ?? 0), invoiceAmount: Number(closing.invoiceAmount ?? 0), cajuExcess: Number(closing.cajuExcess ?? 0), netAmount: Number(closing.netAmount ?? 0) })) : [],
     recentActivity: Array.isArray(snapshot.recentActivity) ? snapshot.recentActivity : [],
   };
 }
@@ -573,6 +585,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   const canEdit = snapshot ? ["admin", "member"].includes(snapshot.workspace.role) : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
+  const canViewPeople = snapshot ? snapshot.workspace.role !== "guest" : false;
   const currentMemberName = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.name ?? user.displayName;
 
   const stats = useMemo(() => {
@@ -596,7 +609,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
     setRealtimeStatus("current");
     realtimeCursorRef.current = realtimeCursor();
     setError("");
-    if (message) setToast(message);
+    if (message || next.operationMessage) setToast(message || next.operationMessage || "Operação concluída.");
   }
 
   async function mutate(url: string, options: RequestInit, message?: string) {
@@ -1054,6 +1067,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
           <button title="Planner" className={view === "planner" ? "active" : ""} onClick={() => setView("planner")}><span aria-hidden="true"><CalendarDays /></span> Planner</button>
           <button title="Processos" className={view === "processes" ? "active" : ""} onClick={() => setView("processes")}><span aria-hidden="true"><ListChecks /></span> Processos</button>
           <span className="sidebar-nav-section management">GESTÃO</span>
+          {canViewPeople && <button title="Funcionários" className={view === "employees" ? "active" : ""} onClick={() => setView("employees")}><span aria-hidden="true"><UserRound /></span> Funcionários</button>}
+          {canViewPeople && <button title="PJ" className={view === "pj" ? "active" : ""} onClick={() => setView("pj")}><span aria-hidden="true"><BadgeDollarSign /></span> PJ</button>}
+          {canViewPeople && <button title="Benefícios" className={view === "benefits" ? "active" : ""} onClick={() => setView("benefits")}><span aria-hidden="true"><HeartHandshake /></span> Benefícios</button>}
           <button title="Folha" className={view === "payroll" ? "active" : ""} onClick={() => setView("payroll")}><span aria-hidden="true"><WalletCards /></span> Folha</button>
           <button title="Relatórios" className={view === "indicators" ? "active" : ""} onClick={() => setView("indicators")}><span aria-hidden="true"><BarChart3 /></span> Relatórios</button>
           {isAdmin && <button title="Configurações" onClick={() => { setSettingsSection("general"); openWorkspaceSettings(); }}><span aria-hidden="true"><Settings /></span> Configurações</button>}
@@ -1089,7 +1105,7 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
             <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
           </div>
 
-          {view === "overview" && <OverviewView cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} onOpen={openCard} onOpenBoard={() => setView("board")} onNew={openNewCard} canEdit={canEdit} />}
+          {view === "overview" && <OverviewView cards={activeCards} companies={snapshot.companies} lists={snapshot.lists} activities={snapshot.recentActivity} stats={stats} employments={snapshot.employments} benefitMovements={snapshot.benefitMovements} pjClosings={snapshot.pjClosings} onOpen={openCard} onOpenBoard={() => setView("board")} onOpenPeople={(target) => setView(target)} onNew={openNewCard} canEdit={canEdit} />}
 
           {view === "processes" && <ProcessBoardsView boards={snapshot.boards} activeBoardId={snapshot.board.id} busy={busy} isAdmin={isAdmin} onOpen={openProcess} onCreate={createProcess} />}
 
@@ -1192,6 +1208,9 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
 
           {view === "inbox" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
           {view === "planner" && <PlannerView cards={activeCards} blocks={snapshot.plannerBlocks} connections={snapshot.calendarConnections} onOpen={openCard} onCreateBlock={(payload) => mutate("/api/planner/blocks", { method: "POST", body: JSON.stringify(payload) }, "Bloco adicionado ao planner.")} onDeleteBlock={(id) => mutate(`/api/planner/blocks/${id}`, { method: "DELETE" }, "Bloco removido do planner.")} onSaveConnection={(payload) => mutate("/api/calendar/connections", { method: "POST", body: JSON.stringify(payload) })} onSyncConnection={(provider) => mutate("/api/calendar/sync", { method: "POST", body: JSON.stringify({ provider }) }, "Calendário sincronizado.")} />}
+          {view === "employees" && <EmployeesView snapshot={snapshot} busy={busy} canEdit={canEdit} isAdmin={isAdmin} onMutate={mutate} />}
+          {view === "pj" && <PjClosingsView snapshot={snapshot} busy={busy} canEdit={canEdit} onMutate={mutate} />}
+          {view === "benefits" && <BenefitsView snapshot={snapshot} busy={busy} canEdit={canEdit} isAdmin={isAdmin} onMutate={mutate} />}
           {view === "payroll" && <PayrollView companies={snapshot.companies} metrics={snapshot.hrMetrics} busy={busy} canEdit={canEdit} onSaveMetric={saveHrMetric} />}
           {view === "indicators" && <IndicatorsView cards={activeCards} rules={snapshot.rules} busy={busy} canManageRules={isAdmin} onToggleRule={toggleRule} onExport={exportCsv} hrMetrics={snapshot.hrMetrics} companies={snapshot.companies} />}
         </div>
@@ -1362,14 +1381,18 @@ export function WorkspaceApp({ user, signOutPath }: { user: User; signOutPath: s
   );
 }
 
-function OverviewView({ cards, companies, lists, activities, stats, onOpen, onOpenBoard, onNew, canEdit }: {
+function OverviewView({ cards, companies, lists, activities, stats, employments, benefitMovements, pjClosings, onOpen, onOpenBoard, onOpenPeople, onNew, canEdit }: {
   cards: Card[];
   companies: WorkspaceSnapshot["companies"];
   lists: WorkspaceSnapshot["lists"];
   activities: ActivityEvent[];
   stats: { active: number; attention: number; waiting: number; onTime: number; completed: number; documentsPending: number; activeCompanies: number };
+  employments: WorkspaceSnapshot["employments"];
+  benefitMovements: WorkspaceSnapshot["benefitMovements"];
+  pjClosings: WorkspaceSnapshot["pjClosings"];
   onOpen: (card: Card) => void;
   onOpenBoard: () => void;
+  onOpenPeople: (target: "employees" | "pj" | "benefits") => void;
   onNew: () => void;
   canEdit: boolean;
 }) {
@@ -1386,6 +1409,12 @@ function OverviewView({ cards, companies, lists, activities, stats, onOpen, onOp
     : stats.active
       ? `${stats.active} demanda(s) avançando dentro do fluxo.`
       : "Sua operação está pronta para receber novas demandas.";
+  const activeEmployments = employments.filter((employment) => employment.status === "active");
+  const activeClt = activeEmployments.filter((employment) => employment.regime === "clt").length;
+  const activePj = activeEmployments.filter((employment) => employment.regime === "pj").length;
+  const latestBenefitPeriod = [...benefitMovements].sort((a, b) => b.period.localeCompare(a.period))[0]?.period ?? "";
+  const benefitCost = benefitMovements.filter((movement) => movement.period === latestBenefitPeriod && movement.status !== "cancelled").reduce((total, movement) => total + Math.max(0, movement.amount - movement.employeeDiscount), 0);
+  const pendingPjClosings = pjClosings.filter((closing) => closing.status !== "paid").length;
 
   return <div className="overview-layout">
     <section className="overview-hero">
@@ -1415,6 +1444,15 @@ function OverviewView({ cards, companies, lists, activities, stats, onOpen, onOp
       <article className={`overview-metric-card ${stats.attention ? "requires-attention" : "healthy"}`}><header><i><CircleAlert aria-hidden="true" /></i><em>PRIORIDADE</em></header><span>SLA em risco</span><strong>{stats.attention}</strong><footer><small>{stats.attention ? "Ação necessária hoje" : "Nenhum prazo crítico"}</small><b>{stats.attention ? "Atenção" : "Em dia"}</b></footer></article>
       <article className="overview-metric-card"><header><i><Paperclip aria-hidden="true" /></i><em>DOCUMENTOS</em></header><span>Pendências documentais</span><strong>{stats.documentsPending}</strong><footer><small>{checkedItems} de {totalChecklistItems} etapas concluídas</small><b>{checklistProgress}%</b></footer></article>
       <article className="overview-metric-card"><header><i><Building2 aria-hidden="true" /></i><em>CARTEIRA</em></header><span>Empresas ativas</span><strong>{stats.activeCompanies}</strong><footer><small>Cadastros disponíveis na operação</small><b>Grupo</b></footer></article>
+    </section>
+
+    <section className="overview-people-strip" aria-label="Pessoas, PJs e benefícios">
+      <header><div><span>GESTÃO DE PESSOAS</span><strong>Funcionários, PJs e benefícios conectados à operação</strong><p>Os números abaixo são alimentados pelos cadastros e competências, sem lançamento duplicado na Visão Geral.</p></div><button onClick={() => onOpenPeople("employees")}>Abrir central <ArrowRight aria-hidden="true" /></button></header>
+      <div>
+        <button onClick={() => onOpenPeople("employees")}><i><UserRound aria-hidden="true" /></i><span><small>Funcionários CLT</small><strong>{activeClt}</strong><em>{activeEmployments.length} vínculo(s) ativo(s) no total</em></span><ArrowRight aria-hidden="true" /></button>
+        <button onClick={() => onOpenPeople("pj")}><i><BadgeDollarSign aria-hidden="true" /></i><span><small>Prestadores PJ</small><strong>{activePj}</strong><em>{pendingPjClosings} fechamento(s) pendente(s)</em></span><ArrowRight aria-hidden="true" /></button>
+        <button onClick={() => onOpenPeople("benefits")}><i><HeartHandshake aria-hidden="true" /></i><span><small>Benefícios {latestBenefitPeriod ? `• ${latestBenefitPeriod}` : ""}</small><strong>{benefitCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><em>{new Set(benefitMovements.filter((movement) => movement.period === latestBenefitPeriod).map((movement) => movement.employmentId)).size} beneficiário(s)</em></span><ArrowRight aria-hidden="true" /></button>
+      </div>
     </section>
 
     <section className="overview-sla-band">
@@ -2260,7 +2298,31 @@ function PlannerView({ cards, blocks, connections, onOpen, onCreateBlock, onDele
 }
 
 function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onExport, hrMetrics, companies }: { cards: Card[]; rules: WorkspaceSnapshot["rules"]; busy: boolean; canManageRules: boolean; onToggleRule: (id: string, enabled: boolean) => Promise<void>; onExport: () => void; hrMetrics: WorkspaceSnapshot["hrMetrics"]; companies: WorkspaceSnapshot["companies"] }) {
-  const [report, setReport] = useState<{ from: string; to: string; total: number; completed: number; completionRate: number; averageCompletionHours: number; activityCount: number; byProcess: Record<string, number>; sla?: { safe: number; warning: number; overdue: number; paused: number; completed: number; escalated: number; complianceRate: number; byCompany: Record<string, { total: number; warning: number; overdue: number }> }; hrMetrics?: { admissions: number; terminations: number; averageHeadcount: number; payrollCostTotal: number; turnoverRate: number; payrollByCompany: Record<string, number> } } | null>(null);
+  const [report, setReport] = useState<{
+    from: string;
+    to: string;
+    total: number;
+    completed: number;
+    completionRate: number;
+    averageCompletionHours: number;
+    activityCount: number;
+    byProcess: Record<string, number>;
+    sla?: { safe: number; warning: number; overdue: number; paused: number; completed: number; escalated: number; complianceRate: number; byCompany: Record<string, { total: number; warning: number; overdue: number }> };
+    hrMetrics?: {
+      admissions: number;
+      terminations: number;
+      averageHeadcount: number;
+      payrollCostTotal: number;
+      turnoverRate: number;
+      payrollByCompany: Record<string, number>;
+      activeClt: number;
+      activePj: number;
+      benefitsCostTotal: number;
+      pjNetTotal: number;
+      pjCajuExcessTotal: number;
+      pjPending: number;
+    };
+  } | null>(null);
   const [reportDays, setReportDays] = useState("30");
   const [reportLoading, setReportLoading] = useState(true);
   const [reportError, setReportError] = useState("");
@@ -2288,7 +2350,27 @@ function IndicatorsView({ cards, rules, busy, canManageRules, onToggleRule, onEx
   cards.forEach((card) => { statusCounts[card.slaStatus] += 1; });
   return (
     <div className="indicators-layout">
-      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência.</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><Users aria-hidden="true" /><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><Plus aria-hidden="true" /><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><ArrowRight aria-hidden="true" /><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><WalletCards aria-hidden="true" /><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
+      <section className="hr-indicators-panel">
+        <header>
+          <div>
+            <strong>Indicadores do Departamento Pessoal</strong>
+            <span>Pessoas, vínculos, benefícios, PJ e folha por competência.</span>
+          </div>
+          <b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b>
+        </header>
+        <div className="hr-indicator-grid">
+          <article><CircleAlert aria-hidden="true" /><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article>
+          <article><Users aria-hidden="true" /><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article>
+          <article><Plus aria-hidden="true" /><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article>
+          <article><ArrowRight aria-hidden="true" /><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article>
+          <article><WalletCards aria-hidden="true" /><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article>
+          <article><UserRound aria-hidden="true" /><strong>{report?.hrMetrics?.activeClt ?? 0}</strong><span>Funcionários CLT ativos</span></article>
+          <article><BadgeDollarSign aria-hidden="true" /><strong>{report?.hrMetrics?.activePj ?? 0}</strong><span>Prestadores PJ ativos</span></article>
+          <article><HeartHandshake aria-hidden="true" /><strong>{(report?.hrMetrics?.benefitsCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo de benefícios</span></article>
+          <article><BadgeDollarSign aria-hidden="true" /><strong>{(report?.hrMetrics?.pjNetTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Fechamento PJ líquido</span><small>{report?.hrMetrics?.pjPending ?? 0} pendente(s)</small></article>
+        </div>
+        <div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) de folha cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre pessoas, benefícios, fechamentos PJ e competências para alimentar os indicadores."}</div>
+      </section>
       <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s)</span></div><button className="export-button" onClick={onExport}><Download aria-hidden="true" /> Exportar CSV</button></header><div className="process-bars">{processes.length === 0 && <div className="panel-empty">Nenhuma demanda nos filtros atuais.</div>}{processes.map(([process, count]) => <div key={process}><span>{process}</span><i><b style={{ width: `${(count / max) * 100}%` }} /></i><strong>{count}</strong></div>)}</div></section>
       <section className="sla-panel"><header><strong>Saúde dos SLAs</strong><span>Visão atual</span></header><div className="sla-donut" style={{ background: `conic-gradient(#23d8a1 0 ${(statusCounts.safe / Math.max(1, cards.length)) * 100}%, #f2a13e 0 ${((statusCounts.safe + statusCounts.warning) / Math.max(1, cards.length)) * 100}%, #ef5b5b 0 ${((statusCounts.safe + statusCounts.warning + statusCounts.overdue) / Math.max(1, cards.length)) * 100}%, #8b98a7 0 100%)` }}><span><strong>{cards.length - statusCounts.overdue}</strong><small>sob controle</small></span></div><ul><li><i className="safe" />No prazo <b>{statusCounts.safe}</b></li><li><i className="warning" />Atenção <b>{statusCounts.warning}</b></li><li><i className="overdue" />Atrasadas <b>{statusCounts.overdue}</b></li><li><i className="paused" />Pausadas/concluídas <b>{statusCounts.paused + statusCounts.completed}</b></li></ul></section>
       <section className="report-panel" aria-live="polite"><header><div><strong>Histórico, produtividade e SLA</strong><span>Indicadores calculados a partir da auditoria persistente do workspace.</span></div><select value={reportDays} onChange={(event) => { setReportDays(event.target.value); setReportLoading(true); setReportError(""); }}><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></header>{reportLoading && <div className="report-state"><i /> Atualizando relatório…</div>}{reportError && <div className="report-state error"><CircleAlert aria-hidden="true" /> {reportError}</div>}{report && !reportLoading && <div className="report-metrics"><article><strong>{report.total}</strong><span>Demandas no período</span></article><article><strong>{report.completionRate}%</strong><span>Taxa de conclusão</span></article><article><strong>{report.averageCompletionHours}h</strong><span>Tempo médio</span></article><article><strong>{report.sla?.complianceRate ?? 100}%</strong><span>Conformidade de SLA</span></article><article><strong>{report.sla?.overdue ?? 0}</strong><span>Demandas atrasadas</span></article><article><strong>{report.sla?.escalated ?? 0}</strong><span>Demandas escalonadas</span></article><article><strong>{report.activityCount}</strong><span>Eventos auditados</span></article></div>}<div className="report-process-list">{report && !reportLoading && Object.entries(report.byProcess).sort((a, b) => b[1] - a[1]).map(([process, count]) => <span key={process}><b>{process}</b><i style={{ width: `${Math.max(8, (count / Math.max(1, report.total)) * 100)}%` }} /><em>{count}</em></span>)}</div>{report?.sla && !reportLoading && Object.keys(report.sla.byCompany).length > 0 && <div className="sla-company-report"><strong>SLA por empresa</strong>{Object.entries(report.sla.byCompany).sort((a, b) => b[1].overdue - a[1].overdue).map(([company, summary]) => <span key={company}><b>{company}</b><small>{summary.total} demanda(s) · {summary.warning} em atenção · {summary.overdue} atrasada(s)</small></span>)}</div>}</section>

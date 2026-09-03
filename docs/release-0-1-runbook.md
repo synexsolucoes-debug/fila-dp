@@ -17,10 +17,27 @@
 5. Executar os testes de fumaça no Preview antes de repetir a migration na produção.
 6. Nunca editar uma migration já registrada em `fdp_schema_migrations`.
 
+### Módulos de pessoas, benefícios e PJ
+
+- A migration `0004_people_benefits_pj.sql` cria pessoas, vínculos profissionais, políticas e movimentações de benefícios e fechamentos PJ.
+- Ela deve ser aplicada no Neon antes de publicar a versão da aplicação que expõe esses módulos.
+- Após migrar, valide no Preview: cadastro de funcionário CLT, cadastro de vínculo PJ, política de benefício, lançamento por competência e fechamento PJ.
+- O fechamento PJ deve bloquear aprovação quando o valor da nota divergir do valor esperado; valores financeiros devem aparecer somente para administrador e membro.
+
+### Fonte Funcionários GRUPO OPYT.xlsx
+
+- A aba `GRUPO OPYT` é a fonte cadastral aceita pelo importador em **Funcionários → Sincronizar planilha**.
+- A sincronização é restrita ao administrador e não armazena o XLSX: o arquivo é processado em memória e descartado após a importação.
+- Pessoa e vínculo são atualizados de forma idempotente; CPF é usado somente em memória para gerar uma chave HMAC e não é gravado em texto aberto.
+- CNPJ válido tem prioridade no vínculo com a empresa. Empresas ainda inexistentes são criadas como empresas do grupo, subordinadas à empresa principal.
+- `Salário` alimenta o valor mensal do vínculo. Valores numéricos de `V. A.` e `VT` geram movimentos de benefício na competência selecionada; marcações como `X` não são tratadas como valor financeiro.
+- Fórmulas quebradas e abas auxiliares não alimentam o cadastro. A planilha contém fórmulas legadas com `#REF!`, `#VALUE!` e `#NAME?`, por isso apenas campos-fonte da aba principal são importados.
+- O caminho local do OneDrive não existe na Vercel. Para sincronizar uma atualização, o administrador deve enviar a versão atual do arquivo pelo painel; uma conexão automática futura exigirá Microsoft Graph/SharePoint com credenciais próprias.
+
 ## Gate de aceitação
 
 - `npm ci`, `npm run lint`, `npm run db:check`, `npm test`, `npm run build` e `npm audit --omit=dev --audit-level=high` devem passar.
-- Login, criação/movimentação de demanda, Inbox, Planner, relatórios, anexos e permissões devem ser testados no Preview.
+- Login, criação/movimentação de demanda, Inbox, Planner, relatórios, anexos, funcionários, benefícios, fechamento PJ e permissões devem ser testados no Preview.
 - Abrir `GET /api/workspace` duas vezes não pode alterar schema, excluir listas, criar cartões ou persistir mudança de SLA.
 - Confirmar `/api/version` no Preview e, depois, em produção.
 
