@@ -1,6 +1,9 @@
 import { ApiError } from "./api-errors.ts";
 import { cleanText, optionalDate } from "./registrations.ts";
-import { componentDirectionFor, contractorCreditTypes, contractorDebitTypes, toCents, type ContractorComponentType } from "./payments.ts";
+import {
+  componentDirectionFor, contractorCreditTypes, contractorDebitTypes, contractorSettlementTarget, toCents,
+  type ContractorComponentType, type ContractorSettlementTarget,
+} from "./payments.ts";
 import {
   assertCompetence, assertContractCoherent,
   type ContractType, type ContractorStatus, type FixedItemDirection, type MovementType,
@@ -123,6 +126,8 @@ export type FixedItemInput = {
   componentType: string;
   description: string;
   amountCents: number;
+  /** Onde o desconto recorrente é abatido; ver `contractorSettlementTargets`. */
+  settlementTarget: ContractorSettlementTarget;
   effectiveFrom: string;
   effectiveTo: string | null;
   note: string;
@@ -144,12 +149,16 @@ export function readFixedItemInput(body: Record<string, unknown>): FixedItemInpu
     throw ApiError.badRequest("A competência final não pode ser anterior à inicial.", "FIXED_ITEM_WINDOW_INVALID");
   }
 
+  // Direção não é escolha independente: ela decorre do tipo.
+  const direction = componentDirectionFor(componentType as ContractorComponentType);
+
   return {
-    // Direção não é escolha independente: ela decorre do tipo.
-    direction: componentDirectionFor(componentType as ContractorComponentType),
+    direction,
     componentType,
     description: cleanText(body.description, 180),
     amountCents,
+    // Provento não escolhe incidência; a normalização mora num lugar só.
+    settlementTarget: contractorSettlementTarget(body.settlementTarget, direction),
     effectiveFrom,
     effectiveTo,
     note: cleanText(body.note, 300),

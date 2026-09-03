@@ -5,7 +5,8 @@ import {
 } from "@/lib/api-v1";
 import { log } from "@/lib/observability";
 import {
-  contractorCreditTypes, contractorDebitTypes, positiveMoney, requiredPaymentEnum, type ContractorComponentType,
+  componentDirectionFor, contractorCreditTypes, contractorDebitTypes, contractorSettlementTarget, positiveMoney,
+  requiredPaymentEnum, type ContractorComponentType,
 } from "@/lib/payments";
 import { createContractorComponent, requireCycle, requireContractorProfile } from "@/lib/payment-service";
 import { cleanText } from "@/lib/registrations";
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
       componentType,
       amount,
       description: cleanText(body.description, 240),
+      settlementTarget: contractorSettlementTarget(body.settlementTarget, componentDirectionFor(componentType)),
       quantity: Math.max(Number(body.quantity) || 1, 0),
       origin: "integration",
       documentReference: cleanText(body.documentReference, 160),
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
         (id, workspace_id, actor_type, actor_user_id, actor_email, action, outcome, entity_type, entity_id, after_json, metadata_json, request_id)
       VALUES (?, ?, 'integration', NULL, ?, 'contractor_component.created', 'success', 'contractor_component', ?, ?::jsonb, ?::jsonb, ?)`)
       .bind(crypto.randomUUID(), context.workspaceId, `api-key:${context.apiKeyId}`, component.id,
-        JSON.stringify({ providerId, competence, componentType, amount, direction: component.direction }),
+        JSON.stringify({ providerId, competence, componentType, amount, direction: component.direction, settlementTarget: component.settlementTarget }),
         JSON.stringify({ apiKeyId: context.apiKeyId, duplicated: component.duplicated, origin: "integration" }),
         context.requestId)
       .run();

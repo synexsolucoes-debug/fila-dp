@@ -40,10 +40,10 @@ export async function POST(request: Request) {
         created.push(itemId);
         statements.push(d1.prepare(`INSERT INTO fdp_contractor_fixed_items
             (id, workspace_id, company_id, provider_id, direction, component_type, description, amount,
-             effective_from, effective_to, note, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+             settlement_target, effective_from, effective_to, note, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .bind(itemId, workspace.id, profile.company_id ?? null, entry.providerId, input.direction, input.componentType,
-            input.description, fromCents(input.amountCents), input.effectiveFrom, input.effectiveTo,
+            input.description, fromCents(input.amountCents), input.settlementTarget, input.effectiveFrom, input.effectiveTo,
             input.note, user.id));
       }
       const amostra = readFixedItemInput({ ...body, amount: entries[0].amount });
@@ -78,10 +78,10 @@ export async function POST(request: Request) {
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_contractor_fixed_items
           (id, workspace_id, company_id, provider_id, direction, component_type, description, amount,
-           effective_from, effective_to, note, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+           settlement_target, effective_from, effective_to, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(itemId, workspace.id, profile.company_id ?? null, providerId, input.direction, input.componentType,
-          input.description, fromCents(input.amountCents), input.effectiveFrom, input.effectiveTo,
+          input.description, fromCents(input.amountCents), input.settlementTarget, input.effectiveFrom, input.effectiveTo,
           input.note, user.id),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,

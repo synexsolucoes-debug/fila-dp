@@ -193,6 +193,59 @@ test("a natureza escolhe a rota, e não um parâmetro dentro de uma rota só", a
   assert.match(modulo, /effectiveTo: entry\.nature === "determinado" \? entry\.effectiveTo : ""/u);
 });
 
+test("a incidência do desconto é escolhida ao lançar, corrigida no detalhamento e guardada no banco", async () => {
+  /* Quem confere precisa poder dizer de onde o desconto saiu — nota ou
+     complemento —, tanto no lançamento quanto depois, olhando o pagamento
+     apurado. Sem isso o número certo só existia numa correção manual fora do
+     sistema. */
+  const [janela, detalhe, tela, componentes, patch, migracao, servico] = await Promise.all([
+    readFile(new URL("../app/painel/features/payments/ContractorEntryDialog.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorPaymentDetail.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/components/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/components/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/postgres/0082_contractor_discount_settlement.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/payment-service.ts", import.meta.url), "utf8"),
+  ]);
+
+  // A escolha só aparece para desconto: provento não tem onde incidir.
+  assert.match(janela, /Incidência do desconto/u);
+  assert.match(janela, /\{isDebit && \(/u);
+  assert.match(janela, /settlementTarget: isDebit \? settlementTarget : "auto"/u);
+  assert.match(tela, /settlementTarget: entry\.settlementTarget/u);
+
+  // E é corrigível depois, na mesma linha em que se corrige valor e descrição.
+  assert.match(detalhe, /Incidência/u);
+  assert.match(detalhe, /aria-label="Incidência do desconto"/u);
+  assert.match(detalhe, /settlementTarget: item\.direction === "debit" \? editSettlement : "auto"/u);
+
+  // A rota grava a coluna, e omitir a incidência preserva a que já estava.
+  assert.match(componentes, /settlementTarget: contractorSettlementTarget\(body\.settlementTarget/u);
+  assert.match(patch, /body\.settlementTarget \?\? component\.settlement_target/u);
+  assert.match(patch, /settlement_target = \?/u);
+
+  // O valor recorrente carrega a escolha para cada competência que materializa.
+  assert.match(servico, /settlement_target = \?, status = 'active'/u);
+  assert.match(servico, /item\.settlementTarget \?\? "auto"/u);
+
+  // `auto` é o padrão: nenhuma competência já apurada muda de valor.
+  assert.match(migracao, /"settlement_target" text DEFAULT 'auto' NOT NULL/u);
+  assert.match(migracao, /"settlement_target" IN \('auto', 'invoice', 'complement'\)/u);
+  assert.match(migracao, /"direction" = 'debit' OR "settlement_target" = 'auto'/u);
+});
+
+test("o extrato diz de qual lado o desconto saiu", async () => {
+  const extrato = await readFile(
+    new URL("../app/painel/features/payments/ContractorAnalyticalStatement.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(extrato, /dentro da nota/u);
+  assert.match(extrato, /no complemento/u);
+  // E leva a informação para o CSV, que é o que sai da tela para a conferência.
+  assert.match(extrato, /"INCIDÊNCIA"/u);
+  assert.match(extrato, /DESCONTOS DENTRO DA NOTA/u);
+});
+
 test("os tokens do módulo acompanham o diálogo portado", async () => {
   /* O `AnimatedModal` porta o conteúdo para a casca do painel, e ali fora
      `--pay-border` não existe: a declaração vira inválida e a borda some sem

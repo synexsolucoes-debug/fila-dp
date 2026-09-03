@@ -87,6 +87,32 @@ Os créditos e descontos entram **sempre antes** do limite. A ordem é implement
 
 Toda a aritmética acontece em centavos inteiros; valores são `numeric(18,2)` no banco.
 
+### Incidência do desconto (migration `0082`, cálculo `contractor-payment-1.3.0`)
+
+Quando o pagamento se divide entre nota e complemento, o passo 2 acima faz o complemento
+absorver todo desconto: a nota fica no limite e a diferença sobra para o outro lado. Nem
+sempre foi assim que a coisa aconteceu — um desconto negociado dentro do serviço prestado
+precisa aparecer na nota.
+
+Cada desconto — avulso ou recorrente — grava em `settlement_target` onde é abatido:
+
+| Incidência | O que acontece |
+| --- | --- |
+| `auto` (padrão) | Reduz o líquido; a nota acompanha o limite e a diferença sai do complemento |
+| `invoice` | É abatido depois do limite, dentro do valor da nota fiscal |
+| `complement` | Fica fora da nota e é abatido do complemento |
+
+O **líquido devido não muda** com a escolha: o total pago é o mesmo, o que muda é a divisão.
+Provento não escolhe incidência — aumentar a nota acima do limite é o que o limite impede —, e
+sem divisão (líquido abaixo do limite, ou sem limite) as três opções dão o mesmo número.
+
+| Base + créditos | Descontos | Limite | Incidência | Líquido | Nota | Complemento |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 6.000,00 | 59,93 | 3.000,00 | `auto` | 5.940,07 | 3.000,00 | 2.940,07 |
+| 6.000,00 | 59,93 | 3.000,00 | `invoice` | 5.940,07 | 2.940,07 | 3.000,00 |
+
+`auto` é o padrão da coluna, então nenhuma competência já apurada muda de valor pela migration.
+
 ### Limite da nota
 
 O limite **não é constante de código**. `fdp_invoice_limit_policies` versiona políticas por

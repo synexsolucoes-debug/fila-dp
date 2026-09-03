@@ -178,6 +178,82 @@ test("a ordem do cálculo PJ nunca aplica o limite antes dos créditos e descont
   assert.equal(result.invoiceExpectedAmount + result.complementAmount, result.netAmount);
 });
 
+test("a incidência do desconto decide qual dos dois lados do pagamento encolhe", () => {
+  /* O caso que trouxe a regra: 6.000 de proventos, limite de nota em 3.000 e um
+     desconto de 59,93 feito dentro do serviço prestado. Antes o desconto sempre
+     caía no complemento e a nota saía cheia — a conferência batia num número que
+     não foi o negociado. */
+  const comum = {
+    baseAmount: 6000,
+    invoiceLimit: limit(3000),
+    complementMethod: "caju_saldo_livre" as const,
+  };
+
+  const automatica = calculateContractorClosing({
+    ...comum, components: [{ direction: "debit", amount: 59.93 }],
+  });
+  assert.equal(automatica.netAmount, 5940.07);
+  assert.equal(automatica.invoiceExpectedAmount, 3000, "sem escolha, a nota continua no limite");
+  assert.equal(automatica.complementAmount, 2940.07);
+  assert.equal(automatica.debitsOnInvoiceAmount, 0);
+
+  const naNota = calculateContractorClosing({
+    ...comum, components: [{ direction: "debit", amount: 59.93, settlementTarget: "invoice" }],
+  });
+  assert.equal(naNota.netAmount, 5940.07, "o líquido devido não muda com a incidência");
+  assert.equal(naNota.invoiceExpectedAmount, 2940.07);
+  assert.equal(naNota.complementAmount, 3000);
+  assert.equal(naNota.cajuAmount, 3000);
+  assert.equal(naNota.debitsOnInvoiceAmount, 59.93);
+  assert.equal(naNota.invoiceExpectedAmount + naNota.complementAmount, naNota.netAmount);
+
+  const noComplemento = calculateContractorClosing({
+    ...comum, components: [{ direction: "debit", amount: 59.93, settlementTarget: "complement" }],
+  });
+  assert.equal(noComplemento.invoiceExpectedAmount, 3000);
+  assert.equal(noComplemento.complementAmount, 2940.07);
+  assert.equal(noComplemento.debitsOnComplementAmount, 59.93);
+});
+
+test("incidência só muda a divisão quando existe divisão, e nunca fura o limite da nota", () => {
+  // Pagamento inteiro na nota: não há dois lados, e as três escolhas coincidem.
+  for (const settlementTarget of ["auto", "invoice", "complement"] as const) {
+    const inteiro = calculateContractorClosing({
+      baseAmount: 5000,
+      components: [{ direction: "debit", amount: 300, settlementTarget }],
+      invoiceLimit: limit(6000),
+      complementMethod: "caju_saldo_livre",
+    });
+    assert.equal(inteiro.netAmount, 4700);
+    assert.equal(inteiro.invoiceExpectedAmount, 4700, `incidência ${settlementTarget} mexeu onde não havia divisão`);
+    assert.equal(inteiro.complementAmount, 0);
+  }
+
+  // Desconto maior que a própria nota: ela zera e o resto vem do complemento,
+  // que é o único lugar que sobra. Nota negativa não existe.
+  const maiorQueANota = calculateContractorClosing({
+    baseAmount: 6000,
+    components: [{ direction: "debit", amount: 4000, settlementTarget: "invoice" }],
+    invoiceLimit: limit(3000),
+    complementMethod: "caju_saldo_livre",
+  });
+  assert.equal(maiorQueANota.netAmount, 2000);
+  assert.equal(maiorQueANota.invoiceExpectedAmount, 0);
+  assert.equal(maiorQueANota.complementAmount, 2000);
+
+  /* Provento não escolhe incidência: aceitar a escolha aqui levaria a nota
+     acima do limite configurado, que é justamente o que o limite impede. */
+  const provento = calculateContractorClosing({
+    baseAmount: 6000,
+    components: [{ direction: "credit", amount: 500, settlementTarget: "invoice" }],
+    invoiceLimit: limit(3000),
+    complementMethod: "caju_saldo_livre",
+  });
+  assert.equal(provento.invoiceExpectedAmount, 3000);
+  assert.equal(provento.complementAmount, 3500);
+  assert.equal(provento.debitsOnInvoiceAmount, 0);
+});
+
 test("cálculo PJ trata limite ausente, componentes cancelados, centavos e complemento sem meio configurado", () => {
   const semLimite = calculateContractorClosing({
     baseAmount: 9000, components: [], invoiceLimit: limit(null), complementMethod: "none",

@@ -194,6 +194,8 @@ export type FixedItem = {
   effectiveFrom: string;
   effectiveTo: string | null;
   status: "active" | "ended";
+  /** Onde o desconto recorrente é abatido; ver `contractorSettlementTargets`. */
+  settlementTarget?: "auto" | "invoice" | "complement";
 };
 
 /**

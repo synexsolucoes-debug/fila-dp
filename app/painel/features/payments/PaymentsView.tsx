@@ -202,7 +202,10 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
   async function submitEntry(entry: EntrySubmission) {
     setEntryError("");
     const lote = entry.entries.length > 1;
-    const comum = { componentType: entry.componentType, description: entry.description, entries: entry.entries };
+    const comum = {
+      componentType: entry.componentType, description: entry.description,
+      settlementTarget: entry.settlementTarget, entries: entry.entries,
+    };
     const alvo = entry.nature === "mensal"
       ? { url: "/api/payments/contractors/components", body: { ...comum, competenceId: cycle?.id } }
       : {
@@ -250,7 +253,11 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     return () => window.cancelAnimationFrame(frame);
   }, [focus, module, openContractorDetail]);
 
-  async function updateContractorComponent(componentId: string, closingId: string, input: { amount: string; description: string }) {
+  async function updateContractorComponent(
+    componentId: string,
+    closingId: string,
+    input: { amount: string; description: string; settlementTarget: string },
+  ) {
     const result = await mutate<{ component: Row }>(`/api/payments/contractors/components/${componentId}`, {
       method: "PATCH",
       body: JSON.stringify(input),

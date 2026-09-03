@@ -5,8 +5,10 @@ import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import {
 
+  componentDirectionFor,
   contractorCreditTypes,
   contractorDebitTypes,
+  contractorSettlementTarget,
   paymentEnum,
   positiveMoney,
   paymentOrigins,
@@ -45,7 +47,7 @@ export async function GET(request: Request) {
     if (providerId) { where.push("c.provider_id = ?"); values.push(providerId); }
 
     const rows = await d1.prepare(`SELECT c.id, c.company_id, c.provider_id, c.payroll_cycle_id, c.closing_id, c.competence, c.direction,
-        c.component_type, c.description, c.component_quantity, c.amount, c.origin, c.document_reference, c.note, c.status, c.created_at,
+        c.component_type, c.description, c.component_quantity, c.amount, c.settlement_target, c.origin, c.document_reference, c.note, c.status, c.created_at,
         a.legal_name AS contractor_name
       FROM fdp_contractor_components c
       JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
@@ -82,6 +84,7 @@ export async function POST(request: Request) {
       if (!cycleId) throw ApiError.badRequest("Selecione a competência.", "COMPONENT_REQUIRED_FIELDS");
       const componentType = requiredPaymentEnum(body.componentType, componentTypes, "Tipo do componente") as ContractorComponentType;
       const description = cleanText(body.description, 240);
+      const settlementTarget = contractorSettlementTarget(body.settlementTarget, componentDirectionFor(componentType));
       const created: string[] = [];
       for (const entry of entries) {
         const profile = await requireContractorProfile(d1, workspace.id, entry.providerId);
@@ -90,7 +93,7 @@ export async function POST(request: Request) {
         const component = await createContractorComponent(d1, {
           workspaceId: workspace.id, profile, cycle, componentType,
           amount: positiveMoney(entry.amount, `Valor de ${entry.providerId}`),
-          description, quantity: 1, origin: "manual",
+          description, settlementTarget, quantity: 1, origin: "manual",
           documentReference: cleanText(body.documentReference, 160),
           note: cleanText(body.note, 300), externalId: "", createdBy: user.id,
         });
@@ -99,7 +102,7 @@ export async function POST(request: Request) {
       await prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
         action: "contractor_component.created_batch", entityType: "contractor_component", entityId: cycleId,
-        after: { componentType, count: created.length, providerIds: entries.map((entry) => entry.providerId) },
+        after: { componentType, settlementTarget, count: created.length, providerIds: entries.map((entry) => entry.providerId) },
         metadata: { source: "contractor_payments", description },
         requestId: request.headers.get("x-fila-dp-request-id"),
       }).run();
@@ -125,6 +128,7 @@ export async function POST(request: Request) {
       componentType,
       amount,
       description: cleanText(body.description, 240),
+      settlementTarget: contractorSettlementTarget(body.settlementTarget, componentDirectionFor(componentType)),
       quantity: Math.max(Number(body.quantity) || 1, 0),
       origin: paymentEnum(body.origin, paymentOrigins, "manual"),
       documentReference: cleanText(body.documentReference, 160),
@@ -136,7 +140,10 @@ export async function POST(request: Request) {
     await prepareAuditEvent({
       workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
       action: "contractor_component.created", entityType: "contractor_component", entityId: component.id,
-      after: { providerId, competence: cycle.competence, direction: component.direction, componentType, amount },
+      after: {
+        providerId, competence: cycle.competence, direction: component.direction, componentType, amount,
+        settlementTarget: component.settlementTarget,
+      },
       metadata: { duplicated: component.duplicated },
       requestId: request.headers.get("x-fila-dp-request-id"),
     }).run();

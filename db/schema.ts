@@ -2298,6 +2298,13 @@ export const contractorComponents = pgTable("fdp_contractor_components", {
   description: text("description").notNull().default(""),
   componentQuantity: numeric("component_quantity", { precision: 18, scale: 4, mode: "number" }).notNull().default(1),
   amount: numeric("amount", { precision: 18, scale: 2, mode: "number" }).notNull(),
+  /**
+   * Onde o desconto é abatido quando o pagamento se divide entre nota e
+   * complemento. Ver `contractorSettlementTargets` em `lib/payments.ts`:
+   * `auto` mantém o comportamento histórico e é o que vale para o que já
+   * estava lançado.
+   */
+  settlementTarget: text("settlement_target").notNull().default("auto"),
   origin: text("origin").notNull().default("manual"),
   documentReference: text("document_reference").notNull().default(""),
   note: text("note").notNull().default(""),
@@ -2320,6 +2327,8 @@ export const contractorComponents = pgTable("fdp_contractor_components", {
   check("fdp_contractor_components_status_check", sql`${table.status} IN ('active', 'canceled')`),
   check("fdp_contractor_components_origin_check", sql`${table.origin} IN ('manual', 'import', 'integration')`),
   check("fdp_contractor_components_amount_check", sql`${table.amount} >= 0`),
+  check("fdp_contractor_components_settlement_target_check", sql`${table.settlementTarget} IN ('auto', 'invoice', 'complement')
+    AND (${table.direction} = 'debit' OR ${table.settlementTarget} = 'auto')`),
   check("fdp_contractor_components_type_check", sql`(${table.direction} = 'credit' AND ${table.componentType} IN ('base', 'commission', 'bonus', 'award', 'reimbursement', 'additional', 'positive_adjustment', 'other_credit'))
     OR (${table.direction} = 'debit' AND ${table.componentType} IN ('health_plan', 'dental_plan', 'benefit', 'coparticipation', 'equipment', 'advance', 'absence', 'loan', 'negative_adjustment', 'other_debit'))`),
 ]);

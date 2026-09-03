@@ -22,7 +22,8 @@ export async function GET(_request: Request, { params }: Params) {
 
     const [full, components, provider] = await Promise.all([
       d1.prepare(`SELECT * FROM fdp_contractor_closings WHERE workspace_id = ? AND id = ? AND excluded_at IS NULL`).bind(workspace.id, id).first<Record<string, unknown>>(),
-      d1.prepare(`SELECT id, direction, component_type, description, component_quantity, amount, origin, document_reference, status, created_at
+      d1.prepare(`SELECT id, direction, component_type, description, component_quantity, amount, settlement_target, origin,
+          document_reference, status, created_at
         FROM fdp_contractor_components WHERE workspace_id = ? AND closing_id = ? ORDER BY direction, component_type`).bind(workspace.id, id).all(),
       d1.prepare(`SELECT a.id, a.code, a.legal_name, a.trade_name, a.tax_id, p.contract_reference, p.role_title, p.complement_platform, p.complement_external_id
         FROM fdp_auxiliary_providers a JOIN fdp_contractor_profiles p ON p.workspace_id = a.workspace_id AND p.provider_id = a.id

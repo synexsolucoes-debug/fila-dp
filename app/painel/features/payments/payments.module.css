@@ -270,6 +270,7 @@
 .resultGrid article { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--pay-border); border-radius: 9px; background: var(--pay-surface); }
 .resultGrid span { display: flex; align-items: center; gap: 5px; color: var(--pay-soft); font-size: .65rem; font-weight: 720; }
 .resultGrid strong { font-size: .87rem; }
+.resultGrid small { color: var(--pay-soft); font-size: .62rem; font-weight: 600; line-height: 1.35; }
 .resultGrid article[data-tone="debit"] strong { color: var(--pay-danger); }
 .resultGrid article[data-tone="caju"] { border-color: color-mix(in srgb, var(--pay-accent) 45%, transparent); }
 .resultGrid article[data-tone="caju"] strong { color: var(--pay-accent-text); }

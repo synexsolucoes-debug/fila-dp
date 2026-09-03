@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: Params) {
         FROM fdp_contractor_profiles p
         LEFT JOIN fdp_companies c ON c.workspace_id = p.workspace_id AND c.id = p.company_id
         WHERE p.workspace_id = ? AND p.provider_id = ?`).bind(workspace.id, id).first<Record<string, unknown>>(),
-      d1.prepare(`SELECT id, direction, component_type, description, amount, effective_from, effective_to, status, note
+      d1.prepare(`SELECT id, direction, component_type, description, amount, settlement_target, effective_from, effective_to, status, note
         FROM fdp_contractor_fixed_items WHERE workspace_id = ? AND provider_id = ?
         ORDER BY status, effective_from DESC`).bind(workspace.id, id).all<Record<string, unknown>>(),
       d1.prepare(`SELECT id, movement_type, effective_date, title, reason, status, before_json, after_json,
