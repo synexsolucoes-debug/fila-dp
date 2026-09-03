@@ -80,6 +80,15 @@ jobs:
       - name: Provar que o extrato analítico fecha com a apuração
         run: npm run db:rehearse-statement
 
+      # A apuração PJ decide a situação da nota comparando um parâmetro com o
+      # literal 0, e o PostgreSQL infere o tipo do parâmetro por esse literal.
+      # Um valor com centavos chega como texto e o banco recusa a instrução
+      # inteira — defeito que passou por toda a suíte e só apareceu em
+      # produção, porque só um banco de verdade infere tipo. O ensaio roda a
+      # apuração importada, com centavos, criando e reapurando.
+      - name: Provar que a apuração PJ atravessa valores com centavos
+        run: npm run db:rehearse-closing
+
       # Duas conexões reais disputam os mesmos registros. O ensaio cobre
       # estoque, tarefa, etapa, aprovação e revisão de processo, além dos casos
       # gerais de demanda, webhook, worker e fechamento.

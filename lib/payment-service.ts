@@ -422,6 +422,23 @@ export async function upsertContractorClosing(d1: Database, input: {
   const invoiceStatus = calculation.invoiceExpectedAmount > 0 ? "pending" : "not_required";
 
   if (existing) {
+    /*
+     * O `::numeric` na comparação da situação da nota não é enfeite: sem ele a
+     * reapuração morre com centavos.
+     *
+     * O PostgreSQL infere o tipo do parâmetro pelo outro lado da comparação, e
+     * o outro lado é o literal `0` — um `integer`. O driver manda todo
+     * parâmetro como texto, então uma nota esperada de 5.102,46 chega como
+     * "5102.46" e o banco recusa a instrução inteira com `invalid input syntax
+     * for type integer`. Um valor redondo passava: 6000,00 vira "6000", que é
+     * inteiro válido. Daí o defeito parecer aleatório — quebrava exatamente
+     * nos prestadores cujo valor tinha centavos, e a apuração da competência
+     * inteira caía junto com o primeiro deles.
+     *
+     * A mesma armadilha vale para qualquer parâmetro de dinheiro comparado a
+     * literal numérico: onde o tipo não vem de uma coluna, ele precisa vir de
+     * um cast explícito.
+     */
     await d1.prepare(`UPDATE fdp_contractor_closings SET base_amount = ?, contract_base_amount = ?, proration_days = ?,
         proration_total_days = ?, proration_end_date = ?, credits_amount = ?, debits_amount = ?, net_amount = ?,
         invoice_limit_amount = ?, invoice_limit_source = ?, invoice_limit_policy_id = ?, invoice_expected_amount = ?,
@@ -429,9 +446,10 @@ export async function upsertContractorClosing(d1: Database, input: {
         invoice_status = CASE WHEN invoice_number = '' THEN ? ELSE invoice_status END,
         /* Reapurar não apaga uma conferência já feita: só ajusta a situação de
            quem ainda não tem nota — e zera a exigência quando o cálculo deixa
-           de pedir nota nesta competência. */
+           de pedir nota nesta competência. O ::numeric abaixo é obrigatório;
+           ver o comentário acima da consulta. */
         invoice_review_status = CASE
-          WHEN ? <= 0 THEN 'not_required'
+          WHEN ?::numeric <= 0 THEN 'not_required'
           WHEN invoice_current_id IS NULL THEN 'awaiting_issue'
           ELSE invoice_review_status END,
         caju_status = CASE WHEN caju_status IN ('sent', 'processed') THEN caju_status ELSE ? END,
