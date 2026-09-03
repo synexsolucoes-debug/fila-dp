@@ -685,7 +685,7 @@ test("todo estado de competência tem tradução na tela", async () => {
 });
 
 test("exclusão lógica do pagamento PJ preserva auditoria e some da operação", async () => {
-  const [migration, prorationMigration, detailRoute, closingRoute, paymentService, overview, componentRoute, cajuExport, reports, publicApi, detail] = await Promise.all([
+  const [migration, prorationMigration, detailRoute, closingRoute, paymentService, overview, componentRoute, cajuExport, reports, publicApi, contractorRoute, detail] = await Promise.all([
     readFile(new URL("../drizzle/postgres/0050_contractor_payment_exclusions.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/postgres/0055_contractor_termination_proration.sql", import.meta.url), "utf8"),
     readFile(new URL("../app/api/payments/contractors/closings/[id]/route.ts", import.meta.url), "utf8"),
@@ -699,6 +699,7 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
     // importa. A conferência segue o SQL, não o arquivo onde ele morava.
     readFile(new URL("../lib/payment-reports.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/v1/contractor-closings/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/[id]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/painel/features/payments/ContractorPaymentDetail.tsx", import.meta.url), "utf8"),
   ]);
 
@@ -719,6 +720,8 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
   assert.match(prorationMigration, /proration_end_date/);
   assert.match(paymentService, /calculateContractorBaseProration/);
   assert.match(paymentService, /calculation\.prorationDays/);
+  assert.match(contractorRoute, /upsertContractorClosing/);
+  assert.match(contractorRoute, /status = 'open'/);
   assert.match(overview, /c\.proration_total_days/);
   assert.match(componentRoute, /upsertContractorClosing/);
   assert.match(componentRoute, /FIXED_COMPONENT_EDIT_REQUIRES_SOURCE/);

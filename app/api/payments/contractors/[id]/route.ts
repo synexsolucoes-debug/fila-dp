@@ -3,7 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { cleanText, optionalDate } from "@/lib/registrations";
 import { complementMethods, openPayoutAccount, paymentEnum, payoutSummary, positiveMoney, sanitizePayoutAccount, sealPayoutAccount, withoutSealedPayout } from "@/lib/payments";
-import { invoiceLimitCandidates, requireContractorProfile } from "@/lib/payment-service";
+import { invoiceLimitCandidates, requireContractorProfile, requireCycle, upsertContractorClosing } from "@/lib/payment-service";
 import { resolveInvoiceLimit } from "@/lib/payments";
 
 type Params = { params: Promise<{ id: string }> };
@@ -117,7 +117,24 @@ export async function PATCH(request: Request, { params }: Params) {
     }));
 
     await d1.batch(statements);
-    return Response.json({ contractor: { id, baseAmount, invoiceLimitOverride, complementMethod, status } });
+    /* A data de início e o valor-base fazem parte do próprio cálculo. Sem esta
+       reapuração, uma competência já aberta conserva o valor integral que foi
+       salvo antes de o cadastro ser corrigido — exatamente o caso em que o
+       proporcional pareceria não funcionar na tela. Fechamentos concluídos
+       continuam imutáveis e precisam do fluxo explícito de reabertura. */
+    const updatedProfile = await requireContractorProfile(d1, workspace.id, id);
+    const openClosings = await d1.prepare(`SELECT payroll_cycle_id, company_id
+      FROM fdp_contractor_closings
+      WHERE workspace_id = ? AND provider_id = ? AND status = 'open' AND excluded_at IS NULL`)
+      .bind(workspace.id, id)
+      .all<{ payroll_cycle_id: string; company_id: string }>();
+    const recalculated = [];
+    for (const closing of openClosings.results) {
+      const cycle = await requireCycle(d1, workspace.id, closing.company_id, closing.payroll_cycle_id);
+      const result = await upsertContractorClosing(d1, { workspaceId: workspace.id, profile: updatedProfile, cycle, userId: user.id });
+      recalculated.push({ id: result.closingId, competence: cycle.competence, baseAmount: result.calculation.baseAmount });
+    }
+    return Response.json({ contractor: { id, baseAmount, invoiceLimitOverride, complementMethod, status }, recalculated });
   } catch (error) {
     return apiError(error);
   }
