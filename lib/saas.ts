@@ -79,10 +79,17 @@ export function publicPlan(row: Record<string, unknown>) {
     companyLimit: Number(row.company_limit ?? 0),
     integrationLimit: Number(row.integration_limit ?? 0),
     storageLimitMb: Number(row.storage_limit_mb ?? 0),
+    checkoutEnabled: Number(row.checkout_enabled ?? 0) === 1,
+    customLimits: Number(row.custom_limits ?? 0) === 1,
     features: parseStringArray(row.features_json),
+    modules: parseStringArray(row.modules_json),
     checkout: {
-      monthly: String(row.stripe_monthly_price_id ?? "").startsWith("price_"),
-      annual: String(row.stripe_annual_price_id ?? "").startsWith("price_"),
+      monthly: Number(row.checkout_enabled ?? 0) === 1
+        && Number(row.monthly_price_cents ?? 0) > 0
+        && String(row.stripe_monthly_price_id ?? "").startsWith("price_"),
+      annual: Number(row.checkout_enabled ?? 0) === 1
+        && Number(row.annual_price_cents ?? 0) > 0
+        && String(row.stripe_annual_price_id ?? "").startsWith("price_"),
     },
   };
 }
@@ -92,9 +99,7 @@ export function currentPeriod() {
 }
 
 export function selfSignupEnabled() {
-  // Provisionamento é uma operação global auditada. Uma variável antiga não
-  // pode reabrir criação pública de identidade e workspace.
-  return false;
+  return String(process.env.FDP_ALLOW_SELF_SIGNUP ?? "").trim().toLowerCase() === "true";
 }
 
 export function workspaceSlug(name: string) {
