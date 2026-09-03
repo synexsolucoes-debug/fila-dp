@@ -45,6 +45,7 @@ export type StripeEventProjection = {
   customerId: string;
   subscriptionId: string;
   planCode: string;
+  planPriceId: string;
   billingInterval: "monthly" | "annual" | "";
   seatQuantity: number;
   subscriptionStatus: "trialing" | "active" | "past_due" | "paused" | "canceled" | "incomplete" | "";
@@ -85,6 +86,7 @@ export function projectStripeEvent(event: Stripe.Event): StripeEventProjection {
     customerId: objectId(object.customer),
     subscriptionId: event.type.startsWith("customer.subscription.") ? String(object.id ?? "") : objectId(object.subscription) || objectId(subscriptionDetails.subscription),
     planCode: String(metadata.planCode ?? metadata.plan_code ?? subscriptionMetadata.planCode ?? subscriptionMetadata.plan_code ?? "").toLowerCase(),
+    planPriceId: String(metadata.planPriceId ?? metadata.plan_price_id ?? subscriptionMetadata.planPriceId ?? subscriptionMetadata.plan_price_id ?? ""),
     billingInterval: rawInterval === "annual" ? "annual" : rawInterval === "monthly" ? "monthly" : "",
     seatQuantity: Math.max(1, Math.min(500, Number(metadata.seatQuantity ?? metadata.seat_quantity ?? 1) || 1)),
     subscriptionStatus: allowedStatuses.has(rawStatus) ? rawStatus as StripeEventProjection["subscriptionStatus"] : event.type === "checkout.session.completed" ? "active" : "",
@@ -101,4 +103,12 @@ export function projectStripeEvent(event: Stripe.Event): StripeEventProjection {
       paidAt: unixTimestamp(record(object.status_transitions).paid_at),
     } : null,
   };
+}
+
+/** O preço é de um pacote. Assentos são entitlement, nunca quantidade Stripe. */
+export function buildPackageLineItem(priceId: string): Stripe.Checkout.SessionCreateParams.LineItem {
+  if (!/^price_[A-Za-z0-9]+$/u.test(priceId)) {
+    throw new ApiError(409, "STRIPE_PRICE_NOT_CONFIGURED", "O preço deste plano não está configurado.");
+  }
+  return { price: priceId, quantity: 1 };
 }

@@ -6,6 +6,7 @@ const IDENTITY_FAILURE_LIMIT = 5;
 const ADDRESS_FAILURE_LIMIT = 30;
 
 type LimitRow = { blocked_until: string | Date | null };
+type ConsumedLimitRow = LimitRow & { failure_count: number };
 
 function limiterSecret() {
   return process.env.FDP_AUTH_SECRET ?? (process.env.NODE_ENV === "production" ? "" : "fila-dp-local-secret-change-me");
@@ -96,3 +97,49 @@ export const authRateLimitPolicy = {
   identityFailureLimit: IDENTITY_FAILURE_LIMIT,
   addressFailureLimit: ADDRESS_FAILURE_LIMIT,
 } as const;
+
+const publicPolicies = {
+  signup: { identityLimit: 4, addressLimit: 20, windowMinutes: 60 },
+  resend: { identityLimit: 3, addressLimit: 20, windowMinutes: 30 },
+} as const;
+
+async function consumePublicKey(hash: string, limit: number, windowMinutes: number) {
+  return getD1().prepare(`INSERT INTO fdp_auth_rate_limits
+      (key_hash, failure_count, window_started_at, blocked_until, updated_at)
+    VALUES (?, 1, CURRENT_TIMESTAMP, NULL, CURRENT_TIMESTAMP)
+    ON CONFLICT (key_hash) DO UPDATE SET
+      failure_count = CASE
+        WHEN fdp_auth_rate_limits.window_started_at <= CURRENT_TIMESTAMP - (? * INTERVAL '1 minute') THEN 1
+        ELSE fdp_auth_rate_limits.failure_count + 1
+      END,
+      window_started_at = CASE
+        WHEN fdp_auth_rate_limits.window_started_at <= CURRENT_TIMESTAMP - (? * INTERVAL '1 minute') THEN CURRENT_TIMESTAMP
+        ELSE fdp_auth_rate_limits.window_started_at
+      END,
+      blocked_until = CASE
+        WHEN fdp_auth_rate_limits.window_started_at <= CURRENT_TIMESTAMP - (? * INTERVAL '1 minute') THEN NULL
+        WHEN fdp_auth_rate_limits.failure_count + 1 >= ? THEN CURRENT_TIMESTAMP + (? * INTERVAL '1 minute')
+        ELSE fdp_auth_rate_limits.blocked_until
+      END,
+      updated_at = CURRENT_TIMESTAMP
+    RETURNING failure_count, blocked_until`)
+    .bind(hash, windowMinutes, windowMinutes, windowMinutes, limit, windowMinutes)
+    .first<ConsumedLimitRow>();
+}
+
+/** Consome limite por identidade e IP sem guardar nenhum dos dois em claro. */
+export async function consumePublicAuthRateLimit(
+  action: keyof typeof publicPolicies,
+  email: string,
+  address: string,
+) {
+  const policy = publicPolicies[action];
+  const rows = await Promise.all([
+    consumePublicKey(keyHash(`${action}:identity:${email}`), policy.identityLimit, policy.windowMinutes),
+    consumePublicKey(keyHash(`${action}:address:${address}`), policy.addressLimit, policy.windowMinutes),
+  ]);
+  const retryAfterSeconds = Math.max(...rows.map((row) => retryAfter(row?.blocked_until ?? null)));
+  return { allowed: retryAfterSeconds === 0, retryAfterSeconds };
+}
+
+export const publicAuthRateLimitPolicy = publicPolicies;

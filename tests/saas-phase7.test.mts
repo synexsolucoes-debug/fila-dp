@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { sanitizeOnboardingProfile, validBillingInterval, validOnboardingStep, validPlanCode } from "../lib/saas.ts";
 import { projectStripeEvent } from "../lib/stripe.ts";
+import "./saas-self-signup.cases.mts";
 
 test("phase 7 persists tenant SaaS state with RLS and append-only financial ledgers", async () => {
   const [schema, migration] = await Promise.all([
@@ -65,7 +66,7 @@ test("checkout uses server-owned prices and signed webhooks authenticate before 
   assert.match(requestSecurity, /\/api\/saas\/webhook\/stripe/);
 });
 
-test("somente o administrador global provisiona ou exclui workspace", async () => {
+test("autocadastro Starter e administração global usam mecanismos separados", async () => {
   const [signup, login, setup, platformAuth, platformRoute, deleteRoute] = await Promise.all([
     readFile(new URL("../app/api/auth/signup/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/login/route.ts", import.meta.url), "utf8"),
@@ -74,11 +75,11 @@ test("somente o administrador global provisiona ou exclui workspace", async () =
     readFile(new URL("../app/api/platform/workspaces/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/platform/workspaces/[id]/delete/route.ts", import.meta.url), "utf8"),
   ]);
-  assert.doesNotMatch(signup, /INSERT INTO fdp_workspaces|provisionWorkspaceDefaults/u);
-  assert.match(signup, /provisionados exclusivamente pelo administrador global/u);
+  assert.match(signup, /fdp_signup_requests/u);
+  assert.doesNotMatch(signup, /body\.workspaceId|body\.planId|body\.role|body\.capabilities|platform_admin/u);
   assert.doesNotMatch(login, /INSERT INTO fdp_workspaces|fdp_bootstrap_guard/u);
   assert.match(login, /isPlatformAdmin/u);
-  assert.match(setup, /setupRequired: false, signupEnabled: false/u);
+  assert.match(setup, /setupRequired: false, signupEnabled: selfSignupEnabled\(\)/u);
   assert.match(platformAuth, /FDP_PLATFORM_ADMIN_EMAILS/);
   assert.doesNotMatch(platformAuth, /workspace\.role|role === "admin"/);
   assert.match(platformRoute, /requirePlatformAdmin/u);
@@ -116,6 +117,6 @@ test("SaaS administration stays isolated in the global platform surface", async 
   assert.match(clients, /Catálogo de planos/u);
   assert.match(billing, /MRR|Receita em risco/u);
   assert.match(plansRoute, /requirePlatformAdmin/u);
-  assert.doesNotMatch(login, /signupEnabled|\/api\/auth\/signup|Criar conta/u);
+  assert.match(login, /\/cadastro/u);
   assert.doesNotMatch(`${platform}\n${clients}\n${billing}\n${login}`, /localStorage|sessionStorage|location\.reload/u);
 });
