@@ -811,6 +811,61 @@ test("exclusão lógica do pagamento PJ preserva auditoria e some da operação"
   assert.match(detail, /Cancelar lançamento/);
 });
 
+test("lançamento recorrente e lançamento mensal podem ser corrigidos onde são vistos", async () => {
+  /* Era um beco sem saída circular: o componente da competência recusava a
+     edição mandando "altere o lançamento fixo de origem", e a origem só sabia
+     nascer e morrer — não havia rota de edição em lugar nenhum. Aplicar um
+     reajuste passava por encerrar o item e cadastrar outro, trocando o
+     histórico de uma linha por duas. E o mensal só era editável dentro do
+     detalhamento do pagamento, que exige um fechamento já apurado. */
+  const [rota, entrada, secoes, view, componentes] = await Promise.all([
+    readFile(new URL("../app/api/registrations/contractors/[id]/fixed-items/[itemId]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/contractor-input.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/components/[id]/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  // Campo ausente preserva o que está gravado; não apaga.
+  assert.match(entrada, /export function readFixedItemEdit/u);
+  assert.match(rota, /amount = COALESCE\(\?::numeric, amount\)/u);
+  assert.match(rota, /FIXED_ITEM_NOTHING_TO_CHANGE/u);
+  // Encerrar continua sendo datar o fim, no mesmo verbo.
+  assert.match(rota, /status = CASE WHEN \?::text IS NULL THEN status ELSE 'ended' END/u);
+  // E a correção chega à folha sem esperar alguém apurar de novo.
+  assert.match(rota, /upsertContractorClosing/u);
+  assert.match(rota, /status NOT IN \('closed', 'paid'\)/u);
+  /* Quem cria o recorrente pela tela de Pagamentos precisa poder corrigi-lo
+     por lá: exigir a permissão do cadastro seria recusar o que o próprio
+     usuário lançou. */
+  assert.match(rota, /contractors\.payments\.manage/u);
+
+  // A mensagem que manda editar na origem só é honesta com a origem editável.
+  assert.match(componentes, /FIXED_COMPONENT_EDIT_REQUIRES_SOURCE/u);
+
+  // As duas listas de Ajustes ganham ação, na própria linha.
+  assert.match(secoes, /onEditFixedItem: \(itemId: string, providerId: string/u);
+  assert.match(secoes, /onEditEntry: \(componentId: string/u);
+  assert.match(view, /async function editFixedItem/u);
+  assert.match(view, /async function editMonthlyEntry/u);
+  assert.match(view, /fixed-items\/\$\{itemId\}/u);
+});
+
+test("o selo da competência segue a vigência, e não o marcador de encerrado", async () => {
+  /* O motor passou a decidir pela vigência; a tela ficou olhando o marcador.
+     Um determinado encerrado com data futura entra na folha e a lista diria
+     "fora da vigência" — a tela mentindo justamente sobre o caso que o defeito
+     original escondia. */
+  const secoes = await readFile(
+    new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    secoes,
+    /const appliesNow = item\.effectiveFrom <= competence\s*\n\s*&& \(item\.effectiveTo \? competence <= item\.effectiveTo : item\.status === "active"\);/u,
+  );
+});
+
 test("um prestador com problema não derruba a apuração da competência inteira", async () => {
   /* O laço apura em sequência. Qualquer recusa lá dentro — contrato sem saldo,
      fechamento travado, um valor que o banco não aceita — subia como erro da

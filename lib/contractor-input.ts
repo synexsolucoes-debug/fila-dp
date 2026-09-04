@@ -165,6 +165,65 @@ export function readFixedItemInput(body: Record<string, unknown>): FixedItemInpu
   };
 }
 
+/**
+ * A correção de um valor recorrente já cadastrado.
+ *
+ * Diferente da criação, aqui **campo ausente significa "não mexer"**, e não
+ * "apagar": quem corrige o valor de um plano de saúde não está pedindo para
+ * zerar a descrição junto. Por isso cada campo volta como `null` quando não
+ * veio, e o `COALESCE` da consulta preserva o que está gravado.
+ *
+ * A direção continua não sendo escolha independente — ela decorre do tipo —,
+ * então trocar a rubrica traz a direção nova junto.
+ */
+export type FixedItemEdit = {
+  amountCents: number | null;
+  description: string | null;
+  componentType: string | null;
+  direction: FixedItemDirection | null;
+  settlementTarget: ContractorSettlementTarget | null;
+  note: string | null;
+  /** Falso quando o corpo não pediu nenhuma alteração de conteúdo. */
+  temAlteracao: boolean;
+};
+
+export function readFixedItemEdit(body: Record<string, unknown>): FixedItemEdit {
+  const amountCents = optionalCents(body.amount, "Valor");
+  if (amountCents !== null && amountCents <= 0) {
+    throw ApiError.badRequest("Informe um valor maior que zero.", "COMPONENT_AMOUNT_REQUIRED");
+  }
+
+  const componentType = body.componentType === undefined || body.componentType === null || body.componentType === ""
+    ? null
+    : pickEnum(body.componentType, COMPONENT_TYPES, "Tipo do valor recorrente");
+  const direction = componentType === null
+    ? null
+    : componentDirectionFor(componentType as ContractorComponentType);
+
+  /* Descrição em branco é uma escolha legítima — a tela mostra o nome da
+     rubrica quando ela falta —, então o que distingue "apagar" de "não mexer"
+     é o campo ter vindo ou não, e não o texto ser vazio. */
+  const description = body.description === undefined ? null : cleanText(body.description, 180);
+  const note = body.note === undefined ? null : cleanText(body.note, 300);
+
+  /* A incidência só faz sentido em desconto, e ela é normalizada contra a
+     direção que vale depois da edição: trocar um desconto por um provento leva
+     a incidência de volta para `auto` na mesma operação. */
+  const settlementTarget = body.settlementTarget === undefined || body.settlementTarget === null
+    ? null
+    : contractorSettlementTarget(body.settlementTarget, direction ?? undefined);
+
+  return {
+    amountCents,
+    description,
+    componentType,
+    direction,
+    settlementTarget,
+    note,
+    temAlteracao: [amountCents, description, componentType, settlementTarget, note].some((value) => value !== null),
+  };
+}
+
 export type MovementInput = {
   movementType: MovementType;
   effectiveDate: string;

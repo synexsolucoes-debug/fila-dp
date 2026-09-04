@@ -37,6 +37,8 @@ process.env.FDP_DB_DRIVER ??= "pg";
 
 const { getScopedD1 } = await import("../db/index.ts");
 const { upsertContractorClosing } = await import("../lib/payment-service.ts");
+const { readFixedItemEdit } = await import("../lib/contractor-input.ts");
+const { fromCents } = await import("../lib/payments.ts");
 
 const workspaceId = `ws-apuracao-${randomUUID().slice(0, 8)}`;
 const competence = "2099-03";
@@ -179,7 +181,35 @@ async function main() {
     falhas.push(`o lançamento determinado entrou por ${materializado.amount} em vez de ${descontoDeterminado}`);
   }
 
-  console.log(`apurado ${Number(gravado.net_amount).toFixed(2)}; nota ${nota.toFixed(2)} + complemento ${complemento.toFixed(2)}; conferência ${gravado.invoice_review_status}; determinado na folha: ${materializado ? "sim" : "não"}`);
+  /* 5. Corrigir o valor do recorrente chega na folha.
+        Editar não existia: o componente da competência recusava a mudança
+        mandando "altere o lançamento fixo de origem", e a origem só sabia
+        nascer e morrer. Quem precisava aplicar um reajuste tinha de encerrar o
+        item e cadastrar outro — duas linhas no lugar de uma. O ensaio usa a
+        mesma leitura de entrada da rota, e reapura como ela reapura. */
+  const edicao = readFixedItemEdit({ amount: "150,00", description: "Determinado reajustado" });
+  await d1.prepare(`UPDATE fdp_contractor_fixed_items SET
+      amount = COALESCE(?::numeric, amount),
+      description = COALESCE(?, description),
+      updated_at = now()
+    WHERE workspace_id = ? AND id = ?`)
+    .bind(fromCents(edicao.amountCents), edicao.description, workspaceId, itemDeterminadoId).run();
+  const depois = await upsertContractorClosing(d1, { ...entrada, profile: await profile() });
+  const esperadoDepois = baseAmount - descontoComCentavos - 150;
+  if (Math.abs(depois.calculation.netAmount - esperadoDepois) > 0.005) {
+    falhas.push(`após corrigir o recorrente para 150,00 o líquido é ${depois.calculation.netAmount} — esperado ${esperadoDepois.toFixed(2)}`);
+  }
+  const corrigido = await d1.prepare(`SELECT amount, description FROM fdp_contractor_components
+    WHERE workspace_id = ? AND payroll_cycle_id = ? AND fixed_item_id = ?`)
+    .bind(workspaceId, cycleId, itemDeterminadoId).first();
+  if (!corrigido || Math.abs(Number(corrigido.amount) - 150) > 0.005) {
+    falhas.push(`a correção não chegou ao componente da competência: ${corrigido ? corrigido.amount : "linha ausente"}`);
+  }
+  if (corrigido && corrigido.description !== "Determinado reajustado") {
+    falhas.push(`a descrição corrigida não chegou à folha: ${corrigido.description}`);
+  }
+
+  console.log(`apurado ${Number(gravado.net_amount).toFixed(2)}; nota ${nota.toFixed(2)} + complemento ${complemento.toFixed(2)}; conferência ${gravado.invoice_review_status}; determinado na folha: ${materializado ? "sim" : "não"}; após corrigir: ${depois.calculation.netAmount.toFixed(2)}`);
 }
 
 try {
