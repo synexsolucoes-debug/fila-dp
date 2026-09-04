@@ -844,11 +844,41 @@ test("lançamento recorrente e lançamento mensal podem ser corrigidos onde são
   assert.match(componentes, /FIXED_COMPONENT_EDIT_REQUIRES_SOURCE/u);
 
   // As duas listas de Ajustes ganham ação, na própria linha.
-  assert.match(secoes, /onEditFixedItem: \(itemId: string, providerId: string/u);
+  assert.match(secoes, /onEditFixedItem: \(\s*itemId: string,\s*providerId: string/u);
   assert.match(secoes, /onEditEntry: \(componentId: string/u);
   assert.match(view, /async function editFixedItem/u);
   assert.match(view, /async function editMonthlyEntry/u);
   assert.match(view, /fixed-items\/\$\{itemId\}/u);
+});
+
+test("a incidência do desconto se escolhe na aba de Ajustes, e não só no detalhamento", async () => {
+  /* A escolha entre abater na nota ou no complemento nasceu no detalhamento do
+     pagamento, que só existe depois de apurar. Quem lança o desconto lança pela
+     aba de Ajustes — e ali a coluna não existia: era possível cadastrar o
+     desconto e impossível dizer de onde ele sai, no mesmo lugar. */
+  const [secoes, view, componentes] = await Promise.all([
+    readFile(new URL("../app/painel/features/payments/ContractorSections.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/components/[id]/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  // A coluna aparece nas duas listas — mensais e recorrentes.
+  assert.equal(secoes.match(/\{celulaIncidencia\(item\)\}/gu)?.length, 2);
+  assert.equal(secoes.match(/<th scope="col">Incidência<\/th>/gu)?.length, 2);
+  /* Provento não escolhe: aumentar a nota acima do limite é o que o limite
+     existe para impedir. A linha de crédito manda `auto` e mostra travessão. */
+  assert.match(secoes, /item\.direction !== "debit"\) return <td>—<\/td>/u);
+  assert.match(secoes, /settlementTarget: item\.direction === "debit" \? incidencia : "auto"/u);
+  // E a edição parte do que está gravado, não de `auto`.
+  assert.match(secoes, /setIncidencia\(settlementTarget \|\| "auto"\)/u);
+  assert.match(view, /settlementTarget: string/u);
+
+  /* Editar na linha manda só o que a linha tem. O UPDATE precisa preservar o
+     resto — antes ele gravava documento e observação como vieram, isto é,
+     vazios, e devolvia a quantidade para 1 em toda correção de centavo. */
+  assert.match(componentes, /document_reference = COALESCE\(\?, document_reference\)/u);
+  assert.match(componentes, /note = COALESCE\(\?, note\)/u);
+  assert.match(componentes, /component_quantity = COALESCE\(\?::numeric, component_quantity\)/u);
 });
 
 test("o selo da competência segue a vigência, e não o marcador de encerrado", async () => {

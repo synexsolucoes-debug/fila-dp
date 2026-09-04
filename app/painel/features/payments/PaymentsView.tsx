@@ -314,7 +314,10 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
    * Editar ali passava por encerrar o item e cadastrar outro, o que troca o
    * histórico de uma linha por duas.
    */
-  async function editMonthlyEntry(componentId: string, input: { amount: string; description: string }) {
+  async function editMonthlyEntry(
+    componentId: string,
+    input: { amount: string; description: string; settlementTarget: string },
+  ) {
     await mutate(`/api/payments/contractors/components/${componentId}`, {
       method: "PATCH",
       body: JSON.stringify(input),
@@ -337,7 +340,11 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     }, "Lançamento cancelado e pagamento reapurado.");
   }
 
-  async function editFixedItem(itemId: string, providerId: string, input: { amount: string; description: string }) {
+  async function editFixedItem(
+    itemId: string,
+    providerId: string,
+    input: { amount: string; description: string; settlementTarget: string },
+  ) {
     await mutate(`/api/registrations/contractors/${providerId}/fixed-items/${itemId}`, {
       method: "PATCH",
       body: JSON.stringify(input),

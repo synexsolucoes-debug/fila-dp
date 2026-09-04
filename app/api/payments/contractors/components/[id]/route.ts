@@ -61,12 +61,29 @@ export async function PATCH(request: Request, { params }: Params) {
       component.direction as ContractorComponentDirection,
     );
 
+    /* Campo ausente é campo intocado. A edição na linha da aba de Ajustes manda
+       só o que está na linha — valor, descrição e incidência —, e um UPDATE que
+       gravasse o resto como veio apagaria o documento e a observação de quem
+       corrigiu um centavo, além de devolver a quantidade para 1. */
+    const quantity = body.quantity === undefined || body.quantity === null
+      ? null
+      : Math.max(Number(body.quantity) || 1, 0);
+
     await d1.batch([
-      d1.prepare(`UPDATE fdp_contractor_components SET amount = ?, description = ?, component_quantity = ?, settlement_target = ?,
-          document_reference = ?, note = ?
+      d1.prepare(`UPDATE fdp_contractor_components SET
+          amount = ?,
+          description = COALESCE(?, description),
+          component_quantity = COALESCE(?::numeric, component_quantity),
+          settlement_target = ?,
+          document_reference = COALESCE(?, document_reference),
+          note = COALESCE(?, note)
         WHERE workspace_id = ? AND id = ? AND status = 'active'`)
-        .bind(amount, cleanText(body.description, 240), Math.max(Number(body.quantity) || 1, 0), settlementTarget,
-          cleanText(body.documentReference, 160), cleanText(body.note, 300), workspace.id, id),
+        .bind(amount,
+          body.description === undefined ? null : cleanText(body.description, 240),
+          quantity, settlementTarget,
+          body.documentReference === undefined ? null : cleanText(body.documentReference, 160),
+          body.note === undefined ? null : cleanText(body.note, 300),
+          workspace.id, id),
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
         action: "contractor_component.updated", entityType: "contractor_component", entityId: id,

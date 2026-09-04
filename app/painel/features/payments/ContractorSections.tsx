@@ -62,9 +62,13 @@ export type SectionProps = {
      edição em lugar nenhum: o componente da competência recusava a mudança
      mandando "altere o lançamento fixo de origem", e a origem só sabia nascer
      e morrer. */
-  onEditEntry: (componentId: string, input: { amount: string; description: string }) => void;
+  onEditEntry: (componentId: string, input: { amount: string; description: string; settlementTarget: string }) => void;
   onCancelEntry: (componentId: string) => void;
-  onEditFixedItem: (itemId: string, providerId: string, input: { amount: string; description: string }) => void;
+  onEditFixedItem: (
+    itemId: string,
+    providerId: string,
+    input: { amount: string; description: string; settlementTarget: string },
+  ) => void;
   onEndFixedItem: (itemId: string, providerId: string) => void;
   /** Abre a escolha de empresa antes de gerar o arquivo de avisos de NF. */
   onInvoiceNotice: () => void;
@@ -532,6 +536,27 @@ function ContractorApprovalPanel({ rows, permissions, busy, competence, competen
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Onde o desconto é abatido quando o pagamento se divide entre nota fiscal e
+ * complemento.
+ *
+ * O nome curto é o da coluna, que divide espaço com outras seis; a lista de
+ * edição usa a forma por extenso, porque ali a pessoa está decidindo e não
+ * conferindo. `auto` diz o que acontece — reduz o líquido — em vez de dizer
+ * "automática", que não responde nada a quem nunca viu a regra.
+ */
+const incidenciaCurta: Record<string, string> = {
+  auto: "Automática",
+  invoice: "Na nota",
+  complement: "No complemento",
+};
+
+const incidenciaOpcoes: Array<[string, string]> = [
+  ["auto", "Automática — reduz o líquido"],
+  ["invoice", "Dentro da nota fiscal"],
+  ["complement", "No complemento (Caju)"],
+];
+
+/**
  * Ajustes: os lançamentos da competência, nas três naturezas.
  *
  * A tela mostrava só os recorrentes, e quem lançava um desconto avulso não
@@ -553,12 +578,33 @@ function AdjustmentsSection(props: SectionProps) {
   const [editando, setEditando] = useState("");
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [incidencia, setIncidencia] = useState("auto");
   const podeEditar = permissions?.manage === true;
 
-  function abrir(id: string, amount: number, description: string) {
+  function abrir(id: string, amount: number, description: string, settlementTarget: string) {
     setEditando(id);
     setValor(String(amount).replace(".", ","));
     setDescricao(description);
+    setIncidencia(settlementTarget || "auto");
+  }
+
+  /* A incidência só existe para desconto: provento não escolhe onde incide,
+     porque aumentar a nota acima do limite configurado é justamente o que o
+     limite impede. Na linha de provento a coluna fica com o travessão, e não
+     com um seletor desabilitado que convida a tentar. */
+  function celulaIncidencia(item: { id: string; direction: string; settlementTarget: string }) {
+    if (item.direction !== "debit") return <td>—</td>;
+    if (editando !== item.id) {
+      return <td>{incidenciaCurta[item.settlementTarget || "auto"] ?? incidenciaCurta.auto}</td>;
+    }
+    return (
+      <td>
+        <select className={styles.inlineInput} value={incidencia} disabled={busy}
+          onChange={(event) => setIncidencia(event.target.value)} aria-label="Incidência do desconto">
+          {incidenciaOpcoes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </td>
+    );
   }
 
   return (
@@ -589,7 +635,8 @@ function AdjustmentsSection(props: SectionProps) {
             <thead>
               <tr>
                 <th scope="col">Prestador</th><th scope="col">Rubrica</th>
-                <th scope="col">Tipo</th><th scope="col">Valor</th><th scope="col">Documento</th>
+                <th scope="col">Tipo</th><th scope="col">Valor</th>
+                <th scope="col">Incidência</th><th scope="col">Documento</th>
                 {podeEditar && <th scope="col">Ações</th>}
               </tr>
             </thead>
@@ -615,13 +662,20 @@ function AdjustmentsSection(props: SectionProps) {
                         onChange={(event) => setValor(event.target.value)} aria-label="Valor do lançamento" />
                     ) : money(item.amount)}
                   </td>
+                  {celulaIncidencia(item)}
                   <td>{item.documentReference || "—"}</td>
                   {podeEditar && (
                     <td className={styles.rowActions}>
                       {editando === item.id ? (
                         <>
                           <button type="button" disabled={busy || !valor.trim()}
-                            onClick={() => { onEditEntry(item.id, { amount: valor, description: descricao }); setEditando(""); }}>
+                            onClick={() => {
+                              onEditEntry(item.id, {
+                                amount: valor, description: descricao,
+                                settlementTarget: item.direction === "debit" ? incidencia : "auto",
+                              });
+                              setEditando("");
+                            }}>
                             Salvar
                           </button>
                           <button type="button" disabled={busy} onClick={() => setEditando("")}>Cancelar</button>
@@ -629,7 +683,7 @@ function AdjustmentsSection(props: SectionProps) {
                       ) : (
                         <>
                           <button type="button" disabled={busy}
-                            onClick={() => abrir(item.id, item.amount, item.description)}>
+                            onClick={() => abrir(item.id, item.amount, item.description, item.settlementTarget)}>
                             <Pencil aria-hidden="true" /> Editar
                           </button>
                           <button type="button" disabled={busy} onClick={() => onCancelEntry(item.id)}>
@@ -677,7 +731,8 @@ function AdjustmentsSection(props: SectionProps) {
             <thead>
               <tr>
                 <th scope="col">Prestador</th><th scope="col">Rubrica</th><th scope="col">Tipo</th>
-                <th scope="col">Valor mensal</th><th scope="col">Vigência</th><th scope="col">Nesta competência</th>
+                <th scope="col">Valor mensal</th><th scope="col">Incidência</th>
+                <th scope="col">Vigência</th><th scope="col">Nesta competência</th>
                 {podeEditar && <th scope="col">Ações</th>}
               </tr>
             </thead>
@@ -711,6 +766,7 @@ function AdjustmentsSection(props: SectionProps) {
                           onChange={(event) => setValor(event.target.value)} aria-label="Valor mensal do recorrente" />
                       ) : money(item.amount)}
                     </td>
+                    {celulaIncidencia(item)}
                     <td>{item.effectiveFrom} → {item.effectiveTo || "sem término"}<small>{item.effectiveTo ? "Determinado" : "Fixo"}</small></td>
                     <td><span className={styles.badge} data-tone={appliesNow ? "validated" : "pending"}>{appliesNow ? "Aplicado" : "Fora da vigência"}</span></td>
                     {podeEditar && (
@@ -719,7 +775,10 @@ function AdjustmentsSection(props: SectionProps) {
                           <>
                             <button type="button" disabled={busy || !valor.trim()}
                               onClick={() => {
-                                onEditFixedItem(item.id, item.providerId, { amount: valor, description: descricao });
+                                onEditFixedItem(item.id, item.providerId, {
+                                  amount: valor, description: descricao,
+                                  settlementTarget: item.direction === "debit" ? incidencia : "auto",
+                                });
                                 setEditando("");
                               }}>
                               Salvar
@@ -729,7 +788,7 @@ function AdjustmentsSection(props: SectionProps) {
                         ) : (
                           <>
                             <button type="button" disabled={busy}
-                              onClick={() => abrir(item.id, item.amount, item.description)}>
+                              onClick={() => abrir(item.id, item.amount, item.description, item.settlementTarget)}>
                               <Pencil aria-hidden="true" /> Editar
                             </button>
                             {/* Encerrar continua sendo datar o fim, e por isso
