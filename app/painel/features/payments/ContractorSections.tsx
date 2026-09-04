@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Archive, ArrowRight, CalendarClock, Calculator, CheckCheck, CreditCard, Download, FileDown, FileSpreadsheet, FileText,
-  FolderOpen, MessageSquare, Plus, ReceiptText, RotateCcw, ShieldCheck, Users,
+  FolderOpen, MessageSquare, Pencil, Plus, ReceiptText, RotateCcw, ShieldCheck, Users,
 } from "lucide-react";
 import { CajuExportPanel } from "./CajuExportPanel";
 import { ContractorInvoicesSection } from "./ContractorInvoicesSection";
@@ -56,6 +56,16 @@ export type SectionProps = {
   onOpenDocuments: (providerId: string) => void;
   /** Abre a janela de lançamento com a natureza já escolhida (§55). */
   onNewEntry: (nature: "mensal" | "fixo" | "determinado") => void;
+  /* Correção do que já foi lançado, na própria lista de Ajustes.
+     Editar um lançamento exigia abrir o detalhamento do pagamento — que só
+     existe para quem já tem fechamento apurado —, e o recorrente não tinha
+     edição em lugar nenhum: o componente da competência recusava a mudança
+     mandando "altere o lançamento fixo de origem", e a origem só sabia nascer
+     e morrer. */
+  onEditEntry: (componentId: string, input: { amount: string; description: string }) => void;
+  onCancelEntry: (componentId: string) => void;
+  onEditFixedItem: (itemId: string, providerId: string, input: { amount: string; description: string }) => void;
+  onEndFixedItem: (itemId: string, providerId: string) => void;
   /** Abre a escolha de empresa antes de gerar o arquivo de avisos de NF. */
   onInvoiceNotice: () => void;
 };
@@ -530,9 +540,27 @@ function ContractorApprovalPanel({ rows, permissions, busy, competence, competen
  * repete, com a vigência dizendo até quando.
  */
 function AdjustmentsSection(props: SectionProps) {
-  const { overview, competence, competenceLabel, money, componentLabels, permissions, busy, onNewEntry } = props;
+  const {
+    overview, competence, competenceLabel, money, componentLabels, permissions, busy,
+    onNewEntry, onEditEntry, onCancelEntry, onEditFixedItem, onEndFixedItem,
+  } = props;
   const { fixedItems, monthlyEntries } = overview;
   const mensais = monthlyEntries.filter((item) => item.status !== "canceled");
+
+  /* A edição acontece na própria linha, e não numa janela: quem corrige um
+     valor está conferindo a lista inteira, e tirar a lista da frente para
+     mostrar um formulário obriga a decorar o que estava escrito ao lado. */
+  const [editando, setEditando] = useState("");
+  const [valor, setValor] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const podeEditar = permissions?.manage === true;
+
+  function abrir(id: string, amount: number, description: string) {
+    setEditando(id);
+    setValor(String(amount).replace(".", ","));
+    setDescricao(description);
+  }
+
   return (
     <>
     <section className={styles.fixedItemsPanel} aria-labelledby="monthly-entries-title">
@@ -542,7 +570,7 @@ function AdjustmentsSection(props: SectionProps) {
           <h3 id="monthly-entries-title">Mensais de {competenceLabel(competence)}</h3>
           <p>Valem só nesta competência. Os que vêm de um lançamento fixo aparecem na lista de baixo, não aqui.</p>
         </div>
-        {permissions?.manage ? (
+        {podeEditar ? (
           <button className={styles.primaryButton} type="button" disabled={busy}
             onClick={() => onNewEntry("mensal")}>
             <Plus aria-hidden="true" /> Novo lançamento
@@ -562,17 +590,55 @@ function AdjustmentsSection(props: SectionProps) {
               <tr>
                 <th scope="col">Prestador</th><th scope="col">Rubrica</th>
                 <th scope="col">Tipo</th><th scope="col">Valor</th><th scope="col">Documento</th>
+                {podeEditar && <th scope="col">Ações</th>}
               </tr>
             </thead>
             <tbody>
               {mensais.map((item) => (
                 <tr key={item.id}>
                   <th scope="row">{item.contractorName}</th>
-                  <td>{item.description || componentLabels[item.componentType] || item.componentType}
-                    <small>{componentLabels[item.componentType] || item.componentType}</small></td>
+                  <td>
+                    {editando === item.id ? (
+                      <input className={styles.inlineInput} value={descricao} disabled={busy}
+                        onChange={(event) => setDescricao(event.target.value)} aria-label="Descrição do lançamento" />
+                    ) : (
+                      <>
+                        {item.description || componentLabels[item.componentType] || item.componentType}
+                        <small>{componentLabels[item.componentType] || item.componentType}</small>
+                      </>
+                    )}
+                  </td>
                   <td>{item.direction === "credit" ? "Provento" : "Desconto"}</td>
-                  <td className={item.direction === "debit" ? styles.negative : undefined}>{money(item.amount)}</td>
+                  <td className={item.direction === "debit" ? styles.negative : undefined}>
+                    {editando === item.id ? (
+                      <input className={styles.inlineMoney} value={valor} inputMode="decimal" disabled={busy}
+                        onChange={(event) => setValor(event.target.value)} aria-label="Valor do lançamento" />
+                    ) : money(item.amount)}
+                  </td>
                   <td>{item.documentReference || "—"}</td>
+                  {podeEditar && (
+                    <td className={styles.rowActions}>
+                      {editando === item.id ? (
+                        <>
+                          <button type="button" disabled={busy || !valor.trim()}
+                            onClick={() => { onEditEntry(item.id, { amount: valor, description: descricao }); setEditando(""); }}>
+                            Salvar
+                          </button>
+                          <button type="button" disabled={busy} onClick={() => setEditando("")}>Cancelar</button>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" disabled={busy}
+                            onClick={() => abrir(item.id, item.amount, item.description)}>
+                            <Pencil aria-hidden="true" /> Editar
+                          </button>
+                          <button type="button" disabled={busy} onClick={() => onCancelEntry(item.id)}>
+                            Cancelar lançamento
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -588,7 +654,7 @@ function AdjustmentsSection(props: SectionProps) {
           <h3 id="fixed-items-title">Fixos e determinados</h3>
           <p>Entram automaticamente em cada competência dentro da vigência. Sem competência final, o lançamento é fixo; com ela, determinado.</p>
         </div>
-        {permissions?.manage ? (
+        {podeEditar ? (
           <button
             className={styles.secondaryButton}
             type="button"
@@ -612,20 +678,73 @@ function AdjustmentsSection(props: SectionProps) {
               <tr>
                 <th scope="col">Prestador</th><th scope="col">Rubrica</th><th scope="col">Tipo</th>
                 <th scope="col">Valor mensal</th><th scope="col">Vigência</th><th scope="col">Nesta competência</th>
+                {podeEditar && <th scope="col">Ações</th>}
               </tr>
             </thead>
             <tbody>
               {fixedItems.map((item) => {
-                const appliesNow = item.status === "active" && item.effectiveFrom <= competence
-                  && (!item.effectiveTo || competence <= item.effectiveTo);
+                /* Quem decide é a vigência, e não o marcador de encerrado.
+                   Encerrar grava a competência final e marca o item na mesma
+                   hora, inclusive quando essa competência ainda está à frente:
+                   olhar o marcador faria a tela dizer "fora da vigência" sobre
+                   um lançamento que a apuração está somando. */
+                const appliesNow = item.effectiveFrom <= competence
+                  && (item.effectiveTo ? competence <= item.effectiveTo : item.status === "active");
                 return (
                   <tr key={item.id}>
                     <th scope="row">{item.contractorName}</th>
-                    <td>{item.description || componentLabels[item.componentType] || item.componentType}<small>{componentLabels[item.componentType] || item.componentType}</small></td>
+                    <td>
+                      {editando === item.id ? (
+                        <input className={styles.inlineInput} value={descricao} disabled={busy}
+                          onChange={(event) => setDescricao(event.target.value)} aria-label="Descrição do recorrente" />
+                      ) : (
+                        <>
+                          {item.description || componentLabels[item.componentType] || item.componentType}
+                          <small>{componentLabels[item.componentType] || item.componentType}</small>
+                        </>
+                      )}
+                    </td>
                     <td>{item.direction === "credit" ? "Provento" : "Desconto"}</td>
-                    <td className={item.direction === "debit" ? styles.negative : undefined}>{money(item.amount)}</td>
+                    <td className={item.direction === "debit" ? styles.negative : undefined}>
+                      {editando === item.id ? (
+                        <input className={styles.inlineMoney} value={valor} inputMode="decimal" disabled={busy}
+                          onChange={(event) => setValor(event.target.value)} aria-label="Valor mensal do recorrente" />
+                      ) : money(item.amount)}
+                    </td>
                     <td>{item.effectiveFrom} → {item.effectiveTo || "sem término"}<small>{item.effectiveTo ? "Determinado" : "Fixo"}</small></td>
                     <td><span className={styles.badge} data-tone={appliesNow ? "validated" : "pending"}>{appliesNow ? "Aplicado" : "Fora da vigência"}</span></td>
+                    {podeEditar && (
+                      <td className={styles.rowActions}>
+                        {editando === item.id ? (
+                          <>
+                            <button type="button" disabled={busy || !valor.trim()}
+                              onClick={() => {
+                                onEditFixedItem(item.id, item.providerId, { amount: valor, description: descricao });
+                                setEditando("");
+                              }}>
+                              Salvar
+                            </button>
+                            <button type="button" disabled={busy} onClick={() => setEditando("")}>Cancelar</button>
+                          </>
+                        ) : (
+                          <>
+                            <button type="button" disabled={busy}
+                              onClick={() => abrir(item.id, item.amount, item.description)}>
+                              <Pencil aria-hidden="true" /> Editar
+                            </button>
+                            {/* Encerrar continua sendo datar o fim, e por isso
+                                some quando a data já foi dada: o que resta ali
+                                é mudar a data, no cadastro do prestador. */}
+                            {item.status === "active" ? (
+                              <button type="button" disabled={busy}
+                                onClick={() => onEndFixedItem(item.id, item.providerId)}>
+                                Encerrar
+                              </button>
+                            ) : null}
+                          </>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -637,7 +756,6 @@ function AdjustmentsSection(props: SectionProps) {
     </>
   );
 }
-
 /* -------------------------------------------------------------------------- */
 /* Limites de nota                                                             */
 /* -------------------------------------------------------------------------- */

@@ -304,6 +304,58 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     return true;
   }
 
+  /**
+   * Corrigir o que já foi lançado, direto da lista de Ajustes.
+   *
+   * Antes só havia um caminho para editar um lançamento: abrir o detalhamento
+   * do pagamento, que exige um fechamento já apurado. E o recorrente não tinha
+   * caminho nenhum — o componente da competência recusava a edição mandando
+   * "altere o lançamento fixo de origem", e a origem só sabia nascer e morrer.
+   * Editar ali passava por encerrar o item e cadastrar outro, o que troca o
+   * histórico de uma linha por duas.
+   */
+  async function editMonthlyEntry(componentId: string, input: { amount: string; description: string }) {
+    await mutate(`/api/payments/contractors/components/${componentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }, "Lançamento atualizado e pagamento reapurado.");
+  }
+
+  async function cancelMonthlyEntry(componentId: string) {
+    /* O motivo é exigido pela rota (mínimo de cinco caracteres) porque o
+       lançamento não é apagado: ele fica cancelado, e o histórico precisa
+       dizer por quê. */
+    const reason = window.prompt("Motivo do cancelamento deste lançamento:", "");
+    if (reason === null) return;
+    if (reason.trim().length < 5) {
+      setError("Descreva o motivo do cancelamento com pelo menos 5 caracteres.");
+      return;
+    }
+    await mutate(`/api/payments/contractors/components/${componentId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ reason: reason.trim() }),
+    }, "Lançamento cancelado e pagamento reapurado.");
+  }
+
+  async function editFixedItem(itemId: string, providerId: string, input: { amount: string; description: string }) {
+    await mutate(`/api/registrations/contractors/${providerId}/fixed-items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }, "Valor recorrente atualizado; competências abertas reapuradas.");
+  }
+
+  async function endFixedItem(itemId: string, providerId: string) {
+    const finalCompetence = window.prompt(
+      "Encerrar a partir de qual competência? (AAAA-MM)\n\nO valor deixa de entrar nas competências seguintes; a competência informada ainda recebe o lançamento.",
+      competence,
+    );
+    if (!finalCompetence) return;
+    await mutate(`/api/registrations/contractors/${providerId}/fixed-items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ effectiveTo: finalCompetence.trim() }),
+    }, "Valor recorrente encerrado.");
+  }
+
   async function deleteContractorClosing(closingId: string, reason: string) {
     const result = await mutate<{ closing: { id: string; excluded: boolean } }>(
       `/api/payments/contractors/closings/${closingId}`,
@@ -681,6 +733,10 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
             if (provider) setDocumentsContractor(provider);
           }}
           onNewEntry={(nature) => { setEntryError(""); setEntryNature(nature); setEntryOpen(true); }}
+          onEditEntry={(componentId, input) => void editMonthlyEntry(componentId, input)}
+          onCancelEntry={(componentId) => void cancelMonthlyEntry(componentId)}
+          onEditFixedItem={(itemId, providerId, input) => void editFixedItem(itemId, providerId, input)}
+          onEndFixedItem={(itemId, providerId) => void endFixedItem(itemId, providerId)}
           onInvoiceNotice={() => { setNoticeCompany(companyId); setNoticeOpen(true); }}
         />
       )}
