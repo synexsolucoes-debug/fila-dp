@@ -173,7 +173,7 @@ test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §
   // aba faria o cabeçalho do processo reanimar — e a troca de contexto, que é o
   // que a §69 quer comunicar, deixaria de se distinguir da troca de tela dentro
   // do contexto.
-  const contexto = source.indexOf('<section className="process-context"');
+  const contexto = source.indexOf('<section className="process-context ');
   const transicao = source.indexOf("<PageTransition transitionKey={view}");
   assert.ok(contexto > 0 && transicao > contexto,
     "o cabeçalho do processo precisa vir antes da transição, e fora dela");
