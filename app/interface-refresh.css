@@ -933,6 +933,35 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
 .operational-ui .sidebar-structure-summary strong { color: #FFFFFF; font-size: .8125rem; }
 .operational-ui .sidebar-structure-summary small { color: var(--ui-rail-icon); font-size: .6875rem; }
 
+/* O seletor de grupo, quando há mais de um.
+   Ele mora na barra escura, mas `dashboard-modern.css` o pinta com
+   `--ui-text`/`--ui-text-soft` — os tokens do *conteúdo*. Enquanto a casca
+   inteira era escura, esses dois eram claros e a conta fechava por acidente;
+   com o conteúdo em papel claro, eles viraram tinta escura sobre o menu
+   escuro: 1,03:1 no nome do grupo e 2,57:1 no papel, medidos pela auditoria
+   da CI em 53 telas. É a mesma classe de defeito que a barra já tinha em
+   `.sidebar-group-context` e `.sidebar-structure-summary`; aqui ela alcança o
+   último bolsão. Os tons abaixo são os da barra: 13,8:1, 5,5:1 e 8,0:1 sobre
+   o menu suspenso. */
+.operational-ui .sidebar-workspace-switcher ul {
+  border-color: var(--ui-rail-border);
+  background: var(--ui-rail-context);
+}
+.operational-ui .sidebar-workspace-switcher li button { color: var(--ui-rail-text); }
+.operational-ui .sidebar-workspace-switcher li button:hover:not(:disabled) { background: var(--ui-rail-hover); }
+.operational-ui :is(.sidebar-workspace-switcher strong, .sidebar-workspace button > span strong) { color: #FFFFFF; }
+.operational-ui :is(.sidebar-workspace-switcher small, .sidebar-workspace button > span small) { color: var(--ui-rail-icon); }
+.operational-ui .sidebar-workspace-switcher i { background: var(--ui-primary); color: #FFFFFF; }
+.operational-ui .sidebar-workspace-switcher li b { color: var(--ui-accent-on-ink); }
+.operational-ui .sidebar-workspace-switcher summary > svg { color: var(--ui-rail-icon); }
+
+/* Mesma origem, outro canto: a marca de "visitado recentemente" é o único
+   sinal que separa um atalho recente de um favorito, e `--ui-text-muted` sobre
+   a barra rende 2,5:1 — abaixo dos 3:1 que a WCAG 1.4.11 pede de indicador
+   não textual. */
+.operational-ui .sidebar-shortcut-mark { color: var(--ui-accent-on-ink); }
+.operational-ui .sidebar-shortcut-recent .sidebar-shortcut-mark { color: var(--ui-rail-icon); opacity: .85; }
+
 /* A conta fecha a barra: avatar da marca, nome, e as ações discretas ao lado. */
 .operational-ui .sidebar-account { padding-top: 12px; }
 .operational-ui .sidebar-account .user-avatar { background: var(--ui-primary); color: #FFFFFF; font-size: .75rem; }
@@ -1271,6 +1300,28 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
    é carregada depois, a trazia de volta flutuando por cima do cabeçalho. */
 @media (max-width: 780px) {
   .operational-ui .sidebar-group-context { display: none; }
+}
+
+@media (max-width: 780px) {
+  /* A faixa superior a 390px tinha seis controles disputando 366px, e o
+     perdedor era sempre o mesmo: o seletor de período sobrava com 15px de
+     largura — abaixo do alvo de 24×24 da WCAG 2.5.8, e pequeno demais para
+     acertar com o dedo. A auditoria da CI acusa isso em cinco telas, e acusava
+     antes desta mudança também: é defeito do arranjo da faixa, não do tema.
+     A trilha sai primeiro porque é a informação que a tela repete logo abaixo,
+     no título da página — os dois seletores não têm segunda chance. Com ela
+     fora, os dois dividem o espaço em partes iguais e nenhum encolhe abaixo do
+     alvo. */
+  .operational-ui .dashboard-location { display: none; }
+  /* O seletor de empresa volta a ser só o ícone, como `dashboard-modern.css`
+     já decidia para esta largura. Esta camada tinha lhe dado `min-width: 140px`
+     sem par para o celular, e o resultado era uma caixa de 140px exibindo um
+     ícone de 15px — espaço tomado de quem precisava dele. */
+  .operational-ui .header-company-select {
+    flex: 0 0 38px; width: 38px; min-width: 38px; padding: 0; justify-content: center;
+  }
+  .operational-ui .header-period-select { flex: 0 1 auto; min-width: 132px; }
+  .operational-ui .header-period-select select { min-width: 88px; }
 }
 
 @media (max-width: 760px) {
