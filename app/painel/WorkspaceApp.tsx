@@ -1414,7 +1414,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     const fixed = new Set<string>([...favorites, "overview"]);
     const recents = shortcuts.recents
       .filter((id): id is View => visible.has(id as View) && !fixed.has(id))
-      .slice(0, 3);
+      .slice(0, 2);
     return { favorites, recents };
   }, [shortcuts.favorites, shortcuts.recents, visibleViews]);
 
@@ -2314,7 +2314,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   </> : null;
 
   return (
-    <main className={`dashboard-shell theme-dark${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <main className={`dashboard-shell operational-ui theme-dark${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -2527,6 +2527,12 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 manda: exibi-lo no quadro sugeriria um recorte que o quadro não
                 aplica, e filtro que não filtra é pior que filtro nenhum. */}
             {view === "overview" && <label className="header-period-select"><CalendarClock aria-hidden="true" /><select aria-label="Selecionar período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as OverviewPeriod)}>{overviewPeriods.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}
+            {activeGroup && <button type="button" className="process-context-pin"
+              onClick={() => shortcuts.toggleFavorite(view)} aria-pressed={shortcuts.isFavorite(view)}
+              title={shortcuts.isFavorite(view) ? "Remover dos atalhos" : "Fixar nos atalhos"}>
+              <Star aria-hidden="true" />
+              <span className="sr-only">{shortcuts.isFavorite(view) ? `Remover ${header.title} dos atalhos` : `Fixar ${header.title} nos atalhos`}</span>
+            </button>}
             <button className="global-search-trigger" aria-label="Busca global" title="Busca global" onClick={() => setSearchOpen(true)}><Search aria-hidden="true" /><span>Buscar demanda, empresa ou CNPJ</span><kbd>⌘ K</kbd></button>
             <button aria-label="Notificações" title="Notificações" onClick={() => setNotificationsOpen(true)}><Bell aria-hidden="true" />{snapshot.notifications.some((item) => !item.readAt) && <i />}</button>
             <button className="help-button" aria-label="Abrir o assistente" title="Ajuda" onClick={() => setAssistantSignal((current) => current + 1)}><CircleHelp aria-hidden="true" /></button>
@@ -2559,44 +2565,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               </span>
             </p>
           )}
-          {/* Cabeçalho do processo (§69, §70).
-              Fica FORA da transição de módulo de propósito: trocar de aba
-              dentro do mesmo processo não pode fazer o cabeçalho dele piscar,
-              senão a troca de contexto — que é o que a §69 quer comunicar —
-              deixa de se distinguir da troca de tela dentro do contexto. */}
-          {/* Cabeçalho do processo (§69, §70), agora para todo processo.
-              Antes ele só aparecia quando o processo tinha mais de um módulo,
-              e o de um módulo só — Controle de EPI, com dez destinos próprios —
-              escondia os seus numa barra dentro do módulo, 200px abaixo e com
-              outro desenho. Eram duas gramáticas para "trocar de assunto dentro
-              do processo". Agora o cabeçalho é um só: ele mostra os módulos
-              quando há mais de um, e empresta o lugar ao módulo quando há um. */}
+          {/* Keep module navigation outside the remounted view. Single modules may supply their own tabs. */}
           {activeGroup && (
-            <section className="process-context" aria-label={`Processo ${activeGroup.label}`}>
-              <div className="process-context-identity">
-                <span aria-hidden="true">{(() => {
-                  const GroupIcon = processGroupIcons[activeGroup.id] ?? Blocks;
-                  return <GroupIcon />;
-                })()}</span>
-                <div>
-                  <strong>{activeGroup.label}</strong>
-                  <p>{activeGroup.description}</p>
-                </div>
-                {/* Onde se fixa um atalho (§67). Fica aqui, e não no menu,
-                    porque é aqui que a pessoa está quando descobre que volta
-                    sempre a esta tela — a decisão nasce do uso, não da lista. */}
-                <button type="button" className="process-context-pin"
-                  onClick={() => shortcuts.toggleFavorite(view)}
-                  aria-pressed={shortcuts.isFavorite(view)}
-                  title={shortcuts.isFavorite(view) ? "Remover dos atalhos" : "Fixar nos atalhos"}>
-                  <Star aria-hidden="true" />
-                  <span className="sr-only">
-                    {shortcuts.isFavorite(view)
-                      ? `Remover ${header.title} dos atalhos`
-                      : `Fixar ${header.title} nos atalhos`}
-                  </span>
-                </button>
-              </div>
+            <section className="process-context process-context-compact" aria-label={`Processo ${activeGroup.label}`}>
               {hasSubNavigation(activeGroup) ? (
                 <AnimatedTabs
                   label={`Módulos de ${activeGroup.label}`}
@@ -2635,8 +2606,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           </PageTransition> : <PageTransition transitionKey={view} className="view-transition">
           {/* A tela que desenha o próprio cabeçalho não recebe este (§41). */}
           {!header.ownHeader && <div className="dashboard-heading">
-            <div><span className="dashboard-eyebrow">{header.eyebrow}</span><h1>{view === "overview" ? `Olá, ${user.displayName.split(" ")[0] || "equipe"}.` : header.title}</h1><p>{view === "overview" ? "Veja as prioridades da operação e avance com segurança." : header.description}</p><div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div></div>
-            <div className="dashboard-date"><span>HOJE</span><strong>{today}</strong></div>
+            <div>
+              <h1>{header.title}</h1>
+              {!["overview", "board", "registrations"].includes(view) && <p>{header.description}</p>}
+            </div>
+            <div className="dashboard-heading-meta">
+              <div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div>
+              {view === "overview" && <div className="dashboard-date"><strong>{today}</strong></div>}
+            </div>
           </div>}
 
           {view === "overview" && <OverviewView integrations={snapshot.integrations}
@@ -2697,11 +2674,16 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                   <button type="button" className={`filter-chip ${assigneeFilter === currentMemberName ? "active" : ""}`} aria-pressed={assigneeFilter === currentMemberName} onClick={() => setAssigneeFilter((current) => current === currentMemberName ? "all" : currentMemberName)}>Minhas</button>
                   <button type="button" className={`filter-chip ${slaFilter === "overdue" ? "active" : ""}`} aria-pressed={slaFilter === "overdue"} onClick={() => setSlaFilter((current) => current === "overdue" ? "all" : "overdue")}>Atrasadas</button>
                   <button type="button" className={`filter-chip ${slaFilter === "warning" ? "active" : ""}`} aria-pressed={slaFilter === "warning"} onClick={() => setSlaFilter((current) => current === "warning" ? "all" : "warning")}>Hoje</button>
+                  <details className="board-filter-details">
+                    <summary>Filtros <span>{[assigneeFilter, companyFilter, processFilter, dueFilter, slaFilter].filter((value) => value !== "all").length || ""}</span><ChevronDown aria-hidden="true" /></summary>
+                    <div className="board-filter-fields">
                   <label><span>Responsável</span><select aria-label="Filtrar por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Todos</option>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label>
                   <label><span>Empresa</span><select aria-label="Filtrar por empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">Todas</option>{snapshot.companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
                   <label><span>Tipo</span><select aria-label="Filtrar por tipo de demanda" value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}><option value="all">Todos</option>{processTypes.map((process) => <option key={process}>{process}</option>)}</select></label>
                   <label><span>Prazo</span><select aria-label="Filtrar por prazo" value={dueFilter} onChange={(event) => setDueFilter(event.target.value)}><option value="all">Todos</option><option value="today">Vence hoje</option><option value="week">Próximos 7 dias</option><option value="overdue">Já atrasados</option></select></label>
                   <label><span>SLA</span><select aria-label="Filtrar por SLA" value={slaFilter} onChange={(event) => setSlaFilter(event.target.value)}><option value="all">Todos</option><option value="safe">No prazo</option><option value="warning">Vence hoje</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>
+                    </div>
+                  </details>
                   {(assigneeFilter !== "all" || slaFilter !== "all" || companyFilter !== "all" || processFilter !== "all" || dueFilter !== "all") && <button type="button" className="filter-clear" onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); setCompanyFilter("all"); setProcessFilter("all"); setDueFilter("all"); }}>Limpar</button>}
                 </div>
               </div>
@@ -2881,7 +2863,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
            dentro e Esc fecha. O que muda é a posição na tela. */
         <div className="workspace-modal-backdrop demand-drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
           <section className="workspace-modal card-modal demand-detail-modal demand-drawer" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
-            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}{selectedCard?.cancelledAt && <b className="demand-cancelled" title={selectedCard.cancellationReason}>CANCELADA</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Adicionar à fila"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}{selectedCard?.cancelledAt && <b className="demand-cancelled" title={selectedCard.cancellationReason}>CANCELADA</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Nova demanda"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
             {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "process" ? "active" : ""} onClick={() => setCardTab("process")}>Processo</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
             <div className="card-modal-body single">
               {selectedCard && (() => {
@@ -2951,6 +2933,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
               })()}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
+                <fieldset className="card-form-section full"><legend>Dados da demanda</legend>
                 {/* Origem da demanda (§10): o processo publicado.
                     A demanda é a EXECUÇÃO de um processo (§4), então escolher
                     qual vem antes de tudo. Agrupado por área porque é a área
@@ -3004,10 +2987,14 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                       {processTypeOptions.map((tipo) => <option key={tipo}>{tipo}</option>)}
                     </optgroup>
                   </select></label>}
+                </fieldset>
+                <fieldset className="card-form-section full"><legend>Vínculos</legend>
                 <label>Empresa<select value={cardForm.companyId} disabled={!canEdit} onChange={(event) => { const company = snapshot.companies.find((item) => item.id === event.target.value); setCardForm({ ...cardForm, companyId: event.target.value, company: company ? (company.tradeName || company.legalName) : cardForm.company }); }}><option value="">Sem empresa vinculada</option>{snapshot.companies.filter((company) => company.status === "active" || company.id === cardForm.companyId).map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}{company.taxId ? ` • ${company.taxId}` : ""}{company.status !== "active" ? " (inativa)" : ""}</option>)}</select></label>
                 {!selectedCard && <label>Colaborador<select value={cardForm.employeeId} disabled={!canEdit || employeeStartOptions === null} onChange={(event) => setCardForm({ ...cardForm, employeeId: event.target.value })}><option value="">{employeeStartOptions === null ? "Carregando..." : "Não informado"}</option>{(employeeStartOptions ?? []).filter((employee) => !cardForm.companyId || employee.company_id === cardForm.companyId).map((employee) => <option key={employee.id} value={employee.id}>{employee.social_name || employee.full_name} • {employee.registration_number}</option>)}</select></label>}
                 {!selectedCard && <label>Solicitante<select value={cardForm.requesterUserId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterUserId: event.target.value })}><option value="">Usuário atual</option>{snapshot.members.map((member) => <option key={member.userId} value={member.userId}>{member.name} • {member.email}</option>)}</select></label>}
                 {!selectedCard && <label>Competência<input type="month" value={cardForm.competence} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, competence: event.target.value })} /></label>}
+                </fieldset>
+                <fieldset className="card-form-section full"><legend>Prazo e responsáveis</legend>
                 <label>Área solicitante<select value={cardForm.requesterAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.requesterAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 <label>Área responsável<select value={cardForm.responsibleAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, responsibleAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.responsibleAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 {!cardForm.processVersionId && <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>}
@@ -3015,8 +3002,11 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>
                 {!cardForm.processVersionId && <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>}
                 <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
+                </fieldset>
+                <fieldset className="card-form-section full"><legend>Informações adicionais</legend>
                 <section className="card-choice-section full"><header><strong>Etiquetas</strong><span>Classifique sem alterar o processo</span></header><div className="choice-chips label-choices">{snapshot.labels.map((label) => <label className={cardForm.labelIds.includes(label.id) ? "selected" : ""} style={{ borderColor: cardForm.labelIds.includes(label.id) ? label.color : undefined }} key={label.id}><input type="checkbox" checked={cardForm.labelIds.includes(label.id)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, labelIds: event.target.checked ? [...cardForm.labelIds, label.id] : cardForm.labelIds.filter((id) => id !== label.id) })} /><i style={{ backgroundColor: label.color }} />{label.name}</label>)}</div></section>
-                {snapshot.customFields.map((field) => <label key={field.id}>{field.name}{field.fieldType === "select" ? <select value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })}><option value="">Selecione</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={field.fieldType === "date" ? "date" : field.fieldType === "number" ? "number" : "text"} value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })} />}</label>)}
+                {snapshot.customFields.map((field) => <label key={field.id}>{field.name}{field.name.trim().toLocaleLowerCase("pt-BR") === "competência" && <small className="card-form-hint">Campo personalizado do grupo</small>}{field.fieldType === "select" ? <select value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })}><option value="">Selecione</option>{field.options.map((option) => <option key={option}>{option}</option>)}</select> : <input type={field.fieldType === "date" ? "date" : field.fieldType === "number" ? "number" : "text"} value={cardForm.customValues[field.fieldKey] ?? ""} disabled={!canEdit} required={field.required} onChange={(event) => setCardForm({ ...cardForm, customValues: { ...cardForm.customValues, [field.fieldKey]: event.target.value } })} />}</label>)}
+                </fieldset>
                 <div className="card-form-actions full">{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="danger-link" onClick={archiveCard}>Arquivar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && !selectedCard.closedAt && <button type="button" className="danger-link" onClick={cancelCard}>Cancelar demanda</button>}{selectedCard && canEdit && !selectedCard.archived && <button type="button" className="secondary-button" onClick={() => void toggleSlaPause()}>{selectedCard.slaStatus === "paused" ? "Retomar SLA" : "Pausar SLA"}</button>}<span /><button type="button" className="secondary-button" onClick={() => setCardModalOpen(false)}>Fechar</button>{canEdit && !selectedCard?.archived && <button className="primary-button" disabled={busy}>{selectedCard ? "Salvar alterações" : "Criar demanda"}</button>}</div>
               </form>}
 
@@ -3160,22 +3150,9 @@ function ConnectionMap({ integrations, onNavigate }: {
   integrations: WorkspaceSnapshot["integrations"];
   onNavigate: (target: ActionTarget) => void;
 }) {
-  /* A peça mais característica do Modelo 2: a marca no centro e os sistemas em
-     volta. Para um produto chamado Vinculato, o desenho é a tese — mas só vale
-     se o que ele mostra for verdade.
-
-     A fonte é `snapshot.integrations`, o que ESTE grupo tem configurado, e não
-     o catálogo do site. O mockup trazia eSocial, FGTS Digital e Pontotel como
-     conectados; nenhum dos três existe no produto, e a §31 é explícita: uma
-     integração só aparece como disponível quando estiver homologada de ponta a
-     ponta. Desenhar linha para conector que não conecta seria vender a conexão
-     na tela de quem já é cliente.
-
-     Semanticamente é uma lista, não um desenho: o arranjo em torno do centro é
-     apresentação, e quem usa leitor de tela recebe nome, estado e última
-     sincronização em texto. */
+  // The overview summarizes connection state; configuration stays in Integrations.
   if (!integrations.length) {
-    return <section className="connection-map connection-map-empty" aria-label="Conexões">
+    return <section className="connection-summary connection-summary-empty" aria-label="Conexões">
       <h3>Conexões</h3>
       <p>Nenhum conector configurado neste grupo. As integrações disponíveis aparecem em Estado das integrações.</p>
       <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
@@ -3185,7 +3162,7 @@ function ConnectionMap({ integrations, onNavigate }: {
   const conectadas = integrations.filter((item) => item.status === "connected").length;
   const comErro = integrations.filter((item) => item.status === "error").length;
 
-  return <section className="connection-map" aria-label="Conexões">
+  return <section className="connection-summary" aria-label="Conexões">
     <header>
       <div>
         <span>CONEXÕES</span>
@@ -3197,8 +3174,7 @@ function ConnectionMap({ integrations, onNavigate }: {
       <button type="button" className="secondary-button" onClick={() => onNavigate("integrations")}>Ver integrações</button>
     </header>
 
-    <div className="connection-map-graph">
-      <p className="connection-map-hub" aria-hidden="true"><VinculatoLogo size={22} compact /></p>
+    <div className="connection-summary-list">
       <ul>
         {integrations.map((item) => {
           const tom = connectionTone(item.status);
@@ -3215,8 +3191,7 @@ function ConnectionMap({ integrations, onNavigate }: {
                   não vira data inventada: `lastSyncLabel(null)` diz "nunca
                   sincronizou". */}
             <button type="button" onClick={() => onNavigate("integrations")}
-              aria-label={`Abrir detalhes da integração ${item.displayName}`}>
-              <i aria-hidden="true" />
+              aria-label={`Ver integração ${item.displayName}`}>
               <span>
                 <strong>{item.displayName}</strong>
                 <small>{connectionStatusLabel(item.status)} · {lastSyncLabel(item.lastSyncAt)}
@@ -3438,13 +3413,11 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
         uma ação que ele mesmo não deixa tomar. */}
     <section className="overview-kpis" aria-label={`Indicadores da operação — ${scopeLabel}`}>
       {kpis.map((kpi) => {
-        const KpiIcon = kpi.icon;
         return <button type="button" key={kpi.key} data-metric={kpi.key}
           className={`overview-kpi${kpi.alert ? " requires-attention" : ""}`}
           onClick={() => onFocus(kpi.target, kpi.sla)}>
           <span className="overview-kpi-top">
             <span className="overview-kpi-label">{kpi.label}</span>
-            <i aria-hidden="true"><KpiIcon /></i>
           </span>
           <strong className="overview-kpi-value">{kpi.value}</strong>
           {/* Barra sem número para representar não deve ser desenhada. */}
@@ -3477,7 +3450,7 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
     <div className="overview-pair">
         <section className="overview-panel flows-panel" aria-labelledby="overview-flows-title">
         <header>
-          <div><span>EM EXECUÇÃO</span><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
+          <div><h2 id="overview-flows-title">Fluxos em andamento</h2></div>
           <button type="button" onClick={() => onFocus("processManagement", "all")}>Ver processos <ArrowRight aria-hidden="true" /></button>
         </header>
         <div className="overview-flow-list">
@@ -3541,7 +3514,7 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
 
       <section className="overview-panel obligations-panel" aria-labelledby="overview-obligations-title">
         <header>
-          <div><span>PRAZOS LEGAIS</span><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
+          <div><h2 id="overview-obligations-title">Próximos vencimentos</h2></div>
           <button type="button" onClick={() => onFocus("processes", "all")}>Ver calendário <ArrowRight aria-hidden="true" /></button>
         </header>
         <div className="overview-obligation-list">
@@ -3599,7 +3572,7 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
           quem renomeia "Em execução" para "Na fila" lê "Na fila" nesta aba. */}
       <section className="overview-panel status-panel" aria-labelledby="overview-status-title">
         <header>
-          <div><span>VOLUME POR STATUS</span><h2 id="overview-status-title">Demandas na operação</h2></div>
+          <div><h2 id="overview-status-title">Demandas na operação</h2></div>
           <button onClick={onOpenBoard}>Abrir demandas <ArrowRight aria-hidden="true" /></button>
         </header>
         {lists.length === 0
@@ -3670,7 +3643,7 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
         coluna" sem dizer QUAL demanda, e descobrir exigia abrir o histórico
         inteiro. Cinco colunas não cabem na coluna estreita da grade, então o
         bloco passa a ocupar a largura toda. */}
-    <section className="overview-panel activity-panel"><header><div><span>ATIVIDADES RECENTES</span><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
+    <section className="overview-panel activity-panel"><header><div><h2>Histórico da operação</h2></div><button type="button" onClick={() => onFocus("history", "all")}>Ver histórico completo <ArrowRight aria-hidden="true" /></button></header><div className="recent-activity-list">
       {activities.length === 0 && <div className="overview-empty"><Clock3 aria-hidden="true" /><strong>O histórico aparecerá aqui.</strong><p>As movimentações de demandas e documentos serão registradas automaticamente.</p></div>}
       {activities.length > 0 && <div className="overview-table-scroll">
         <table className="overview-table overview-activity-table">

@@ -63,12 +63,13 @@ test("estado sem conector é dito, não desenhado vazio", () => {
   assert.match(painel, /Nenhum conector configurado neste grupo/u);
 });
 
-test("o desenho é uma lista por baixo", () => {
+test("o resumo mantém uma lista acessível com estado e sincronização", () => {
   // Um SVG de linhas seria ilegível para leitor de tela — e é justamente a
   // informação que o diagrama existe para dar. O arranjo é apresentação.
   assert.match(codigo, /<ul>[\s\S]{0,400}integrations\.map/u);
   assert.match(codigo, /aria-label="Conexões"/u);
-  assert.match(codigo, /connection-map-hub[^>]*aria-hidden="true"/u);
+  assert.match(mapa, /connectionStatusLabel\(item\.status\)/u);
+  assert.match(mapa, /lastSyncLabel\(item\.lastSyncAt\)/u);
 });
 
 test("sem credencial e com erro não são a mesma coisa", () => {
