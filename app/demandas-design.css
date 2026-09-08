@@ -1,0 +1,195 @@
+/* Demandas: composição aprovada, com superfície clara e navegação navy.
+   O escopo mantém os demais módulos no tema atual durante a implantação. */
+.operational-ui.demands-design {
+  --layout-sidebar-width: 224px;
+  --ui-bg: #f6f8fc;
+  --ui-surface: #ffffff;
+  --ui-surface-elevated: #ffffff;
+  --ui-surface-muted: #edf2f8;
+  --ui-border: #dce3ee;
+  --ui-border-strong: #a8b8d0;
+  --ui-text: #172033;
+  --ui-text-soft: #52627b;
+  --ui-text-muted: #64748b;
+  --ui-primary: #365cf5;
+  --ui-primary-hover: #2547cc;
+  --ui-primary-soft: #edf1ff;
+  --ui-accent-text: #2547cc;
+  --ui-rail: #18223a;
+  --ui-rail-text: #d7dfef;
+  --ui-rail-icon: #b8c7e1;
+  --ui-rail-section: #acbbd5;
+  --ui-rail-border: #35435d;
+  --ui-rail-context: #202d47;
+  --ui-rail-hover: #253552;
+  --ui-rail-active: #2a4173;
+  --ui-rail-active-text: #ffffff;
+  --on-sidebar-text: #d7dfef;
+  --on-sidebar-muted: #acbbd5;
+  --on-sidebar-section: #acbbd5;
+  --ui-avatar-bg: #e6ecf7;
+  --ui-avatar-text: #253d6b;
+  --ui-shadow-card: none;
+  color-scheme: light;
+  background: var(--ui-bg);
+}
+body:has(.demands-design) { background: #f6f8fc; }
+.operational-ui.demands-design .dashboard-main { min-width: 0; background: var(--ui-bg); }
+.operational-ui.demands-design .dashboard-content { padding: 24px 28px 32px; }
+.operational-ui.demands-design .dashboard-header {
+  height: 64px; min-height: 64px; padding-inline: 28px;
+  background: #fff; border-bottom: 1px solid var(--ui-border); box-shadow: none;
+}
+.operational-ui.demands-design .dashboard-location { flex: 1 1 auto; color: var(--ui-text-soft); font-size: .875rem; }
+.operational-ui.demands-design .dashboard-location strong { color: var(--ui-text); }
+.operational-ui.demands-design .dashboard-header-actions { flex: 0 1 auto; }
+.operational-ui.demands-design .dashboard-header-actions > button:not(.header-profile) { background: transparent; color: var(--ui-text-soft); border: 0; }
+.operational-ui.demands-design .header-company-select { background: #fff; border: 1px solid var(--ui-border); border-radius: 6px; }
+.operational-ui.demands-design .header-company-select select { color: var(--ui-text); font-size: .875rem; }
+.operational-ui.demands-design .dashboard-header .global-search-trigger { width: 36px; flex: 0 0 36px; }
+.operational-ui.demands-design .global-search-trigger :is(span, kbd) { display: none; }
+.operational-ui.demands-design .dashboard-heading { margin: 0 0 20px; align-items: center; }
+.operational-ui.demands-design .dashboard-heading h1 { font-size: 1.875rem; font-weight: 650; letter-spacing: -.035em; }
+.operational-ui.demands-design .dashboard-heading p { font-size: .9375rem; margin-top: 6px; color: var(--ui-text-soft); }
+.operational-ui.demands-design .dashboard-heading-meta { gap: 16px; }
+.operational-ui.demands-design .dashboard-sync-status { max-width: 150px; font-size: .75rem; }
+.operational-ui.demands-design .demand-create-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 10px 18px; border: 1px solid var(--ui-primary);
+  border-radius: 6px; background: var(--ui-primary); color: #fff;
+  font-size: .9375rem; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.operational-ui.demands-design .demand-create-button:hover { background: var(--ui-primary-hover); }
+.operational-ui.demands-design .demand-create-button svg { width: 19px; height: 19px; }
+/* Os mesmos destinos seguem disponíveis no menu lateral. */
+.operational-ui.demands-design .process-context-compact { display: none; }
+.operational-ui.demands-design .dashboard-sidebar { background: var(--ui-rail); padding: 16px 12px 12px; border-right: 0; }
+.operational-ui.demands-design .dashboard-brand { margin: 14px 4px 24px; }
+.operational-ui.demands-design .sidebar-group-context { border: 1px solid var(--ui-rail-border); border-radius: 6px; padding: 12px; }
+.operational-ui.demands-design .sidebar-group-context > span { color: var(--ui-rail-section); font-size: .75rem; }
+.operational-ui.demands-design .sidebar-group-context strong { color: #fff; font-size: .875rem; margin-top: 5px; }
+.operational-ui.demands-design .dashboard-sidebar nav button { color: var(--ui-rail-text); border-radius: 5px; font-size: .875rem; line-height: 1.4; min-height: 40px; }
+.operational-ui.demands-design .dashboard-sidebar nav button svg { color: var(--ui-rail-icon); }
+.operational-ui.demands-design .dashboard-sidebar nav button.active { color: #fff; background: var(--ui-rail-active); }
+.operational-ui.demands-design .dashboard-sidebar nav button.active::before { display: none; }
+.operational-ui.demands-design .sidebar-nav-section { color: var(--ui-rail-section); font-size: .75rem; }
+.operational-ui.demands-design .sidebar-process-views { margin-left: 8px; border-color: var(--ui-rail-border); }
+.operational-ui.demands-design :is(.sidebar-workspace, .sidebar-account, .sidebar-workspace-switcher) { border-color: var(--ui-rail-border); }
+.operational-ui.demands-design .sidebar-account strong { color: #fff; }
+.operational-ui.demands-design .sidebar-account small { color: var(--ui-rail-section); }
+.operational-ui.demands-design .sidebar-workspace:not(.sidebar-workspace-switcher) { display: none; }
+.operational-ui.demands-design .demand-summary {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center;
+  min-height: 56px; margin-bottom: 18px; padding: 12px 0;
+  border: 1px solid var(--ui-border); border-radius: 6px; background: #fff;
+}
+.operational-ui.demands-design .demand-summary > span {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 7px;
+  padding: 0 12px; border-right: 1px solid var(--ui-border); color: var(--ui-text-soft); font-size: .875rem;
+}
+.operational-ui.demands-design .demand-summary > span:last-child { border: 0; }
+.operational-ui.demands-design .demand-summary strong { font-size: 1.0625rem; font-variant-numeric: tabular-nums; color: var(--ui-text); }
+.operational-ui.demands-design .demand-summary i { width: 7px; height: 7px; border-radius: 50%; }
+.operational-ui.demands-design .demand-summary i.overdue { background: #c62e3b; }
+.operational-ui.demands-design .demand-summary i.warning { background: #a76508; }
+.operational-ui.demands-design .dashboard-board-head { gap: 14px; padding: 0; margin-bottom: 16px; }
+.operational-ui.demands-design .demand-view-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; border-bottom: 1px solid var(--ui-border); }
+.operational-ui.demands-design .demand-quick-filters { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.operational-ui.demands-design .demand-quick-filters button { padding: 14px 4px; border: 0; border-bottom: 3px solid transparent; background: transparent; font-size: .875rem; color: var(--ui-text-soft); cursor: pointer; }
+.operational-ui.demands-design .demand-quick-filters button.active { color: #2547cc; border-bottom-color: var(--ui-primary); font-weight: 600; }
+.operational-ui.demands-design .board-mode-tabs { width: auto; padding: 0; gap: 0; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; margin: 0 0 6px; }
+.operational-ui.demands-design .board-mode-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; min-height: 36px; padding: 6px 10px; border: 0; border-right: 1px solid var(--ui-border); border-radius: 0; box-shadow: none; background: transparent; color: var(--ui-text-soft); font-size: .875rem; }
+.operational-ui.demands-design .board-mode-tabs button:last-child { border: 0; }
+.operational-ui.demands-design .board-mode-tabs button.active { background: var(--ui-primary-soft); color: #2547cc; box-shadow: inset 0 -2px var(--ui-primary); }
+.operational-ui.demands-design .board-mode-tabs svg { width: 16px; height: 16px; }
+.operational-ui.demands-design .demand-toolbar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+.operational-ui.demands-design .demand-toolbar > label { flex: 1 1 130px; min-width: 0; max-width: 220px; }
+.operational-ui.demands-design .demand-toolbar :is(input, select) { width: 100%; min-width: 0; height: 40px; padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; color: var(--ui-text); font-size: .875rem; }
+.operational-ui.demands-design .demand-toolbar > .demand-search { flex: 2 1 220px; display: flex; align-items: center; gap: 8px; max-width: none; height: 40px; padding: 0 12px; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; }
+.operational-ui.demands-design .demand-search svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--ui-text-muted); }
+.operational-ui.demands-design .demand-search input { border: 0; height: 38px; padding: 0; background: transparent; }
+.operational-ui.demands-design .board-filter-details { flex: 0 0 auto; position: relative; }
+.operational-ui.demands-design .board-filter-details summary { min-height: 40px; background: #fff; font-size: .875rem; }
+.operational-ui.demands-design .board-filter-fields { position: absolute; top: calc(100% + 8px); right: 0; z-index: 8; width: 300px; max-width: calc(100vw - 32px); grid-template-columns: 1fr 1fr; padding: 16px; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; box-shadow: 0 8px 24px #18223a14; }
+.operational-ui.demands-design .demand-archive { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 10px; border: 0; background: transparent; color: var(--ui-text-soft); font-size: .875rem; cursor: pointer; }
+.operational-ui.demands-design .demand-archive svg { width: 16px; height: 16px; }
+.operational-ui.demands-design .demand-archive b { font-size: .75rem; font-weight: 500; }
+.operational-ui.demands-design .demand-filter-result { display: flex; align-items: center; gap: 16px; font-size: .875rem; color: var(--ui-text-soft); }
+.operational-ui.demands-design .demand-filter-result button { padding: 4px 0; border: 0; background: none; color: #2547cc; font-size: .875rem; text-decoration: underline; cursor: pointer; }
+.operational-ui.demands-design .dashboard-kanban { padding: 0 0 14px; gap: 12px; grid-auto-columns: minmax(264px, 1fr); align-items: stretch; }
+.operational-ui.demands-design .dashboard-column { min-width: 0; min-height: max(350px, calc(100dvh - 335px)); border: 1px solid #e8edf5; border-radius: 6px; background: #edf2f8; box-shadow: none; }
+.operational-ui.demands-design .dashboard-column > header { height: 48px; min-height: 48px; padding: 10px 12px; border: 0; gap: 6px; }
+.operational-ui.demands-design .dashboard-column > header > span { color: var(--ui-text); font-size: .9375rem; font-weight: 600; }
+.operational-ui.demands-design .dashboard-column > header > span i { display: none; }
+.operational-ui.demands-design .dashboard-column > header b { background: #dce4f0; color: #344563; font-size: .8125rem; }
+.operational-ui.demands-design .dashboard-card-list { padding: 0 8px 8px; }
+.operational-ui.demands-design .dashboard-task { display: flex; flex-direction: column; padding: 14px; margin-bottom: 10px; border: 1px solid #d7e1ee; border-radius: 6px; background: #fff; box-shadow: none; }
+.operational-ui.demands-design .dashboard-task:hover { transform: none; border-color: #92a8d6; box-shadow: 0 2px 6px #18223a09; }
+.operational-ui.demands-design .dashboard-task h2 { order: -2; margin: 0 0 5px; font-size: 1rem; font-weight: 600; line-height: 1.45; }
+.operational-ui.demands-design .dashboard-task > p { order: -1; font-size: .875rem; margin: 0 0 10px; color: var(--ui-text-soft); }
+.operational-ui.demands-design .dashboard-task > p small { display: none; }
+.operational-ui.demands-design .dashboard-task-labels { margin: 0 0 8px; }
+.operational-ui.demands-design .dashboard-task-labels span { font-size: .75rem; letter-spacing: 0; padding: 3px 5px; }
+.operational-ui.demands-design .dashboard-task-labels .dashboard-card-reference { color: var(--ui-text-muted); background: transparent; font-weight: 500; }
+.operational-ui.demands-design .demand-checklist-progress { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.operational-ui.demands-design .demand-checklist-progress progress { appearance: none; flex: 1; min-width: 0; width: 60px; height: 6px; border: 0; border-radius: 6px; overflow: hidden; background: #dbe3ef; }
+.operational-ui.demands-design .demand-checklist-progress progress::-webkit-progress-bar { background: #dbe3ef; }
+.operational-ui.demands-design .demand-checklist-progress progress::-webkit-progress-value { background: var(--ui-primary); border-radius: 6px; }
+.operational-ui.demands-design .demand-checklist-progress progress::-moz-progress-bar { background: var(--ui-primary); }
+.operational-ui.demands-design .demand-checklist-progress span { font-size: .8125rem; color: var(--ui-text-soft); white-space: nowrap; }
+.operational-ui.demands-design .dashboard-task-bottom { margin-top: auto; padding-top: 12px; border: 0; gap: 8px; }
+.operational-ui.demands-design .dashboard-sla { padding: 3px 0; background: transparent; box-shadow: none; font-size: .875rem; }
+.operational-ui.demands-design .dashboard-sla.overdue { color: #b42335; }
+.operational-ui.demands-design .dashboard-sla.warning { color: #945800; }
+.operational-ui.demands-design .dashboard-sla.completed { color: #087c5a; }
+.operational-ui.demands-design .dashboard-sla.paused { color: var(--ui-text-soft); }
+.operational-ui.demands-design .dashboard-task-owner b { font-size: .75rem; max-width: 88px; }
+.operational-ui.demands-design .dashboard-mini-avatar { width: 30px; height: 30px; background: #e6ecf7; color: #253d6b; font-size: .8125rem; }
+.operational-ui.demands-design :is(.dashboard-check, .dashboard-comments) { font-size: .75rem; }
+.operational-ui.demands-design .dashboard-add-card { min-height: 38px; padding: 8px; border: 1px dashed #b9c8de; border-radius: 5px; color: #2547cc; background: transparent; font-size: .875rem; }
+.operational-ui.demands-design .demand-column-empty { padding: 18px 10px; margin: 0; color: var(--ui-text-muted); font-size: .875rem; text-align: center; }
+.operational-ui.demands-design :is(button, select, input, summary):focus-visible { outline: 2px solid #365cf5; outline-offset: 3px; }
+@media (min-width: 761px) and (max-width: 1200px) {
+  .operational-ui.demands-design .dashboard-content { padding-inline: 20px; }
+  .operational-ui.demands-design .dashboard-sync-status { max-width: 125px; }
+  .operational-ui.demands-design .demand-view-row { align-items: flex-start; }
+  .operational-ui.demands-design .dashboard-kanban { grid-auto-columns: 280px; }
+}
+@media (max-width: 760px) {
+  .operational-ui.demands-design .dashboard-content { padding: 18px 14px 96px; }
+  .operational-ui.demands-design .dashboard-header { padding-inline: 12px; }
+  .operational-ui.demands-design .dashboard-location { display: none; }
+  .operational-ui.demands-design .dashboard-header-actions { flex: 1; }
+  .operational-ui.demands-design .dashboard-heading { gap: 14px; }
+  .operational-ui.demands-design .dashboard-heading h1 { font-size: 1.625rem; }
+  .operational-ui.demands-design .dashboard-heading p { font-size: .875rem; }
+  .operational-ui.demands-design .dashboard-heading-meta { width: 100%; justify-content: space-between; }
+  .operational-ui.demands-design .demand-summary { grid-template-columns: 1fr 1fr; gap: 14px 0; padding: 14px 0; }
+  .operational-ui.demands-design .demand-summary > span { justify-content: flex-start; }
+  .operational-ui.demands-design .demand-summary > span:nth-child(2) { border: 0; }
+  .operational-ui.demands-design .demand-quick-filters { gap: 0 10px; }
+  .operational-ui.demands-design .board-mode-tabs { width: 100%; }
+  .operational-ui.demands-design .board-mode-tabs button { flex: 1; padding-inline: 6px; }
+  .operational-ui.demands-design .board-mode-tabs svg { display: none; }
+  .operational-ui.demands-design .demand-toolbar > label { max-width: none; flex: 1 1 130px; }
+  .operational-ui.demands-design .demand-toolbar > .demand-search { flex-basis: 100%; }
+  .operational-ui.demands-design .demand-toolbar :is(input, select) { font-size: 16px; }
+  .operational-ui.demands-design .board-filter-fields { right: auto; left: 0; }
+  .operational-ui.demands-design .dashboard-kanban { grid-auto-columns: min(310px, calc(100vw - 44px)); scroll-snap-type: x proximity; }
+  .operational-ui.demands-design .dashboard-column { scroll-snap-align: start; }
+  .operational-ui.demands-design .dashboard-sidebar { padding: 0; }
+  .operational-ui.demands-design .dashboard-sidebar nav { background: var(--ui-rail); }
+}
+
+/* Navegação direta na tela aprovada; catálogo completo continua acessível. */
+.operational-ui.demands-design .demand-desktop-nav { display: none; }
+@media (min-width: 761px) {
+  .operational-ui.demands-design .dashboard-sidebar nav > :not(.demand-desktop-nav) { display: none; }
+  .operational-ui.demands-design .demand-desktop-nav { display: grid; gap: 22px; min-width: 0; }
+  .operational-ui.demands-design .demand-other-modules summary { display: flex; align-items: center; gap: 10px; padding: 10px; color: var(--ui-rail-text); cursor: pointer; font-size: .875rem; list-style: none; }
+  .operational-ui.demands-design .demand-other-modules summary::-webkit-details-marker { display: none; }
+  .operational-ui.demands-design .demand-other-modules summary svg { width: 20px; height: 20px; flex: 0 0 auto; }
+  .operational-ui.demands-design .demand-other-modules > div { padding-top: 8px; }
+  .operational-ui.demands-design.sidebar-collapsed .demand-other-modules summary span { display: none; }
+  .operational-ui.demands-design.sidebar-collapsed .dashboard-sidebar nav button { padding-inline: 0; justify-content: center; font-size: 0; gap: 0; }
+}

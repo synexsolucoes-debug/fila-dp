@@ -141,7 +141,7 @@ test("a ação primária da barra é declarada, nunca deduzida por exclusão", (
   const codigo = source.replace(/\/\*[\s\S]*?\*\//gu, "").replace(/\/\/[^\n]*/gu, "");
   assert.doesNotMatch(codigo, /view !== "registrations"/u,
     "a cadeia de negações é o que fazia uma tela nova nascer com o botão errado");
-  assert.match(source, /\{canEdit && primaryAction && <button className="new-demand"/u);
+  assert.match(source, /\{canEdit && primaryAction && !usesDemandDesign && <button className="new-demand"/u);
 
   // Só as telas cujo objeto é a demanda oferecem o botão. As outras têm os
   // próprios comandos: um botão genérico ali criaria dois caminhos para a mesma
