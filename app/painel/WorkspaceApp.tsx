@@ -928,6 +928,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const [periodFilter, setPeriodFilter] = useState<OverviewPeriod>("all");
   const [processFilter, setProcessFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
+  const [boardSearch, setBoardSearch] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberName, setMemberName] = useState("");
   const [memberRole, setMemberRole] = useState<WorkspaceRole>("member");
@@ -959,27 +960,13 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   const touchCardMoveRef = useRef<{ cardId: string; x: number; y: number } | null>(null);
   const suppressCardOpenRef = useRef<string | null>(null);
 
-  /**
-   * Tema (§7).
-   *
-   * O Vinculato tem um tema só, e ele é escuro — decisão de produto, tomada
-   * depois de o claro existir e ser avaliado. O que sobra aqui é a única parte
-   * que o CSS não resolve sozinho: `color-scheme` é o que faz a barra de
-   * rolagem, o seletor de data e os demais controles nativos do navegador
-   * acompanharem o tema. Sem ele, o painel escuro abre um calendário branco.
-   *
-   * A escala clara continua declarada em `dashboard-modern.css` porque é a
-   * camada base sobre a qual as regras `.theme-dark` escrevem — apagá-la
-   * exigiria reescrever cada regra do painel, e o resultado na tela seria
-   * exatamente o mesmo.
-   */
+  // Demandas usa a superfície clara aprovada; os outros módulos mantêm o tema atual.
+  const usesDemandDesign = view === "board" && !administrationOpen;
   useEffect(() => {
-    document.documentElement.style.colorScheme = "dark";
-    // A escolha de quem experimentou a alternância enquanto ela existiu não
-    // pode sobreviver a ela: sem esta linha, um valor guardado ficaria no
-    // navegador da pessoa sem nada que o leia nem o apague.
-    window.localStorage.removeItem("vinculato-theme");
-  }, []);
+    const previous = document.documentElement.style.colorScheme;
+    document.documentElement.style.colorScheme = usesDemandDesign ? "light" : "dark";
+    return () => { document.documentElement.style.colorScheme = previous; };
+  }, [usesDemandDesign]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -1334,7 +1321,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
     const weekEnd = todayStart + 7 * 24 * 60 * 60 * 1000;
+    const search = boardSearch.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
     return activeCards.filter((card) => {
+      const searchable = [card.title, card.company, card.processType, referenceLabel(card), card.assigneeName, ...card.assignees.map((assignee) => assignee.name)].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
       const dueAt = card.dueAt ? new Date(card.dueAt).getTime() : Number.NaN;
       const dueMatches = dueFilter === "all" ||
         (dueFilter === "today" && dueAt >= todayStart && dueAt < tomorrowStart) ||
@@ -1344,9 +1333,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
         (slaFilter === "all" || card.slaStatus === slaFilter) &&
         (companyFilter === "all" || card.companyId === companyFilter) &&
         (processFilter === "all" || card.processType === processFilter) &&
-        dueMatches;
+        dueMatches && (!search || searchable.includes(search));
     });
-  }, [activeCards, assigneeFilter, companyFilter, dueFilter, processFilter, slaFilter]);
+  }, [activeCards, assigneeFilter, companyFilter, dueFilter, processFilter, slaFilter, boardSearch]);
   const selectedCard = useMemo(() => allCards.find((card) => card.id === selectedCardId) ?? null, [allCards, selectedCardId]);
   const assignees = useMemo(() => Array.from(new Set(activeCards.flatMap((card) => card.assignees.length ? card.assignees.map((assignee) => assignee.name) : [card.assigneeName]).filter(Boolean))).sort(), [activeCards]);
   const processTypes = useMemo(() => Array.from(new Set(activeCards.map((card) => card.processType).filter(Boolean))).sort(), [activeCards]);
@@ -1443,6 +1432,18 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
       activeCompanies: snapshot?.companies.filter((company) => company.status === "active").length ?? 0,
     };
   }, [scopedCards, snapshot]);
+
+  const boardSummary = useMemo(() => {
+    const cards = activeCards.filter((card) => companyFilter === "all" || card.companyId === companyFilter);
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return {
+      open: cards.filter((card) => card.slaStatus !== "completed").length,
+      overdue: cards.filter((card) => card.slaStatus === "overdue").length,
+      today: cards.filter((card) => card.slaStatus !== "completed" && card.dueAt?.slice(0, 10) === todayKey).length,
+      waiting: cards.filter((card) => card.slaStatus === "paused").length,
+    };
+  }, [activeCards, companyFilter]);
 
   function applySnapshot(next: WorkspaceSnapshot, message?: string) {
     setSnapshot(next);
@@ -2314,7 +2315,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   </> : null;
 
   return (
-    <main className={`dashboard-shell operational-ui theme-dark${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view}>
+    <main className={`dashboard-shell operational-ui ${usesDemandDesign ? "demands-design" : "theme-dark"}${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -2330,6 +2331,29 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           <small>{principalCompany ? `Principal: ${principalCompany.tradeName || principalCompany.legalName}` : "Defina a empresa principal"}</small>
         </div>
         <nav aria-label="Navegação do painel">
+          {usesDemandDesign && <div className="demand-desktop-nav">
+            {([
+              { label: "OPERAÇÃO", views: ["overview", "board", "processManagement", "processes", "planner"] },
+              { label: "GESTÃO", views: ["registrations", "integrations", "indicators"] },
+            ] as { label: string; views: View[] }[]).map((section) => <div className="sidebar-nav-group" key={section.label}>
+              <span className="sidebar-nav-section">{section.label}</span>
+              {section.views.filter((id) => visibleViews.includes(id)).map((id) => {
+                const entry = viewCatalog[id];
+                const Icon = entry.icon;
+                return <button type="button" key={id} title={entry.label} className={`sidebar-nav-item ${view === id ? "active" : ""}`} onClick={() => setView(id)} aria-current={view === id ? "page" : undefined}><span aria-hidden="true"><Icon /></span>{entry.label}</button>;
+              })}
+            </div>)}
+            <details className="demand-other-modules">
+              <summary title="Todos os módulos"><MoreHorizontal aria-hidden="true" /><span>Todos os módulos</span></summary>
+              <div>{visibleViews.map((id) => {
+                const entry = viewCatalog[id];
+                const Icon = entry.icon;
+                return <button type="button" key={id} title={entry.label} className="sidebar-nav-item" onClick={() => setView(id)}><span aria-hidden="true"><Icon /></span>{entry.label}</button>;
+              })}</div>
+            </details>
+            <button type="button" className="sidebar-nav-item" title="Configurações" onClick={openWorkspaceSettings}><span aria-hidden="true"><Settings /></span>Configurações</button>
+          </div>}
+
           {/* A home fica fora de qualquer processo: ela é a porta para todos.
               Pô-la dentro de um deles diria que a visão da operação pertence a
               um processo específico, e ela é justamente o contrário. */}
@@ -2545,7 +2569,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 A versão anterior aparecia por negação — seis `view !== "…"` —,
                 então uma tela nova nascia com "Nova demanda" no topo mesmo sem
                 ter demanda nenhuma para criar. */}
-            {canEdit && primaryAction && <button className="new-demand"
+            {canEdit && primaryAction && !usesDemandDesign && <button className="new-demand"
               onClick={primaryAction.kind === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>
               <Plus aria-hidden="true" /><span>{primaryAction.label}</span>
             </button>}
@@ -2608,10 +2632,12 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {!header.ownHeader && <div className="dashboard-heading">
             <div>
               <h1>{header.title}</h1>
+              {usesDemandDesign && <p>Acompanhe as execuções do seu departamento.</p>}
               {!["overview", "board", "registrations"].includes(view) && <p>{header.description}</p>}
             </div>
             <div className="dashboard-heading-meta">
               <div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div>
+              {usesDemandDesign && canEdit && <button type="button" className="demand-create-button" onClick={openNewCard}><Plus aria-hidden="true" /> Nova demanda</button>}
               {view === "overview" && <div className="dashboard-date"><strong>{today}</strong></div>}
             </div>
           </div>}
@@ -2661,31 +2687,42 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
 
           {view === "board" && (
             <>
-              <div className="dashboard-stats">
-                <article><span>Demandas ativas</span><strong>{stats.active}</strong><small>{plural(stats.completed, "concluída", "concluídas")}</small></article>
-                <article><span>Exigem atenção</span><strong>{stats.attention}</strong><small className="warning-text">SLA hoje ou atrasado</small></article>
-                <article><span>Aguardando terceiros</span><strong>{stats.waiting}</strong><small>SLA pausado</small></article>
-                <article><span>Dentro do prazo</span><strong>{stats.onTime === null ? "—" : `${stats.onTime}%`}</strong><small className="safe-text">{stats.onTime === null ? "Nenhuma demanda no recorte" : "Das demandas em aberto"}</small></article>
+              <div className="demand-summary" aria-label="Resumo das demandas da empresa selecionada">
+                <span><strong>{boardSummary.open}</strong> em aberto</span>
+                <span><i className="overdue" /><strong>{boardSummary.overdue}</strong> atrasadas</span>
+                <span><i className="warning" /><strong>{boardSummary.today}</strong> vencem hoje</span>
+                <span><strong>{boardSummary.waiting}</strong> aguardando retorno</span>
               </div>
-
               <div className="dashboard-board-head">
-                <div className="dashboard-tabs board-mode-tabs"><label className="board-selector"><span>Quadro</span><select value={snapshot.board.id} onChange={(event) => void switchBoard(event.target.value)} aria-label="Selecionar quadro">{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}</select></label><button className={boardMode === "kanban" ? "active" : ""} onClick={() => setBoardMode("kanban")}>Kanban</button><button className={boardMode === "table" ? "active" : ""} onClick={() => setBoardMode("table")}>Tabela</button><button className={boardMode === "calendar" ? "active" : ""} onClick={() => setBoardMode("calendar")}>Calendário</button><button className={boardMode === "process" ? "active" : ""} onClick={() => setBoardMode("process")}>Processos</button><button className="archive-trigger" onClick={() => setArchiveOpen(true)}><Archive aria-hidden="true" /> Arquivados <b>{snapshot.archivedCards.length}</b></button></div>
-                <div className="dashboard-filters">
-                  <button type="button" className={`filter-chip ${assigneeFilter === currentMemberName ? "active" : ""}`} aria-pressed={assigneeFilter === currentMemberName} onClick={() => setAssigneeFilter((current) => current === currentMemberName ? "all" : currentMemberName)}>Minhas</button>
-                  <button type="button" className={`filter-chip ${slaFilter === "overdue" ? "active" : ""}`} aria-pressed={slaFilter === "overdue"} onClick={() => setSlaFilter((current) => current === "overdue" ? "all" : "overdue")}>Atrasadas</button>
-                  <button type="button" className={`filter-chip ${slaFilter === "warning" ? "active" : ""}`} aria-pressed={slaFilter === "warning"} onClick={() => setSlaFilter((current) => current === "warning" ? "all" : "warning")}>Hoje</button>
+                <div className="demand-view-row">
+                  <div className="demand-quick-filters" role="group" aria-label="Atalhos de filtros">
+                    <button type="button" className={assigneeFilter === "all" && slaFilter === "all" ? "active" : ""} aria-pressed={assigneeFilter === "all" && slaFilter === "all"} onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); }}>Todas</button>
+                    <button type="button" className={assigneeFilter === currentMemberName ? "active" : ""} aria-pressed={assigneeFilter === currentMemberName} onClick={() => setAssigneeFilter((current) => current === currentMemberName ? "all" : currentMemberName)}>Minhas demandas</button>
+                    <button type="button" className={slaFilter === "overdue" ? "active" : ""} aria-pressed={slaFilter === "overdue"} onClick={() => setSlaFilter((current) => current === "overdue" ? "all" : "overdue")}>Atrasadas</button>
+                    <button type="button" className={slaFilter === "paused" ? "active" : ""} aria-pressed={slaFilter === "paused"} onClick={() => setSlaFilter((current) => current === "paused" ? "all" : "paused")}>Aguardando retorno</button>
+                  </div>
+                  <div className="dashboard-tabs board-mode-tabs" role="group" aria-label="Visualização das demandas">
+                    <button type="button" className={boardMode === "kanban" ? "active" : ""} title="Visualização Kanban" aria-pressed={boardMode === "kanban"} onClick={() => setBoardMode("kanban")}><LayoutDashboard aria-hidden="true" /> Quadro</button>
+                    <button type="button" className={boardMode === "table" ? "active" : ""} aria-pressed={boardMode === "table"} onClick={() => setBoardMode("table")}><ListChecks aria-hidden="true" /> Tabela</button>
+                    <button type="button" className={boardMode === "calendar" ? "active" : ""} aria-pressed={boardMode === "calendar"} onClick={() => setBoardMode("calendar")}><CalendarDays aria-hidden="true" /> Calendário</button>
+                    <button type="button" className={boardMode === "process" ? "active" : ""} aria-pressed={boardMode === "process"} onClick={() => setBoardMode("process")}><GitBranch aria-hidden="true" /> Processos</button>
+                  </div>
+                </div>
+                <div className="demand-toolbar">
+                  <label className="demand-search"><Search aria-hidden="true" /><input type="search" aria-label="Buscar demanda no quadro" placeholder="Buscar demanda..." value={boardSearch} onChange={(event) => setBoardSearch(event.target.value)} /></label>
+                  <label><span className="sr-only">Quadro</span><select value={snapshot.board.id} onChange={(event) => void switchBoard(event.target.value)} aria-label="Selecionar quadro">{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}</select></label>
+                  <label><span className="sr-only">Tipo de demanda</span><select aria-label="Filtrar por tipo de demanda" value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}><option value="all">Tipo de demanda</option>{processTypes.map((process) => <option key={process}>{process}</option>)}</select></label>
+                  <label><span className="sr-only">Responsável</span><select aria-label="Filtrar por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Responsável</option>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label>
                   <details className="board-filter-details">
-                    <summary>Filtros <span>{[assigneeFilter, companyFilter, processFilter, dueFilter, slaFilter].filter((value) => value !== "all").length || ""}</span><ChevronDown aria-hidden="true" /></summary>
+                    <summary>Filtros <span>{[dueFilter, slaFilter].filter((value) => value !== "all").length || ""}</span><ChevronDown aria-hidden="true" /></summary>
                     <div className="board-filter-fields">
-                  <label><span>Responsável</span><select aria-label="Filtrar por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Todos</option>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label>
-                  <label><span>Empresa</span><select aria-label="Filtrar por empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">Todas</option>{snapshot.companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
-                  <label><span>Tipo</span><select aria-label="Filtrar por tipo de demanda" value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}><option value="all">Todos</option>{processTypes.map((process) => <option key={process}>{process}</option>)}</select></label>
-                  <label><span>Prazo</span><select aria-label="Filtrar por prazo" value={dueFilter} onChange={(event) => setDueFilter(event.target.value)}><option value="all">Todos</option><option value="today">Vence hoje</option><option value="week">Próximos 7 dias</option><option value="overdue">Já atrasados</option></select></label>
-                  <label><span>SLA</span><select aria-label="Filtrar por SLA" value={slaFilter} onChange={(event) => setSlaFilter(event.target.value)}><option value="all">Todos</option><option value="safe">No prazo</option><option value="warning">Vence hoje</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>
+                      <label><span>Prazo</span><select aria-label="Filtrar por prazo" value={dueFilter} onChange={(event) => setDueFilter(event.target.value)}><option value="all">Todos</option><option value="today">Vence hoje</option><option value="week">Próximos 7 dias</option><option value="overdue">Já atrasados</option></select></label>
+                      <label><span>SLA</span><select aria-label="Filtrar por SLA" value={slaFilter} onChange={(event) => setSlaFilter(event.target.value)}><option value="all">Todos</option><option value="safe">No prazo</option><option value="warning">Vence hoje</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>
                     </div>
                   </details>
-                  {(assigneeFilter !== "all" || slaFilter !== "all" || companyFilter !== "all" || processFilter !== "all" || dueFilter !== "all") && <button type="button" className="filter-clear" onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); setCompanyFilter("all"); setProcessFilter("all"); setDueFilter("all"); }}>Limpar</button>}
+                  <button type="button" className="demand-archive" onClick={() => setArchiveOpen(true)} title="Ver demandas arquivadas"><Archive aria-hidden="true" /> Arquivados <b>{snapshot.archivedCards.length}</b></button>
                 </div>
+                {(boardSearch || assigneeFilter !== "all" || slaFilter !== "all" || companyFilter !== "all" || processFilter !== "all" || dueFilter !== "all") && <div className="demand-filter-result"><span role="status">{plural(filteredActiveCards.length, "demanda encontrada", "demandas encontradas")}</span><button type="button" onClick={() => { setBoardSearch(""); setAssigneeFilter("all"); setSlaFilter("all"); setCompanyFilter("all"); setProcessFilter("all"); setDueFilter("all"); }}>Limpar filtros</button></div>}
               </div>
 
               {boardMode === "kanban" && <div className="dashboard-kanban">
@@ -2738,12 +2775,13 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                             onKeyDown={(event) => {
                               if (event.altKey && event.key === "ArrowLeft" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, -1); return; }
                               if (event.altKey && event.key === "ArrowRight" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, 1); return; }
-                              if (event.key === "Enter" || event.key === " ") openCard(card);
+                              if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openCard(card); }
                             }}
                           >
                             <div className="dashboard-task-labels">{referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}<span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}</div>
-                            <h2>{card.title}</h2>
+                            <h2 title={card.title}>{card.title}</h2>
                             <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
+                            {card.checklist.length > 0 && <div className="demand-checklist-progress"><progress value={completed} max={card.checklist.length} aria-label={`${completed} de ${card.checklist.length} tarefas concluídas`} /><span>{completed} de {card.checklist.length} tarefas</span></div>}
                             <DemandAreaFlow card={card} areas={snapshot.areas} />
                             {/* Processo, etapa e progresso — as três coisas que a
                                 especificação pede no cartão e que já existiam
@@ -2771,6 +2809,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                           </article>
                         );
                       })}
+                      {visibleCards.length === 0 && <p className="demand-column-empty">Nenhuma demanda nesta coluna.</p>}
                       {canEdit && <button className="dashboard-add-card" onClick={() => { setCardForm({ ...emptyCardForm, boardId: snapshot.board.id, listId: list.id }); setSelectedCardId(null); setCardTab("details"); setCardModalOpen(true); }}><Plus aria-hidden="true" /> Adicionar demanda</button>}
                     </div>
                   </section>
