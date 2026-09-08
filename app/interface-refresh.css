@@ -574,7 +574,7 @@ body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
 .operational-ui .process-context [role="tab"] { min-height: 38px; font-size: .875rem; }
 .operational-ui .dashboard-header { gap: 16px; padding-inline: 24px; backdrop-filter: none; background: var(--ui-rail); }
 .operational-ui .dashboard-header-actions { min-width: 0; gap: 8px; }
-.operational-ui .dashboard-location { flex: 0 1 200px; font-size: .75rem; }
+.operational-ui .dashboard-location { flex: 0 1 320px; font-size: .75rem; }
 .operational-ui .header-company-select { flex: 0 1 280px; min-width: 140px; }
 .operational-ui .header-company-select select { width: 100%; min-width: 0; text-overflow: ellipsis; font-size: .8125rem; }
 .operational-ui .global-search-trigger { flex: 0 1 240px; min-width: 40px; }
@@ -596,38 +596,6 @@ body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
 .operational-ui .sidebar-process-views button { font-size: .8125rem; }
 .operational-ui .sidebar-account { margin-top: 12px; }
 
-/* Indicators read as one summary row instead of four competing cards. */
-.operational-ui[data-view="board"] .dashboard-stats {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
-  border-block: 1px solid var(--ui-border); margin: 0 0 16px; padding: 0;
-}
-.operational-ui[data-view="board"] .dashboard-stats article {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 8px;
-  min-height: 72px; padding: 12px 16px; border: 0; border-right: 1px solid var(--ui-border);
-  border-radius: 0; background: transparent; box-shadow: none;
-}
-.operational-ui[data-view="board"] .dashboard-stats article:last-child { border-right: 0; }
-.operational-ui[data-view="board"] .dashboard-stats article > span { font-size: .8125rem; }
-.operational-ui[data-view="board"] .dashboard-stats article > strong { margin: 0; font-size: 1.25rem; }
-.operational-ui[data-view="board"] .dashboard-stats article > small { grid-column: 1 / -1; font-size: .75rem; text-align: left; }
-.operational-ui .dashboard-board-head { display: flex; flex-direction: column; align-items: stretch; margin-top: 0; gap: 10px; padding-bottom: 12px; }
-.operational-ui .board-mode-tabs { display: flex; flex-wrap: wrap; width: 100%; align-items: center; gap: 4px; }
-.operational-ui .board-mode-tabs button { font-size: .875rem; height: 38px; min-height: 38px; }
-.operational-ui .board-selector { flex: 0 1 220px; min-width: 0; max-width: 100%; margin-right: 12px; }
-.operational-ui .board-selector select { min-width: 0; width: 100%; font-size: .875rem; }
-.operational-ui .board-selector span { font-size: .75rem; }
-.operational-ui .board-mode-tabs .archive-trigger { margin-left: auto; background: transparent; border: 0; }
-.operational-ui .dashboard-filters { display: flex; flex-wrap: wrap; align-items: flex-start; padding: 0; gap: 8px; }
-.operational-ui .dashboard-filters :is(.filter-chip, .filter-clear) { font-size: .8125rem; min-height: 36px; padding: 7px 12px; border-radius: var(--ui-radius-md); }
-.operational-ui .board-filter-details { min-width: 0; flex: 1 1 150px; }
-.operational-ui .board-filter-details summary { display: flex; align-items: center; gap: 8px; width: fit-content; min-height: 36px; padding: 7px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); cursor: pointer; color: var(--ui-text); font-size: .8125rem; list-style: none; }
-.operational-ui .board-filter-details summary::-webkit-details-marker { display: none; }
-.operational-ui .board-filter-details summary svg { width: 14px; height: 14px; }
-.operational-ui .board-filter-details[open] summary svg { transform: rotate(180deg); }
-.operational-ui .board-filter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; padding: 14px 0 4px; }
-.operational-ui .board-filter-fields label { display: grid; gap: 6px; min-width: 0; padding: 0; border: 0; background: transparent; }
-.operational-ui .board-filter-fields label > span { font-size: .8125rem; }
-.operational-ui .board-filter-fields select { min-width: 0; width: 100%; min-height: 38px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); padding: 6px 8px; background: var(--ui-surface); font-size: .875rem; }
 .operational-ui .dashboard-kanban { margin-top: 0; gap: 14px; }
 .operational-ui .dashboard-column { background: var(--ui-surface); }
 .operational-ui .dashboard-column > header { min-height: 44px; font-size: .8125rem; text-transform: none; letter-spacing: 0; }
@@ -710,11 +678,6 @@ body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
   .operational-ui .dashboard-sidebar { padding: 0; }
   .operational-ui .dashboard-sidebar nav { margin: 0; }
   .operational-ui .process-context-compact { margin-bottom: 14px; overflow-x: auto; }
-  .operational-ui[data-view="board"] .dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .operational-ui[data-view="board"] .dashboard-stats article { padding: 10px; }
-  .operational-ui .board-mode-tabs { gap: 2px; }
-  .operational-ui .board-selector { flex-basis: 100%; margin: 0 0 8px; }
-  .operational-ui .board-mode-tabs .archive-trigger { margin-left: 0; }
   .operational-ui .card-form-section { grid-template-columns: minmax(0, 1fr); }
   .operational-ui .card-form-section :is(input, select, textarea) { font-size: 16px; }
   .operational-ui .demand-drawer > header { padding-inline: 16px; }
@@ -722,4 +685,611 @@ body:has(.dashboard-shell:not(.theme-dark)) { background: var(--vin-bg); }
   .operational-ui .overview-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operational-ui .overview-grid { grid-template-columns: minmax(0, 1fr); }
   .operational-ui .connection-summary > header { flex-wrap: wrap; }
+}
+
+/* ========================================================================== */
+/* 6. Casca clara do painel — a maquete aprovada do Vinculato                  */
+/* ========================================================================== */
+/*
+ * O que mudou e por quê.
+ *
+ * O painel vinha da direção "central de comando": tela inteira escura, com a
+ * barra lateral apenas um degrau mais escura que o conteúdo. Numa tela de
+ * leitura longa — e o quadro de demandas é isso: título, empresa, etapa, prazo,
+ * responsável, cartão após cartão — o escuro cobra em duas frentes. A primeira
+ * é a separação: com barra e conteúdo no mesmo território de tom, a única coisa
+ * que dizia "aqui acaba a navegação e começa o trabalho" era um fio de 1px. A
+ * segunda é o estado: atrasado, hoje, pausado e concluído precisam ser lidos de
+ * relance, e sobre fundo escuro os quatro precisam clarear tanto que acabam
+ * parecidos entre si.
+ *
+ * A maquete resolve as duas com a mesma decisão: conteúdo em papel claro, e a
+ * navegação num bloco navy fechado. A marca não muda — o navy, o azul e o
+ * cinza são os mesmos tokens do §88, que a casca escura tinha repintado.
+ *
+ * Esta seção é a última do arquivo de propósito: ela vence as regras de tema
+ * escuro que continuam acima e que seguem valendo para quem renderizar
+ * `.theme-dark`. Nada foi apagado — só deixou de ser o que o produto entrega.
+ *
+ * Todo par de cor abaixo foi medido com a fórmula da WCAG 2.2; as razões estão
+ * anotadas onde o par é apertado.
+ */
+
+.operational-ui {
+  /* Superfície: papel claro em três degraus. O cartão é branco porque ele é a
+     unidade que se lê; a coluna é o degrau recuado que o segura; a página é o
+     degrau intermediário, para que a coluna não pareça flutuar no nada. */
+  --ui-bg: #F7F9FD;
+  --ui-surface: #FFFFFF;
+  --ui-surface-elevated: #FFFFFF;
+  --ui-surface-muted: #EFF3F9;
+  --ui-border: #E2E8F0;
+  --ui-border-strong: #CBD5E1;
+  --ui-text: #172033;
+  --ui-text-soft: #55627A;   /* 6.15:1 sobre o cartão branco, 5.84:1 sobre a página */
+  --ui-text-muted: #626C7A;
+  --ui-slate: #64748B;
+
+  /* Marca. O azul do §88 é preenchimento e indicador; como texto sobre branco
+     ele rende 3.9:1, então quem carrega rótulo azul é `--ui-accent-text`. */
+  --ui-brand: #18223A;
+  --ui-brand-soft: #22304F;
+  --ui-primary: #365CF5;
+  --ui-primary-hover: #2A4AD4;
+  --ui-primary-active: #22304F;
+  --ui-primary-soft: #E7F0FE;
+  --ui-accent: #365CF5;
+  --ui-accent-text: #2A46B8;   /* 7.88:1 sobre o branco, 6.86:1 sobre o azul-suave */
+  --ui-accent-soft: #E7F0FE;
+  --ui-on-accent: #FFFFFF;
+  --ui-mint: #365CF5;
+  --ui-mint-text: #2A46B8;
+  --ui-on-mint: #FFFFFF;
+
+  /* Estado. Os quatro pares valem sobre a pílula tingida, não sobre o branco:
+     é ali que eles são desenhados, e medir contra o branco deixaria passar um
+     âmbar que some dentro do próprio preenchimento. */
+  --ui-success: #137A4F;
+  --ui-warning: #A15C07;
+  --ui-warning-strong: #7D4705;
+  --ui-danger: #B42318;
+  --ui-on-danger: #FFFFFF;
+  --ui-done: #137A4F;
+  --ui-done-soft: #E4F5EC;
+  --ui-on-done: #FFFFFF;
+  --ui-state-neutral-bg: #EEF2F8;
+  --ui-state-neutral-text: #414D63;
+  --ui-state-ok-bg: #E4F5EC;
+  --ui-state-ok-text: #0F6341;
+  --ui-state-warn-bg: #FDF0DC;
+  --ui-state-warn-text: #7D4705;
+  --ui-state-danger-bg: #FCE9E7;
+  --ui-state-danger-text: #A21C12;
+  /* Os pares `--tone-*` do chip de estado já estão declarados acima, no bloco
+     claro de `.dashboard-shell`, e foram medidos lá. Repeti-los aqui criaria
+     uma terceira cópia da mesma decisão — e a próxima pessoa a ajustar o tom
+     mexeria em uma delas sem efeito na tela. */
+
+  /* A barra. É `--vin-navy-deep` levado na direção do azul da marca: o mesmo
+     lugar da paleta, um pouco mais azul, para que ela leia como Vinculato e não
+     como grafite. Os tons de texto abaixo foram medidos sobre ela. */
+  --ui-rail: #152340;
+  --ui-rail-border: #26375A;
+  --ui-rail-context: #1C2C4D;
+  --ui-rail-hover: #1E3057;
+  --ui-rail-active: #24406E;
+  --ui-rail-active-text: #FFFFFF;    /* 10.33:1 sobre o item ativo */
+  --ui-rail-text: #C7D3E6;           /* 10.32:1 sobre a barra */
+  --ui-rail-icon: #97A9C6;           /* 6.54:1 — serve a ícone, traço e rótulo */
+  --ui-rail-section: #97A9C6;
+  --ui-avatar-bg: #E7F0FE;
+  --ui-avatar-text: #2A46B8;
+  /* O acento que se lê **sobre tinta**. Ele não é decoração do tema escuro: a
+     barra e os dois cartões navy (Inbox e Planner) continuam escuros na casca
+     clara, e é este token que veste o traço do item ativo, o rótulo do link e o
+     ícone dentro deles. Estava declarado só em `.theme-dark`; sem ele aqui,
+     essas regras cairiam em valor indefinido e o texto herdaria a tinta escura
+     do conteúdo — escuro sobre escuro. 8.77:1 sobre a barra. */
+  --ui-accent-on-ink: #AFC0FF;
+
+  --ui-shadow-card: var(--elevation-1);
+  --ui-shadow-modal: var(--elevation-3);
+
+  /* Os tokens de identidade voltam ao valor do §88 **dentro do painel**.
+     Isto não é redundância: `globals.css` redeclara `--brand`, `--vin-*` e
+     companhia num segundo `:root` — a direção escura do site — e ali `--brand`
+     virou `#b9c8ff`, um azul claro que só existe para ser lido *sobre* fundo
+     escuro. O painel consome esses tokens em 59 lugares (borda de foco, ícone
+     ativo, traço de gráfico, marca-d'água), e com a casca clara todos eles
+     ficariam pálidos sobre branco. Redeclarar aqui devolve a paleta clara a
+     quem está dentro de `.operational-ui` e deixa o site como está. */
+  --vin-navy-deep: #18223A;
+  --vin-navy: #22304F;
+  --vin-blue: #365CF5;
+  --vin-blue-vivid: #5C7DF7;
+  --vin-bg: #F6F8FC;
+  --vin-surface: #FFFFFF;
+  --vin-text: #172033;
+  --vin-slate: #64748B;
+  --vin-slate-aa: #55627A;
+  --vin-text-soft: #55627A;
+  --vin-border: #E2E8F0;
+  --vin-teal: #16A394;
+  --brand: #365CF5;
+  --brand-strong: #22304F;
+  --brand-deep: #18223A;
+  --brand-accent: #5C7DF7;
+  --brand-contrast: #FFFFFF;
+  --brand-soft: #E7F0FE;
+  --brand-soft-border: #C3DBFB;
+  --accent-teal: #16A394;
+  --accent-teal-soft: #E3F5F2;
+  --ui-status-doing: #6FA8C9;
+  --on-brand-text: #E6EEFA;
+  --on-brand-soft: #B6C8E0;
+  --on-brand-line: rgba(255, 255, 255, .16);
+  --brand-accent-on-dark: #6FB4FF;
+  --shadow-soft: 0 12px 32px rgba(6, 43, 96, .10);
+  --shadow-strong: 0 28px 70px rgba(4, 27, 69, .22);
+}
+
+/* Anel de foco: azul cheio no conteúdo claro, e o acento sobre tinta na barra.
+   O anel geral da folha é `--ui-accent-on-ink` a 60% — ele foi escolhido para a
+   barra escura, e ali rende 4.08:1. Sobre o papel claro o mesmo anel some: um
+   azul pálido a 60% sobre branco fica em 2.5:1, abaixo dos 3:1 que a WCAG
+   1.4.11 exige de indicador não textual. O azul da marca, sem transparência,
+   rende 5.24:1 sobre o cartão branco e 4.7:1 sobre a coluna. */
+.operational-ui .dashboard-main :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--ui-primary);
+}
+
+/* O `body` acompanha a casca clara: sem isto, o repique da rolagem no celular
+   mostra o navy do site atrás de uma tela clara. */
+body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD; }
+
+/* -------------------------------------------------------------------------- */
+/* 6.1 Barra lateral                                                          */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .dashboard-sidebar {
+  padding: 18px 14px 14px;
+  background: var(--ui-rail);
+  border-right: 0;
+  color: var(--ui-rail-text);
+  scrollbar-color: rgba(255, 255, 255, .2) transparent;
+}
+
+.operational-ui .dashboard-brand { color: #FFFFFF; margin-block: 4px 14px; }
+
+/* O grupo operacional é um controle, e não um rótulo solto: é por ali que se
+   confere em qual cliente o trabalho está sendo feito. A caixa existe para dar
+   a ele a forma de coisa clicável que a maquete mostra. */
+.operational-ui .sidebar-group-context {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-rail-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-rail-context);
+}
+.operational-ui .sidebar-group-context > span { color: var(--ui-rail-section); font-size: .625rem; font-weight: 700; letter-spacing: .09em; }
+.operational-ui .sidebar-group-context strong { color: #FFFFFF; font-size: .875rem; font-weight: 650; }
+
+.operational-ui .dashboard-sidebar nav { margin-top: 6px; gap: 14px; }
+.operational-ui .sidebar-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.operational-ui .sidebar-nav-section {
+  margin: 6px 0 4px; padding-inline: 10px;
+  color: var(--ui-rail-section); font-size: .625rem; font-weight: 700; letter-spacing: .1em;
+}
+
+.operational-ui .dashboard-sidebar nav button {
+  min-height: 40px; padding-inline: 10px; gap: 11px;
+  border-radius: var(--ui-radius-lg);
+  color: var(--ui-rail-text); font-size: .875rem; font-weight: 550;
+}
+.operational-ui .dashboard-sidebar nav button > span { color: var(--ui-rail-icon); }
+.operational-ui .dashboard-sidebar nav button:hover { background: var(--ui-rail-hover); color: #FFFFFF; }
+.operational-ui .dashboard-sidebar nav button:hover > span { color: #FFFFFF; }
+
+/* O item ativo é bloco cheio, e não só cor de texto: numa barra escura a cor
+   sozinha some, e a forma continua legível para quem não distingue matiz. */
+.operational-ui .dashboard-sidebar nav button.active {
+  background: var(--ui-rail-active); color: var(--ui-rail-active-text);
+  font-weight: 650; box-shadow: none;
+}
+.operational-ui .dashboard-sidebar nav button.active > span { color: #FFFFFF; }
+.operational-ui .dashboard-sidebar nav button b { background: var(--ui-badge-surface); color: #FFFFFF; }
+
+.operational-ui .sidebar-process-views { margin-left: 30px; gap: 1px; }
+.operational-ui .sidebar-process-view {
+  min-height: 32px; padding: 0 10px; border-radius: var(--ui-radius-md);
+  color: var(--ui-rail-icon); font-size: .8125rem; text-align: left;
+}
+.operational-ui .sidebar-process-view:hover { background: var(--ui-rail-hover); color: #FFFFFF; }
+.operational-ui .sidebar-process-view.active { background: var(--ui-rail-hover); color: #FFFFFF; font-weight: 600; }
+
+.operational-ui .sidebar-toggle {
+  border-color: var(--ui-rail-border); background: transparent; color: var(--ui-rail-icon);
+}
+.operational-ui .sidebar-toggle:hover { background: var(--ui-rail-hover); color: #FFFFFF; }
+
+.operational-ui :is(.sidebar-workspace, .sidebar-account) { border-color: var(--ui-rail-border); }
+.operational-ui .sidebar-workspace > span { color: var(--ui-rail-section); font-size: .625rem; letter-spacing: .09em; }
+.operational-ui .sidebar-structure-summary,
+.operational-ui .sidebar-workspace summary {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 48px; padding: 0 10px;
+  border: 1px solid var(--ui-rail-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-rail-context); color: var(--ui-rail-text);
+}
+.operational-ui .sidebar-structure-summary i,
+.operational-ui .sidebar-workspace summary > i {
+  width: 28px; height: 28px; display: grid; place-items: center; flex: 0 0 28px;
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-primary); color: #FFFFFF;
+  font-style: normal; font-size: .625rem; font-weight: 700;
+}
+.operational-ui .sidebar-structure-summary strong { color: #FFFFFF; font-size: .8125rem; }
+.operational-ui .sidebar-structure-summary small { color: var(--ui-rail-icon); font-size: .6875rem; }
+
+/* A conta fecha a barra: avatar da marca, nome, e as ações discretas ao lado. */
+.operational-ui .sidebar-account { padding-top: 12px; }
+.operational-ui .sidebar-account .user-avatar { background: var(--ui-primary); color: #FFFFFF; font-size: .75rem; }
+.operational-ui .sidebar-account strong { color: #FFFFFF; font-size: .8125rem; }
+.operational-ui .sidebar-account small { color: var(--ui-rail-icon); font-size: .6875rem; }
+.operational-ui .sidebar-account :is(.switch-account-button, .sign-out-button) { color: var(--ui-rail-icon); }
+.operational-ui .sidebar-account :is(.switch-account-button, .sign-out-button):hover { background: var(--ui-rail-hover); color: #FFFFFF; }
+
+/* -------------------------------------------------------------------------- */
+/* 6.2 Faixa superior                                                         */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .dashboard-header {
+  height: 64px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+.operational-ui .dashboard-location { color: var(--ui-text-muted); font-size: .8125rem; }
+.operational-ui .dashboard-location strong { color: var(--ui-text); font-weight: 650; }
+
+.operational-ui .dashboard-header-actions button {
+  border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted);
+}
+.operational-ui .dashboard-header-actions button:hover {
+  border-color: var(--ui-border-strong); background: var(--ui-surface-muted); color: var(--ui-text); transform: none;
+}
+.operational-ui .header-company-select {
+  min-height: 38px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface); color: var(--ui-text-soft);
+}
+.operational-ui .header-company-select select { color: var(--ui-text); font-weight: 550; }
+
+/* Avatar da faixa: o mesmo par do avatar da barra, invertido para o fundo
+   claro. Azul sobre o azul-suave rende 6.86:1. */
+.operational-ui .header-profile { border-color: var(--ui-border); background: var(--ui-surface); }
+.operational-ui .header-profile > span {
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--ui-avatar-bg); color: var(--ui-avatar-text); font-size: .6875rem; font-weight: 700;
+}
+.operational-ui .dashboard-header-actions button > i { background: var(--ui-badge-surface); }
+
+/* -------------------------------------------------------------------------- */
+/* 6.3 Título da página e ação primária                                       */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .dashboard-heading { margin-bottom: 20px; gap: 20px; align-items: flex-start; }
+.operational-ui .dashboard-heading h1 {
+  font-family: var(--font-title); font-size: clamp(1.75rem, 2.1vw, 2.125rem);
+  font-weight: 800; letter-spacing: -.03em; color: var(--ui-text);
+}
+.operational-ui .dashboard-heading p { margin-top: 6px; color: var(--ui-text-soft); font-size: .9375rem; }
+.operational-ui .dashboard-heading-meta { align-items: center; gap: 14px; }
+
+/* A ação primária é o único preenchimento azul da tela. Se um segundo botão
+   ganhar a mesma cor, os dois deixam de significar "é por aqui". */
+.operational-ui .new-demand {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 42px; padding-inline: 18px; gap: 8px;
+  border: 1px solid var(--ui-primary); border-radius: var(--ui-radius-lg);
+  background: var(--ui-primary); color: var(--ui-on-accent);
+  font-size: .875rem; font-weight: 650; white-space: nowrap; box-shadow: none;
+}
+.operational-ui .new-demand:hover { border-color: var(--ui-primary-hover); background: var(--ui-primary-hover); color: var(--ui-on-accent); transform: none; }
+.operational-ui .new-demand svg { width: 18px; height: 18px; }
+
+/* -------------------------------------------------------------------------- */
+/* 6.4 Tira de resumo                                                         */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .board-summary {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0;
+  margin: 0 0 18px; padding: 0;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface); box-shadow: var(--elevation-1);
+  overflow: hidden;
+}
+.operational-ui .board-summary-item {
+  display: flex; align-items: baseline; gap: 8px;
+  min-height: 58px; padding: 14px 18px;
+  border: 0; border-right: 1px solid var(--ui-border); border-radius: 0;
+  background: transparent; color: var(--ui-text-soft);
+  font-size: .875rem; text-align: left; cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-standard);
+}
+.operational-ui .board-summary-item:last-child { border-right: 0; }
+.operational-ui .board-summary-item:hover { background: var(--ui-surface-muted); }
+.operational-ui .board-summary-item.active { background: var(--ui-primary-soft); }
+.operational-ui .board-summary-item > strong {
+  color: var(--ui-text); font-size: 1.375rem; font-weight: 750; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.operational-ui .board-summary-item > span { color: var(--ui-text-soft); }
+/* O ponto é redundante de propósito: ele repete pela forma o que a palavra ao
+   lado já diz, para quem varre a tira sem ler. Cor sozinha nunca é o sinal. */
+.operational-ui .board-summary-item > i {
+  width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; align-self: center;
+}
+.operational-ui .board-summary-item.tone-danger > i { background: var(--ui-danger); }
+.operational-ui .board-summary-item.tone-warn > i { background: var(--ui-warning); }
+
+/* -------------------------------------------------------------------------- */
+/* 6.5 Recorte (abas) e formato (segmentado)                                  */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .dashboard-board-head {
+  display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 12px; margin: 0; padding: 0 0 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.operational-ui .board-scope-tabs { display: flex; align-items: center; gap: 4px; }
+.operational-ui .board-scope-tabs button {
+  height: 42px; min-height: 42px; padding-inline: 12px;
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  background: transparent; color: var(--ui-text-soft);
+  font-size: .875rem; font-weight: 550; white-space: nowrap; cursor: pointer;
+}
+.operational-ui .board-scope-tabs button:hover { color: var(--ui-text); }
+.operational-ui .board-scope-tabs button.active {
+  border-bottom-color: var(--ui-primary); color: var(--ui-accent-text); font-weight: 650;
+}
+
+/* Segmentado: o formato escolhido é uma pastilha branca dentro do trilho, e
+   não uma quarta aba. As abas ao lado recortam *o que* aparece; isto muda *como*
+   aparece, e as duas coisas não podem ter o mesmo desenho. */
+.operational-ui .board-view-switch {
+  display: flex; align-items: center; gap: 2px;
+  margin-bottom: 6px; padding: 3px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: #EDF1F8;
+}
+.operational-ui .board-view-switch button {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; padding: 0 11px;
+  border: 1px solid transparent; border-radius: var(--ui-radius-md);
+  background: transparent; color: var(--ui-text-soft);
+  font-size: .8125rem; font-weight: 550; white-space: nowrap; cursor: pointer;
+}
+.operational-ui .board-view-switch button svg { width: 15px; height: 15px; flex: 0 0 15px; }
+.operational-ui .board-view-switch button:hover { color: var(--ui-text); }
+.operational-ui .board-view-switch button.active {
+  border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text);
+  font-weight: 650; box-shadow: var(--elevation-1);
+}
+/* Arquivados não é formato: fica no mesmo canto, mas fora do trilho. */
+.operational-ui .board-view-switch .archive-trigger {
+  margin-left: 6px; padding-left: 12px;
+  border-left: 1px solid var(--ui-border); border-radius: 0; background: transparent;
+}
+.operational-ui .board-view-switch .archive-trigger b {
+  min-width: 20px; height: 20px; display: inline-grid; place-items: center; margin-left: 2px;
+  border-radius: 999px; background: var(--ui-surface); color: var(--ui-text-soft); font-size: .6875rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 6.6 Fileira de filtros                                                     */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .board-filter-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin: 0; padding: 16px 0 4px;
+}
+.operational-ui .board-search {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1 1 260px; min-width: 200px; max-width: 420px; min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface); color: var(--ui-text-muted);
+}
+.operational-ui .board-search svg { width: 16px; height: 16px; flex: 0 0 16px; }
+.operational-ui .board-search input {
+  flex: 1; min-width: 0; height: 38px;
+  border: 0; background: transparent; color: var(--ui-text); font-size: .875rem;
+}
+.operational-ui .board-search input::placeholder { color: var(--ui-text-muted); }
+.operational-ui .board-search:focus-within { border-color: var(--ui-primary); }
+
+.operational-ui :is(.board-field, .board-filter-bar .board-selector) {
+  display: flex; align-items: center; gap: 6px;
+  flex: 0 1 auto; min-width: 0; min-height: 40px; margin: 0; padding: 0 10px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+.operational-ui :is(.board-field, .board-filter-bar .board-selector) > span {
+  color: var(--ui-text-muted); font-size: .8125rem; white-space: nowrap;
+}
+.operational-ui :is(.board-field, .board-filter-bar .board-selector) select {
+  min-width: 0; max-width: 170px; height: 38px;
+  border: 0; background: transparent; color: var(--ui-text); font-size: .875rem; font-weight: 550;
+}
+
+.operational-ui .board-filter-bar .board-filter-details { flex: 0 0 auto; margin-left: auto; }
+.operational-ui .board-filter-details summary {
+  display: flex; align-items: center; gap: 7px;
+  width: fit-content; min-height: 40px; padding: 0 14px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface); color: var(--ui-text-soft);
+  font-size: .875rem; font-weight: 550; cursor: pointer; list-style: none;
+}
+.operational-ui .board-filter-details summary::-webkit-details-marker { display: none; }
+.operational-ui .board-filter-bar .board-filter-details summary:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
+.operational-ui .board-filter-bar .board-filter-details summary svg { width: 16px; height: 16px; }
+.operational-ui .board-filter-details[open] summary svg { transform: none; }
+/* O contador só aparece quando conta alguma coisa: uma pastilha vazia ao lado
+   de "Filtros" anuncia um estado que não existe. */
+.operational-ui .board-filter-details summary > span:empty { display: none; }
+.operational-ui .board-filter-details summary > span {
+  min-width: 20px; height: 20px; display: inline-grid; place-items: center;
+  border-radius: 999px; background: var(--ui-primary); color: var(--ui-on-accent);
+  font-size: .6875rem; font-weight: 700;
+}
+.operational-ui .board-filter-bar .filter-clear {
+  min-height: 40px; padding: 0 12px; border: 0; border-radius: var(--ui-radius-lg);
+  background: transparent; color: var(--ui-accent-text); font-size: .875rem; font-weight: 600; cursor: pointer;
+}
+.operational-ui .board-filter-bar .board-filter-fields {
+  position: absolute; z-index: 20; right: 0; width: max-content; min-width: 260px;
+  margin-top: 6px; padding: 14px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-elevated); box-shadow: var(--elevation-2);
+}
+.operational-ui .board-filter-bar .board-filter-details { position: relative; }
+
+/* -------------------------------------------------------------------------- */
+/* 6.7 Colunas e cartões                                                      */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .dashboard-kanban { padding-top: 18px; gap: 16px; }
+
+.operational-ui .dashboard-column {
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-muted); box-shadow: none;
+}
+.operational-ui .dashboard-column > header {
+  height: 46px; border-bottom: 0;
+}
+.operational-ui .dashboard-column > header > span {
+  color: var(--ui-text); font-size: .875rem; font-weight: 650; text-transform: none; letter-spacing: 0;
+}
+.operational-ui .dashboard-column > header b {
+  background: var(--ui-surface); border: 1px solid var(--ui-border); color: var(--ui-text-soft); font-size: .6875rem;
+}
+.operational-ui .dashboard-column > header button { color: var(--ui-text-muted); }
+.operational-ui .dashboard-column > header button:hover { background: var(--ui-surface); color: var(--ui-text); }
+
+.operational-ui .dashboard-task {
+  padding: 14px;
+  border: 1px solid var(--ui-border); border-left: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface); box-shadow: var(--elevation-1);
+}
+/* Atraso e vencimento no fio da esquerda: é a marca que sobrevive à varredura
+   diagonal de uma coluna cheia, sem gastar uma linha do cartão. */
+.operational-ui .dashboard-task.sla-warning { border-left: 3px solid var(--ui-warning); }
+.operational-ui .dashboard-task.sla-overdue { border-left: 3px solid var(--ui-danger); }
+.operational-ui .dashboard-task:hover,
+.operational-ui .dashboard-task:focus-visible {
+  border-color: var(--ui-border-strong); box-shadow: var(--elevation-2); transform: none;
+}
+.operational-ui .dashboard-task h2 { margin: 0 0 4px; font-size: .9375rem; font-weight: 650; line-height: 1.4; }
+.operational-ui .dashboard-task > p { color: var(--ui-text-soft); font-size: .8125rem; }
+.operational-ui .dashboard-task-labels { margin-bottom: 8px; }
+.operational-ui .dashboard-task-labels span { font-size: .625rem; font-weight: 700; letter-spacing: .04em; }
+/* Sem fio no rodapé do cartão. O cartão já é uma unidade fechada por borda e
+   sombra; cortá-lo ao meio com um segundo traço divide em dois algo que se lê
+   de uma vez. O espaço basta para separar o conteúdo do estado. */
+.operational-ui .dashboard-task-bottom { margin-top: 14px; padding-top: 0; border-top: 0; gap: 8px; }
+.operational-ui .dashboard-sla { font-size: .75rem; font-weight: 600; }
+.operational-ui :is(.dashboard-check, .dashboard-comments) { color: var(--ui-text-muted); font-size: .75rem; }
+.operational-ui .dashboard-task-owner { margin-left: auto; }
+.operational-ui .dashboard-mini-avatar { background: var(--ui-avatar-bg); color: var(--ui-avatar-text); font-size: .625rem; font-weight: 700; }
+
+.operational-ui .dashboard-add-card {
+  min-height: 40px; border: 1px dashed var(--ui-border-strong); border-radius: var(--ui-radius-lg);
+  background: transparent; color: var(--ui-text-soft); font-size: .875rem;
+}
+.operational-ui .dashboard-add-card:hover { border-color: var(--ui-primary); background: var(--ui-surface); color: var(--ui-accent-text); }
+
+/* -------------------------------------------------------------------------- */
+/* 6.8 Larguras estreitas                                                     */
+/* -------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/* 6.9 Barra recolhida                                                        */
+/* -------------------------------------------------------------------------- */
+/*
+ * Recolhida, a barra é um trilho de 76px: só ícone, e nada que precise de
+ * rótulo para significar alguma coisa.
+ *
+ * As regras de recolhimento moram em `dashboard-modern.css` e pesam (0,2,2) —
+ * o mesmo que as desta camada, que é carregada depois e por isso vinha
+ * ganhando. O efeito era o trilho compacto continuar com `font-size` de item
+ * aberto: o rótulo transbordava os 76px e escrevia por cima do conteúdo. As
+ * caixas de grupo e de estrutura, que esta camada passou a desenhar, entravam
+ * pelo mesmo caminho.
+ *
+ * O prefixo duplo (`.operational-ui.sidebar-collapsed`) resolve isso pelo peso,
+ * e não pela ordem: (0,4,x) não depende de quem foi carregado por último.
+ */
+@media (min-width: 761px) {
+  .operational-ui.sidebar-collapsed .dashboard-sidebar nav button {
+    padding-inline: 0; justify-content: center; font-size: 0;
+  }
+  .operational-ui.sidebar-collapsed .dashboard-sidebar nav button > span { width: 22px; }
+  .operational-ui.sidebar-collapsed :is(.sidebar-group-context, .sidebar-nav-section,
+    .sidebar-workspace, .sidebar-process-views) { display: none; }
+  .operational-ui.sidebar-collapsed .sidebar-account > span:nth-child(2) { display: none; }
+  .operational-ui.sidebar-collapsed .dashboard-brand { justify-content: center; }
+  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-full { display: none; }
+  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-mark { display: inline-flex; }
+}
+
+/* A estrutura do grupo volta a aparecer no notebook.
+   `access.css` a esconde de 761px a 1499px, e isso fazia sentido enquanto a
+   barra virava trilho de ícones nessa faixa. Ela não vira mais — esta camada
+   mantém rótulo e largura —, então esconder o bloco só tirava do laptop de
+   1440px, que é onde a operação trabalha, a única confirmação de qual grupo e
+   quantas empresas estão em jogo. */
+@media (min-width: 1100px) {
+  .operational-ui .sidebar-workspace { display: block; }
+  /* Junto com ela volta o nome de quem está logado: um avatar com uma letra,
+     sozinho, não responde "com qual conta eu estou aqui?" — e é essa a única
+     pergunta que o rodapé da barra existe para responder. */
+  .operational-ui .sidebar-account > span:nth-child(2) { display: block; }
+}
+
+@media (max-width: 1180px) {
+  .operational-ui .board-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .operational-ui .board-summary-item:nth-child(2) { border-right: 0; }
+  .operational-ui .board-summary-item:nth-child(-n + 2) { border-bottom: 1px solid var(--ui-border); }
+}
+
+/* Abaixo de 780px a barra lateral deixa de ser barra: vira faixa superior com
+   a marca e navegação fixa embaixo. A caixa do grupo operacional não cabe nessa
+   faixa — `dashboard-modern.css` já a escondia ali, e a regra desta camada, que
+   é carregada depois, a trazia de volta flutuando por cima do cabeçalho. */
+@media (max-width: 780px) {
+  .operational-ui .sidebar-group-context { display: none; }
+}
+
+@media (max-width: 760px) {
+  /* Uma marca só na faixa. As duas variantes existem para a barra inteira e
+     para a barra recolhida; no celular não há barra recolhida, e as duas
+     apareciam lado a lado — a assinatura horizontal seguida do símbolo.
+     O seletor precisa do filho direto para pesar mais que
+     `.dashboard-brand > span:last-child`, que é quem vinha ganhando: um
+     pseudo-classe conta na mesma coluna que uma classe, então aquele seletor
+     vale (0,2,1) e o `.dashboard-brand-logo-mark` sozinho, (0,1,0), nunca
+     chegou a valer nada aqui. Era essa a origem do símbolo duplicado. */
+  .operational-ui .dashboard-brand > .dashboard-brand-logo-full { display: inline-flex; }
+  .operational-ui .dashboard-brand > .dashboard-brand-logo-mark { display: none; }
+  .operational-ui .dashboard-heading-meta { width: 100%; }
+  .operational-ui .new-demand { width: 100%; justify-content: center; }
+  .operational-ui .dashboard-board-head { flex-direction: column; align-items: stretch; }
+  .operational-ui .board-scope-tabs { overflow-x: auto; scrollbar-width: none; }
+  .operational-ui .board-view-switch { margin-bottom: 10px; overflow-x: auto; scrollbar-width: none; }
+  .operational-ui .board-filter-bar > :is(.board-search, .board-field, .board-selector) { flex: 1 1 100%; max-width: none; }
+  .operational-ui .board-filter-bar .board-filter-details { margin-left: 0; }
+  .operational-ui .board-filter-bar .board-filter-fields { right: auto; left: 0; }
 }
