@@ -90,6 +90,7 @@ export const expectedMigrations = [
   "0080_saas_self_signup_contract.sql",
   "0081_contractor_start_proration.sql",
   "0082_contractor_discount_settlement.sql",
+  "0083_work_accident_dashboard.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

@@ -19,6 +19,7 @@ export const capabilityAreas = [
   { key: "payments", label: "Pagamentos auxiliares" },
   { key: "time", label: "Ponto" },
   { key: "epi", label: "Controle de EPI" },
+  { key: "safety", label: "Acidentes de trabalho" },
   { key: "platform", label: "Integrações, plano e auditoria" },
 ] as const;
 
@@ -118,6 +119,11 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "epi.export": { area: "epi", label: "Exportar relatórios do Controle de EPI" },
   "epi.audit.view": { area: "epi", label: "Consultar a trilha de auditoria do Controle de EPI" },
   "epi.stock.adjust": { area: "epi", label: "Registrar entradas, transferências e ajustes de estoque" },
+
+  "safety.view": { area: "safety", label: "Abrir o dashboard de acidentes de trabalho" },
+  "safety.manage": { area: "safety", label: "Registrar e corrigir acidentes de trabalho" },
+  "safety.delete": { area: "safety", label: "Excluir um acidente lançado por engano" },
+  "safety.export": { area: "safety", label: "Exportar os acidentes do período em planilha" },
 
   "integrations.status.read": { area: "platform", label: "Ver o estado das integrações" },
   "integrations.manage": { area: "platform", label: "Configurar conectores e credenciais" },

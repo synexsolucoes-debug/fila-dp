@@ -113,6 +113,18 @@ export const processGroups: readonly ProcessGroup[] = [
     views: ["epi"],
   },
   {
+    id: "seguranca-do-trabalho",
+    label: "Segurança do trabalho",
+    description: "Acidentes, dias afastados e despesas do período, lançados e acompanhados pelo SESMT.",
+    /* Área, e não processo, pelo mesmo motivo que a Gestão de EPI é (§91): o
+       que acontece aqui é o acompanhamento contínuo de quem responde pela
+       segurança. Ela é um grupo próprio, e não uma tela dentro da Gestão de
+       EPI, porque equipamento e acidente são trabalhos diferentes — quem abre
+       o dashboard depois de um acidente não está mexendo em estoque. */
+    kind: "area",
+    views: ["safety"],
+  },
+  {
     id: "jornada",
     label: "Ponto e jornada",
     description: "Conferência de marcações, tratativa de inconsistências e envio para a folha.",
