@@ -2061,7 +2061,7 @@
 }
 
 .hr-indicators-panel > header > b {
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
   font-size: 22px;
 }
 
@@ -2200,7 +2200,7 @@
 }
 
 .report-metrics strong {
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
   font-size: 23px;
 }
 
@@ -2259,7 +2259,7 @@
   padding: 6px 9px;
   border-radius: 999px;
   background: var(--ui-primary-soft);
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
   font-size: 9px;
 }
 
@@ -4239,7 +4239,7 @@
 .payroll-composition > header, .payroll-company-breakdown > header, .payroll-entry-panel > header { min-height: 64px; padding: 14px 17px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--ui-border); }
 .payroll-composition header strong, .payroll-company-breakdown header strong { color: var(--ui-text); font-size: 11px; }
 .payroll-composition header span, .payroll-company-breakdown header span { display: block; margin-top: 4px; color: var(--ui-text-soft); font-size: 8px; }
-.payroll-composition header > b { color: var(--ui-primary); font-size: 12px; white-space: nowrap; }
+.payroll-composition header > b { color: var(--ui-accent-text, var(--ui-primary)); font-size: 12px; white-space: nowrap; }
 .payroll-bars { padding: 15px 17px 18px; display: grid; gap: 12px; }
 .payroll-bars > div > span { display: flex; justify-content: space-between; gap: 10px; }
 .payroll-bars strong { color: var(--ui-text); font-size: 9px; }
@@ -4253,7 +4253,7 @@
 .payroll-company-breakdown article small { margin-top: 4px; color: var(--ui-text-soft); font-size: 8px; }
 .payroll-company-breakdown article > span { color: var(--ui-text); font-size: 10px; font-weight: 850; white-space: nowrap; }
 .payroll-company-breakdown article > b { padding: 4px 6px; border-radius: var(--ui-radius-md); background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 7px; white-space: nowrap; }
-.payroll-entry-panel > header > b { padding: 7px 9px; border-radius: var(--ui-radius-lg); background: var(--ui-primary-soft); color: var(--ui-primary); font-size: 9px; white-space: nowrap; }
+.payroll-entry-panel > header > b { padding: 7px 9px; border-radius: var(--ui-radius-lg); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); font-size: 9px; white-space: nowrap; }
 .payroll-entry-panel form { padding: 17px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 11px; background: var(--ui-surface-muted); }
 .payroll-entry-panel textarea { min-height: 74px; padding: 9px; resize: vertical; line-height: 1.45; }
 .payroll-entry-panel .wide { grid-column: 1 / -1; }
@@ -4353,7 +4353,7 @@
 }
 .payroll-form-section legend {
   padding: 0 5px;
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
   font-size: 10px;
   font-weight: 900;
   letter-spacing: .02em;

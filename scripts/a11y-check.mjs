@@ -428,41 +428,75 @@ async function auditPanelViews(theme = "") {
  * que o script olhou.
  */
 /**
- * O produto voltou a ter um tema só.
+ * Leva a interface a um tema, pelo mesmo caminho da pessoa.
  *
- * Esta função já foi três coisas, e o histórico importa para não repetir
- * nenhuma delas. Primeiro ela trocava de tema pelo botão do cabeçalho e a
- * varredura cobria os dois. Quando a interface virou exclusivamente escura, o
- * botão sumiu e no lugar da troca ficou uma sentinela: reprovar se um
- * alternador reaparecesse, para o segundo tema nunca ficar sem auditoria em
- * silêncio. Ele reapareceu, a sentinela acusou, e a varredura voltou a cobrir
- * os dois — de um jeito que, na primeira tentativa, media o mesmo tema duas
- * vezes com rótulos trocados.
+ * O botão cicla três estados (sistema, claro, escuro), então chegar a um tema
+ * é clicar até a casca declarar que chegou — e não um número fixo de cliques,
+ * que muda de significado se a ordem do ciclo mudar.
  *
- * O produto agora tem um tema só de novo, por decisão registrada. A regra que
- * atravessou as três versões é sempre a mesma: **nunca audite metade**. Então
- * a sentinela volta ao posto. Ela não mede tema nenhum; ela vigia o retorno do
- * segundo, que é a única coisa capaz de tornar esta varredura parcial sem que
- * ninguém perceba.
+ * Quem responde é `data-theme` na casca, que é a escala **resolvida**: com a
+ * preferência em "sistema" ela depende do navegador, e é a resolvida que a
+ * tela usa. Se não der para chegar, o ensaio para — uma varredura que pensa
+ * ter trocado de tema e não trocou é pior que uma que não tenta.
  */
-async function themeToggleExists() {
-  return await page.locator(".theme-toggle").count() > 0;
+async function setTheme(target) {
+  const toggle = page.locator(".theme-toggle");
+  if (await toggle.count() === 0) throw new Error("o alternador de tema sumiu da interface");
+  for (let tentativa = 0; tentativa < 4; tentativa += 1) {
+    const atual = await page.evaluate(() => document.querySelector(".dashboard-shell")?.dataset.theme ?? "");
+    if (atual === target) return;
+    await toggle.first().click();
+    await page.waitForTimeout(400);
+  }
+  throw new Error(`não consegui levar a interface ao tema ${target}`);
 }
 
+/** A escala que o tema atual está usando, para provar que ela mudou. */
+async function surfaceSignature() {
+  return await page.evaluate(() => {
+    const cs = getComputedStyle(document.querySelector(".dashboard-shell"));
+    return ["--ui-bg", "--ui-surface", "--ui-text"].map((t) => cs.getPropertyValue(t).trim()).join("|");
+  });
+}
+
+/**
+ * Os dois temas, inteiros.
+ *
+ * Esta função já foi três coisas, e o histórico importa para não repetir
+ * nenhuma delas. Primeiro trocava de tema pelo botão e cobria os dois. Quando
+ * a interface virou exclusivamente escura, o botão sumiu e no lugar da troca
+ * ficou uma sentinela: reprovar se um alternador reaparecesse, para o segundo
+ * tema nunca ficar sem auditoria em silêncio. Ele reapareceu — e a sentinela
+ * cumpriu o papel.
+ *
+ * A regra que atravessou as três versões é sempre a mesma: **nunca audite
+ * metade**. "Zero violações" precisa querer dizer zero no produto inteiro.
+ *
+ * Da segunda versão sobrou um aviso registrado: naquela tentativa a varredura
+ * media o mesmo tema duas vezes com os rótulos trocados, e o relatório ficava
+ * com cara de cobertura dobrada. Por isso as escalas dos dois temas são
+ * comparadas no fim: se saírem iguais, um dos dois não foi auditado, e isso
+ * reprova.
+ */
 async function auditEverything() {
   console.log("\n\n═══════════ INTERFACE ═══════════");
-  await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(1500);
-  if (await themeToggleExists()) {
-    console.log("um alternador de tema voltou à interface: a varredura precisa cobrir os dois temas de novo");
-    failures += 1;
-    return;
+  const escalas = {};
+  for (const tema of ["light", "dark"]) {
+    await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    await setTheme(tema);
+    escalas[tema] = await surfaceSignature();
+    console.log(`\n─────── tema ${tema} ───────`);
+    await audit(`Painel [${tema}]`, null);
+    await auditPanelViews(tema);
+    await auditAssistant(tema);
+    await audit(`Console da plataforma [${tema}]`, "/plataforma");
+    await auditPlatformAreas(tema);
   }
-  await audit("Painel", null);
-  await auditPanelViews();
-  await auditAssistant();
-  await audit("Console da plataforma", "/plataforma");
-  await auditPlatformAreas();
+  if (escalas.light === escalas.dark) {
+    console.log(`\nos dois temas mediram a mesma escala (${escalas.light}): um deles não foi auditado`);
+    failures += 1;
+  }
 }
 
 /**
