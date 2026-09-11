@@ -15,7 +15,8 @@ import {
   type AnimatedTab,
 } from "../shared";
 import { AccidentDialog } from "./AccidentDialog";
-import { BodyMap, DonutRing, MonthSeries, SectorBars } from "./SafetyCharts";
+import { BodyMap } from "./BodyMap";
+import { DonutRing, MonthSeries, SectorBars } from "./SafetyCharts";
 import {
   currency, dateLabel, draftFromRecord, emptyDraft, normalizeOverview,
   payloadFromDraft, requestJson, shortCurrency, type Row,

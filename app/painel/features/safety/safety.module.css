@@ -26,9 +26,9 @@
 }
 
 /* Ícone é 16px; gráfico não. A regra de ícone é `.workspace svg`, que ganha de
-   uma classe sozinha por especificidade — foi assim que o mapa do corpo e a
-   série do ano saíram desenhados dentro de 16 por 16 pixels, invisíveis na
-   tela e corretos no DOM. Os gráficos reconquistam o tamanho pelo mesmo peso. */
+   uma classe sozinha por especificidade — foi assim que a série do ano saiu
+   desenhada dentro de 16 por 16 pixels, invisível na tela e correta no DOM. Os
+   gráficos reconquistam o tamanho pelo mesmo peso. */
 .workspace svg { width: 16px; height: 16px; stroke-width: 1.9; }
 .eyebrow { color: var(--sft-accent-text); font-size: .58rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
 
@@ -184,16 +184,87 @@
 .barTrack i { display: block; height: 100%; width: var(--bar-width, 0%); border-radius: inherit; background: var(--sft-accent); }
 .bars b { font-size: .78rem; font-variant-numeric: tabular-nums; }
 
-/* ── Mapa do corpo ────────────────────────────────────────────────────── */
+/* ── Mapa do corpo, em três dimensões ─────────────────────────────────── */
 .bodyMap { display: grid; gap: 12px; }
-/* Mesmo motivo do gráfico de linha: sem proporção declarada, a figura colapsa.
-   `margin: auto` centraliza sem `justify-items`, que faria a coluna encolher
-   até o conteúdo — e o conteúdo de um SVG sem tamanho é nada. */
-.workspace .bodyFigure { display: block; width: 100%; max-width: 250px; height: auto; aspect-ratio: 220 / 366; margin: 0 auto; }
-.bodyRegion > * { fill: var(--sft-muted); stroke: var(--sft-border); stroke-width: 1; }
-.bodyRegion[data-active="true"] > * {
-  fill: color-mix(in srgb, var(--sft-accent) calc(var(--region-weight, 1) * 100%), var(--sft-muted));
-  stroke: var(--sft-accent);
+
+/* A janela do palco: é ela que carrega a perspectiva. O boneco tem 372px de
+   altura e não escala com a coluna — reduzir o palco encolheria a figura sem
+   ganhar leitura, e o painel já tem largura de sobra para ele. */
+.bodyViewport {
+  display: grid; place-items: center;
+  height: 392px; perspective: 900px; perspective-origin: 50% 42%;
+  border-radius: 12px; background:
+    radial-gradient(120% 90% at 50% 12%, color-mix(in srgb, var(--sft-accent) 7%, transparent), transparent 70%);
+  /* O recorte não é enfeite: plano girado sai da caixa do palco, e sem ele o
+     pé — que é mais comprido do que largo — empurrava a página 25px para o lado
+     em 1024px de viewport. Rolagem horizontal no painel inteiro por causa de um
+     boneco é defeito, e a auditoria de interface reprova por isso. */
+  overflow: hidden;
+}
+
+.bodyStage {
+  position: relative; width: 220px; height: 372px;
+  transform-style: preserve-3d;
+  /* A inclinação fixa dá o ponto de vista de quem olha de pé para o boneco; o
+     giro é da pessoa. `pan-y` deixa a rolagem vertical passar no celular: sem
+     isso, arrastar a página para baixo em cima da figura prenderia o dedo. */
+  transform: rotateX(-7deg) rotateY(var(--spin, 0deg));
+  transition: transform .38s cubic-bezier(.22, .61, .36, 1);
+  touch-action: pan-y; cursor: grab;
+}
+/* Durante o arrasto a figura acompanha o dedo sem atraso: a transição só existe
+   para o salto dos botões de vista. */
+.bodyStage[data-dragging="true"] { transition: none; cursor: grabbing; }
+
+.bodyVolume {
+  position: absolute; transform-style: preserve-3d;
+  transform: translateZ(var(--depth, 0px));
+  /* Cinza-azulado, e não o recuo do painel: o degradê de sombra escurece a cor
+     da região, e partindo do recuo ele terminava em quase preto — o boneco
+     ficava sujo e a região sem acidente sumia do fundo escuro. */
+  color: color-mix(in srgb, var(--sft-border) 78%, var(--sft-surface));
+}
+.bodyVolume[data-active="true"] {
+  color: color-mix(in srgb, var(--sft-accent) calc(var(--region-weight, 1) * 100%), var(--sft-muted));
+}
+
+/* Os planos cruzados. Cada um recebe o mesmo degradê de luz para sombra, na
+   mesma direção — é o sombreado que faz o conjunto ler como volume em vez de
+   folhas soltas. Branco e preto entram aqui porque luz e sombra são física, não
+   marca: eles se misturam à cor da região, que continua vindo dos tokens. */
+.bodyVolume i {
+  position: absolute; inset: 0; border-radius: var(--radius, 40%);
+  background: linear-gradient(148deg,
+    color-mix(in srgb, white 26%, currentColor) 0%,
+    currentColor 48%,
+    color-mix(in srgb, black 20%, currentColor) 100%);
+  /* Sem contorno no volume sem acidente: um traço em cada plano recortava a
+     silhueta e o boneco lia como uma corrente de contas em vez de um corpo. O
+     contorno fica só na região atingida, que é onde ele separa o que importa. */
+  /* Sem `backface-visibility: hidden`. Ela esconderia o verso de cada plano — e
+     o verso é justamente o que fica virado para a câmera em metade do giro:
+     com ela, o boneco desaparecia por inteiro na vista de lado. */
+}
+.bodyVolume[data-active="true"] i {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sft-accent) 55%, transparent);
+}
+
+/* A sombra no chão. Ela não muda de forma com o giro, e não precisa: o que ela
+   entrega é o apoio — sem sombra, o boneco flutua. */
+.bodyFloor {
+  position: absolute; left: 50%; bottom: 4px; width: 150px; height: 54px;
+  margin-left: -75px; transform: rotateX(90deg) translateZ(-14px);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, black 26%, transparent), transparent);
+}
+
+.bodyViews { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: center; }
+.bodyHint { color: var(--sft-soft); font-size: .62rem; }
+
+/* Quem pediu menos movimento recebe o boneco parado no salto entre vistas; o
+   arrasto continua respondendo, porque ali o movimento é o da própria mão. */
+@media (prefers-reduced-motion: reduce) {
+  .bodyStage { transition: none; }
 }
 
 .bodyLegend {
