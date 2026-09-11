@@ -1040,6 +1040,16 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
   font-size: .875rem; font-weight: 650; white-space: nowrap; box-shadow: none;
 }
 .operational-ui .new-demand:hover { border-color: var(--ui-primary-hover); background: var(--ui-primary-hover); color: var(--ui-on-accent); transform: none; }
+/* No escuro, `--ui-primary-hover` vale `#5274FF` — mais claro que o repouso,
+   que é o sentido certo para um link e o errado para um botão cheio: branco
+   sobre ele cai a 3,96:1. O token não pode mudar, porque ele também pinta
+   *texto* no escuro (`.notification-actions button:hover`), e ali o azul claro
+   é justamente o que funciona. Então a correção é do botão, não da escala.
+
+   `#2A4AD4` é o mesmo hover do tema claro: branco em cima dá 6,93:1, e o
+   degrau até o repouso (1,32:1) é exatamente o mesmo que o `#5274FF` dava —
+   o botão continua reagindo com a mesma força, só para o outro lado. */
+.operational-ui.theme-dark .new-demand:hover { border-color: #2A4AD4; background: #2A4AD4; }
 .operational-ui .new-demand svg { width: 18px; height: 18px; }
 
 /* -------------------------------------------------------------------------- */

@@ -244,10 +244,16 @@ let screensAudited = 0;
  * a 1,03:1 — vinte e cinco violações reais numa área que o relatório dava como
  * limpa.
  *
- * O número continua folgado de propósito — 77 contra 88 medidas — para acusar
- * um colapso de cobertura sem quebrar quando um módulo sai do plano.
+ * O número continua folgado de propósito — para acusar um colapso de cobertura
+ * sem quebrar quando um módulo sai do plano.
+ *
+ * Com os dois temas de volta, a medida passou de 88 para 204, e manter o piso
+ * em 77 o tornaria inútil justamente contra o risco que ele existe para pegar:
+ * um tema inteiro pode sumir da varredura — 102 telas — e o número ainda
+ * ficaria acima de 77. O piso sobe para 170: continua folgado contra a saída de
+ * um módulo, e fica abaixo do que qualquer um dos dois temas sozinho alcança.
  */
-const MINIMO_DE_TELAS = 77;
+const MINIMO_DE_TELAS = 170;
 
 /**
  * `path === null` audita a tela já aberta, sem recarregar — usado nas visões do
