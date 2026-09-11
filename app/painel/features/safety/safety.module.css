@@ -1,0 +1,336 @@
+/* Dashboard de Acidente de Trabalho.
+ *
+ * Nenhuma cor escrita à mão: tudo vem dos tokens do painel, e o acento do
+ * módulo é o acento semântico compartilhado — assim o cabeçalho, o estado vazio
+ * e o diálogo de confirmação, que vêm de `features/shared`, saem no mesmo tom
+ * da tela em vez de num verde próprio. O modo escuro vem junto de graça, porque
+ * são os mesmos tokens que ele redefine.
+ */
+.workspace {
+  --sft-accent: var(--ui-accent, #1f5f8b);
+  --sft-accent-text: var(--ui-accent-text, #1f5f8b);
+  --sft-on-accent: var(--ui-on-accent, #fff);
+  --sft-accent-soft: var(--ui-accent-soft, #e6f0f7);
+  --sft-surface: var(--ui-surface, #fff);
+  --sft-muted: var(--ui-surface-muted, #f0f4f6);
+  --sft-border: var(--ui-border, #d8e0e7);
+  --sft-text: var(--ui-text, #172235);
+  --sft-soft: var(--ui-text-soft, #5e6d7f);
+  --sft-success: var(--ui-success, #137a4f);
+  --sft-warning: var(--ui-warning, #a15c07);
+  --sft-danger: var(--ui-danger, #b42318);
+
+  display: grid;
+  gap: 14px;
+  color: var(--sft-text);
+}
+
+/* Ícone é 16px; gráfico não. A regra de ícone é `.workspace svg`, que ganha de
+   uma classe sozinha por especificidade — foi assim que a série do ano saiu
+   desenhada dentro de 16 por 16 pixels, invisível na tela e correta no DOM. Os
+   gráficos reconquistam o tamanho pelo mesmo peso. */
+.workspace svg { width: 16px; height: 16px; stroke-width: 1.9; }
+.eyebrow { color: var(--sft-accent-text); font-size: .58rem; font-weight: 820; letter-spacing: .11em; line-height: 1.2; }
+
+.srOnly {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* ── Ações e controles ────────────────────────────────────────────────── */
+.headerActions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.primaryButton, .secondaryButton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 0 14px;
+  border-radius: 7px; font-size: .72rem; font-weight: 740; white-space: nowrap; cursor: pointer; text-decoration: none;
+}
+.primaryButton { border: 1px solid var(--sft-accent); background: var(--sft-accent); color: var(--sft-on-accent); }
+.secondaryButton { border: 1px solid var(--sft-border); background: var(--sft-surface); color: var(--sft-text); }
+.primaryButton:disabled, .secondaryButton:disabled { opacity: .55; cursor: not-allowed; }
+
+.iconButton {
+  display: grid; place-items: center; width: 30px; height: 30px;
+  border: 1px solid var(--sft-border); border-radius: 7px;
+  background: var(--sft-surface); color: var(--sft-soft); cursor: pointer;
+}
+.iconButton:hover { color: var(--sft-accent-text); border-color: var(--sft-accent); }
+
+.filterBar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px;
+  padding: 12px 14px; border: 1px solid var(--sft-border); border-radius: 12px; background: var(--sft-surface);
+}
+
+.selectField { display: grid; gap: 5px; }
+.selectField > span { color: var(--sft-soft); font-size: .58rem; font-weight: 820; letter-spacing: .11em; }
+.selectField select {
+  min-height: 38px; min-width: 220px; padding: 0 10px; border: 1px solid var(--sft-border);
+  border-radius: 7px; background: var(--sft-surface); color: inherit; font-size: .74rem;
+}
+
+.chipGroup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chipLabel { color: var(--sft-soft); font-size: .58rem; font-weight: 820; letter-spacing: .11em; margin-right: 2px; }
+.chipEmpty { color: var(--sft-soft); font-size: .7rem; }
+
+/* O botão do período é o controle mais clicado da tela: alto o bastante para o
+   dedo, e com o estado escrito no fundo, não só na borda. */
+.chip {
+  min-height: 30px; padding: 0 10px; border: 1px solid var(--sft-border); border-radius: 7px;
+  background: var(--sft-surface); color: var(--sft-soft); font-size: .68rem; font-weight: 760; cursor: pointer;
+}
+.chip[data-selected="true"] { border-color: var(--sft-accent); background: var(--sft-accent); color: var(--sft-on-accent); }
+.chipReset {
+  min-height: 30px; padding: 0 9px; border: 1px dashed var(--sft-border); border-radius: 7px;
+  background: transparent; color: var(--sft-soft); font-size: .66rem; font-weight: 720; cursor: pointer;
+}
+
+.noticeBar {
+  display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--sft-border); background: var(--sft-muted); font-size: .73rem;
+}
+.noticeBar span { display: grid; gap: 2px; }
+.noticeBar[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--sft-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--sft-warning) 10%, transparent);
+  color: var(--sft-warning);
+}
+.noticeBar[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--sft-danger) 45%, transparent);
+  background: color-mix(in srgb, var(--sft-danger) 10%, transparent);
+  color: var(--sft-danger);
+}
+
+/* ── Cartões do topo ──────────────────────────────────────────────────── */
+.summaryRow {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.summaryCard {
+  display: flex; align-items: flex-start; gap: 10px; padding: 13px;
+  border: 1px solid var(--sft-border); border-radius: 12px; background: var(--sft-surface);
+}
+.summaryCard > div { display: grid; gap: 2px; min-width: 0; }
+.summaryCard small { color: var(--sft-soft); font-size: .6rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.summaryCard strong { font-size: 1.3rem; line-height: 1.15; }
+.summaryCard p { margin: 0; color: var(--sft-soft); font-size: .67rem; }
+
+.cardIcon {
+  display: grid; place-items: center; width: 34px; height: 34px; flex: none;
+  border-radius: 9px; background: var(--sft-accent-soft); color: var(--sft-accent-text);
+}
+
+.genderSplit, .shiftSplit { display: flex; align-items: baseline; gap: 12px; font-size: 1.1rem; }
+.genderSplit span, .shiftSplit span { display: inline-flex; align-items: center; gap: 4px; }
+.genderSplit i { color: var(--sft-soft); font-size: .66rem; font-style: normal; font-weight: 800; }
+.shiftSplit span { font-size: 1rem; }
+.shiftSplit svg { color: var(--sft-accent-text); }
+
+/* ── Painéis dos gráficos ─────────────────────────────────────────────── */
+.chartsGrid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+/* O mapa do corpo é o painel mais alto e o mais lido: em tela larga ele ocupa
+   duas colunas para o desenho não encolher até virar ícone. */
+.chartsGrid > [data-area="body"] { grid-column: span 1; }
+@media (min-width: 1100px) {
+  .chartsGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .chartsGrid > [data-area="body"] { grid-row: span 2; }
+}
+
+.panel {
+  display: grid; gap: 12px; align-content: start; padding: 14px;
+  border: 1px solid var(--sft-border); border-radius: 12px; background: var(--sft-surface);
+}
+.panel > header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.panel > header strong { font-size: .84rem; }
+.panel > header span { color: var(--sft-soft); font-size: .65rem; }
+
+.typeList { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.typeList li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--sft-border); border-radius: 10px; background: var(--sft-muted);
+}
+.typeList li > div { display: grid; gap: 1px; }
+.typeList b { font-size: 1.2rem; line-height: 1.1; }
+.typeList span { color: var(--sft-soft); font-size: .69rem; font-weight: 700; }
+
+.donut { display: inline-flex; align-items: center; gap: 7px; }
+.workspace .donut svg { width: 42px; height: 42px; }
+.donutTrack { fill: none; stroke: var(--sft-border); stroke-width: 6; }
+.donutValue {
+  fill: none; stroke: var(--sft-accent); stroke-width: 6; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: 50% 50%;
+}
+.donut b { font-size: .82rem; font-weight: 800; }
+
+.series { display: grid; gap: 4px; }
+/* `aspect-ratio` no lugar de `height: auto`: um SVG só com `viewBox` não tem
+   tamanho intrínseco, e dentro de um grid ele resolvia para altura zero — o
+   painel aparecia vazio, com o gráfico desenhado em um risco de um pixel. */
+.workspace .seriesChart { display: block; width: 100%; height: auto; aspect-ratio: 360 / 140; }
+.seriesLine { fill: none; stroke: var(--sft-accent); stroke-width: 2; stroke-linejoin: round; }
+.seriesDot { fill: var(--sft-surface); stroke: var(--sft-accent); stroke-width: 2; }
+.seriesValue { fill: var(--sft-text); font-size: 11px; font-weight: 700; }
+.seriesLabel { fill: var(--sft-soft); font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+
+.bars { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.bars li { display: grid; grid-template-columns: minmax(80px, 34%) 1fr auto; align-items: center; gap: 9px; }
+.barLabel {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--sft-soft); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.barTrack { display: block; height: 10px; border-radius: 99px; background: var(--sft-muted); overflow: hidden; }
+.barTrack i { display: block; height: 100%; width: var(--bar-width, 0%); border-radius: inherit; background: var(--sft-accent); }
+.bars b { font-size: .78rem; font-variant-numeric: tabular-nums; }
+
+/* ── Mapa do corpo, em três dimensões ─────────────────────────────────── */
+.bodyMap { display: grid; gap: 12px; }
+
+/* A janela do palco: é ela que carrega a perspectiva. O boneco tem 372px de
+   altura e não escala com a coluna — reduzir o palco encolheria a figura sem
+   ganhar leitura, e o painel já tem largura de sobra para ele. */
+.bodyViewport {
+  display: grid; place-items: center;
+  height: 392px; perspective: 900px; perspective-origin: 50% 42%;
+  border-radius: 12px; background:
+    radial-gradient(120% 90% at 50% 12%, color-mix(in srgb, var(--sft-accent) 7%, transparent), transparent 70%);
+  /* O recorte não é enfeite: plano girado sai da caixa do palco, e sem ele o
+     pé — que é mais comprido do que largo — empurrava a página 25px para o lado
+     em 1024px de viewport. Rolagem horizontal no painel inteiro por causa de um
+     boneco é defeito, e a auditoria de interface reprova por isso. */
+  overflow: hidden;
+}
+
+.bodyStage {
+  position: relative; width: 220px; height: 372px;
+  transform-style: preserve-3d;
+  /* A inclinação fixa dá o ponto de vista de quem olha de pé para o boneco; o
+     giro é da pessoa. `pan-y` deixa a rolagem vertical passar no celular: sem
+     isso, arrastar a página para baixo em cima da figura prenderia o dedo. */
+  transform: rotateX(-7deg) rotateY(var(--spin, 0deg));
+  transition: transform .38s cubic-bezier(.22, .61, .36, 1);
+  touch-action: pan-y; cursor: grab;
+}
+/* Durante o arrasto a figura acompanha o dedo sem atraso: a transição só existe
+   para o salto dos botões de vista. */
+.bodyStage[data-dragging="true"] { transition: none; cursor: grabbing; }
+
+/* Os dois planos do turntable: a silhueta de frente a 0° e o perfil a 90°.
+   Eles giram com o palco, e a opacidade — calculada pelo ângulo, no componente —
+   decide qual dos dois a pessoa está vendo. Sem `backface-visibility: hidden`:
+   o verso de cada plano é justamente o que fica virado para a câmera em metade
+   do giro, e escondê-lo apagava a figura inteira nas costas. */
+.bodyPlane { position: absolute; inset: 0; display: grid; place-items: center; }
+.bodyPlane[data-plane="side"] { transform: rotateY(90deg); }
+
+.bodyArt { width: 100%; height: 100%; }
+/* `isolation` prende a mistura da camada de luz ao próprio desenho: sem ela, o
+   degradê tentaria se misturar ao fundo do painel. */
+.workspace .bodyArt { width: 220px; height: 372px; isolation: isolate; }
+
+/* O traço fino separa braço de tronco quando os dois estão no mesmo tom: sem
+   ele, duas regiões vizinhas apagadas viram uma mancha só. */
+.bodyRegion {
+  fill: color-mix(in srgb, var(--sft-border) 82%, var(--sft-surface));
+  stroke: color-mix(in srgb, black 20%, transparent); stroke-width: 1;
+}
+.bodyRegion[data-active="true"] {
+  fill: color-mix(in srgb, var(--sft-accent) calc(var(--region-weight, 1) * 100%), var(--sft-muted));
+}
+
+/* A luz: uma camada só, por cima da silhueta inteira. `soft-light` mistura com
+   a cor que está embaixo em vez de substituí-la — assim a região acesa continua
+   acesa, e a apagada continua neutra, as duas com o mesmo volume. */
+.bodyLight { mix-blend-mode: soft-light; pointer-events: none; }
+/* Claro em cima à esquerda, escuro embaixo à direita. Luz e sombra são física,
+   não marca: são as únicas cores do módulo que não saem de um token. */
+.lightTop { stop-color: white; stop-opacity: .85; }
+.lightMiddle { stop-color: white; stop-opacity: .1; }
+.lightBottom { stop-color: black; stop-opacity: .55; }
+
+/* A sombra no chão. Ela não muda de forma com o giro, e não precisa: o que ela
+   entrega é o apoio — sem sombra, o boneco flutua. */
+.bodyFloor {
+  position: absolute; left: 50%; bottom: 4px; width: 150px; height: 54px;
+  margin-left: -75px; transform: rotateX(90deg) translateZ(-14px);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, black 26%, transparent), transparent);
+}
+
+.bodyViews { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: center; }
+.bodyHint { color: var(--sft-soft); font-size: .62rem; }
+
+/* Quem pediu menos movimento recebe o boneco parado no salto entre vistas; o
+   arrasto continua respondendo, porque ali o movimento é o da própria mão. */
+@media (prefers-reduced-motion: reduce) {
+  .bodyStage { transition: none; }
+}
+
+.bodyLegend {
+  display: grid; gap: 4px; width: 100%; margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.bodyLegend li {
+  display: flex; align-items: baseline; gap: 6px; padding: 5px 8px;
+  border-radius: 7px; background: var(--sft-muted); font-size: .69rem;
+}
+.bodyLegend li > span { flex: 1; color: var(--sft-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bodyLegend b { font-weight: 800; }
+.bodyLegend small { color: var(--sft-soft); font-size: .62rem; }
+
+/* ── Lançamentos ──────────────────────────────────────────────────────── */
+.tableWrap { border: 1px solid var(--sft-border); border-radius: 12px; background: var(--sft-surface); overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: .73rem; }
+.table th, .table td { padding: 9px 11px; text-align: left; white-space: nowrap; }
+.table thead th {
+  position: sticky; top: 0; background: var(--sft-muted); color: var(--sft-soft);
+  font-size: .6rem; font-weight: 820; letter-spacing: .08em; text-transform: uppercase;
+}
+.table tbody tr + tr td { border-top: 1px solid var(--sft-border); }
+.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.rowActions { display: flex; gap: 6px; justify-content: flex-end; }
+
+/* ── Diálogo ──────────────────────────────────────────────────────────── */
+.drawerOverlay {
+  /* 120 é o mesmo patamar das gavetas do resto do painel. Abaixo dele, o botão
+     flutuante do assistente fica por cima do rodapé e cobre justamente o botão
+     que grava o lançamento. */
+  position: fixed; inset: 0; z-index: 120; display: flex; justify-content: flex-end;
+  background: color-mix(in srgb, var(--sft-text) 45%, transparent); backdrop-filter: blur(2px);
+}
+.drawer {
+  width: min(620px, 100%); height: 100%; overflow-y: auto;
+  background: var(--sft-surface); border-left: 1px solid var(--sft-border);
+}
+.drawer form { display: grid; gap: 14px; min-height: 100%; grid-template-rows: auto 1fr auto; }
+.drawerHeader {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 16px 18px 0;
+}
+.drawerHeader h2 { margin: 2px 0 3px; font-size: 1.02rem; }
+.drawerHeader p { margin: 0; color: var(--sft-soft); font-size: .71rem; }
+.closeButton {
+  display: grid; place-items: center; width: 32px; height: 32px; flex: none;
+  border: 1px solid var(--sft-border); border-radius: 8px; background: var(--sft-surface); cursor: pointer;
+}
+.drawerBody { display: grid; gap: 12px; align-content: start; padding: 0 18px; }
+.drawerFooter {
+  display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px;
+  border-top: 1px solid var(--sft-border); background: var(--sft-muted);
+}
+
+.formGrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.formGrid label, .formField { display: grid; gap: 5px; font-size: .68rem; font-weight: 720; color: var(--sft-soft); }
+.formGrid input, .formGrid select, .formField textarea, .formField input {
+  min-height: 38px; padding: 8px 10px; border: 1px solid var(--sft-border); border-radius: 7px;
+  background: var(--sft-surface); color: var(--sft-text); font-size: .76rem; font-weight: 500;
+}
+.formField textarea { min-height: 84px; resize: vertical; }
+.formGrid input:disabled { background: var(--sft-muted); color: var(--sft-soft); }
+.checkboxField { display: flex !important; align-items: center; gap: 8px; align-self: end; min-height: 38px; }
+.checkboxField input { min-height: 0; width: 16px; height: 16px; }
+.formHint {
+  margin: 0; padding: 9px 11px; border-radius: 9px;
+  background: var(--sft-accent-soft); color: var(--sft-accent-text); font-size: .69rem;
+}

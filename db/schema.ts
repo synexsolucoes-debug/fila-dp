@@ -3487,3 +3487,54 @@ export const agentProposals = pgTable("fdp_agent_proposals", {
   check("fdp_agent_proposals_agent_check", sql`length(${table.agentKey}) > 0`),
   check("fdp_agent_proposals_resolution_check", sql`(${table.status} IN ('pending_triage', 'suggested') AND ${table.resolvedAt} IS NULL) OR (${table.status} NOT IN ('pending_triage', 'suggested') AND ${table.resolvedAt} IS NOT NULL)`),
 ]);
+
+/**
+ * Acidente de trabalho, um registro por fato (SESMT).
+ *
+ * O dashboard do módulo mostra nove recortes do mesmo conjunto — tipo, parte do
+ * corpo, setor, gênero, turno, mês, dias afastados, despesa e total. Guardar
+ * nove totais digitados deixaria os recortes se contradizerem entre si; aqui
+ * eles são a mesma soma vista de nove ângulos, e o filtro de período vale para
+ * todos ao mesmo tempo.
+ *
+ * A data que importa é a do fato (`occurredOn`), nunca a do lançamento: um
+ * acidente de março registrado em setembro pertence a março, que é onde a CAT o
+ * colocou.
+ */
+export const workAccidents = pgTable("fdp_work_accidents", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  occurredOn: date("occurred_on", { mode: "string" }).notNull(),
+  accidentType: text("accident_type").notNull(),
+  bodyPart: text("body_part").notNull(),
+  /* Aberto de propósito: a estrutura de setores é de cada empresa. O que é
+     fechado é o vocabulário que precisa ser comparável entre elas. */
+  sector: text("sector").notNull().default(""),
+  workShift: text("work_shift").notNull(),
+  gender: text("gender").notNull().default("not_informed"),
+  employeeLabel: text("employee_label").notNull().default(""),
+  leaveDays: integer("leave_days").notNull().default(0),
+  expenseAmount: numeric("expense_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  catIssued: integer("cat_issued").notNull().default(0),
+  catNumber: text("cat_number").notNull().default(""),
+  description: text("description").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_work_accidents_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_work_accidents_workspace_company_date_idx").on(table.workspaceId, table.companyId, table.occurredOn),
+  index("fdp_work_accidents_workspace_date_idx").on(table.workspaceId, table.occurredOn),
+  foreignKey({ name: "fdp_work_accidents_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  check("fdp_work_accidents_type_check", sql`${table.accidentType} IN ('incident', 'typical', 'commute', 'occupational_disease')`),
+  check("fdp_work_accidents_body_part_check", sql`${table.bodyPart} IN ('skull', 'face', 'eyes', 'neck', 'shoulder', 'arm', 'elbow', 'hand', 'fingers', 'chest', 'abdomen', 'lumbar', 'hip', 'leg', 'knee', 'foot', 'toes', 'multiple', 'other')`),
+  check("fdp_work_accidents_shift_check", sql`${table.workShift} IN ('morning', 'afternoon', 'night')`),
+  check("fdp_work_accidents_gender_check", sql`${table.gender} IN ('female', 'male', 'other', 'not_informed')`),
+  check("fdp_work_accidents_leave_days_check", sql`${table.leaveDays} >= 0`),
+  check("fdp_work_accidents_expense_check", sql`${table.expenseAmount} >= 0`),
+  check("fdp_work_accidents_cat_flag_check", sql`${table.catIssued} IN (0, 1)`),
+  // Protocolo sem emissão é prova de um ato que não aconteceu.
+  check("fdp_work_accidents_cat_number_check", sql`${table.catIssued} = 1 OR ${table.catNumber} = ''`),
+]);

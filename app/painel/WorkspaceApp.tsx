@@ -49,6 +49,7 @@ import {
   Settings,
   Settings2,
   ShieldQuestion,
+  Siren,
   SlidersHorizontal,
   AlertTriangle,
   UserRoundCog,
@@ -87,6 +88,7 @@ import { IntegrationsView } from "./features/integrations";
 import { PaymentsView, contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments";
 import { TimeTrackingView } from "./features/time";
 import { EpiControlView } from "./features/epi";
+import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
 
@@ -94,7 +96,7 @@ import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type BoardDensity = "comfortable" | "compact";
 type BoardGroupBy = "none" | "company" | "assignee";
@@ -290,6 +292,7 @@ const processGroupIcons: Record<string, LucideIcon> = {
   "operacao-dp": ClipboardCheck,
   pagamentos: WalletCards,
   epi: HardHat,
+  "seguranca-do-trabalho": Siren,
   jornada: Timer,
   desenho: Workflow,
   cadastros: Users,
@@ -425,6 +428,11 @@ const viewCatalog: Record<View, ViewEntry> = {
     label: "Controle de EPI", icon: HardHat, module: "epi", hiddenFor: ["guest"],
     eyebrow: "SEGURANÇA DO TRABALHO", title: "Controle de EPI",
     description: "Cadastro, entrega, devolução, troca, descarte e análise de desconto de equipamentos de proteção.",
+  },
+  safety: {
+    label: "Acidentes de Trabalho", icon: Siren, module: "safety", hiddenFor: ["guest"], ownHeader: true,
+    eyebrow: "SEGURANÇA DO TRABALHO", title: "Dashboard de Acidente de Trabalho",
+    description: "Acidentes, dias afastados e despesas por período, tipo, parte do corpo, setor e turno.",
   },
   payroll: {
     label: "Folha", icon: WalletCards, module: "payroll",
@@ -3009,6 +3017,8 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
           {view === "timeTracking" && <TimeTrackingView role={snapshot.workspace.role} />}
 
           {view === "epi" && <EpiControlView role={snapshot.workspace.role} />}
+
+          {view === "safety" && <WorkAccidentDashboardView />}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
 

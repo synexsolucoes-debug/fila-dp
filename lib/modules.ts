@@ -92,6 +92,7 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
     // perdesse a tela continuaria lendo a trilha do EPI pela auditoria.
     "epi.audit.view", "epi.stock.adjust",
   ],
+  safety: ["safety.manage", "safety.delete", "safety.export"],
   integrations: ["integrations.manage", "integrations.run", "integrations.reconcile"],
   sankhya_browser: ["integrations.credentials.manage", "integrations.execute", "integrations.logs.view"],
   payroll: ["hr.write"],

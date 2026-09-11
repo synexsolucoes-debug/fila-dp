@@ -8,6 +8,7 @@ export type ModuleWindowViewKey =
   | "registrations"
   | "timeTracking"
   | "epi"
+  | "safety"
   | "payroll"
   | "psychologistPayments"
   | "contractorPayments"
@@ -84,6 +85,12 @@ export const moduleWindowRegistry: readonly ModuleWindowRegistryItem[] = [
     viewKey: "epi",
     label: "Controle de EPI",
     context: "Gestão de EPI",
+  },
+  {
+    moduleKey: "safety",
+    viewKey: "safety",
+    label: "Acidentes de Trabalho",
+    context: "Segurança do trabalho",
   },
   {
     moduleKey: "payroll",
