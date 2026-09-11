@@ -1231,7 +1231,13 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
 .operational-ui .dashboard-task-bottom { margin-top: 14px; padding-top: 0; border-top: 0; gap: 8px; }
 .operational-ui .dashboard-sla { font-size: .75rem; font-weight: 600; }
 .operational-ui :is(.dashboard-check, .dashboard-comments) { color: var(--ui-text-muted); font-size: .75rem; }
-.operational-ui .dashboard-task-owner { margin-left: auto; }
+/* O nome do responsável cede espaço com reticências, em vez de ser cortado no
+   meio da palavra pela borda do cartão: "Sem responsáve" parecia texto
+   truncado por engano, e não por falta de espaço. */
+.operational-ui .dashboard-task-owner { margin-left: auto; min-width: 0; max-width: 60%; }
+.operational-ui .dashboard-task-owner > b {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .operational-ui .dashboard-mini-avatar { background: var(--ui-avatar-bg); color: var(--ui-avatar-text); font-size: .625rem; font-weight: 700; }
 
 .operational-ui .dashboard-add-card {
@@ -1286,7 +1292,59 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
      sozinho, não responde "com qual conta eu estou aqui?" — e é essa a única
      pergunta que o rodapé da barra existe para responder. */
   .operational-ui .sidebar-account > span:nth-child(2) { display: block; }
+
+  /* E o rodapé volta a ser uma grade que cabe.
+     Duas coisas estavam erradas ao mesmo tempo, e só juntas explicam o que se
+     via: `access.css` põe `justify-items: center` nesta faixa (era o desenho de
+     quando a barra virava trilho de ícone), então cada item passou a centralizar
+     na *própria* trilha e a transbordar dela pelos dois lados — o nome por cima
+     do avatar, as ações passando da borda da barra. E a terceira trilha tem
+     28px, largura de uma ação; o rodapé tem três (configurações, trocar de
+     conta, sair), que somam 88.
+     As ações descem para uma linha própria, alinhadas à direita. São 204px de
+     coluna útil: com avatar, nome e três botões na mesma linha, sobrariam 60px
+     para o nome — e um nome cortado em "Administra…" não responde com qual
+     conta a pessoa está. A barra tem altura de sobra; largura, não. */
+  .operational-ui .sidebar-account {
+    grid-template-columns: 38px minmax(0, 1fr);
+    justify-items: stretch;
+    align-items: center;
+    row-gap: 8px;
+  }
+  .operational-ui .sidebar-account-actions { grid-column: 1 / -1; justify-content: flex-end; }
+
+  /* E volta o rótulo do seletor de grupo.
+     `access.css` reduz esse seletor ao símbolo de 1499px para baixo — decisão
+     de quando a barra virava trilho estreito nessa faixa. Trazer a caixa de
+     volta sem desfazer aquilo deixava um controle mostrando só "OP": um
+     quadrado clicável que não diz qual grupo está aberto nem que é possível
+     trocar. Um seletor sem rótulo é pior que seletor nenhum, porque ocupa o
+     lugar de um.
+     A lista também volta para dentro da coluna: `left: 100%` existia para ela
+     não caber na barra estreita, e com a barra larga isso a jogava por cima do
+     conteúdo. */
+  .operational-ui .sidebar-workspace-switcher summary { justify-content: flex-start; }
+  .operational-ui .sidebar-workspace-switcher summary > span { display: grid; gap: 2px; min-width: 0; }
+  .operational-ui .sidebar-workspace-switcher summary > svg {
+    display: block; width: 16px; height: 16px; flex: 0 0 16px; margin-left: auto; color: var(--ui-rail-icon);
+  }
+  .operational-ui .sidebar-workspace-switcher > span { display: block; }
+  .operational-ui .sidebar-workspace-switcher ul {
+    position: static; min-width: 0; margin: 6px 0 0;
+    border-color: var(--ui-rail-border); background: var(--ui-rail-context); box-shadow: none;
+  }
 }
+
+/* O acento sobre tinta nos dois cartões navy do conteúdo.
+   `--brand-accent` é o azul vivo do §88, e a própria paleta diz o que ele é:
+   preenchimento, foco e traço — nunca texto pequeno. Nos passos da Inbox ele
+   veste um número de 10px sobre o cartão navy e rende 4,31:1, abaixo dos 4,5
+   da WCAG 2.2 AA. Medido nas seis telas em que o cartão aparece.
+   `--ui-accent-on-ink` é o mesmo azul na versão que se lê sobre tinta: 8,89:1
+   sobre o navy do cartão. O traço do círculo continua no vivo, que ali é
+   indicador e não texto. */
+.operational-ui .inbox-summary li > b { color: var(--ui-accent-on-ink); }
+.operational-ui .inbox-converted strong { color: var(--ui-accent-on-ink); }
 
 @media (max-width: 1180px) {
   .operational-ui .board-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1585,6 +1643,11 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
 /* 7.8 Controles de exibição                                                  */
 /* -------------------------------------------------------------------------- */
 
+/* Exibição e Filtros andam juntos no canto direito. Os dois abrem painel, e
+   separá-los na quebra de linha — um no meio da fileira, outro na ponta — fazia
+   parecer que um deles era mais um campo de filtro. */
+.operational-ui .board-view-options { margin-left: auto; }
+.operational-ui .board-view-options + .board-filter-details { margin-left: 0; }
 .operational-ui .board-view-options .board-filter-fields { min-width: 288px; }
 .operational-ui .board-view-density { display: grid; gap: 6px; }
 .operational-ui .board-view-density > span { color: var(--ui-text-muted); font-size: .8125rem; }
