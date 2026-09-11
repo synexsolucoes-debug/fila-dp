@@ -216,38 +216,38 @@
    para o salto dos botões de vista. */
 .bodyStage[data-dragging="true"] { transition: none; cursor: grabbing; }
 
-.bodyVolume {
-  position: absolute; transform-style: preserve-3d;
-  transform: translateZ(var(--depth, 0px));
-  /* Cinza-azulado, e não o recuo do painel: o degradê de sombra escurece a cor
-     da região, e partindo do recuo ele terminava em quase preto — o boneco
-     ficava sujo e a região sem acidente sumia do fundo escuro. */
-  color: color-mix(in srgb, var(--sft-border) 78%, var(--sft-surface));
+/* Os dois planos do turntable: a silhueta de frente a 0° e o perfil a 90°.
+   Eles giram com o palco, e a opacidade — calculada pelo ângulo, no componente —
+   decide qual dos dois a pessoa está vendo. Sem `backface-visibility: hidden`:
+   o verso de cada plano é justamente o que fica virado para a câmera em metade
+   do giro, e escondê-lo apagava a figura inteira nas costas. */
+.bodyPlane { position: absolute; inset: 0; display: grid; place-items: center; }
+.bodyPlane[data-plane="side"] { transform: rotateY(90deg); }
+
+.bodyArt { width: 100%; height: 100%; }
+/* `isolation` prende a mistura da camada de luz ao próprio desenho: sem ela, o
+   degradê tentaria se misturar ao fundo do painel. */
+.workspace .bodyArt { width: 220px; height: 372px; isolation: isolate; }
+
+/* O traço fino separa braço de tronco quando os dois estão no mesmo tom: sem
+   ele, duas regiões vizinhas apagadas viram uma mancha só. */
+.bodyRegion {
+  fill: color-mix(in srgb, var(--sft-border) 82%, var(--sft-surface));
+  stroke: color-mix(in srgb, black 20%, transparent); stroke-width: 1;
 }
-.bodyVolume[data-active="true"] {
-  color: color-mix(in srgb, var(--sft-accent) calc(var(--region-weight, 1) * 100%), var(--sft-muted));
+.bodyRegion[data-active="true"] {
+  fill: color-mix(in srgb, var(--sft-accent) calc(var(--region-weight, 1) * 100%), var(--sft-muted));
 }
 
-/* Os planos cruzados. Cada um recebe o mesmo degradê de luz para sombra, na
-   mesma direção — é o sombreado que faz o conjunto ler como volume em vez de
-   folhas soltas. Branco e preto entram aqui porque luz e sombra são física, não
-   marca: eles se misturam à cor da região, que continua vindo dos tokens. */
-.bodyVolume i {
-  position: absolute; inset: 0; border-radius: var(--radius, 40%);
-  background: linear-gradient(148deg,
-    color-mix(in srgb, white 26%, currentColor) 0%,
-    currentColor 48%,
-    color-mix(in srgb, black 20%, currentColor) 100%);
-  /* Sem contorno no volume sem acidente: um traço em cada plano recortava a
-     silhueta e o boneco lia como uma corrente de contas em vez de um corpo. O
-     contorno fica só na região atingida, que é onde ele separa o que importa. */
-  /* Sem `backface-visibility: hidden`. Ela esconderia o verso de cada plano — e
-     o verso é justamente o que fica virado para a câmera em metade do giro:
-     com ela, o boneco desaparecia por inteiro na vista de lado. */
-}
-.bodyVolume[data-active="true"] i {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sft-accent) 55%, transparent);
-}
+/* A luz: uma camada só, por cima da silhueta inteira. `soft-light` mistura com
+   a cor que está embaixo em vez de substituí-la — assim a região acesa continua
+   acesa, e a apagada continua neutra, as duas com o mesmo volume. */
+.bodyLight { mix-blend-mode: soft-light; pointer-events: none; }
+/* Claro em cima à esquerda, escuro embaixo à direita. Luz e sombra são física,
+   não marca: são as únicas cores do módulo que não saem de um token. */
+.lightTop { stop-color: white; stop-opacity: .85; }
+.lightMiddle { stop-color: white; stop-opacity: .1; }
+.lightBottom { stop-color: black; stop-opacity: .55; }
 
 /* A sombra no chão. Ela não muda de forma com o giro, e não precisa: o que ela
    entrega é o apoio — sem sombra, o boneco flutua. */

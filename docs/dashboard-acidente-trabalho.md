@@ -70,13 +70,21 @@ desenhadas por cima do abdômen — duas regiões diferentes no mesmo lugar, que
 exatamente o que o mapa existe para separar. Aqui a lombar fica atrás do tronco
 e aparece ao virar o boneco, pelo arrasto ou pelos botões Frente, Lado e Costas.
 
-Não entrou biblioteca 3D. Cada região é um punhado de planos cruzados dentro de
-um palco com `perspective` e `preserve-3d`; de qualquer ângulo pelo menos um
-plano está virado para a câmera, então o volume nunca some. A seção de cada
-parte é declarada (`depth`), e é ela que dá ao tronco frente larga e perfil
-estreito — sem isso o boneco sairia cilíndrico, com a mesma largura em toda a
-volta. O custo é zero em dependência, em `npm audit` e em tamanho de pacote, e
-a cor continua saindo dos tokens do painel, de modo que o tema escuro vem junto.
+Não entrou biblioteca 3D. São duas ilustrações — a silhueta de frente e o perfil
+— montadas como planos reais dentro de um palco com `perspective`, um a 0° e
+outro a 90°. O palco gira, os dois planos giram junto e a opacidade de cada um
+acompanha o ângulo: de frente só a silhueta frontal aparece, de lado só o
+perfil, e no caminho os dois se sobrepõem já deformados pela perspectiva. É um
+turntable, a mesma técnica de vitrine de produto. A luz é uma camada só por cima
+de toda a silhueta, em `soft-light`, o que dá volume sem sombrear região por
+região — e sem trocar a cor que veio do token.
+
+A primeira versão montou o corpo com cilindros e esferas cruzados. Girava, e era
+honesta, mas lia como manequim de articulações; a ilustração entrega o que a
+geometria não entregava — ombro que cai, cintura, panturrilha, pé que aponta
+para a frente. O custo continua zero em dependência, em `npm audit` e em tamanho
+de pacote, e a cor continua saindo dos tokens do painel, de modo que o tema
+escuro vem junto.
 
 Para quem usa leitor de tela a figura é decorativa: girar um desenho não
 acrescenta nada a quem não o vê, e os números estão escritos na legenda ao lado.
