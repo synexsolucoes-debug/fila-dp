@@ -1390,9 +1390,18 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
      `.dashboard-brand > span:last-child`, que é quem vinha ganhando: um
      pseudo-classe conta na mesma coluna que uma classe, então aquele seletor
      vale (0,2,1) e o `.dashboard-brand-logo-mark` sozinho, (0,1,0), nunca
-     chegou a valer nada aqui. Era essa a origem do símbolo duplicado. */
-  .operational-ui .dashboard-brand > .dashboard-brand-logo-full { display: inline-flex; }
-  .operational-ui .dashboard-brand > .dashboard-brand-logo-mark { display: none; }
+     chegou a valer nada aqui. Era essa a origem do símbolo duplicado.
+
+     A variante recolhida precisa vir junto: no celular a casca carrega
+     `sidebar-collapsed` o tempo todo — não há barra para recolher, mas a
+     classe está lá —, e `.sidebar-collapsed .dashboard-brand > span:last-child`
+     pesa (0,3,1), um degrau acima do seletor sem ela. Era esse o par que
+     continuava acendendo o símbolo. `display: inline` também não escondia
+     nada: item de flex tem o display blocado, e `inline` virava `block`. */
+  .operational-ui .dashboard-brand > .dashboard-brand-logo-full,
+  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-full { display: inline-flex; }
+  .operational-ui .dashboard-brand > .dashboard-brand-logo-mark,
+  .operational-ui.sidebar-collapsed .dashboard-brand > .dashboard-brand-logo-mark { display: none; }
   .operational-ui .dashboard-heading-meta { width: 100%; }
   .operational-ui .new-demand { width: 100%; justify-content: center; }
   .operational-ui .dashboard-board-head { flex-direction: column; align-items: stretch; }
