@@ -1344,3 +1344,278 @@ body:has(.dashboard-shell.operational-ui:not(.theme-dark)) { background: #F7F9FD
   .operational-ui .board-filter-bar .board-filter-details { margin-left: 0; }
   .operational-ui .board-filter-bar .board-filter-fields { right: auto; left: 0; }
 }
+
+/* ========================================================================== */
+/* 7. O quadro de demandas                                                    */
+/* ========================================================================== */
+/*
+ * A tela onde a operação passa o dia. As decisões desta seção seguem três
+ * regras, e cada bloco abaixo diz qual delas está aplicando:
+ *
+ *   1. o cartão é a unidade de leitura — tudo que não ajuda a decidir o que
+ *      fazer com ele sai, e o que ajuda ganha forma, não só texto;
+ *   2. mover um cartão é a ação central do quadro, e ela precisa parecer
+ *      física: o que sai deixa um buraco, e o destino se abre para receber;
+ *   3. nada pisca sem motivo — movimento aqui é resposta a um gesto, nunca
+ *      decoração de carregamento.
+ */
+
+/* -------------------------------------------------------------------------- */
+/* 7.1 Progresso                                                              */
+/* -------------------------------------------------------------------------- */
+
+/* A barra de 34px era um traço, não uma medida: em 34px, 6 de 10 e 7 de 10
+   ficam a três pixels um do outro. Ocupando a largura do cartão, a mesma
+   diferença vira uma distância que o olho pega sem ler o número. */
+.operational-ui .dashboard-card-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 10px;
+  font-size: .75rem;
+  font-weight: 550;
+  white-space: normal;
+}
+.operational-ui .dashboard-card-progress i {
+  flex: initial;
+  grid-column: 1 / -1;
+  order: 2;
+  width: 100%;
+  height: 5px;
+  background: var(--ui-surface-muted);
+  box-shadow: inset 0 0 0 1px var(--ui-border);
+}
+.operational-ui .dashboard-card-progress b {
+  background: var(--ui-primary);
+  transition: width var(--motion-base) var(--motion-standard);
+}
+/* Completo é um estado, não "quase lá": o verde fecha a leitura. */
+.operational-ui .dashboard-card-progress b[style*="width: 100%"] { background: var(--ui-success); }
+
+.operational-ui .dashboard-card-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--ui-text-soft);
+  font-size: .75rem;
+  font-weight: 550;
+}
+.operational-ui .dashboard-card-step svg { width: 13px; height: 13px; color: var(--ui-text-muted); }
+
+/* -------------------------------------------------------------------------- */
+/* 7.2 Etiquetas e urgência                                                   */
+/* -------------------------------------------------------------------------- */
+
+/* URGENTE não é mais uma etiqueta entre outras: ela é a única do cartão que
+   muda a ordem do dia de alguém. Fundo cheio, e não tingido. */
+.operational-ui .dashboard-task-labels .urgent {
+  background: var(--ui-danger);
+  color: #FFFFFF;
+  letter-spacing: .06em;
+}
+.operational-ui .dashboard-label-more {
+  padding: 4px 6px;
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-muted);
+  font-size: .625rem;
+  font-weight: 700;
+}
+.operational-ui .dashboard-card-reference {
+  background: transparent;
+  color: var(--ui-text-muted);
+  font-family: var(--font-data), ui-monospace, monospace;
+  letter-spacing: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 7.3 Arrastar: o que sai deixa buraco, o destino se abre                    */
+/* -------------------------------------------------------------------------- */
+
+/* O cartão de origem permanece no lugar como contorno tracejado. É ele que
+   responde "de onde isto saiu" se a pessoa desistir no meio do gesto — sem
+   isso, soltar fora de uma coluna parece ter apagado o cartão. */
+.operational-ui .dashboard-task.dragging {
+  border-style: dashed;
+  border-color: var(--ui-border-strong);
+  background: var(--ui-surface-muted);
+  box-shadow: none;
+  opacity: .55;
+}
+.operational-ui .dashboard-task.dragging > * { opacity: .5; }
+
+/* Só a coluna sob o ponteiro acende. As outras recuam um degrau: o contraste
+   entre elas é o que diz onde o cartão vai cair, e acender todas seria o mesmo
+   que não acender nenhuma. */
+.operational-ui .dashboard-column.drop-ready {
+  border-color: var(--ui-border);
+  background: var(--ui-surface-muted);
+  transition: background var(--motion-fast) var(--motion-standard),
+    border-color var(--motion-fast) var(--motion-standard), opacity var(--motion-fast) var(--motion-standard);
+}
+.operational-ui .dashboard-kanban:has(.dashboard-task.dragging) .dashboard-column:not(.drop-target) { opacity: .72; }
+.operational-ui .dashboard-column.drop-target {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary-soft);
+  opacity: 1;
+}
+.operational-ui .dashboard-column.drop-target > .dashboard-card-list {
+  outline: 2px dashed color-mix(in srgb, var(--ui-primary) 55%, transparent);
+  outline-offset: -6px;
+  border-radius: var(--ui-radius-lg);
+}
+.operational-ui .dashboard-column.drop-target > header > span { color: var(--ui-accent-text); }
+
+/* -------------------------------------------------------------------------- */
+/* 7.4 Entrada dos cartões                                                    */
+/* -------------------------------------------------------------------------- */
+
+/* Escalonamento curto, e só na montagem: as chaves do React são o id do
+   cartão, então filtrar não remonta quem ficou — só quem entra anima. É por
+   isso que digitar na busca não faz a coluna inteira piscar a cada tecla. */
+.operational-ui .dashboard-task { animation: vin-rise var(--motion-base) var(--motion-enter) both; }
+.operational-ui .dashboard-task:nth-child(1) { animation-delay: 10ms; }
+.operational-ui .dashboard-task:nth-child(2) { animation-delay: 35ms; }
+.operational-ui .dashboard-task:nth-child(3) { animation-delay: 60ms; }
+.operational-ui .dashboard-task:nth-child(4) { animation-delay: 85ms; }
+.operational-ui .dashboard-task:nth-child(n + 5) { animation-delay: 110ms; }
+/* Quem está sendo arrastado não re-anima a cada quadro do gesto. */
+.operational-ui .dashboard-task.dragging { animation: none; }
+
+/* O cartão sobe de leve ao receber o ponteiro. 1px: o suficiente para dizer
+   "isto responde", pouco o bastante para não empurrar a coluna. */
+.operational-ui .dashboard-task {
+  transition: border-color var(--motion-fast) var(--motion-standard),
+    box-shadow var(--motion-fast) var(--motion-standard), transform var(--motion-fast) var(--motion-standard);
+}
+.operational-ui .dashboard-task:hover { transform: translateY(-1px); }
+.operational-ui .dashboard-task:active { transform: none; }
+
+/* -------------------------------------------------------------------------- */
+/* 7.5 Coluna vazia                                                           */
+/* -------------------------------------------------------------------------- */
+
+/* Um retângulo cinza vazio não diz se a etapa está limpa ou se o filtro
+   escondeu tudo — e são conclusões opostas. A frase muda com a causa; o texto
+   vem do componente. */
+.operational-ui .dashboard-column-empty {
+  margin: 0;
+  padding: 18px 14px;
+  border: 1px dashed var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  color: var(--ui-text-muted);
+  font-size: .8125rem;
+  line-height: 1.5;
+  text-align: center;
+}
+.operational-ui .board-lanes-empty { margin: 8px 0 0; padding: 28px; }
+
+/* -------------------------------------------------------------------------- */
+/* 7.6 Raias                                                                  */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .board-lanes { display: grid; gap: 10px; padding-top: 18px; }
+.operational-ui .board-lane {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  overflow: hidden;
+}
+.operational-ui .board-lane > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 14px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  cursor: pointer;
+  list-style: none;
+}
+.operational-ui .board-lane > summary::-webkit-details-marker { display: none; }
+.operational-ui .board-lane > summary:hover { background: var(--ui-surface-muted); }
+.operational-ui .board-lane > summary svg {
+  width: 16px; height: 16px; flex: 0 0 16px; color: var(--ui-text-muted);
+  transition: transform var(--motion-fast) var(--motion-standard);
+}
+.operational-ui .board-lane[open] > summary svg { transform: rotate(90deg); }
+.operational-ui .board-lane > summary strong { font-size: .9375rem; font-weight: 650; }
+.operational-ui .board-lane > summary b {
+  min-width: 22px; height: 22px; display: grid; place-items: center; padding: 0 6px;
+  border: 1px solid var(--ui-border); border-radius: 999px;
+  background: var(--ui-surface-muted); color: var(--ui-text-soft);
+  font-size: .6875rem; font-variant-numeric: tabular-nums;
+}
+/* Dentro da raia as colunas perdem a moldura: a raia já é a caixa, e duas
+   bordas concêntricas é o desenho contando a mesma coisa duas vezes. */
+.operational-ui .board-lane .dashboard-kanban { padding: 0 12px 12px; }
+.operational-ui .board-lane .dashboard-column { background: var(--ui-surface-muted); }
+.operational-ui .board-lane .dashboard-column,
+.operational-ui .board-lane .dashboard-column > header { min-height: 0; }
+.operational-ui .board-lane .dashboard-column { min-height: 120px; }
+
+/* -------------------------------------------------------------------------- */
+/* 7.7 Densidade                                                              */
+/* -------------------------------------------------------------------------- */
+
+/* Compacto não é "a mesma coisa menor": é a mesma decisão com menos apoio.
+   Saem as duas linhas de contexto — o fluxo entre áreas e a matrícula do
+   colaborador —, que explicam a demanda mas não mudam o que fazer com ela.
+   Ficam título, empresa, progresso e rodapé, que é do que a decisão precisa. */
+.operational-ui [data-density="compact"] .dashboard-kanban,
+.operational-ui .dashboard-kanban[data-density="compact"] { gap: 12px; }
+.operational-ui [data-density="compact"] .dashboard-column,
+.operational-ui .dashboard-kanban[data-density="compact"] .dashboard-column { min-width: 248px; }
+.operational-ui [data-density="compact"] .dashboard-card-list,
+.operational-ui .dashboard-kanban[data-density="compact"] .dashboard-card-list { padding: 8px; }
+.operational-ui [data-density="compact"] .dashboard-task,
+.operational-ui .dashboard-kanban[data-density="compact"] .dashboard-task { padding: 10px; margin-bottom: 6px; }
+.operational-ui [data-density="compact"] .dashboard-task h2,
+.operational-ui .dashboard-kanban[data-density="compact"] .dashboard-task h2 { font-size: .875rem; line-height: 1.35; }
+.operational-ui [data-density="compact"] .dashboard-task-bottom,
+.operational-ui .dashboard-kanban[data-density="compact"] .dashboard-task-bottom { margin-top: 10px; }
+.operational-ui [data-density="compact"] .dashboard-card-progress,
+.operational-ui .dashboard-kanban[data-density="compact"] .dashboard-card-progress { margin-top: 8px; }
+.operational-ui [data-density="compact"] :is(.demand-area-flow, .dashboard-card-employee),
+.operational-ui .dashboard-kanban[data-density="compact"] :is(.demand-area-flow, .dashboard-card-employee) { display: none; }
+
+/* -------------------------------------------------------------------------- */
+/* 7.8 Controles de exibição                                                  */
+/* -------------------------------------------------------------------------- */
+
+.operational-ui .board-view-options .board-filter-fields { min-width: 288px; }
+.operational-ui .board-view-density { display: grid; gap: 6px; }
+.operational-ui .board-view-density > span { color: var(--ui-text-muted); font-size: .8125rem; }
+.operational-ui .board-view-density > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: #EDF1F8;
+}
+.operational-ui .board-view-density button {
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--ui-text-soft);
+  font-size: .8125rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+.operational-ui .board-view-density button.active {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-weight: 650;
+  box-shadow: var(--elevation-1);
+}
+
+@media (max-width: 760px) {
+  .operational-ui .board-view-options .board-filter-fields { min-width: 0; width: min(288px, calc(100vw - 40px)); }
+  .operational-ui .board-lane .dashboard-kanban { padding-inline: 8px; }
+}

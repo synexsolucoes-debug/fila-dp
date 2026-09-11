@@ -47,6 +47,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Settings2,
   ShieldQuestion,
   SlidersHorizontal,
   AlertTriangle,
@@ -95,6 +96,9 @@ import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
    esconderia oito telas de quem confere. */
 type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
+type BoardDensity = "comfortable" | "compact";
+type BoardGroupBy = "none" | "company" | "assignee";
+type BoardSort = "position" | "due" | "priority";
 
 /** Os quatro formatos do quadro, com o rótulo que a maquete usa.
     "Kanban" e "Tabela" eram jargão de ferramenta; "Quadro" e "Lista" dizem o
@@ -708,6 +712,44 @@ function groupObligations(items: readonly WorkspaceSnapshot["upcomingObligations
   return [...grupos.values()];
 }
 
+/**
+ * O prazo em distância, e não em data.
+ *
+ * "12 set" obriga quem lê a fazer a conta contra o dia de hoje, cartão por
+ * cartão — e é justamente a conta que decide o que fazer agora. "Vence em 3
+ * dias" já é a resposta. A data exata não some: vai no `title` do elemento,
+ * para quem precisa dela ao passar o mouse.
+ *
+ * Compara o *dia*, não o instante: um prazo às 23h de hoje e outro às 8h de
+ * hoje vencem os dois "hoje", e arredondar por 24h corridas diria "amanhã"
+ * para o primeiro.
+ */
+function relativeDue(value: string | null) {
+  if (!value || typeof value !== "string") return null;
+  const prazo = new Date(value.includes("T") ? value : `${value}T12:00:00`);
+  if (Number.isNaN(prazo.getTime())) return null;
+  const hoje = new Date();
+  const diaPrazo = new Date(prazo.getFullYear(), prazo.getMonth(), prazo.getDate()).getTime();
+  const diaHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+  const dias = Math.round((diaPrazo - diaHoje) / 86400000);
+  if (dias === 0) return "Vence hoje";
+  if (dias === 1) return "Vence amanhã";
+  if (dias === -1) return "1 dia em atraso";
+  if (dias < -1) return `${Math.abs(dias)} dias em atraso`;
+  if (dias <= 30) return `Vence em ${dias} dias`;
+  return formatDue(value);
+}
+
+/** Prazo como número ordenável. Sem prazo vai para o fim, nunca para o topo. */
+function dueValue(card: Card) {
+  if (!card.dueAt) return Number.POSITIVE_INFINITY;
+  const at = new Date(card.dueAt).getTime();
+  return Number.isNaN(at) ? Number.POSITIVE_INFINITY : at;
+}
+
+/** Ordem de urgência, do mais para o menos. */
+const priorityRank: Record<Card["priority"], number> = { urgent: 0, high: 1, normal: 2, low: 3 };
+
 function slaLabel(card: Card) {
   if (card.slaStatus === "overdue") return `Atrasada • ${formatDue(card.dueAt)}`;
   if (card.slaStatus === "warning") return card.dueAt ? `Atenção • ${formatDue(card.dueAt)}` : "Atenção no SLA";
@@ -881,6 +923,19 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     companyId: string; competence: string; closingId: string;
   } | null>(null);
   const [boardMode, setBoardMode] = useState<BoardMode>("kanban");
+  /* Como o quadro é lido, e não o que ele mostra.
+     Densidade, agrupamento e ordenação são preferências de leitura: não mudam
+     o recorte (isso é filtro) nem o formato (isso é `boardMode`), mudam o
+     arranjo. Ficam no navegador de quem escolheu, porque a escolha é de quem
+     lê: numa equipe, um confere por empresa e outro por responsável, e gravar
+     isso no servidor faria um impor o arranjo ao outro. */
+  const [boardDensity, setBoardDensity] = useState<BoardDensity>("comfortable");
+  const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>("none");
+  const [boardSort, setBoardSort] = useState<BoardSort>("position");
+  const boardPreferencesLoaded = useRef(false);
+  /* A coluna sob o cartão arrastado. Sem isto o alvo é adivinhado: todas as
+     colunas acendem juntas e a pessoa solta sem saber onde vai cair. */
+  const [dragOverListId, setDragOverListId] = useState<string | null>(null);
   const [cardTab, setCardTab] = useState<CardTab>("details");
   /** Segurança continua sendo a abertura padrão; administradores também podem
    * alcançar daqui o cadastro hierárquico de usuários do Workspace. */
@@ -1004,7 +1059,12 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
    * exatamente o mesmo.
    */
   useEffect(() => {
-    document.documentElement.style.colorScheme = "dark";
+    /* O esquema nativo acompanha a casca.
+       Ficou em "dark" desde a direção escura, e com a casca clara isso deixava
+       o que o navegador desenha sozinho — a lista aberta de um `select`, a
+       barra de rolagem, o seletor de data — em tema escuro dentro de uma tela
+       branca. É o tipo de detalhe que ninguém sabe nomear e todo mundo nota. */
+    document.documentElement.style.colorScheme = "light";
     // A escolha de quem experimentou a alternância enquanto ela existiu não
     // pode sobreviver a ela: sem esta linha, um valor guardado ficaria no
     // navegador da pessoa sem nada que o leia nem o apague.
@@ -1025,6 +1085,35 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     if (!sidebarPreferenceLoaded.current) return;
     window.localStorage.setItem("fila-dp-sidebar-collapsed", String(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  /* As três preferências de leitura do quadro, num registro só.
+     Uma chave por preferência daria três leituras e três gravações para um
+     estado que sempre muda junto; e um valor gravado que o código não reconheça
+     mais (uma opção removida) precisa ser descartado, não aplicado. */
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const bruto = window.localStorage.getItem("vinculato-quadro-leitura");
+        if (bruto) {
+          const guardado = JSON.parse(bruto) as Partial<Record<string, string>>;
+          if (guardado.density === "compact" || guardado.density === "comfortable") setBoardDensity(guardado.density);
+          if (guardado.groupBy === "company" || guardado.groupBy === "assignee" || guardado.groupBy === "none") setBoardGroupBy(guardado.groupBy);
+          if (guardado.sort === "due" || guardado.sort === "priority" || guardado.sort === "position") setBoardSort(guardado.sort);
+        }
+      } catch {
+        /* JSON corrompido no navegador de alguém não pode derrubar o painel:
+           a preferência volta ao padrão e o quadro abre. */
+      }
+      boardPreferencesLoaded.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!boardPreferencesLoaded.current) return;
+    window.localStorage.setItem("vinculato-quadro-leitura",
+      JSON.stringify({ density: boardDensity, groupBy: boardGroupBy, sort: boardSort }));
+  }, [boardDensity, boardGroupBy, boardSort]);
 
   /* Catálogo de processos que podem originar demanda (§10).
      Carrega uma vez, na primeira abertura da modal de criação. Falha aqui não
@@ -1386,6 +1475,52 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
         termoCombina && dueMatches;
     });
   }, [activeCards, assigneeFilter, boardQuery, companyFilter, dueFilter, processFilter, slaFilter]);
+
+  /* O quadro montado: raias, e dentro delas as colunas já ordenadas.
+     Montar isto uma vez aqui, e não dentro do JSX, tem uma razão prática: sem
+     agrupamento são N colunas filtrando a mesma lista N vezes; com agrupamento
+     seriam N×M. O custo passa a ser uma varredura só, e o JSX fica lendo dados
+     em vez de calculá-los.
+     Quando não há agrupamento existe uma raia só, sem rótulo — assim o desenho
+     tem um caminho só, e não dois que precisam concordar entre si. */
+  const boardLanes = useMemo(() => {
+    const listas = snapshot?.lists ?? [];
+    const ordenar = (cards: Card[]) => {
+      if (boardSort === "position") return cards;
+      const copia = [...cards];
+      /* Desempate por prazo nos dois modos: duas demandas da mesma prioridade
+         não têm ordem definida entre si, e sem critério estável elas trocam de
+         lugar a cada atualização do snapshot. */
+      if (boardSort === "priority") copia.sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || dueValue(a) - dueValue(b));
+      else copia.sort((a, b) => dueValue(a) - dueValue(b));
+      return copia;
+    };
+    const porColuna = (cards: Card[]) => new Map(listas.map((list) =>
+      [list.id, ordenar(cards.filter((card) => card.listId === list.id))]));
+
+    if (boardGroupBy === "none") {
+      return [{ key: "todas", label: "", total: filteredActiveCards.length, cardsByList: porColuna(filteredActiveCards) }];
+    }
+    const rotulo = (card: Card) => boardGroupBy === "company"
+      ? (card.company || "Sem empresa")
+      : (card.assignees[0]?.name || card.assigneeName || "Sem responsável");
+    const grupos = new Map<string, Card[]>();
+    for (const card of filteredActiveCards) {
+      const chave = rotulo(card);
+      const atual = grupos.get(chave);
+      if (atual) atual.push(card); else grupos.set(chave, [card]);
+    }
+    return [...grupos.entries()]
+      /* "Sem empresa" e "Sem responsável" por último: eles são a ausência do
+         critério de agrupamento, e ordená-los pelo "S" os jogaria no meio da
+         lista como se fossem mais um grupo. */
+      .sort(([a], [b]) => {
+        const aSem = a.startsWith("Sem "), bSem = b.startsWith("Sem ");
+        if (aSem !== bSem) return aSem ? 1 : -1;
+        return a.localeCompare(b, "pt-BR");
+      })
+      .map(([label, cards]) => ({ key: label, label, total: cards.length, cardsByList: porColuna(cards) }));
+  }, [boardGroupBy, boardSort, filteredActiveCards, snapshot?.lists]);
   const selectedCard = useMemo(() => allCards.find((card) => card.id === selectedCardId) ?? null, [allCards, selectedCardId]);
   const assignees = useMemo(() => Array.from(new Set(activeCards.flatMap((card) => card.assignees.length ? card.assignees.map((assignee) => assignee.name) : [card.assigneeName]).filter(Boolean))).sort(), [activeCards]);
   const processTypes = useMemo(() => Array.from(new Set(activeCards.map((card) => card.processType).filter(Boolean))).sort(), [activeCards]);
@@ -1429,6 +1564,9 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
     if (slaFilter === "all") return "all";
     return "none";
   }, [assigneeFilter, currentMemberName, slaFilter]);
+  /** Quantas opções de exibição saíram do padrão — o número no botão "Exibição". */
+  const activeBoardViewOptions = (boardDensity === "comfortable" ? 0 : 1)
+    + (boardGroupBy === "none" ? 0 : 1) + (boardSort === "position" ? 0 : 1);
   /** Quantos recortes estão ligados — o número no botão "Filtros". */
   const activeBoardFilters = useMemo(
     () => [assigneeFilter, companyFilter, processFilter, dueFilter, slaFilter].filter((value) => value !== "all").length,
@@ -2379,6 +2517,149 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
         </div>
   </> : null;
 
+  /* O cartão e a coluna saem do JSX e viram função.
+     Não é organização por organização: com raias, a mesma coluna é desenhada
+     uma vez por grupo, e o mesmo cartão precisa do mesmo comportamento em
+     qualquer uma delas. Enquanto o desenho estava embutido no laço, manter as
+     duas cópias iguais dependia de alguém lembrar. */
+  const renderDemandCard = (card: Card) => {
+    const concluidas = card.checklist.filter((item) => item.completed).length;
+    const flow = flowByCard.get(card.id);
+    const dono = card.assignees[0]?.name || card.assigneeName;
+    const cnpj = card.companyId ? snapshot.companies.find((company) => company.id === card.companyId)?.taxId : null;
+    /* O rodapé diz a distância até o prazo; a data exata fica no `title`.
+       Pausado e concluído não têm distância que interesse: o primeiro não está
+       correndo, o segundo já chegou. */
+    const prazo = card.slaStatus === "paused" ? "Aguardando retorno"
+      : card.slaStatus === "completed" ? "Concluída"
+      : relativeDue(card.dueAt) ?? "Sem prazo";
+    return (
+      <article
+        className={`dashboard-task priority-${card.priority} sla-${card.slaStatus}${draggedCardId === card.id ? " dragging" : ""}`}
+        key={card.id}
+        draggable={canEdit}
+        tabIndex={0}
+        role="button"
+        aria-label={`Abrir demanda ${card.title}`}
+        onDragStart={() => setDraggedCardId(card.id)}
+        onDragEnd={() => { setDraggedCardId(null); setDragOverListId(null); }}
+        onTouchStart={(event) => {
+          if (canEdit) touchCardMoveRef.current = { cardId: card.id, x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 };
+        }}
+        onTouchEnd={(event) => {
+          const start = touchCardMoveRef.current;
+          touchCardMoveRef.current = null;
+          const end = event.changedTouches[0];
+          if (!canEdit || !start || start.cardId !== card.id || !end) return;
+          const deltaX = end.clientX - start.x;
+          const deltaY = end.clientY - start.y;
+          if (Math.abs(deltaX) > 96 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+            suppressCardOpenRef.current = card.id;
+            moveCardByDirection(card.id, deltaX > 0 ? -1 : 1);
+          }
+        }}
+        onClick={() => {
+          if (suppressCardOpenRef.current === card.id) { suppressCardOpenRef.current = null; return; }
+          openCard(card);
+        }}
+        onKeyDown={(event) => {
+          if (event.altKey && event.key === "ArrowLeft" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, -1); return; }
+          if (event.altKey && event.key === "ArrowRight" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, 1); return; }
+          if (event.key === "Enter" || event.key === " ") openCard(card);
+        }}
+      >
+        <div className="dashboard-task-labels">
+          {referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}
+          <span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>
+          {card.priority === "urgent" && <span className="urgent">URGENTE</span>}
+          {/* Duas etiquetas, não uma. Uma só fazia a segunda existir sem
+              aparecer — e quem etiqueta com duas cores está dizendo duas
+              coisas. Acima de duas, o cartão vira legenda. */}
+          {card.labels.slice(0, 2).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}
+          {card.labels.length > 2 && <span className="dashboard-label-more" title={card.labels.slice(2).map((label) => label.name).join(", ")}>+{card.labels.length - 2}</span>}
+        </div>
+        <h2>{card.title}</h2>
+        <p>{card.company || "Sem empresa informada"}{cnpj ? <small> • {cnpj}</small> : null}</p>
+        <DemandAreaFlow card={card} areas={snapshot.areas} />
+        {/* Processo, etapa e progresso — as três coisas que a especificação pede
+            no cartão e que já existiam calculadas no servidor, sem chegar à
+            tela. Processo e etapa são coisas diferentes e ficam em linhas
+            diferentes: o processo diz *que trabalho é este*, a etapa diz *onde
+            ele está*. O progresso conta as tarefas já instanciadas — as das
+            etapas percorridas —, não as do processo inteiro.
+            Sem processo, quem mede o avanço é o checklist: ele é a única
+            contagem que a demanda tem, e estava reduzida a "1/4" no rodapé,
+            onde nada indica se isso é perto ou longe do fim. */}
+        {flow ? <CardProcessLine flow={flow} />
+          : card.checklist.length > 0 && <span className="dashboard-card-progress" title="Itens do checklist concluídos">
+            <i><b style={{ width: `${Math.round((concluidas / card.checklist.length) * 100)}%` }} /></i>
+            {concluidas} de {card.checklist.length} no checklist
+          </span>}
+        {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
+        <div className="dashboard-task-bottom">
+          <span className={`dashboard-sla ${card.slaStatus}${card.dueAt ? " has-due" : ""}`}
+            title={card.dueAt ? `Prazo: ${formatDue(card.dueAt)}` : "Sem prazo definido"}>
+            <Clock3 aria-hidden="true" /> {prazo}
+          </span>
+          {/* Contadores só quando contam alguma coisa: "0 anexos" ocupa o mesmo
+              espaço de uma informação e não é uma. */}
+          {card.checklist.length > 0 && <span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {concluidas}/{card.checklist.length}</span>}
+          {card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}
+          {card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}
+          {/* Avatar com inicial ao lado de "Sem responsável" é contradição: o
+              círculo afirma que há alguém. Sem responsável, fica só o texto. */}
+          <span className="dashboard-task-owner" title={dono || "Sem responsável"}>
+            {dono && <span className="dashboard-mini-avatar">{initials(dono)}</span>}
+            <b className={dono ? "" : "dashboard-owner-none"}>{dono || "Sem responsável"}</b>
+            {card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}
+          </span>
+        </div>
+      </article>
+    );
+  };
+
+  const renderBoardColumn = (list: WorkspaceSnapshot["lists"][number], cards: Card[], laneKey: string) => {
+    const alvo = `${laneKey}:${list.id}`;
+    return (
+      <section
+        className={`dashboard-column${draggedCardId ? " drop-ready" : ""}${dragOverListId === alvo ? " drop-target" : ""}`}
+        key={alvo}
+        onDragOver={(event) => { event.preventDefault(); if (draggedCardId) setDragOverListId(alvo); }}
+        /* `relatedTarget` fora da coluna: sem esta guarda, passar por cima de um
+           cartão filho dispara `dragleave` na coluna e o realce pisca. */
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setDragOverListId((atual) => atual === alvo ? null : atual);
+          }
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          if (canEdit && draggedCardId) void moveCard(draggedCardId, list.id);
+          setDraggedCardId(null);
+          setDragOverListId(null);
+        }}
+      >
+        <header>
+          <span><i className={list.kind} />{list.name}</span>
+          <b>{cards.length}</b>
+          <button aria-label={`Opções de ${list.name}`} onClick={() => setToast(`${list.name}: ${plural(cards.length, "demanda visível", "demandas visíveis")}.`)}><MoreHorizontal aria-hidden="true" /></button>
+        </header>
+        <div className="dashboard-card-list">
+          {cards.map(renderDemandCard)}
+          {/* Coluna vazia não é a mesma coisa que coluna que não carregou. O
+              recorte ativo muda a frase porque muda a causa: sem filtro, não há
+              demanda nesta etapa; com filtro, pode haver e o recorte esconde. */}
+          {cards.length === 0 && <p className="dashboard-column-empty">
+            {activeBoardFilters > 0 || boardQuery.trim()
+              ? "Nenhuma demanda desta etapa no recorte atual."
+              : "Nada nesta etapa por enquanto."}
+          </p>}
+          {canEdit && boardGroupBy === "none" && <button className="dashboard-add-card" onClick={() => { setCardForm({ ...emptyCardForm, boardId: snapshot.board.id, listId: list.id }); setSelectedCardId(null); setCardTab("details"); setCardModalOpen(true); }}><Plus aria-hidden="true" /> Adicionar demanda</button>}
+        </div>
+      </section>
+    );
+  };
+
   /* Casca clara, barra escura.
      O painel rodava em `theme-dark` desde a direção "central de comando", e a
      maquete aprovada do Vinculato pede o contrário: conteúdo em papel claro,
@@ -2823,6 +3104,25 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 <label className="board-field"><span>Processo</span><select aria-label="Filtrar por tipo de demanda" value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}><option value="all">Todos</option>{processTypes.map((process) => <option key={process}>{process}</option>)}</select></label>
                 <label className="board-field"><span>Responsável</span><select aria-label="Filtrar por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Todos</option>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label>
                 <label className="board-field"><span>Empresa</span><select aria-label="Filtrar por empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">Todas</option>{snapshot.companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
+                {/* Exibição fica separada de Filtros porque responde a outra
+                    pergunta: filtro decide *o que aparece*, exibição decide
+                    *como*. Juntá-las faria "compacto" parecer um recorte. Só
+                    existe no quadro — lista, calendário e processos têm o
+                    próprio arranjo e nenhum deles tem coluna para adensar. */}
+                {boardMode === "kanban" && <details className="board-filter-details board-view-options">
+                  <summary><Settings2 aria-hidden="true" />Exibição <span>{activeBoardViewOptions || ""}</span></summary>
+                  <div className="board-filter-fields">
+                    <div className="board-view-density" role="group" aria-label="Densidade do quadro">
+                      <span>Densidade</span>
+                      <div>
+                        <button type="button" className={boardDensity === "comfortable" ? "active" : ""} aria-pressed={boardDensity === "comfortable"} onClick={() => setBoardDensity("comfortable")}>Confortável</button>
+                        <button type="button" className={boardDensity === "compact" ? "active" : ""} aria-pressed={boardDensity === "compact"} onClick={() => setBoardDensity("compact")}>Compacto</button>
+                      </div>
+                    </div>
+                    <label><span>Agrupar por</span><select value={boardGroupBy} onChange={(event) => setBoardGroupBy(event.target.value as BoardGroupBy)}><option value="none">Sem agrupamento</option><option value="company">Empresa</option><option value="assignee">Responsável</option></select></label>
+                    <label><span>Ordenar por</span><select value={boardSort} onChange={(event) => setBoardSort(event.target.value as BoardSort)}><option value="position">Ordem do quadro</option><option value="due">Prazo</option><option value="priority">Prioridade</option></select></label>
+                  </div>
+                </details>}
                 <details className="board-filter-details">
                   <summary><SlidersHorizontal aria-hidden="true" />Filtros <span>{activeBoardFilters || ""}</span></summary>
                   <div className="board-filter-fields">
@@ -2833,95 +3133,29 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 {(activeBoardFilters > 0 || boardQuery.trim() !== "") && <button type="button" className="filter-clear" onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); setCompanyFilter("all"); setProcessFilter("all"); setDueFilter("all"); setBoardQuery(""); }}>Limpar</button>}
               </div>
 
-              {boardMode === "kanban" && <div className="dashboard-kanban">
-                {snapshot.lists.map((list) => {
-                  const visibleCards = filteredActiveCards.filter((card) => card.listId === list.id);
-                  return (
-                  <section
-                    className={`dashboard-column ${draggedCardId ? "drop-ready" : ""}`}
-                    key={list.id}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      if (canEdit && draggedCardId) void moveCard(draggedCardId, list.id);
-                      setDraggedCardId(null);
-                    }}
-                  >
-                    <header><span><i className={list.kind} />{list.name}</span><b>{visibleCards.length}</b><button aria-label={`Opções de ${list.name}`} onClick={() => setToast(`${list.name}: ${visibleCards.length} demanda(s) visível(is).`)}><MoreHorizontal aria-hidden="true" /></button></header>
-                    <div className="dashboard-card-list">
-                      {visibleCards.map((card) => {
-                        const completed = card.checklist.filter((item) => item.completed).length;
-                        return (
-                          <article
-                            className={`dashboard-task priority-${card.priority} sla-${card.slaStatus}`}
-                            key={card.id}
-                            draggable={canEdit}
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`Abrir demanda ${card.title}`}
-                            onDragStart={() => setDraggedCardId(card.id)}
-                            onDragEnd={() => setDraggedCardId(null)}
-                            onTouchStart={(event) => {
-                              if (canEdit) touchCardMoveRef.current = { cardId: card.id, x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 };
-                            }}
-                            onTouchEnd={(event) => {
-                              const start = touchCardMoveRef.current;
-                              touchCardMoveRef.current = null;
-                              const end = event.changedTouches[0];
-                              if (!canEdit || !start || start.cardId !== card.id || !end) return;
-                              const deltaX = end.clientX - start.x;
-                              const deltaY = end.clientY - start.y;
-                              if (Math.abs(deltaX) > 96 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-                                suppressCardOpenRef.current = card.id;
-                                moveCardByDirection(card.id, deltaX > 0 ? -1 : 1);
-                              }
-                            }}
-                            onClick={() => {
-                              if (suppressCardOpenRef.current === card.id) { suppressCardOpenRef.current = null; return; }
-                              openCard(card);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.altKey && event.key === "ArrowLeft" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, -1); return; }
-                              if (event.altKey && event.key === "ArrowRight" && canEdit) { event.preventDefault(); moveCardByDirection(card.id, 1); return; }
-                              if (event.key === "Enter" || event.key === " ") openCard(card);
-                            }}
-                          >
-                            <div className="dashboard-task-labels">{referenceLabel(card) && <span className="dashboard-card-reference">{referenceLabel(card)}</span>}<span className={processColors[card.processType] ?? "gray"}>{card.processType}</span>{card.priority === "urgent" && <span className="urgent">URGENTE</span>}{card.labels.slice(0, 1).map((label) => <span className="custom-label" style={{ color: label.color, backgroundColor: `${label.color}18` }} key={label.id}>{label.name}</span>)}</div>
-                            <h2>{card.title}</h2>
-                            <p>{card.company || "Sem empresa informada"}{card.companyId && snapshot.companies.find((company) => company.id === card.companyId)?.taxId ? <small> • {snapshot.companies.find((company) => company.id === card.companyId)?.taxId}</small> : null}</p>
-                            <DemandAreaFlow card={card} areas={snapshot.areas} />
-                            {/* Processo, etapa e progresso — as três coisas que a
-                                especificação pede no cartão e que já existiam
-                                calculadas no servidor, sem chegar à tela.
-
-                                Processo e etapa são coisas diferentes e ficam em
-                                linhas diferentes: o processo diz *que trabalho é
-                                este*, a etapa diz *onde ele está*. O progresso
-                                conta as tarefas já instanciadas — as das etapas
-                                percorridas —, não as do processo inteiro, porque
-                                as etapas à frente ainda não geraram tarefa. */}
-                            {flowByCard.get(card.id) && <CardProcessLine flow={flowByCard.get(card.id)!} />}
-                            {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
-                            <div className="dashboard-task-bottom"><span className={`dashboard-sla ${card.slaStatus}${card.dueAt ? " has-due" : ""}`}><Clock3 aria-hidden="true" /> {slaLabel(card)}</span><span className="dashboard-check" title="Checklist concluído"><ListChecks aria-hidden="true" /> {completed}/{card.checklist.length}</span>{card.attachments.length > 0 && <span className="dashboard-comments" title="Anexos"><Paperclip aria-hidden="true" /> {card.attachments.length}</span>}{card.comments.length > 0 && <span className="dashboard-comments" title="Comentários"><MessageCircle aria-hidden="true" /> {card.comments.length}</span>}{(() => {
-                              /* Avatar com inicial ao lado de "Sem responsável" é
-                                 contradição: o círculo afirma que há alguém. Sem
-                                 responsável, fica só o texto. */
-                              const dono = card.assignees[0]?.name || card.assigneeName;
-                              return <span className="dashboard-task-owner" title={dono || "Sem responsável"}>
-                                {dono && <span className="dashboard-mini-avatar">{initials(dono)}</span>}
-                                <b className={dono ? "" : "dashboard-owner-none"}>{dono || "Sem responsável"}</b>
-                                {card.assignees.length > 1 && <small className="avatar-more">+{card.assignees.length - 1}</small>}
-                              </span>;
-                            })()}</div>
-                          </article>
-                        );
-                      })}
-                      {canEdit && <button className="dashboard-add-card" onClick={() => { setCardForm({ ...emptyCardForm, boardId: snapshot.board.id, listId: list.id }); setSelectedCardId(null); setCardTab("details"); setCardModalOpen(true); }}><Plus aria-hidden="true" /> Adicionar demanda</button>}
-                    </div>
-                  </section>
-                  );
-                })}
-              </div>}
+              {boardMode === "kanban" && (boardGroupBy === "none"
+                ? <div className="dashboard-kanban" data-density={boardDensity}>
+                    {snapshot.lists.map((list) => renderBoardColumn(list, boardLanes[0]?.cardsByList.get(list.id) ?? [], "todas"))}
+                  </div>
+                /* Raias abertas por padrão e dobráveis uma a uma: quem agrupa
+                   por empresa está procurando *uma* empresa, e fechar as outras
+                   é o que traz a dela para perto do topo. O `details` nativo
+                   guarda o estado, responde ao teclado e é lido pelo leitor de
+                   tela sem nada além do rótulo. */
+                : <div className="board-lanes" data-density={boardDensity}>
+                    {boardLanes.map((lane) => <details className="board-lane" key={lane.key} open>
+                      <summary>
+                        <ChevronRight aria-hidden="true" />
+                        <strong>{lane.label}</strong>
+                        <b>{lane.total}</b>
+                      </summary>
+                      <div className="dashboard-kanban">
+                        {snapshot.lists.map((list) => renderBoardColumn(list, lane.cardsByList.get(list.id) ?? [], lane.key))}
+                      </div>
+                    </details>)}
+                    {boardLanes.length === 0 && <p className="dashboard-column-empty board-lanes-empty">Nenhuma demanda no recorte atual.</p>}
+                  </div>
+              )}
               {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
               {boardMode === "calendar" && <DemandCalendarView cards={filteredActiveCards} onOpen={openCard} />}
               {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
