@@ -117,6 +117,14 @@ export const capabilities = [
   "epi.export",
   "epi.audit.view",
   "epi.stock.adjust",
+  // Dashboard de Acidente de Trabalho. Excluir é separado de registrar pelo
+  // mesmo motivo que o descarte de EPI é: apagar um acidente apaga o número que
+  // o SESMT usa para justificar investimento em segurança, e a CAT que ele
+  // acompanha já foi para fora da empresa.
+  "safety.view",
+  "safety.manage",
+  "safety.delete",
+  "safety.export",
 ] as const;
 
 export type Capability = typeof capabilities[number];
@@ -197,6 +205,11 @@ const roleCapabilities = {
     // servem para encobrir as outras, e por isso ficam com o administrador.
     "epi.view", "epi.create", "epi.edit", "epi.deliver", "epi.return", "epi.damage",
     "epi.dispose", "epi.discount.analyze", "epi.export", "epi.stock.adjust",
+    // Quem alimenta o dashboard de acidentes é a própria equipe de segurança,
+    // que opera como membro. Excluir fica fora: um acidente lançado errado se
+    // corrige editando, e apagar é a única ação que faz o número sumir sem
+    // deixar o que sobrou explicar a diferença.
+    "safety.view", "safety.manage", "safety.export",
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",
@@ -204,7 +217,7 @@ const roleCapabilities = {
     "companies.read", "employees.read", "departments.view",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "invoice.read", "time.read",
-    "epi.view",
+    "epi.view", "safety.view",
   ]),
   guest: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "comments.write",

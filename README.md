@@ -93,6 +93,16 @@ O módulo de Ponto confere marcações e prepara o envio dos eventos de hora par
 - Nenhum fornecedor de relógio de ponto tem integração oficial implementada. Marcações entram por API, importação ou digitação.
 - Ensaio contra PostgreSQL real: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse`.
 
+## Dashboard de Acidente de Trabalho
+
+A área **Acidentes de Trabalho** é do SESMT e é alimentada por ele: um registro por acidente, e o dashboard responde por período. Documentação completa em `docs/dashboard-acidente-trabalho.md`.
+
+- Total de acidentes, dias afastados, despesas, gênero, turno, tipo, parte do corpo atingida, série mensal e setor saem todos da **mesma** apuração sobre a mesma base. Guardar totais digitados faria os recortes se contradizerem entre si já na primeira competência.
+- O período é o do **fato**, nunca o do lançamento: um acidente de março registrado em setembro pertence a março, que é onde a CAT o colocou.
+- O produto **não calcula taxa de frequência nem de gravidade da NBR 14280**: elas exigem horas-homem trabalhadas, que o Vinculato não coleta. Também não emite CAT e não guarda dado clínico — apenas a parte do corpo atingida, que é o que a CAT registra.
+- Registrar e corrigir é do analista; **excluir tem permissão própria**, porque apagar um acidente apaga o número que sustenta o período inteiro. Exportar também é separado: a planilha leva nome do colaborador e descrição na mesma linha, e cada exportação fica na trilha de auditoria.
+- Não existe origem automática de acidente. Nenhum conector traz esse dado e nenhuma rotina o infere.
+
 ## Central de Integrações
 
 A fase 6 substitui sincronizações longas dentro da requisição por um motor rastreável: conectores usam credenciais criptografadas por workspace, mapeamentos versionados, execuções e itens idempotentes, fila com lease/backoff/dead-letter e conciliação explícita.
