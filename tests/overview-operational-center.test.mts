@@ -367,8 +367,17 @@ test("demanda fora do teto de fluxos não ganha etapa inventada", async () => {
   // A consulta traz 60 demandas em andamento. Passando disso, o cartão mostra
   // ausência — que é verdade — em vez de um rótulo aproximado.
   const app = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
-  assert.match(app, /\{flowByCard\.get\(card\.id\) && </u,
+  /* O desenho do cartão saiu do laço e virou função (`renderDemandCard`), para
+     que a mesma coluna desenhada dentro de cada raia não dependesse de duas
+     cópias iguais. Com isso o fluxo é lido uma vez numa variável, e a guarda
+     mudou de forma — não de exigência: `CardProcessLine` continua sem caminho
+     para ser montado com fluxo ausente, que é o que este teste protege. */
+  assert.match(app, /const flow = flowByCard\.get\(card\.id\);/u,
+    "o fluxo precisa ser lido uma vez, e não buscado de novo em cada ramo");
+  assert.match(app, /\{flow \? <CardProcessLine flow=\{flow\} \/>/u,
     "sem a guarda, demanda sem fluxo carregado renderizaria etapa vazia");
+  assert.doesNotMatch(app, /<CardProcessLine flow=\{flowByCard\.get\(card\.id\)!\}/u,
+    "o `!` reintroduz exatamente a etapa inventada que a guarda existe para impedir");
 });
 
 test("a mesma obrigação em várias empresas ocupa uma linha, com a contagem", async () => {
