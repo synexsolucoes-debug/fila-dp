@@ -3090,7 +3090,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                   <button type="button" className={boardScope === "waiting" ? "active" : ""} aria-pressed={boardScope === "waiting"}
                     onClick={() => { setAssigneeFilter("all"); setSlaFilter((current) => current === "paused" ? "all" : "paused"); }}>Aguardando retorno</button>
                 </div>
-                <div className="board-view-switch" role="group" aria-label="Formato do quadro">
+                <div className="board-view-switch board-view-tabs" role="group" aria-label="Formato do quadro">
                   {boardModes.map((mode) => {
                     const ModeIcon = mode.icon;
                     return <button key={mode.id} type="button" className={boardMode === mode.id ? "active" : ""}

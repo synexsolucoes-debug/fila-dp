@@ -422,6 +422,20 @@
 /* O papel do integrante (#647284 sobre #EEF2F8, 4.37:1) fica em 5.47:1. */
 .workspace-member-list article > b { color: var(--ui-text-soft); }
 
+/* Lista e Calendário só ficaram visíveis à auditoria depois que o seletor de
+ * formato voltou à convenção de nome da varredura — até então as duas telas
+ * existiam no produto e não eram medidas por ninguém. Medidas, acusaram cinzas
+ * que o `access.css` chumbou para superfície clara e que o `.theme-dark`
+ * cobria: o painel nunca rodou claro, então eles nunca valeram. Agora valem.
+ *
+ * `#8a96a2` sobre branco dá 3.02:1 e `#8995a1`, 3.05:1 — os dois são texto
+ * pequeno (8px em 750), então a exigência é 4.5:1, não 3:1. O mesmo
+ * `--ui-text-soft` das outras correções de apoio resolve, em 6.15:1. */
+.operational-ui .demand-table-view th,
+.operational-ui .demand-table-view td small,
+.operational-ui .calendar-weekdays span,
+.operational-ui .calendar-days article small { color: var(--ui-text-soft); }
+
 /* -- Chips de estado ------------------------------------------------------ */
 
 .dashboard-sla.safe,
