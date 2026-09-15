@@ -28,7 +28,10 @@ const limitSourceLabels: Record<string, string> = {
   provider: "Prestador",
 };
 
-const invoiceStatusLabels: Record<string, string> = {
+/** As situações da nota, em português. Exportado porque a relação de líquidos
+ *  em nota fiscal fala das mesmas situações: duas cópias divergiriam no dia em
+ *  que uma delas ganhasse um estado novo. */
+export const invoiceStatusLabels: Record<string, string> = {
   pending: "Pendente", received: "Recebida", validated: "Conferida",
   divergent: "Divergente", not_required: "Não se aplica", canceled: "Cancelada",
 };
