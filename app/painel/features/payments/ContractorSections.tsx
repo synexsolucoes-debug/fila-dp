@@ -338,6 +338,13 @@ function ClosingsSection(props: SectionProps) {
         <a className={styles.secondaryButton} href={props.reportUrl("contractor-analytical")}>
           <FileSpreadsheet aria-hidden="true" /> Extrato analítico (CSV)
         </a>
+        {/* O mesmo fechamento visto pelo pagamento: uma linha por nota a
+            emitir, com o valor e o total — o relatório de líquidos da folha,
+            só que o líquido do PJ é o que vai na nota. Fica ao lado dos avisos
+            porque é o papel que confere o que foi avisado. */}
+        <a className={styles.secondaryButton} href={props.reportUrl("contractor-invoice-summary", "pdf")}>
+          <ReceiptText aria-hidden="true" /> Líquidos em NF (PDF)
+        </a>
         {/* As mensagens de aviso. Não é um link direto como os outros: a
             empresa é escolhida na hora, porque é ela que define de quem são as
             mensagens do arquivo. */}
@@ -955,6 +962,7 @@ function ArchiveSection(props: SectionProps) {
         <a className={styles.secondaryButton} href={reportUrl("contractor-closing")}><Download aria-hidden="true" /> Fechamento (CSV)</a>
         <a className={styles.secondaryButton} href={reportUrl("contractor-analytical", "pdf")}><FileText aria-hidden="true" /> Extrato analítico (PDF)</a>
         <a className={styles.secondaryButton} href={reportUrl("contractor-analytical")}><FileSpreadsheet aria-hidden="true" /> Extrato analítico (CSV)</a>
+        <a className={styles.secondaryButton} href={reportUrl("contractor-invoice-summary", "pdf")}><ReceiptText aria-hidden="true" /> Líquidos em NF (PDF)</a>
         <a className={styles.secondaryButton} href={reportUrl("contractor-divergences")}><FileText aria-hidden="true" /> Divergências (CSV)</a>
       </footer>
     </>

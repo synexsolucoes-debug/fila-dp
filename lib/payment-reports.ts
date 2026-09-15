@@ -166,6 +166,45 @@ export const reports = {
     companyColumn: "c.company_id",
     order: "ORDER BY a.legal_name",
   },
+  /* A relação de líquidos em nota fiscal.
+   *
+   * O extrato analítico abre a apuração rubrica a rubrica: ele responde "de
+   * onde veio este número". Esta relação responde a pergunta do pagamento —
+   * quanto cada prestador vai emitir em nota nesta competência — e é uma lista
+   * simples, uma linha por nota, com o total no fim. É o desenho do relatório
+   * de líquidos da folha, que é como quem confere já lê esse tipo de papel.
+   *
+   * Entra quem tem valor a emitir, pela mesma regra do aviso de NF: os dois
+   * documentos falam das mesmas pessoas, e essa é a vantagem — a relação é a
+   * conferência dos avisos que foram mandados. Quem recebe tudo por
+   * complemento não emite nota, e uma linha de "0,00" numa relação de notas a
+   * emitir só faria procurar uma cobrança que não existe.
+   *
+   * Aqui a empresa recorta a lista, e não é a emitente do aviso: cada
+   * fechamento gera a nota da empresa dele, e é por empresa que o financeiro
+   * paga. Por isso ela vem na consulta e ordena o resultado — o PDF fecha um
+   * subtotal por empresa quando o documento cobre mais de uma.
+   *
+   * A permissão é a de leitura do pagamento PJ, a mesma do extrato analítico:
+   * os números são os mesmos que o extrato já mostra, em outro recorte. Exigir
+   * `invoice.export` aqui deixaria de fora justamente quem confere a apuração. */
+  "contractor-invoice-summary": {
+    capability: "contractors.payments.read",
+    columns: ["codigo", "prestador", "cnpj", "empresa", "competencia", "nf_esperada", "status_nf"],
+    query: `SELECT a.code AS codigo, a.legal_name AS prestador, a.tax_id AS cnpj,
+        coalesce(nullif(company.trade_name, ''), company.legal_name) AS empresa,
+        c.competence AS competencia, c.invoice_expected_amount AS nf_esperada,
+        c.invoice_status AS status_nf
+      FROM fdp_contractor_closings c
+      JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
+      JOIN fdp_companies company ON company.workspace_id = c.workspace_id AND company.id = c.company_id
+      WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL
+        AND c.invoice_expected_amount > 0`,
+    companyColumn: "c.company_id",
+    /* Ordena pelo nome que o documento mostra, e não pela razão social: é o
+       que mantém as linhas de uma empresa juntas embaixo do título dela. */
+    order: "ORDER BY coalesce(nullif(company.trade_name, ''), company.legal_name), a.legal_name",
+  },
   /* O relatório de notas fiscais da competência.
    *
    * É o documento que o financeiro leva para fora do sistema — para a

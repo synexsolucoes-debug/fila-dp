@@ -7,6 +7,8 @@ import { validCompetence } from "@/lib/operations";
 import { reports, type PaymentReportKey } from "@/lib/payment-reports";
 import { renderContractorStatement } from "@/lib/contractor-statement-pdf";
 import { buildStatement } from "@/lib/contractor-statement";
+import { renderInvoiceSummary } from "@/lib/contractor-invoice-summary-pdf";
+import { buildInvoiceSummary } from "@/lib/contractor-invoice-summary";
 import { buildInvoiceNoticeFile } from "@/lib/contractor-invoice-notice";
 import { contractorComponentLabel } from "@/lib/payments";
 
@@ -23,6 +25,9 @@ function recordExport(
     requestId: request.headers.get("x-fila-dp-request-id"),
   }).run();
 }
+
+/** Os relatórios com desenho próprio em PDF. */
+const pdfReports = new Set<PaymentReportKey>(["contractor-analytical", "contractor-invoice-summary"]);
 
 function csvCell(value: unknown) {
   const text = value === null || value === undefined ? "" : String(value);
@@ -47,10 +52,11 @@ export async function GET(request: Request) {
     const format = requested === "csv" ? "csv"
       : requested === "pdf" ? "pdf"
         : requested === "txt" ? "txt" : "json";
-    /* O PDF existe para um documento só: o extrato analítico, que é o que se
-       entrega para conferência. Oferecê-lo nos outros seria prometer um
-       desenho que não existe. */
-    if (format === "pdf" && key !== "contractor-analytical") {
+    /* O PDF existe para os documentos que têm desenho próprio: o extrato
+       analítico, que se entrega para conferência, e a relação de líquidos em
+       nota fiscal, que se entrega para pagamento. Oferecê-lo nos outros seria
+       prometer um desenho que não existe. */
+    if (format === "pdf" && !pdfReports.has(key)) {
       throw ApiError.badRequest("Este relatório não tem versão em PDF.", "PAYMENT_REPORT_NO_PDF");
     }
     /* O texto puro só faz sentido para o aviso de nota: é uma mensagem pronta
@@ -141,16 +147,22 @@ export async function GET(request: Request) {
           .bind(workspace.id, companyId).first<{ legal_name: string; trade_name: string; tax_id: string }>()
         : null;
       await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "pdf");
-      const pdf = renderContractorStatement(buildStatement(rows.results, {
+      /* Os dois documentos nascem do mesmo contexto — de quem é o papel, de
+         que competência, emitido por quem e quando —, e é ele que responde por
+         uma folha solta que alguém imprimiu. O que muda é o desenho. */
+      const contexto = {
         competence,
         empresa: empresa?.trade_name || empresa?.legal_name || workspace.name || "Todas as empresas do grupo",
         cnpjEmpresa: empresa?.tax_id ?? "",
         emitidoPor: user.name || auth.user.email,
-      }));
-      return new Response(new Uint8Array(pdf), {
+      };
+      const documento = key === "contractor-invoice-summary"
+        ? { pdf: renderInvoiceSummary(buildInvoiceSummary(rows.results, contexto)), arquivo: `liquidos-nota-fiscal-${competence}.pdf` }
+        : { pdf: renderContractorStatement(buildStatement(rows.results, contexto)), arquivo: `extrato-analitico-pj-${competence}.pdf` };
+      return new Response(new Uint8Array(documento.pdf), {
         headers: {
           "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename="extrato-analitico-pj-${competence}.pdf"`,
+          "Content-Disposition": `attachment; filename="${documento.arquivo}"`,
           "Cache-Control": "no-store",
         },
       });
