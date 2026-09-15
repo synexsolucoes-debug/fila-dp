@@ -51,6 +51,9 @@ import {
   ShieldQuestion,
   Siren,
   SlidersHorizontal,
+  Sun,
+  Moon,
+  MonitorCog,
   AlertTriangle,
   UserRoundCog,
   Smartphone,
@@ -73,6 +76,10 @@ import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { PRIORITY_LABELS } from "@/lib/work-items";
+import {
+  nextThemePreference, themeLabels, THEME_COOKIE, THEME_COOKIE_MAX_AGE, THEME_SYSTEM_COOKIE,
+  type ResolvedTheme, type ThemePreference,
+} from "@/lib/theme";
 import { capabilitiesForRole, workspaceRoles } from "@/lib/authorization";
 import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
@@ -914,7 +921,10 @@ function canPreviewAttachment(attachment: CardAttachment) {
   return attachment.contentType === "application/pdf" || attachment.contentType.startsWith("image/");
 }
 
-export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanelLocation }: {
+export function WorkspaceApp({
+  user, signOutPath, initialLocation = defaultPanelLocation,
+  initialThemePreference = "system", initialTheme = "light",
+}: {
   user: User;
   signOutPath: string;
   /**
@@ -924,6 +934,10 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
    * efeito, quem abre o link de uma demanda vê a visão geral piscar antes dela.
    */
   initialLocation?: PanelLocation;
+  /** A escolha guardada em cookie: claro, escuro ou o que o sistema disser. */
+  initialThemePreference?: ThemePreference;
+  /** A escala que o servidor já resolveu — pelo mesmo motivo de `initialLocation`. */
+  initialTheme?: ResolvedTheme;
 }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [view, setViewState] = useState<View>(initialLocation.view as View);
@@ -1055,28 +1069,51 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
   /**
    * Tema (§7).
    *
-   * O Vinculato tem um tema só, e ele é escuro — decisão de produto, tomada
-   * depois de o claro existir e ser avaliado. O que sobra aqui é a única parte
-   * que o CSS não resolve sozinho: `color-scheme` é o que faz a barra de
-   * rolagem, o seletor de data e os demais controles nativos do navegador
-   * acompanharem o tema. Sem ele, o painel escuro abre um calendário branco.
+   * Duas escalas, e a escolha é de quem usa. A clara é a da maquete aprovada; a
+   * escura sempre esteve declarada em `dashboard-modern.css` e volta a ser
+   * alcançável. "Sistema" segue `prefers-color-scheme`.
    *
-   * A escala clara continua declarada em `dashboard-modern.css` porque é a
-   * camada base sobre a qual as regras `.theme-dark` escrevem — apagá-la
-   * exigiria reescrever cada regra do painel, e o resultado na tela seria
-   * exatamente o mesmo.
+   * Os dois estados chegam prontos do servidor, lidos de cookie, e é por isso
+   * que não há lampejo: a classe já vai no HTML da primeira resposta. O efeito
+   * abaixo cuida só do que o servidor não tem como saber.
    */
+  const [themePreference, setThemePreference] = useState<ThemePreference>(initialThemePreference);
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(initialTheme);
+  const theme: ResolvedTheme = themePreference === "system" ? systemTheme : themePreference;
+
+  /* O que o navegador responde de `prefers-color-scheme`, e o que ele responde
+     quando a pessoa muda no sistema operacional com o painel aberto.
+
+     O valor é gravado em cookie mesmo quando a preferência não é "sistema":
+     ele não decide nada agora, mas é o que permite ao servidor acertar de
+     saída se a pessoa voltar a escolher "sistema" depois. */
   useEffect(() => {
-    /* O esquema nativo acompanha a casca.
-       Ficou em "dark" desde a direção escura, e com a casca clara isso deixava
-       o que o navegador desenha sozinho — a lista aberta de um `select`, a
-       barra de rolagem, o seletor de data — em tema escuro dentro de uma tela
-       branca. É o tipo de detalhe que ninguém sabe nomear e todo mundo nota. */
-    document.documentElement.style.colorScheme = "light";
-    // A escolha de quem experimentou a alternância enquanto ela existiu não
-    // pode sobreviver a ela: sem esta linha, um valor guardado ficaria no
-    // navegador da pessoa sem nada que o leia nem o apague.
-    window.localStorage.removeItem("vinculato-theme");
+    const consulta = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!consulta) return;
+    const aplicar = (escuro: boolean) => {
+      const resolvido: ResolvedTheme = escuro ? "dark" : "light";
+      setSystemTheme(resolvido);
+      document.cookie = `${THEME_SYSTEM_COOKIE}=${resolvido}; path=/; max-age=${THEME_COOKIE_MAX_AGE}; samesite=lax`;
+    };
+    aplicar(consulta.matches);
+    const ouvir = (evento: MediaQueryListEvent) => aplicar(evento.matches);
+    consulta.addEventListener("change", ouvir);
+    return () => consulta.removeEventListener("change", ouvir);
+  }, []);
+
+  /* `color-scheme` é o que o CSS não resolve: sem ele, o que o navegador
+     desenha sozinho — a lista aberta de um `select`, a barra de rolagem, o
+     seletor de data — fica no tema errado dentro da tela. É o tipo de detalhe
+     que ninguém sabe nomear e todo mundo nota. */
+  useEffect(() => {
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+
+  /* A escolha vai para cookie, não para `localStorage`, porque é o servidor
+     quem precisa dela na próxima resposta. */
+  const escolherTema = useCallback((escolha: ThemePreference) => {
+    setThemePreference(escolha);
+    document.cookie = `${THEME_COOKIE}=${escolha}; path=/; max-age=${THEME_COOKIE_MAX_AGE}; samesite=lax`;
   }, []);
 
   useEffect(() => {
@@ -2679,7 +2716,7 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
      O tema escuro não foi removido: `.theme-dark` continua definido e medido em
      `dashboard-modern.css`; ele só deixou de ser o tema que o produto entrega. */
   return (
-    <main className={`dashboard-shell operational-ui${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view}>
+    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view} data-theme={theme}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -2868,6 +2905,18 @@ export function WorkspaceApp({ user, signOutPath, initialLocation = defaultPanel
                 "configurar o grupo" olha o menu, não a foto. Enquanto a única
                 porta era o avatar, nove seções de configuração ficavam a um
                 clique que ninguém sabia que existia. */}
+            {/* Um botão só para três estados, e não três botões, porque esta
+                fileira já tem três comandos e o rodapé da barra é estreito. O
+                `aria-label` diz o estado atual e o próximo — sem isso, um botão
+                que cicla é mudo para quem não vê o ícone mudar. */}
+            <button type="button" className="switch-account-button theme-toggle"
+              onClick={() => escolherTema(nextThemePreference(themePreference))}
+              aria-label={`Tema: ${themeLabels[themePreference].toLowerCase()}. Trocar para ${themeLabels[nextThemePreference(themePreference)].toLowerCase()}.`}
+              title={`Tema: ${themeLabels[themePreference]}`}>
+              {themePreference === "system" ? <MonitorCog aria-hidden="true" />
+                : themePreference === "dark" ? <Moon aria-hidden="true" />
+                : <Sun aria-hidden="true" />}
+            </button>
             <button type="button" className="switch-account-button"
               onClick={openWorkspaceSettings}
               aria-label="Abrir configurações" title="Configurações"><Settings aria-hidden="true" /></button>

@@ -169,7 +169,19 @@ jobs:
   # fáceis de quebrar sem ninguém perceber.
   interface:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 40, e não 20, porque a auditoria voltou a cobrir os dois temas (§7).
+    #
+    # O custo é real e foi medido: com um tema só o passo inteiro levava 6min39
+    # para 102 telas. Com os dois são 204, e a execução de 20 minutos morreu
+    # ainda dentro do `a11y-check`, sem chegar aos outros três ensaios — o job
+    # foi cancelado pelo teto, não por falha.
+    #
+    # A alternativa seria auditar um tema só e deixar o outro fora, que é
+    # exatamente o que este repositório já pagou caro para não fazer: a regra é
+    # **nunca audite metade**, e ela custa minutos. O teto sobe para 40 para dar
+    # folga sobre os ~26 minutos medidos, e continua baixo o bastante para
+    # acusar um travamento em vez de rodar até o limite da plataforma.
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16

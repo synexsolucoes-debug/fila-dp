@@ -221,18 +221,29 @@ test("a conferência WCAG faz parte do repositório, não de uma rodada avulsa",
   assert.match(script, /\.sidebar-process > button/u);
   assert.match(script, /\.sidebar-process-view/u);
 
-  /* O produto voltou a ter um tema só, por decisão de produto registrada — e a
-     varredura volta ao posto de sentinela.
+  /* O produto voltou a ter dois temas, e a trava volta a cobrar os dois.
 
-     Esta trava já mudou de lado três vezes, e é justamente por isso que ela
-     existe: a regra que atravessou as três versões é sempre a mesma, **nunca
-     audite metade**. Quando havia dois temas, ela cobrava que os dois fossem
-     medidos. Com um só, ela cobra que a volta do segundo seja acusada em vez
-     de passar em silêncio — que é a única coisa capaz de tornar esta varredura
-     parcial sem ninguém perceber. */
-  assert.doesNotMatch(script, /async function switchTheme/u);
-  assert.match(script, /async function themeToggleExists/u);
-  assert.match(script, /um alternador de tema voltou à interface/u);
+     Esta é a quarta vez que ela muda de lado, e é justamente por isso que ela
+     existe: a regra que atravessou as quatro versões é sempre a mesma, **nunca
+     audite metade**. Com dois temas ela cobra que os dois sejam medidos; com um
+     só, cobrava que a volta do segundo fosse acusada em vez de passar em
+     silêncio. A sentinela cumpriu o papel — o alternador voltou e ela reprovou
+     na primeira execução, antes de qualquer tela escura ficar sem auditoria.
+
+     A troca é pelo botão, o mesmo caminho da pessoa, e o tema alcançado é
+     conferido na casca: uma varredura que pensa ter trocado de tema e não
+     trocou mede o mesmo duas vezes e devolve um relatório com cara de
+     cobertura dobrada. Isso já aconteceu numa versão anterior desta função, e é
+     por isso que as escalas dos dois temas são comparadas no fim. */
+  assert.doesNotMatch(script, /async function themeToggleExists/u,
+    "a sentinela sai quando a varredura volta a cobrir os dois temas");
+  assert.match(script, /async function setTheme/u);
+  assert.match(script, /for \(const tema of \["light", "dark"\]\)/u,
+    "os dois temas precisam ser percorridos");
+  // Prova de que a troca aconteceu: sem isto, medir o mesmo tema duas vezes
+  // passa como cobertura dobrada.
+  assert.match(script, /async function surfaceSignature/u);
+  assert.match(script, /os dois temas mediram a mesma escala/u);
   assert.match(script, /await auditEverything\(\);/u);
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(pkg.scripts["a11y-check"], "node scripts/a11y-check.mjs");
