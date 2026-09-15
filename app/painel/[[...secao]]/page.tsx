@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { chatGPTSignOutPath, requireChatGPTUser } from "../../chatgpt-auth";
 import { WorkspaceApp } from "../WorkspaceApp";
 import { panelPath, parsePanelPath } from "@/lib/panel-routes";
+import {
+  parseResolvedTheme, parseThemePreference, resolveTheme,
+  THEME_COOKIE, THEME_SYSTEM_COOKIE,
+} from "@/lib/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +47,20 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
 
   const user = await requireChatGPTUser(panelPath(location));
 
+  /* O tema entra pronto, pelo mesmo motivo que o caminho entra: o que se
+     resolve depois da hidratação pisca. Aqui o lampejo seria a tela inteira
+     trocando de cor. */
+  const jar = await cookies();
+  const themePreference = parseThemePreference(jar.get(THEME_COOKIE)?.value);
+  const systemTheme = parseResolvedTheme(jar.get(THEME_SYSTEM_COOKIE)?.value);
+
   return (
     <WorkspaceApp
       user={{ displayName: user.displayName, email: user.email, fullName: user.fullName }}
       signOutPath={chatGPTSignOutPath("/")}
       initialLocation={location}
+      initialThemePreference={themePreference}
+      initialTheme={resolveTheme(themePreference, systemTheme)}
     />
   );
 }
