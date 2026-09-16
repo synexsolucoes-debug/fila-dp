@@ -1,6 +1,9 @@
 export { ConfirmDialog, EmptyState, ErrorBanner, LoadingState, PageSkeleton, PanelHeader, StatusPill, type PanelStateSize } from "./panel-ui";
 export { statusTone, type PanelTone } from "./status-tone";
-export { competenceLabel, cycleProgress, cycleStages, stageIndex, type CycleStatus } from "./competence-cycle";
+export {
+  competenceLabel, competenceWindow, cycleProgress, cycleStages, nextFreeCompetence, shiftCompetence, stageIndex,
+  type CompetenceChoice, type CycleStatus,
+} from "./competence-cycle";
 export { connectionStatusLabel, connectionStatusLabels, connectionTone, lastSyncLabel } from "./connection-status";
 export { MemberModules } from "./MemberModules";
 export {

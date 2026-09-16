@@ -2,11 +2,14 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, BookOpenCheck, CheckCircle2, FilePlus2, ShieldCheck, X } from "lucide-react";
+import { nextFreeCompetence } from "../shared";
 import type { Approval, Approver, Cycle, EditorState, EmployeeOption } from "./operations.types";
 import styles from "./operations.module.css";
 
 type DialogProps = {
   editor: NonNullable<EditorState>; cycle: Cycle | null; companyId: string; competence: string;
+  /** Competências que já têm ciclo nesta empresa — o servidor recusa repetir. */
+  openCompetences?: string[];
   employees: EmployeeOption[]; approvers: Approver[]; busy: boolean; onClose: () => void;
   onSubmit: (editor: NonNullable<EditorState>, data: FormData) => Promise<void>;
 };
@@ -72,7 +75,7 @@ export function OperationDialog(props: DialogProps) {
         </header>
         <form onSubmit={submit}>
           <div className={styles.dialogBody}>
-            {editor.kind === "competence" && <CompetenceFields competence={props.competence} />}
+            {editor.kind === "competence" && <CompetenceFields competence={props.competence} openCompetences={props.openCompetences ?? []} />}
             {editor.kind === "movement" && <MovementFields editor={editor} employees={props.employees} approvers={props.approvers} cycle={props.cycle} />}
             {editor.kind === "approval" && <ApprovalFields approval={editor.approval} />}
             {editor.kind === "obligation" && <ObligationFields approvers={props.approvers} />}
@@ -95,13 +98,24 @@ export function OperationDialog(props: DialogProps) {
   );
 }
 
-function CompetenceFields({ competence }: { competence: string }) {
+/**
+ * A abertura parte de um mês livre, não do mês que está na tela.
+ *
+ * Com o ciclo do mês corrente já aberto, o campo vinha preenchido com ele e o
+ * envio batia no 409 do servidor — o diálogo sugeria justamente o único valor
+ * que ele não aceita. O aviso em tela evita a ida ao servidor para descobrir
+ * isso, e o `min`/`max` mantém a escolha dentro da janela que o seletor cobre.
+ */
+function CompetenceFields({ competence, openCompetences }: { competence: string; openCompetences: string[] }) {
+  const [escolhida, setEscolhida] = useState(() => nextFreeCompetence(openCompetences, competence));
+  const repetida = openCompetences.includes(escolhida);
   return <div className={styles.formGrid}>
-    <label><span>Competência</span><input name="competence" type="month" defaultValue={competence} required /></label>
+    <label><span>Competência</span><input name="competence" type="month" value={escolhida} onChange={(event) => setEscolhida(event.target.value)} required /></label>
     <label><span>Prazo de pré-fechamento</span><input name="preClosingDueDate" type="date" /></label>
     <label><span>Data de pagamento</span><input name="paymentDate" type="date" /></label>
     <label><span>Prazo de pós-fechamento</span><input name="postClosingDueDate" type="date" /></label>
     <label className={styles.spanTwo}><span>Nota operacional</span><textarea name="notes" placeholder="Contexto para o ciclo, sem dados pessoais ou remuneratórios." /></label>
+    {repetida && <div className={`${styles.inlineAlert} ${styles.spanTwo}`}><AlertTriangle aria-hidden="true" />Esta competência já tem ciclo nesta empresa. Escolha outro mês.</div>}
   </div>;
 }
 

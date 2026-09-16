@@ -22,7 +22,7 @@ import type {
   CompanyOption, Contractor, ContractorOverview, ContractorPaymentDetail as ContractorPaymentDetailData,
   EmployeeOption, PaymentDialog, PaymentModule, PsychologyOverview,
 } from "./payments.types";
-import { ErrorBanner } from "../shared";
+import { competenceWindow, ErrorBanner } from "../shared";
 import styles from "./payments.module.css";
 
 const moduleConfig: Record<PaymentModule, { title: string; eyebrow: string; description: string; icon: typeof Stethoscope }> = {
@@ -170,10 +170,13 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
   }, [companyId, competence, loadEmployees, loadOverview]);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 3800); return () => window.clearTimeout(timer); }, [toast]);
 
-  const competenceOptions = useMemo(() => {
-    const known = cycles.map((item) => item.competence);
-    return known.includes(competence) ? known : [competence, ...known];
-  }, [competence, cycles]);
+  // Meses sem ciclo também entram na lista. Sem eles, quem precisava conferir
+  // um mês que ninguém abriu não tinha como chegar até ele — e o aviso que
+  // manda abrir a competência na Operação DP nunca aparecia para esse mês.
+  const competenceOptions = useMemo(
+    () => competenceWindow(cycles.map((item) => item.competence), { selected: competence }),
+    [competence, cycles],
+  );
 
   async function mutate<T>(url: string, init: RequestInit, success: string): Promise<T | null> {
     setBusy(true);
@@ -634,7 +637,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           <label>
             <span className={styles.eyebrow}>COMPETÊNCIA</span>
             <select value={competence} onChange={(event) => setCompetence(event.target.value)}>
-              {competenceOptions.map((item) => <option key={item} value={item}>{competenceLabel(item)}</option>)}
+              {competenceOptions.map((item) => <option key={item.competence} value={item.competence}>{competenceLabel(item.competence)}{item.open ? "" : " · não aberta"}</option>)}
             </select>
           </label>
         </div>

@@ -58,3 +58,56 @@ export function cycleProgress(cycles: ReadonlyArray<{ status: string }>) {
     completa: concluidos === cycles.length,
   };
 }
+
+/** "2026-11" + 2 → "2027-01". Competência é mês, e mês vira a conta em meses. */
+export function shiftCompetence(competence: string, months: number) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/u.exec(competence);
+  if (!match) return competence;
+  const total = Number(match[1]) * 12 + (Number(match[2]) - 1) + months;
+  if (total < 0) return competence;
+  const ano = Math.floor(total / 12);
+  const mes = (total % 12) + 1;
+  return `${String(ano).padStart(4, "0")}-${String(mes).padStart(2, "0")}`;
+}
+
+export type CompetenceChoice = { competence: string; open: boolean };
+
+/**
+ * As competências que o seletor pode oferecer — as abertas e as que ainda não
+ * existem.
+ *
+ * O seletor listava só os ciclos já criados. Quem abrisse a competência do mês
+ * corrente ficava sem nenhum mês livre para escolher, e o botão "Abrir
+ * competência" — que só aparece quando o mês da tela não tem ciclo — sumia da
+ * tela para sempre: não havia como abrir novembro em outubro, nem como abrir
+ * um mês antigo que ninguém abriu na época. A abertura existia no servidor e
+ * no diálogo, e mesmo assim era inalcançável.
+ *
+ * A janela, então, é de meses e não de ciclos: os doze anteriores e os três
+ * seguintes ao mês de referência, mais tudo que já existe no banco, mais o que
+ * estiver selecionado. `open` diz quais já têm ciclo, para a tela marcar as
+ * outras em vez de fingir que todas são iguais.
+ */
+export function competenceWindow(
+  existing: readonly string[],
+  options: { reference?: string; back?: number; forward?: number; selected?: string } = {},
+): CompetenceChoice[] {
+  const { reference = new Date().toISOString().slice(0, 7), back = 12, forward = 3, selected = "" } = options;
+  const valid = (value: string) => /^\d{4}-(0[1-9]|1[0-2])$/u.test(value);
+  const abertas = new Set(existing.filter(valid));
+  const meses = new Set(abertas);
+  if (valid(reference)) for (let offset = -back; offset <= forward; offset += 1) meses.add(shiftCompetence(reference, offset));
+  if (valid(selected)) meses.add(selected);
+  return [...meses].sort().reverse().map((competence) => ({ competence, open: abertas.has(competence) }));
+}
+
+/** O primeiro mês da janela sem ciclo, para sugerir no diálogo de abertura. */
+export function nextFreeCompetence(existing: readonly string[], preferred = new Date().toISOString().slice(0, 7)) {
+  const abertas = new Set(existing);
+  if (!abertas.has(preferred)) return preferred;
+  for (let offset = 1; offset <= 24; offset += 1) {
+    const candidato = shiftCompetence(preferred, offset);
+    if (!abertas.has(candidato)) return candidato;
+  }
+  return preferred;
+}
