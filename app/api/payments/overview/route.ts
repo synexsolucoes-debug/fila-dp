@@ -180,6 +180,7 @@ export async function GET(request: Request) {
         reopen: hasCapability(workspace, "payments.reopen"),
         manageLimits: hasCapability(workspace, "contractors.limits.manage"),
         exportCaju: hasCapability(workspace, "contractors.export_caju"),
+        portal: hasCapability(workspace, "invoice.portal.manage"),
       },
     });
   } catch (error) {

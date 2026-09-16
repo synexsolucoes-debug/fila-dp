@@ -848,3 +848,13 @@
 }
 
 .mutedCell { color: var(--pay-soft); }
+
+/* A opção que muda o que o botão faz: com ela marcada, o arquivo de avisos
+   passa a criar os links em vez de só listar valores. O aviso fica junto da
+   caixa porque a consequência — invalidar os links já enviados — precisa ser
+   lida antes do clique, não depois. */
+.noticeLinkToggle { display: flex; align-items: flex-start; gap: 10px; margin-top: 4px; cursor: pointer; }
+.noticeLinkToggle input { margin-top: 3px; flex: 0 0 auto; width: 16px; height: 16px; }
+.noticeLinkToggle > span { display: grid; gap: 3px; min-width: 0; }
+.noticeLinkToggle strong { font-size: .78rem; }
+.noticeLinkToggle small { color: var(--pay-soft); font-size: .71rem; line-height: 1.5; }

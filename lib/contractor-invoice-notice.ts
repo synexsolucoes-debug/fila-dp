@@ -138,3 +138,20 @@ export function buildInvoiceNoticeFile(
      das vezes, e com "\n" sozinho ele mostra tudo numa linha só. */
   return mensagens.join("\r\n\r\n\r\n");
 }
+
+/**
+ * O nome e o corpo do arquivo, num lugar só.
+ *
+ * Dois caminhos produzem este arquivo — o relatório sem link e a geração com
+ * link do portal —, e eles precisam sair idênticos: mesmo nome, mesmo BOM,
+ * mesma quebra final. Quem recebe os dois em meses diferentes não deve notar
+ * que vieram de rotas distintas, e a marca de ordem de byte é o que faz o
+ * Bloco de Notas ler os acentos.
+ */
+export function invoiceNoticeFilename(competence: string) {
+  return `avisos-nf-${competence}.txt`;
+}
+
+export function invoiceNoticeFileBody(conteudo: string) {
+  return `\uFEFF${conteudo}\r\n`;
+}

@@ -10,6 +10,8 @@ export type PaymentPermissions = {
   reopen: boolean;
   manageLimits: boolean;
   exportCaju: boolean;
+  /** Gerar o link do portal — e, com ele, o arquivo de avisos que o carrega. */
+  portal: boolean;
 };
 
 export type Psychologist = {

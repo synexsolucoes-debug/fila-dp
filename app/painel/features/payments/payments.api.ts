@@ -55,6 +55,7 @@ function normalizePermissions(row: Row): PaymentPermissions {
     reopen: source.reopen === true,
     manageLimits: source.manageLimits === true,
     exportCaju: source.exportCaju === true,
+    portal: source.portal === true,
   };
 }
 
