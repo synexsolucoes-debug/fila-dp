@@ -293,6 +293,47 @@ test("o token não entra na trilha de auditoria", async () => {
   assert.ok(!/token/iu.test(trilha), "auditoria guarda o que aconteceu, não a credencial que permite repetir");
 });
 
+test("o arquivo de avisos sai do mesmo molde nos dois caminhos", async () => {
+  // Dois caminhos produzem este arquivo — o relatório sem link e a geração com
+  // link —, e quem recebe não deve notar que vieram de rotas distintas.
+  const aviso = await readFile(new URL("../lib/contractor-invoice-notice.ts", import.meta.url), "utf8");
+  assert.match(aviso, /export function invoiceNoticeFilename/u);
+  assert.match(aviso, /export function invoiceNoticeFileBody/u);
+  // O BOM é o que faz o Bloco de Notas ler os acentos.
+  assert.match(aviso, /return `\\uFEFF\$\{conteudo\}\\r\\n`/u);
+
+  const relatorio = await readFile(new URL("../app/api/payments/reports/route.ts", import.meta.url), "utf8");
+  assert.match(relatorio, /invoiceNoticeFileBody\(conteudo\)/u);
+  assert.match(relatorio, /invoiceNoticeFilename\(competence\)/u);
+  assert.doesNotMatch(relatorio, /avisos-nf-\$\{competence\}\.txt/u, "o nome do arquivo voltou a ser escrito à mão");
+});
+
+test("o arquivo com link cobre o grupo, e a emitente não recorta ninguém", async () => {
+  const rota = await readFile(new URL("../app/api/payments/contractors/invoices/portal-links/route.ts", import.meta.url), "utf8");
+  // O prestador é do grupo: recortar por empresa deixaria de fora justamente
+  // quem atende mais de uma.
+  assert.match(rota, /const issuerCompanyId = cleanText\(body\.issuerCompanyId \?\? body\.companyId, 120\)/u);
+  assert.match(rota, /const empresas = companyId \? \[companyId\] : \[\.\.\.access\.companyIds\]/u);
+  // A emitente entra no texto, e o acesso a ela é exigido porque é o nome dela
+  // que vai no documento.
+  assert.match(rota, /requireCompanyAccess\(d1, workspace\.id, user\.id, workspace\.role, issuerCompanyId\)/u);
+  assert.match(rota, /\.bind\(workspace\.id, issuerCompanyId\)/u);
+  // O link, porém, pertence à empresa do fechamento — usar a emitente furaria
+  // a chave estrangeira do ciclo para quem atende outra empresa do grupo.
+  assert.match(rota, /\.bind\(id, workspace\.id, closing\.company_id, closing\.provider_id/u);
+});
+
+test("gerar o arquivo é escrita, e escrita não acontece por download", async () => {
+  const tela = await readFile(new URL("../app/painel/features/payments/PaymentsView.tsx", import.meta.url), "utf8");
+  // O navegador repete GET em retentativa e pré-carregamento, e cada repetição
+  // revogaria os links que acabaram de ser enviados.
+  assert.match(tela, /async function baixarAvisosComLink/u);
+  assert.match(tela, /"\/api\/payments\/contractors\/invoices\/portal-links",\s*\n\s*\{ method: "POST"/u);
+  assert.doesNotMatch(tela, /href=\{[^}]*portal-links/u, "o arquivo com link voltou a sair por <a href>");
+  // E a consequência precisa ser lida antes do clique, não depois.
+  assert.match(tela, /invalida os que foram enviados antes nesta competência/u);
+});
+
 test("a mensagem do aviso leva o link, e o link é casado por id e não por nome", async () => {
   const aviso = await readFile(new URL("../lib/contractor-invoice-notice.ts", import.meta.url), "utf8");
   assert.match(aviso, /portalUrls\.get\(String\(row\.provider_id \?\? row\.providerId \?\? ""\)\)/u,

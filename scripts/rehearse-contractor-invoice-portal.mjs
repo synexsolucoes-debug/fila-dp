@@ -331,6 +331,79 @@ async function main() {
   });
   conferir("o link entregue passa a 'nota recebida'", portalLinkStatus(fechado) === "submitted", portalLinkStatus(fechado));
 
+  /* 9. O recorte do arquivo de avisos: ele cobre o GRUPO, não uma empresa.
+        O prestador é do grupo, e recortar por empresa deixaria de fora quem
+        atende mais de uma — que é exatamente o caso que esta parte monta: uma
+        segunda empresa no mesmo workspace, com fechamento próprio.
+
+        A consulta conferida aqui é a da rota, com os dois parâmetros que
+        decidem o alcance: o booleano de "sem recorte" e o array de empresas.
+        `ANY(?::text[])` é o tipo de construção que `tsc` aceita e o banco
+        recusa, e só rodando dá para saber qual das duas está certa. */
+  const segunda = {
+    companyId: `${alfa.workspaceId}-co2`,
+    cycleId: `${alfa.workspaceId}-cy2`,
+    providerId: `${alfa.workspaceId}-pj2`,
+    closingId: `${alfa.workspaceId}-ccl2`,
+  };
+  await comTenant(alfa.workspaceId, async (client) => {
+    await client.query(`INSERT INTO fdp_companies (id, workspace_id, legal_name, trade_name, tax_id, city)
+      VALUES ($1, $2, 'Segunda empresa do grupo', 'Segunda', '99888777000166', 'Contagem')`,
+    [segunda.companyId, alfa.workspaceId]);
+    await client.query(`INSERT INTO fdp_payroll_cycles (id, workspace_id, company_id, competence, status, created_by)
+      VALUES ($1, $2, $3, $4, 'open', $5)`, [segunda.cycleId, alfa.workspaceId, segunda.companyId, competence, alfa.userId]);
+    await client.query(`INSERT INTO fdp_auxiliary_providers (id, workspace_id, provider_type, code, legal_name, tax_id)
+      VALUES ($1, $2, 'contractor', 'ZETA', 'Empresa ZETA LTDA', '12345678000190')`, [segunda.providerId, alfa.workspaceId]);
+    await client.query(`INSERT INTO fdp_contractor_profiles
+        (provider_id, workspace_id, company_id, base_amount, complement_method, updated_by)
+      VALUES ($1, $2, $3, 4000, 'none', $4)`, [segunda.providerId, alfa.workspaceId, segunda.companyId, alfa.userId]);
+    await client.query(`INSERT INTO fdp_contractor_closings (id, workspace_id, company_id, provider_id, payroll_cycle_id,
+        competence, base_amount, net_amount, invoice_expected_amount, calc_version, created_by, invoice_review_status)
+      VALUES ($1, $2, $3, $4, $5, $6, 4000, 4000, 4000, 'ensaio', $7, 'awaiting_issue')`,
+    [segunda.closingId, alfa.workspaceId, segunda.companyId, segunda.providerId, segunda.cycleId, competence, alfa.userId]);
+  });
+
+  const candidatos = (semRecorte, empresas) => comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(`SELECT closing.id, closing.company_id, closing.provider_id,
+        closing.payroll_cycle_id, closing.competence, closing.invoice_expected_amount,
+        provider.legal_name AS contractor_name
+      FROM fdp_contractor_closings closing
+      JOIN fdp_auxiliary_providers provider ON provider.workspace_id = closing.workspace_id AND provider.id = closing.provider_id
+      WHERE closing.workspace_id = $1 AND closing.competence = $2
+        AND ($3::boolean OR closing.company_id = ANY($4::text[]))
+        AND closing.excluded_at IS NULL
+        AND closing.invoice_expected_amount > 0
+        AND closing.invoice_current_id IS NULL
+        AND closing.status NOT IN ('closed', 'paid')
+        AND ($5::boolean OR closing.provider_id = ANY($6::text[]))
+      ORDER BY provider.legal_name`,
+    [alfa.workspaceId, competence, semRecorte, empresas, true, []]);
+    return rows;
+  });
+
+  // O fechamento do grupo A já recebeu nota nesta altura do ensaio, então quem
+  // sobra esperando nota é o da segunda empresa. É o que o recorte tem de achar.
+  const semRecorte = await candidatos(true, []);
+  conferir("sem recorte, a consulta alcança a outra empresa do grupo",
+    semRecorte.some((linha) => linha.company_id === segunda.companyId), `linhas=${semRecorte.length}`);
+
+  const comRecorte = await candidatos(false, [segunda.companyId]);
+  conferir("com recorte, só a empresa pedida entra",
+    comRecorte.length === semRecorte.filter((l) => l.company_id === segunda.companyId).length
+      && comRecorte.every((linha) => linha.company_id === segunda.companyId),
+    `linhas=${comRecorte.length}`);
+
+  const recorteVazio = await candidatos(false, []);
+  conferir("lista de empresas vazia não devolve o grupo inteiro", recorteVazio.length === 0, `linhas=${recorteVazio.length}`);
+
+  // E o link da segunda empresa entra apontando para o ciclo DELA: usar a
+  // emitente aqui furaria a chave estrangeira do ciclo.
+  const linkSegunda = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await inserirLink(client, { ...alfa, ...segunda }, createPortalToken(alfa.workspaceId));
+    return rows[0].id;
+  });
+  conferir("o link da outra empresa usa o ciclo dela", Boolean(linkSegunda));
+
   /* E com o lugar livre de novo, o próximo link do fechamento pode nascer: é o
      caminho da substituição pedida pela conferência. */
   const link3 = await comTenant(alfa.workspaceId, async (client) => {

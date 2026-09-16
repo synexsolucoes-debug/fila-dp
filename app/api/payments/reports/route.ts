@@ -9,7 +9,7 @@ import { renderContractorStatement } from "@/lib/contractor-statement-pdf";
 import { buildStatement } from "@/lib/contractor-statement";
 import { renderInvoiceSummary } from "@/lib/contractor-invoice-summary-pdf";
 import { buildInvoiceSummary } from "@/lib/contractor-invoice-summary";
-import { buildInvoiceNoticeFile } from "@/lib/contractor-invoice-notice";
+import { buildInvoiceNoticeFile, invoiceNoticeFileBody, invoiceNoticeFilename } from "@/lib/contractor-invoice-notice";
 import { contractorComponentLabel } from "@/lib/payments";
 
 /** Toda exportação entra na auditoria, em qualquer formato: é ela que responde
@@ -132,10 +132,10 @@ export async function GET(request: Request) {
         );
       }
       await recordExport(request, workspace.id, user.id, auth.user.email, key, competence, companyId, rows.results.length, "txt");
-      return new Response(`\uFEFF${conteudo}\r\n`, {
+      return new Response(invoiceNoticeFileBody(conteudo), {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
-          "Content-Disposition": `attachment; filename="avisos-nf-${competence}.txt"`,
+          "Content-Disposition": `attachment; filename="${invoiceNoticeFilename(competence)}"`,
           "Cache-Control": "no-store",
         },
       });

@@ -1,5 +1,5 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
-import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
+import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
@@ -10,7 +10,7 @@ import {
   portalLinkStatus,
   portalLinkUrl,
 } from "@/lib/contractor-invoice-portal";
-import { buildInvoiceNoticeFile } from "@/lib/contractor-invoice-notice";
+import { buildInvoiceNoticeFile, invoiceNoticeFilename } from "@/lib/contractor-invoice-notice";
 
 /**
  * Os links do portal do prestador, por competência.
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
 }
 
 /**
- * Gera os links da competência.
+ * Gera os links da competência e devolve o arquivo de avisos pronto.
  *
  * Sem `contractorIds`, atende todo mundo que tem nota a emitir e ainda não
  * mandou — o caso do mês. Com a lista, atende só quem foi pedido, que é o caso
@@ -91,6 +91,25 @@ export async function GET(request: Request) {
  * Quem já enviou a nota fica de fora mesmo quando vem nomeado: gerar link para
  * quem já cumpriu é convidar a uma segunda via que ninguém pediu. Substituir
  * uma nota recebida é decisão de conferência, e ela tem tela própria.
+ *
+ * ## Por que gerar é a única forma de o link entrar no arquivo
+ *
+ * O banco guarda o hash do token, nunca o token. Isso significa que o endereço
+ * de um link já criado é irrecuperável — de propósito: é o que faz um vazamento
+ * do banco não devolver nenhum link utilizável. A consequência é que o arquivo
+ * de avisos não pode *ler* links; ele os cria no momento em que é produzido, e
+ * os anteriores daquele fechamento são revogados na mesma transação.
+ *
+ * Isso é a semântica certa e não um efeito colateral: quem gera o arquivo de
+ * avisos vai mandá-lo para todo mundo, e o link que valia na mensagem anterior
+ * não deve continuar valendo depois de um reenvio geral.
+ *
+ * ## Recorte
+ *
+ * `companyId` é opcional, e a ausência dele não é descuido: o arquivo de avisos
+ * cobre o grupo, porque o prestador é do grupo e recortar deixaria de fora quem
+ * atende mais de uma empresa. `issuerCompanyId` é outra coisa — a emitente, que
+ * entra no texto de cada mensagem e não filtra ninguém.
  */
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -99,10 +118,22 @@ export async function POST(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "invoice.portal.manage");
-    const companyId = cleanText(body.companyId, 120);
-    if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");
     const competence = validCompetence(body.competence);
-    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
+    /* A emitente é quem recebe a nota de todo mundo, e o acesso a ela é exigido
+       porque é o nome dela que vai no documento. */
+    const issuerCompanyId = cleanText(body.issuerCompanyId ?? body.companyId, 120);
+    if (!issuerCompanyId) throw ApiError.badRequest("Selecione a empresa emitente.", "COMPANY_REQUIRED");
+    await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, issuerCompanyId);
+
+    /* O recorte dos prestadores: uma empresa quando pedida, senão tudo que a
+       pessoa alcança — o mesmo alcance do relatório de avisos. */
+    const companyId = cleanText(body.companyId, 120);
+    if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
+    const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
+    const empresas = companyId ? [companyId] : [...access.companyIds];
+    if (!companyId && !access.unrestricted && empresas.length === 0) {
+      throw ApiError.badRequest("Você não tem acesso a nenhuma empresa desta competência.", "COMPANY_ACCESS_REQUIRED");
+    }
 
     const escolhidos = Array.isArray(body.contractorIds)
       ? body.contractorIds.map((item) => cleanText(item, 120)).filter(Boolean)
@@ -112,20 +143,23 @@ export async function POST(request: Request) {
     /* O recorte é o mesmo do aviso de NF: quem tem valor de nota a emitir nesta
        competência. Os dois falam das mesmas pessoas de propósito — é isso que
        permite conferir uma lista contra a outra. */
-    const candidatos = await d1.prepare(`SELECT closing.id, closing.provider_id, closing.payroll_cycle_id,
-        closing.competence, closing.invoice_expected_amount, provider.legal_name AS contractor_name
+    const candidatos = await d1.prepare(`SELECT closing.id, closing.company_id, closing.provider_id,
+        closing.payroll_cycle_id, closing.competence, closing.invoice_expected_amount,
+        provider.legal_name AS contractor_name
       FROM fdp_contractor_closings closing
       JOIN fdp_auxiliary_providers provider ON provider.workspace_id = closing.workspace_id AND provider.id = closing.provider_id
-      WHERE closing.workspace_id = ? AND closing.company_id = ? AND closing.competence = ?
+      WHERE closing.workspace_id = ? AND closing.competence = ?
+        AND (?::boolean OR closing.company_id = ANY(?::text[]))
         AND closing.excluded_at IS NULL
         AND closing.invoice_expected_amount > 0
         AND closing.invoice_current_id IS NULL
         AND closing.status NOT IN ('closed', 'paid')
         AND (?::boolean OR closing.provider_id = ANY(?::text[]))
       ORDER BY provider.legal_name`)
-      .bind(workspace.id, companyId, competence, escolhidos.length === 0, escolhidos)
+      .bind(workspace.id, competence, !companyId && access.unrestricted, empresas,
+        escolhidos.length === 0, escolhidos)
       .all<{
-        id: string; provider_id: string; payroll_cycle_id: string; competence: string;
+        id: string; company_id: string; provider_id: string; payroll_cycle_id: string; competence: string;
         invoice_expected_amount: string | number; contractor_name: string;
       }>();
 
@@ -153,7 +187,7 @@ export async function POST(request: Request) {
           (id, workspace_id, company_id, provider_id, payroll_cycle_id, closing_id, competence,
            token_hash, expires_at, expected_amount, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(id, workspace.id, companyId, closing.provider_id, closing.payroll_cycle_id, closing.id,
+        .bind(id, workspace.id, closing.company_id, closing.provider_id, closing.payroll_cycle_id, closing.id,
           closing.competence, token.hash, expiresAt.toISOString(),
           Number(closing.invoice_expected_amount ?? 0), user.id));
       gerados.push({
@@ -171,16 +205,16 @@ export async function POST(request: Request) {
       actorEmail: auth.user.email,
       action: "contractor_invoice_portal.links_created",
       entityType: "contractor_invoice_portal_link",
-      entityId: companyId,
+      entityId: issuerCompanyId,
       // O token não entra na trilha: auditoria guarda o que aconteceu, não a
       // credencial que permitiria repetir.
       after: { competence, total: gerados.length, expiresAt: expiresAt.toISOString() },
-      metadata: { companyId, providerIds: gerados.map((item) => item.providerId) },
+      metadata: { issuerCompanyId, companyId: companyId || null, providerIds: gerados.map((item) => item.providerId) },
       requestId: request.headers.get("x-fila-dp-request-id"),
     }));
 
     const emitente = await d1.prepare("SELECT legal_name, tax_id, city FROM fdp_companies WHERE workspace_id = ? AND id = ?")
-      .bind(workspace.id, companyId)
+      .bind(workspace.id, issuerCompanyId)
       .first<{ legal_name: string; tax_id: string; city: string }>();
 
     await d1.batch(statements);
@@ -192,6 +226,9 @@ export async function POST(request: Request) {
       new Map(gerados.map((item) => [item.providerId, item.url])),
     );
 
-    return Response.json({ links: gerados, messages: mensagens, expiresAt: expiresAt.toISOString() }, { status: 201 });
+    return Response.json({
+      links: gerados, messages: mensagens, filename: invoiceNoticeFilename(competence),
+      expiresAt: expiresAt.toISOString(),
+    }, { status: 201 });
   } catch (error) { return apiError(error); }
 }

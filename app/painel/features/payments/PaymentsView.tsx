@@ -97,6 +97,12 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
      qual é antes de gerar evita mandar a nota para o CNPJ errado. */
   const [noticeOpen, setNoticeOpen] = useState(false);
   const [noticeCompany, setNoticeCompany] = useState("");
+  /* Incluir o link muda o que o botão faz: em vez de baixar um relatório, ele
+     GERA os links e devolve o arquivo já com eles. O banco guarda só o hash do
+     token, então não existe caminho de leitura — ou o arquivo cria o link, ou
+     sai sem link. */
+  const [noticeWithLink, setNoticeWithLink] = useState(true);
+  const [noticeBusy, setNoticeBusy] = useState(false);
   const [paymentDetail, setPaymentDetail] = useState<ContractorPaymentDetailData | null>(null);
   const [documentsContractor, setDocumentsContractor] = useState<Pick<Contractor, "id" | "legalName" | "contractReference"> | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState("");
@@ -602,6 +608,42 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
     return `/api/payments/reports?${params}`;
   };
 
+  /**
+   * O arquivo de avisos com o link do portal.
+   *
+   * Sai do POST que gera os links, e não de um `<a href>`: gerar é uma escrita,
+   * e uma escrita não pode acontecer por download — o navegador repete GET em
+   * retentativa e em pré-carregamento, e cada repetição revogaria os links que
+   * acabaram de ser enviados.
+   */
+  async function baixarAvisosComLink(company: string) {
+    setNoticeBusy(true);
+    try {
+      const payload = await requestJson<{ messages?: string; filename?: string; links?: unknown[] }>(
+        "/api/payments/contractors/invoices/portal-links",
+        { method: "POST", body: JSON.stringify({ competence, issuerCompanyId: company }) },
+      );
+      const conteudo = payload.messages ?? "";
+      if (!conteudo) throw new Error("Nenhum prestador desta competência está esperando nota fiscal.");
+      /* O mesmo corpo do relatório: BOM na frente para o Bloco de Notas ler os
+         acentos, e a quebra final que ele espera. */
+      const blob = new Blob([`\uFEFF${conteudo}\r\n`], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = payload.filename ?? `avisos-nf-${competence}.txt`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setNoticeOpen(false);
+      setToast(`Avisos gerados com link para ${payload.links?.length ?? 0} prestador(es).`);
+      await loadOverview(companyId, competence, true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível gerar os avisos com link.");
+    } finally {
+      setNoticeBusy(false);
+    }
+  }
+
   const reportUrl = (report: string, format: "csv" | "pdf" = "csv") => {
     const params = new URLSearchParams({ report, competence, format });
     if (companyId) params.set("companyId", companyId);
@@ -878,14 +920,35 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
               <p className={styles.noteLine}>
                 É para esta empresa que todos vão emitir a nota. O nome dela entra em cada mensagem.
               </p>
+              {permissions?.portal && (
+                <label className={styles.noticeLinkToggle}>
+                  <input type="checkbox" checked={noticeWithLink}
+                    onChange={(event) => setNoticeWithLink(event.target.checked)} />
+                  <span>
+                    <strong>Incluir o link de envio da nota</strong>
+                    <small>
+                      Cada mensagem ganha um endereço em que o próprio prestador anexa a nota, válido por 10 dias.
+                      Gerar o arquivo cria links novos e invalida os que foram enviados antes nesta competência —
+                      o endereço não é guardado em lugar nenhum, então não há como reimprimir o anterior.
+                    </small>
+                  </span>
+                </label>
+              )}
             </div>
             <footer className={styles.dialogFooter}>
-              <button type="button" className={styles.secondaryButton} onClick={() => setNoticeOpen(false)}>Cancelar</button>
-              <a className={styles.primaryButton} aria-disabled={!noticeCompany}
-                href={noticeCompany ? noticeUrl(noticeCompany) : undefined}
-                onClick={() => { if (noticeCompany) setNoticeOpen(false); }}>
-                Gerar arquivo
-              </a>
+              <button type="button" className={styles.secondaryButton} onClick={() => setNoticeOpen(false)} disabled={noticeBusy}>Cancelar</button>
+              {permissions?.portal && noticeWithLink ? (
+                <button type="button" className={styles.primaryButton} disabled={!noticeCompany || noticeBusy}
+                  onClick={() => { if (noticeCompany) void baixarAvisosComLink(noticeCompany); }}>
+                  {noticeBusy ? "Gerando…" : "Gerar arquivo com link"}
+                </button>
+              ) : (
+                <a className={styles.primaryButton} aria-disabled={!noticeCompany}
+                  href={noticeCompany ? noticeUrl(noticeCompany) : undefined}
+                  onClick={() => { if (noticeCompany) setNoticeOpen(false); }}>
+                  Gerar arquivo
+                </a>
+              )}
             </footer>
           </div>
         </AnimatedModal>
