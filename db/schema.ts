@@ -2346,7 +2346,9 @@ export const contractorDocuments = pgTable("fdp_contractor_documents", {
   filename: text("filename").notNull(),
   contentType: text("content_type").notNull(),
   sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
-  createdBy: text("created_by").notNull(),
+  /** Nulo no envio pelo portal: quem anexou não é membro. Ver `createdVia`. */
+  createdBy: text("created_by"),
+  createdVia: text("created_via").notNull().default("panel"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_contractor_documents_workspace_id_uq").on(table.workspaceId, table.id),
@@ -2360,6 +2362,8 @@ export const contractorDocuments = pgTable("fdp_contractor_documents", {
   check("fdp_contractor_documents_kind_check", sql`${table.documentKind} IN ('invoice')`),
   check("fdp_contractor_documents_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
   check("fdp_contractor_documents_size_check", sql`${table.sizeBytes} > 0`),
+  check("fdp_contractor_documents_created_via_check", sql`${table.createdVia} IN ('panel', 'contractor_portal')`),
+  check("fdp_contractor_documents_creator_presence_check", sql`${table.createdVia} <> 'panel' OR ${table.createdBy} IS NOT NULL`),
 ]);
 
 /**
@@ -2404,7 +2408,15 @@ export const contractorInvoices = pgTable("fdp_contractor_invoices", {
   notes: text("notes").notNull().default(""),
   /** Envio aceito apesar do alerta de duplicidade, com quem aceitou no histórico. */
   duplicateAck: boolean("duplicate_ack").notNull().default(false),
-  uploadedBy: text("uploaded_by").notNull(),
+  /**
+   * Quem enviou, quando houve alguém.
+   *
+   * Nulo no envio pelo portal do prestador: ele não é membro do workspace, e
+   * carimbar aqui o id de quem gerou o link registraria que uma pessoa do DP
+   * mandou uma nota que ela não mandou. `uploadedVia` diz por onde entrou.
+   */
+  uploadedBy: text("uploaded_by"),
+  uploadedVia: text("uploaded_via").notNull().default("panel"),
   uploadedAt: timestamp("uploaded_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   uploadedIp: text("uploaded_ip").notNull().default(""),
   uploadedUserAgent: text("uploaded_user_agent").notNull().default(""),
@@ -2456,6 +2468,8 @@ export const contractorInvoices = pgTable("fdp_contractor_invoices", {
   check("fdp_contractor_invoices_amount_check", sql`${table.amount} >= 0 AND ${table.expectedAmount} >= 0`),
   check("fdp_contractor_invoices_difference_check", sql`${table.differenceAmount} = ${table.amount} - ${table.expectedAmount}`),
   check("fdp_contractor_invoices_attempt_check", sql`${table.attempt} >= 1`),
+  check("fdp_contractor_invoices_uploaded_via_check", sql`${table.uploadedVia} IN ('panel', 'contractor_portal')`),
+  check("fdp_contractor_invoices_uploader_presence_check", sql`${table.uploadedVia} <> 'panel' OR ${table.uploadedBy} IS NOT NULL`),
   // Recusar sem motivo é recusar sem explicação: a nota volta para o prestador
   // e ninguém sabe o que corrigir.
   check("fdp_contractor_invoices_rejection_check",
@@ -2475,7 +2489,11 @@ export const contractorInvoiceEvents = pgTable("fdp_contractor_invoice_events", 
   providerId: text("provider_id").notNull(),
   competence: text("competence").notNull(),
   action: text("action").notNull(),
-  actorUserId: text("actor_user_id").notNull(),
+  /** Nulo quando o ator não é pessoa do workspace — ver `actorKind`. */
+  actorUserId: text("actor_user_id"),
+  actorKind: text("actor_kind").notNull().default("user"),
+  /** Nome de quem agiu quando não há usuário: o prestador que enviou a nota. */
+  actorLabel: text("actor_label").notNull().default(""),
   summary: text("summary").notNull().default(""),
   beforeJson: jsonb("before_json").$type<Record<string, unknown>>().notNull().default({}),
   afterJson: jsonb("after_json").$type<Record<string, unknown>>().notNull().default({}),
@@ -2490,6 +2508,64 @@ export const contractorInvoiceEvents = pgTable("fdp_contractor_invoice_events", 
   check("fdp_contractor_invoice_events_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
   check("fdp_contractor_invoice_events_action_check",
     sql`${table.action} IN ('uploaded', 'submitted', 'approved', 'rejected', 'correction_requested', 'replaced', 'superseded', 'reviewer_assigned', 'updated', 'canceled')`),
+  check("fdp_contractor_invoice_events_actor_kind_check", sql`${table.actorKind} IN ('user', 'contractor_portal')`),
+  check("fdp_contractor_invoice_events_actor_presence_check",
+    sql`(${table.actorKind} = 'user' AND ${table.actorUserId} IS NOT NULL) OR (${table.actorKind} = 'contractor_portal' AND length(trim(${table.actorLabel})) > 0)`),
+]);
+
+/**
+ * O link por competência que recebe a nota fiscal do prestador.
+ *
+ * Guarda só o hash do token: o valor completo existe na mensagem enviada e em
+ * nenhum outro lugar. O índice parcial de link aberto garante um vivo por
+ * fechamento — gerar o segundo revoga o primeiro, em vez de deixar dois válidos
+ * e o prestador adivinhando qual usar.
+ */
+export const contractorInvoicePortalLinks = pgTable("fdp_contractor_invoice_portal_links", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  payrollCycleId: text("payroll_cycle_id").notNull(),
+  closingId: text("closing_id").notNull(),
+  competence: text("competence").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+  /** Valor pedido quando o link nasceu; reapurar depois não reescreve o aviso. */
+  expectedAmount: numeric("expected_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  firstOpenedAt: timestamp("first_opened_at", { withTimezone: true, mode: "string" }),
+  openedCount: integer("opened_count").notNull().default(0),
+  submittedAt: timestamp("submitted_at", { withTimezone: true, mode: "string" }),
+  submittedInvoiceId: text("submitted_invoice_id"),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
+  revokedBy: text("revoked_by"),
+  revokeReason: text("revoke_reason").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_contractor_invoice_portal_links_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_contractor_invoice_portal_links_token_uq").on(table.tokenHash),
+  index("fdp_contractor_invoice_portal_links_competence_idx").on(table.workspaceId, table.companyId, table.competence),
+  index("fdp_contractor_invoice_portal_links_provider_idx").on(table.workspaceId, table.providerId, table.competence),
+  index("fdp_contractor_invoice_portal_links_closing_idx").on(table.workspaceId, table.closingId),
+  index("fdp_contractor_invoice_portal_links_creator_idx").on(table.workspaceId, table.createdBy),
+  index("fdp_contractor_invoice_portal_links_revoker_idx").on(table.workspaceId, table.revokedBy),
+  index("fdp_contractor_invoice_portal_links_invoice_idx").on(table.workspaceId, table.submittedInvoiceId),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_provider_fk", columns: [table.workspaceId, table.providerId], foreignColumns: [auxiliaryProviders.workspaceId, auxiliaryProviders.id] }),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_cycle_fk", columns: [table.workspaceId, table.companyId, table.payrollCycleId], foreignColumns: [payrollCycles.workspaceId, payrollCycles.companyId, payrollCycles.id] }),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_closing_fk", columns: [table.workspaceId, table.closingId], foreignColumns: [contractorClosings.workspaceId, contractorClosings.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_invoice_fk", columns: [table.workspaceId, table.submittedInvoiceId], foreignColumns: [contractorInvoices.workspaceId, contractorInvoices.id] }),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_revoker_fk", columns: [table.workspaceId, table.revokedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_contractor_invoice_portal_links_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_contractor_invoice_portal_links_amount_check", sql`${table.expectedAmount} >= 0`),
+  check("fdp_contractor_invoice_portal_links_opened_check", sql`${table.openedCount} >= 0`),
+  check("fdp_contractor_invoice_portal_links_revoke_check",
+    sql`(${table.revokedAt} IS NULL AND ${table.revokedBy} IS NULL) OR (${table.revokedAt} IS NOT NULL AND ${table.revokedBy} IS NOT NULL)`),
+  check("fdp_contractor_invoice_portal_links_submission_check",
+    sql`(${table.submittedAt} IS NULL AND ${table.submittedInvoiceId} IS NULL) OR (${table.submittedAt} IS NOT NULL AND ${table.submittedInvoiceId} IS NOT NULL)`),
 ]);
 
 /* -------------------------------------------------------------------------- */

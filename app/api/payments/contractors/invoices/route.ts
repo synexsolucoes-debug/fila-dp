@@ -148,6 +148,7 @@ export async function GET(request: Request) {
         reject: hasCapability(workspace, "invoice.reject"),
         replace: hasCapability(workspace, "invoice.replace"),
         export: hasCapability(workspace, "invoice.export"),
+        portal: hasCapability(workspace, "invoice.portal.manage"),
       },
     });
   } catch (error) {
@@ -290,8 +291,7 @@ export async function POST(request: Request) {
       documentId: documentStored ? documentId : null,
       duplicateAck: Boolean(duplicate),
       replacesInvoiceId,
-      actorUserId: user.id,
-      actorName: user.name || auth.user.email,
+      actor: { kind: "user", userId: user.id, name: user.name || auth.user.email },
       ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
       userAgent: request.headers.get("user-agent") ?? "",
     });

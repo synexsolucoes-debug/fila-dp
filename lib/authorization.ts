@@ -96,6 +96,7 @@ export const capabilities = [
   "invoice.reject",
   "invoice.replace",
   "invoice.export",
+  "invoice.portal.manage",
   "payments.reopen",
   "time.read",
   "time.manage",
@@ -198,6 +199,7 @@ const roleCapabilities = {
     // ação que reescreve um documento financeiro que já liberou pagamento.
     "invoice.read", "invoice.create", "invoice.upload", "invoice.update",
     "invoice.review", "invoice.approve", "invoice.reject", "invoice.export",
+    "invoice.portal.manage",
     "time.read", "time.manage", "time.approve", "time.export",
     // O analista de DP opera o EPI inteiro: é ele quem entrega, recebe de
     // volta, trata a troca e leva o caso de desconto ao parecer. O que fica

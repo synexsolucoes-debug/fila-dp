@@ -7,7 +7,7 @@ import {
   Search, ShieldAlert, ShieldCheck, TimerReset, UserCheck, UsersRound,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { cycleStages, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
+import { competenceWindow, cycleStages, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
 import { OperationDialog } from "./OperationDialogs";
 import {
   normalizeCompany, normalizeEmployee, normalizeMovement, normalizeOverview, normalizeProcess, normalizeVersion, requestJson,
@@ -135,6 +135,13 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
     }
     return issues;
   }, [blockers, data]);
+  // As competências que o seletor oferece incluem meses ainda sem ciclo: é por
+  // eles que se chega à abertura, que antes só era alcançável no mês corrente.
+  const competenceChoices = useMemo(
+    () => competenceWindow(data?.cycles.map((item) => item.competence) ?? [], { selected: competence }),
+    [competence, data?.cycles],
+  );
+  const openCompetences = useMemo(() => data?.cycles.map((item) => item.competence) ?? [], [data?.cycles]);
   const filteredMovements = useMemo(() => {
     const query = movementFilter.toLocaleLowerCase("pt-BR");
     return (data?.movements ?? []).filter((item) => !query || [item.title, item.employeeName, item.socialName, movementLabels[item.movementType]].some((value) => value?.toLocaleLowerCase("pt-BR").includes(query)));
@@ -147,8 +154,11 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
     } finally { setBusy(false); }
   }
 
-  async function refreshAfterMutation() {
-    await loadOverview(companyId, competence, true);
+  // A competência vai por parâmetro: quem acabou de abrir outro mês já trocou
+  // `competence` no estado, mas o valor capturado por esta closure ainda é o
+  // antigo — recarregar com ele traria de volta a tela que o usuário deixou.
+  async function refreshAfterMutation(selectedCompetence = competence) {
+    await loadOverview(companyId, selectedCompetence, true);
     if (tab === "library") await loadLibrary();
   }
 
@@ -156,8 +166,11 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
     if (!companyId) return;
     try {
       if (state.kind === "competence") {
-        await mutate("/api/operations/competences", { method: "POST", body: JSON.stringify({ companyId, competence: field(form, "competence"), preClosingDueDate: field(form, "preClosingDueDate") || null, paymentDate: field(form, "paymentDate") || null, postClosingDueDate: field(form, "postClosingDueDate") || null, notes: field(form, "notes") }) }, "Competência aberta com checklist padrão.");
-        setCompetence(field(form, "competence"));
+        const aberta = field(form, "competence");
+        await mutate("/api/operations/competences", { method: "POST", body: JSON.stringify({ companyId, competence: aberta, preClosingDueDate: field(form, "preClosingDueDate") || null, paymentDate: field(form, "paymentDate") || null, postClosingDueDate: field(form, "postClosingDueDate") || null, notes: field(form, "notes") }) }, "Competência aberta com checklist padrão.");
+        setCompetence(aberta);
+        setEditor(null); await refreshAfterMutation(aberta);
+        return;
       } else if (state.kind === "movement") {
         const movementType = field(form, "movementType");
         const details = movementType === "salary_change" ? { newSalary: Number(field(form, "newSalary")), percentage: Number(field(form, "percentage")), reason: field(form, "reason") }
@@ -212,15 +225,21 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
       <div className={styles.commandBar}>
         <div className={styles.commandSelectors}>
           <label><span>EMPRESA</span><div><Building2 aria-hidden="true" /><select value={companyId} onChange={(event) => { setEmployees([]); setCompanyId(event.target.value); setCompetence(currentCompetence()); }} aria-label="Empresa da operação">{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select></div></label>
-          <label><span>COMPETÊNCIA</span><div><CalendarClock aria-hidden="true" /><select value={competence} onChange={(event) => setCompetence(event.target.value)} aria-label="Competência da operação"><option value={competence}>{competenceLabel(competence)}</option>{data?.cycles.filter((item) => item.competence !== competence).map((item) => <option value={item.competence} key={item.id}>{competenceLabel(item.competence)}</option>)}</select></div></label>
+          <label><span>COMPETÊNCIA</span><div><CalendarClock aria-hidden="true" /><select value={competence} onChange={(event) => setCompetence(event.target.value)} aria-label="Competência da operação">{competenceChoices.map((item) => <option value={item.competence} key={item.competence}>{competenceLabel(item.competence)}{item.open ? "" : " · não aberta"}</option>)}</select></div></label>
           <button className={styles.refreshButton} type="button" onClick={() => void loadOverview(companyId, competence, true)} disabled={refreshing} aria-label="Atualizar cockpit"><RefreshCw className={refreshing ? styles.spin : ""} aria-hidden="true" /><span>{refreshing ? "Atualizando" : "Atualizar"}</span></button>
         </div>
-        {cycle ? next && data?.permissions.transitionCompetences && <button className={styles.primaryButton} type="button" onClick={() => setEditor({ kind: "transition", target: next })}>Avançar ciclo <ArrowRight aria-hidden="true" /></button> : data?.permissions.manageCompetences && <button className={styles.primaryButton} type="button" onClick={() => setEditor({ kind: "competence" })}><Plus aria-hidden="true" /> Abrir competência</button>}
+        {/* Abrir competência acompanha a permissão, não o estado da tela. Ficar
+            só no lugar do "Avançar ciclo" escondia a abertura assim que o mês
+            corrente tinha ciclo — e nunca mais voltava. */}
+        <div className={styles.commandActions}>
+          {data?.permissions.manageCompetences && <button className={cycle ? styles.secondaryButton : styles.primaryButton} type="button" onClick={() => setEditor({ kind: "competence" })}><Plus aria-hidden="true" /> Abrir competência</button>}
+          {cycle && next && data?.permissions.transitionCompetences && <button className={styles.primaryButton} type="button" onClick={() => setEditor({ kind: "transition", target: next })}>Avançar ciclo <ArrowRight aria-hidden="true" /></button>}
+        </div>
       </div>
 
       {error && <ErrorBanner title="Algo exige atenção" message={error} onDismiss={() => setError("")} />}
 
-      <CycleRail cycle={cycle} gateIssues={gateIssues} next={next} onAdvance={data?.permissions.transitionCompetences && next ? () => setEditor({ kind: "transition", target: next }) : undefined} />
+      <CycleRail cycle={cycle} gateIssues={gateIssues} next={next} competenceName={competenceLabel(competence)} onOpen={data?.permissions.manageCompetences ? () => setEditor({ kind: "competence" }) : undefined} onAdvance={data?.permissions.transitionCompetences && next ? () => setEditor({ kind: "transition", target: next }) : undefined} />
 
       <div className={styles.exceptionStrip}>
         <ExceptionMetric icon={TimerReset} label="Movimentações pendentes" value={pendingMovements} tone={pendingMovements ? "warning" : "safe"} note={pendingMovements ? "Exigem avanço" : "Sem exceções"} />
@@ -241,14 +260,14 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
         {tab === "library" && <LibraryPanel processes={libraryProcesses.length ? libraryProcesses : data?.processes ?? []} versions={versions} canManage={Boolean(data?.permissions.manageProcesses)} canPublish={Boolean(data?.permissions.publishProcesses && role === "admin")} onCreate={() => setEditor({ kind: "process" })} onVersion={(process) => setEditor({ kind: "process-version", process })} onPublish={(process, version) => setEditor({ kind: "process-publish", process, version })} />}
       </div>
 
-      {editor && <OperationDialog editor={editor} cycle={cycle} companyId={companyId} competence={competence} employees={employees} approvers={data?.approvers ?? []} busy={busy} onClose={() => setEditor(null)} onSubmit={handleDialogSubmit} />}
+      {editor && <OperationDialog editor={editor} cycle={cycle} companyId={companyId} competence={competence} openCompetences={openCompetences} employees={employees} approvers={data?.approvers ?? []} busy={busy} onClose={() => setEditor(null)} onSubmit={handleDialogSubmit} />}
       {toast && <div className={styles.toast} role="status"><CheckCircle2 aria-hidden="true" />{toast}</div>}
     </section>
   );
 }
 
-function CycleRail({ cycle, gateIssues, next, onAdvance }: { cycle: Cycle | null; gateIssues: string[]; next?: Cycle["status"]; onAdvance?: () => void }) {
-  if (!cycle) return <section className={styles.cycleEmpty}><div><CircleDashed aria-hidden="true" /><span><strong>Competência ainda não aberta</strong><small>Abra o ciclo para ativar gates, checklists e prazos desta empresa.</small></span></div></section>;
+function CycleRail({ cycle, gateIssues, next, competenceName, onOpen, onAdvance }: { cycle: Cycle | null; gateIssues: string[]; next?: Cycle["status"]; competenceName: string; onOpen?: () => void; onAdvance?: () => void }) {
+  if (!cycle) return <section className={styles.cycleEmpty}><div><CircleDashed aria-hidden="true" /><span><strong>{competenceName} ainda não foi aberta</strong><small>Abra o ciclo para ativar gates, checklists e prazos desta empresa.</small></span>{onOpen && <button className={styles.primaryButton} type="button" onClick={onOpen}><Plus aria-hidden="true" /> Abrir competência</button>}</div></section>;
   const current = cycleStages.findIndex((stage) => stage.status === cycle.status);
   return <section className={styles.cycleRail} aria-label={`Ciclo da competência ${cycle.competence}`}>
     <header><div><span className={styles.eyebrow}>CICLO DE FECHAMENTO</span><strong>{competenceLabel(cycle.competence)}</strong></div><span className={`${styles.cycleHealth} ${gateIssues.length ? styles.healthBlocked : styles.healthSafe}`}>{gateIssues.length ? <LockKeyhole aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}{gateIssues.length ? `${gateIssues.length} gate${gateIssues.length > 1 ? "s" : ""} bloqueado${gateIssues.length > 1 ? "s" : ""}` : "Gates livres"}</span></header>

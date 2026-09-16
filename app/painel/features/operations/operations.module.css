@@ -35,6 +35,7 @@
 
 .commandBar { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .commandSelectors { display: flex; align-items: end; gap: 9px; min-width: 0; }
+.commandActions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
 .commandSelectors > label { display: grid; gap: 6px; }
 .commandSelectors > label > span { color: var(--ops-soft); font-size: .57rem; font-weight: 790; letter-spacing: .1em; }
 .commandSelectors > label > div { display: flex; align-items: center; min-height: 40px; padding-left: 11px; border: 1px solid var(--ops-border); border-radius: 8px; background: var(--ops-surface); }
@@ -45,7 +46,9 @@
 .refreshButton:disabled { opacity: .55; }
 
 .cycleEmpty { margin-bottom: 14px; padding: 22px; border: 1px dashed var(--ops-strong); border-radius: 10px; background: color-mix(in srgb, var(--ops-muted) 65%, var(--ops-surface)); }
-.cycleEmpty > div { display: flex; align-items: center; gap: 13px; }
+.cycleEmpty > div { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }
+.cycleEmpty > div > span { flex: 1 1 260px; }
+.cycleEmpty > div > button { flex: 0 0 auto; }
 .cycleEmpty > div > svg { width: 30px; height: 30px; color: var(--ops-mint); }
 .cycleEmpty span { display: grid; gap: 4px; }
 .cycleEmpty strong { font-size: .84rem; }

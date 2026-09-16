@@ -187,7 +187,7 @@ export async function PATCH(request: Request, { params }: Params) {
       prepareInvoiceEvent(d1, {
         workspaceId: workspace.id, invoiceId: id, closingId: invoice.closing_id,
         providerId: invoice.provider_id, competence: invoice.competence,
-        action: "updated", actorUserId: user.id,
+        action: "updated", actor: { kind: "user", userId: user.id, name: user.name || auth.user.email },
         summary: invoiceEventSummary({
           action: "updated", actorName: user.name || auth.user.email, invoiceNumber,
         }),

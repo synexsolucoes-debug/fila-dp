@@ -14,6 +14,7 @@ import {
   type InvoiceQuickFilter,
 } from "@/lib/contractor-invoices";
 import { ConfirmDialog, EmptyState, ErrorBanner, PageSkeleton } from "../shared";
+import { ContractorPortalLinks } from "./ContractorPortalLinks";
 import { InvoiceReviewDrawer } from "./InvoiceReviewDrawer";
 import { InvoiceUploadDialog } from "./InvoiceUploadDialog";
 import { normalizeInvoiceDetail, normalizeInvoicePanel, requestJson, type Row } from "./payments.api";
@@ -312,6 +313,14 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
           {alerts.map((alert) => <li key={alert}>{alert}</li>)}
         </ul>
       )}
+
+      <ContractorPortalLinks
+        companyId={companyId}
+        competence={competence}
+        competenceLabel={competenceLabel}
+        money={money}
+        canManage={Boolean(permissions?.portal)}
+      />
 
       <div className={styles.invoiceToolbar}>
         <div className={styles.invoiceQuickFilters} role="group" aria-label="Filtros rápidos">

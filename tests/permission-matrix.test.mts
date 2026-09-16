@@ -79,9 +79,16 @@ test("toda rota de escrita passa por alguma autorização", () => {
      Elas não ficam sem conferência: a regra delas é mais estreita que uma
      capacidade, e está no bloco logo abaixo. */
   const PESSOAIS = new Set(["shortcuts/route.ts"]);
+  /* Rotas cuja autorização é um token portador, e não uma sessão: o portal em
+     que o prestador envia a nota fiscal. Quem chega ali não é membro do grupo e
+     nunca vai ser — exigir capacidade seria exigir uma conta, que é exatamente
+     o que o portal existe para não pedir.
+     Elas também não ficam sem conferência: a regra delas é mais estreita que
+     uma capacidade, e está no bloco logo abaixo. */
+  const POR_TOKEN = new Set(["portal/nota/[token]/route.ts"]);
   for (const [caminho, fonte] of routes) {
     if (!/export async function (POST|PATCH|PUT|DELETE)/u.test(fonte)) continue;
-    if (PUBLICAS.has(caminho) || PESSOAIS.has(caminho)) continue;
+    if (PUBLICAS.has(caminho) || PESSOAIS.has(caminho) || POR_TOKEN.has(caminho)) continue;
     // Rotas internas do worker usam assinatura HMAC curta no lugar de sessão
     // humana; ela também é uma verificação de autorização e prende workspace,
     // job, ação, conteúdo e validade temporal.
@@ -104,6 +111,29 @@ test("toda rota de escrita passa por alguma autorização", () => {
       `${caminho} precisa escrever escopado ao grupo e à pessoa da sessão`);
     assert.doesNotMatch(fonte, /body\.userId|body\.workspaceId/u,
       `${caminho} aceita identidade vinda do cliente`);
+  }
+
+  /* O que prende as rotas por token, ponto a ponto:
+
+     1. o segredo nunca é comparado em claro — o que roda é o hash;
+     2. o inquilino sai do próprio token e a conexão nasce presa a ele, de modo
+        que a RLS do banco vale ali como vale em qualquer outra rota;
+     3. há limite de tentativas, senão a rota vira um oráculo que responde, em
+        milissegundos, se um segredo existe;
+     4. a situação do link é conferida antes da escrita: revogado, vencido e já
+        usado não gravam nada. */
+  for (const caminho of POR_TOKEN) {
+    const fonte = routes.find(([nome]) => nome === caminho)?.[1];
+    assert.ok(fonte, `${caminho} não existe mais — tire da lista de rotas por token`);
+    assert.match(fonte, /hashPortalToken\(/u, `${caminho} precisa comparar o token por hash`);
+    assert.doesNotMatch(fonte, /token_hash = \?\s*OR|=== *parsed\.secret/u,
+      `${caminho} compara o segredo em claro`);
+    assert.match(fonte, /getScopedD1\(\{ workspaceId: parsed\.workspaceId \}\)/u,
+      `${caminho} precisa prender a conexão ao inquilino do token`);
+    assert.match(fonte, /consumePublicAuthRateLimit\("contractor_portal"/u,
+      `${caminho} precisa limitar tentativas`);
+    assert.match(fonte, /assertPortalLinkUsable\(/u,
+      `${caminho} precisa recusar link revogado, vencido ou já usado`);
   }
 });
 
