@@ -282,6 +282,29 @@ export async function listInvoiceEvents(d1: Database, workspaceId: string, closi
 /* Escrita                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Quem agiu sobre a nota.
+ *
+ * Nem todo ato tem pessoa do workspace por trás: o portal do prestador recebe
+ * nota de quem não é membro. Antes de existir esse canal, `actor_user_id` era
+ * obrigatório — e a saída fácil seria carimbar ali o id de quem gerou o link,
+ * registrando que uma pessoa do DP enviou uma nota que ela não enviou. Numa
+ * tabela cuja razão de existir é responder "quem fez o quê", isso não é um
+ * atalho: é a única coisa que ela não pode fazer.
+ *
+ * O tipo é fechado porque o banco também fecha: o CHECK exige a pessoa quando
+ * o ator é pessoa, e o nome de quem enviou quando é o portal.
+ */
+export type InvoiceActor =
+  | { kind: "user"; userId: string; name: string }
+  | { kind: "contractor_portal"; name: string };
+
+const actorColumns = (actor: InvoiceActor) => ({
+  userId: actor.kind === "user" ? actor.userId : null,
+  kind: actor.kind,
+  label: actor.kind === "user" ? "" : actor.name.slice(0, 200),
+});
+
 export type InvoiceEventInput = {
   workspaceId: string;
   invoiceId: string;
@@ -289,7 +312,7 @@ export type InvoiceEventInput = {
   providerId: string;
   competence: string;
   action: InvoiceEventAction;
-  actorUserId: string;
+  actor: InvoiceActor;
   summary: string;
   before?: Record<string, unknown>;
   after?: Record<string, unknown>;
@@ -297,11 +320,13 @@ export type InvoiceEventInput = {
 
 /** O evento do histórico, preparado para entrar no mesmo lote da mudança que o originou. */
 export function prepareInvoiceEvent(d1: Database, input: InvoiceEventInput) {
+  const actor = actorColumns(input.actor);
   return d1.prepare(`INSERT INTO fdp_contractor_invoice_events
-      (id, workspace_id, invoice_id, closing_id, provider_id, competence, action, actor_user_id, summary, before_json, after_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb)`)
+      (id, workspace_id, invoice_id, closing_id, provider_id, competence, action,
+       actor_user_id, actor_kind, actor_label, summary, before_json, after_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb)`)
     .bind(crypto.randomUUID(), input.workspaceId, input.invoiceId, input.closingId, input.providerId,
-      input.competence, input.action, input.actorUserId, input.summary.slice(0, 500),
+      input.competence, input.action, actor.userId, actor.kind, actor.label, input.summary.slice(0, 500),
       JSON.stringify(input.before ?? {}), JSON.stringify(input.after ?? {}));
 }
 
@@ -418,8 +443,7 @@ export type RegisterInvoiceInput = {
   documentId: string | null;
   duplicateAck: boolean;
   replacesInvoiceId: string | null;
-  actorUserId: string;
-  actorName: string;
+  actor: InvoiceActor;
   ip: string;
   userAgent: string;
 };
@@ -473,9 +497,9 @@ export async function registerInvoice(d1: Database, input: RegisterInvoiceInput)
     statements.push(prepareInvoiceEvent(d1, {
       workspaceId: input.workspaceId, invoiceId: current.id, closingId: input.closing.id,
       providerId: input.closing.provider_id, competence: input.closing.competence,
-      action: "replaced", actorUserId: input.actorUserId,
+      action: "replaced", actor: input.actor,
       summary: invoiceEventSummary({
-        action: "replaced", actorName: input.actorName,
+        action: "replaced", actorName: input.actor.name,
         invoiceNumber: current.invoice_number, replacementNumber: input.invoiceNumber,
       }),
       before: { status: current.status, current: true },
@@ -487,14 +511,16 @@ export async function registerInvoice(d1: Database, input: RegisterInvoiceInput)
       (id, workspace_id, company_id, provider_id, payroll_cycle_id, closing_id, competence, attempt,
        invoice_number, series, issue_date, issuer_document, issuer_name, receiver_document, service_description,
        amount, expected_amount, difference_amount, status, document_id, notes, duplicate_ack,
-       uploaded_by, uploaded_ip, uploaded_user_agent, replaces_invoice_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?)`)
+       uploaded_by, uploaded_via, uploaded_ip, uploaded_user_agent, replaces_invoice_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(invoiceId, input.workspaceId, input.closing.company_id, input.closing.provider_id,
       input.closing.payroll_cycle_id, input.closing.id, input.closing.competence, attempt,
       input.invoiceNumber, input.series, input.issueDate, documentDigits(input.issuerDocument),
       input.issuerName, documentDigits(input.receiverDocument), input.serviceDescription,
       comparison.informedAmount, comparison.expectedAmount, comparison.difference,
-      input.documentId, input.notes, input.duplicateAck, input.actorUserId,
+      input.documentId, input.notes, input.duplicateAck,
+      input.actor.kind === "user" ? input.actor.userId : null,
+      input.actor.kind === "user" ? "panel" : "contractor_portal",
       input.ip.slice(0, 60), input.userAgent.slice(0, 200), current?.id ?? null));
 
   if (current) {
@@ -506,9 +532,9 @@ export async function registerInvoice(d1: Database, input: RegisterInvoiceInput)
   statements.push(prepareInvoiceEvent(d1, {
     workspaceId: input.workspaceId, invoiceId, closingId: input.closing.id,
     providerId: input.closing.provider_id, competence: input.closing.competence,
-    action: "uploaded", actorUserId: input.actorUserId,
+    action: "uploaded", actor: input.actor,
     summary: invoiceEventSummary({
-      action: "uploaded", actorName: input.actorName,
+      action: "uploaded", actorName: input.actor.name,
       invoiceNumber: input.invoiceNumber, amount: comparison.informedAmount,
     }),
     after: {
@@ -654,7 +680,8 @@ export async function reviewInvoice(d1: Database, input: ReviewInvoiceInput) {
     prepareInvoiceEvent(d1, {
       workspaceId: input.workspaceId, invoiceId: invoice.id, closingId: invoice.closing_id,
       providerId: invoice.provider_id, competence: invoice.competence,
-      action: invoiceReviewEvent[action], actorUserId: input.actorUserId, summary,
+      action: invoiceReviewEvent[action],
+      actor: { kind: "user", userId: input.actorUserId, name: input.actorName }, summary,
       before: { status: invoice.status },
       after: {
         status, checklist: input.checklist, reviewNote: input.reviewNote,

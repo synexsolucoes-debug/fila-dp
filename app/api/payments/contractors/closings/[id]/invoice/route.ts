@@ -191,8 +191,7 @@ export async function POST(request: Request, { params }: Params) {
       documentId: documentStored ? documentId : null,
       duplicateAck: Boolean(duplicate),
       replacesInvoiceId: closing.invoice_current_id,
-      actorUserId: user.id,
-      actorName: user.name || auth.user.email,
+      actor: { kind: "user", userId: user.id, name: user.name || auth.user.email },
       ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "",
       userAgent: request.headers.get("user-agent") ?? "",
     });

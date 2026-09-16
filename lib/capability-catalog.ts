@@ -99,6 +99,7 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "invoice.reject": { area: "payments", label: "Rejeitar a nota ou solicitar correção, com motivo" },
   "invoice.replace": { area: "payments", label: "Substituir uma nota já aprovada, mantendo o histórico" },
   "invoice.export": { area: "payments", label: "Exportar o relatório de notas fiscais da competência" },
+  "invoice.portal.manage": { area: "payments", label: "Gerar e revogar o link do portal onde o prestador envia a nota" },
   "payments.reopen": { area: "payments", label: "Reabrir pagamento fechado, com justificativa" },
 
   "time.read": { area: "time", label: "Ver marcações e conferências de ponto" },

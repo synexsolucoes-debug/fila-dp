@@ -89,6 +89,14 @@ jobs:
       - name: Provar que a apuração PJ atravessa valores com centavos
         run: npm run db:rehearse-closing
 
+      # O portal do prestador é a única porta aberta a quem não tem conta, e o
+      # que a protege mora no banco: hash em vez de segredo, um link vivo por
+      # fechamento, ator sem pessoa e RLS. O ensaio prova cada uma sob um papel
+      # que NÃO ignora RLS — superusuário passaria mesmo com as políticas
+      # desligadas, que é o pior tipo de prova: a que não pode falhar.
+      - name: Provar as travas do portal do prestador
+        run: npm run db:rehearse-portal
+
       # Duas conexões reais disputam os mesmos registros. O ensaio cobre
       # estoque, tarefa, etapa, aprovação e revisão de processo, além dos casos
       # gerais de demanda, webhook, worker e fechamento.

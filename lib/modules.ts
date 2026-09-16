@@ -78,6 +78,9 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
     // sobre o dinheiro por outra rota.
     "invoice.create", "invoice.upload", "invoice.update", "invoice.review",
     "invoice.approve", "invoice.reject", "invoice.replace", "invoice.export",
+    // Pedir a nota pelo portal é a mesma etapa, vista do outro lado: quem perde
+    // o módulo não pode mandar link nem revogá-lo.
+    "invoice.portal.manage",
   ],
   registrations: [
     "companies.manage", "employees.manage", "registrations.catalogs.manage",

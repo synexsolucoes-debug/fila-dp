@@ -179,6 +179,18 @@ export type InvoicePolicy = { reviewPolicy: "required" | "optional"; requiredChe
 export type InvoicePermissions = {
   read: boolean; create: boolean; upload: boolean; update: boolean;
   review: boolean; approve: boolean; reject: boolean; replace: boolean; export: boolean;
+  /** Gerar e revogar o link do portal onde o prestador envia a nota. */
+  portal: boolean;
+};
+
+/** Um link do portal, como a tela de Notas Fiscais o acompanha. */
+export type InvoicePortalLink = {
+  id: string; providerId: string; closingId: string; competence: string;
+  contractorName: string; contractorCode: string; expectedAmount: number;
+  status: "active" | "submitted" | "revoked" | "expired";
+  expiresAt: string; firstOpenedAt: string; openedCount: number;
+  submittedAt: string; submittedInvoiceId: string;
+  revokedAt: string; revokeReason: string; createdAt: string;
 };
 
 export type InvoicePanel = {

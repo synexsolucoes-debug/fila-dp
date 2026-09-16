@@ -101,6 +101,11 @@ export const authRateLimitPolicy = {
 const publicPolicies = {
   signup: { identityLimit: 4, addressLimit: 20, windowMinutes: 60 },
   resend: { identityLimit: 3, addressLimit: 20, windowMinutes: 30 },
+  /* O portal do prestador é uma URL pública com um segredo dentro. O teto por
+     identidade é o do token: um prestador legítimo abre a página e envia uma
+     nota, não trinta. O teto por endereço é o que impede varredura — quem tenta
+     adivinhar segredos gasta o orçamento do IP antes de chegar perto de um. */
+  contractor_portal: { identityLimit: 30, addressLimit: 60, windowMinutes: 60 },
 } as const;
 
 async function consumePublicKey(hash: string, limit: number, windowMinutes: number) {

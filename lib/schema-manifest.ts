@@ -91,6 +91,7 @@ export const expectedMigrations = [
   "0081_contractor_start_proration.sql",
   "0082_contractor_discount_settlement.sql",
   "0083_work_accident_dashboard.sql",
+  "0084_contractor_invoice_portal.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

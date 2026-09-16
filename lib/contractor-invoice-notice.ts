@@ -75,6 +75,8 @@ export function invoiceNoticeMessage(input: {
   amount: number;
   competence: string;
   emitente?: InvoiceNoticeIssuer;
+  /** Endereço do portal, quando a mensagem acompanha um link de envio. */
+  portalUrl?: string;
 }) {
   const { razaoSocial, cnpj, cidade } = input.emitente ?? emitenteVazia;
   const mes = monthName(input.competence);
@@ -98,7 +100,11 @@ export function invoiceNoticeMessage(input: {
   linhas.push("");
   if (cidade) linhas.push(`Ficar atento ao preencher a cidade de prestação do serviço: ${cidade}.`);
   if (mes) linhas.push(`Colocar na descrição: "Serviço prestado referente ao mês de ${mes}/${ano}".`);
-  linhas.push("Por gentileza emitir sua NF e enviar, fico no aguardo.");
+  if (input.portalUrl) {
+    linhas.push("Por gentileza emitir sua NF e enviar por este link:", "", input.portalUrl);
+  } else {
+    linhas.push("Por gentileza emitir sua NF e enviar, fico no aguardo.");
+  }
 
   return linhas.join("\r\n");
 }
@@ -114,9 +120,18 @@ export function buildInvoiceNoticeFile(
   rows: ReadonlyArray<Record<string, unknown>>,
   emitente?: InvoiceNoticeIssuer,
   competence = "",
+  /* Endereço do portal por prestador, quando há link gerado. A chave é o
+     `provider_id` e não o nome: dois prestadores homônimos no mesmo grupo
+     receberiam o link um do outro, e o nome é o único campo aqui que o
+     cadastro não garante único. */
+  portalUrls: ReadonlyMap<string, string> = new Map(),
 ) {
   const mensagens = rows
-    .map((row) => ({ prestador: String(row.prestador ?? ""), amount: Number(row.nf_esperada ?? 0) || 0 }))
+    .map((row) => ({
+      prestador: String(row.prestador ?? ""),
+      amount: Number(row.nf_esperada ?? 0) || 0,
+      portalUrl: portalUrls.get(String(row.provider_id ?? row.providerId ?? "")) ?? "",
+    }))
     .filter((row) => row.amount > 0)
     .map((row) => invoiceNoticeMessage({ ...row, competence, emitente }));
   /* Quebra de linha do Windows: o arquivo é aberto no Bloco de Notas na maioria

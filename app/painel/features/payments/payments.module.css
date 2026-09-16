@@ -775,3 +775,76 @@
 }
 .invoiceEmptyNotice > svg { flex: none; margin-top: 1px; color: var(--pay-accent-text); }
 .invoiceEmptyNotice strong { display: block; color: var(--pay-text); font-size: .8rem; margin-bottom: 2px; }
+
+/* -------------------------------------------------------------------------- */
+/* Portal do prestador                                                         */
+/* -------------------------------------------------------------------------- */
+
+/* O bloco fica entre os alertas e a tabela de notas porque é essa a ordem do
+   trabalho: pedir a nota vem antes de conferir a nota. A borda tracejada o
+   separa sem criar um segundo cartão concorrendo com os indicadores do topo. */
+.portalPanel {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 16px 16px 18px;
+  border: 1px dashed var(--pay-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--pay-muted) 55%, var(--pay-surface));
+}
+
+.portalHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.portalHeader > div:first-child { display: grid; gap: 4px; min-width: 0; flex: 1 1 280px; }
+.portalHeader h3 { margin: 0; font-size: .92rem; }
+.portalHeader p { margin: 0; color: var(--pay-soft); font-size: .74rem; line-height: 1.5; }
+
+.portalActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.portalDays { display: flex; align-items: center; gap: 6px; }
+.portalDays > span { color: var(--pay-soft); font-size: .62rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.portalDays select {
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--pay-border);
+  border-radius: 8px;
+  background: var(--pay-surface);
+  color: inherit;
+  font: inherit;
+  font-size: .74rem;
+  cursor: pointer;
+}
+
+.portalAlert {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--pay-danger, #b3261e) 32%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--pay-danger, #b3261e) 8%, transparent);
+  color: var(--pay-danger, #b3261e);
+  font-size: .74rem;
+}
+
+.portalMessages { display: grid; gap: 9px; }
+.portalMessagesHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.portalMessagesHead strong { font-size: .78rem; }
+.portalMessages textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--pay-border);
+  border-radius: 9px;
+  background: var(--pay-surface);
+  color: inherit;
+  font-family: var(--font-data), ui-monospace, monospace;
+  font-size: .72rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+/* O aviso é forte de propósito: o endereço não volta, e quem sair da tela sem
+   copiar precisa gerar tudo de novo — invalidando o que já mandou. */
+.portalWarning {
+  margin: 0;
+  color: var(--vin-warning-strong, #7d4705);
+  font-size: .71rem;
+  line-height: 1.5;
+}
+
+.mutedCell { color: var(--pay-soft); }

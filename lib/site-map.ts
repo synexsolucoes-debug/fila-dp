@@ -24,7 +24,7 @@ export const publicPages = [
 ] as const;
 
 /** Caminhos que não devem ser rastreados: área logada e fluxo de autenticação. */
-export const privatePaths = ["/painel", "/plataforma", "/login", "/recuperar", "/api"] as const;
+export const privatePaths = ["/painel", "/plataforma", "/login", "/recuperar", "/portal", "/api"] as const;
 
 /**
  * Origem pública do site.

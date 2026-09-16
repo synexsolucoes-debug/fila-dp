@@ -3,7 +3,7 @@ import type {
   ContractorMonthlyEntry,
   ContractorOverview, ContractorPaymentDetail, CycleOption,
   InvoiceDetail, InvoiceEvent, InvoiceLimitPolicy, InvoicePanel, InvoicePermissions, InvoicePolicy,
-  InvoiceRow, InvoiceSummary, InvoiceVersion,
+  InvoicePortalLink, InvoiceRow, InvoiceSummary, InvoiceVersion,
   PaymentPermissions, Psychologist, PsychologyAdjustment, PsychologyClosing,
   PsychologyOverview, PsychologySession, UnassignedSessions,
 } from "./payments.types";
@@ -368,7 +368,29 @@ function normalizeInvoicePermissions(row: Row | undefined): InvoicePermissions {
   return {
     read: allowed("read"), create: allowed("create"), upload: allowed("upload"), update: allowed("update"),
     review: allowed("review"), approve: allowed("approve"), reject: allowed("reject"),
-    replace: allowed("replace"), export: allowed("export"),
+    replace: allowed("replace"), export: allowed("export"), portal: allowed("portal"),
+  };
+}
+
+export function normalizeInvoicePortalLink(row: Row): InvoicePortalLink {
+  const status = String(row.status ?? "active");
+  return {
+    id: String(row.id ?? ""),
+    providerId: String(row.providerId ?? ""),
+    closingId: String(row.closingId ?? ""),
+    competence: String(row.competence ?? ""),
+    contractorName: String(row.contractorName ?? ""),
+    contractorCode: String(row.contractorCode ?? ""),
+    expectedAmount: Number(row.expectedAmount ?? 0) || 0,
+    status: (["active", "submitted", "revoked", "expired"].includes(status) ? status : "active") as InvoicePortalLink["status"],
+    expiresAt: String(row.expiresAt ?? ""),
+    firstOpenedAt: String(row.firstOpenedAt ?? ""),
+    openedCount: Number(row.openedCount ?? 0) || 0,
+    submittedAt: String(row.submittedAt ?? ""),
+    submittedInvoiceId: String(row.submittedInvoiceId ?? ""),
+    revokedAt: String(row.revokedAt ?? ""),
+    revokeReason: String(row.revokeReason ?? ""),
+    createdAt: String(row.createdAt ?? ""),
   };
 }
 

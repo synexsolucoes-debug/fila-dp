@@ -146,7 +146,7 @@ async function main() {
     issuerDocument: "26.016.500/0001-05", issuerName: "Empresa XPTO LTDA",
     receiverDocument: "11222333000181", serviceDescription: "Serviço prestado",
     amount: 5500, notes: "", documentId: null, duplicateAck: false, replacesInvoiceId: null,
-    actorUserId: userId, actorName: "Conferente", ip: "203.0.113.7", userAgent: "ensaio",
+    actor: { kind: "user", userId, name: "Conferente" }, ip: "203.0.113.7", userAgent: "ensaio",
   });
   conferir("a divergência é calculada no registro", primeira.comparison.difference === -500,
     String(primeira.comparison.difference));
@@ -177,7 +177,7 @@ async function main() {
     receiverDocument: "11222333000181", serviceDescription: "Serviço prestado",
     amount: 6000, notes: "", documentId: null, duplicateAck: false,
     replacesInvoiceId: primeira.invoiceId,
-    actorUserId: userId, actorName: "Conferente", ip: "203.0.113.7", userAgent: "ensaio",
+    actor: { kind: "user", userId, name: "Conferente" }, ip: "203.0.113.7", userAgent: "ensaio",
   });
   conferir("a substituta é o segundo envio do pagamento", substituta.attempt === 2, String(substituta.attempt));
   conferir("a substituição aponta para a nota anterior",
