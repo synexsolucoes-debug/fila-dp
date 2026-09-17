@@ -474,6 +474,122 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Adiantamento: um pagamento produz UMA obrigação de recuperar, nunca duas.
+--
+-- O número da parcela sai da distância entre a primeira competência do
+-- lançamento e a da recuperação, exatamente como a rota calcula. Pagar duas
+-- vezes o mesmo mês esbarra no índice `(workspace, entry, number)`.
+-- ---------------------------------------------------------------------------
+INSERT INTO fdp_ledger_advance_payments (id, workspace_id, entry_id, company_id, competence,
+  approved_amount, expected_payment_date, status, idempotency_key, created_by)
+  VALUES ('pay-set','ws-a','led-2','co-a','2026-10',500.00,'2026-10-20','authorized','ledger-advance:led-2:2026-10','u1');
+
+-- O pagamento cria a parcela de recuperação. led-2 comeca em 2026-08, entao a
+-- recuperacao de 2026-10 e a parcela numero 3.
+UPDATE fdp_ledger_advance_payments
+  SET status = 'paid', paid_amount = 500.00, actual_payment_date = '2026-10-20', paid_by = 'u1'
+  WHERE workspace_id = 'ws-a' AND id = 'pay-set' AND status = 'authorized';
+INSERT INTO fdp_ledger_installments (id, workspace_id, entry_id, company_id, number, total_count, competence, planned_amount, note)
+  VALUES ('rec-1','ws-a','led-2','co-a',3,NULL,'2026-10',500.00,'Recuperacao do adiantamento pago em 2026-10-20')
+  ON CONFLICT (workspace_id, entry_id, number) DO NOTHING;
+
+DO $$
+DECLARE parcela RECORD;
+BEGIN
+  SELECT * INTO parcela FROM fdp_ledger_installments WHERE entry_id = 'led-2' AND number = 3;
+  IF parcela.discounted_amount <> 0 OR parcela.status <> 'scheduled' THEN
+    RAISE EXCEPTION 'a recuperacao nasceu ja descontada: % / %', parcela.discounted_amount, parcela.status;
+  END IF;
+  IF parcela.planned_amount <> 500.00 THEN
+    RAISE EXCEPTION 'a recuperacao nasceu com valor %', parcela.planned_amount;
+  END IF;
+  RAISE NOTICE 'OK: pagar cria a recuperacao programada, nunca confirmada';
+END;
+$$;
+
+-- Repetir o pagamento não cria a segunda dívida pelo mesmo adiantamento.
+INSERT INTO fdp_ledger_installments (id, workspace_id, entry_id, company_id, number, total_count, competence, planned_amount, note)
+  VALUES ('rec-1-dup','ws-a','led-2','co-a',3,NULL,'2026-10',500.00,'Tentativa repetida')
+  ON CONFLICT (workspace_id, entry_id, number) DO NOTHING;
+
+DO $$
+DECLARE quantas int; soma numeric(18,2);
+BEGIN
+  SELECT count(*), SUM(planned_amount) INTO quantas, soma
+    FROM fdp_ledger_installments WHERE entry_id = 'led-2' AND competence = '2026-10';
+  IF quantas <> 1 OR soma <> 500.00 THEN
+    RAISE EXCEPTION 'o mesmo adiantamento virou % obrigacao(oes) somando %', quantas, soma;
+  END IF;
+  RAISE NOTICE 'OK: um adiantamento pago nao vira duas dividas';
+END;
+$$;
+
+-- A recorrência gera a programação, e gerar duas vezes não paga duas.
+INSERT INTO fdp_ledger_advance_payments (id, workspace_id, entry_id, company_id, competence,
+  approved_amount, status, idempotency_key, created_by)
+  VALUES ('pay-nov','ws-a','led-2','co-a','2026-11',500.00,'scheduled','ledger-advance:led-2:2026-11','u1')
+  ON CONFLICT (workspace_id, entry_id, competence) DO NOTHING;
+INSERT INTO fdp_ledger_advance_payments (id, workspace_id, entry_id, company_id, competence,
+  approved_amount, status, idempotency_key, created_by)
+  VALUES ('pay-nov-2','ws-a','led-2','co-a','2026-11',500.00,'scheduled','outra-chave-nov','u1')
+  ON CONFLICT (workspace_id, entry_id, competence) DO NOTHING;
+
+DO $$
+DECLARE quantas int; situacao text;
+BEGIN
+  SELECT count(*) INTO quantas FROM fdp_ledger_advance_payments
+    WHERE entry_id = 'led-2' AND competence = '2026-11';
+  IF quantas <> 1 THEN
+    RAISE EXCEPTION 'gerar a programacao duas vezes criou % ocorrencias', quantas;
+  END IF;
+  SELECT status INTO situacao FROM fdp_ledger_advance_payments WHERE id = 'pay-nov';
+  IF situacao <> 'scheduled' THEN
+    RAISE EXCEPTION 'a programacao nasceu como % em vez de programada', situacao;
+  END IF;
+  RAISE NOTICE 'OK: a recorrencia programa sem pagar e sem duplicar';
+END;
+$$;
+
+-- Percentual sem base salarial vira pendência nomeada, nunca R$ 0,00 pago.
+INSERT INTO fdp_ledger_advance_rules (id, workspace_id, entry_id, mode, percentage, effective_from_competence, created_by)
+  VALUES ('rule-pct','ws-a','led-2','percentage',40,'2027-01','u1');
+INSERT INTO fdp_ledger_advance_payments (id, workspace_id, entry_id, company_id, competence,
+  approved_amount, status, pending_reason, idempotency_key, created_by)
+  VALUES ('pay-pend','ws-a','led-2','co-a','2027-01',0,'pending_data',
+    'Informe a base salarial para calcular o adiantamento percentual.','ledger-advance:led-2:2027-01','u1');
+
+DO $$
+DECLARE registro RECORD;
+BEGIN
+  SELECT * INTO registro FROM fdp_ledger_advance_payments WHERE id = 'pay-pend';
+  IF registro.status <> 'pending_data' OR registro.pending_reason = '' THEN
+    RAISE EXCEPTION 'percentual sem base nao virou pendencia nomeada';
+  END IF;
+  RAISE NOTICE 'OK: percentual sem base e pendencia, nao pagamento de zero';
+END;
+$$;
+
+-- A regra anterior vira `superseded` e continua legível: competências passadas
+-- leem o valor que valia nelas.
+UPDATE fdp_ledger_advance_rules SET status = 'superseded'
+  WHERE workspace_id = 'ws-a' AND id = 'rule-1' AND status = 'active';
+
+DO $$
+DECLARE antiga RECORD; nova RECORD;
+BEGIN
+  SELECT * INTO antiga FROM fdp_ledger_advance_rules WHERE id = 'rule-1';
+  SELECT * INTO nova FROM fdp_ledger_advance_rules WHERE id = 'rule-pct';
+  IF antiga.fixed_amount <> 500.00 OR antiga.effective_from_competence <> '2026-08' THEN
+    RAISE EXCEPTION 'a regra anterior foi reescrita: % a partir de %', antiga.fixed_amount, antiga.effective_from_competence;
+  END IF;
+  IF antiga.status <> 'superseded' OR nova.status <> 'active' THEN
+    RAISE EXCEPTION 'as vigencias nao se sucederam: % / %', antiga.status, nova.status;
+  END IF;
+  RAISE NOTICE 'OK: alterar valor cria nova vigencia e preserva a anterior';
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Isolamento entre workspaces com papel sem superusuário.
 -- ---------------------------------------------------------------------------
 DROP ROLE IF EXISTS fdp_ledger_rehearsal_app;

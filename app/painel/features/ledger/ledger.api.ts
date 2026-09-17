@@ -336,3 +336,72 @@ export async function renegotiateEntry(id: string, input: {
     body: JSON.stringify(input),
   });
 }
+
+export type LedgerAdvancePayment = {
+  id: string;
+  entryId: string;
+  entryTitle: string;
+  companyId: string;
+  companyName: string;
+  employeeId: string;
+  employeeName: string;
+  registrationNumber: string;
+  unitLabel: string;
+  departmentLabel: string;
+  competence: string;
+  approvedAmount: number;
+  paidAmount: number;
+  expectedPaymentDate: string;
+  actualPaymentDate: string;
+  status: "scheduled" | "pending_data" | "authorized" | "paid" | "canceled";
+  pendingReason: string;
+  cancelReason: string;
+  recoveryPlannedAmount: number;
+  recoveredAmount: number;
+  recoveryCompetence: string;
+  recoveryStatus: string;
+};
+
+export async function loadAdvancePayments(companyId: string, competence: string) {
+  const query = new URLSearchParams();
+  if (companyId) query.set("companyId", companyId);
+  if (competence) query.set("competence", competence);
+  const suffix = query.toString() ? `?${query}` : "";
+  const payload = await requestJson<{ payments?: LedgerAdvancePayment[] }>(`/api/payroll-ledger/advance-payments${suffix}`);
+  return payload.payments ?? [];
+}
+
+/**
+ * Gera a programação mensal.
+ *
+ * A resposta traz a contagem que o servidor leu do banco depois de gravar, e
+ * não o que o laço tentou inserir: com `ON CONFLICT DO NOTHING`, dizer "criei
+ * 40" quando 38 já existiam seria mentir sobre o que aconteceu.
+ */
+export async function scheduleAdvances(companyId: string, competence: string, expectedPaymentDate: string) {
+  return requestJson<{ scheduled: number; pending: number; skipped: string[]; message?: string }>(
+    "/api/payroll-ledger/advance-payments",
+    { method: "POST", body: JSON.stringify({ companyId, competence, expectedPaymentDate }) },
+  );
+}
+
+export async function updateAdvancePayment(id: string, input: {
+  action: "authorize" | "pay" | "cancel" | "resolve_pending";
+  paidAmount?: string;
+  approvedAmount?: string;
+  actualPaymentDate?: string;
+  recoveryCompetence?: string;
+  cancelReason?: string;
+}) {
+  return requestJson<Row>(`/api/payroll-ledger/advance-payments/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function createAdvanceRule(entryId: string, draft: LedgerAdvanceDraft) {
+  return requestJson<{ pendingReason?: string }>(
+    `/api/payroll-ledger/entries/${encodeURIComponent(entryId)}/advance-rules`,
+    { method: "POST", body: JSON.stringify(advanceBody(draft)) },
+  );
+}

@@ -637,3 +637,80 @@ test("o ensaio de banco cobre quitação e renegociação contra PostgreSQL real
   assert.match(rehearsal, /renegociacao cobre so o saldo e preserva o acordo original inteiro/);
   assert.match(rehearsal, /com parcela em aberto, o lancamento nao se quita sozinho/);
 });
+
+// ---------------------------------------------------------------------------
+// Adiantamento: pago ≠ descontado
+// ---------------------------------------------------------------------------
+
+const advancePaymentRoute = await readFile(
+  new URL("../app/api/payroll-ledger/advance-payments/[id]/route.ts", import.meta.url), "utf8",
+);
+const advanceScheduleRoute = await readFile(
+  new URL("../app/api/payroll-ledger/advance-payments/route.ts", import.meta.url), "utf8",
+);
+const advanceRuleRoute = await readFile(
+  new URL("../app/api/payroll-ledger/entries/[id]/advance-rules/route.ts", import.meta.url), "utf8",
+);
+
+test("pagar o adiantamento exige permissão própria; preparar a programação não", () => {
+  // Autorizar e informar a base são preparação. Só o pagamento move dinheiro.
+  assert.match(advancePaymentRoute, /if \(acao === "pay"\) requireNamedCapability\(workspace, "ledger\.pay"/);
+  assert.match(advancePaymentRoute, /else requireNamedCapability\(workspace, "ledger\.manage"/);
+});
+
+test("o pagamento cria uma recuperação programada, com número determinístico", () => {
+  // O número sai da distância entre competências, então duas tentativas de
+  // pagar o mesmo mês produzem o mesmo número — e o índice único deixa passar
+  // uma. É isto que impede duas dívidas pelo mesmo adiantamento.
+  assert.match(advancePaymentRoute, /competenceDistance\(String\(payment\.first_competence\), recoveryCompetence\) \+ 1/);
+  assert.match(advancePaymentRoute, /ON CONFLICT \(workspace_id, entry_id, number\) DO NOTHING/);
+  // A parcela nasce sem `discounted_amount`: o INSERT não menciona a coluna.
+  assert.equal(/INSERT INTO fdp_ledger_installments[\s\S]{0,400}discounted_amount/.test(advancePaymentRoute), false);
+});
+
+test("a recuperação não pode ser anterior ao início do adiantamento", () => {
+  assert.match(advancePaymentRoute, /LEDGER_RECOVERY_BEFORE_START/);
+});
+
+test("suspender uma competência é cancelar com motivo, nunca um pulo silencioso", () => {
+  assert.match(advancePaymentRoute, /LEDGER_JUSTIFICATION_REQUIRED/);
+  assert.match(advancePaymentRoute, /status = 'canceled', cancel_reason = \?/);
+  // Cancelar um pagamento já feito não devolve dinheiro, e a rota diz isso.
+  assert.match(advancePaymentRoute, /Cancelar não devolve o dinheiro/);
+});
+
+test("gerar a programação é idempotente e não paga nada", () => {
+  assert.match(advanceScheduleRoute, /ON CONFLICT \(workspace_id, entry_id, competence\) DO NOTHING/);
+  assert.match(advanceScheduleRoute, /'scheduled' : "pending_data"|"scheduled" : "pending_data"/);
+  // Nenhum caminho da geração grava confirmação de desconto.
+  assert.equal(/fdp_ledger_confirmations/.test(advanceScheduleRoute), false);
+  // A contagem devolvida vem do banco depois de gravar, não do laço.
+  assert.match(advanceScheduleRoute, /A contagem real vem do banco/);
+});
+
+test("percentual sem base vira pendência na programação, não pagamento de zero", () => {
+  assert.match(advanceScheduleRoute, /advanceAmount\(regra\)/);
+  assert.match(advanceScheduleRoute, /"pending_data"/);
+  assert.match(advanceScheduleRoute, /valor\.pendingReason/);
+});
+
+test("alterar a regra exige vigência futura e preserva a anterior", () => {
+  assert.match(advanceRuleRoute, /LEDGER_RULE_NOT_FUTURE/);
+  assert.match(advanceRuleRoute, /status = 'superseded'/);
+  assert.match(advanceRuleRoute, /supersedes_rule_id/);
+  // Nenhum UPDATE reescreve valor ou vigência de uma regra existente.
+  assert.equal(/UPDATE fdp_ledger_advance_rules SET (fixed_amount|percentage|effective_from_competence)/.test(advanceRuleRoute), false);
+});
+
+test("regra de adiantamento só existe em lançamento de adiantamento", () => {
+  assert.match(advanceRuleRoute, /LEDGER_NOT_ADVANCE/);
+});
+
+test("o ensaio de banco prova o fluxo do adiantamento contra PostgreSQL real", async () => {
+  const rehearsal = await readFile(new URL("../scripts/ledger-db-rehearsal.sql", import.meta.url), "utf8");
+  assert.match(rehearsal, /OK: pagar cria a recuperacao programada, nunca confirmada/);
+  assert.match(rehearsal, /OK: um adiantamento pago nao vira duas dividas/);
+  assert.match(rehearsal, /OK: a recorrencia programa sem pagar e sem duplicar/);
+  assert.match(rehearsal, /OK: percentual sem base e pendencia, nao pagamento de zero/);
+  assert.match(rehearsal, /OK: alterar valor cria nova vigencia e preserva a anterior/);
+});

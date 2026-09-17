@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ChevronRight, HandCoins, Inbox, Info, ListChecks, Loader2, Plus, Send, ThumbsDown, ThumbsUp, Wallet, X,
+  BadgeDollarSign, ChevronRight, HandCoins, Inbox, Info, ListChecks, Loader2, Plus, Send, ThumbsDown,
+  ThumbsUp, Wallet, X,
 } from "lucide-react";
 import {
   formatBRL, formatCompetence, ledgerCategories, ledgerCategoryLabels,
@@ -11,20 +12,24 @@ import {
 import type { LedgerEntryStatus, LedgerInstallmentStatus } from "@/lib/payroll-ledger";
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared/panel-ui";
 import type { PanelTone } from "../shared/status-tone";
+import { AdvanceActionDialog } from "./AdvanceActionDialog";
+import { AdvancesPanel, type AdvanceAction } from "./AdvancesPanel";
 import { InstallmentActionDialog } from "./InstallmentActionDialog";
 import { InstallmentsPanel, type InstallmentAction } from "./InstallmentsPanel";
 import { LedgerEntryDialog, emptyDraft } from "./LedgerEntryDialog";
 import {
-  cancelEntry, confirmInstallment, createEntry, decideEntry, loadEmployees, loadEntries,
-  loadEntryDetail, loadInstallments, loadOverview, renegotiateEntry, submitEntry, updateInstallment,
+  cancelEntry, confirmInstallment, createEntry, decideEntry, loadAdvancePayments, loadEmployees,
+  loadEntries, loadEntryDetail, loadInstallments, loadOverview, renegotiateEntry, scheduleAdvances,
+  createAdvanceRule, submitEntry, updateAdvancePayment, updateInstallment,
 } from "./ledger.api";
+import type { LedgerAdvancePayment } from "./ledger.api";
 import styles from "./ledger.module.css";
 import type {
-  LedgerEntry, LedgerEntryDetail, LedgerEntryDraft, LedgerInstallment, LedgerOverview,
-  LedgerPersonOption,
+  LedgerAdvanceDraft, LedgerEntry, LedgerEntryDetail, LedgerEntryDraft, LedgerInstallment,
+  LedgerOverview, LedgerPersonOption,
 } from "./ledger.types";
 
-type Aba = "entries" | "installments";
+type Aba = "entries" | "installments" | "advances";
 
 function competenciaAtual() {
   const agora = new Date();
@@ -92,6 +97,13 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
   const [installmentAction, setInstallmentAction] = useState<InstallmentAction | null>(null);
   const [actionError, setActionError] = useState("");
   const [renegotiation, setRenegotiation] = useState({ installmentCount: "", firstCompetence: "", reason: "" });
+  const [advances, setAdvances] = useState<LedgerAdvancePayment[]>([]);
+  const [advanceAction, setAdvanceAction] = useState<AdvanceAction | null>(null);
+  const [scheduleNote, setScheduleNote] = useState("");
+  const [advanceDraft, setAdvanceDraft] = useState<LedgerAdvanceDraft>({
+    mode: "fixed_monthly", fixedAmount: "", percentage: "", salaryBaseAmount: "",
+    effectiveFromCompetence: competenciaAtual(), endCompetence: "", note: "",
+  });
 
   const [companyId, setCompanyId] = useState("");
   const [category, setCategory] = useState("");
@@ -142,6 +154,23 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
     });
     setInstallments(dados.installments);
   }, [companyId, competence, overdue, category]);
+
+  const refreshAdvances = useCallback(async () => {
+    setAdvances(await loadAdvancePayments(companyId, competence));
+  }, [companyId, competence]);
+
+  useEffect(() => {
+    if (aba !== "advances") return;
+    let vivo = true;
+    void (async () => {
+      try {
+        await refreshAdvances();
+      } catch (issue) {
+        if (vivo) setError(issue instanceof Error ? issue.message : "Não foi possível carregar os adiantamentos.");
+      }
+    })();
+    return () => { vivo = false; };
+  }, [aba, refreshAdvances]);
 
   useEffect(() => {
     if (aba !== "installments") return;
@@ -262,6 +291,9 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
         <button type="button" aria-current={aba === "installments" ? "page" : undefined} onClick={() => setAba("installments")}>
           <Wallet aria-hidden="true" /> Parcelas e saldos
         </button>
+        <button type="button" aria-current={aba === "advances" ? "page" : undefined} onClick={() => setAba("advances")}>
+          <BadgeDollarSign aria-hidden="true" /> Adiantamentos
+        </button>
       </nav>
 
       <div className={styles.filters}>
@@ -292,7 +324,12 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
             ))}
           </select>
         </label>
-        {aba === "entries" ? (
+        {aba === "advances" ? (
+          <label>
+            Competência
+            <input value={competence} onChange={(event) => setCompetence(event.target.value)} placeholder="2026-09" />
+          </label>
+        ) : aba === "entries" ? (
           <>
             <label>
               Buscar
@@ -324,7 +361,30 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
         )}
       </div>
 
-      {aba === "installments" ? (
+      {aba === "advances" ? (
+        <>
+          {scheduleNote && <p className={styles.notice}><Info aria-hidden="true" />{scheduleNote}</p>}
+          <AdvancesPanel
+            payments={advances}
+            permissions={permissions}
+            busy={busy}
+            competence={competence}
+            onAction={(action) => { setActionError(""); setAdvanceAction(action); }}
+            onSchedule={() => {
+              if (!companyId) { setError("Escolha a empresa antes de gerar a programação."); return; }
+              setBusy(true); setError(""); setScheduleNote("");
+              void scheduleAdvances(companyId, competence, "")
+                .then(async (resultado) => {
+                  setScheduleNote(resultado.message
+                    ?? `${resultado.scheduled} adiantamento(s) na competência${resultado.pending ? `, ${resultado.pending} com pendência de valor` : ""}. Gerar não paga nada.`);
+                  await refreshAdvances();
+                })
+                .catch((issue: unknown) => setError(issue instanceof Error ? issue.message : "Não foi possível gerar a programação."))
+                .finally(() => setBusy(false));
+            }}
+          />
+        </>
+      ) : aba === "installments" ? (
         <InstallmentsPanel
           installments={installments}
           permissions={permissions}
@@ -416,6 +476,33 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
         />
       )}
         </>
+      )}
+
+      {advanceAction && (
+        <AdvanceActionDialog
+          action={advanceAction}
+          busy={busy}
+          error={actionError}
+          onCancel={() => { setAdvanceAction(null); setActionError(""); }}
+          onSubmit={(payload) => {
+            const alvo = advanceAction;
+            setBusy(true); setActionError("");
+            void updateAdvancePayment(alvo.payment.id, {
+              action: alvo.kind,
+              paidAmount: payload.paidAmount,
+              approvedAmount: payload.approvedAmount,
+              actualPaymentDate: payload.actualPaymentDate,
+              recoveryCompetence: payload.recoveryCompetence,
+              cancelReason: payload.cancelReason,
+            })
+              .then(async () => {
+                setAdvanceAction(null);
+                await Promise.all([refresh(), refreshAdvances()]);
+              })
+              .catch((issue: unknown) => setActionError(issue instanceof Error ? issue.message : "Não foi possível concluir a operação."))
+              .finally(() => setBusy(false));
+          }}
+        />
       )}
 
       {installmentAction && (
@@ -638,6 +725,73 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
                 </li>
               ))}
             </ul>
+
+            {permissions?.manage && detail.entry.category === "salary_advance" && (
+              <>
+                <p className={styles.sectionTitle}>Regra do adiantamento</p>
+                <p className={styles.notice}>
+                  <Info aria-hidden="true" />
+                  <span>
+                    Alterar o valor <strong>não reescreve</strong> a regra atual: cria outra, a partir da competência
+                    que você informar. As competências já processadas continuam lendo o valor que valia nelas.
+                  </span>
+                </p>
+                <div className={styles.formGrid}>
+                  <label>
+                    Modo
+                    <select value={advanceDraft.mode} onChange={(event) => setAdvanceDraft({ ...advanceDraft, mode: event.target.value as LedgerAdvanceDraft["mode"] })}>
+                      <option value="fixed_monthly">Mensal fixo</option>
+                      <option value="single_competence">Somente uma competência</option>
+                      <option value="percentage">Percentual do salário</option>
+                    </select>
+                  </label>
+                  {advanceDraft.mode === "percentage" ? (
+                    <>
+                      <label>
+                        Percentual
+                        <input value={advanceDraft.percentage} onChange={(event) => setAdvanceDraft({ ...advanceDraft, percentage: event.target.value })} inputMode="decimal" placeholder="40" />
+                      </label>
+                      <label>
+                        Base salarial (opcional)
+                        <input value={advanceDraft.salaryBaseAmount} onChange={(event) => setAdvanceDraft({ ...advanceDraft, salaryBaseAmount: event.target.value })} inputMode="decimal" placeholder="3.175,00" />
+                        <span className={styles.fieldHint}>
+                          Sem ela o produto não calcula: a competência aparece como pendência, nunca como R$ 0,00.
+                        </span>
+                      </label>
+                    </>
+                  ) : (
+                    <label>
+                      Valor
+                      <input value={advanceDraft.fixedAmount} onChange={(event) => setAdvanceDraft({ ...advanceDraft, fixedAmount: event.target.value })} inputMode="decimal" placeholder="500,00" />
+                    </label>
+                  )}
+                  <label>
+                    Vigente a partir de
+                    <input value={advanceDraft.effectiveFromCompetence} onChange={(event) => setAdvanceDraft({ ...advanceDraft, effectiveFromCompetence: event.target.value })} placeholder="2026-10" />
+                  </label>
+                  <label>
+                    Fim da vigência (opcional)
+                    <input value={advanceDraft.endCompetence} onChange={(event) => setAdvanceDraft({ ...advanceDraft, endCompetence: event.target.value })} placeholder="2027-06" />
+                  </label>
+                  <div className={`${styles.fullWidth} ${styles.formActions}`}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      disabled={busy || !advanceDraft.effectiveFromCompetence
+                        || (advanceDraft.mode === "percentage" ? !advanceDraft.percentage : !advanceDraft.fixedAmount)}
+                      onClick={() => void run(async () => {
+                        const resposta = await createAdvanceRule(detail.entry.id, advanceDraft);
+                        setScheduleNote(resposta.pendingReason
+                          ? `Regra registrada com pendência: ${resposta.pendingReason}`
+                          : "Regra registrada. Ela passa a valer na competência informada.");
+                      }, detail.entry.id)}
+                    >
+                      Registrar regra
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {permissions?.manage && detail.entry.modality !== "recurring"
               && ["approved", "active", "suspended"].includes(detail.entry.status)
