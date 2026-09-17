@@ -405,3 +405,100 @@ export async function createAdvanceRule(entryId: string, draft: LedgerAdvanceDra
     { method: "POST", body: JSON.stringify(advanceBody(draft)) },
   );
 }
+
+export type LedgerBatch = {
+  id: string;
+  status: string;
+  competence: string;
+  reopen_reason?: string;
+  approved_by_name?: string;
+  closed_by_name?: string;
+  exported_at?: string | null;
+};
+
+export type LedgerCompetenceSummary = {
+  scheduledCount: number;
+  scheduledAmount: number;
+  confirmedAmount: number;
+  differenceAmount: number;
+  openCount: number;
+  overdueCount: number;
+  overdueAmount: number;
+  futureCount: number;
+  futureAmount: number;
+  entriesWithoutApproval: number;
+  advanceExpectedAmount: number;
+  advancePaidAmount: number;
+  advancePendingCount: number;
+};
+
+export async function loadCompetence(companyId: string, competence: string) {
+  const query = new URLSearchParams({ companyId, competence });
+  return requestJson<{
+    cycle: Row | null;
+    batch: LedgerBatch | null;
+    summary: LedgerCompetenceSummary;
+  }>(`/api/payroll-ledger/batches?${query}`);
+}
+
+export async function openBatch(companyId: string, competence: string) {
+  return requestJson<{ batch: LedgerBatch }>("/api/payroll-ledger/batches", {
+    method: "POST",
+    body: JSON.stringify({ companyId, competence }),
+  });
+}
+
+export async function moveBatch(id: string, status: string, reason = "") {
+  return requestJson<{ batch: LedgerBatch; projectedToContractorPayment?: number }>(
+    `/api/payroll-ledger/batches/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify({ status, reason }) },
+  );
+}
+
+/**
+ * Baixa a planilha da competência.
+ *
+ * O download é feito por `fetch` e não por um link direto porque a resposta
+ * carrega o número de linhas em um cabeçalho — e a tela precisa dizer quantas
+ * foram, em vez de a pessoa descobrir abrindo o arquivo.
+ */
+export async function downloadBatchExport(id: string): Promise<{ rows: number; filename: string }> {
+  const response = await fetch(`/api/payroll-ledger/batches/${encodeURIComponent(id)}/export`, { cache: "no-store" });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
+    throw new Error(payload.error || payload.message || "Não foi possível exportar a competência.");
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "descontos.xlsx";
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+  return { rows: Number(response.headers.get("X-Fila-Dp-Rows") ?? 0), filename };
+}
+
+export type LedgerReturnResult = {
+  confirmed: number;
+  totalConfirmedInBatch?: number;
+  totalAmountInBatch?: number;
+  blank: number;
+  problems: { sheetRow: number; reason: string }[];
+  message?: string;
+};
+
+export async function importBatchReturn(id: string, file: File, reference: string): Promise<LedgerReturnResult> {
+  const form = new FormData();
+  form.set("file", file);
+  if (reference) form.set("reference", reference);
+  const response = await fetch(`/api/payroll-ledger/batches/${encodeURIComponent(id)}/return`, {
+    method: "POST",
+    body: form,
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({})) as LedgerReturnResult & { error?: string; message?: string };
+  if (!response.ok) throw new Error(payload.error || payload.message || "Não foi possível ler o arquivo de retorno.");
+  return payload;
+}

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BadgeDollarSign, ChevronRight, HandCoins, Inbox, Info, ListChecks, Loader2, Plus, Send, ThumbsDown,
+  BadgeDollarSign, CalendarCheck, ChevronRight, HandCoins, Inbox, Info, ListChecks, Loader2, Plus, Send,
+  ThumbsDown,
   ThumbsUp, Wallet, X,
 } from "lucide-react";
 import {
@@ -13,6 +14,7 @@ import type { LedgerEntryStatus, LedgerInstallmentStatus } from "@/lib/payroll-l
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared/panel-ui";
 import type { PanelTone } from "../shared/status-tone";
 import { AdvanceActionDialog } from "./AdvanceActionDialog";
+import { CompetencePanel } from "./CompetencePanel";
 import { AdvancesPanel, type AdvanceAction } from "./AdvancesPanel";
 import { InstallmentActionDialog } from "./InstallmentActionDialog";
 import { InstallmentsPanel, type InstallmentAction } from "./InstallmentsPanel";
@@ -20,16 +22,19 @@ import { LedgerEntryDialog, emptyDraft } from "./LedgerEntryDialog";
 import {
   cancelEntry, confirmInstallment, createEntry, decideEntry, loadAdvancePayments, loadEmployees,
   loadEntries, loadEntryDetail, loadInstallments, loadOverview, renegotiateEntry, scheduleAdvances,
-  createAdvanceRule, submitEntry, updateAdvancePayment, updateInstallment,
+  createAdvanceRule, downloadBatchExport, importBatchReturn, loadCompetence, moveBatch, openBatch,
+  submitEntry, updateAdvancePayment, updateInstallment,
 } from "./ledger.api";
-import type { LedgerAdvancePayment } from "./ledger.api";
+import type {
+  LedgerAdvancePayment, LedgerBatch, LedgerCompetenceSummary, LedgerReturnResult,
+} from "./ledger.api";
 import styles from "./ledger.module.css";
 import type {
   LedgerAdvanceDraft, LedgerEntry, LedgerEntryDetail, LedgerEntryDraft, LedgerInstallment,
   LedgerOverview, LedgerPersonOption,
 } from "./ledger.types";
 
-type Aba = "entries" | "installments" | "advances";
+type Aba = "competence" | "entries" | "installments" | "advances";
 
 function competenciaAtual() {
   const agora = new Date();
@@ -100,6 +105,9 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
   const [advances, setAdvances] = useState<LedgerAdvancePayment[]>([]);
   const [advanceAction, setAdvanceAction] = useState<AdvanceAction | null>(null);
   const [scheduleNote, setScheduleNote] = useState("");
+  const [batch, setBatch] = useState<LedgerBatch | null>(null);
+  const [competenceSummary, setCompetenceSummary] = useState<LedgerCompetenceSummary | null>(null);
+  const [returnResult, setReturnResult] = useState<LedgerReturnResult | null>(null);
   const [advanceDraft, setAdvanceDraft] = useState<LedgerAdvanceDraft>({
     mode: "fixed_monthly", fixedAmount: "", percentage: "", salaryBaseAmount: "",
     effectiveFromCompetence: competenciaAtual(), endCompetence: "", note: "",
@@ -154,6 +162,26 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
     });
     setInstallments(dados.installments);
   }, [companyId, competence, overdue, category]);
+
+  const refreshCompetence = useCallback(async () => {
+    if (!companyId) { return; }
+    const dados = await loadCompetence(companyId, competence);
+    setBatch(dados.batch);
+    setCompetenceSummary(dados.summary);
+  }, [companyId, competence]);
+
+  useEffect(() => {
+    if (aba !== "competence") return;
+    let vivo = true;
+    void (async () => {
+      try {
+        await refreshCompetence();
+      } catch (issue) {
+        if (vivo) setError(issue instanceof Error ? issue.message : "Não foi possível carregar a conferência.");
+      }
+    })();
+    return () => { vivo = false; };
+  }, [aba, refreshCompetence]);
 
   const refreshAdvances = useCallback(async () => {
     setAdvances(await loadAdvancePayments(companyId, competence));
@@ -285,6 +313,9 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
       )}
 
       <nav className={styles.localTabs} aria-label="Áreas do módulo">
+        <button type="button" aria-current={aba === "competence" ? "page" : undefined} onClick={() => setAba("competence")}>
+          <CalendarCheck aria-hidden="true" /> Competência
+        </button>
         <button type="button" aria-current={aba === "entries" ? "page" : undefined} onClick={() => setAba("entries")}>
           <ListChecks aria-hidden="true" /> Lançamentos
         </button>
@@ -324,7 +355,7 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
             ))}
           </select>
         </label>
-        {aba === "advances" ? (
+        {aba === "advances" || aba === "competence" ? (
           <label>
             Competência
             <input value={competence} onChange={(event) => setCompetence(event.target.value)} placeholder="2026-09" />
@@ -361,7 +392,33 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
         )}
       </div>
 
-      {aba === "advances" ? (
+      {aba === "competence" ? (
+        <CompetencePanel
+          batch={batch}
+          summary={competenceSummary}
+          competence={competence}
+          companyId={companyId}
+          permissions={permissions}
+          busy={busy}
+          returnResult={returnResult}
+          onOpen={() => void run(async () => { await openBatch(companyId, competence); await refreshCompetence(); })}
+          onMove={(status, reason) => void run(async () => {
+            const resultado = await moveBatch(batch!.id, status, reason);
+            if (resultado.projectedToContractorPayment) {
+              setScheduleNote(`${resultado.projectedToContractorPayment} desconto(s) de prestador projetado(s) no fechamento PJ da competência.`);
+            }
+            await Promise.all([refreshCompetence(), refresh()]);
+          })}
+          onExport={() => void run(async () => {
+            const resultado = await downloadBatchExport(batch!.id);
+            setScheduleNote(`${resultado.rows} linha(s) exportada(s) em ${resultado.filename}. Exportar não confirma desconto.`);
+          })}
+          onImportReturn={(file) => void run(async () => {
+            setReturnResult(await importBatchReturn(batch!.id, file, file.name));
+            await Promise.all([refreshCompetence(), refresh()]);
+          })}
+        />
+      ) : aba === "advances" ? (
         <>
           {scheduleNote && <p className={styles.notice}><Info aria-hidden="true" />{scheduleNote}</p>}
           <AdvancesPanel

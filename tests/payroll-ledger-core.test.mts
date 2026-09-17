@@ -714,3 +714,99 @@ test("o ensaio de banco prova o fluxo do adiantamento contra PostgreSQL real", a
   assert.match(rehearsal, /OK: percentual sem base e pendencia, nao pagamento de zero/);
   assert.match(rehearsal, /OK: alterar valor cria nova vigencia e preserva a anterior/);
 });
+
+// ---------------------------------------------------------------------------
+// Conferência da competência e integrações
+// ---------------------------------------------------------------------------
+
+const batchRoute = await readFile(
+  new URL("../app/api/payroll-ledger/batches/[id]/route.ts", import.meta.url), "utf8",
+);
+const exportRoute = await readFile(
+  new URL("../app/api/payroll-ledger/batches/[id]/export/route.ts", import.meta.url), "utf8",
+);
+const returnRoute = await readFile(
+  new URL("../app/api/payroll-ledger/batches/[id]/return/route.ts", import.meta.url), "utf8",
+);
+const epiDecisionRoute = await readFile(
+  new URL("../app/api/epi/discounts/[id]/route.ts", import.meta.url), "utf8",
+);
+
+test("exportado, lançado na folha e confirmado são estados distintos", () => {
+  // "Lançado na Domínio" na planilha significava qualquer um dos três, e por
+  // isso não significava nenhum.
+  for (const estado of ["exported", "sent_to_payroll", "confirmed"]) {
+    assert.match(batchRoute, new RegExp(`"${estado}"`));
+  }
+  assert.match(batchRoute, /sent_to_payroll: \["exported", "confirmed"\]/);
+});
+
+test("aprovar a conferência é bloqueado por lançamento sem aprovação", () => {
+  assert.match(batchRoute, /LEDGER_BATCH_BLOCKED/);
+  assert.match(batchRoute, /sem_aprovacao/);
+  assert.match(batchRoute, /adiantamentos_pendentes/);
+});
+
+test("reabrir exige justificativa e permissão própria", () => {
+  assert.match(batchRoute, /LEDGER_REOPEN_REASON_REQUIRED/);
+  assert.match(batchRoute, /reopened: "ledger\.reopen"/);
+  assert.match(batchRoute, /closed: "ledger\.close"/);
+});
+
+test("nenhuma transição da conferência confirma desconto", () => {
+  // O saldo só muda por `fdp_ledger_confirmations`, e a rota de transição não
+  // escreve nessa tabela em nenhum caminho.
+  assert.equal(/INSERT INTO fdp_ledger_confirmations/.test(batchRoute), false);
+  assert.equal(/discounted_amount\s*=/.test(batchRoute), false);
+});
+
+test("a projeção PJ usa o external_id que o banco já torna único", () => {
+  assert.match(batchRoute, /contractorProjectionKey/);
+  assert.match(batchRoute, /ON CONFLICT \(workspace_id, external_id\) DO NOTHING/);
+  // Nenhum fechamento PJ paralelo: a rota lança o componente e para por aí.
+  assert.equal(/fdp_contractor_closings/.test(batchRoute), false);
+});
+
+test("exportar não escreve em parcela nenhuma", () => {
+  assert.equal(/UPDATE fdp_ledger_installments/.test(exportRoute), false);
+  assert.equal(/INSERT INTO fdp_ledger_confirmations/.test(exportRoute), false);
+  assert.match(exportRoute, /LEDGER_BATCH_NOT_APPROVED/);
+  // Só parcelas de folha entram: o desconto de prestador vai pelo fechamento PJ.
+  assert.match(exportRoute, /entry\.settlement_target = 'payroll'/);
+});
+
+test("o retorno passa pela mesma porta das confirmações manuais", () => {
+  assert.match(returnRoute, /confirmationKey\(/);
+  assert.match(returnRoute, /ON CONFLICT \(workspace_id, idempotency_key\) DO NOTHING/);
+  assert.match(returnRoute, /'return_import'/);
+  // Valor acima do saldo é apontado, não gravado: o ajuste autorizado tem
+  // permissão própria e exige justificativa escrita.
+  assert.match(returnRoute, /valor acima do saldo da parcela/);
+  assert.equal(/authorized_override/.test(returnRoute), false);
+});
+
+test("o retorno não confirma parcela de lançamento não aprovado nem fora da programação", () => {
+  assert.match(returnRoute, /o lançamento desta parcela não está aprovado/);
+  assert.match(returnRoute, /fora da programação/);
+  assert.match(returnRoute, /parcela não encontrada nesta empresa/);
+});
+
+test("a decisão do SESMT origina um único lançamento, garantido pelo banco", () => {
+  assert.match(epiDecisionRoute, /origin_type = 'epi_discount'/);
+  assert.match(epiDecisionRoute, /NOT EXISTS/);
+  // Só quando há decisão de descontar com valor: entrega, dano, perda e
+  // devolução continuam não gerando cobrança.
+  assert.match(epiDecisionRoute, /const criaLancamento = createsMovement && decidedValue > 0;/);
+});
+
+test("uma decisão posterior não reescreve o que já foi descontado", () => {
+  assert.match(epiDecisionRoute, /installment\.discounted_amount <> 0/);
+  assert.match(epiDecisionRoute, /installment\.discounted_amount = 0/);
+});
+
+test("o ensaio de banco prova a integração com o SESMT contra PostgreSQL real", async () => {
+  const rehearsal = await readFile(new URL("../scripts/ledger-db-rehearsal.sql", import.meta.url), "utf8");
+  assert.match(rehearsal, /OK: decidir tres vezes a mesma solicitacao gera um lancamento/);
+  assert.match(rehearsal, /OK: nova decisao corrige o valor enquanto nada foi descontado/);
+  assert.match(rehearsal, /OK: apos confirmado, nova decisao nao reescreve o que foi descontado/);
+});

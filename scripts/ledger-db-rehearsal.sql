@@ -590,6 +590,145 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- SESMT: a decisão de descontar origina UM lançamento, mesmo repetida.
+--
+-- É o mesmo SQL que a rota de decisão executa. O `WHERE NOT EXISTS` existe para
+-- que a segunda decisão não aborte o lote com violação de chave; o índice
+-- parcial em (workspace, origin_type, origin_id) é quem garante a unicidade.
+-- ---------------------------------------------------------------------------
+-- `status` vai explícito: o default da coluna (`in_stock`) é anterior ao CHECK
+-- que hoje aceita só `active`/`inactive`, e omitir a coluna falharia. É um
+-- defeito de outra tabela, fora do escopo deste módulo.
+INSERT INTO fdp_epi_products (id, workspace_id, name, epi_type, ca_number, size, brand, model,
+  registered_on, status, registration_reason, created_by, updated_by)
+  VALUES ('epi-p1','ws-a','Luva de protecao','upper_limbs','CA-00000','M','Marca','Modelo',
+    '2026-01-05','active','stock_replenishment','u1','u1');
+INSERT INTO fdp_epi_discount_requests (id, workspace_id, company_id, employee_id, product_id,
+  title, quantity, unit_value, total_value, occurred_on, trigger_reason, reason_note, created_by, updated_by)
+  VALUES ('epi-req-2','ws-a','co-a','emp-a','epi-p1','Luva nao devolvida',1,55.00,55.00,
+    '2026-04-02','not_returned','Colaborador informou perda','u1','u1');
+
+CREATE OR REPLACE FUNCTION ensaio_decide_epi(valor numeric, comp text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO fdp_ledger_entries
+    (id, workspace_id, company_id, employee_id, employment_type_snapshot, department_id, department_label,
+     requester_area_id, responsible_area_id, category, title, description, reason,
+     occurred_on, requested_on, requested_by, total_amount, modality, installment_count,
+     first_competence, expected_end_competence, settlement_target, status, origin_type, origin_id,
+     details_json, approved_by, approved_at, created_by, updated_by)
+  SELECT gen_random_uuid()::text, 'ws-a', request.company_id, request.employee_id,
+    COALESCE(employee.employment_type, ''), employee.department_id, COALESCE(department.name, ''),
+    request.requester_area_id, request.responsible_area_id, 'sesmt_discount',
+    'Desconto de EPI', 'parecer', request.reason_note,
+    request.occurred_on, CURRENT_DATE, 'u1', valor, 'single', 1,
+    comp, comp, 'payroll', 'active', 'epi_discount', request.id,
+    '{}'::jsonb, 'u1', now(), 'u1', 'u1'
+  FROM fdp_epi_discount_requests request
+  JOIN fdp_employees employee
+    ON employee.workspace_id = request.workspace_id AND employee.id = request.employee_id
+  LEFT JOIN fdp_departments department
+    ON department.workspace_id = employee.workspace_id AND department.id = employee.department_id
+  WHERE request.workspace_id = 'ws-a' AND request.id = 'epi-req-2'
+    AND NOT EXISTS (
+      SELECT 1 FROM fdp_ledger_entries existing
+      WHERE existing.workspace_id = request.workspace_id
+        AND existing.origin_type = 'epi_discount' AND existing.origin_id = request.id
+    );
+
+  INSERT INTO fdp_ledger_installments
+    (id, workspace_id, entry_id, company_id, number, total_count, competence, planned_amount)
+  SELECT gen_random_uuid()::text, entry.workspace_id, entry.id, entry.company_id, 1, 1,
+    entry.first_competence, entry.total_amount
+  FROM fdp_ledger_entries entry
+  WHERE entry.workspace_id = 'ws-a' AND entry.origin_type = 'epi_discount' AND entry.origin_id = 'epi-req-2'
+  ON CONFLICT (workspace_id, entry_id, number) DO NOTHING;
+
+  UPDATE fdp_ledger_entries entry
+    SET total_amount = valor, first_competence = comp, expected_end_competence = comp, updated_at = now()
+    WHERE entry.workspace_id = 'ws-a' AND entry.origin_type = 'epi_discount' AND entry.origin_id = 'epi-req-2'
+      AND entry.status IN ('approved', 'active')
+      AND NOT EXISTS (
+        SELECT 1 FROM fdp_ledger_installments installment
+        WHERE installment.workspace_id = entry.workspace_id AND installment.entry_id = entry.id
+          AND installment.discounted_amount <> 0
+      );
+
+  UPDATE fdp_ledger_installments installment
+    SET planned_amount = valor, competence = comp, updated_at = now()
+    FROM fdp_ledger_entries entry
+    WHERE entry.workspace_id = installment.workspace_id AND entry.id = installment.entry_id
+      AND installment.workspace_id = 'ws-a' AND entry.origin_type = 'epi_discount'
+      AND entry.origin_id = 'epi-req-2' AND installment.discounted_amount = 0;
+END;
+$$;
+
+SELECT ensaio_decide_epi(55.00, '2026-05');
+SELECT ensaio_decide_epi(55.00, '2026-05');
+SELECT ensaio_decide_epi(55.00, '2026-05');
+
+DO $$
+DECLARE quantos int; parcelas int;
+BEGIN
+  SELECT count(*) INTO quantos FROM fdp_ledger_entries
+    WHERE origin_type = 'epi_discount' AND origin_id = 'epi-req-2';
+  IF quantos <> 1 THEN
+    RAISE EXCEPTION 'tres decisoes geraram % lancamento(s)', quantos;
+  END IF;
+  SELECT count(*) INTO parcelas FROM fdp_ledger_installments installment
+    JOIN fdp_ledger_entries entry ON entry.id = installment.entry_id
+    WHERE entry.origin_type = 'epi_discount' AND entry.origin_id = 'epi-req-2';
+  IF parcelas <> 1 THEN
+    RAISE EXCEPTION 'tres decisoes geraram % parcela(s)', parcelas;
+  END IF;
+  RAISE NOTICE 'OK: decidir tres vezes a mesma solicitacao gera um lancamento';
+END;
+$$;
+
+-- Uma segunda decisão corrige o valor enquanto nada foi descontado.
+SELECT ensaio_decide_epi(30.00, '2026-06');
+DO $$
+DECLARE entrada RECORD; parcela RECORD;
+BEGIN
+  SELECT * INTO entrada FROM fdp_ledger_entries
+    WHERE origin_type = 'epi_discount' AND origin_id = 'epi-req-2';
+  SELECT * INTO parcela FROM fdp_ledger_installments WHERE entry_id = entrada.id;
+  IF entrada.total_amount <> 30.00 OR parcela.planned_amount <> 30.00 OR parcela.competence <> '2026-06' THEN
+    RAISE EXCEPTION 'a correcao nao foi aplicada: % / % / %', entrada.total_amount, parcela.planned_amount, parcela.competence;
+  END IF;
+  RAISE NOTICE 'OK: nova decisao corrige o valor enquanto nada foi descontado';
+END;
+$$;
+
+-- Depois de confirmado, a decisão não reescreve mais nada.
+DO $$
+DECLARE alvo text;
+BEGIN
+  SELECT installment.id INTO alvo FROM fdp_ledger_installments installment
+    JOIN fdp_ledger_entries entry ON entry.id = installment.entry_id
+    WHERE entry.origin_type = 'epi_discount' AND entry.origin_id = 'epi-req-2';
+  INSERT INTO fdp_ledger_confirmations (id, workspace_id, installment_id, entry_id, competence, amount, confirmed_by, idempotency_key)
+    SELECT 'epi-conf-1','ws-a', installment.id, installment.entry_id, installment.competence, 30.00, 'u1', 'epi-k1'
+    FROM fdp_ledger_installments installment WHERE installment.id = alvo;
+END;
+$$;
+
+SELECT ensaio_decide_epi(99.00, '2026-07');
+DO $$
+DECLARE parcela RECORD;
+BEGIN
+  SELECT installment.* INTO parcela FROM fdp_ledger_installments installment
+    JOIN fdp_ledger_entries entry ON entry.id = installment.entry_id
+    WHERE entry.origin_type = 'epi_discount' AND entry.origin_id = 'epi-req-2';
+  IF parcela.planned_amount <> 30.00 OR parcela.competence <> '2026-06' THEN
+    RAISE EXCEPTION 'uma decisao posterior reescreveu desconto ja confirmado: % em %', parcela.planned_amount, parcela.competence;
+  END IF;
+  RAISE NOTICE 'OK: apos confirmado, nova decisao nao reescreve o que foi descontado';
+END;
+$$;
+
+DROP FUNCTION ensaio_decide_epi(numeric, text);
+
+-- ---------------------------------------------------------------------------
 -- Isolamento entre workspaces com papel sem superusuário.
 -- ---------------------------------------------------------------------------
 DROP ROLE IF EXISTS fdp_ledger_rehearsal_app;
