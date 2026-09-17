@@ -741,8 +741,11 @@ ALTER TABLE "fdp_demand_module_links" ADD CONSTRAINT "fdp_demand_module_links_mo
 -- ---------------------------------------------------------------------------
 -- Sem esta linha o módulo existiria em código e não teria porta: o menu do
 -- painel é montado a partir de `fdp_modules`.
+-- `route` aqui é a chave da visão do painel, não a URL: é o valor que
+-- `viewCatalog[...].module` compara em `WorkspaceApp.tsx`. O endereço em
+-- português (`/painel/adiantamentos`) mora em `lib/panel-routes.ts`.
 INSERT INTO "fdp_modules" ("key", "name", "description", "category", "route", "required_capability", "depends_on", "position") VALUES
-  ('payroll_ledger', 'Adiantamentos e Descontos', 'Adiantamentos salariais, empréstimos, multas, franquias e descontos parcelados ou recorrentes, com parcelas, saldos, aprovação e conferência por competência.', 'folha', 'adiantamentos', 'ledger.read', 'processes', 430)
+  ('payroll_ledger', 'Adiantamentos e Descontos', 'Adiantamentos salariais, empréstimos, multas, franquias e descontos parcelados ou recorrentes, com parcelas, saldos, aprovação e conferência por competência.', 'folha', 'payrollLedger', 'ledger.read', 'processes', 430)
 ON CONFLICT ("key") DO NOTHING;--> statement-breakpoint
 -- Controlar o que se desconta do salário de alguém não é recurso de porte: é a
 -- obrigação de quem desconta. Entra em todos os planos, como o EPI entrou.

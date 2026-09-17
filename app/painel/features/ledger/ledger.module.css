@@ -1,0 +1,389 @@
+/* Adiantamentos e Descontos.
+ *
+ * Nenhuma cor escrita à mão: tudo vem dos tokens do painel, e o acento do
+ * módulo é o acento semântico compartilhado — assim o cabeçalho, o estado vazio
+ * e o diálogo de confirmação, que vêm de `features/shared`, saem no mesmo tom
+ * da tela. O modo escuro vem junto, porque são os mesmos tokens que ele
+ * redefine.
+ */
+.workspace {
+  --lg-accent: var(--ui-accent, #1f5f8b);
+  --lg-accent-text: var(--ui-accent-text, #1f5f8b);
+  --lg-on-accent: var(--ui-on-accent, #fff);
+  --lg-accent-soft: var(--ui-accent-soft, #e6f0f7);
+  --lg-surface: var(--ui-surface, #fff);
+  --lg-muted: var(--ui-surface-muted, #f0f4f6);
+  --lg-border: var(--ui-border, #d8e0e7);
+  --lg-text: var(--ui-text, #172235);
+  --lg-soft: var(--ui-text-soft, #5e6d7f);
+  --lg-success: var(--ui-success, #137a4f);
+  --lg-warning: var(--ui-warning, #a15c07);
+  --lg-danger: var(--ui-danger, #b42318);
+
+  display: grid;
+  gap: 14px;
+  color: var(--lg-text);
+}
+
+.workspace svg { width: 16px; height: 16px; flex: none; }
+
+/* Cartões do topo: o que a planilha nunca respondeu de uma vez. */
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.metrics article {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--lg-border);
+  border-radius: 12px;
+  background: var(--lg-surface);
+}
+
+.metrics span { font-size: 12px; color: var(--lg-soft); letter-spacing: 0.02em; }
+.metrics strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.metrics small { font-size: 12px; color: var(--lg-soft); }
+
+.localTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid var(--lg-border);
+  padding-bottom: 8px;
+}
+
+.localTabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lg-soft);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.localTabs button:hover { background: var(--lg-muted); color: var(--lg-text); }
+
+.localTabs button[aria-current="page"] {
+  background: var(--lg-accent-soft);
+  border-color: var(--lg-accent);
+  color: var(--lg-accent-text);
+}
+
+.localTabs b {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--lg-accent);
+  color: var(--lg-on-accent);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.filters label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--lg-soft);
+}
+
+.filters select,
+.filters input {
+  padding: 8px 10px;
+  border: 1px solid var(--lg-border);
+  border-radius: 8px;
+  background: var(--lg-surface);
+  color: var(--lg-text);
+  font-size: 13px;
+  min-height: 38px;
+}
+
+.checkboxFilter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  font-size: 13px;
+  color: var(--lg-text);
+}
+
+.checkboxFilter input { width: 16px; height: 16px; min-height: 0; }
+
+.tableWrap {
+  border: 1px solid var(--lg-border);
+  border-radius: 12px;
+  background: var(--lg-surface);
+  overflow-x: auto;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.dataTable th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lg-soft);
+  border-bottom: 1px solid var(--lg-border);
+  white-space: nowrap;
+}
+
+.dataTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--lg-border);
+  vertical-align: top;
+}
+
+.dataTable tbody tr:last-child td { border-bottom: none; }
+.dataTable tbody tr:hover { background: var(--lg-muted); }
+
+.dataTable strong { display: block; font-weight: 600; }
+.dataTable small { display: block; color: var(--lg-soft); font-size: 12px; }
+
+/* Dinheiro alinhado à direita e com dígitos de largura fixa: é assim que a
+   coluna de saldo fica conferível de cima a baixo sem ninguém somar de cabeça. */
+.amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--lg-border);
+  border-radius: 8px;
+  background: var(--lg-surface);
+  color: var(--lg-accent-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.rowAction:hover { background: var(--lg-accent-soft); }
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.primaryButton { background: var(--lg-accent); color: var(--lg-on-accent); }
+.primaryButton:hover { filter: brightness(1.06); }
+.primaryButton:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
+
+.secondaryButton { background: var(--lg-surface); border-color: var(--lg-border); color: var(--lg-text); }
+.secondaryButton:hover { background: var(--lg-muted); }
+.secondaryButton:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.tableTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--lg-soft);
+}
+
+/* Painel lateral do lançamento. */
+.drawerBackdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--lg-text) 45%, transparent);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 60;
+}
+
+.drawer {
+  width: min(560px, 100%);
+  height: 100%;
+  overflow-y: auto;
+  background: var(--lg-surface);
+  border-left: 1px solid var(--lg-border);
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.drawerHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawerHead h2 { font-size: 17px; margin: 0; }
+.drawerHead p { margin: 4px 0 0; font-size: 13px; color: var(--lg-soft); }
+
+.closeButton {
+  border: 1px solid var(--lg-border);
+  border-radius: 8px;
+  background: var(--lg-surface);
+  color: var(--lg-soft);
+  padding: 6px;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.closeButton:hover { background: var(--lg-muted); color: var(--lg-text); }
+
+.definitionList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.definitionList div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--lg-border);
+  border-radius: 10px;
+  background: var(--lg-muted);
+}
+
+.definitionList dt { font-size: 11px; color: var(--lg-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.definitionList dd { margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--lg-soft);
+  margin: 0;
+}
+
+.timeline { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+
+.timeline li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--lg-border);
+  background: var(--lg-muted);
+  border-radius: 0 8px 8px 0;
+  font-size: 13px;
+}
+
+.timeline time { font-size: 11px; color: var(--lg-soft); }
+
+/* Formulário do lançamento. */
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.formGrid label,
+.fullWidth {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--lg-soft);
+}
+
+.fullWidth { grid-column: 1 / -1; }
+
+.formGrid input,
+.formGrid select,
+.formGrid textarea,
+.fullWidth input,
+.fullWidth select,
+.fullWidth textarea {
+  padding: 9px 11px;
+  border: 1px solid var(--lg-border);
+  border-radius: 8px;
+  background: var(--lg-surface);
+  color: var(--lg-text);
+  font-size: 14px;
+  font-family: inherit;
+  min-height: 40px;
+}
+
+.formGrid textarea, .fullWidth textarea { min-height: 76px; resize: vertical; }
+
+.fieldHint { font-size: 12px; color: var(--lg-soft); }
+
+/* Aviso que explica uma regra em vez de só recusar. */
+.notice {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--lg-border);
+  border-left: 3px solid var(--lg-accent);
+  border-radius: 0 8px 8px 0;
+  background: var(--lg-muted);
+  font-size: 13px;
+  color: var(--lg-text);
+}
+
+.notice[data-tone="warning"] { border-left-color: var(--lg-warning); }
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.preview {
+  border: 1px solid var(--lg-border);
+  border-radius: 10px;
+  background: var(--lg-muted);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.preview ol { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 720px) {
+  .dataTable thead { display: none; }
+  .dataTable tbody tr { display: grid; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--lg-border); }
+  .dataTable td { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 2px 0; border: none; }
+  .dataTable td::before { content: attr(data-label); font-size: 11px; color: var(--lg-soft); text-transform: uppercase; }
+  .amount { text-align: left; }
+  .drawer { width: 100%; padding: 16px; }
+}
+
+/* O giro do botão ocupado. `prefers-reduced-motion` desliga: quem pediu menos
+   movimento continua vendo o ícone, parado. */
+.spin { animation: lg-spin 900ms linear infinite; }
+
+@keyframes lg-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+}

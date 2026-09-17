@@ -4,8 +4,16 @@ import test from "node:test";
 import { capabilities, capabilitiesForRole, hasCapability } from "../lib/authorization.ts";
 import { capabilityCatalog } from "../lib/capability-catalog.ts";
 import { moduleWriteCapabilities } from "../lib/modules.ts";
+import { panelPath, panelViews, parsePanelPath } from "../lib/panel-routes.ts";
+import { groupOfView, viewsWithoutProcess } from "../lib/process-navigation.ts";
 import {
-  addCompetenceMonths, advanceAmount, advancePaymentKey, competenceDistance, competenceSeries,
+  entryBody,
+} from "../app/painel/features/ledger/ledger.api.ts";
+import {
+  parseAdvanceRuleInput, parseCategoryDetails, parseLedgerEntryInput, plannedRowsFor,
+} from "../lib/payroll-ledger-service.ts";
+import {
+  addCompetenceMonths, advanceAmount, advancePaymentKey, competenceDistance,
   confirmableCents, confirmationKey, contractorComponentType, contractorProjectionKey,
   formatCompetence, fromCents, isCompetence, ledgerBalance, ledgerCategories, ledgerCategoryFields,
   ledgerCategoryLabels, planInstallments, ruleInEffect, splitInstallments, terminationPendingKey,
@@ -377,4 +385,177 @@ test("a migration é aditiva: nenhuma tabela ou coluna some", () => {
   assert.equal(/DROP\s+COLUMN/i.test(migration), false);
   assert.equal(/DELETE\s+FROM/i.test(migration), false);
   assert.equal(/TRUNCATE/i.test(migration), false);
+});
+
+// ---------------------------------------------------------------------------
+// Validação de entrada: as recusas que o formulário precisa ouvir por extenso
+// ---------------------------------------------------------------------------
+
+test("recorrente com valor total é recusado com uma frase, não com o nome do CHECK", () => {
+  assert.throws(
+    () => parseLedgerEntryInput({
+      companyId: "c1", employeeId: "e1", category: "salary_advance", title: "Vale fixo",
+      modality: "recurring", firstCompetence: "2026-09", totalAmount: "500",
+    }),
+    (error: Error & { code?: string }) => {
+      assert.equal(error.code, "LEDGER_RECURRING_HAS_NO_TOTAL");
+      assert.match(error.message, /não tem valor total/i);
+      return true;
+    },
+  );
+});
+
+test("recorrente sem total passa e não inventa parcelas", () => {
+  const input = parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "salary_advance", title: "Vale fixo",
+    modality: "recurring", firstCompetence: "2026-09",
+  });
+  assert.equal(input.totalAmount, null);
+  assert.equal(input.installmentCount, null);
+  // As ocorrências do recorrente nascem competência a competência, na
+  // conferência do mês: não existe fim para programar de uma vez.
+  assert.deepEqual(plannedRowsFor(input), []);
+});
+
+test("um lançamento pertence a uma pessoa ou a um prestador, nunca aos dois nem a nenhum", () => {
+  const base = { companyId: "c1", category: "loan", title: "Empréstimo", modality: "single", totalAmount: "100", firstCompetence: "2026-09" };
+  assert.throws(() => parseLedgerEntryInput({ ...base, employeeId: "e1", providerId: "p1" }), /nunca aos dois/i);
+  assert.throws(() => parseLedgerEntryInput(base), /Selecione o colaborador ou o prestador/i);
+});
+
+test("prestador liquida no pagamento PJ e colaborador na folha", () => {
+  const pj = parseLedgerEntryInput({
+    companyId: "c1", providerId: "p1", category: "loan", title: "Empréstimo",
+    modality: "single", totalAmount: "100", firstCompetence: "2026-09",
+  });
+  assert.equal(pj.settlementTarget, "contractor_payment");
+
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "loan", title: "Empréstimo",
+    modality: "single", totalAmount: "100", firstCompetence: "2026-09",
+    settlementTarget: "contractor_payment",
+  }), /não é liquidado no pagamento PJ/i);
+
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", providerId: "p1", category: "loan", title: "Empréstimo",
+    modality: "single", totalAmount: "100", firstCompetence: "2026-09",
+    settlementTarget: "payroll",
+  }), /é liquidado no pagamento PJ/i);
+});
+
+test("o parcelamento impossível é recusado antes de chegar ao banco", () => {
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "loan", title: "Centavos",
+    modality: "installments", totalAmount: "0,05", installmentCount: "10", firstCompetence: "2026-09",
+  }), /não se divide/i);
+
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "loan", title: "Muitas parcelas",
+    modality: "installments", totalAmount: "100000", installmentCount: "500", firstCompetence: "2026-09",
+  }), /até 120 parcelas/i);
+});
+
+test("valor zero é recusado: um desconto de R$ 0,00 ninguém percebe que está errado", () => {
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "loan", title: "Zero",
+    modality: "single", totalAmount: "0", firstCompetence: "2026-09",
+  }), /maior que zero/i);
+});
+
+test("o parcelamento gerado pelo serviço fecha com o total informado em reais", () => {
+  const input = parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "loan", title: "Empréstimo",
+    modality: "installments", totalAmount: "2.000,00", installmentCount: "10", firstCompetence: "2026-09",
+  });
+  const rows = plannedRowsFor(input);
+  assert.equal(rows.length, 10);
+  assert.equal(rows.reduce((sum, row) => sum + toCents(row.plannedAmount), 0), toCents(input.totalAmount!));
+  assert.equal(rows[0].competence, "2026-09");
+  assert.equal(rows.at(-1)?.competence, "2027-06");
+  assert.equal(input.expectedEndCompetence, "2027-06");
+});
+
+test("só entram em details os campos que a categoria declara", () => {
+  const details = parseCategoryDetails("traffic_fine", {
+    plate: "ABC1D23", ticketNumber: "AI-99", vehicle: "Veículo 1",
+    // Uma chave que a categoria não declara não entra no documento financeiro,
+    // venha ela de onde vier.
+    salarioSecreto: "9999", __proto__: { poluido: true },
+  });
+  assert.deepEqual(Object.keys(details).sort(), ["plate", "ticketNumber", "vehicle"]);
+  assert.equal("salarioSecreto" in details, false);
+});
+
+test("a data de um campo de categoria é validada com o nome do campo", () => {
+  assert.throws(() => parseCategoryDetails("traffic_fine", { infractionDate: "10/03/2026" }), /Data da infração/);
+});
+
+test("o corpo enviado ao servidor omite total e parcelas no recorrente", () => {
+  const recorrente = entryBody({
+    companyId: "c1", subjectKind: "employee", employeeId: "e1", providerId: "",
+    category: "salary_advance", title: "Vale fixo", description: "", reason: "",
+    occurredOn: "", requestedOn: "2026-09-01", unitLabel: "", operationLabel: "",
+    requesterAreaId: "", modality: "recurring", totalAmount: "", installmentCount: "",
+    firstCompetence: "2026-09", recurrenceEndCompetence: "2027-06", details: {},
+  });
+  assert.equal("totalAmount" in recorrente, false);
+  assert.equal("installmentCount" in recorrente, false);
+  assert.equal(recorrente.recurrenceEndCompetence, "2027-06");
+
+  const unico = entryBody({
+    companyId: "c1", subjectKind: "provider", employeeId: "", providerId: "p1",
+    category: "loan", title: "Empréstimo", description: "", reason: "",
+    occurredOn: "", requestedOn: "2026-09-01", unitLabel: "", operationLabel: "",
+    requesterAreaId: "", modality: "single", totalAmount: "300", installmentCount: "",
+    firstCompetence: "2026-09", recurrenceEndCompetence: "", details: {},
+  });
+  // O único sempre vai com uma parcela, mesmo que o campo esteja vazio na tela.
+  assert.equal(unico.installmentCount, 1);
+  assert.equal(unico.settlementTarget, "contractor_payment");
+  assert.equal(unico.employeeId, null);
+});
+
+test("a regra de adiantamento percentual sem base é aceita, mas nasce com pendência nomeada", () => {
+  const regra = parseAdvanceRuleInput({ mode: "percentage", percentage: 40, effectiveFromCompetence: "2026-09" });
+  assert.equal(regra.percentage, 40);
+  assert.equal(regra.salaryBaseAmount, null);
+  assert.match(regra.pendingReason, /base salarial/i);
+
+  const comBase = parseAdvanceRuleInput({
+    mode: "percentage", percentage: 40, salaryBaseAmount: "3.175,00", effectiveFromCompetence: "2026-09",
+  });
+  assert.equal(comBase.salaryBaseAmount, 3175);
+  assert.equal(comBase.salaryBaseSource, "manual");
+  assert.equal(comBase.pendingReason, "");
+});
+
+test("vigência invertida é recusada nos dois lugares que a aceitam", () => {
+  assert.throws(() => parseAdvanceRuleInput({
+    mode: "fixed_monthly", fixedAmount: "500", effectiveFromCompetence: "2026-09", endCompetence: "2026-06",
+  }), /anterior ao início/i);
+
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "salary_advance", title: "Vale",
+    modality: "recurring", firstCompetence: "2026-09", recurrenceEndCompetence: "2026-06",
+  }), /anterior à primeira competência/i);
+});
+
+// ---------------------------------------------------------------------------
+// A tela tem porta, e a porta tem endereço
+// ---------------------------------------------------------------------------
+
+test("a visão está registrada na navegação, com endereço em português", () => {
+  assert.equal(panelViews.includes("payrollLedger"), true);
+  assert.equal(panelPath({ view: "payrollLedger" }), "/painel/adiantamentos");
+  assert.equal(parsePanelPath("/painel/adiantamentos").view, "payrollLedger");
+  // O grupo do menu precisa reconhecê-la: uma tela órfã não aparece em lugar
+  // nenhum, e o teste de navegação do painel reprova por isso.
+  assert.equal(groupOfView("payrollLedger")?.id, "pagamentos");
+  assert.equal(viewsWithoutProcess(panelViews).includes("payrollLedger"), false);
+});
+
+test("o catálogo de módulos aponta para a chave de visão que o painel compara", () => {
+  // `route` em `fdp_modules` é a chave da visão, não a URL. Trocar os dois faz
+  // o módulo existir no banco e nunca aparecer no menu.
+  assert.match(migration, /'folha', 'payrollLedger', 'ledger\.read', 'processes'/);
 });

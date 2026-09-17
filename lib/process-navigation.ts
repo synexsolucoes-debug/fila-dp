@@ -99,7 +99,7 @@ export const processGroups: readonly ProcessGroup[] = [
     views: [
       "contractorPayments", "contractorProviders", "contractorCycles", "contractorClosings",
       "contractorInvoices", "contractorAdjustments", "contractorLimits", "contractorCaju", "contractorArchive",
-      "psychologistPayments", "auxiliary", "payroll",
+      "psychologistPayments", "auxiliary", "payroll", "payrollLedger",
     ],
   },
   {
