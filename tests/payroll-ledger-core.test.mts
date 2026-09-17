@@ -559,3 +559,81 @@ test("o catálogo de módulos aponta para a chave de visão que o painel compara
   // o módulo existir no banco e nunca aparecer no menu.
   assert.match(migration, /'folha', 'payrollLedger', 'ledger\.read', 'processes'/);
 });
+
+// ---------------------------------------------------------------------------
+// As três portas do dinheiro, e o que cada uma exige
+// ---------------------------------------------------------------------------
+
+const confirmRoute = await readFile(
+  new URL("../app/api/payroll-ledger/installments/[id]/confirmations/route.ts", import.meta.url), "utf8",
+);
+const rescheduleRoute = await readFile(
+  new URL("../app/api/payroll-ledger/installments/[id]/route.ts", import.meta.url), "utf8",
+);
+const renegotiationRoute = await readFile(
+  new URL("../app/api/payroll-ledger/entries/[id]/renegotiation/route.ts", import.meta.url), "utf8",
+);
+
+test("confirmar, autorizar acima do saldo e estornar pedem permissões diferentes", () => {
+  assert.match(confirmRoute, /requireNamedCapability\(workspace, "ledger\.confirm"/);
+  assert.match(confirmRoute, /requireNamedCapability\(workspace, "ledger\.override"/);
+  assert.match(confirmRoute, /requireNamedCapability\(workspace, "ledger\.reverse"/);
+});
+
+test("um desconto não é confirmado sobre lançamento que ninguém aprovou", () => {
+  assert.match(confirmRoute, /LEDGER_ENTRY_NOT_APPROVED/);
+  assert.match(confirmRoute, /\["approved", "active", "suspended"\]/);
+});
+
+test("a confirmação repetida devolve o registro existente em vez de duplicar a baixa", () => {
+  // A chave é determinística e o índice único do banco é quem decide. Repetir a
+  // chamada é 200 com o que já existe: quem repetiu queria este efeito, e ele
+  // já está aplicado.
+  assert.match(confirmRoute, /idempotency_key/);
+  assert.match(confirmRoute, /deduplicated: true/);
+  assert.match(confirmRoute, /confirmationKey\(/);
+});
+
+test("mexer na programação de parcela confirmada é recusado com o caminho da correção", () => {
+  assert.match(rescheduleRoute, /LEDGER_INSTALLMENT_CONFIRMED/);
+  assert.match(rescheduleRoute, /Estorne a confirmação antes/);
+  // O `WHERE discounted_amount = 0` fecha a janela entre ler e escrever: se
+  // alguém confirmar no intervalo, o UPDATE não pega linha.
+  assert.match(rescheduleRoute, /AND discounted_amount = 0/);
+  assert.match(rescheduleRoute, /LEDGER_INSTALLMENT_CHANGED/);
+});
+
+test("antecipar e reprogramar são nomeados separadamente, porque a consequência difere", () => {
+  assert.match(rescheduleRoute, /LEDGER_NOT_ANTICIPATION/);
+  assert.match(rescheduleRoute, /LEDGER_NOT_RESCHEDULE/);
+});
+
+test("pular não empurra o valor para a parcela seguinte", () => {
+  // Pular mexe em quando, nunca em quanto: a rota não escreve `planned_amount`
+  // em lugar nenhum. Somar o pulado na parcela seguinte é como um desconto vira
+  // o dobro no mês seguinte sem ninguém ter decidido isso.
+  assert.equal(/SET[^`]*planned_amount/.test(rescheduleRoute), false);
+  assert.match(rescheduleRoute, /empurrado para a parcela seguinte/);
+});
+
+test("a renegociação calcula o saldo no servidor e preserva o acordo original", () => {
+  // O saldo não vem do corpo da requisição: aceitar um valor do navegador seria
+  // deixar o cliente escolher quanto a pessoa ainda deve.
+  assert.equal(/body\.(remainingAmount|totalAmount)/.test(renegotiationRoute), false);
+  assert.match(renegotiationRoute, /remainingCents = plannedCents - discountedCents/);
+  assert.match(renegotiationRoute, /parent_entry_id/);
+  assert.match(renegotiationRoute, /'renegotiated'/);
+  // Só as parcelas não tocadas saem da programação.
+  assert.match(renegotiationRoute, /AND discounted_amount = 0/);
+});
+
+test("recorrente não é renegociável: ele tem vigência, não saldo", () => {
+  assert.match(renegotiationRoute, /LEDGER_RECURRING_NOT_RENEGOTIABLE/);
+});
+
+test("o ensaio de banco cobre quitação e renegociação contra PostgreSQL real", async () => {
+  const rehearsal = await readFile(new URL("../scripts/ledger-db-rehearsal.sql", import.meta.url), "utf8");
+  assert.match(rehearsal, /quitacao e leitura do saldo, nao digitacao/);
+  assert.match(rehearsal, /renegociacao cobre so o saldo e preserva o acordo original inteiro/);
+  assert.match(rehearsal, /com parcela em aberto, o lancamento nao se quita sozinho/);
+});

@@ -1,6 +1,6 @@
 import type {
   LedgerAdvanceDraft, LedgerCompanyOption, LedgerEntry, LedgerEntryDetail,
-  LedgerEntryDraft, LedgerOverview, LedgerPersonOption,
+  LedgerEntryDraft, LedgerInstallment, LedgerOverview, LedgerPersonOption,
 } from "./ledger.types";
 
 /**
@@ -267,3 +267,72 @@ export function advanceBody(draft: LedgerAdvanceDraft): Record<string, unknown> 
 }
 
 export { numOrNull };
+
+export type InstallmentFilters = {
+  companyId: string;
+  competence: string;
+  overdue: boolean;
+  category: string;
+  status: string;
+  settlementTarget: string;
+};
+
+export async function loadInstallments(filters: InstallmentFilters): Promise<{ installments: LedgerInstallment[]; truncated: boolean }> {
+  const query = new URLSearchParams();
+  if (filters.companyId) query.set("companyId", filters.companyId);
+  if (filters.competence) query.set("competence", filters.competence);
+  if (filters.overdue) query.set("overdue", "true");
+  if (filters.category) query.set("category", filters.category);
+  if (filters.status) query.set("status", filters.status);
+  if (filters.settlementTarget) query.set("settlementTarget", filters.settlementTarget);
+  const suffix = query.toString() ? `?${query}` : "";
+  const payload = await requestJson<{ installments?: LedgerInstallment[]; truncated?: boolean }>(
+    `/api/payroll-ledger/installments${suffix}`,
+  );
+  return { installments: payload.installments ?? [], truncated: Boolean(payload.truncated) };
+}
+
+/**
+ * Confirmar, autorizar acima do saldo e estornar.
+ *
+ * O valor vai como texto digitado; a chave de idempotência é montada no
+ * servidor a partir do que ele mesmo leu da parcela. Deixar o navegador
+ * escolher a chave abriria a porta para duas confirmações diferentes
+ * compartilharem a mesma — e uma delas sumir sem aviso.
+ */
+export async function confirmInstallment(id: string, input: {
+  kind: "confirmation" | "authorized_override" | "reversal";
+  amount: string;
+  competence?: string;
+  justification?: string;
+  reference?: string;
+  reversesConfirmationId?: string;
+}) {
+  return requestJson<Row>(`/api/payroll-ledger/installments/${encodeURIComponent(id)}/confirmations`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateInstallment(id: string, input: {
+  action: "reschedule" | "skip" | "anticipate" | "restore";
+  competence?: string;
+  justification: string;
+}) {
+  return requestJson<Row>(`/api/payroll-ledger/installments/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function renegotiateEntry(id: string, input: {
+  installmentCount: string;
+  firstCompetence: string;
+  reason: string;
+  title?: string;
+}) {
+  return requestJson<Row>(`/api/payroll-ledger/entries/${encodeURIComponent(id)}/renegotiation`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

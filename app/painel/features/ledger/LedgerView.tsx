@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ChevronRight, HandCoins, Inbox, Loader2, Plus, Send, ThumbsDown, ThumbsUp, X,
+  ChevronRight, HandCoins, Inbox, Info, ListChecks, Loader2, Plus, Send, ThumbsDown, ThumbsUp, Wallet, X,
 } from "lucide-react";
 import {
   formatBRL, formatCompetence, ledgerCategories, ledgerCategoryLabels,
@@ -11,15 +11,25 @@ import {
 import type { LedgerEntryStatus, LedgerInstallmentStatus } from "@/lib/payroll-ledger";
 import { EmptyState, ErrorBanner, LoadingState, PanelHeader, StatusPill } from "../shared/panel-ui";
 import type { PanelTone } from "../shared/status-tone";
+import { InstallmentActionDialog } from "./InstallmentActionDialog";
+import { InstallmentsPanel, type InstallmentAction } from "./InstallmentsPanel";
 import { LedgerEntryDialog, emptyDraft } from "./LedgerEntryDialog";
 import {
-  cancelEntry, createEntry, decideEntry, loadEmployees, loadEntries, loadEntryDetail, loadOverview,
-  submitEntry,
+  cancelEntry, confirmInstallment, createEntry, decideEntry, loadEmployees, loadEntries,
+  loadEntryDetail, loadInstallments, loadOverview, renegotiateEntry, submitEntry, updateInstallment,
 } from "./ledger.api";
 import styles from "./ledger.module.css";
 import type {
-  LedgerEntry, LedgerEntryDetail, LedgerEntryDraft, LedgerOverview, LedgerPersonOption,
+  LedgerEntry, LedgerEntryDetail, LedgerEntryDraft, LedgerInstallment, LedgerOverview,
+  LedgerPersonOption,
 } from "./ledger.types";
+
+type Aba = "entries" | "installments";
+
+function competenciaAtual() {
+  const agora = new Date();
+  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
+}
 
 /**
  * Adiantamentos e Descontos.
@@ -75,6 +85,14 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
 
+  const [aba, setAba] = useState<Aba>("entries");
+  const [installments, setInstallments] = useState<LedgerInstallment[]>([]);
+  const [competence, setCompetence] = useState(competenciaAtual());
+  const [overdue, setOverdue] = useState(false);
+  const [installmentAction, setInstallmentAction] = useState<InstallmentAction | null>(null);
+  const [actionError, setActionError] = useState("");
+  const [renegotiation, setRenegotiation] = useState({ installmentCount: "", firstCompetence: "", reason: "" });
+
   const [companyId, setCompanyId] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
@@ -114,6 +132,29 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
     })();
     return () => { vivo = false; };
   }, [refresh]);
+
+  /* As parcelas só são buscadas quando a aba delas está aberta: a conferência
+     de uma competência traz milhares de linhas, e carregá-las junto da lista de
+     lançamentos custaria isso a cada visita, inclusive às que não abrem a aba. */
+  const refreshInstallments = useCallback(async () => {
+    const dados = await loadInstallments({
+      companyId, competence, overdue, category, status: "", settlementTarget: "",
+    });
+    setInstallments(dados.installments);
+  }, [companyId, competence, overdue, category]);
+
+  useEffect(() => {
+    if (aba !== "installments") return;
+    let vivo = true;
+    void (async () => {
+      try {
+        await refreshInstallments();
+      } catch (issue) {
+        if (vivo) setError(issue instanceof Error ? issue.message : "Não foi possível carregar as parcelas.");
+      }
+    })();
+    return () => { vivo = false; };
+  }, [aba, refreshInstallments]);
 
   /* O seletor de pessoas só é carregado quando o formulário abre e uma empresa
      está escolhida: buscar todos os colaboradores do grupo ao abrir a tela
@@ -214,6 +255,15 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
         </div>
       )}
 
+      <nav className={styles.localTabs} aria-label="Áreas do módulo">
+        <button type="button" aria-current={aba === "entries" ? "page" : undefined} onClick={() => setAba("entries")}>
+          <ListChecks aria-hidden="true" /> Lançamentos
+        </button>
+        <button type="button" aria-current={aba === "installments" ? "page" : undefined} onClick={() => setAba("installments")}>
+          <Wallet aria-hidden="true" /> Parcelas e saldos
+        </button>
+      </nav>
+
       <div className={styles.filters}>
         <label>
           Empresa
@@ -242,21 +292,47 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
             ))}
           </select>
         </label>
-        <label>
-          Buscar
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Nome, matrícula ou descrição"
-            aria-label="Buscar por nome, matrícula ou descrição"
-          />
-        </label>
-        <label className={styles.checkboxFilter}>
-          <input type="checkbox" checked={openOnly} onChange={(event) => setOpenOnly(event.target.checked)} />
-          Somente com saldo em aberto
-        </label>
+        {aba === "entries" ? (
+          <>
+            <label>
+              Buscar
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Nome, matrícula ou descrição"
+                aria-label="Buscar por nome, matrícula ou descrição"
+              />
+            </label>
+            <label className={styles.checkboxFilter}>
+              <input type="checkbox" checked={openOnly} onChange={(event) => setOpenOnly(event.target.checked)} />
+              Somente com saldo em aberto
+            </label>
+          </>
+        ) : (
+          <>
+            <label>
+              Competência
+              <input value={competence} onChange={(event) => setCompetence(event.target.value)} placeholder="2026-09" />
+            </label>
+            {/* Parcela atrasada continua pertencendo ao mês em que nasceu: este
+                filtro é leitura, não migração para o mês atual. */}
+            <label className={styles.checkboxFilter}>
+              <input type="checkbox" checked={overdue} onChange={(event) => setOverdue(event.target.checked)} />
+              Pendentes de competências anteriores
+            </label>
+          </>
+        )}
       </div>
 
+      {aba === "installments" ? (
+        <InstallmentsPanel
+          installments={installments}
+          permissions={permissions}
+          busy={busy}
+          onAction={(action) => { setActionError(""); setInstallmentAction(action); }}
+        />
+      ) : (
+        <>
       <div className={styles.tableTools}>
         <span>{visible.length} lançamento(s)</span>
         {truncated && <span>A consulta atingiu o limite. Reduza o recorte para ver tudo.</span>}
@@ -337,6 +413,41 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
               <Plus aria-hidden="true" /> Criar o primeiro
             </button>
           ) : undefined}
+        />
+      )}
+        </>
+      )}
+
+      {installmentAction && (
+        <InstallmentActionDialog
+          action={installmentAction}
+          busy={busy}
+          error={actionError}
+          onCancel={() => { setInstallmentAction(null); setActionError(""); }}
+          onSubmit={(payload) => {
+            const alvo = installmentAction;
+            setBusy(true); setActionError("");
+            const pedido = alvo.kind === "reschedule" || alvo.kind === "skip"
+              ? updateInstallment(alvo.installment.id, {
+                action: alvo.kind,
+                competence: alvo.kind === "reschedule" ? payload.competence : undefined,
+                justification: payload.justification,
+              })
+              : confirmInstallment(alvo.installment.id, {
+                kind: alvo.kind === "confirm" ? "confirmation" : alvo.kind === "override" ? "authorized_override" : "reversal",
+                amount: payload.amount,
+                competence: payload.competence,
+                justification: payload.justification,
+                reference: payload.reference,
+              });
+            void pedido
+              .then(async () => {
+                setInstallmentAction(null);
+                await Promise.all([refresh(), refreshInstallments()]);
+              })
+              .catch((issue: unknown) => setActionError(issue instanceof Error ? issue.message : "Não foi possível concluir a operação."))
+              .finally(() => setBusy(false));
+          }}
         />
       )}
 
@@ -527,6 +638,49 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
                 </li>
               ))}
             </ul>
+
+            {permissions?.manage && detail.entry.modality !== "recurring"
+              && ["approved", "active", "suspended"].includes(detail.entry.status)
+              && detail.entry.remainingAmount > 0 && (
+              <>
+                <p className={styles.sectionTitle}>Renegociar o saldo</p>
+                <p className={styles.notice}>
+                  <Info aria-hidden="true" />
+                  <span>
+                    Renegociar cria um acordo novo, cobrindo <strong>somente os {formatBRL(detail.entry.remainingAmount)}</strong> que
+                    ainda faltam. O acordo original fica no histórico com o valor e as parcelas que já foram descontadas — ele não é reescrito.
+                  </span>
+                </p>
+                <div className={styles.formGrid}>
+                  <label>
+                    Em quantas parcelas
+                    <input value={renegotiation.installmentCount} onChange={(event) => setRenegotiation({ ...renegotiation, installmentCount: event.target.value })} inputMode="numeric" placeholder="6" />
+                  </label>
+                  <label>
+                    A partir da competência
+                    <input value={renegotiation.firstCompetence} onChange={(event) => setRenegotiation({ ...renegotiation, firstCompetence: event.target.value })} placeholder="2026-12" />
+                  </label>
+                  <label className={styles.fullWidth}>
+                    Motivo da renegociação
+                    <textarea value={renegotiation.reason} onChange={(event) => setRenegotiation({ ...renegotiation, reason: event.target.value })} maxLength={1000} />
+                  </label>
+                  <div className={`${styles.fullWidth} ${styles.formActions}`}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      disabled={busy || !renegotiation.installmentCount || !renegotiation.firstCompetence || renegotiation.reason.trim().length < 5}
+                      onClick={() => void run(async () => {
+                        await renegotiateEntry(detail.entry.id, renegotiation);
+                        setDetail(null);
+                        setRenegotiation({ installmentCount: "", firstCompetence: "", reason: "" });
+                      })}
+                    >
+                      Renegociar saldo
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
 
             {permissions?.manage && detail.entry.status === "draft" && detail.entry.discountedAmount === 0 && (
               <div className={styles.formActions}>

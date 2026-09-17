@@ -181,6 +181,11 @@
 
 .rowAction:hover { background: var(--lg-accent-soft); }
 
+/* As ações da parcela cabem lado a lado numa tela larga e empilham no celular.
+   `flex-wrap` em vez de largura fixa: "Ajuste autorizado" é o rótulo mais
+   longo do produto e não pode ser cortado — é a ação de maior consequência. */
+.rowActions { display: flex; flex-wrap: wrap; gap: 6px; }
+
 .primaryButton,
 .secondaryButton {
   display: inline-flex;

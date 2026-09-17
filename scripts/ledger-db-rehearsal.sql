@@ -354,6 +354,126 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
+-- Quitação: o lançamento vira `settled` por leitura do saldo, não por digitação.
+-- É a mesma consulta que a rota de confirmação executa.
+-- ---------------------------------------------------------------------------
+INSERT INTO fdp_ledger_entries (id, workspace_id, company_id, employee_id, category, title,
+  requested_on, requested_by, total_amount, modality, installment_count, first_competence,
+  status, created_by, updated_by)
+  VALUES ('led-q','ws-a','co-a','emp-a','loan','Emprestimo de duas parcelas','2026-07-20','u1',
+    100.00,'installments',2,'2026-08','active','u1','u1');
+INSERT INTO fdp_ledger_installments (id, workspace_id, entry_id, company_id, number, total_count, competence, planned_amount) VALUES
+  ('led-q-p1','ws-a','led-q','co-a',1,2,'2026-08',50.00),
+  ('led-q-p2','ws-a','led-q','co-a',2,2,'2026-09',50.00);
+INSERT INTO fdp_ledger_confirmations (id, workspace_id, installment_id, entry_id, competence, amount, confirmed_by, idempotency_key)
+  VALUES ('led-q-c1','ws-a','led-q-p1','led-q','2026-08',50.00,'u1','q-k1');
+
+UPDATE fdp_ledger_entries entry SET status = 'settled', updated_at = now()
+  WHERE entry.workspace_id = 'ws-a' AND entry.id = 'led-q' AND entry.status = 'active'
+    AND entry.modality <> 'recurring'
+    AND NOT EXISTS (
+      SELECT 1 FROM fdp_ledger_installments open_installment
+      WHERE open_installment.workspace_id = entry.workspace_id
+        AND open_installment.entry_id = entry.id
+        AND open_installment.status NOT IN ('canceled', 'rescheduled', 'skipped')
+        AND open_installment.discounted_amount < open_installment.planned_amount
+    );
+
+DO $$
+DECLARE situacao text;
+BEGIN
+  SELECT status INTO situacao FROM fdp_ledger_entries WHERE id = 'led-q';
+  IF situacao <> 'active' THEN
+    RAISE EXCEPTION 'lancamento com parcela em aberto virou % em vez de continuar ativo', situacao;
+  END IF;
+  RAISE NOTICE 'OK: com parcela em aberto, o lancamento nao se quita sozinho';
+END;
+$$;
+
+INSERT INTO fdp_ledger_confirmations (id, workspace_id, installment_id, entry_id, competence, amount, confirmed_by, idempotency_key)
+  VALUES ('led-q-c2','ws-a','led-q-p2','led-q','2026-09',50.00,'u1','q-k2');
+
+UPDATE fdp_ledger_entries entry SET status = 'settled', updated_at = now()
+  WHERE entry.workspace_id = 'ws-a' AND entry.id = 'led-q' AND entry.status = 'active'
+    AND entry.modality <> 'recurring'
+    AND NOT EXISTS (
+      SELECT 1 FROM fdp_ledger_installments open_installment
+      WHERE open_installment.workspace_id = entry.workspace_id
+        AND open_installment.entry_id = entry.id
+        AND open_installment.status NOT IN ('canceled', 'rescheduled', 'skipped')
+        AND open_installment.discounted_amount < open_installment.planned_amount
+    );
+
+DO $$
+DECLARE situacao text;
+BEGIN
+  SELECT status INTO situacao FROM fdp_ledger_entries WHERE id = 'led-q';
+  IF situacao <> 'settled' THEN
+    RAISE EXCEPTION 'lancamento integralmente descontado ficou como %', situacao;
+  END IF;
+  RAISE NOTICE 'OK: quitacao e leitura do saldo, nao digitacao';
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Renegociação: só o saldo entra no novo acordo; o original preserva o que já
+-- foi descontado e não é reescrito.
+-- ---------------------------------------------------------------------------
+-- O empréstimo led-1 tem 1.000,00 previstos, 150,00 confirmados e a parcela 3
+-- reprogramada. O saldo é o que resta das parcelas que continuam valendo.
+DO $$
+DECLARE previsto numeric(18,2); descontado numeric(18,2); saldo numeric(18,2);
+BEGIN
+  SELECT
+    SUM(CASE WHEN status IN ('canceled','rescheduled','skipped') THEN discounted_amount ELSE planned_amount END),
+    SUM(discounted_amount)
+    INTO previsto, descontado
+  FROM fdp_ledger_installments WHERE entry_id = 'led-1';
+  saldo := previsto - descontado;
+  IF saldo <> 516.67 THEN
+    RAISE EXCEPTION 'saldo remanescente esperado 516,67, veio %', saldo;
+  END IF;
+  RAISE NOTICE 'OK: saldo remanescente calculado sobre as parcelas que valem (%)', saldo;
+END;
+$$;
+
+INSERT INTO fdp_ledger_entries (id, workspace_id, company_id, employee_id, category, title,
+  requested_on, requested_by, total_amount, modality, installment_count, first_competence,
+  status, origin_type, origin_id, parent_entry_id, created_by, updated_by)
+  VALUES ('led-1-r','ws-a','co-a','emp-a','loan','Renegociacao do emprestimo','2026-09-01','u1',
+    516.67,'installments',2,'2026-11','active','renegotiation','led-1','led-1','u1','u1');
+INSERT INTO fdp_ledger_installments (id, workspace_id, entry_id, company_id, number, total_count, competence, planned_amount) VALUES
+  ('led-1-r-p1','ws-a','led-1-r','co-a',1,2,'2026-11',258.34),
+  ('led-1-r-p2','ws-a','led-1-r','co-a',2,2,'2026-12',258.33);
+
+UPDATE fdp_ledger_installments SET status = 'canceled', note = 'Renegociado', updated_at = now()
+  WHERE workspace_id = 'ws-a' AND entry_id = 'led-1' AND discounted_amount = 0
+    AND status NOT IN ('canceled', 'discounted');
+UPDATE fdp_ledger_entries SET status = 'renegotiated', updated_at = now()
+  WHERE workspace_id = 'ws-a' AND id = 'led-1' AND status IN ('approved','active','suspended');
+
+DO $$
+DECLARE confirmada RECORD; soma numeric(18,2);
+BEGIN
+  SELECT * INTO confirmada FROM fdp_ledger_installments WHERE id = 'led-1-p1';
+  IF confirmada.discounted_amount <> 150.00 OR confirmada.status <> 'partially_discounted' THEN
+    RAISE EXCEPTION 'a renegociacao mexeu na parcela ja confirmada: % / %', confirmada.discounted_amount, confirmada.status;
+  END IF;
+  SELECT SUM(planned_amount) INTO soma FROM fdp_ledger_installments WHERE entry_id = 'led-1-r';
+  IF soma <> 516.67 THEN
+    RAISE EXCEPTION 'as parcelas do novo acordo somam % em vez do saldo', soma;
+  END IF;
+  IF (SELECT total_amount FROM fdp_ledger_entries WHERE id = 'led-1') <> 1000.00 THEN
+    RAISE EXCEPTION 'o valor do acordo original foi reescrito';
+  END IF;
+  IF (SELECT count(*) FROM fdp_ledger_confirmations WHERE entry_id = 'led-1') <> 3 THEN
+    RAISE EXCEPTION 'o historico do acordo original foi perdido na renegociacao';
+  END IF;
+  RAISE NOTICE 'OK: renegociacao cobre so o saldo e preserva o acordo original inteiro';
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Isolamento entre workspaces com papel sem superusuário.
 -- ---------------------------------------------------------------------------
 DROP ROLE IF EXISTS fdp_ledger_rehearsal_app;
