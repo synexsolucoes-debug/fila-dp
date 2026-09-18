@@ -791,6 +791,62 @@ $$;
 DROP FUNCTION ensaio_decide_epi(numeric, text);
 
 -- ---------------------------------------------------------------------------
+-- Recorrente de categoria comum: valor por competência e materialização mensal.
+--
+-- Este bloco existe por causa de um defeito encontrado no primeiro uso em
+-- produção. O recorrente não tem total por CHECK, a regra de valor era exclusiva
+-- do adiantamento salarial e a geração de programação filtrava pela mesma
+-- categoria. Resultado: um vale fixo nascia sem valor, sem parcela e sem como
+-- ser conferido — vivo na listagem e inútil.
+-- ---------------------------------------------------------------------------
+INSERT INTO fdp_ledger_entries (id, workspace_id, company_id, employee_id, category, title,
+  requested_on, modality, total_amount, installment_count, first_competence, status,
+  requested_by, created_by, updated_by)
+  VALUES ('led-rec','ws-a','co-a','emp-a','other','Plano de saude',
+    '2026-07-20','recurring', NULL, NULL, '2026-08', 'active', 'u1','u1','u1');
+-- O valor do mes nasce como vigencia, no mesmo lote do lancamento.
+INSERT INTO fdp_ledger_advance_rules (id, workspace_id, entry_id, mode, fixed_amount,
+  effective_from_competence, status, note, created_by)
+  VALUES ('rule-rec','ws-a','led-rec','fixed_monthly',189.90,'2026-08','active','Valor informado na criacao.','u1');
+-- Abrir a competencia materializa a ocorrencia do mes. O numero sai da distancia
+-- desde a primeira competencia: 2026-10 e a terceira ocorrencia de 2026-08.
+INSERT INTO fdp_ledger_installments (id, workspace_id, entry_id, company_id, number, total_count,
+  competence, planned_amount, note)
+  VALUES ('inst-rec-3','ws-a','led-rec','co-a', 3, NULL, '2026-10', 189.90, 'Ocorrencia do lancamento recorrente.')
+  ON CONFLICT (workspace_id, entry_id, number) DO NOTHING;
+-- Abrir a MESMA competencia de novo nao cria a segunda parcela. E o caso real:
+-- a conferencia do mes e reaberta o tempo todo.
+INSERT INTO fdp_ledger_installments (id, workspace_id, entry_id, company_id, number, total_count,
+  competence, planned_amount, note)
+  VALUES ('inst-rec-3-bis','ws-a','led-rec','co-a', 3, NULL, '2026-10', 189.90, 'Ocorrencia do lancamento recorrente.')
+  ON CONFLICT (workspace_id, entry_id, number) DO NOTHING;
+DO $$
+DECLARE quantas int; valor numeric; sem_total int;
+BEGIN
+  SELECT COUNT(*) INTO quantas FROM fdp_ledger_installments
+  WHERE entry_id = 'led-rec' AND competence = '2026-10';
+  IF quantas <> 1 THEN
+    RAISE EXCEPTION 'abrir a competencia duas vezes gerou % parcelas para o mesmo mes', quantas;
+  END IF;
+  SELECT planned_amount INTO valor FROM fdp_ledger_installments WHERE id = 'inst-rec-3';
+  IF valor <> 189.90 THEN
+    RAISE EXCEPTION 'a parcela do recorrente nao pegou o valor da vigencia: %', valor;
+  END IF;
+  -- `total_count` nulo e o que distingue "ocorrencia 3 do recorrente" de
+  -- "parcela 3 de 10": nao existe total quando nao existe prazo.
+  SELECT COUNT(*) INTO sem_total FROM fdp_ledger_installments
+  WHERE id = 'inst-rec-3' AND total_count IS NULL;
+  IF sem_total <> 1 THEN
+    RAISE EXCEPTION 'a ocorrencia do recorrente nao deveria ter total de parcelas';
+  END IF;
+  RAISE NOTICE 'OK: recorrente de categoria comum tem valor por competencia e nao duplica no mes';
+END;
+$$;
+-- E o lancamento continua sem total: o valor mensal nao virou divida somada.
+SELECT expect_error($$UPDATE fdp_ledger_entries SET total_amount = 2000 WHERE id = 'led-rec'$$,
+  'fdp_ledger_entries_modality_shape_check');
+
+-- ---------------------------------------------------------------------------
 -- Isolamento entre workspaces com papel sem superusuário.
 -- ---------------------------------------------------------------------------
 DROP ROLE IF EXISTS fdp_ledger_rehearsal_app;

@@ -3,7 +3,9 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
-import { isCompetence } from "@/lib/payroll-ledger";
+import {
+  advanceAmount, fromCents, isCompetence, recurringOccurrenceNumber, ruleInEffect,
+} from "@/lib/payroll-ledger";
 
 /**
  * O lote de conferência da competência.
@@ -152,6 +154,69 @@ export async function POST(request: Request) {
       .bind(workspace.id, String(cycle.id)).first<Record<string, unknown>>();
     if (existing) return Response.json({ batch: existing, created: false });
 
+    /* O recorrente não tem parcelas programadas de saída — ele tem um valor por
+       mês e uma vigência. Abrir a competência é o momento em que esse valor
+       vira uma parcela conferível: antes disso não havia nada a conferir, e o
+       vale fixo simplesmente não aparecia no mês.
+       O adiantamento salarial fica de fora daqui de propósito: ele passa pela
+       programação da aba de Adiantamentos, que registra também o pagamento à
+       pessoa. Materializar os dois aqui criaria a dívida duas vezes. */
+    const recorrentes = await d1.prepare(`SELECT entry.id, entry.first_competence, entry.title,
+        rule.mode, rule.fixed_amount, rule.percentage, rule.salary_base_amount,
+        rule.effective_from_competence, rule.end_competence, rule.status AS rule_status
+      FROM fdp_ledger_entries entry
+      JOIN fdp_ledger_advance_rules rule
+        ON rule.workspace_id = entry.workspace_id AND rule.entry_id = entry.id
+      WHERE entry.workspace_id = ? AND entry.company_id = ?
+        AND entry.modality = 'recurring'
+        AND entry.category <> 'salary_advance'
+        AND entry.status IN ('approved', 'active')
+        AND entry.first_competence <= ?
+        AND (entry.recurrence_end_competence IS NULL OR entry.recurrence_end_competence >= ?)`)
+      .bind(workspace.id, companyId, competence, competence).all<Record<string, unknown>>();
+
+    const regrasPorLancamento = new Map<string, Record<string, unknown>[]>();
+    const tituloPorLancamento = new Map<string, { title: string; firstCompetence: string }>();
+    for (const linha of recorrentes.results) {
+      const entryId = String(linha.id);
+      const lista = regrasPorLancamento.get(entryId) ?? [];
+      lista.push(linha);
+      regrasPorLancamento.set(entryId, lista);
+      tituloPorLancamento.set(entryId, {
+        title: String(linha.title),
+        firstCompetence: String(linha.first_competence),
+      });
+    }
+
+    const parcelasRecorrentes = [];
+    for (const [entryId, linhas] of regrasPorLancamento) {
+      const regra = ruleInEffect(linhas.map((linha) => ({
+        effectiveFromCompetence: String(linha.effective_from_competence),
+        endCompetence: linha.end_competence ? String(linha.end_competence) : null,
+        status: String(linha.rule_status),
+        mode: String(linha.mode) as "single_competence" | "fixed_monthly" | "percentage",
+        fixedAmount: linha.fixed_amount === null ? null : Number(linha.fixed_amount),
+        percentage: linha.percentage === null ? null : Number(linha.percentage),
+        salaryBaseAmount: linha.salary_base_amount === null ? null : Number(linha.salary_base_amount),
+      })), competence);
+      if (!regra) continue;
+
+      /* Percentual sem base não vira R$ 0,00: a competência simplesmente não
+         materializa a parcela, e o lançamento continua visível como pendência.
+         Gravar zero seria inventar um desconto que ninguém decidiu. */
+      const valor = advanceAmount(regra);
+      if (!valor.ok) continue;
+
+      const dados = tituloPorLancamento.get(entryId)!;
+      parcelasRecorrentes.push(d1.prepare(`INSERT INTO fdp_ledger_installments
+        (id, workspace_id, entry_id, company_id, number, total_count, competence, planned_amount, note)
+        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+        ON CONFLICT (workspace_id, entry_id, number) DO NOTHING`)
+        .bind(crypto.randomUUID(), workspace.id, entryId, companyId,
+          recurringOccurrenceNumber(dados.firstCompetence, competence),
+          competence, fromCents(valor.cents), "Ocorrência do lançamento recorrente."));
+    }
+
     const id = crypto.randomUUID();
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_ledger_batches
@@ -159,6 +224,7 @@ export async function POST(request: Request) {
         VALUES (?, ?, ?, ?, ?, 'draft', ?)
         ON CONFLICT (workspace_id, payroll_cycle_id) DO NOTHING`)
         .bind(id, workspace.id, companyId, String(cycle.id), competence, user.id),
+      ...parcelasRecorrentes,
       prepareAuditEvent({
         workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
         action: "ledger_batch.opened", entityType: "ledger_batch", entityId: id,

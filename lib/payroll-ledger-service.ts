@@ -149,6 +149,8 @@ export type LedgerEntryInput = {
   /** Nulo no recorrente: não existe total quando não existe prazo. */
   totalAmount: number | null;
   totalCents: number | null;
+  /** Só no recorrente: o valor de cada competência, que vira a primeira vigência. */
+  recurringCents: number | null;
   modality: LedgerModality;
   installmentCount: number | null;
   firstCompetence: string;
@@ -200,6 +202,8 @@ export function parseLedgerEntryInput(body: Record<string, unknown>): LedgerEntr
 
   let totalCents: number | null = null;
   let installmentCount: number | null = null;
+  /** O valor de cada mês do recorrente, que vira a primeira vigência. */
+  let recurringCents: number | null = null;
   if (modality === "recurring") {
     /* Recorrente sem prazo não tem saldo devedor total. Recusar aqui evita que
        a pessoa preencha um total que o produto vai ignorar — e que ela depois
@@ -210,6 +214,10 @@ export function parseLedgerEntryInput(body: Record<string, unknown>): LedgerEntr
         "LEDGER_RECURRING_HAS_NO_TOTAL",
       );
     }
+    /* Mas ele precisa do valor **do mês**, e é obrigatório: sem ele o
+       lançamento nasce sem número nenhum, não entra em conferência e não tem
+       como ser descontado. Era o que acontecia antes deste campo existir. */
+    recurringCents = requiredAmountCents(body.recurringAmount, "o valor por competência");
   } else {
     totalCents = requiredAmountCents(body.totalAmount, "o valor total");
     installmentCount = modality === "single" ? 1 : Math.trunc(Number(body.installmentCount ?? 0));
@@ -256,6 +264,7 @@ export function parseLedgerEntryInput(body: Record<string, unknown>): LedgerEntr
     responsibleUserId: optionalId(body.responsibleUserId),
     totalAmount: totalCents === null ? null : fromCents(totalCents),
     totalCents,
+    recurringCents,
     modality,
     installmentCount,
     firstCompetence,

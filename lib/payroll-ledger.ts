@@ -406,6 +406,24 @@ export function confirmationKey(input: {
   ].join(":");
 }
 
+/**
+ * O número da ocorrência mensal de um lançamento recorrente.
+ *
+ * Um recorrente não tem "parcela 3 de 10" — não há total. Mas cada mês precisa
+ * de um número estável, porque é `(workspace, lançamento, número)` que impede a
+ * mesma competência de virar duas parcelas quando alguém abre a conferência
+ * duas vezes. A distância desde a primeira competência dá exatamente isso: ela
+ * não depende de quantas vezes a geração rodou, nem da ordem em que os meses
+ * foram abertos. Setembro é sempre a mesma ocorrência, aberto hoje ou em março.
+ */
+export function recurringOccurrenceNumber(firstCompetence: string, competence: string): number {
+  const distance = competenceDistance(firstCompetence, competence);
+  if (distance < 0) {
+    throw new Error("A competência é anterior ao início da recorrência.");
+  }
+  return distance + 1;
+}
+
 /** Chave da ocorrência mensal do adiantamento: gerar a programação duas vezes não paga duas. */
 export function advancePaymentKey(entryId: string, competence: string): string {
   return `ledger-advance:${entryId}:${competence}`;

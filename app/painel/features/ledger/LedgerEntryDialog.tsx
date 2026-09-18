@@ -41,6 +41,7 @@ export function emptyDraft(companyId: string): LedgerEntryDraft {
     modality: "installments",
     totalAmount: "",
     installmentCount: "",
+    recurringAmount: "",
     firstCompetence: currentCompetence(),
     recurrenceEndCompetence: "",
     details: {},
@@ -107,7 +108,11 @@ export function LedgerEntryDialog({
   const missing = !draft.companyId
     || (draft.subjectKind === "employee" ? !draft.employeeId : !draft.providerId)
     || !draft.title
-    || (draft.modality !== "recurring" && (!draft.totalAmount || (draft.modality === "installments" && !draft.installmentCount)));
+    || (draft.modality !== "recurring" && (!draft.totalAmount || (draft.modality === "installments" && !draft.installmentCount)))
+    /* O recorrente exige o valor do mês pelo mesmo motivo que o parcelado exige
+       o total: um lançamento sem valor não é um rascunho, é uma obrigação que
+       ninguém consegue conferir nem descontar. */
+    || (draft.modality === "recurring" && !draft.recurringAmount);
 
   return (
     <div className={styles.drawerBackdrop} role="dialog" aria-modal="true" aria-label="Novo lançamento">
@@ -205,6 +210,27 @@ export function LedgerEntryDialog({
             <label>
               Valor total
               <input value={draft.totalAmount} onChange={(event) => set("totalAmount", event.target.value)} inputMode="decimal" placeholder="2.000,00" />
+            </label>
+          )}
+
+          {/* O recorrente pede o valor do mês, e não o total — que o banco
+              recusa por CHECK. Sem este campo o lançamento nascia sem valor
+              nenhum: a tela prometia "um valor por competência" e não oferecia
+              onde informá-lo, e o vale fixo ficava parado esperando um número
+              que não tinha porta de entrada. */}
+          {draft.modality === "recurring" && (
+            <label>
+              Valor por competência
+              <input
+                value={draft.recurringAmount}
+                onChange={(event) => set("recurringAmount", event.target.value)}
+                inputMode="decimal"
+                placeholder="500,00"
+              />
+              <span className={styles.fieldHint}>
+                Quanto entra por mês enquanto a vigência valer. Dá para alterar depois, e alterar cria uma vigência
+                nova em vez de reescrever os meses já processados.
+              </span>
             </label>
           )}
 
