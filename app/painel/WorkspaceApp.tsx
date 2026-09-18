@@ -77,6 +77,7 @@ import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { PRIORITY_LABELS } from "@/lib/work-items";
+import { demandNextAction, isOpenDemand, summarizeDemands } from "@/lib/demand-dashboard";
 import {
   nextThemePreference, themeLabels, THEME_COOKIE, THEME_COOKIE_MAX_AGE, THEME_SYSTEM_COOKIE,
   type ResolvedTheme, type ThemePreference,
@@ -100,6 +101,7 @@ import { LedgerView } from "./features/ledger";
 import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
+import { DemandPriorityView, DemandDeadlineView } from "./features/work/DemandViews";
 
 /* Os oito destinos do Pagamento PJ (§74) estão escritos aqui um a um, e não
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
@@ -111,15 +113,11 @@ type BoardDensity = "comfortable" | "compact";
 type BoardGroupBy = "none" | "company" | "assignee";
 type BoardSort = "position" | "due" | "priority";
 
-/** Os quatro formatos do quadro, com o rótulo que a maquete usa.
-    "Kanban" e "Tabela" eram jargão de ferramenta; "Quadro" e "Lista" dizem o
-    que a pessoa vai ver. O identificador não muda — ele é o estado, e trocá-lo
-    quebraria o link salvo de quem já está numa visão. */
-const boardModes: ReadonlyArray<{ id: BoardMode; label: string; icon: LucideIcon }> = [
-  { id: "kanban", label: "Quadro", icon: Columns3 },
-  { id: "table", label: "Lista", icon: List },
-  { id: "calendar", label: "Calendário", icon: CalendarDays },
-  { id: "process", label: "Processos", icon: Workflow },
+/** Três leituras da mesma fila; os identificadores preservam as preferências existentes. */
+const boardModes: ReadonlyArray<{ id: BoardMode; label: string; description: string; icon: LucideIcon }> = [
+  { id: "kanban", label: "Fluxo de demandas", description: "Etapas, pendências e próximos passos", icon: Columns3 },
+  { id: "table", label: "Central do DP", description: "Prioridades e distribuição por analista", icon: List },
+  { id: "calendar", label: "Calendário de prazos", description: "Entregas e rotina da semana", icon: CalendarDays },
 ];
 
 /** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
@@ -1501,11 +1499,14 @@ export function WorkspaceApp({
     });
   }, [snapshot?.recentActivity, periodFilter]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
+  const boardSummary = useMemo(() => summarizeDemands(
+    activeCards.filter((card) => companyFilter === "all" || card.companyId === companyFilter), snapshot?.lists ?? [],
+  ), [activeCards, companyFilter, snapshot?.lists]);
   const filteredActiveCards = useMemo(() => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
-    const weekEnd = todayStart + 7 * 24 * 60 * 60 * 1000;
+    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).getTime();
     /* Sem acento e em caixa baixa dos dois lados: quem digita "servicos" com
        pressa procura "Serviços", e um filtro que exige o acento certo é um
        filtro que responde "nada encontrado" para um termo que está na tela. */
@@ -1513,9 +1514,9 @@ export function WorkspaceApp({
     const contem = (value: string | null | undefined) =>
       !!value && value.normalize("NFD").replace(/[\u0300-\u036f]/gu, "").toLowerCase().includes(termo);
     return activeCards.filter((card) => {
-      const dueAt = card.dueAt ? new Date(card.dueAt).getTime() : Number.NaN;
+      const dueAt = card.dueAt ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(card.dueAt) ? `${card.dueAt}T12:00:00` : card.dueAt).getTime() : Number.NaN;
       const dueMatches = dueFilter === "all" ||
-        (dueFilter === "today" && dueAt >= todayStart && dueAt < tomorrowStart) ||
+        (dueFilter === "today" && isOpenDemand(card) && dueAt >= todayStart && dueAt < tomorrowStart) ||
         (dueFilter === "week" && dueAt >= todayStart && dueAt < weekEnd) ||
         (dueFilter === "overdue" && card.slaStatus === "overdue");
       const termoCombina = !termo || contem(card.title) || contem(card.company) || contem(card.processType) ||
@@ -1610,13 +1611,14 @@ export function WorkspaceApp({
      leitura do filtro — se o filtro não corresponde a nenhum recorte nomeado,
      nenhuma aba fica marcada, que é a verdade. */
   const boardScope = useMemo(() => {
+    if (dueFilter !== "all") return "none";
     if (assigneeFilter === currentMemberName && slaFilter === "all") return "mine";
     if (assigneeFilter !== "all") return "none";
     if (slaFilter === "overdue") return "overdue";
     if (slaFilter === "paused") return "waiting";
     if (slaFilter === "all") return "all";
     return "none";
-  }, [assigneeFilter, currentMemberName, slaFilter]);
+  }, [assigneeFilter, currentMemberName, dueFilter, slaFilter]);
   /** Quantas opções de exibição saíram do padrão — o número no botão "Exibição". */
   const activeBoardViewOptions = (boardDensity === "comfortable" ? 0 : 1)
     + (boardGroupBy === "none" ? 0 : 1) + (boardSort === "position" ? 0 : 1);
@@ -2649,6 +2651,7 @@ export function WorkspaceApp({
             {concluidas} de {card.checklist.length} no checklist
           </span>}
         {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
+        <div className="dp-card-next"><span>Próximo passo</span><p>{demandNextAction(card)}</p></div>
         <div className="dashboard-task-bottom">
           <span className={`dashboard-sla ${card.slaStatus}${card.dueAt ? " has-due" : ""}`}
             title={card.dueAt ? `Prazo: ${formatDue(card.dueAt)}` : "Sem prazo definido"}>
@@ -3099,38 +3102,41 @@ export function WorkspaceApp({
             onOpenContractorPayment={(target) => { setContractorPaymentFocus(target); setView("contractorClosings"); }} />}
 
           {view === "board" && (
-            <>
-              {/* Uma tira, quatro números, e cada um deles é um recorte que dá
-                  para abrir.
-                  As quatro fichas separadas custavam ~100px de altura antes do
-                  primeiro cartão e não faziam nada além de informar. Aqui o
-                  número é o botão: clicar em "atrasadas" liga o filtro de
-                  atrasadas, e o estado ligado aparece nos dois lugares — na
-                  tira e na aba correspondente. Um indicador que leva ao próprio
-                  recorte é a diferença entre saber que há três atrasadas e
-                  conseguir olhar para elas. */}
+            <section className="dp-demand-panel" aria-label="Painel de demandas do DP">
+              <div className="dp-model-switch" role="group" aria-label="Formato do quadro">
+                {boardModes.map((mode) => {
+                  const ModeIcon = mode.icon;
+                  return <button key={mode.id} type="button" aria-pressed={boardMode === mode.id}
+                    onClick={() => setBoardMode(mode.id)}><ModeIcon aria-hidden="true" />
+                    <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
+                  </button>;
+                })}
+              </div>
+              {/* Indicadores do quadro e da empresa selecionada. Cada número
+                  abre o recorte correspondente; vencer hoje usa a data real,
+                  não a janela de advertência do SLA. */}
               <div className="dashboard-stats board-summary" role="group" aria-label="Resumo do quadro">
                 {/* O total não é um recorte: ele é o estado de repouso da tela,
                     e por isso não fica marcado. O que ele faz é desfazer — é o
                     caminho de volta quando um dos três recortes está ligado. */}
                 <button type="button" className="board-summary-item"
-                  onClick={() => { setSlaFilter("all"); setAssigneeFilter("all"); }}>
-                  <strong>{stats.active}</strong><span>em aberto</span>
+                  onClick={() => { setSlaFilter("all"); setAssigneeFilter("all"); setDueFilter("all"); }}>
+                  <span>Demandas abertas</span><strong>{boardSummary.open}</strong><small>{boardSummary.completed} concluídas no quadro</small>
                 </button>
                 <button type="button" className={`board-summary-item tone-danger${slaFilter === "overdue" ? " active" : ""}`}
                   aria-pressed={slaFilter === "overdue"}
-                  onClick={() => setSlaFilter((current) => current === "overdue" ? "all" : "overdue")}>
-                  <i aria-hidden="true" /><strong>{stats.overdue}</strong><span>atrasadas</span>
+                  onClick={() => { setDueFilter("all"); setSlaFilter((current) => current === "overdue" ? "all" : "overdue"); }}>
+                  <span>Com prazo vencido</span><strong>{boardSummary.overdue}</strong><small>Precisam de atenção do DP</small>
                 </button>
-                <button type="button" className={`board-summary-item tone-warn${slaFilter === "warning" ? " active" : ""}`}
-                  aria-pressed={slaFilter === "warning"}
-                  onClick={() => setSlaFilter((current) => current === "warning" ? "all" : "warning")}>
-                  <i aria-hidden="true" /><strong>{stats.dueToday}</strong><span>vencem hoje</span>
+                <button type="button" className={`board-summary-item tone-warn${dueFilter === "today" ? " active" : ""}`}
+                  aria-pressed={dueFilter === "today"}
+                  onClick={() => { setSlaFilter("all"); setDueFilter((current) => current === "today" ? "all" : "today"); }}>
+                  <span>Vencem hoje</span><strong>{boardSummary.dueToday}</strong><small>Entregas previstas para hoje</small>
                 </button>
                 <button type="button" className={`board-summary-item${slaFilter === "paused" ? " active" : ""}`}
                   aria-pressed={slaFilter === "paused"}
-                  onClick={() => setSlaFilter((current) => current === "paused" ? "all" : "paused")}>
-                  <strong>{stats.waiting}</strong><span>aguardando retorno</span>
+                  onClick={() => { setDueFilter("all"); setSlaFilter((current) => current === "paused" ? "all" : "paused"); }}>
+                  <span>Aguardando retorno</span><strong>{boardSummary.waiting}</strong><small>Demandas em espera</small>
                 </button>
               </div>
 
@@ -3145,22 +3151,16 @@ export function WorkspaceApp({
               <div className="dashboard-board-head">
                 <div className="dashboard-tabs board-scope-tabs" role="group" aria-label="Recorte do quadro">
                   <button type="button" className={boardScope === "all" ? "active" : ""} aria-pressed={boardScope === "all"}
-                    onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); }}>Todas</button>
+                    onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); setDueFilter("all"); }}>Todas</button>
                   <button type="button" className={boardScope === "mine" ? "active" : ""} aria-pressed={boardScope === "mine"}
-                    onClick={() => { setSlaFilter("all"); setAssigneeFilter((current) => current === currentMemberName ? "all" : currentMemberName); }}>Minhas demandas</button>
+                    onClick={() => { setSlaFilter("all"); setDueFilter("all"); setAssigneeFilter((current) => current === currentMemberName ? "all" : currentMemberName); }}>Minhas demandas</button>
                   <button type="button" className={boardScope === "overdue" ? "active" : ""} aria-pressed={boardScope === "overdue"}
-                    onClick={() => { setAssigneeFilter("all"); setSlaFilter((current) => current === "overdue" ? "all" : "overdue"); }}>Atrasadas</button>
+                    onClick={() => { setAssigneeFilter("all"); setDueFilter("all"); setSlaFilter((current) => current === "overdue" ? "all" : "overdue"); }}>Atrasadas</button>
                   <button type="button" className={boardScope === "waiting" ? "active" : ""} aria-pressed={boardScope === "waiting"}
-                    onClick={() => { setAssigneeFilter("all"); setSlaFilter((current) => current === "paused" ? "all" : "paused"); }}>Aguardando retorno</button>
+                    onClick={() => { setAssigneeFilter("all"); setDueFilter("all"); setSlaFilter((current) => current === "paused" ? "all" : "paused"); }}>Aguardando retorno</button>
                 </div>
-                <div className="board-view-switch board-view-tabs" role="group" aria-label="Formato do quadro">
-                  {boardModes.map((mode) => {
-                    const ModeIcon = mode.icon;
-                    return <button key={mode.id} type="button" className={boardMode === mode.id ? "active" : ""}
-                      aria-pressed={boardMode === mode.id} onClick={() => setBoardMode(mode.id)}>
-                      <ModeIcon aria-hidden="true" />{mode.label}
-                    </button>;
-                  })}
+                <div className="board-view-switch board-view-tabs" role="group" aria-label="Consultas adicionais">
+                  <button type="button" className={boardMode === "process" ? "active" : ""} aria-pressed={boardMode === "process"} onClick={() => setBoardMode("process")}><Workflow aria-hidden="true" />Processos</button>
                   <button type="button" className="archive-trigger" onClick={() => setArchiveOpen(true)}>
                     <Archive aria-hidden="true" /> Arquivados <b>{snapshot.archivedCards.length}</b>
                   </button>
@@ -3171,7 +3171,7 @@ export function WorkspaceApp({
                 <label className="board-search">
                   <Search aria-hidden="true" />
                   <input type="search" value={boardQuery} onChange={(event) => setBoardQuery(event.target.value)}
-                    placeholder="Buscar demanda..." aria-label="Buscar no quadro" />
+                    placeholder="Buscar demanda, colaborador ou empresa" aria-label="Buscar no quadro" />
                 </label>
                 <label className="board-selector"><span>Quadro</span><select value={snapshot.board.id} onChange={(event) => void switchBoard(event.target.value)} aria-label="Selecionar quadro">{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}</select></label>
                 <label className="board-field"><span>Processo</span><select aria-label="Filtrar por tipo de demanda" value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}><option value="all">Todos</option>{processTypes.map((process) => <option key={process}>{process}</option>)}</select></label>
@@ -3229,10 +3229,10 @@ export function WorkspaceApp({
                     {boardLanes.length === 0 && <p className="dashboard-column-empty board-lanes-empty">Nenhuma demanda no recorte atual.</p>}
                   </div>
               )}
-              {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
-              {boardMode === "calendar" && <DemandCalendarView cards={filteredActiveCards} onOpen={openCard} />}
+              {boardMode === "table" && <DemandPriorityView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} renderAreaFlow={(card) => <DemandAreaFlow card={card} areas={snapshot.areas} />} onWaiting={() => { setSlaFilter("paused"); setDueFilter("all"); setBoardMode("kanban"); }} />}
+              {boardMode === "calendar" && <DemandDeadlineView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
               {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
-            </>
+            </section>
           )}
 
           {view === "inbox" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
@@ -4331,28 +4331,6 @@ function DemandTableView({ cards, lists, areas, onOpen }: { cards: Card[]; lists
         </table>
         {cards.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Ajuste os filtros para ampliar a visão.</p></div>}
       </div>
-    </section>
-  );
-}
-
-function DemandCalendarView({ cards, onOpen }: { cards: Card[]; onOpen: (card: Card) => void }) {
-  const [cursor, setCursor] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const leading = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = Array.from({ length: leading + daysInMonth }, (_, index) => index < leading ? null : index - leading + 1);
-  const cardsByDay = cards.reduce<Record<number, Card[]>>((accumulator, card) => {
-    if (!card.dueAt) return accumulator;
-    const [cardYear, cardMonth, cardDay] = card.dueAt.slice(0, 10).split("-").map(Number);
-    if (cardYear === year && cardMonth === month + 1) (accumulator[cardDay] ??= []).push(card);
-    return accumulator;
-  }, {});
-  return (
-    <section className="demand-calendar-view">
-      <header><button aria-label="Mês anterior" onClick={() => setCursor(new Date(year, month - 1, 1))}>←</button><div><strong>{new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(cursor)}</strong><span>{Object.values(cardsByDay).flat().length} prazo(s) neste mês</span></div><button aria-label="Próximo mês" onClick={() => setCursor(new Date(year, month + 1, 1))}>→</button></header>
-      <div className="calendar-grid"><div className="calendar-weekdays">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-days">{cells.map((day, index) => <article className={!day ? "empty" : ""} key={`${day ?? "empty"}-${index}`}>{day && <><b>{day}</b><div>{(cardsByDay[day] ?? []).slice(0, 3).map((card) => <button className={card.slaStatus} key={card.id} onClick={() => onOpen(card)} title={card.title}><i className={processColors[card.processType] ?? "gray"} />{card.title}</button>)}{(cardsByDay[day]?.length ?? 0) > 3 && <small>+{cardsByDay[day].length - 3} demanda(s)</small>}</div></>}</article>)}</div></div>
-      {cards.every((card) => !card.dueAt) && <div className="calendar-empty-note">Defina prazos nas demandas para visualizá-las no calendário.</div>}
     </section>
   );
 }
