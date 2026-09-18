@@ -526,14 +526,16 @@ test("áreas operacionais são N:N e governam a origem e o destino das demandas"
   assert.match(membersRoute, /requireNamedCapability\(workspace, "departments\.manage_members"/u);
 });
 
-test("o fluxo entre áreas aparece no Kanban e na tabela sem depender de nomes fixos", async () => {
+test("o fluxo entre áreas aparece no quadro e na central sem depender de nomes fixos", async () => {
   const workspace = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   assert.match(workspace, /function DemandAreaFlow/u);
   assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.requesterAreaId\)/u);
   assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.responsibleAreaId\)/u);
   assert.ok(workspace.includes('aria-label={`Fluxo entre áreas:'));
   assert.ok(workspace.includes('<DemandAreaFlow card={card} areas={snapshot.areas} />'));
-  assert.ok(workspace.includes('<td><DemandAreaFlow card={card} areas={areas} /></td>'));
+  assert.ok(workspace.includes('renderAreaFlow={(card) => <DemandAreaFlow card={card} areas={snapshot.areas} />}'));
+  const views = await readFile(new URL("../app/painel/features/work/DemandViews.tsx", import.meta.url), "utf8");
+  assert.ok(views.includes("{renderAreaFlow(card)}"));
   assert.doesNotMatch(workspace.match(/function DemandAreaFlow[\s\S]*?\n\}/u)?.[0] ?? "", /SESMT|Departamento Pessoal|Financeiro/u);
 });
 

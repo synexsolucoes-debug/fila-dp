@@ -68,9 +68,9 @@ test("ships operational foundations for boards, attachments, planner, reports an
   ]);
   assert.match(hosting, /"r2":\s*"ATTACHMENTS"/);
   for (const table of ["fdp_labels", "fdp_custom_fields", "fdp_card_attachments", "fdp_process_templates", "fdp_workspace_settings", "fdp_business_holidays", "fdp_sla_policies", "fdp_notifications", "fdp_integrations", "fdp_planner_blocks", "fdp_calendar_connections", "fdp_card_sla_pauses"]) assert.match(schema + db + migration, new RegExp(table));
-  assert.match(dashboard, /Kanban/);
-  assert.match(dashboard, /Tabela/);
-  assert.match(dashboard, /Calendário/);
+  assert.match(dashboard, /Fluxo de demandas/);
+  assert.match(dashboard, /Central do DP/);
+  assert.match(dashboard, /Calendário de prazos/);
   assert.match(dashboard, /Editor No-Code/);
   assert.match(dashboard, /Bloco de tempo/);
   assert.match(dashboard, /Pausar SLA/);
