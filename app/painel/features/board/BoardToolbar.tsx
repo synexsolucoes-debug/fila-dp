@@ -120,17 +120,42 @@ export function BoardToolbar(props: BoardToolbarProps) {
           />
         </label>
 
-        <div className={styles.modes} role="group" aria-label="Modo de visualização">
-          {MODES.map((mode) => {
+        {/* Abas de verdade, e não um grupo de botões com `aria-pressed`.
+            Os seis modos são recortes do mesmo conteúdo — a definição de uma
+            lista de abas —, e dizer isso na árvore de acessibilidade muda três
+            coisas: o leitor de tela anuncia "aba 1 de 6" em vez de seis botões
+            soltos, as setas do teclado passam a percorrer os modos, e a
+            varredura de acessibilidade do produto volta a enxergar cada modo
+            como uma tela a auditar. A última não é detalhe: enquanto isto era
+            um `role="group"`, o quadro inteiro entrava na varredura como uma
+            tela só, e os cinco outros modos deixavam de ser medidos. */}
+        <div className={styles.modes} role="tablist" aria-label="Modo de visualização">
+          {MODES.map((mode, index) => {
             const Icon = mode.icon;
+            const ativo = props.mode === mode.id;
             return (
               <button
                 key={mode.id}
+                id={`board-mode-${mode.id}`}
                 type="button"
+                role="tab"
                 title={mode.hint}
                 className={styles.mode}
-                data-active={props.mode === mode.id || undefined}
-                aria-pressed={props.mode === mode.id}
+                data-active={ativo || undefined}
+                aria-selected={ativo}
+                aria-controls="board-view-panel"
+                /* Só a aba ativa recebe o foco pela tabulação; dentro da lista,
+                   quem navega são as setas. Seis paradas de tabulação antes de
+                   chegar ao quadro é o que torna um teclado inutilizável. */
+                tabIndex={ativo ? 0 : -1}
+                onKeyDown={(event) => {
+                  const passo = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+                  if (passo === 0) return;
+                  event.preventDefault();
+                  const proximo = MODES[(index + passo + MODES.length) % MODES.length];
+                  props.onMode(proximo.id);
+                  document.getElementById(`board-mode-${proximo.id}`)?.focus();
+                }}
                 onClick={() => props.onMode(mode.id)}
               >
                 <Icon aria-hidden="true" />{mode.label}

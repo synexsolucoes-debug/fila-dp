@@ -66,6 +66,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 24px;
   padding: 5px 10px;
   border: 1px solid var(--ui-border);
   border-radius: 999px;
@@ -104,6 +105,12 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .search input {
   flex: 1;
   min-width: 0;
+  /* O campo ocupa a altura inteira do rótulo.
+     A borda e os 36px moram no `<label>`, e o `<input>` ficava com os 20px do
+     próprio texto: para quem mede alvo de toque, o alvo tem 20px de altura —
+     abaixo dos 24 que a WCAG 2.5.8 exige — e para quem usa mouse, clicar na
+     faixa entre o texto e a borda não focava nada. */
+  align-self: stretch;
   border: 0;
   background: transparent;
   color: var(--ui-text);
@@ -409,11 +416,16 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .card[data-sla="paused"] { border-left-color: var(--ui-text-muted); }
 .card[data-attention="high"] { border-color: var(--ui-danger); }
 
-.cardSelect { position: absolute; top: 7px; right: 7px; opacity: 0; transition: opacity .12s ease; }
+.cardSelect { position: absolute; top: 4px; right: 4px; line-height: 0; opacity: 0; transition: opacity .12s ease; }
 .card:hover .cardSelect, .card:focus-within .cardSelect, .card[data-selected] .cardSelect { opacity: 1; }
-.cardSelect input { width: 14px; height: 14px; accent-color: var(--ui-primary); cursor: pointer; }
+/* 24x24, e não 14x14.
+   É o mínimo da WCAG 2.5.8 para alvo de toque, e aqui ele não é teórico: a
+   seleção em massa é usada com o polegar na segunda-feira de distribuição, num
+   cartão cercado por outros cinco alvos. O visual pesa um pouco mais no canto
+   do cartão; errar a demanda selecionada pesa mais. */
+.cardSelect input { width: 24px; height: 24px; margin: 0; accent-color: var(--ui-primary); cursor: pointer; }
 
-.cardTop { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-right: 20px; }
+.cardTop { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-right: 28px; }
 .reference { font-size: 10px; font-weight: 800; letter-spacing: .03em; color: var(--ui-text-muted); }
 .process {
   padding: 1px 6px;
@@ -436,6 +448,10 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 
 .cardTitle {
   padding: 0;
+  /* Título de uma linha só media 17px de altura, e ele é o alvo principal do
+     cartão — o que abre a demanda. O mínimo da WCAG 2.5.8 vale para ele antes
+     de valer para qualquer outro controle desta tela. */
+  min-height: 24px;
   border: 0;
   background: transparent;
   color: var(--ui-text);

@@ -5799,7 +5799,15 @@
   width: 100%;
   font-size: 10px;
   font-weight: 650;
-  color: var(--ui-text-muted);
+  /* Cor fixa, e não um token.
+     O chip de responsável é branco nos dois temas — é um dos poucos lugares do
+     painel que não vira escuro. Qualquer token de texto apagado cai sobre esse
+     branco no tema escuro e rende menos de 2,2:1; herdar também não resolve,
+     porque quem vence a cascata ali é uma regra de tema escuro (1,79:1
+     medidos). O valor abaixo é o mesmo que `.choice-chips label` usa para o
+     nome ao lado, em `access.css`: enquanto o chip não acompanhar o tema, a
+     carga tem de acompanhar o chip. */
+  color: #59687a;
 }
 .choice-chips label > b { font-weight: 700; }
 
@@ -5814,3 +5822,29 @@
   color: var(--ui-accent-text, var(--ui-primary));
 }
 .dashboard-heading-meta .board-context small { font-size: 10.5px; color: var(--ui-text-muted); }
+
+/* O painel das abas de modo do quadro. Ele não desenha nada: existe para a
+   aba ter o que apontar, e para o conteúdo do quadro não ficar solto na
+   árvore de acessibilidade. */
+.board-view-panel { display: grid; gap: 12px; min-width: 0; }
+.board-view-panel:focus { outline: none; }
+
+/* ==========================================================================
+   Gaveta da demanda no tema escuro
+   ==========================================================================
+   Três cores escritas à mão em `access.css` assumem fundo branco — as abas da
+   gaveta, a aba ativa e o link de cancelar. No tema escuro elas caem sobre
+   `--ui-surface` e rendem 2,96:1, 3,05:1 e 3,01:1: texto que existe e não se
+   lê. Não era defeito novo; era defeito nunca medido. A gaveta só existe depois
+   de um clique, e a varredura de acessibilidade nunca a abria — o relatório
+   dava o módulo como limpo sem nunca ter olhado para a tela onde o trabalho
+   acontece. Ela entrou na varredura junto com este quadro, e estas três
+   apareceram na primeira passagem.
+
+   O remendo é local à gaveta, e não à classe: `.card-dialog-tabs` e
+   `.danger-link` aparecem em outras telas, e mudá-las na origem mexeria em
+   superfícies que já estão medidas e aprovadas. */
+.theme-dark .demand-detail-modal .card-dialog-tabs button { color: var(--ui-text-soft); }
+.theme-dark .demand-detail-modal .card-dialog-tabs button.active { color: var(--ui-accent-text, var(--ui-primary)); }
+.theme-dark .demand-detail-modal .card-form-actions .danger-link,
+.theme-dark .demand-drawer-actions .danger-link { color: var(--ui-state-danger-text); }

@@ -423,6 +423,39 @@ test("o quadro abre por responsável, e a gaveta continua sendo a gaveta", async
   assert.match(painel, /demand-detail-modal demand-drawer/u);
 });
 
+test("os modos do quadro são abas de verdade, e não botões que fingem ser", async () => {
+  /* Não é preciosismo de marcação. Enquanto os seis modos eram um
+     `role="group"` com `aria-pressed`, três coisas se perdiam ao mesmo tempo:
+     o leitor de tela anunciava seis botões soltos em vez de "aba 1 de 6", as
+     setas do teclado não percorriam os modos, e a varredura de acessibilidade
+     do produto — que acha tela por `[role="tab"]` — auditava o quadro inteiro
+     como uma tela só. Os outros cinco modos deixavam de ser medidos, e a
+     cobertura caiu abaixo do piso sem que nada na tela parecesse errado. */
+  const [toolbar, painel] = await Promise.all([
+    readFile(new URL("../app/painel/features/board/BoardToolbar.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(toolbar, /role="tablist"/u);
+  assert.match(toolbar, /role="tab"/u);
+  assert.match(toolbar, /aria-selected=\{ativo\}/u);
+  assert.match(toolbar, /ArrowRight/u, "as setas precisam percorrer os modos");
+  // A aba precisa ter o que controlar, e o painel precisa dizer de quem é.
+  assert.match(painel, /id="board-view-panel" role="tabpanel"/u);
+  assert.match(toolbar, /aria-controls="board-view-panel"/u);
+});
+
+test("a varredura de acessibilidade alcança a gaveta e os recortes do quadro", async () => {
+  /* A gaveta da demanda nunca esteve na varredura: ela só existe depois de um
+     clique, e o relatório declarava o módulo limpo sem nunca tê-la aberto. Na
+     primeira passagem em que entrou, acusou quatro violações reais de
+     contraste. Este teste existe para que ela não volte a sair. */
+  const script = await readFile(new URL("../scripts/a11y-check.mjs", import.meta.url), "utf8");
+  assert.match(script, /async function auditBoardSurfaces/u);
+  assert.match(script, /gaveta da demanda/u);
+  assert.match(script, /recorte \$\{rotulo\}/u);
+  assert.match(script, /auditBoardSurfaces\(`Painel › Demandas\$\{sufixo\}`\)/u);
+});
+
 test("o quadro não escreve cor à mão: a identidade vem dos tokens", async () => {
   const css = await readFile(new URL("../app/painel/features/board/board.module.css", import.meta.url), "utf8");
   const semComentario = css.replace(/\/\*[\s\S]*?\*\//gu, "");

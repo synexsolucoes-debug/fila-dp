@@ -338,6 +338,50 @@ async function auditModuleTabs(prefix) {
 }
 
 /**
+ * O quadro de demandas por dentro: os recortes e a gaveta.
+ *
+ * O caminhador genérico de abas alcança os modos do quadro — eles são uma lista
+ * de abas de verdade —, e não alcança duas superfícies que a pessoa usa o dia
+ * inteiro: a faixa de recortes rápidos, que muda o que o quadro mostra, e a
+ * gaveta da demanda, que é onde o trabalho acontece. A gaveta nunca esteve na
+ * varredura: ela só existe depois de um clique, e o relatório declarava o
+ * módulo limpo sem nunca tê-la aberto — o mesmo ponto cego das gavetas da
+ * integração global, que quando entraram acusaram vinte e cinco violações
+ * reais numa área dada como limpa.
+ *
+ * Não é cobertura inventada para encher número: são estados distintos da mesma
+ * tela, com contraste e alvo próprios, e cada um deles é medido uma vez só.
+ */
+async function auditBoardSurfaces(prefix) {
+  const recortes = page.locator('[class*="presets"] > button');
+  const rotulos = (await recortes.allInnerTexts()).map((t) => t.trim().split("\n")[0]).filter(Boolean)
+    // "Salvar recorte" abre um diálogo do navegador (`prompt`), que travaria a
+    // varredura esperando alguém digitar. Ele não é um recorte.
+    .filter((rotulo) => !/^Salvar/u.test(rotulo));
+  for (const rotulo of rotulos) {
+    await recortes.filter({ hasText: rotulo }).first().click().catch(() => undefined);
+    await page.waitForTimeout(700);
+    await audit(`${prefix} › recorte ${rotulo}`, null);
+    // Desliga antes do próximo: recortes combinam, e o quinto mediria a soma
+    // dos cinco em vez do que o rótulo diz.
+    await recortes.filter({ hasText: rotulo }).first().click().catch(() => undefined);
+    await page.waitForTimeout(400);
+  }
+
+  const cartao = page.locator('[class*="cardTitle"]').first();
+  if (await cartao.count() === 0) return;
+  await cartao.click().catch(() => undefined);
+  const gaveta = page.locator('[role="dialog"]').first();
+  await gaveta.waitFor({ state: "visible", timeout: 8000 }).catch(() => undefined);
+  if (await gaveta.count() > 0) {
+    await page.waitForTimeout(900);
+    await audit(`${prefix} › gaveta da demanda`, null);
+  }
+  await page.keyboard.press("Escape").catch(() => undefined);
+  await page.waitForTimeout(400);
+}
+
+/**
  * O assistente fica recolhido por padrão — então nunca entraria na varredura
  * junto com a tela que o hospeda. Aqui ele é aberto de propósito: um painel que
  * só aparece quando chamado ainda precisa ser legível quando aparece.
@@ -409,12 +453,14 @@ async function auditPanelViews(theme = "") {
     const entrada = `Painel › ${rotulo}${nomes[0] ? ` › ${nomes[0]}` : ""}${sufixo}`;
     await audit(entrada, null);
     await auditModuleTabs(entrada);
+    if (nomes[0] === "Demandas") await auditBoardSurfaces(`Painel › Demandas${sufixo}`);
 
     for (const nome of nomes.slice(1)) {
       await modulos.filter({ hasText: nome }).first().click().catch(() => undefined);
       await page.waitForTimeout(900);
       await audit(`Painel › ${rotulo} › ${nome}${sufixo}`, null);
       await auditModuleTabs(`Painel › ${nome}${sufixo}`);
+      if (nome === "Demandas") await auditBoardSurfaces(`Painel › Demandas${sufixo}`);
     }
     await page.keyboard.press("Escape").catch(() => undefined);
   }

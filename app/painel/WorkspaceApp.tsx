@@ -3446,6 +3446,13 @@ export function WorkspaceApp({
                 onOpenArchive={() => setArchiveOpen(true)}
               />
 
+              {/* O painel das abas de modo. `tabIndex={-1}` e não `0`: o quadro
+                  tem os próprios alvos de foco — cartões, ações, caixas de
+                  seleção —, e uma parada de tabulação no invólucro faria o
+                  teclado passar por um contêiner vazio antes de chegar neles.
+                  O `-1` mantém o painel alcançável por programa, que é o que a
+                  aba precisa para apontar para ele. */}
+              <div id="board-view-panel" role="tabpanel" tabIndex={-1} aria-labelledby={`board-mode-${boardMode}`} className="board-view-panel">
               {boardMode === "team" && <TeamBoard
                 cards={filteredActiveCards}
                 members={snapshot.members}
@@ -3501,6 +3508,8 @@ export function WorkspaceApp({
               {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
               {boardMode === "calendar" && <DemandCalendarView cards={filteredActiveCards} onOpen={openCard} />}
               {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
+
+              </div>
 
               {boardSelection.size > 0 && canEdit && <BulkBar
                 count={boardSelection.size}
