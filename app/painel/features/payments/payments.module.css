@@ -858,3 +858,21 @@
 .noticeLinkToggle > span { display: grid; gap: 3px; min-width: 0; }
 .noticeLinkToggle strong { font-size: .78rem; }
 .noticeLinkToggle small { color: var(--pay-soft); font-size: .71rem; line-height: 1.5; }
+
+/* O selo de origem: aparece só quando a nota fugiu do caminho de sempre.
+   Marcar as duas origens encheria a tabela de ruído para dizer "normal" na
+   maioria das linhas — e o que a conferência precisa notar é a exceção. */
+.originBadge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--pay-accent-text) 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pay-accent-text) 8%, transparent);
+  color: var(--pay-accent-text);
+  font-size: .62rem;
+  font-weight: 760;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}

@@ -5,6 +5,7 @@ import {
   CheckCheck, ClipboardCheck, Download, Eye, FileSpreadsheet, FileUp, Filter, RefreshCw, Search, X,
 } from "lucide-react";
 import {
+  invoiceOriginLabel,
   invoiceQuickFilterLabels,
   invoiceQuickFilters,
   invoiceRejectionReasonLabels,
@@ -502,6 +503,9 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
                         </button>
                       ) : row.providerName}
                       <small>{row.providerDocument || row.contractReference || "Sem CNPJ informado"}</small>
+                      {row.hasInvoice && invoiceOriginLabel({ origin: row.uploadedVia }).fromPortal && (
+                        <span className={styles.originBadge}>{invoiceOriginLabel({ origin: row.uploadedVia }).badge}</span>
+                      )}
                     </th>
                     <td>{row.companyName}<small>{row.companyDocument}</small></td>
                     <td><strong>{money(row.expectedAmount)}</strong></td>

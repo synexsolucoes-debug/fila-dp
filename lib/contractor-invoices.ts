@@ -46,6 +46,66 @@ export const invoiceReviewStatuses = [
 ] as const;
 export type InvoiceReviewStatus = typeof invoiceReviewStatuses[number];
 
+/* -------------------------------------------------------------------------- */
+/* Origem da nota                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Por onde a nota entrou.
+ *
+ * O portal do prestador abriu um segundo caminho, e o banco passou a registrar
+ * qual foi (`uploaded_via`). A tela, porém, continuou mostrando só o nome de
+ * quem enviou — que para o portal é vazio, porque quem enviou não é membro do
+ * workspace. O efeito era uma nota vinda de fora aparecer idêntica a uma que um
+ * colega subiu, e "de onde veio este arquivo" é uma das perguntas da própria
+ * conferência.
+ */
+export const invoiceOrigins = ["panel", "contractor_portal"] as const;
+export type InvoiceOrigin = typeof invoiceOrigins[number];
+
+/** Vocabulário fechado: origem desconhecida é tratada como o caminho do painel. */
+export function invoiceOrigin(value: unknown): InvoiceOrigin {
+  return value === "contractor_portal" ? "contractor_portal" : "panel";
+}
+
+export type InvoiceOriginLabel = {
+  /** Quem enviou, em uma linha. */
+  label: string;
+  /** Rótulo curto para o selo; vazio quando a nota veio do painel. */
+  badge: string;
+  fromPortal: boolean;
+};
+
+/**
+ * Quem enviou a nota, em texto.
+ *
+ * Duas escolhas que parecem detalhe e não são:
+ *
+ * 1. **a origem do portal não inventa uma pessoa.** Seria fácil escrever ali o
+ *    nome de quem gerou o link, e seria a mesma mentira que o `actor_kind`
+ *    existe para não contar no histórico;
+ * 2. **nota do painel sem pessoa não vira "portal".** O CHECK do banco exige
+ *    pessoa nesse caminho, então a ausência é defeito, não origem — e dizer
+ *    "prestador" ali esconderia o defeito atrás de uma explicação plausível.
+ */
+export function invoiceOriginLabel(input: {
+  origin: unknown;
+  uploadedByName?: string;
+  providerName?: string;
+}): InvoiceOriginLabel {
+  const origin = invoiceOrigin(input.origin);
+  if (origin === "contractor_portal") {
+    const quem = (input.providerName ?? "").trim();
+    return {
+      label: quem ? `${quem} — pelo portal` : "Enviada pelo prestador, pelo portal",
+      badge: "Pelo portal",
+      fromPortal: true,
+    };
+  }
+  const pessoa = (input.uploadedByName ?? "").trim();
+  return { label: pessoa || "Origem não registrada", badge: "", fromPortal: false };
+}
+
 /** O nome de cada situação para quem lê, sem depender de cor para distinguir. */
 export const invoiceReviewStatusLabels: Record<InvoiceReviewStatus, string> = {
   not_required: "Não emite nota",

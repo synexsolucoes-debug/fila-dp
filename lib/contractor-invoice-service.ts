@@ -11,6 +11,7 @@ import {
   invoiceEventSummary,
   invoicePaymentBlock,
   invoiceRejectionReasonLabels,
+  invoiceOrigin,
   isTerminalInvoiceStatus as rulesIsTerminal,
   reviewStatusFor,
   sanitizeRequiredChecks,
@@ -118,6 +119,8 @@ export type InvoicePanelRow = {
   documentFilename: string;
   uploadedAt: string;
   uploadedByName: string;
+  /** Por onde a nota entrou. Vazio de pessoa não é o mesmo que vinda do portal. */
+  uploadedVia: string;
   reviewedAt: string;
   reviewedByUserId: string;
   reviewedByName: string;
@@ -152,7 +155,7 @@ export async function listInvoicePanel(d1: Database, input: {
       company.trade_name AS company_trade_name, company.legal_name AS company_legal_name, company.tax_id AS company_document,
       i.id AS invoice_id, i.invoice_number, i.series, i.issue_date, i.issuer_document, i.issuer_name,
       i.amount AS informed_amount, i.difference_amount, i.status AS invoice_status, i.attempt,
-      i.document_id, i.uploaded_at, i.reviewed_at, i.reviewed_by, i.rejection_reason,
+      i.document_id, i.uploaded_at, i.uploaded_via, i.reviewed_at, i.reviewed_by, i.rejection_reason,
       document.content_type AS document_content_type, document.filename AS document_filename,
       uploader.name AS uploaded_by_name, reviewer.name AS reviewed_by_name
     FROM fdp_contractor_closings c
@@ -210,6 +213,7 @@ function toPanelRow(row: Record<string, unknown>, policy: InvoicePolicy): Invoic
     documentFilename: String(row.document_filename ?? ""),
     uploadedAt: row.uploaded_at ? String(row.uploaded_at) : "",
     uploadedByName: String(row.uploaded_by_name ?? ""),
+    uploadedVia: invoiceOrigin(row.uploaded_via),
     reviewedAt: row.reviewed_at ? String(row.reviewed_at) : "",
     reviewedByUserId: String(row.reviewed_by ?? ""),
     reviewedByName: String(row.reviewed_by_name ?? ""),
@@ -232,7 +236,8 @@ export type InvoiceRow = {
   issue_date: string; issuer_document: string; issuer_name: string; receiver_document: string;
   service_description: string; amount: string | number; expected_amount: string | number;
   difference_amount: string | number; status: string; document_id: string | null;
-  checklist_json: unknown; notes: string; duplicate_ack: boolean; uploaded_by: string; uploaded_at: string;
+  checklist_json: unknown; notes: string; duplicate_ack: boolean;
+  uploaded_by: string | null; uploaded_via: string; uploaded_at: string;
   reviewed_by: string | null; reviewed_at: string | null; review_note: string;
   rejection_reason: string; rejection_detail: string; replaces_invoice_id: string | null;
   replaced_by_invoice_id: string | null; superseded_at: string | null;
@@ -250,7 +255,7 @@ export async function findInvoice(d1: Database, workspaceId: string, invoiceId: 
 export async function listClosingInvoices(d1: Database, workspaceId: string, closingId: string) {
   const rows = await d1.prepare(`SELECT i.id, i.attempt, i.invoice_number, i.series, i.issue_date, i.amount,
       i.expected_amount, i.difference_amount, i.status, i.document_id, i.rejection_reason, i.rejection_detail,
-      i.uploaded_at, i.reviewed_at, i.superseded_at, i.replaces_invoice_id, i.replaced_by_invoice_id,
+      i.uploaded_at, i.uploaded_via, i.reviewed_at, i.superseded_at, i.replaces_invoice_id, i.replaced_by_invoice_id,
       document.filename AS document_filename, document.content_type AS document_content_type,
       uploader.name AS uploaded_by_name, reviewer.name AS reviewed_by_name
     FROM fdp_contractor_invoices i
