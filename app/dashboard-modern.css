@@ -5758,7 +5758,7 @@
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .1em;
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
 }
 .demand-next-step textarea {
   width: 100%;
@@ -5811,6 +5811,6 @@
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--ui-primary);
+  color: var(--ui-accent-text, var(--ui-primary));
 }
 .dashboard-heading-meta .board-context small { font-size: 10.5px; color: var(--ui-text-muted); }

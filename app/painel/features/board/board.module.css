@@ -51,6 +51,15 @@
 .indicator[data-active][data-tone="danger"] { border-color: var(--ui-danger); background: var(--ui-state-danger-bg); }
 .indicator[data-active][data-tone="warn"] { border-color: var(--ui-warning); background: var(--ui-state-warn-bg); }
 .indicator[data-active][data-tone="ok"] { border-color: var(--ui-success); background: var(--ui-state-ok-bg); }
+/* Ligado, o indicador troca de fundo — e o texto precisa trocar junto. O par
+   fundo/texto de cada tom foi medido para ler; cruzar o fundo de um com o texto
+   cinza do repouso é como o contraste se perde sem ninguém notar. */
+.indicator[data-active][data-tone="danger"] strong,
+.indicator[data-active][data-tone="danger"] span { color: var(--ui-state-danger-text); }
+.indicator[data-active][data-tone="warn"] strong,
+.indicator[data-active][data-tone="warn"] span { color: var(--ui-state-warn-text); }
+.indicator[data-active][data-tone="ok"] strong,
+.indicator[data-active][data-tone="ok"] span { color: var(--ui-state-ok-text); }
 
 .alerts { display: flex; flex-wrap: wrap; gap: 6px; }
 .alert {
@@ -121,7 +130,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .mode svg { width: 14px; height: 14px; }
 .mode:hover { background: var(--ui-surface-elevated); color: var(--ui-text); }
 .mode:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 1px; }
-.mode[data-active] { background: var(--ui-surface-elevated); color: var(--ui-primary); box-shadow: var(--ui-shadow-card); }
+.mode[data-active] { background: var(--ui-surface-elevated); color: var(--ui-accent-text, var(--ui-primary)); box-shadow: var(--ui-shadow-card); }
 
 .focusToggle {
   display: inline-flex;
@@ -139,7 +148,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .focusToggle svg { width: 14px; height: 14px; }
 .focusToggle:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
 .focusToggle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-.focusToggle[data-active] { border-color: var(--ui-primary); background: var(--ui-primary-soft); color: var(--ui-primary); }
+.focusToggle[data-active] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 
 .presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
 .preset, .saveView, .savedView > button {
@@ -155,7 +164,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 }
 .preset:hover, .saveView:hover, .savedView > button:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
 .preset:focus-visible, .saveView:focus-visible, .savedView > button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-.preset[data-active] { border-color: var(--ui-primary); background: var(--ui-primary-soft); color: var(--ui-primary); }
+.preset[data-active] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 .saveView { display: inline-flex; align-items: center; gap: 5px; }
 .saveView svg { width: 13px; height: 13px; }
 
@@ -204,13 +213,15 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--ui-primary);
-  color: var(--ui-on-accent, var(--ui-surface-elevated));
+  /* Pastilha suave, e não azul cheio: branco sobre o azul vivo do tema escuro
+     dá 2,3:1. O par suave lê nos dois temas sem precisar de uma exceção. */
+  background: var(--ui-accent-soft, var(--ui-primary-soft));
+  color: var(--ui-accent-text, var(--ui-primary));
   font-size: 10px;
   line-height: 16px;
   text-align: center;
 }
-.filters[open] > summary { border-color: var(--ui-primary); color: var(--ui-primary); }
+.filters[open] > summary { border-color: var(--ui-accent-text, var(--ui-primary)); color: var(--ui-accent-text, var(--ui-primary)); }
 
 .filterFields {
   position: absolute;
@@ -229,8 +240,13 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 }
 .filterFields label, .sort { display: grid; gap: 4px; }
 .filterFields span, .sort > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+/* 36px, a mesma altura da caixa de busca ao lado.
+   A régua de consistência do produto julga altura por repetição: um valor usado
+   por um único controle no produto inteiro é acidente, não decisão. Um campo
+   de 32px aqui seria exatamente isso — e o quadro não ganha densidade nenhuma
+   com 4px a menos num controle que aparece uma vez. */
 .filterFields select, .sort select {
-  height: 32px;
+  height: 36px;
   padding: 0 8px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-sm);
@@ -365,7 +381,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   padding: 12px;
 }
 .unassignTarget svg { width: 18px; height: 18px; }
-.unassignTarget[data-drop] { border-color: var(--ui-primary); background: var(--ui-primary-soft); color: var(--ui-primary); }
+.unassignTarget[data-drop] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 
 /* ── Cartão ───────────────────────────────────────────────────────────────── */
 
@@ -403,7 +419,12 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--ui-primary-soft);
-  color: var(--ui-primary);
+  /* `--ui-accent-text`, e não `--ui-primary`.
+     São dois tokens porque são dois trabalhos: o azul vivo preenche bem e lê
+     mal. No tema escuro, `--ui-primary` sobre `--ui-primary-soft` dá 2,2:1 —
+     texto que existe e não se lê. O token de texto clareia o bastante para o
+     par medir 9,4:1, e no tema claro os dois coincidem. */
+  color: var(--ui-accent-text, var(--ui-primary));
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: .04em;
@@ -429,7 +450,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.cardTitle:hover { color: var(--ui-primary); }
+.cardTitle:hover { color: var(--ui-accent-text, var(--ui-primary)); }
 .cardTitle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
 
 .cardWho { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ui-text-soft); }
@@ -499,7 +520,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   cursor: pointer;
 }
 .quickActions button svg { width: 13px; height: 13px; }
-.quickActions button:hover { background: var(--ui-primary-soft); color: var(--ui-primary); }
+.quickActions button:hover { background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 .quickActions button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 1px; }
 
 /* ── Minha fila ───────────────────────────────────────────────────────────── */
@@ -546,7 +567,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .bulkBar label { display: inline-flex; align-items: center; gap: 5px; }
 .bulkBar label > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
 .bulkBar select, .bulkBar input, .bulkBar label button {
-  height: 30px;
+  height: 36px;
   padding: 0 8px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-sm);
@@ -555,7 +576,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   font: inherit;
   font-size: 12px;
 }
-.bulkBar label button { cursor: pointer; font-weight: 700; color: var(--ui-primary); }
+.bulkBar label button { cursor: pointer; font-weight: 700; color: var(--ui-accent-text, var(--ui-primary)); }
 .bulkClear {
   display: inline-flex;
   align-items: center;

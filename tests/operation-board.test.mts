@@ -432,3 +432,19 @@ test("o quadro não escreve cor à mão: a identidade vem dos tokens", async () 
   // O tema escuro não precisa de um bloco próprio: os tokens já mudam com ele.
   assert.doesNotMatch(semComentario, /theme-dark/u);
 });
+
+test("o azul de texto do quadro usa o token que foi medido para ler", async () => {
+  /* `--ui-primary` e `--ui-accent-text` são dois tokens porque são dois
+     trabalhos: o azul vivo preenche bem e lê mal. No tema escuro, `--ui-primary`
+     (#365CF5) sobre `--ui-primary-soft` (#1D2B58) dá 2,2:1 — texto que existe e
+     não se lê, e que passaria despercebido no tema claro, onde os dois tokens
+     coincidem. Fundo, borda, contorno de foco e barra de carga continuam com
+     `--ui-primary`: ali ele é preenchimento. */
+  const css = await readFile(new URL("../app/painel/features/board/board.module.css", import.meta.url), "utf8");
+  const textoEmAzulCru = css
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .split("\n")
+    .filter((linha) => /(^|[^-])color: var\(--ui-primary\)/u.test(linha) && !/accent-color/u.test(linha));
+  assert.deepEqual(textoEmAzulCru, [],
+    "texto azul com --ui-primary: use var(--ui-accent-text, var(--ui-primary))");
+});
