@@ -45,10 +45,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     const processTemplateId = body.templateId === undefined ? (current.process_template_id ? String(current.process_template_id) : null) : (text(body.templateId, 120) || null);
     const requesterAreaId = body.requesterAreaId === undefined ? (current.requester_area_id ? String(current.requester_area_id) : null) : (text(body.requesterAreaId, 120) || null);
     const responsibleAreaId = body.responsibleAreaId === undefined ? (current.responsible_area_id ? String(current.responsible_area_id) : null) : (text(body.responsibleAreaId, 120) || null);
+    /* O próximo passo cabe em uma linha do cartão; o teto aqui é o mesmo do
+       banco, para a recusa chegar como mensagem e não como erro de restrição. */
+    const nextStep = body.nextStep === undefined ? String(current.next_step ?? "") : text(body.nextStep, 280);
     await validateActiveAreaIds(d1, workspace.id, [requesterAreaId, responsibleAreaId]);
     if (processTemplateId && !await d1.prepare("SELECT id FROM fdp_process_templates WHERE workspace_id = ? AND id = ? AND active = 1").bind(workspace.id, processTemplateId).first()) throw ApiError.badRequest("Template inválido.", "INVALID_PROCESS_TEMPLATE");
     await d1.prepare(`UPDATE fdp_cards SET
-      list_id = ?, title = ?, description = ?, company_id = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, competence = ?, legal_due_at = ?, process_template_id = ?, requester_area_id = ?, responsible_area_id = ?, updated_at = CURRENT_TIMESTAMP
+      list_id = ?, title = ?, description = ?, company_id = ?, company = ?, process_type = ?, priority = ?, assignee_name = ?, due_at = ?, sla_status = ?, competence = ?, legal_due_at = ?, process_template_id = ?, requester_area_id = ?, responsible_area_id = ?, next_step = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND board_id = ?`)
       .bind(
         listId,
@@ -66,6 +69,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         processTemplateId,
         requesterAreaId,
         responsibleAreaId,
+        nextStep,
         id,
         board.id,
       ).run();
@@ -85,6 +89,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       legalDueAt: [current.legal_due_at ? String(current.legal_due_at) : "", legalDueAt ?? ""],
       requesterAreaId: [current.requester_area_id ? String(current.requester_area_id) : "", requesterAreaId ?? ""],
       responsibleAreaId: [current.responsible_area_id ? String(current.responsible_area_id) : "", responsibleAreaId ?? ""],
+      nextStep: [String(current.next_step ?? ""), nextStep],
     }).filter(([, [from, to]]) => from !== to).map(([field, [from, to]]) => [field, { from, to }]));
     await recordActivity(workspace.id, id, auth.user.email, "card.updated", { title, changes, automationApplied: listId !== current.list_id });
     return Response.json(await getWorkspaceSnapshot(auth.user));

@@ -68,9 +68,21 @@ test("ships operational foundations for boards, attachments, planner, reports an
   ]);
   assert.match(hosting, /"r2":\s*"ATTACHMENTS"/);
   for (const table of ["fdp_labels", "fdp_custom_fields", "fdp_card_attachments", "fdp_process_templates", "fdp_workspace_settings", "fdp_business_holidays", "fdp_sla_policies", "fdp_notifications", "fdp_integrations", "fdp_planner_blocks", "fdp_calendar_connections", "fdp_card_sla_pauses"]) assert.match(schema + db + migration, new RegExp(table));
-  assert.match(dashboard, /Kanban/);
-  assert.match(dashboard, /Tabela/);
-  assert.match(dashboard, /Calendário/);
+  /* Os formatos do quadro, pelo identificador que os liga — e não pelas
+     palavras "Kanban" e "Tabela", que desde a Operação DP só existiam em
+     comentários. Um teste que passa por causa de um comentário passa a
+     reprovar quando alguém reescreve o comentário, e continua passando se
+     alguém apagar o formato: era o inverso do que ele existe para garantir.
+     A tela chama os quatro de "Situação", "Lista" e "Calendário" — o jargão
+     saiu da interface; os identificadores ficaram, porque são o estado e
+     estão em links já salvos. */
+  assert.match(dashboard, /boardMode === "kanban"/u);
+  assert.match(dashboard, /boardMode === "table"/u);
+  assert.match(dashboard, /boardMode === "calendar"/u);
+  /* E os dois que a Operação DP acrescentou: o quadro por responsável e a fila
+     de uma pessoa. */
+  assert.match(dashboard, /boardMode === "team"/u);
+  assert.match(dashboard, /boardMode === "queue"/u);
   assert.match(dashboard, /Editor No-Code/);
   assert.match(dashboard, /Bloco de tempo/);
   assert.match(dashboard, /Pausar SLA/);

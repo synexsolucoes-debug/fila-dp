@@ -132,14 +132,15 @@ export async function POST(request: Request) {
     const checklist = fallbackTemplate ? JSON.parse(String(fallbackTemplate.checklist_json)) as string[] : ["Analisar solicitação", "Executar atividade", "Conferir conclusão"];
     const competence = body.competence ? validCompetence(body.competence) : "";
     const legalDueAt = body.legalDueAt === undefined ? null : validDueAt(body.legalDueAt);
+    const nextStep = text(body.nextStep, 280);
     const requesterAreaId = text(body.requesterAreaId, 120) || null;
     const responsibleAreaId = text(body.responsibleAreaId, 120) || null;
     await validateActiveAreaIds(d1, workspace.id, [requesterAreaId, responsibleAreaId]);
 
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
-        (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by, sla_target_minutes, sla_started_at, competence, legal_due_at, process_template_id, requester_area_id, responsible_area_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)`)
+        (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, due_at, sla_status, position, source_type, created_by, sla_target_minutes, sla_started_at, competence, legal_due_at, process_template_id, requester_area_id, responsible_area_id, next_step)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)`)
         .bind(
           cardId,
           workspace.id,
@@ -162,6 +163,7 @@ export async function POST(request: Request) {
           template?.id ?? null,
           requesterAreaId,
           responsibleAreaId,
+          nextStep,
         ),
       ...checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
         .bind(crypto.randomUUID(), workspace.id, cardId, item, (index + 1) * 1000)),

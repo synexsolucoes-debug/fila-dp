@@ -13,7 +13,14 @@ export function addBusinessDays(start: string, days: number, businessDays: numbe
   return cursor.toISOString().slice(0, 10);
 }
 
-function stringIds(value: unknown) {
+/**
+ * Lista de identificadores vinda do corpo da requisição.
+ *
+ * Exportada para que a rota de atribuição valide a mesma coisa que a troca de
+ * vínculos aplica — dois recortes diferentes do que é "uma lista de ids"
+ * divergiriam no dia em que um deles mudasse o teto.
+ */
+export function stringIds(value: unknown) {
   return Array.isArray(value) ? Array.from(new Set(value.filter((item): item is string => typeof item === "string" && item.length <= 100).slice(0, 50))) : [];
 }
 

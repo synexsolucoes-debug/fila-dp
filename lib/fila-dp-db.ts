@@ -661,6 +661,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     referenceNumber: row.reference_number == null ? null : Number(row.reference_number),
     cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
     cancellationReason: String(row.cancellation_reason ?? ""),
+    nextStep: String(row.next_step ?? ""),
     title: String(row.title),
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,

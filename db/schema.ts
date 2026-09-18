@@ -322,6 +322,18 @@ export const cards = pgTable("fdp_cards", {
   instantiatedAt: timestamp("instantiated_at", { withTimezone: true, mode: "string" }),
   /* Concorrência otimista (§34): a atualização exige a versão lida. */
   version: integer("version").notNull().default(1),
+  /**
+   * A próxima ação, em uma frase.
+   *
+   * Processo diz o que é, etapa diz onde está, checklist diz o que falta — e
+   * nenhum dos três responde "o que eu faço agora". Quem pega a fila de um
+   * colega lia a descrição, os comentários e o checklist para descobrir que o
+   * que trava é um comprovante. Esta linha é essa descoberta, escrita.
+   *
+   * Vazio é estado legítimo: demanda recém-aberta ainda não tem próximo passo,
+   * e uma frase inventada seria pior do que a ausência.
+   */
+  nextStep: text("next_step").notNull().default(""),
 }, (table) => [
   /* Chave composta que impede a combinação entre grupos (§87). A simples
      continua existindo; é esta que dá a garantia estrutural. */
@@ -359,6 +371,9 @@ export const cards = pgTable("fdp_cards", {
   index("fdp_cards_process_definition_idx").on(table.workspaceId, table.processDefinitionId, table.archived)
     .where(sql`${table.processDefinitionId} IS NOT NULL`),
   check("fdp_cards_version_check", sql`${table.version} > 0`),
+  /* Teto no banco, e não só no formulário: a tela não é o único caminho de
+     escrita — integração, automação e agente também abrem demanda. */
+  check("fdp_cards_next_step_check", sql`length(${table.nextStep}) <= 280`),
   check("fdp_cards_process_instance_check", sql`(${table.processVersionId} IS NULL AND ${table.processDefinitionId} IS NULL AND ${table.currentStepId} = '' AND ${table.processVersionNumber} = '' AND ${table.instantiatedAt} IS NULL) OR (${table.processVersionId} IS NOT NULL AND ${table.processDefinitionId} IS NOT NULL AND ${table.currentStepId} <> '' AND ${table.instantiatedAt} IS NOT NULL)`),
 ]);
 
