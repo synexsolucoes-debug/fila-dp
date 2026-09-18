@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BadgeDollarSign, CalendarCheck, ChevronRight, HandCoins, Inbox, Info, ListChecks, Loader2, Plus, Send,
+  BadgeDollarSign, CalendarCheck, ChevronRight, FileSpreadsheet, HandCoins, Inbox, Info, ListChecks, Loader2, Plus, Send,
   ThumbsDown,
   ThumbsUp, Wallet, X,
 } from "lucide-react";
@@ -16,6 +16,7 @@ import type { PanelTone } from "../shared/status-tone";
 import { AdvanceActionDialog } from "./AdvanceActionDialog";
 import { CompetencePanel } from "./CompetencePanel";
 import { AdvancesPanel, type AdvanceAction } from "./AdvancesPanel";
+import { ImportPanel } from "./ImportPanel";
 import { InstallmentActionDialog } from "./InstallmentActionDialog";
 import { InstallmentsPanel, type InstallmentAction } from "./InstallmentsPanel";
 import { LedgerEntryDialog, emptyDraft } from "./LedgerEntryDialog";
@@ -24,9 +25,11 @@ import {
   loadEntries, loadEntryDetail, loadInstallments, loadOverview, renegotiateEntry, scheduleAdvances,
   createAdvanceRule, downloadBatchExport, importBatchReturn, loadCompetence, moveBatch, openBatch,
   submitEntry, updateAdvancePayment, updateInstallment,
+  cancelImport, commitImport, ignoreImportRow, listImportSheets, loadImport, previewImport, resolveImportRow,
 } from "./ledger.api";
 import type {
   LedgerAdvancePayment, LedgerBatch, LedgerCompetenceSummary, LedgerReturnResult,
+  LedgerImport, LedgerImportCommitResult, LedgerImportRow, LedgerImportTotals,
 } from "./ledger.api";
 import styles from "./ledger.module.css";
 import type {
@@ -34,7 +37,7 @@ import type {
   LedgerOverview, LedgerPersonOption,
 } from "./ledger.types";
 
-type Aba = "competence" | "entries" | "installments" | "advances";
+type Aba = "competence" | "entries" | "installments" | "advances" | "import";
 
 function competenciaAtual() {
   const agora = new Date();
@@ -112,6 +115,21 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
     mode: "fixed_monthly", fixedAmount: "", percentage: "", salaryBaseAmount: "",
     effectiveFromCompetence: competenciaAtual(), endCompetence: "", note: "",
   });
+
+  /* A importação vive num estado próprio, e não no do resto da tela: ela é um
+     caminho de sete passos que a pessoa pode abandonar no meio, e misturar isso
+     com os filtros da listagem faria um trocar de aba apagar o trabalho do
+     outro. */
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importSheets, setImportSheets] = useState<string[]>([]);
+  const [importCompanyId, setImportCompanyId] = useState("");
+  const [importCompetence, setImportCompetence] = useState(competenciaAtual());
+  const [importacao, setImportacao] = useState<LedgerImport | null>(null);
+  const [importRows, setImportRows] = useState<LedgerImportRow[]>([]);
+  const [importTotals, setImportTotals] = useState<LedgerImportTotals | null>(null);
+  const [importPeople, setImportPeople] = useState<LedgerPersonOption[]>([]);
+  const [importResolution, setImportResolution] = useState("pending");
+  const [commitResult, setCommitResult] = useState<LedgerImportCommitResult | null>(null);
 
   const [companyId, setCompanyId] = useState("");
   const [category, setCategory] = useState("");
@@ -227,6 +245,39 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
     return () => { ativo = false; };
   }, [draft?.companyId]);
 
+  /* As pessoas da empresa de destino da importação — um seletor à parte do
+     seletor do formulário, porque a empresa da importação é escolhida ali
+     dentro e não precisa coincidir com o recorte que a listagem está usando. */
+  useEffect(() => {
+    if (aba !== "import") return;
+    let ativo = true;
+    void loadEmployees(importCompanyId)
+      .then((list) => { if (ativo) setImportPeople(list); })
+      .catch(() => { if (ativo) setImportPeople([]); });
+    return () => { ativo = false; };
+  }, [aba, importCompanyId]);
+
+  const refreshImport = useCallback(async (id: string, resolution: string) => {
+    const dados = await loadImport(id, resolution);
+    setImportacao(dados.import);
+    setImportRows(dados.rows);
+    setImportTotals(dados.totals);
+  }, []);
+
+  /* Toda ação da importação passa por aqui: uma só trava de ocupado, uma só
+     forma de relatar erro, e a prévia recarregada depois de cada mudança —
+     conferir num retrato velho é como a planilha errava. */
+  const runImport = useCallback(async (action: () => Promise<unknown>) => {
+    setBusy(true); setError("");
+    try {
+      await action();
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : "Não foi possível concluir a importação.");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   const openDetail = useCallback(async (id: string) => {
     setBusy(true); setError(""); setApprover(""); setDecisionNote("");
     try {
@@ -312,22 +363,41 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
         </div>
       )}
 
-      <nav className={styles.localTabs} aria-label="Áreas do módulo">
-        <button type="button" aria-current={aba === "competence" ? "page" : undefined} onClick={() => setAba("competence")}>
+      {/* `role="tablist"` com `aria-selected`, e não `aria-current="page"`: são
+          abas de um mesmo lugar, não links para lugares diferentes — e é o
+          padrão que os outros módulos do painel já usam (§70).
+
+          A escolha tem uma segunda consequência, e ela é o motivo de estar
+          escrita aqui: a varredura de acessibilidade encontra as abas de dentro
+          de um módulo procurando por `[role="tab"]`. Com `aria-current` as
+          cinco áreas desta tela ficavam fora da varredura inteira — e o
+          relatório diria "sem violações" sobre quatro telas que ninguém mediu,
+          que é exatamente a falha que o piso de cobertura daquele script existe
+          para acusar. */}
+      <nav className={styles.localTabs} role="tablist" aria-label="Áreas do módulo">
+        <button type="button" role="tab" aria-selected={aba === "competence"} onClick={() => setAba("competence")}>
           <CalendarCheck aria-hidden="true" /> Competência
         </button>
-        <button type="button" aria-current={aba === "entries" ? "page" : undefined} onClick={() => setAba("entries")}>
+        <button type="button" role="tab" aria-selected={aba === "entries"} onClick={() => setAba("entries")}>
           <ListChecks aria-hidden="true" /> Lançamentos
         </button>
-        <button type="button" aria-current={aba === "installments" ? "page" : undefined} onClick={() => setAba("installments")}>
+        <button type="button" role="tab" aria-selected={aba === "installments"} onClick={() => setAba("installments")}>
           <Wallet aria-hidden="true" /> Parcelas e saldos
         </button>
-        <button type="button" aria-current={aba === "advances" ? "page" : undefined} onClick={() => setAba("advances")}>
+        <button type="button" role="tab" aria-selected={aba === "advances"} onClick={() => setAba("advances")}>
           <BadgeDollarSign aria-hidden="true" /> Adiantamentos
         </button>
+        {permissions?.import && (
+          <button type="button" role="tab" aria-selected={aba === "import"} onClick={() => setAba("import")}>
+            <FileSpreadsheet aria-hidden="true" /> Importação
+          </button>
+        )}
       </nav>
 
-      <div className={styles.filters}>
+      {/* A importação traz os próprios campos — empresa de destino e competência
+          de entrada — e eles não são os filtros da listagem. Repetir os de cima
+          ali sugeriria que recortam a prévia, e não recortam nada. */}
+      <div className={styles.filters} hidden={aba === "import"}>
         <label>
           Empresa
           <select value={companyId} onChange={(event) => setCompanyId(event.target.value)}>
@@ -392,7 +462,66 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
         )}
       </div>
 
-      {aba === "competence" ? (
+      {aba === "import" ? (
+        <ImportPanel
+          companies={overview?.companies ?? []}
+          people={importPeople}
+          permissions={permissions}
+          busy={busy}
+          importacao={importacao}
+          rows={importRows}
+          totals={importTotals}
+          commitResult={commitResult}
+          sheets={importSheets}
+          file={importFile}
+          entryCompetence={importCompetence}
+          companyId={importCompanyId}
+          onCompanyChange={setImportCompanyId}
+          onCompetenceChange={setImportCompetence}
+          onPickFile={(file) => void runImport(async () => {
+            setImportFile(file);
+            setImportSheets([]);
+            setCommitResult(null);
+            const { sheets } = await listImportSheets(file);
+            setImportSheets(sheets);
+          })}
+          onPreview={(sheetNames) => void runImport(async () => {
+            if (!importFile) throw new Error("Escolha a planilha antes de montar a prévia.");
+            const { importId } = await previewImport({
+              file: importFile, companyId: importCompanyId,
+              entryCompetence: importCompetence, sheetNames,
+            });
+            setImportResolution("pending");
+            await refreshImport(importId, "pending");
+          })}
+          onLoadRows={(resolution) => void runImport(async () => {
+            setImportResolution(resolution);
+            await refreshImport(importacao!.id, resolution);
+          })}
+          onResolve={(rowId, employeeId, candidate) => void runImport(async () => {
+            await resolveImportRow(importacao!.id, { rowId, employeeId, candidate });
+            await refreshImport(importacao!.id, importResolution);
+          })}
+          onIgnore={(rowId) => void runImport(async () => {
+            await ignoreImportRow(importacao!.id, rowId);
+            await refreshImport(importacao!.id, importResolution);
+          })}
+          onCommit={() => void runImport(async () => {
+            setCommitResult(await commitImport(importacao!.id));
+            await refreshImport(importacao!.id, importResolution);
+            await refresh();
+          })}
+          onCancel={() => void runImport(async () => {
+            await cancelImport(importacao!.id);
+            await refreshImport(importacao!.id, importResolution);
+          })}
+          onReset={() => {
+            setImportacao(null); setImportRows([]); setImportTotals(null);
+            setImportSheets([]); setImportFile(null); setCommitResult(null);
+            setImportResolution("pending");
+          }}
+        />
+      ) : aba === "competence" ? (
         <CompetencePanel
           batch={batch}
           summary={competenceSummary}

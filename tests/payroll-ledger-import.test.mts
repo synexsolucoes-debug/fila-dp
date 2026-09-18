@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ExcelJS from "exceljs";
 import {
@@ -263,4 +264,53 @@ test("a prévia conta linhas, propostas e ambiguidades da aba escolhida", async 
     linha.ambiguities.length === 0 && linha.candidates.every((candidate) => candidate.ambiguities.length === 0));
   assert.equal(semDuvida.length, 1);
   assert.equal(semDuvida[0].employeeName, "Pessoa Exemplo Dois");
+});
+
+// ---------------------------------------------------------------------------
+// A tela e a rota de gravação
+//
+// Estas asserções são sobre o código-fonte, e existem porque o que elas
+// protegem não é comportamento de função: é a promessa que a tela faz e a porta
+// que a rota fecha. As duas já estiveram erradas uma vez — a rota documentava
+// uma reimportação idempotente que, na prática, derrubaria o lote inteiro.
+// ---------------------------------------------------------------------------
+
+const painelImportacao = await readFile(
+  new URL("../app/painel/features/ledger/ImportPanel.tsx", import.meta.url), "utf8");
+const telaDoModulo = await readFile(
+  new URL("../app/painel/features/ledger/LedgerView.tsx", import.meta.url), "utf8");
+const rotaDeGravacao = await readFile(
+  new URL("../app/api/payroll-ledger/imports/[id]/commit/route.ts", import.meta.url), "utf8");
+
+test("a aba de importação só existe para quem tem a permissão de importar", () => {
+  /* Esconder o botão é cortesia, e a rota confere a capacidade de novo. Mas
+     mostrar uma aba que responde 403 ao primeiro clique é pior que não
+     mostrá-la: ensina que o produto está quebrado. */
+  assert.match(telaDoModulo, /permissions\?\.import && \(\s*<button[\s\S]{0,200}?setAba\("import"\)/u);
+  assert.match(painelImportacao, /if \(!permissions\?\.import\)/u);
+});
+
+test("a gravação descarta o que já virou lançamento antes de esbarrar no índice", () => {
+  /* O índice único parcial é a última trava. Se a gravação chegar até ele, o
+     lote inteiro cai por causa de uma linha repetida — e quem reimporta o
+     arquivo para pegar o que faltava recebe um erro de banco no lugar do
+     trabalho feito. */
+  assert.match(rotaDeGravacao, /AND NOT EXISTS \(\s*SELECT 1 FROM fdp_ledger_import_rows anterior/u);
+  assert.match(rotaDeGravacao, /anterior\.entry_id IS NOT NULL/u);
+  assert.match(rotaDeGravacao, /alreadyImported/u);
+});
+
+test("parcela anterior à corrente nasce como histórico, nunca como desconto confirmado", () => {
+  /* `5/10` na planilha não é comprovante de que cinco parcelas foram
+     descontadas. Gravá-las como `discounted` inventaria baixa que ninguém
+     registrou — e o saldo restante sairia errado para sempre. */
+  assert.match(rotaDeGravacao, /anterior \? "skipped" : "scheduled"/u);
+  assert.doesNotMatch(rotaDeGravacao, /anterior \? "discounted"/u);
+  assert.match(painelImportacao, /histórico da planilha/u);
+});
+
+test("a tela diz que o arquivo não é guardado", () => {
+  /* A planilha traz CPF e nome de gente real. Guardar o arquivo criaria uma
+     cópia de dado pessoal que ninguém pediu e que nada no produto lê. */
+  assert.match(painelImportacao, /não é guardado/u);
 });

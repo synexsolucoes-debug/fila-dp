@@ -502,3 +502,155 @@ export async function importBatchReturn(id: string, file: File, reference: strin
   if (!response.ok) throw new Error(payload.error || payload.message || "Não foi possível ler o arquivo de retorno.");
   return payload;
 }
+
+/* ==========================================================================
+ * Importação assistida da planilha.
+ * ========================================================================== */
+
+export type LedgerImportCandidate = {
+  category: string;
+  modality: string;
+  totalAmount: number | null;
+  installmentCount: number | null;
+  currentInstallment: number | null;
+  installmentAmount: number | null;
+  firstCompetence: string;
+  title: string;
+  sourceText: string;
+  ambiguities: { code: string; message: string }[];
+};
+
+export type LedgerImportRow = {
+  id: string;
+  sheet_name: string;
+  row_number: number;
+  block_label: string;
+  resolution: "pending" | "resolved" | "ignored";
+  employee_id: string | null;
+  employee_name: string | null;
+  entry_id: string | null;
+  raw_json: Record<string, string>;
+  parsed_json: {
+    employeeName?: string;
+    unit?: string;
+    department?: string;
+    operation?: string;
+    blockTaxId?: string;
+    advanceAmount?: number | null;
+    candidates?: LedgerImportCandidate[];
+    chosen?: LedgerImportCandidate;
+  };
+  ambiguities_json: { code: string; message: string }[];
+};
+
+export type LedgerImportTotals = {
+  total: number;
+  resolved: number;
+  ignored: number;
+  committed: number;
+  unidentified: number;
+};
+
+export type LedgerImport = {
+  id: string;
+  filename: string;
+  entry_competence: string;
+  status: "draft" | "mapped" | "previewed" | "committed" | "canceled";
+  totals_json: Record<string, number>;
+  mapping_json: { companyId?: string; sheetNames?: string[] };
+};
+
+/**
+ * Passo 1 — ler o arquivo e listar as abas, sem escolher nenhuma.
+ *
+ * Sem `sheetNames` nada é gravado: a resposta é só a lista de abas, para a
+ * pessoa decidir o que entra. A planilha real tem 87 abas cobrindo sete anos, e
+ * importá-la inteira recriaria sete anos de pagamentos já feitos.
+ */
+export async function listImportSheets(file: File): Promise<{ sheets: string[] }> {
+  const form = new FormData();
+  form.set("file", file);
+  const response = await fetch("/api/payroll-ledger/imports", { method: "POST", body: form, cache: "no-store" });
+  const payload = await response.json().catch(() => ({})) as { sheets?: string[]; error?: string; message?: string };
+  if (!response.ok) throw new Error(payload.error || payload.message || "Não foi possível ler a planilha.");
+  return { sheets: payload.sheets ?? [] };
+}
+
+/** Passo 2 — a prévia das abas escolhidas. Grava a interpretação, nenhum lançamento. */
+export async function previewImport(input: {
+  file: File; companyId: string; entryCompetence: string; sheetNames: string[];
+}): Promise<{ importId: string; totals: Record<string, number> }> {
+  const form = new FormData();
+  form.set("file", input.file);
+  form.set("companyId", input.companyId);
+  form.set("entryCompetence", input.entryCompetence);
+  for (const name of input.sheetNames) form.append("sheetNames", name);
+  const response = await fetch("/api/payroll-ledger/imports", { method: "POST", body: form, cache: "no-store" });
+  const payload = await response.json().catch(() => ({})) as {
+    importId?: string; totals?: Record<string, number>; error?: string; message?: string;
+  };
+  if (!response.ok) throw new Error(payload.error || payload.message || "Não foi possível montar a prévia.");
+  return { importId: String(payload.importId ?? ""), totals: payload.totals ?? {} };
+}
+
+export async function loadImport(id: string, resolution = ""): Promise<{
+  import: LedgerImport; rows: LedgerImportRow[]; totals: LedgerImportTotals;
+}> {
+  const query = resolution ? `?resolution=${encodeURIComponent(resolution)}` : "";
+  return await requestJson(`/api/payroll-ledger/imports/${encodeURIComponent(id)}${query}`);
+}
+
+/** Passo 3 — dizer quem é a pessoa e qual proposta vale. Ainda não grava lançamento. */
+export async function resolveImportRow(id: string, input: {
+  rowId: string; employeeId: string; candidate: LedgerImportCandidate;
+}) {
+  return await requestJson(`/api/payroll-ledger/imports/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function ignoreImportRow(id: string, rowId: string) {
+  return await requestJson(`/api/payroll-ledger/imports/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ rowId, resolution: "ignored" }),
+  });
+}
+
+export async function cancelImport(id: string) {
+  return await requestJson(`/api/payroll-ledger/imports/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ cancel: true }),
+  });
+}
+
+export type LedgerImportCommitResult = {
+  committed: number;
+  attempted: number;
+  priorInstallmentsAsHistory: number;
+  alreadyImported: number;
+};
+
+/** Passo 4 — gravar. Tudo ou nada: uma linha resolvida incompleta recusa o lote. */
+export async function commitImport(id: string): Promise<LedgerImportCommitResult> {
+  const response = await fetch(`/api/payroll-ledger/imports/${encodeURIComponent(id)}/commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({})) as LedgerImportCommitResult & {
+    error?: string; message?: string; problems?: { sheetName: string; rowNumber: number; reason: string }[];
+  };
+  if (!response.ok) {
+    const detalhe = payload.problems?.length
+      ? ` ${payload.problems.slice(0, 5).map((p) => `${p.sheetName} linha ${p.rowNumber}: ${p.reason}`).join("; ")}`
+      : "";
+    throw new Error(`${payload.error || payload.message || "Não foi possível gravar a importação."}${detalhe}`);
+  }
+  return {
+    committed: Number(payload.committed ?? 0),
+    attempted: Number(payload.attempted ?? 0),
+    priorInstallmentsAsHistory: Number(payload.priorInstallmentsAsHistory ?? 0),
+    alreadyImported: Number(payload.alreadyImported ?? 0),
+  };
+}

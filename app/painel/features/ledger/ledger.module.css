@@ -72,7 +72,7 @@
 
 .localTabs button:hover { background: var(--lg-muted); color: var(--lg-text); }
 
-.localTabs button[aria-current="page"] {
+.localTabs button[aria-selected="true"] {
   background: var(--lg-accent-soft);
   border-color: var(--lg-accent);
   color: var(--lg-accent-text);
@@ -402,4 +402,144 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; }
+}
+
+/* ==========================================================================
+ * Importação assistida.
+ *
+ * Nenhuma cor nova: os mesmos tokens do módulo, que é o que faz o tema escuro
+ * vir junto sem uma regra própria. O que muda aqui é a densidade — cada linha
+ * da planilha precisa mostrar o texto original, a interpretação e os avisos no
+ * mesmo bloco, porque decidir sem ver os três é decidir no escuro.
+ * ========================================================================== */
+
+.importWizard { display: grid; gap: 14px; }
+
+.notice[data-tone="safe"] { border-left-color: var(--lg-success); }
+
+/* Os sete passos ficam à vista o tempo todo: quem abandona no meio precisa
+   saber onde parou, e um assistente que esconde o próprio caminho vira uma
+   sequência de telas sem mapa. */
+.importSteps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--lg-soft);
+}
+
+.importSteps li {
+  padding: 4px 10px;
+  border: 1px solid var(--lg-border);
+  border-radius: 999px;
+  background: var(--lg-surface);
+}
+
+.importSteps li[aria-current="step"] {
+  border-color: var(--lg-accent);
+  background: var(--lg-accent-soft);
+  color: var(--lg-accent-text);
+  font-weight: 600;
+}
+
+.sheetPicker {
+  border: 1px solid var(--lg-border);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  background: var(--lg-surface);
+}
+
+.sheetPicker legend { font-size: 13px; font-weight: 600; padding: 0 4px; }
+
+.sheetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 4px 12px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.importRows { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.importRow {
+  border: 1px solid var(--lg-border);
+  border-left: 3px solid var(--lg-border);
+  border-radius: 0 10px 10px 0;
+  background: var(--lg-surface);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.importRow[data-resolution="resolved"] { border-left-color: var(--lg-success); }
+.importRow[data-resolution="ignored"] { border-left-color: var(--lg-soft); opacity: 0.72; }
+.importRow[data-resolution="pending"] { border-left-color: var(--lg-warning); }
+
+.importRow header { display: grid; gap: 2px; }
+.importRow header strong { font-size: 14px; }
+.importRow header small { font-size: 12px; color: var(--lg-soft); }
+
+/* O texto original da planilha, intocado, ao lado da interpretação. Sem ele a
+   pessoa estaria conferindo a leitura do produto contra a leitura do produto. */
+.importSource {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--lg-muted);
+  font-size: 12px;
+  color: var(--lg-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+
+.importSource b { color: var(--lg-text); font-weight: 600; }
+
+.importWarnings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--lg-warning);
+}
+
+.importWarnings li { display: flex; gap: 6px; align-items: flex-start; }
+.importWarnings svg { margin-top: 1px; }
+
+.importDecision {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 12px;
+  align-items: end;
+}
+
+.importDecision label { display: grid; gap: 4px; font-size: 12px; color: var(--lg-soft); }
+
+.importDecision select {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--lg-border);
+  border-radius: 8px;
+  background: var(--lg-surface);
+  color: var(--lg-text);
+  font-size: 13px;
+}
+
+.importActions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.importDone {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  font-size: 13px;
+  color: var(--lg-success);
 }

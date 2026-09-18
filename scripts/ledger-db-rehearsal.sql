@@ -353,6 +353,68 @@ BEGIN
 END;
 $$;
 
+-- O índice acima é a última trava, e não a primeira: deixar a gravação esbarrar
+-- nele derrubaria o lote inteiro por causa de uma linha repetida. A rota de
+-- gravação descarta antes as linhas cujo texto já virou lançamento, e é essa
+-- consulta — a mesma, literalmente — que este bloco ensaia.
+--
+-- Cenário: `imp-2` tem duas linhas resolvidas. A primeira repete o hash de uma
+-- linha que `imp-1` já gravou; a segunda é inédita. A gravação deve enxergar
+-- uma, e reportar a outra como já importada.
+UPDATE fdp_ledger_import_rows SET resolution = 'resolved', employee_id = 'emp-a' WHERE id = 'imp-2-r2';
+INSERT INTO fdp_ledger_import_rows (id, workspace_id, import_id, sheet_name, row_number, raw_json, row_hash, resolution, employee_id)
+  VALUES ('imp-2-r3','ws-a','imp-2','20.08.26',27,'{"controle":"5/10 R$ 200,00 Emprestimo Loja"}','hash-linha-1','resolved','emp-a');
+
+DO $$
+DECLARE a_gravar int; ja_gravadas int;
+BEGIN
+  SELECT COUNT(*) INTO a_gravar
+  FROM fdp_ledger_import_rows row
+  WHERE row.workspace_id = 'ws-a' AND row.import_id = 'imp-2' AND row.resolution = 'resolved'
+    AND row.entry_id IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM fdp_ledger_import_rows anterior
+      WHERE anterior.workspace_id = row.workspace_id
+        AND anterior.row_hash = row.row_hash
+        AND anterior.row_hash <> ''
+        AND anterior.entry_id IS NOT NULL
+    );
+
+  SELECT COUNT(*) INTO ja_gravadas
+  FROM fdp_ledger_import_rows row
+  WHERE row.workspace_id = 'ws-a' AND row.import_id = 'imp-2' AND row.resolution = 'resolved'
+    AND row.entry_id IS NULL
+    AND EXISTS (
+      SELECT 1 FROM fdp_ledger_import_rows anterior
+      WHERE anterior.workspace_id = row.workspace_id
+        AND anterior.row_hash = row.row_hash
+        AND anterior.row_hash <> ''
+        AND anterior.entry_id IS NOT NULL
+    );
+
+  IF a_gravar <> 1 THEN
+    RAISE EXCEPTION 'a reimportacao deveria gravar exatamente a linha inedita, e enxergou %', a_gravar;
+  END IF;
+  IF ja_gravadas <> 1 THEN
+    RAISE EXCEPTION 'a linha repetida deveria ser reportada como ja importada, e foram %', ja_gravadas;
+  END IF;
+  RAISE NOTICE 'OK: reimportar grava so o que faltava, sem derrubar o lote na linha repetida';
+END;
+$$;
+
+-- E a linha repetida continua sem lançamento: ela foi pulada, não gravada.
+DO $$
+DECLARE pendente int;
+BEGIN
+  SELECT COUNT(*) INTO pendente FROM fdp_ledger_import_rows
+  WHERE id = 'imp-2-r3' AND entry_id IS NULL;
+  IF pendente <> 1 THEN
+    RAISE EXCEPTION 'a linha repetida nao deveria ter virado lancamento';
+  END IF;
+  RAISE NOTICE 'OK: a linha repetida fica sem lancamento, e o original de imp-1 e preservado';
+END;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Quitação: o lançamento vira `settled` por leitura do saldo, não por digitação.
 -- É a mesma consulta que a rota de confirmação executa.
