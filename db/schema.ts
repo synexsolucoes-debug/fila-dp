@@ -3614,3 +3614,417 @@ export const workAccidents = pgTable("fdp_work_accidents", {
   // Protocolo sem emissão é prova de um ato que não aconteceu.
   check("fdp_work_accidents_cat_number_check", sql`${table.catIssued} = 1 OR ${table.catNumber} = ''`),
 ]);
+
+/**
+ * Adiantamentos e Descontos (§ migration 0085).
+ *
+ * O lote de conferência da competência. Não é um segundo fechamento: é a
+ * conferência deste módulo dentro do ciclo que `payrollCycles` já governa, e o
+ * índice único por ciclo é o que impede a segunda conferência paralela do mês.
+ */
+export const ledgerBatches = pgTable("fdp_ledger_batches", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  payrollCycleId: text("payroll_cycle_id").notNull(),
+  competence: text("competence").notNull(),
+  scopeJson: jsonb("scope_json").$type<Record<string, unknown>>().notNull().default({}),
+  status: text("status").notNull().default("draft"),
+  snapshotJson: jsonb("snapshot_json").$type<Record<string, unknown>>().notNull().default({}),
+  exportReference: text("export_reference").notNull().default(""),
+  exportedAt: timestamp("exported_at", { withTimezone: true, mode: "string" }),
+  exportedBy: text("exported_by"),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true, mode: "string" }),
+  closedBy: text("closed_by"),
+  closedAt: timestamp("closed_at", { withTimezone: true, mode: "string" }),
+  reopenReason: text("reopen_reason").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  /* Concorrência otimista: o trigger da 0085 incrementa. */
+  version: integer("version").notNull().default(1),
+}, (table) => [
+  uniqueIndex("fdp_ledger_batches_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_ledger_batches_cycle_uq").on(table.workspaceId, table.payrollCycleId),
+  index("fdp_ledger_batches_workspace_competence_idx").on(table.workspaceId, table.competence, table.status),
+  foreignKey({ name: "fdp_ledger_batches_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_ledger_batches_cycle_fk", columns: [table.workspaceId, table.companyId, table.payrollCycleId], foreignColumns: [payrollCycles.workspaceId, payrollCycles.companyId, payrollCycles.id] }),
+  check("fdp_ledger_batches_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  /* "exportado", "lançado na folha" e "desconto confirmado" são três estados
+     distintos. Colapsá-los em um só é o erro que a planilha cometia. */
+  check("fdp_ledger_batches_status_check", sql`${table.status} IN ('draft', 'in_review', 'approved', 'exported', 'sent_to_payroll', 'confirmed', 'closed', 'reopened')`),
+  check("fdp_ledger_batches_reopen_reason_check", sql`${table.status} <> 'reopened' OR length(trim(${table.reopenReason})) >= 5`),
+]);
+
+/**
+ * O lançamento: um registro individual por empréstimo, multa, franquia,
+ * adiantamento ou desconto.
+ *
+ * Uma pessoa tem quantos lançamentos simultâneos forem necessários, cada um com
+ * o próprio saldo. Empresa, unidade e departamento são fotografados aqui no
+ * momento do lançamento — mudar de empresa depois **não** reescreve o histórico
+ * das competências anteriores.
+ */
+export const ledgerEntries = pgTable("fdp_ledger_entries", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  /** Exatamente um dos dois: CLT aponta para o colaborador, PJ para o prestador. */
+  employeeId: text("employee_id"),
+  providerId: text("provider_id"),
+  employmentTypeSnapshot: text("employment_type_snapshot").notNull().default(""),
+  departmentId: text("department_id"),
+  departmentLabel: text("department_label").notNull().default(""),
+  unitLabel: text("unit_label").notNull().default(""),
+  operationLabel: text("operation_label").notNull().default(""),
+  /** Área que pediu ≠ departamento de quem sofre o desconto. Dois fatos, dois campos. */
+  requesterAreaId: text("requester_area_id"),
+  responsibleAreaId: text("responsible_area_id"),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  occurredOn: date("occurred_on", { mode: "string" }),
+  requestedOn: date("requested_on", { mode: "string" }).notNull(),
+  requestedBy: text("requested_by").notNull(),
+  responsibleUserId: text("responsible_user_id"),
+  /** Nulo quando a obrigação não tem total definido (recorrente sem prazo). */
+  totalAmount: numeric("total_amount", { precision: 18, scale: 2, mode: "number" }),
+  modality: text("modality").notNull(),
+  installmentCount: integer("installment_count"),
+  firstCompetence: text("first_competence").notNull(),
+  expectedEndCompetence: text("expected_end_competence"),
+  recurrenceEndCompetence: text("recurrence_end_competence"),
+  settlementTarget: text("settlement_target").notNull().default("payroll"),
+  status: text("status").notNull().default("draft"),
+  /** A aprovação reusa `employeeMovements` + `movementApprovalSteps`. Sem máquina nova. */
+  movementId: text("movement_id"),
+  originType: text("origin_type").notNull().default("manual"),
+  originId: text("origin_id").notNull().default(""),
+  parentEntryId: text("parent_entry_id"),
+  detailsJson: jsonb("details_json").$type<Record<string, unknown>>().notNull().default({}),
+  approvalNote: text("approval_note").notNull().default(""),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true, mode: "string" }),
+  canceledReason: text("canceled_reason").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  version: integer("version").notNull().default(1),
+}, (table) => [
+  uniqueIndex("fdp_ledger_entries_workspace_id_uq").on(table.workspaceId, table.id),
+  /* "Uma solicitação aprovada origina um único lançamento, mesmo se a operação
+     for repetida" — vale para o SESMT, para a demanda e para a linha importada
+     da planilha, e é o mesmo índice para os três. */
+  uniqueIndex("fdp_ledger_entries_origin_uq").on(table.workspaceId, table.originType, table.originId).where(sql`${table.originId} <> ''`),
+  index("fdp_ledger_entries_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.status),
+  index("fdp_ledger_entries_workspace_provider_idx").on(table.workspaceId, table.providerId, table.status),
+  index("fdp_ledger_entries_workspace_company_status_idx").on(table.workspaceId, table.companyId, table.status, table.category),
+  index("fdp_ledger_entries_workspace_movement_idx").on(table.workspaceId, table.movementId).where(sql`${table.movementId} IS NOT NULL`),
+  foreignKey({ name: "fdp_ledger_entries_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_ledger_entries_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
+  foreignKey({ name: "fdp_ledger_entries_provider_fk", columns: [table.workspaceId, table.providerId], foreignColumns: [auxiliaryProviders.workspaceId, auxiliaryProviders.id] }),
+  foreignKey({ name: "fdp_ledger_entries_department_fk", columns: [table.workspaceId, table.companyId, table.departmentId], foreignColumns: [departments.workspaceId, departments.companyId, departments.id] }),
+  foreignKey({ name: "fdp_ledger_entries_requester_area_fk", columns: [table.workspaceId, table.requesterAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_ledger_entries_responsible_area_fk", columns: [table.workspaceId, table.responsibleAreaId], foreignColumns: [areas.workspaceId, areas.id] }),
+  foreignKey({ name: "fdp_ledger_entries_movement_fk", columns: [table.workspaceId, table.movementId], foreignColumns: [employeeMovements.workspaceId, employeeMovements.id] }),
+  foreignKey({ name: "fdp_ledger_entries_parent_fk", columns: [table.workspaceId, table.parentEntryId], foreignColumns: [table.workspaceId, table.id] }),
+  foreignKey({ name: "fdp_ledger_entries_requester_fk", columns: [table.workspaceId, table.requestedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_ledger_entries_subject_check", sql`(${table.employeeId} IS NOT NULL) <> (${table.providerId} IS NOT NULL)`),
+  check("fdp_ledger_entries_category_check", sql`${table.category} IN ('salary_advance', 'loan', 'traffic_fine', 'vehicle_deductible', 'sesmt_discount', 'equipment_damage', 'tool_loss', 'other')`),
+  check("fdp_ledger_entries_modality_check", sql`${table.modality} IN ('single', 'installments', 'recurring')`),
+  check("fdp_ledger_entries_settlement_check", sql`${table.settlementTarget} IN ('payroll', 'contractor_payment', 'other')`),
+  /* PJ liquida no fechamento PJ; CLT, na folha. Sem isto, um lançamento de
+     prestador poderia ser projetado na folha de uma empresa qualquer. */
+  check("fdp_ledger_entries_target_subject_check", sql`(${table.providerId} IS NULL AND ${table.settlementTarget} IN ('payroll', 'other'))
+    OR (${table.providerId} IS NOT NULL AND ${table.settlementTarget} = 'contractor_payment')`),
+  check("fdp_ledger_entries_status_check", sql`${table.status} IN ('draft', 'pending_approval', 'approved', 'rejected', 'active', 'suspended', 'settled', 'canceled', 'renegotiated')`),
+  check("fdp_ledger_entries_origin_check", sql`${table.originType} IN ('manual', 'epi_discount', 'demand', 'import', 'renegotiation')`),
+  check("fdp_ledger_entries_first_competence_check", sql`${table.firstCompetence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_entries_end_competence_check", sql`${table.expectedEndCompetence} IS NULL OR ${table.expectedEndCompetence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_entries_recurrence_end_check", sql`${table.recurrenceEndCompetence} IS NULL OR ${table.recurrenceEndCompetence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  /* Sem saldo devedor artificial: recorrente sem prazo não tem total. */
+  check("fdp_ledger_entries_modality_shape_check", sql`(${table.modality} = 'recurring' AND ${table.totalAmount} IS NULL AND ${table.installmentCount} IS NULL)
+    OR (${table.modality} = 'single' AND ${table.totalAmount} > 0 AND ${table.installmentCount} = 1)
+    OR (${table.modality} = 'installments' AND ${table.totalAmount} > 0 AND ${table.installmentCount} >= 1)`),
+  check("fdp_ledger_entries_cancel_reason_check", sql`${table.status} <> 'canceled' OR length(trim(${table.canceledReason})) >= 5`),
+]);
+
+/**
+ * A parcela.
+ *
+ * `discountedAmount` é mantido por trigger a partir de `ledgerConfirmations` e
+ * nunca escrito pela aplicação: guardar o mesmo número em duas fontes é
+ * garantir que um dia elas discordem.
+ */
+export const ledgerInstallments = pgTable("fdp_ledger_installments", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  entryId: text("entry_id").notNull(),
+  companyId: text("company_id").notNull(),
+  number: integer("number").notNull(),
+  /** Nulo no recorrente sem prazo: não existe "parcela 3 de ?". */
+  totalCount: integer("total_count"),
+  competence: text("competence").notNull(),
+  plannedAmount: numeric("planned_amount", { precision: 18, scale: 2, mode: "number" }).notNull(),
+  discountedAmount: numeric("discounted_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  status: text("status").notNull().default("scheduled"),
+  batchId: text("batch_id"),
+  note: text("note").notNull().default(""),
+  rescheduledToCompetence: text("rescheduled_to_competence"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  version: integer("version").notNull().default(1),
+}, (table) => [
+  uniqueIndex("fdp_ledger_installments_workspace_id_uq").on(table.workspaceId, table.id),
+  /* Parcela 3 existe uma vez. Reprocessar a geração não cria a segunda. */
+  uniqueIndex("fdp_ledger_installments_entry_number_uq").on(table.workspaceId, table.entryId, table.number),
+  index("fdp_ledger_installments_workspace_competence_idx").on(table.workspaceId, table.competence, table.status),
+  index("fdp_ledger_installments_workspace_batch_idx").on(table.workspaceId, table.batchId).where(sql`${table.batchId} IS NOT NULL`),
+  index("fdp_ledger_installments_workspace_entry_idx").on(table.workspaceId, table.entryId, table.competence),
+  foreignKey({ name: "fdp_ledger_installments_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_ledger_installments_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_ledger_installments_batch_fk", columns: [table.workspaceId, table.batchId], foreignColumns: [ledgerBatches.workspaceId, ledgerBatches.id] }),
+  check("fdp_ledger_installments_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_installments_reschedule_check", sql`${table.rescheduledToCompetence} IS NULL OR ${table.rescheduledToCompetence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_installments_number_check", sql`${table.number} > 0 AND (${table.totalCount} IS NULL OR ${table.number} <= ${table.totalCount})`),
+  check("fdp_ledger_installments_amount_check", sql`${table.plannedAmount} >= 0 AND ${table.discountedAmount} >= 0`),
+  check("fdp_ledger_installments_status_check", sql`${table.status} IN ('scheduled', 'partially_discounted', 'discounted', 'skipped', 'rescheduled', 'canceled')`),
+]);
+
+/**
+ * A confirmação do desconto — append-only.
+ *
+ * Esta tabela é a **única** fonte de "foi descontado". Nada mais no sistema
+ * pode afirmar isso: nem a competência ter passado, nem a exportação ter saído,
+ * nem o lote ter sido fechado. Corrigir é gravar um estorno; a linha original
+ * permanece.
+ */
+export const ledgerConfirmations = pgTable("fdp_ledger_confirmations", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  installmentId: text("installment_id").notNull(),
+  entryId: text("entry_id").notNull(),
+  competence: text("competence").notNull(),
+  /** Positivo desconta, negativo estorna. O saldo da parcela é a soma. */
+  amount: numeric("amount", { precision: 18, scale: 2, mode: "number" }).notNull(),
+  kind: text("kind").notNull().default("confirmation"),
+  source: text("source").notNull().default("manual"),
+  reference: text("reference").notNull().default(""),
+  justification: text("justification").notNull().default(""),
+  reversesConfirmationId: text("reverses_confirmation_id"),
+  batchId: text("batch_id"),
+  confirmedBy: text("confirmed_by").notNull(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  /** Dois usuários confirmando ao mesmo tempo gravam a mesma chave; passa uma. */
+  idempotencyKey: text("idempotency_key").notNull(),
+}, (table) => [
+  uniqueIndex("fdp_ledger_confirmations_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_ledger_confirmations_idempotency_uq").on(table.workspaceId, table.idempotencyKey),
+  index("fdp_ledger_confirmations_installment_idx").on(table.workspaceId, table.installmentId, table.confirmedAt),
+  index("fdp_ledger_confirmations_workspace_competence_idx").on(table.workspaceId, table.competence),
+  foreignKey({ name: "fdp_ledger_confirmations_installment_fk", columns: [table.workspaceId, table.installmentId], foreignColumns: [ledgerInstallments.workspaceId, ledgerInstallments.id] }),
+  foreignKey({ name: "fdp_ledger_confirmations_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }),
+  foreignKey({ name: "fdp_ledger_confirmations_reverses_fk", columns: [table.workspaceId, table.reversesConfirmationId], foreignColumns: [table.workspaceId, table.id] }),
+  foreignKey({ name: "fdp_ledger_confirmations_batch_fk", columns: [table.workspaceId, table.batchId], foreignColumns: [ledgerBatches.workspaceId, ledgerBatches.id] }),
+  check("fdp_ledger_confirmations_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_confirmations_kind_check", sql`${table.kind} IN ('confirmation', 'reversal', 'authorized_override')`),
+  check("fdp_ledger_confirmations_source_check", sql`${table.source} IN ('manual', 'return_import', 'api')`),
+  check("fdp_ledger_confirmations_amount_sign_check", sql`(${table.kind} = 'reversal' AND ${table.amount} < 0) OR (${table.kind} <> 'reversal' AND ${table.amount} > 0)`),
+  /* Estornar e descontar acima do saldo são as duas ações que precisam de
+     motivo escrito: sem ele o histórico registra o quê e não registra o porquê. */
+  check("fdp_ledger_confirmations_justification_check", sql`${table.kind} = 'confirmation' OR length(trim(${table.justification})) >= 5`),
+]);
+
+/**
+ * Regra de adiantamento.
+ *
+ * Alterar o valor de um vale fixo não reescreve a linha: cria outra com
+ * vigência futura e marca a anterior como `superseded`. As competências já
+ * processadas continuam lendo a regra que valia nelas.
+ */
+export const ledgerAdvanceRules = pgTable("fdp_ledger_advance_rules", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  entryId: text("entry_id").notNull(),
+  mode: text("mode").notNull(),
+  fixedAmount: numeric("fixed_amount", { precision: 18, scale: 2, mode: "number" }),
+  percentage: numeric("percentage", { precision: 7, scale: 4, mode: "number" }),
+  /** Sem base o percentual não calcula: o produto apresenta pendência em vez de multiplicar por zero. */
+  salaryBaseAmount: numeric("salary_base_amount", { precision: 18, scale: 2, mode: "number" }),
+  salaryBaseSource: text("salary_base_source").notNull().default(""),
+  effectiveFromCompetence: text("effective_from_competence").notNull(),
+  endCompetence: text("end_competence"),
+  supersedesRuleId: text("supersedes_rule_id"),
+  status: text("status").notNull().default("active"),
+  note: text("note").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_ledger_advance_rules_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_ledger_advance_rules_entry_effective_uq").on(table.workspaceId, table.entryId, table.effectiveFromCompetence),
+  index("fdp_ledger_advance_rules_entry_idx").on(table.workspaceId, table.entryId, table.status),
+  foreignKey({ name: "fdp_ledger_advance_rules_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_ledger_advance_rules_supersedes_fk", columns: [table.workspaceId, table.supersedesRuleId], foreignColumns: [table.workspaceId, table.id] }),
+  check("fdp_ledger_advance_rules_mode_check", sql`${table.mode} IN ('single_competence', 'fixed_monthly', 'percentage')`),
+  check("fdp_ledger_advance_rules_status_check", sql`${table.status} IN ('active', 'superseded', 'canceled')`),
+  check("fdp_ledger_advance_rules_source_check", sql`${table.salaryBaseSource} IN ('', 'manual', 'hr_metrics')`),
+  check("fdp_ledger_advance_rules_competence_check", sql`${table.effectiveFromCompetence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_advance_rules_end_check", sql`${table.endCompetence} IS NULL OR ${table.endCompetence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_advance_rules_shape_check", sql`(${table.mode} IN ('single_competence', 'fixed_monthly') AND ${table.fixedAmount} > 0 AND ${table.percentage} IS NULL)
+    OR (${table.mode} = 'percentage' AND ${table.percentage} > 0 AND ${table.percentage} <= 100 AND ${table.fixedAmount} IS NULL)`),
+  check("fdp_ledger_advance_rules_base_check", sql`${table.mode} <> 'percentage' OR ${table.salaryBaseAmount} IS NULL OR (${table.salaryBaseAmount} > 0 AND ${table.salaryBaseSource} <> '')`),
+]);
+
+/**
+ * O pagamento do adiantamento ao colaborador.
+ *
+ * "Pago ao colaborador" mora aqui; "descontado dele" mora em
+ * `ledgerConfirmations`. Os dois lados pertencem ao **mesmo** lançamento e
+ * nunca viram duas dívidas pelo mesmo adiantamento.
+ */
+export const ledgerAdvancePayments = pgTable("fdp_ledger_advance_payments", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  entryId: text("entry_id").notNull(),
+  companyId: text("company_id").notNull(),
+  competence: text("competence").notNull(),
+  approvedAmount: numeric("approved_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  paidAmount: numeric("paid_amount", { precision: 18, scale: 2, mode: "number" }).notNull().default(0),
+  expectedPaymentDate: date("expected_payment_date", { mode: "string" }),
+  actualPaymentDate: date("actual_payment_date", { mode: "string" }),
+  status: text("status").notNull().default("scheduled"),
+  /** Suspender a competência é cancelar o pagamento dela com motivo. Não há "pular" silencioso. */
+  cancelReason: text("cancel_reason").notNull().default(""),
+  proofObjectKey: text("proof_object_key").notNull().default(""),
+  pendingReason: text("pending_reason").notNull().default(""),
+  authorizedBy: text("authorized_by"),
+  paidBy: text("paid_by"),
+  idempotencyKey: text("idempotency_key").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  version: integer("version").notNull().default(1),
+}, (table) => [
+  uniqueIndex("fdp_ledger_advance_payments_workspace_id_uq").on(table.workspaceId, table.id),
+  /* Uma ocorrência por competência: gerar a programação duas vezes não produz
+     dois pagamentos. */
+  uniqueIndex("fdp_ledger_advance_payments_entry_competence_uq").on(table.workspaceId, table.entryId, table.competence),
+  uniqueIndex("fdp_ledger_advance_payments_idempotency_uq").on(table.workspaceId, table.idempotencyKey),
+  index("fdp_ledger_advance_payments_workspace_competence_idx").on(table.workspaceId, table.competence, table.status),
+  foreignKey({ name: "fdp_ledger_advance_payments_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_ledger_advance_payments_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  check("fdp_ledger_advance_payments_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_advance_payments_status_check", sql`${table.status} IN ('scheduled', 'pending_data', 'authorized', 'paid', 'canceled')`),
+  check("fdp_ledger_advance_payments_amount_check", sql`${table.approvedAmount} >= 0 AND ${table.paidAmount} >= 0`),
+  check("fdp_ledger_advance_payments_paid_check", sql`${table.status} <> 'paid' OR (${table.paidAmount} > 0 AND ${table.actualPaymentDate} IS NOT NULL)`),
+  check("fdp_ledger_advance_payments_cancel_check", sql`${table.status} <> 'canceled' OR length(trim(${table.cancelReason})) >= 5`),
+  check("fdp_ledger_advance_payments_pending_check", sql`${table.status} <> 'pending_data' OR length(trim(${table.pendingReason})) >= 5`),
+]);
+
+/** Documentos do lançamento: termo, comprovante, auto de infração, autorização. */
+export const ledgerDocuments = pgTable("fdp_ledger_documents", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  entryId: text("entry_id").notNull(),
+  companyId: text("company_id").notNull(),
+  documentKind: text("document_kind").notNull().default("other"),
+  objectKey: text("object_key").notNull(),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_ledger_documents_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_ledger_documents_object_key_uq").on(table.objectKey),
+  index("fdp_ledger_documents_entry_idx").on(table.workspaceId, table.entryId, table.createdAt),
+  foreignKey({ name: "fdp_ledger_documents_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_ledger_documents_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  check("fdp_ledger_documents_kind_check", sql`${table.documentKind} IN ('receipt', 'contract', 'term', 'fine_notice', 'incident_report', 'authorization', 'other')`),
+  check("fdp_ledger_documents_size_check", sql`${table.sizeBytes} > 0`),
+]);
+
+/** Histórico do lançamento — append-only, ao lado da auditoria global. */
+export const ledgerEvents = pgTable("fdp_ledger_events", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  entryId: text("entry_id").notNull(),
+  installmentId: text("installment_id"),
+  eventType: text("event_type").notNull(),
+  summary: text("summary").notNull().default(""),
+  payloadJson: jsonb("payload_json").$type<Record<string, unknown>>().notNull().default({}),
+  actorUserId: text("actor_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_ledger_events_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_ledger_events_entry_idx").on(table.workspaceId, table.entryId, table.createdAt),
+  foreignKey({ name: "fdp_ledger_events_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }).onDelete("cascade"),
+  check("fdp_ledger_events_type_check", sql`${table.eventType} IN (
+    'created', 'updated', 'submitted', 'approved', 'rejected', 'canceled',
+    'installments_generated', 'installment_rescheduled', 'installment_skipped',
+    'confirmed', 'reversed', 'override_authorized',
+    'advance_scheduled', 'advance_authorized', 'advance_paid', 'advance_canceled',
+    'renegotiated', 'projected_to_contractor', 'imported'
+  )`),
+]);
+
+/** Importação assistida da planilha: o arquivo e a competência de entrada. */
+export const ledgerImports = pgTable("fdp_ledger_imports", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  fileHash: text("file_hash").notNull(),
+  /** A competência a partir da qual o Vinculato controla. O anterior entra como saldo inicial. */
+  entryCompetence: text("entry_competence").notNull(),
+  mappingJson: jsonb("mapping_json").$type<Record<string, unknown>>().notNull().default({}),
+  totalsJson: jsonb("totals_json").$type<Record<string, unknown>>().notNull().default({}),
+  status: text("status").notNull().default("draft"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  committedBy: text("committed_by"),
+  committedAt: timestamp("committed_at", { withTimezone: true, mode: "string" }),
+}, (table) => [
+  uniqueIndex("fdp_ledger_imports_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_ledger_imports_workspace_hash_idx").on(table.workspaceId, table.fileHash),
+  check("fdp_ledger_imports_competence_check", sql`${table.entryCompetence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_ledger_imports_status_check", sql`${table.status} IN ('draft', 'mapped', 'previewed', 'committed', 'canceled')`),
+]);
+
+/**
+ * A linha da planilha, com o texto original preservado.
+ *
+ * `rawJson` guarda o que estava escrito — "5/10 R$ 200,00 Emprestimo Loja" — e
+ * `parsedJson` guarda a interpretação. Quem conferir depois vê os dois, lado a
+ * lado, com a aba e a linha de onde vieram.
+ */
+export const ledgerImportRows = pgTable("fdp_ledger_import_rows", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  importId: text("import_id").notNull(),
+  sheetName: text("sheet_name").notNull(),
+  rowNumber: integer("row_number").notNull(),
+  blockLabel: text("block_label").notNull().default(""),
+  rawJson: jsonb("raw_json").$type<Record<string, unknown>>().notNull().default({}),
+  parsedJson: jsonb("parsed_json").$type<Record<string, unknown>>().notNull().default({}),
+  ambiguitiesJson: jsonb("ambiguities_json").$type<unknown[]>().notNull().default([]),
+  resolution: text("resolution").notNull().default("pending"),
+  employeeId: text("employee_id"),
+  entryId: text("entry_id"),
+  rowHash: text("row_hash").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_ledger_import_rows_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_ledger_import_rows_position_uq").on(table.workspaceId, table.importId, table.sheetName, table.rowNumber),
+  /* Reimportar o mesmo arquivo não grava de novo o que já virou lançamento;
+     linha ainda não gravada continua livre para ser reprocessada. */
+  uniqueIndex("fdp_ledger_import_rows_committed_uq").on(table.workspaceId, table.rowHash).where(sql`${table.entryId} IS NOT NULL AND ${table.rowHash} <> ''`),
+  index("fdp_ledger_import_rows_import_idx").on(table.workspaceId, table.importId, table.resolution),
+  foreignKey({ name: "fdp_ledger_import_rows_import_fk", columns: [table.workspaceId, table.importId], foreignColumns: [ledgerImports.workspaceId, ledgerImports.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_ledger_import_rows_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }),
+  check("fdp_ledger_import_rows_resolution_check", sql`${table.resolution} IN ('pending', 'resolved', 'ignored')`),
+  check("fdp_ledger_import_rows_number_check", sql`${table.rowNumber} > 0`),
+]);

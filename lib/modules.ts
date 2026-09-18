@@ -96,6 +96,14 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
     "epi.audit.view", "epi.stock.adjust",
   ],
   safety: ["safety.manage", "safety.delete", "safety.export"],
+  // Negar o módulo à pessoa precisa fechar todas as portas de escrita sobre o
+  // salário de alguém — inclusive confirmar desconto e pagar adiantamento, que
+  // são as duas que movem dinheiro de verdade.
+  payroll_ledger: [
+    "ledger.request", "ledger.manage", "ledger.approve", "ledger.pay",
+    "ledger.confirm", "ledger.reverse", "ledger.override", "ledger.reschedule",
+    "ledger.import", "ledger.export", "ledger.close", "ledger.reopen",
+  ],
   integrations: ["integrations.manage", "integrations.run", "integrations.reconcile"],
   sankhya_browser: ["integrations.credentials.manage", "integrations.execute", "integrations.logs.view"],
   payroll: ["hr.write"],

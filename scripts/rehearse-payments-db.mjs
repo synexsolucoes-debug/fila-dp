@@ -89,4 +89,8 @@ psql(join(root, "scripts", "payments-db-rehearsal.sql"));
 psql(join(root, "scripts", "contractor-invoices-db-rehearsal.sql"));
 psql(join(root, "scripts", "scale-db-rehearsal.sql"));
 psql(join(root, "scripts", "time-db-rehearsal.sql"));
-console.log("Ensaio concluído: migrations, constraints de pagamento, controle de notas fiscais, regra do §22 no ponto, outbox/webhooks/API e isolamento multi-tenant verificados.");
+/* Adiantamentos e Descontos reaproveita a mesma semente: o lançamento nasce
+   sobre a competência e o prestador que o ensaio de pagamento já criou, e a
+   projeção PJ precisa de um fechamento existente para ter o que duplicar. */
+psql(join(root, "scripts", "ledger-db-rehearsal.sql"));
+console.log("Ensaio concluído: migrations, constraints de pagamento, controle de notas fiscais, regra do §22 no ponto, saldos e confirmações de adiantamentos e descontos, outbox/webhooks/API e isolamento multi-tenant verificados.");

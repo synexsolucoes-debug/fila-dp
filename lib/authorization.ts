@@ -126,6 +126,29 @@ export const capabilities = [
   "safety.manage",
   "safety.delete",
   "safety.export",
+  /* Adiantamentos e Descontos. A separação segue as três etapas que o módulo
+     insiste em não confundir: aprovar o lançamento, pagar o adiantamento e
+     confirmar o desconto são decisões diferentes, de pessoas frequentemente
+     diferentes, e uma permissão só para as três apagaria justamente a
+     segregação que o módulo existe para ter.
+
+     Estornar, descontar acima do saldo e reabrir a competência ficam à parte
+     pelo mesmo motivo que `epi.dispose` fica: são as ações que mexem no que já
+     foi confirmado — e uma delas autoriza cobrar de alguém mais do que o saldo
+     devido. */
+  "ledger.read",
+  "ledger.request",
+  "ledger.manage",
+  "ledger.approve",
+  "ledger.pay",
+  "ledger.confirm",
+  "ledger.reverse",
+  "ledger.override",
+  "ledger.reschedule",
+  "ledger.import",
+  "ledger.export",
+  "ledger.close",
+  "ledger.reopen",
 ] as const;
 
 export type Capability = typeof capabilities[number];
@@ -212,6 +235,17 @@ const roleCapabilities = {
     // corrige editando, e apagar é a única ação que faz o número sumir sem
     // deixar o que sobrou explicar a diferença.
     "safety.view", "safety.manage", "safety.export",
+    // O analista de DP opera o módulo inteiro: lança, aprova, paga o
+    // adiantamento, confirma o desconto e fecha a conferência do mês. Estornar
+    // fica com ele porque é a única forma de corrigir uma confirmação errada, e
+    // deixa rastro com justificativa obrigatória.
+    //
+    // O que fica fora são as duas ações que não corrigem nada: descontar acima
+    // do saldo devido, que é autorizar cobrar a mais, e reabrir uma competência
+    // já encerrada, que reescreve o que foi conferido.
+    "ledger.read", "ledger.request", "ledger.manage", "ledger.approve", "ledger.pay",
+    "ledger.confirm", "ledger.reverse", "ledger.reschedule", "ledger.import",
+    "ledger.export", "ledger.close",
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",
@@ -219,7 +253,7 @@ const roleCapabilities = {
     "companies.read", "employees.read", "departments.view",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "invoice.read", "time.read",
-    "epi.view", "safety.view",
+    "epi.view", "safety.view", "ledger.read",
   ]),
   guest: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "comments.write",

@@ -15,6 +15,7 @@ import {
   Bot,
   Building2,
   Cable,
+  HandCoins,
   HardHat,
   History,
   CalendarClock,
@@ -95,6 +96,7 @@ import { IntegrationsView } from "./features/integrations";
 import { PaymentsView, contractorSections, isContractorSection, type ContractorSectionId } from "./features/payments";
 import { TimeTrackingView } from "./features/time";
 import { EpiControlView } from "./features/epi";
+import { LedgerView } from "./features/ledger";
 import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
@@ -103,7 +105,7 @@ import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "payrollLedger" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
 type BoardMode = "kanban" | "table" | "calendar" | "process";
 type BoardDensity = "comfortable" | "compact";
 type BoardGroupBy = "none" | "company" | "assignee";
@@ -405,6 +407,12 @@ const viewCatalog: Record<View, ViewEntry> = {
     eyebrow: "OPERAÇÃO DO DP", title: "Cockpit de fechamento",
     description: "Coordene competências, gates, aprovações e obrigações. A admissão digital permanece integralmente na Sólides.",
     primaryAction: { label: "Nova demanda", kind: "card" },
+  },
+  payrollLedger: {
+    label: "Adiantamentos e Descontos", icon: HandCoins, module: "payrollLedger",
+    hiddenFor: ["guest"], ownHeader: true,
+    eyebrow: "OPERAÇÃO DO DP", title: "Adiantamentos e Descontos",
+    description: "Adiantamentos, empréstimos, multas, franquias e descontos do SESMT — com parcelas, saldos e conferência por competência. O produto organiza o desconto; quem calcula o salário continua sendo a folha.",
   },
   auxiliary: {
     label: "Módulos auxiliares", icon: Blocks, module: "auxiliary", hiddenFor: ["guest"],
@@ -3068,6 +3076,12 @@ export function WorkspaceApp({
           {view === "epi" && <EpiControlView role={snapshot.workspace.role} />}
 
           {view === "safety" && <WorkAccidentDashboardView />}
+          {view === "payrollLedger" && (
+            <LedgerView
+              members={snapshot.members.map((member) => ({ id: member.userId, name: member.name || member.email, email: member.email }))}
+              currentUserId={snapshot.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.userId ?? ""}
+            />
+          )}
 
           {view === "integrations" && <IntegrationsView role={snapshot.workspace.role} />}
 

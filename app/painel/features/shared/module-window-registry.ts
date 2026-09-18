@@ -9,6 +9,7 @@ export type ModuleWindowViewKey =
   | "timeTracking"
   | "epi"
   | "safety"
+  | "payrollLedger"
   | "payroll"
   | "psychologistPayments"
   | "contractorPayments"
@@ -96,6 +97,13 @@ export const moduleWindowRegistry: readonly ModuleWindowRegistryItem[] = [
     moduleKey: "payroll",
     viewKey: "payroll",
     label: "Folha",
+    context: "Folha",
+  },
+  {
+    moduleKey: "payroll_ledger",
+    viewKey: "payrollLedger",
+    label: "Adiantamentos e Descontos",
+    capability: "ledger.read",
     context: "Folha",
   },
   {
