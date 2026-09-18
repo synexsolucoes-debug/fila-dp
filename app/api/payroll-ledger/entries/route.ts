@@ -3,7 +3,7 @@ import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent, requireC
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/clean-text";
-import { ledgerCategories, ledgerEntryStatuses } from "@/lib/payroll-ledger";
+import { fromCents, ledgerCategories, ledgerEntryStatuses } from "@/lib/payroll-ledger";
 import {
   MAX_LEDGER_RECORDS, ledgerEntryFromRow, parseLedgerEntryInput, plannedRowsFor,
 } from "@/lib/payroll-ledger-service";
@@ -183,6 +183,17 @@ export async function POST(request: Request) {
         (id, workspace_id, entry_id, company_id, number, total_count, competence, planned_amount)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(part.id, workspace.id, id, input.companyId, part.number, part.totalCount, part.competence, part.plannedAmount)),
+      /* O recorrente não tem parcelas a programar de saída — ele tem um valor
+         por mês. Esse valor nasce aqui, como a primeira vigência, no mesmo lote
+         do lançamento: separar as duas escritas deixaria uma janela em que o
+         lançamento existe sem valor, e foi assim que o vale fixo ficou órfão. */
+      ...(input.recurringCents === null ? [] : [d1.prepare(`INSERT INTO fdp_ledger_advance_rules
+        (id, workspace_id, entry_id, mode, fixed_amount, effective_from_competence,
+         end_competence, status, note, created_by)
+        VALUES (?, ?, ?, 'fixed_monthly', ?, ?, ?, 'active', ?, ?)`)
+        .bind(crypto.randomUUID(), workspace.id, id,
+          fromCents(input.recurringCents), input.firstCompetence,
+          input.recurrenceEndCompetence, "Valor informado na criação do lançamento.", user.id)]),
       d1.prepare(`INSERT INTO fdp_ledger_events (id, workspace_id, entry_id, event_type, summary, payload_json, actor_user_id)
         VALUES (?, ?, ?, 'created', ?, ?::jsonb, ?)`)
         .bind(crypto.randomUUID(), workspace.id, id, input.title,

@@ -49,13 +49,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "ledger.manage", "definir a regra de um adiantamento");
 
-    const entry = await d1.prepare(`SELECT id, company_id, category, status, first_competence
+    const entry = await d1.prepare(`SELECT id, company_id, category, status, first_competence, modality
       FROM fdp_ledger_entries WHERE workspace_id = ? AND id = ?`)
       .bind(workspace.id, id).first<Record<string, unknown>>();
     if (!entry) throw ApiError.notFound("Lançamento não encontrado.", "LEDGER_ENTRY_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(entry.company_id));
-    if (String(entry.category) !== "salary_advance") {
-      throw ApiError.badRequest("Regra de adiantamento só existe em lançamento da categoria adiantamento salarial.", "LEDGER_NOT_ADVANCE");
+    /* Vale para adiantamento salarial em qualquer modalidade — que é onde a
+       regra nasceu — e para **todo** recorrente, de qualquer categoria.
+
+       A versão anterior exigia `salary_advance`, e isso deixava um buraco que
+       não era teórico: um vale fixo, um plano de saúde ou uma mensalidade
+       recorrente não tem total por CHECK, não podia ter regra por esta recusa,
+       e portanto não tinha onde guardar valor nenhum. O lançamento ficava vivo,
+       sem número, sem parcela e sem como ser conferido. */
+    if (String(entry.category) !== "salary_advance" && String(entry.modality) !== "recurring") {
+      throw ApiError.badRequest(
+        "Valor por competência existe no adiantamento salarial e em qualquer lançamento recorrente. Neste, informe o valor total.",
+        "LEDGER_NOT_RECURRING",
+      );
     }
 
     const input = parseAdvanceRuleInput(body);

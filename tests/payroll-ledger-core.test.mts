@@ -16,7 +16,8 @@ import {
   addCompetenceMonths, advanceAmount, advancePaymentKey, competenceDistance,
   confirmableCents, confirmationKey, contractorComponentType, contractorProjectionKey,
   formatCompetence, fromCents, isCompetence, ledgerBalance, ledgerCategories, ledgerCategoryFields,
-  ledgerCategoryLabels, planInstallments, ruleInEffect, splitInstallments, terminationPendingKey,
+  ledgerCategoryLabels, planInstallments, recurringOccurrenceNumber, ruleInEffect, splitInstallments,
+  terminationPendingKey,
   terminationSignals, toCents,
   type InstallmentBalanceInput,
 } from "../lib/payroll-ledger.ts";
@@ -406,9 +407,13 @@ test("recorrente com valor total é recusado com uma frase, não com o nome do C
 });
 
 test("recorrente sem total passa e não inventa parcelas", () => {
+  /* O valor do mês passou a ser obrigatório: sem ele o lançamento nascia sem
+     número nenhum, que foi o defeito encontrado no primeiro uso em produção.
+     O que continua valendo é que ele não tem *total* nem parcelas programadas
+     de saída. */
   const input = parseLedgerEntryInput({
     companyId: "c1", employeeId: "e1", category: "salary_advance", title: "Vale fixo",
-    modality: "recurring", firstCompetence: "2026-09",
+    modality: "recurring", firstCompetence: "2026-09", recurringAmount: "500,00",
   });
   assert.equal(input.totalAmount, null);
   assert.equal(input.installmentCount, null);
@@ -496,17 +501,23 @@ test("o corpo enviado ao servidor omite total e parcelas no recorrente", () => {
     category: "salary_advance", title: "Vale fixo", description: "", reason: "",
     occurredOn: "", requestedOn: "2026-09-01", unitLabel: "", operationLabel: "",
     requesterAreaId: "", modality: "recurring", totalAmount: "", installmentCount: "",
+    recurringAmount: "500,00",
     firstCompetence: "2026-09", recurrenceEndCompetence: "2027-06", details: {},
   });
   assert.equal("totalAmount" in recorrente, false);
   assert.equal("installmentCount" in recorrente, false);
   assert.equal(recorrente.recurrenceEndCompetence, "2027-06");
+  /* O valor do mês vai, e vai num campo próprio: é ele que vira a primeira
+     vigência do lançamento. Antes de existir, o recorrente nascia sem valor
+     nenhum e ficava impossível de conferir. */
+  assert.equal(recorrente.recurringAmount, "500,00");
 
   const unico = entryBody({
     companyId: "c1", subjectKind: "provider", employeeId: "", providerId: "p1",
     category: "loan", title: "Empréstimo", description: "", reason: "",
     occurredOn: "", requestedOn: "2026-09-01", unitLabel: "", operationLabel: "",
     requesterAreaId: "", modality: "single", totalAmount: "300", installmentCount: "",
+    recurringAmount: "",
     firstCompetence: "2026-09", recurrenceEndCompetence: "", details: {},
   });
   // O único sempre vai com uma parcela, mesmo que o campo esteja vazio na tela.
@@ -537,6 +548,7 @@ test("vigência invertida é recusada nos dois lugares que a aceitam", () => {
   assert.throws(() => parseLedgerEntryInput({
     companyId: "c1", employeeId: "e1", category: "salary_advance", title: "Vale",
     modality: "recurring", firstCompetence: "2026-09", recurrenceEndCompetence: "2026-06",
+    recurringAmount: "500,00",
   }), /anterior à primeira competência/i);
 });
 
@@ -702,8 +714,15 @@ test("alterar a regra exige vigência futura e preserva a anterior", () => {
   assert.equal(/UPDATE fdp_ledger_advance_rules SET (fixed_amount|percentage|effective_from_competence)/.test(advanceRuleRoute), false);
 });
 
-test("regra de adiantamento só existe em lançamento de adiantamento", () => {
-  assert.match(advanceRuleRoute, /LEDGER_NOT_ADVANCE/);
+test("valor por competência vale no adiantamento salarial e em todo recorrente", () => {
+  /* Este teste já exigiu o contrário — `LEDGER_NOT_ADVANCE`, que recusava a
+     regra em qualquer categoria fora do adiantamento salarial. Era essa recusa
+     que deixava um vale fixo ou um plano de saúde recorrente sem lugar nenhum
+     para guardar valor: sem total por CHECK, sem regra por esta porta, e
+     portanto sem número. A recusa agora olha a modalidade, não só a categoria. */
+  assert.match(advanceRuleRoute, /LEDGER_NOT_RECURRING/);
+  assert.doesNotMatch(advanceRuleRoute, /LEDGER_NOT_ADVANCE/);
+  assert.match(advanceRuleRoute, /entry\.modality\) !== "recurring"/);
 });
 
 test("o ensaio de banco prova o fluxo do adiantamento contra PostgreSQL real", async () => {
@@ -809,4 +828,81 @@ test("o ensaio de banco prova a integração com o SESMT contra PostgreSQL real"
   assert.match(rehearsal, /OK: decidir tres vezes a mesma solicitacao gera um lancamento/);
   assert.match(rehearsal, /OK: nova decisao corrige o valor enquanto nada foi descontado/);
   assert.match(rehearsal, /OK: apos confirmado, nova decisao nao reescreve o que foi descontado/);
+});
+
+// ---------------------------------------------------------------------------
+// O valor do lançamento recorrente
+//
+// Estes testes existem por causa de um defeito real, encontrado em produção no
+// primeiro uso: o recorrente nascia sem valor nenhum. A tela prometia "um valor
+// por competência" e não oferecia onde informá-lo, a rota de regra recusava
+// qualquer categoria que não fosse adiantamento salarial, e a geração de
+// programação filtrava pela mesma categoria. Um vale fixo ficava vivo, sem
+// número, sem parcela e sem como ser conferido.
+// ---------------------------------------------------------------------------
+
+test("a ocorrência mensal do recorrente é estável, não depende de quando foi gerada", () => {
+  /* É `(workspace, lançamento, número)` que impede a mesma competência de virar
+     duas parcelas. O número tem de sair da competência, e não de um contador —
+     senão abrir a conferência duas vezes produziria a dívida duas vezes. */
+  assert.equal(recurringOccurrenceNumber("2026-09", "2026-09"), 1);
+  assert.equal(recurringOccurrenceNumber("2026-09", "2026-10"), 2);
+  // Virada de ano: dezembro para janeiro é o mês seguinte, não o mês -11.
+  assert.equal(recurringOccurrenceNumber("2026-12", "2027-01"), 2);
+  assert.equal(recurringOccurrenceNumber("2026-09", "2027-09"), 13);
+});
+
+test("competência anterior ao início da recorrência é recusada, não vira número negativo", () => {
+  /* Sem esta recusa o número sairia zero ou negativo e o CHECK `number > 0` do
+     banco derrubaria a abertura da competência inteira, com erro de constraint
+     no lugar de uma frase. */
+  assert.throws(() => recurringOccurrenceNumber("2026-09", "2026-08"), /anterior ao início/u);
+});
+
+test("o corpo do recorrente leva o valor do mês, e o parcelado não o inventa", () => {
+  const recorrente = entryBody({
+    companyId: "c1", subjectKind: "employee", employeeId: "e1", providerId: "",
+    category: "other", title: "Plano de saúde", description: "", reason: "",
+    occurredOn: "", requestedOn: "2026-09-01", unitLabel: "", operationLabel: "",
+    requesterAreaId: "", modality: "recurring", totalAmount: "", installmentCount: "",
+    recurringAmount: "189,90",
+    firstCompetence: "2026-09", recurrenceEndCompetence: "", details: {},
+  });
+  assert.equal(recorrente.recurringAmount, "189,90");
+  assert.equal("totalAmount" in recorrente, false);
+
+  const parcelado = entryBody({
+    companyId: "c1", subjectKind: "employee", employeeId: "e1", providerId: "",
+    category: "loan", title: "Empréstimo", description: "", reason: "",
+    occurredOn: "", requestedOn: "2026-09-01", unitLabel: "", operationLabel: "",
+    requesterAreaId: "", modality: "installments", totalAmount: "1.000,00", installmentCount: "4",
+    recurringAmount: "",
+    firstCompetence: "2026-09", recurrenceEndCompetence: "", details: {},
+  });
+  assert.equal("recurringAmount" in parcelado, false);
+});
+
+test("recorrente sem valor por competência é recusado com frase, não com constraint", () => {
+  /* O banco recusaria de todo jeito — mas devolvendo o nome de um CHECK para um
+     analista de DP. A recusa nomeada é o que diz qual campo preencher. */
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "other", title: "Vale fixo",
+    modality: "recurring", firstCompetence: "2026-09",
+  }), /valor por competência/u);
+});
+
+test("recorrente continua recusando valor total, e agora aceita o valor do mês", () => {
+  assert.throws(() => parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "other", title: "Vale fixo",
+    modality: "recurring", firstCompetence: "2026-09",
+    totalAmount: "2000", recurringAmount: "500",
+  }), /não tem valor total/u);
+
+  const aceito = parseLedgerEntryInput({
+    companyId: "c1", employeeId: "e1", category: "other", title: "Vale fixo",
+    modality: "recurring", firstCompetence: "2026-09", recurringAmount: "500,00",
+  });
+  assert.equal(aceito.totalCents, null);
+  assert.equal(aceito.installmentCount, null);
+  assert.equal(aceito.recurringCents, 50000);
 });

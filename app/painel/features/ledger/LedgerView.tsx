@@ -912,9 +912,12 @@ export function LedgerView({ members, currentUserId }: { members: Member[]; curr
               ))}
             </ul>
 
-            {permissions?.manage && detail.entry.category === "salary_advance" && (
+            {permissions?.manage
+              && (detail.entry.category === "salary_advance" || detail.entry.modality === "recurring") && (
               <>
-                <p className={styles.sectionTitle}>Regra do adiantamento</p>
+                <p className={styles.sectionTitle}>
+                  {detail.entry.category === "salary_advance" ? "Regra do adiantamento" : "Valor por competência"}
+                </p>
                 <p className={styles.notice}>
                   <Info aria-hidden="true" />
                   <span>

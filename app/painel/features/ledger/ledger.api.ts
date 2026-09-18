@@ -175,7 +175,14 @@ export function entryBody(draft: LedgerEntryDraft): Record<string, unknown> {
     details: draft.details,
   };
   if (draft.modality === "recurring") {
-    return { ...common, recurrenceEndCompetence: draft.recurrenceEndCompetence };
+    /* `recurringAmount` não é o total do lançamento — o banco recusa total em
+       recorrente. Ele vira a primeira vigência do valor por competência, criada
+       junto com o lançamento para que ele não nasça sem número. */
+    return {
+      ...common,
+      recurrenceEndCompetence: draft.recurrenceEndCompetence,
+      recurringAmount: draft.recurringAmount,
+    };
   }
   return {
     ...common,

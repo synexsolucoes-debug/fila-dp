@@ -198,6 +198,14 @@ export type LedgerEntryDraft = {
   modality: LedgerModality;
   totalAmount: string;
   installmentCount: string;
+  /**
+   * O valor de cada mês do recorrente.
+   *
+   * Separado de `totalAmount` porque não é a mesma coisa: o recorrente não tem
+   * total por CHECK no banco, e tratar os dois como um campo só foi exatamente
+   * o defeito que deixou o vale fixo nascer sem valor nenhum.
+   */
+  recurringAmount: string;
   firstCompetence: string;
   recurrenceEndCompetence: string;
   details: Record<string, string>;
