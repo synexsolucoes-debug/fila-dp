@@ -29,7 +29,13 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { getScopedD1 } from "../db/index.ts";
-import { registerInvoice } from "../lib/contractor-invoice-service.ts";
+import {
+  listClosingInvoices,
+  listInvoicePanel,
+  loadInvoicePolicy,
+  registerInvoice,
+} from "../lib/contractor-invoice-service.ts";
+import { invoiceOriginLabel } from "../lib/contractor-invoices.ts";
 import {
   createPortalToken,
   hashPortalToken,
@@ -300,6 +306,32 @@ async function main() {
   conferir("o histórico não atribui o envio a nenhuma pessoa", evento?.actor_user_id === null, String(evento?.actor_user_id));
   conferir("o histórico nomeia quem enviou", evento?.actor_label === "Empresa XPTO LTDA", String(evento?.actor_label));
   conferir("e diz que o ator é o portal", evento?.actor_kind === "contractor_portal", String(evento?.actor_kind));
+
+  /* 6b. A origem sobrevive à consulta e chega na forma que a tela lê.
+         Este é o fecho do buraco que existia: a nota do portal aparecia
+         idêntica a uma que um colega subiu, porque a tela mostrava só o nome
+         de quem enviou — vazio, já que quem enviou não é membro. Provar isso
+         com a função pura não bastaria: o que falhava era a coluna não vir na
+         consulta, e SELECT é coisa que só o banco julga. */
+  const policy = await loadInvoicePolicy(d1Alfa, alfa.workspaceId);
+  const linhas = await listInvoicePanel(d1Alfa, {
+    workspaceId: alfa.workspaceId, companyId: alfa.companyId, cycleId: alfa.cycleId, policy,
+  });
+  const linha = linhas.find((item) => item.closingId === alfa.closingId);
+  conferir("a lista da competência traz a origem da nota", linha?.uploadedVia === "contractor_portal", String(linha?.uploadedVia));
+  conferir("e a lista não tem nome de pessoa para atribuir", (linha?.uploadedByName ?? "") === "", String(linha?.uploadedByName));
+
+  const rotulo = invoiceOriginLabel({
+    origin: linha?.uploadedVia,
+    uploadedByName: linha?.uploadedByName,
+    providerName: "Empresa XPTO LTDA",
+  });
+  conferir("a tela lê 'pelo portal' em vez de um campo vazio", rotulo.fromPortal && rotulo.label.includes("portal"), rotulo.label);
+
+  const versoes = await listClosingInvoices(d1Alfa, alfa.workspaceId, alfa.closingId);
+  conferir("a lista de versões também traz a origem",
+    versoes.some((item) => item.uploaded_via === "contractor_portal"),
+    versoes.map((item) => String(item.uploaded_via)).join(","));
 
   /* 7. O CHECK não afrouxou para o caminho do painel: nota sem pessoa por ali
         continua recusada, e ator de portal sem nome também. */

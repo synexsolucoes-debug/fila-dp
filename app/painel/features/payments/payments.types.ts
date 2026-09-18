@@ -160,6 +160,8 @@ export type InvoiceRow = {
   documentFilename: string;
   uploadedAt: string;
   uploadedByName: string;
+  /** "panel" ou "contractor_portal" — por onde a nota entrou. */
+  uploadedVia: string;
   reviewedAt: string;
   reviewedByUserId: string;
   reviewedByName: string;
@@ -212,7 +214,8 @@ export type InvoiceVersion = {
   amount: number; expectedAmount: number; differenceAmount: number; status: string;
   documentId: string; documentFilename: string; documentContentType: string;
   rejectionReason: string; rejectionDetail: string;
-  uploadedAt: string; uploadedByName: string; reviewedAt: string; reviewedByName: string;
+  uploadedAt: string; uploadedByName: string; uploadedVia: string;
+  reviewedAt: string; reviewedByName: string;
   supersededAt: string;
 };
 
@@ -227,7 +230,8 @@ export type InvoiceDetail = {
     receiverDocument: string; serviceDescription: string; amount: number; expectedAmount: number;
     differenceAmount: number; status: string; documentId: string; notes: string;
     checklist: Record<string, boolean>;
-    uploadedAt: string; reviewedAt: string; reviewNote: string;
+    uploadedAt: string; uploadedVia: string; uploadedByName: string;
+    reviewedAt: string; reviewNote: string;
     rejectionReason: string; rejectionDetail: string; supersededAt: string;
   };
   comparison: { expectedAmount: number; informedAmount: number; difference: number; matches: boolean };

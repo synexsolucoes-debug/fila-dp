@@ -8,6 +8,7 @@ import {
 import {
   contractorInvoiceStatusLabels,
   invoiceChecklistItems,
+  invoiceOriginLabel,
   invoiceRejectionReasonLabels,
   invoiceRejectionReasons,
   invoiceReviewStatusLabels,
@@ -195,6 +196,11 @@ function InvoiceReviewContent(
             <div><dt>Empresa pagadora</dt><dd>{closing.companyName || "—"}</dd></div>
             <div><dt>Serviço</dt><dd>{invoice.serviceDescription || "—"}</dd></div>
             <div><dt>Enviada em</dt><dd>{dateTime(invoice.uploadedAt)}</dd></div>
+            <div><dt>Enviada por</dt><dd>{invoiceOriginLabel({
+              origin: invoice.uploadedVia,
+              uploadedByName: invoice.uploadedByName,
+              providerName: closing.providerName,
+            }).label}</dd></div>
             <div><dt>Situação</dt>
               <dd><span className={styles.badge} data-tone={invoice.status}>
                 {contractorInvoiceStatusLabels[invoice.status as keyof typeof contractorInvoiceStatusLabels] ?? invoice.status}
@@ -263,7 +269,12 @@ function InvoiceReviewContent(
               <tbody>
                 {detail.versions.map((version) => (
                   <tr key={version.id} aria-current={version.id === invoice.id ? "true" : undefined}>
-                    <th scope="row">#{version.attempt}<small>{dateTime(version.uploadedAt)}</small></th>
+                    <th scope="row">
+                      #{version.attempt}<small>{dateTime(version.uploadedAt)}</small>
+                      {invoiceOriginLabel({ origin: version.uploadedVia }).fromPortal && (
+                        <span className={styles.originBadge}>{invoiceOriginLabel({ origin: version.uploadedVia }).badge}</span>
+                      )}
+                    </th>
                     <td>{version.invoiceNumber}{version.series ? `/${version.series}` : ""}</td>
                     <td>{money(version.amount)}</td>
                     <td><span className={styles.badge} data-tone={version.status}>

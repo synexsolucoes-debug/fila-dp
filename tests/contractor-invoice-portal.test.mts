@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { invoiceOrigin, invoiceOriginLabel } from "../lib/contractor-invoices.ts";
 import {
   assertPortalLinkUsable,
   createPortalToken,
@@ -339,6 +340,67 @@ test("a mensagem do aviso leva o link, e o link é casado por id e não por nome
   assert.match(aviso, /portalUrls\.get\(String\(row\.provider_id \?\? row\.providerId \?\? ""\)\)/u,
     "dois prestadores homônimos receberiam o link um do outro");
   assert.match(aviso, /Por gentileza emitir sua NF e enviar por este link:/u);
+});
+
+/* -------------------------------------------------------------------------- */
+/* A origem da nota, na tela                                                   */
+/* -------------------------------------------------------------------------- */
+
+test("a origem do portal nomeia o prestador, e nunca inventa uma pessoa", () => {
+  const vindo = invoiceOriginLabel({ origin: "contractor_portal", providerName: "Empresa XPTO LTDA" });
+  assert.equal(vindo.fromPortal, true);
+  assert.match(vindo.label, /Empresa XPTO LTDA/u);
+  assert.match(vindo.label, /portal/iu);
+  assert.equal(vindo.badge, "Pelo portal");
+
+  // Sem o nome do prestador a frase ainda diz de onde veio, em vez de sair
+  // vazia — que é exatamente o defeito que este rótulo existe para fechar.
+  const anonimo = invoiceOriginLabel({ origin: "contractor_portal" });
+  assert.match(anonimo.label, /prestador/iu);
+  assert.notEqual(anonimo.label.trim(), "");
+});
+
+test("o nome de quem enviou pelo painel não é substituído pela origem", () => {
+  const painel = invoiceOriginLabel({ origin: "panel", uploadedByName: "Ana Souza", providerName: "Empresa XPTO LTDA" });
+  assert.equal(painel.label, "Ana Souza");
+  assert.equal(painel.fromPortal, false);
+  // O selo fica vazio: marcar as duas origens diria "normal" na maioria das
+  // linhas, e o que a conferência precisa notar é a exceção.
+  assert.equal(painel.badge, "");
+});
+
+test("nota do painel sem pessoa é defeito declarado, não origem do portal", () => {
+  // O CHECK do banco exige pessoa nesse caminho. Dizer "prestador" aqui
+  // esconderia o defeito atrás de uma explicação plausível.
+  const semPessoa = invoiceOriginLabel({ origin: "panel", uploadedByName: "", providerName: "Empresa XPTO LTDA" });
+  assert.equal(semPessoa.fromPortal, false);
+  assert.equal(semPessoa.label, "Origem não registrada");
+  assert.doesNotMatch(semPessoa.label, /XPTO|portal/iu);
+});
+
+test("origem desconhecida cai no caminho do painel, não no do portal", () => {
+  for (const valor of [undefined, null, "", "outro", 42, {}]) {
+    assert.equal(invoiceOrigin(valor), "panel", `${String(valor)} virou outra coisa`);
+  }
+  assert.equal(invoiceOrigin("contractor_portal"), "contractor_portal");
+});
+
+test("a origem chega do banco até as três telas", async () => {
+  const servicoAtual = await readFile(new URL("../lib/contractor-invoice-service.ts", import.meta.url), "utf8");
+  // As duas consultas que alimentam tela precisam trazer a coluna.
+  assert.match(servicoAtual, /i\.document_id, i\.uploaded_at, i\.uploaded_via, i\.reviewed_at/u, "a lista não traz a origem");
+  assert.match(servicoAtual, /i\.uploaded_at, i\.uploaded_via, i\.reviewed_at, i\.superseded_at/u, "as versões não trazem a origem");
+  assert.match(servicoAtual, /uploadedVia: invoiceOrigin\(row\.uploaded_via\)/u);
+
+  const tabela = await readFile(new URL("../app/painel/features/payments/ContractorInvoicesSection.tsx", import.meta.url), "utf8");
+  assert.match(tabela, /invoiceOriginLabel\(\{ origin: row\.uploadedVia \}\)\.fromPortal/u);
+
+  const drawer = await readFile(new URL("../app/painel/features/payments/InvoiceReviewDrawer.tsx", import.meta.url), "utf8");
+  // A conferência decide sobre o documento: de onde ele veio fica ao lado dos
+  // outros fatos da nota, não dois cliques abaixo, no histórico.
+  assert.match(drawer, /<dt>Enviada por<\/dt>/u);
+  assert.match(drawer, /providerName: closing\.providerName/u);
+  assert.match(drawer, /invoiceOriginLabel\(\{ origin: version\.uploadedVia \}\)\.fromPortal/u);
 });
 
 test("a página do portal não é indexável e o token não aparece no corpo", async () => {
