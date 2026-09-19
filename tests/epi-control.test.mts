@@ -533,9 +533,12 @@ test("o fluxo entre áreas aparece no quadro e na central sem depender de nomes 
   assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.responsibleAreaId\)/u);
   assert.ok(workspace.includes('aria-label={`Fluxo entre áreas:'));
   assert.ok(workspace.includes('<DemandAreaFlow card={card} areas={snapshot.areas} />'));
-  assert.ok(workspace.includes('renderAreaFlow={(card) => <DemandAreaFlow card={card} areas={snapshot.areas} />}'));
-  const views = await readFile(new URL("../app/painel/features/work/DemandViews.tsx", import.meta.url), "utf8");
-  assert.ok(views.includes("{renderAreaFlow(card)}"));
+  /* As duas verificações do `renderAreaFlow` saíram com a `DemandPriorityView`
+     que as recebia: o quadro por responsável passou a responder "o que é mais
+     urgente e quem está com o quê", e manter a lista de prioridades ao lado
+     dele deixaria uma tela sem ninguém que a renderize. O que o teste protege
+     continua protegido — o fluxo entre áreas é desenhado a partir do catálogo
+     do grupo, e as duas linhas acima são as que garantem isso. */
   assert.doesNotMatch(workspace.match(/function DemandAreaFlow[\s\S]*?\n\}/u)?.[0] ?? "", /SESMT|Departamento Pessoal|Financeiro/u);
 });
 

@@ -1,17 +1,10 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, ArrowRight, CalendarDays, Clock3, Inbox, ListChecks, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, CalendarDays } from "lucide-react";
 import type { Card, WorkspaceSnapshot } from "@/lib/fila-dp-types";
-import { PRIORITY_LABELS } from "@/lib/work-items";
-import { demandAssigneeWorkload, demandCalendarDays, demandDeadlineDay, demandNextAction, isOpenDemand, localDayKey, prioritizeDemands } from "@/lib/demand-dashboard";
+import { demandCalendarDays, demandDeadlineDay, localDayKey, prioritizeDemands } from "@/lib/demand-dashboard";
 import styles from "./DemandViews.module.css";
-
-function deadline(card: Card) {
-  if (!card.dueAt) return "Sem prazo";
-  const date = new Date(card.dueAt.includes("T") ? card.dueAt : `${card.dueAt.slice(0, 10)}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? "Sem prazo" : date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-}
 
 function status(card: Card, listName?: string) {
   if (card.cancelledAt) return "Cancelada";
@@ -29,40 +22,14 @@ function DemandPreview({ card, listName, onOpen }: { card: Card; listName?: stri
   </button>;
 }
 
-export function DemandPriorityView({ cards, lists, onOpen, onWaiting, renderAreaFlow }: {
-  cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void; onWaiting: () => void; renderAreaFlow: (card: Card) => ReactNode;
-}) {
-  const ordered = useMemo(() => prioritizeDemands(cards), [cards]);
-  const workload = useMemo(() => demandAssigneeWorkload(cards), [cards]);
-  const listNames = useMemo(() => new Map(lists.map((list) => [list.id, list.name])), [lists]);
-  const open = cards.filter(isOpenDemand).length;
-  const waiting = cards.filter((card) => isOpenDemand(card) && (card.slaStatus === "paused" || lists.some((list) => list.id === card.listId && list.slaBehavior === "paused"))).length;
-  return <div className={styles.central}>
-    <section className={styles.queue} aria-label="Fila de prioridades">
-      <header className={styles.sectionHead}><div><h2>Fila de prioridades</h2><span>{cards.length} demandas nos filtros atuais</span></div><span className={styles.hint}>Atrasos primeiro</span></header>
-      {ordered.length ? <ul className={styles.rows}>{ordered.map((card) => <li key={card.id}>
-        <button type="button" className={styles.row} onClick={() => onOpen(card)}>
-          <span className={styles.rowContent}><span className={styles.cardMeta}>{card.referenceNumber != null ? `#DM-${card.referenceNumber} · ` : ""}{card.processType || "Demanda"}</span><strong>{card.title}</strong><span>{card.company || "Sem empresa informada"}</span>{renderAreaFlow(card)}<small>{demandNextAction(card)}</small></span>
-          <span className={styles.rowState}><span className={styles.status} data-status={card.slaStatus}>{status(card, listNames.get(card.listId))}</span><span><Clock3 aria-hidden="true" />{deadline(card)}</span></span>
-          <span className={styles.rowOwner}><span>{card.assignees.map((person) => person.name).join(", ") || card.assigneeName || "Sem responsável"}</span><small>{PRIORITY_LABELS[card.priority]}</small></span>
-          <ArrowRight className={styles.openArrow} aria-hidden="true" />
-        </button>
-      </li>)}</ul> : <div className={styles.empty}><Inbox aria-hidden="true" /><strong>Nenhuma demanda neste filtro</strong><span>Ajuste os filtros para ampliar a consulta.</span></div>}
-    </section>
-    <aside className={styles.workload} aria-label="Distribuição de trabalho">
-      <h2><Users aria-hidden="true" />Demandas por responsável</h2>
-      <p>Abertas no recorte atual</p>
-      {workload.map((person) => <div className={styles.person} key={person.id}>
-        <div><strong>{person.name}</strong><b>{person.open}</b></div><div className={styles.track} aria-hidden="true"><span style={{ width: `${open ? person.open / open * 100 : 0}%` }} /></div>
-        <small>{person.waiting ? `${person.waiting} aguardando retorno` : "Sem demandas em espera"}</small>
-      </div>)}
-      {!workload.length && <p>Nenhuma demanda aberta neste recorte.</p>}
-      {cards.some((card) => isOpenDemand(card) && card.assignees.length > 1) && <p className={styles.sharedNote}>Demandas compartilhadas aparecem para cada responsável.</p>}
-      {waiting > 0 && <div className={styles.waiting}><ListChecks aria-hidden="true" /><strong>Retornos pendentes</strong><p>{waiting} demandas aguardam retorno para continuar.</p><button type="button" onClick={onWaiting}>Ver pendências <ArrowRight aria-hidden="true" /></button></div>}
-    </aside>
-  </div>;
-}
-
+/* `DemandPriorityView` saiu com a chegada do quadro por responsável.
+   Ela respondia "o que é mais urgente e quem está com o quê" numa lista
+   ordenada; o quadro responde a mesma pergunta com a pessoa como coluna, e
+   manter as duas deixaria uma tela construída sem ninguém que a renderize —
+   que é exatamente o que a verificação de alcance do painel existe para
+   acusar. O que ela usava de `lib/demand-dashboard.ts` continua vivo: a
+   ordenação e a carga alimentam o quadro, e o próximo passo derivado é o
+   texto de reserva do cartão quando a demanda ainda não tem um escrito. */
 export function DemandDeadlineView({ cards, lists, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; onOpen: (card: Card) => void }) {
   const [cursor, setCursor] = useState(() => new Date());
   const [mode, setMode] = useState<"week" | "month">("week");

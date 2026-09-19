@@ -1,0 +1,645 @@
+/*
+ * Operação DP — quadro de demandas.
+ *
+ * Nenhuma cor é escrita aqui. Tudo sai dos tokens do painel (`--ui-*`), que já
+ * são redefinidos no tema escuro: a mesma regra vale nos dois temas e um ajuste
+ * de identidade não precisa ser refeito neste arquivo. É por isso também que o
+ * escuro não tem um bloco próprio embaixo — se tivesse, seria mais uma cópia
+ * para manter em dia.
+ *
+ * A densidade é a decisão de fundo. Este é um sistema de registro operado o dia
+ * inteiro, não uma página de marketing: o cartão cabe em ~120px, a coluna em
+ * 300px, e a tela mostra seis pessoas sem rolar na maioria dos notebooks. Cada
+ * pixel de respiro a mais aqui é uma demanda a menos visível, e demanda
+ * invisível é demanda esquecida.
+ */
+
+.board { display: grid; gap: 12px; min-width: 0; }
+
+/* ── Indicadores ──────────────────────────────────────────────────────────── */
+
+.indicators {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.indicator {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-card);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .14s ease, transform .14s ease, background .14s ease;
+}
+.indicator:hover { border-color: var(--ui-border-strong); transform: translateY(-1px); }
+.indicator:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.indicator strong { font-size: 21px; font-weight: 800; line-height: 1.05; color: var(--ui-text); }
+.indicator span { font-size: 11px; font-weight: 650; letter-spacing: .02em; color: var(--ui-text-soft); }
+
+/* O tom é a leitura, e o marcado é o recorte ligado. A cor nunca é a única
+   diferença: o marcado também ganha a borda cheia e o fundo do próprio tom. */
+.indicator[data-tone="danger"] strong { color: var(--ui-danger); }
+.indicator[data-tone="warn"] strong { color: var(--ui-warning); }
+.indicator[data-tone="ok"] strong { color: var(--ui-success); }
+.indicator[data-tone="info"] strong { color: var(--ui-info); }
+.indicator[data-active] { border-color: var(--ui-primary); background: var(--ui-primary-soft); }
+.indicator[data-active][data-tone="danger"] { border-color: var(--ui-danger); background: var(--ui-state-danger-bg); }
+.indicator[data-active][data-tone="warn"] { border-color: var(--ui-warning); background: var(--ui-state-warn-bg); }
+.indicator[data-active][data-tone="ok"] { border-color: var(--ui-success); background: var(--ui-state-ok-bg); }
+/* Ligado, o indicador troca de fundo — e o texto precisa trocar junto. O par
+   fundo/texto de cada tom foi medido para ler; cruzar o fundo de um com o texto
+   cinza do repouso é como o contraste se perde sem ninguém notar. */
+.indicator[data-active][data-tone="danger"] strong,
+.indicator[data-active][data-tone="danger"] span { color: var(--ui-state-danger-text); }
+.indicator[data-active][data-tone="warn"] strong,
+.indicator[data-active][data-tone="warn"] span { color: var(--ui-state-warn-text); }
+.indicator[data-active][data-tone="ok"] strong,
+.indicator[data-active][data-tone="ok"] span { color: var(--ui-state-ok-text); }
+
+.alerts { display: flex; flex-wrap: wrap; gap: 6px; }
+.alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 5px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.alert svg { width: 13px; height: 13px; }
+button.alert { cursor: pointer; }
+button.alert:hover { border-color: var(--ui-border-strong); }
+button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.alert[data-tone="danger"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); border-color: var(--ui-danger); }
+.alert[data-tone="warn"] { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+
+/* ── Barra de comando ─────────────────────────────────────────────────────── */
+
+.toolbar { display: grid; gap: 8px; }
+.toolbarTop { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.toolbarBottom { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 0 12px;
+  height: 36px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-elevated);
+}
+.search:focus-within { border-color: var(--ui-primary); box-shadow: 0 0 0 3px var(--ui-primary-soft); }
+.search svg { width: 15px; height: 15px; color: var(--ui-text-muted); flex: 0 0 auto; }
+.search input {
+  flex: 1;
+  min-width: 0;
+  /* O campo ocupa a altura inteira do rótulo.
+     A borda e os 36px moram no `<label>`, e o `<input>` ficava com os 20px do
+     próprio texto: para quem mede alvo de toque, o alvo tem 20px de altura —
+     abaixo dos 24 que a WCAG 2.5.8 exige — e para quem usa mouse, clicar na
+     faixa entre o texto e a borda não focava nada. */
+  align-self: stretch;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 13px;
+}
+.search input:focus { outline: none; }
+
+.modes { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface-muted); }
+.mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-soft);
+  font: 650 12px inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mode svg { width: 14px; height: 14px; }
+.mode:hover { background: var(--ui-surface-elevated); color: var(--ui-text); }
+.mode:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 1px; }
+.mode[data-active] { background: var(--ui-surface-elevated); color: var(--ui-accent-text, var(--ui-primary)); box-shadow: var(--ui-shadow-card); }
+
+.focusToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text-soft);
+  font: 650 12px inherit;
+  cursor: pointer;
+}
+.focusToggle svg { width: 14px; height: 14px; }
+.focusToggle:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
+.focusToggle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.focusToggle[data-active] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+
+.presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.preset, .saveView, .savedView > button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text-soft);
+  font: 650 11.5px inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.preset:hover, .saveView:hover, .savedView > button:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
+.preset:focus-visible, .saveView:focus-visible, .savedView > button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.preset[data-active] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+.saveView { display: inline-flex; align-items: center; gap: 5px; }
+.saveView svg { width: 13px; height: 13px; }
+
+/* A visualização salva e o seu descarte são dois botões, e não um botão com um
+   "x" decorativo dentro: remover precisa de nome próprio para o leitor de tela. */
+.savedView { display: inline-flex; align-items: center; }
+.savedView > button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; }
+.savedView > button:last-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text-muted);
+  cursor: pointer;
+}
+.savedView > button:last-child svg { width: 12px; height: 12px; }
+.savedView > button:last-child:hover { color: var(--ui-danger); }
+
+.filters { position: relative; }
+.filters > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text-soft);
+  font: 650 12px inherit;
+  cursor: pointer;
+  list-style: none;
+}
+.filters > summary::-webkit-details-marker { display: none; }
+.filters > summary svg { width: 14px; height: 14px; }
+.filters > summary b {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  /* Pastilha suave, e não azul cheio: branco sobre o azul vivo do tema escuro
+     dá 2,3:1. O par suave lê nos dois temas sem precisar de uma exceção. */
+  background: var(--ui-accent-soft, var(--ui-primary-soft));
+  color: var(--ui-accent-text, var(--ui-primary));
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+.filters[open] > summary { border-color: var(--ui-accent-text, var(--ui-primary)); color: var(--ui-accent-text, var(--ui-primary)); }
+
+.filterFields {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 10px;
+  width: min(560px, 88vw);
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-modal);
+}
+.filterFields label, .sort { display: grid; gap: 4px; }
+.filterFields span, .sort > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+/* 36px, a mesma altura da caixa de busca ao lado.
+   A régua de consistência do produto julga altura por repetição: um valor usado
+   por um único controle no produto inteiro é acidente, não decisão. Um campo
+   de 32px aqui seria exatamente isso — e o quadro não ganha densidade nenhuma
+   com 4px a menos num controle que aparece uma vez. */
+.filterFields select, .sort select {
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 12.5px;
+}
+.sort { grid-template-columns: auto auto; align-items: center; gap: 6px; }
+.clear {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--ui-text-soft);
+  font: 650 12px inherit;
+  cursor: pointer;
+}
+.clear:hover { color: var(--ui-danger); border-color: var(--ui-danger); }
+
+/* ── Colunas por responsável ──────────────────────────────────────────────── */
+
+.columns {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  min-width: 0;
+  scroll-snap-type: x proximity;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  /* Largura fixa, e não `1fr`: colunas que se esticam mudam de tamanho quando
+     alguém é atribuído, e o cartão que a pessoa ia clicar muda de lugar. */
+  flex: 0 0 292px;
+  max-height: 100%;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  scroll-snap-align: start;
+  transition: border-color .14s ease, background .14s ease;
+}
+.column[data-unassigned] { background: var(--ui-surface-muted); border-color: var(--ui-border-strong); }
+/* Durante o arrasto toda coluna se anuncia como alvo possível; a que está sob o
+   cursor se anuncia como o alvo. Sem o primeiro estado, quem arrasta não sabe
+   onde pode soltar; sem o segundo, não sabe onde vai soltar. */
+.column[data-dragging] { border-style: dashed; }
+.column[data-drop] { border-color: var(--ui-primary); border-style: solid; background: var(--ui-primary-soft); }
+
+.columnHead { display: flex; align-items: center; gap: 8px; padding: 10px 11px 8px; }
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--ui-avatar-bg);
+  color: var(--ui-avatar-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+.avatar[data-empty] { background: var(--ui-state-neutral-bg); color: var(--ui-state-neutral-text); }
+.avatar svg { width: 15px; height: 15px; }
+.columnWho { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.columnWho strong { font-size: 13px; font-weight: 700; color: var(--ui-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.columnWho small { font-size: 10.5px; color: var(--ui-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.columnCount {
+  flex: 0 0 auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 20px;
+  text-align: center;
+}
+
+.columnHint { margin: 0; padding: 0 11px 9px; font-size: 11px; color: var(--ui-text-soft); }
+.columnHint em { font-style: normal; color: var(--ui-danger); font-weight: 700; }
+
+.columnLoad { display: grid; gap: 4px; padding: 0 11px 9px; }
+.columnLoad small { font-size: 10.5px; color: var(--ui-text-muted); }
+.columnLoad em { font-style: normal; color: var(--ui-danger); font-weight: 700; }
+.loadBar { display: block; height: 4px; border-radius: 999px; background: var(--ui-surface-muted); overflow: hidden; }
+.loadBar i { display: block; height: 100%; border-radius: 999px; background: var(--ui-primary); transition: width .2s ease; }
+.loadBar[data-tone="busy"] i { background: var(--ui-warning); }
+.loadBar[data-tone="heavy"] i { background: var(--ui-danger); }
+
+.columnCards {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  padding: 0 8px 10px;
+  overflow-y: auto;
+  max-height: calc(100vh - 340px);
+  min-height: 56px;
+}
+.columnEmpty, .boardEmpty {
+  margin: 0;
+  padding: 14px 10px;
+  border: 1px dashed var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  color: var(--ui-text-muted);
+  font-size: 11.5px;
+  text-align: center;
+}
+.boardEmpty { padding: 40px 16px; background: var(--ui-surface); }
+
+.unassignTarget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 180px;
+  min-height: 140px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-lg);
+  color: var(--ui-text-muted);
+  font-size: 11.5px;
+  font-weight: 650;
+  text-align: center;
+  padding: 12px;
+}
+.unassignTarget svg { width: 18px; height: 18px; }
+.unassignTarget[data-drop] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+
+/* ── Cartão ───────────────────────────────────────────────────────────────── */
+
+.card {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-card);
+  cursor: grab;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.card:hover { transform: translateY(-1px); box-shadow: var(--ui-shadow-modal); }
+.card:active { cursor: grabbing; }
+.card[data-selected] { border-color: var(--ui-primary); background: var(--ui-primary-soft); }
+/* A faixa da esquerda é a leitura de prazo do cartão inteiro, visível mesmo
+   quando o rodapé está fora do recorte de quem rola rápido. */
+.card[data-sla="overdue"] { border-left-color: var(--ui-danger); }
+.card[data-sla="warning"] { border-left-color: var(--ui-warning); }
+.card[data-sla="completed"] { border-left-color: var(--ui-success); }
+.card[data-sla="paused"] { border-left-color: var(--ui-text-muted); }
+.card[data-attention="high"] { border-color: var(--ui-danger); }
+
+.cardSelect { position: absolute; top: 4px; right: 4px; line-height: 0; opacity: 0; transition: opacity .12s ease; }
+.card:hover .cardSelect, .card:focus-within .cardSelect, .card[data-selected] .cardSelect { opacity: 1; }
+/* 24x24, e não 14x14.
+   É o mínimo da WCAG 2.5.8 para alvo de toque, e aqui ele não é teórico: a
+   seleção em massa é usada com o polegar na segunda-feira de distribuição, num
+   cartão cercado por outros cinco alvos. O visual pesa um pouco mais no canto
+   do cartão; errar a demanda selecionada pesa mais. */
+.cardSelect input { width: 24px; height: 24px; margin: 0; accent-color: var(--ui-primary); cursor: pointer; }
+
+.cardTop { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-right: 28px; }
+.reference { font-size: 10px; font-weight: 800; letter-spacing: .03em; color: var(--ui-text-muted); }
+.process {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ui-primary-soft);
+  /* `--ui-accent-text`, e não `--ui-primary`.
+     São dois tokens porque são dois trabalhos: o azul vivo preenche bem e lê
+     mal. No tema escuro, `--ui-primary` sobre `--ui-primary-soft` dá 2,2:1 —
+     texto que existe e não se lê. O token de texto clareia o bastante para o
+     par medir 9,4:1, e no tema claro os dois coincidem. */
+  color: var(--ui-accent-text, var(--ui-primary));
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.priority { padding: 1px 6px; border-radius: 999px; font-size: 9.5px; font-weight: 800; text-transform: uppercase; }
+.priority[data-level="urgent"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
+.priority[data-level="high"] { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+
+.cardTitle {
+  padding: 0;
+  /* Título de uma linha só media 17px de altura, e ele é o alvo principal do
+     cartão — o que abre a demanda. O mínimo da WCAG 2.5.8 vale para ele antes
+     de valer para qualquer outro controle desta tela. */
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: 700 13px inherit;
+  line-height: 1.32;
+  text-align: left;
+  cursor: pointer;
+  /* Duas linhas e corta. Um título de quatro linhas empurra prazo e etapa para
+     fora do cartão — e são eles que decidem o que fazer com a demanda. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cardTitle:hover { color: var(--ui-accent-text, var(--ui-primary)); }
+.cardTitle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
+
+.cardWho { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ui-text-soft); }
+.employee { font-weight: 700; color: var(--ui-text); }
+.employee::after { content: " ·"; color: var(--ui-text-muted); font-weight: 400; }
+.company { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cardBottom { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 10.5px; color: var(--ui-text-muted); }
+.due, .stage, .checklist, .meta, .orphan {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-muted);
+  font-weight: 650;
+}
+.due svg, .checklist svg, .meta svg { width: 11px; height: 11px; }
+.due[data-sla="overdue"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
+.due[data-sla="warning"] { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+.due[data-sla="completed"] { background: var(--ui-state-ok-bg); color: var(--ui-state-ok-text); }
+.stage { background: transparent; border: 1px solid var(--ui-border); color: var(--ui-text-soft); }
+.orphan { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+
+.nextStep {
+  margin: 0;
+  padding: 5px 7px;
+  border-left: 2px solid var(--ui-primary);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-primary-soft);
+  color: var(--ui-text-soft);
+  font-size: 10.5px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.quickActions {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-card);
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease;
+}
+.card:hover .quickActions, .card:focus-within .quickActions { opacity: 1; transform: none; pointer-events: auto; }
+.quickActions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+}
+.quickActions button svg { width: 13px; height: 13px; }
+.quickActions button:hover { background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
+.quickActions button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 1px; }
+
+/* ── Minha fila ───────────────────────────────────────────────────────────── */
+
+.queue { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 10px; align-items: start; }
+.queueSection { border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); }
+.queueSection > header { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 10px 11px 8px; }
+.queueSection > header strong { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-soft); }
+.queueSection > header b {
+  grid-row: 1;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-soft);
+  font-size: 11px;
+  line-height: 20px;
+  text-align: center;
+}
+.queueSection > header small { grid-column: 1 / -1; font-size: 10.5px; color: var(--ui-text-muted); }
+.queueSection[data-section="overdue"] > header strong { color: var(--ui-danger); }
+.queueSection[data-section="overdue"] > header b { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
+.queueSection[data-section="today"] > header strong { color: var(--ui-warning); }
+.queueCards { display: grid; gap: 7px; align-content: start; padding: 0 8px 10px; max-height: calc(100vh - 320px); overflow-y: auto; }
+
+/* ── Seleção em massa ─────────────────────────────────────────────────────── */
+
+.bulkBar {
+  position: sticky;
+  bottom: 10px;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-primary);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-elevated);
+  box-shadow: var(--ui-shadow-modal);
+}
+.bulkBar > strong { font-size: 12.5px; color: var(--ui-text); }
+.bulkBar label { display: inline-flex; align-items: center; gap: 5px; }
+.bulkBar label > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+.bulkBar select, .bulkBar input, .bulkBar label button {
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 12px;
+}
+.bulkBar label button { cursor: pointer; font-weight: 700; color: var(--ui-accent-text, var(--ui-primary)); }
+.bulkClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: transparent;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+}
+.bulkClear svg { width: 14px; height: 14px; }
+.bulkClear:hover { color: var(--ui-danger); border-color: var(--ui-danger); }
+
+/* ── Telas menores ────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .indicators { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+  .column { flex-basis: 268px; }
+  .columnCards { max-height: none; }
+  .modes { width: 100%; overflow-x: auto; }
+  .filterFields { width: min(420px, 92vw); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .indicator, .quickActions, .loadBar i { transition: none; }
+  .card:hover, .indicator:hover { transform: none; }
+}
+
+/* O arquivo não é um formato do quadro: é outro conjunto de demandas, e por
+   isso fica ao lado dos filtros e não entre os modos de visualização. */
+.archive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: var(--ui-text-soft);
+  font: 650 12px inherit;
+  cursor: pointer;
+}
+.archive svg { width: 14px; height: 14px; }
+.archive b { color: var(--ui-text); }
+.archive:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
+.archive:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }

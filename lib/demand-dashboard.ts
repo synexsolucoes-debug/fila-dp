@@ -42,11 +42,22 @@ export function prioritizeDemands(cards: Card[]): Card[] {
     priorityOrder[a.priority] - priorityOrder[b.priority] || due(a) - due(b) || a.id.localeCompare(b.id));
 }
 
+/**
+ * O que sobra quando a demanda não tem nada que diga o próximo passo.
+ *
+ * Exportado porque quem exibe precisa poder distinguir a frase derivada de um
+ * fato — um item pendente, um motivo de espera — desta, que é só o texto de
+ * reserva. No cartão do quadro, repetir "conferir os detalhes" em sessenta
+ * demandas é uma linha de ruído por cartão; a frase vale a tela onde ela é a
+ * única coisa escrita, não a que já tem título, empresa, prazo e etapa.
+ */
+export const DEMAND_NEXT_ACTION_FALLBACK = "Conferir os detalhes da demanda";
+
 export function demandNextAction(card: Card): string {
   if (card.cancelledAt) return "Demanda cancelada";
   if (card.slaStatus === "completed") return "Processo finalizado";
   if (card.slaPausedReason.trim()) return card.slaPausedReason;
-  return card.checklist.find((item) => !item.completed)?.title || "Conferir os detalhes da demanda";
+  return card.checklist.find((item) => !item.completed)?.title || DEMAND_NEXT_ACTION_FALLBACK;
 }
 
 export function demandAssigneeWorkload(cards: Card[]) {

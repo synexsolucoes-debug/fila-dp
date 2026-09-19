@@ -5724,3 +5724,127 @@
   --ui-state-danger-bg: #431d22;
   --ui-state-danger-text: #ffaaa8;
 }
+
+/* ==========================================================================
+   Operação DP — o que a gaveta e a casca precisam saber sobre o quadro novo
+   ==========================================================================
+   O quadro em si mora em `features/board/board.module.css`, com escopo próprio.
+   Aqui ficam só as três coisas que não cabem lá porque pertencem a outro dono:
+   o bloco de próximo passo e a leitura de SLA (que são da gaveta) e o modo
+   foco (que é da casca inteira). */
+
+.board-shell { display: grid; gap: 12px; min-width: 0; }
+
+/* Modo foco: o quadro fica com a largura da janela.
+   Não é tela cheia do navegador — quem trabalha a fila o dia inteiro continua
+   precisando das abas e da barra do sistema. O que sai é o que já foi lido:
+   a navegação lateral e o contexto do topo. */
+.dashboard-shell[data-focus="on"] { grid-template-columns: 0 minmax(0, 1fr); }
+.dashboard-shell[data-focus="on"] .dashboard-sidebar { display: none; }
+.dashboard-shell[data-focus="on"] .sidebar-group-context { display: none; }
+
+/* PRÓXIMO PASSO. A borda azul à esquerda é a mesma do cartão do quadro: quem
+   leu a frase no cartão reconhece o campo que a escreve. */
+.demand-next-step {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-primary);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-primary-soft);
+}
+.demand-next-step > header span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  color: var(--ui-accent-text, var(--ui-primary));
+}
+.demand-next-step textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.demand-next-step textarea:focus { outline: 2px solid var(--ui-primary); outline-offset: 1px; }
+
+/* A leitura de SLA por extenso, em três colunas de largura igual: prazo,
+   tempo restante e estado são lidos juntos, e um deles maior que os outros
+   sugeriria uma hierarquia que não existe. */
+.demand-sla-reading {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface-muted);
+}
+.demand-sla-reading span { display: grid; gap: 2px; min-width: 0; }
+.demand-sla-reading small { font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ui-text-muted); }
+.demand-sla-reading strong { font-size: 12.5px; font-weight: 700; color: var(--ui-text); }
+.demand-sla-reading[data-sla="overdue"] { border-color: var(--ui-danger); background: var(--ui-state-danger-bg); }
+.demand-sla-reading[data-sla="overdue"] strong { color: var(--ui-state-danger-text); }
+.demand-sla-reading[data-sla="warning"] { border-color: var(--ui-warning); background: var(--ui-state-warn-bg); }
+
+/* A carga de cada pessoa ao lado do nome, na escolha de responsável. */
+.choice-chips label .choice-load {
+  display: block;
+  width: 100%;
+  font-size: 10px;
+  font-weight: 650;
+  /* Cor fixa, e não um token.
+     O chip de responsável é branco nos dois temas — é um dos poucos lugares do
+     painel que não vira escuro. Qualquer token de texto apagado cai sobre esse
+     branco no tema escuro e rende menos de 2,2:1; herdar também não resolve,
+     porque quem vence a cascata ali é uma regra de tema escuro (1,79:1
+     medidos). O valor abaixo é o mesmo que `.choice-chips label` usa para o
+     nome ao lado, em `access.css`: enquanto o chip não acompanhar o tema, a
+     carga tem de acompanhar o chip. */
+  color: #59687a;
+}
+.choice-chips label > b { font-weight: 700; }
+
+/* Departamento, data e competência ao lado do título do quadro. Três linhas
+   curtas, e não três cartões: é contexto de leitura, não indicador. */
+.dashboard-heading-meta .board-context { display: grid; gap: 1px; text-align: right; }
+.dashboard-heading-meta .board-context span {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ui-accent-text, var(--ui-primary));
+}
+.dashboard-heading-meta .board-context small { font-size: 10.5px; color: var(--ui-text-muted); }
+
+/* O painel das abas de modo do quadro. Ele não desenha nada: existe para a
+   aba ter o que apontar, e para o conteúdo do quadro não ficar solto na
+   árvore de acessibilidade. */
+.board-view-panel { display: grid; gap: 12px; min-width: 0; }
+.board-view-panel:focus { outline: none; }
+
+/* ==========================================================================
+   Gaveta da demanda no tema escuro
+   ==========================================================================
+   Três cores escritas à mão em `access.css` assumem fundo branco — as abas da
+   gaveta, a aba ativa e o link de cancelar. No tema escuro elas caem sobre
+   `--ui-surface` e rendem 2,96:1, 3,05:1 e 3,01:1: texto que existe e não se
+   lê. Não era defeito novo; era defeito nunca medido. A gaveta só existe depois
+   de um clique, e a varredura de acessibilidade nunca a abria — o relatório
+   dava o módulo como limpo sem nunca ter olhado para a tela onde o trabalho
+   acontece. Ela entrou na varredura junto com este quadro, e estas três
+   apareceram na primeira passagem.
+
+   O remendo é local à gaveta, e não à classe: `.card-dialog-tabs` e
+   `.danger-link` aparecem em outras telas, e mudá-las na origem mexeria em
+   superfícies que já estão medidas e aprovadas. */
+.theme-dark .demand-detail-modal .card-dialog-tabs button { color: var(--ui-text-soft); }
+.theme-dark .demand-detail-modal .card-dialog-tabs button.active { color: var(--ui-accent-text, var(--ui-primary)); }
+.theme-dark .demand-detail-modal .card-form-actions .danger-link,
+.theme-dark .demand-drawer-actions .danger-link { color: var(--ui-state-danger-text); }

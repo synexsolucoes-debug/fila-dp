@@ -9,7 +9,7 @@ const card = (id: string, patch: Partial<Card> = {}): Card => ({
   assigneeName: "", dueAt: null, slaStatus: "safe", position: 0, sourceType: "manual", archived: false, createdAt: "", updatedAt: "",
   checklist: [], comments: [], activities: [], assignees: [], labels: [], customValues: {}, attachments: [], solidesAttachments: null,
   slaPausedReason: "", slaTargetMinutes: 0, slaPausedMinutes: 0, slaEscalationLevel: 0, competence: "", legalDueAt: null,
-  processTemplateId: null, closedAt: null, cancelledAt: null, cancellationReason: "", ...patch,
+  processTemplateId: null, closedAt: null, cancelledAt: null, cancellationReason: "", nextStep: "", ...patch,
 });
 
 test("vence hoje conta a data, inclusive em espera, sem confundir janela de SLA com vencimento", () => {

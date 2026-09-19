@@ -223,6 +223,13 @@ export type Card = {
    */
   cancelledAt: string | null;
   cancellationReason: string;
+  /**
+   * A próxima ação, em uma frase ("Receber o comprovante e conferir o cadastro").
+   *
+   * É o campo que responde "o que eu faço agora" sem obrigar ninguém a ler a
+   * descrição, os comentários e o checklist. Vazio é estado legítimo.
+   */
+  nextStep: string;
 };
 
 export type OperationalArea = {

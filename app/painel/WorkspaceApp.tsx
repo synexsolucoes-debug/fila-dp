@@ -7,7 +7,6 @@ import {
   type PanelLocation, type PanelSettingsSection, type PanelView,
 } from "@/lib/panel-routes";
 import {
-  Archive,
   ArrowRight,
   BarChart3,
   Bell,
@@ -31,9 +30,7 @@ import {
   Download,
   GitBranch,
   Inbox,
-  Columns3,
   LayoutDashboard,
-  List,
   ListChecks,
   LogOut,
   Mail,
@@ -48,10 +45,8 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Settings2,
   ShieldQuestion,
   Siren,
-  SlidersHorizontal,
   Sun,
   Moon,
   MonitorCog,
@@ -77,7 +72,7 @@ import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { PRIORITY_LABELS } from "@/lib/work-items";
-import { demandNextAction, isOpenDemand, summarizeDemands } from "@/lib/demand-dashboard";
+import { demandNextAction } from "@/lib/demand-dashboard";
 import {
   nextThemePreference, themeLabels, THEME_COOKIE, THEME_COOKIE_MAX_AGE, THEME_SYSTEM_COOKIE,
   type ResolvedTheme, type ThemePreference,
@@ -101,24 +96,34 @@ import { LedgerView } from "./features/ledger";
 import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
-import { DemandPriorityView, DemandDeadlineView } from "./features/work/DemandViews";
+import { DemandDeadlineView } from "./features/work/DemandViews";
+import {
+  BoardIndicators, BoardToolbar, BulkBar, QueueBoard, TeamBoard,
+  activeFilterCount, demandIndicators, filterDemands, operationalAlerts,
+  applyAssigneeOptimistically, boardViewModes, parseSavedViews, readBoardFilters,
+  responsibleColumns, slaReading, toggleIndicator, writeBoardFilters,
+  SAVED_VIEWS_LIMIT,
+  type BoardAlert, type BoardContext, type BulkAction, type DemandFilters, type DemandSort,
+  type IndicatorId, type SavedBoardView,
+} from "./features/board";
 
 /* Os oito destinos do Pagamento PJ (§74) estão escritos aqui um a um, e não
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
 type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "payrollLedger" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
-type BoardMode = "kanban" | "table" | "calendar" | "process";
+/* Os eixos do quadro. `team` e `queue` chegaram com a Operação DP: o primeiro
+   é o quadro por responsável — o modo principal —, o segundo é a fila de uma
+   pessoa separada por urgência. Os quatro antigos continuam porque cada um
+   responde uma pergunta que os novos não respondem. */
+type BoardMode = "team" | "queue" | "kanban" | "table" | "calendar" | "process";
 type BoardDensity = "comfortable" | "compact";
 type BoardGroupBy = "none" | "company" | "assignee";
-type BoardSort = "position" | "due" | "priority";
-
-/** Três leituras da mesma fila; os identificadores preservam as preferências existentes. */
-const boardModes: ReadonlyArray<{ id: BoardMode; label: string; description: string; icon: LucideIcon }> = [
-  { id: "kanban", label: "Fluxo de demandas", description: "Etapas, pendências e próximos passos", icon: Columns3 },
-  { id: "table", label: "Central do DP", description: "Prioridades e distribuição por analista", icon: List },
-  { id: "calendar", label: "Calendário de prazos", description: "Entregas e rotina da semana", icon: CalendarDays },
-];
+/* A ordem do quadro. "Mais recentes" e "mais antigas" chegaram com a Operação
+   DP: quem confere a fila do dia lê pela chegada, e ordenar por prazo esconde
+   a solicitação que entrou há dez minutos no meio de um mês de demandas.
+   O tipo é o do modelo do quadro para que os dois não divirjam. */
+type BoardSort = DemandSort;
 
 /** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
 type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations" | "history";
@@ -220,9 +225,12 @@ type CardForm = {
   assigneeIds: string[];
   labelIds: string[];
   customValues: Record<string, string>;
+  /** A próxima ação, em uma frase. Vazio é estado legítimo (§14). */
+  nextStep: string;
 };
 
 const emptyCardForm: CardForm = {
+  nextStep: "",
   boardId: "",
   employeeId: "",
   requesterUserId: "",
@@ -883,6 +891,12 @@ function activityLabel(activity: ActivityEvent) {
     "teams.movement_confirmed": "confirmou uma movimentação vinda do Teams",
     "sla.paused": "pausou o SLA",
     "sla.resumed": "retomou o SLA",
+    /* A troca de responsável tem linha própria (§16, §41). Enquanto ela passava
+       pelo `PATCH` genérico, o histórico dizia "atualizou os dados" no evento
+       que a operação mais precisa reconstituir — "quem me passou isso, e
+       quando?". */
+    "card.assigned": activity.payload.to ? `atribuiu a demanda a ${String(activity.payload.to)}` : "devolveu a demanda para a fila comum",
+    "card.bulk_updated": "alterou a demanda junto com outras",
   };
   return labels[activity.eventType] ?? "atualizou a demanda";
 }
@@ -891,6 +905,14 @@ function activityDetails(activity: ActivityEvent) {
   const payload = activity.payload && typeof activity.payload === "object" && !Array.isArray(activity.payload) ? activity.payload : {};
   if (activity.eventType === "card.moved") {
     return [`De ${String(payload.fromListName ?? "coluna anterior")} para ${String(payload.toListName ?? "nova coluna")}.`];
+  }
+  if (activity.eventType === "card.assigned") {
+    const de = String(payload.from ?? "");
+    return [de ? `Antes com ${de}.` : "Estava sem responsável."];
+  }
+  if (activity.eventType === "card.bulk_updated") {
+    const total = Number(payload.selectionSize ?? 0);
+    return [`${String(payload.summary ?? "alteração em massa")}${total > 1 ? ` (${total} demandas na mesma ação).` : "."}`];
   }
   if (activity.eventType === "checklist.item_toggled") {
     const state = payload.completed ? "concluída" : "reaberta";
@@ -950,7 +972,10 @@ export function WorkspaceApp({
   const [contractorPaymentFocus, setContractorPaymentFocus] = useState<{
     companyId: string; competence: string; closingId: string;
   } | null>(null);
-  const [boardMode, setBoardMode] = useState<BoardMode>("kanban");
+  /* O quadro abre por responsável. É a pergunta que o DP faz às oito da manhã
+     — quem está com o quê, e o que não tem dono —, e abrir por etapa fazia
+     essa resposta custar um clique todos os dias. */
+  const [boardMode, setBoardMode] = useState<BoardMode>("team");
   /* Como o quadro é lido, e não o que ele mostra.
      Densidade, agrupamento e ordenação são preferências de leitura: não mudam
      o recorte (isso é filtro) nem o formato (isso é `boardMode`), mudam o
@@ -1002,6 +1027,10 @@ export function WorkspaceApp({
   const setView = useCallback((next: View) => {
     setAdministrationOpen(false);
     setViewState(next);
+    /* Sair do quadro desfaz a seleção. Voltar meia hora depois e encontrar doze
+       demandas ainda marcadas é o caminho mais curto para uma ação em massa
+       aplicada no conjunto errado. */
+    setBoardSelection((atual) => (atual.size === 0 ? atual : new Set()));
   }, []);
   /* O nome do grupo em edição, ou `null` quando ninguém digitou nada ainda.
      O estado guardava a string direto e só era preenchido por
@@ -1029,6 +1058,26 @@ export function WorkspaceApp({
   const [periodFilter, setPeriodFilter] = useState<OverviewPeriod>("all");
   const [processFilter, setProcessFilter] = useState("all");
   const [dueFilter, setDueFilter] = useState("all");
+  /* Os três recortes que faltavam para o quadro responder sozinho: a etapa
+     ("situação"), a prioridade e a competência. Eram filtráveis só de cabeça —
+     quem queria "as admissões urgentes da competência que fecha sexta"
+     percorria o quadro com o olho. */
+  const [listFilter, setListFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [competenceFilter, setCompetenceFilter] = useState("");
+  /* Seleção em massa, modo foco e visualizações salvas.
+     A seleção mora aqui, e não dentro do quadro, porque a barra de ações que
+     ela liga é irmã do quadro e não filha dele — e porque trocar de eixo
+     (equipe → situação) não pode perder o que já estava selecionado. */
+  const [boardSelection, setBoardSelection] = useState<ReadonlySet<string>>(() => new Set());
+  const [focusMode, setFocusMode] = useState(false);
+  const [savedViews, setSavedViews] = useState<readonly SavedBoardView[]>([]);
+  /* O relógio do quadro. "Vence em 40 minutos" e "SLA crítico" são leituras
+     contra o instante atual; sem atualizar, o quadro aberto desde as oito da
+     manhã continua dizendo o que era verdade às oito. Um minuto é a menor
+     unidade que a tela exibe, então é a cadência certa — e não há nenhuma
+     chamada de rede envolvida. */
+  const [boardNow, setBoardNow] = useState(() => new Date());
   /**
    * Busca dentro do quadro, separada da busca global (⌘K).
    *
@@ -1086,6 +1135,56 @@ export function WorkspaceApp({
   const [themePreference, setThemePreference] = useState<ThemePreference>(initialThemePreference);
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(initialTheme);
   const theme: ResolvedTheme = themePreference === "system" ? systemTheme : themePreference;
+
+  /* Quem está olhando, pelo nome com que as demandas o registram. Fica aqui em
+     cima porque o recorte do quadro já depende dele: "minha fila" é um filtro
+     por esse nome. */
+  const currentMemberName = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.name ?? user.displayName;
+
+  /**
+   * O recorte do quadro, inteiro, em um objeto (§47).
+   *
+   * Os nove campos continuam morando em `useState` separados porque metade
+   * deles é lida por outras telas — a Visão geral usa a empresa, os Indicadores
+   * usam o período. O que muda é que o quadro passa a enxergá-los como uma
+   * coisa só: é isso que permite escrever o recorte na URL, salvá-lo em "Meus
+   * filtros" e limpá-lo sem esquecer um campo pelo caminho, que era o defeito
+   * de `Limpar` antes — ele zerava cinco dos sete filtros existentes.
+   */
+  const boardFilters = useMemo<DemandFilters>(() => ({
+    query: boardQuery,
+    companyId: companyFilter,
+    processType: processFilter,
+    listId: listFilter,
+    assignee: assigneeFilter,
+    priority: priorityFilter,
+    due: dueFilter,
+    sla: slaFilter,
+    competence: competenceFilter,
+  }), [assigneeFilter, boardQuery, companyFilter, competenceFilter, dueFilter, listFilter, priorityFilter, processFilter, slaFilter]);
+
+  const applyBoardFilters = useCallback((next: DemandFilters) => {
+    setBoardQuery(next.query);
+    setCompanyFilter(next.companyId);
+    setProcessFilter(next.processType);
+    setListFilter(next.listId);
+    setAssigneeFilter(next.assignee);
+    setPriorityFilter(next.priority);
+    setDueFilter(next.due);
+    setSlaFilter(next.sla);
+    setCompetenceFilter(next.competence);
+  }, []);
+
+  /* O que o recorte sozinho não sabe: o nome das áreas (a busca procura
+     "Departamento Pessoal", não o id), quais colunas significam "aguardando
+     terceiros" e quem está olhando. */
+  const boardContext = useMemo<BoardContext>(() => ({
+    areaNames: new Map((snapshot?.areas ?? []).map((area) => [area.id, area.name])),
+    waitingListIds: new Set((snapshot?.lists ?? []).filter((list) => list.slaBehavior === "paused").map((list) => list.id)),
+    currentMemberName,
+  }), [snapshot?.areas, snapshot?.lists, currentMemberName]);
+
+
 
   /* O que o navegador responde de `prefers-color-scheme`, e o que ele responde
      quando a pessoa muda no sistema operacional com o painel aberto.
@@ -1166,6 +1265,63 @@ export function WorkspaceApp({
       JSON.stringify({ density: boardDensity, groupBy: boardGroupBy, sort: boardSort }));
   }, [boardDensity, boardGroupBy, boardSort]);
 
+  /**
+   * O que o endereço pediu do quadro, aplicado uma vez na abertura (§47).
+   *
+   * O caminho (`/painel/demandas/…`) já vinha resolvido do servidor; a consulta
+   * (`?situacao=atrasada&empresa=4`) não vinha, e não pode vir: ela depende de
+   * estado que só existe depois da hidratação. Aplicar num quadro adiado evita
+   * o piscar do quadro sem recorte, e o `ref` garante que isto aconteça só na
+   * abertura — reaplicar a cada render desfaria todo filtro que a pessoa
+   * mexesse.
+   */
+  const boardLocationApplied = useRef(false);
+  useEffect(() => {
+    if (boardLocationApplied.current) return;
+    boardLocationApplied.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      const busca = window.location.search;
+      if (!busca) return;
+      applyBoardFilters(readBoardFilters(busca));
+      const modo = new URLSearchParams(busca).get("modo");
+      if (boardViewModes.includes(modo as BoardMode)) setBoardMode(modo as BoardMode);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [applyBoardFilters]);
+
+  /**
+   * "Meus filtros": as visualizações que a pessoa salvou.
+   *
+   * Ficam no navegador, e por grupo. É a mesma decisão da densidade e da
+   * ordenação logo acima: o recorte salvo é de quem lê, não do grupo. Numa
+   * equipe de seis, quatro salvariam "minha fila" e a lista viraria seis
+   * versões do mesmo recorte para todo mundo.
+   */
+  useEffect(() => {
+    const workspaceId = snapshot?.workspace.id;
+    if (!workspaceId) return;
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        setSavedViews(parseSavedViews(window.localStorage.getItem(`vinculato-quadro-recortes:${workspaceId}`)));
+      } catch {
+        /* Armazenamento bloqueado (janela anônima, política corporativa) não
+           pode impedir o quadro de abrir: sem visualização salva, tudo o mais
+           continua funcionando. */
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [snapshot?.workspace.id]);
+
+  /* O relógio do quadro. "Vence em 40 minutos" e "SLA crítico" são leituras
+     contra o instante atual, e um quadro aberto desde as oito da manhã
+     continuaria dizendo o que era verdade às oito. Um minuto é a menor unidade
+     que a tela exibe, e nada aqui vai à rede. */
+  useEffect(() => {
+    if (view !== "board") return;
+    const timer = window.setInterval(() => setBoardNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [view]);
+
   /* Catálogo de processos que podem originar demanda (§10).
      Carrega uma vez, na primeira abertura da modal de criação. Falha aqui não
      interrompe nada: a lista fica vazia e a modal segue oferecendo a demanda
@@ -1237,12 +1393,26 @@ export function WorkspaceApp({
    * atual e o botão voltar precisaria de dois cliques para sair da tela.
    * ---------------------------------------------------------------------- */
   const locationSynced = useRef(false);
-  const currentPath = useMemo(() => panelPath({
-    view: view as PanelView,
-    recordId: cardModalOpen && selectedCardId ? selectedCardId : "",
-    settings: administrationOpen ? settingsSection as PanelSettingsSection : null,
-    companyId: companyFilter === "all" ? "" : companyFilter,
-  }), [view, cardModalOpen, selectedCardId, administrationOpen, settingsSection, companyFilter]);
+  const currentPath = useMemo(() => {
+    const base = panelPath({
+      view: view as PanelView,
+      recordId: cardModalOpen && selectedCardId ? selectedCardId : "",
+      settings: administrationOpen ? settingsSection as PanelSettingsSection : null,
+      companyId: companyFilter === "all" ? "" : companyFilter,
+    });
+    /* O recorte do quadro também é endereço (§47).
+       "Manda o link dessas atrasadas da Horizonte" é a segunda frase mais dita
+       do dia, depois de "manda o link dessa demanda" — e até aqui o link
+       mandava para o quadro inteiro, com o recorte desfeito. Só o quadro
+       escreve esses parâmetros: pendurá-los em Ponto ou EPI seria prometer um
+       recorte que aquelas telas não aplicam. */
+    if (view !== "board") return base;
+    const [caminho, consulta = ""] = base.split("?");
+    const parametros = writeBoardFilters(boardFilters, new URLSearchParams(consulta));
+    if (boardMode !== "team") parametros.set("modo", boardMode); else parametros.delete("modo");
+    const query = parametros.toString();
+    return query ? `${caminho}?${query}` : caminho;
+  }, [view, cardModalOpen, selectedCardId, administrationOpen, settingsSection, companyFilter, boardFilters, boardMode]);
 
   useEffect(() => {
     const here = `${window.location.pathname}${window.location.search}`;
@@ -1257,6 +1427,14 @@ export function WorkspaceApp({
       const next = parsePanelPath(window.location.pathname, window.location.search);
       setView(next.view as View);
       setCompanyFilter(next.companyId || "all");
+      /* Voltar precisa desfazer o recorte junto com a tela. Sem isto, o botão
+         voltar levava de "atrasadas da Horizonte" para "atrasadas da
+         Horizonte" — mudava o endereço e não mudava nada na tela. */
+      if (next.view === "board") {
+        applyBoardFilters(readBoardFilters(window.location.search));
+        const modo = new URLSearchParams(window.location.search).get("modo");
+        setBoardMode(boardViewModes.includes(modo as BoardMode) ? modo as BoardMode : "team");
+      }
       setAdministrationOpen(Boolean(next.settings));
       if (next.settings) setSettingsSection(next.settings as SettingsSection);
       if (!next.recordId) {
@@ -1499,36 +1677,51 @@ export function WorkspaceApp({
     });
   }, [snapshot?.recentActivity, periodFilter]);
   const allCards = useMemo(() => [...activeCards, ...(snapshot?.archivedCards ?? [])], [activeCards, snapshot?.archivedCards]);
-  const boardSummary = useMemo(() => summarizeDemands(
-    activeCards.filter((card) => companyFilter === "all" || card.companyId === companyFilter), snapshot?.lists ?? [],
-  ), [activeCards, companyFilter, snapshot?.lists]);
-  const filteredActiveCards = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
-    const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).getTime();
-    /* Sem acento e em caixa baixa dos dois lados: quem digita "servicos" com
-       pressa procura "Serviços", e um filtro que exige o acento certo é um
-       filtro que responde "nada encontrado" para um termo que está na tela. */
-    const termo = boardQuery.trim().normalize("NFD").replace(/[\u0300-\u036f]/gu, "").toLowerCase();
-    const contem = (value: string | null | undefined) =>
-      !!value && value.normalize("NFD").replace(/[\u0300-\u036f]/gu, "").toLowerCase().includes(termo);
-    return activeCards.filter((card) => {
-      const dueAt = card.dueAt ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(card.dueAt) ? `${card.dueAt}T12:00:00` : card.dueAt).getTime() : Number.NaN;
-      const dueMatches = dueFilter === "all" ||
-        (dueFilter === "today" && isOpenDemand(card) && dueAt >= todayStart && dueAt < tomorrowStart) ||
-        (dueFilter === "week" && dueAt >= todayStart && dueAt < weekEnd) ||
-        (dueFilter === "overdue" && card.slaStatus === "overdue");
-      const termoCombina = !termo || contem(card.title) || contem(card.company) || contem(card.processType) ||
-        contem(card.assigneeName) || card.assignees.some((assignee) => contem(assignee.name)) ||
-        contem(referenceLabel(card)) || contem(card.customValues.matricula);
-      return (assigneeFilter === "all" || card.assigneeName === assigneeFilter || card.assignees.some((assignee) => assignee.name === assigneeFilter)) &&
-        (slaFilter === "all" || card.slaStatus === slaFilter) &&
-        (companyFilter === "all" || card.companyId === companyFilter) &&
-        (processFilter === "all" || card.processType === processFilter) &&
-        termoCombina && dueMatches;
-    });
-  }, [activeCards, assigneeFilter, boardQuery, companyFilter, dueFilter, processFilter, slaFilter]);
+  const filteredActiveCards = useMemo(
+    () => filterDemands(activeCards, boardFilters, boardContext, boardNow),
+    [activeCards, boardFilters, boardContext, boardNow],
+  );
+
+  /**
+   * A base dos indicadores: a empresa escolhida, e nada além disso.
+   *
+   * Contar sobre `filteredActiveCards` faria o número desaparecer no instante
+   * em que ele fosse usado — clicar em "atrasadas" recortaria o quadro, e o
+   * indicador passaria a dizer que só há atrasadas. Contar sobre tudo ignoraria
+   * o seletor de empresa, que é a primeira coisa que um grupo com oito
+   * empresas ajusta pela manhã. A empresa recorta; os demais filtros, não.
+   */
+  const boardBaseCards = useMemo(
+    () => activeCards.filter((card) => companyFilter === "all" || card.companyId === companyFilter),
+    [activeCards, companyFilter],
+  );
+  const boardIndicators = useMemo(() => demandIndicators(boardBaseCards, boardNow), [boardBaseCards, boardNow]);
+  const boardAlerts = useMemo(() => operationalAlerts(boardBaseCards, boardNow), [boardBaseCards, boardNow]);
+  /* As competências que existem no quadro. O campo é uma escolha, e não um
+     texto livre, porque competência inventada não casa com demanda nenhuma e o
+     resultado vazio parece defeito. */
+  const boardCompetences = useMemo(
+    () => Array.from(new Set(activeCards.map((card) => card.competence).filter(Boolean))).sort().reverse(),
+    [activeCards],
+  );
+  /**
+   * Quanto cada pessoa já carrega — a informação que falta na hora de atribuir.
+   *
+   * Sai do mesmo cálculo que desenha as colunas do quadro, e não de uma segunda
+   * contagem: dois números para a mesma pergunta divergem no dia em que um dos
+   * dois deixar de considerar as concluídas, e aí a gaveta e o quadro passam a
+   * discordar sobre quem está sobrecarregado.
+   */
+  const assigneeLoad = useMemo(
+    () => new Map(responsibleColumns(activeCards, snapshot?.members ?? [])
+      .map((column) => [column.key, { open: column.open, overdue: column.overdue }])),
+    [activeCards, snapshot?.members],
+  );
+
+  const stageNames = useMemo(
+    () => new Map((snapshot?.lists ?? []).map((list) => [list.id, list.name])),
+    [snapshot?.lists],
+  );
 
   /* O quadro montado: raias, e dentro delas as colunas já ordenadas.
      Montar isto uma vez aqui, e não dentro do JSX, tem uma razão prática: sem
@@ -1576,7 +1769,6 @@ export function WorkspaceApp({
       .map(([label, cards]) => ({ key: label, label, total: cards.length, cardsByList: porColuna(cards) }));
   }, [boardGroupBy, boardSort, filteredActiveCards, snapshot?.lists]);
   const selectedCard = useMemo(() => allCards.find((card) => card.id === selectedCardId) ?? null, [allCards, selectedCardId]);
-  const assignees = useMemo(() => Array.from(new Set(activeCards.flatMap((card) => card.assignees.length ? card.assignees.map((assignee) => assignee.name) : [card.assigneeName]).filter(Boolean))).sort(), [activeCards]);
   const processTypes = useMemo(() => Array.from(new Set(activeCards.map((card) => card.processType).filter(Boolean))).sort(), [activeCards]);
   const workspaceInitials = initials(snapshot?.workspace.name ?? "Synex DP");
   /** O valor do campo: o que está sendo digitado, ou o nome vigente do grupo. */
@@ -1602,30 +1794,17 @@ export function WorkspaceApp({
     [snapshot?.modules],
   );
   const hasModule = useCallback((route: string) => enabledModules.size === 0 || enabledModules.has(route), [enabledModules]);
-  const currentMemberName = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.name ?? user.displayName;
 
-  /* A aba ativa é derivada do filtro, e não um estado paralelo.
-     Guardar "qual aba está marcada" ao lado de `assigneeFilter`/`slaFilter`
-     abriria a porta para os dois discordarem: a pessoa muda o responsável pelo
-     campo de baixo e a aba continua dizendo "Minhas demandas". Aqui a aba é uma
-     leitura do filtro — se o filtro não corresponde a nenhum recorte nomeado,
-     nenhuma aba fica marcada, que é a verdade. */
-  const boardScope = useMemo(() => {
-    if (dueFilter !== "all") return "none";
-    if (assigneeFilter === currentMemberName && slaFilter === "all") return "mine";
-    if (assigneeFilter !== "all") return "none";
-    if (slaFilter === "overdue") return "overdue";
-    if (slaFilter === "paused") return "waiting";
-    if (slaFilter === "all") return "all";
-    return "none";
-  }, [assigneeFilter, currentMemberName, dueFilter, slaFilter]);
-  /** Quantas opções de exibição saíram do padrão — o número no botão "Exibição". */
-  const activeBoardViewOptions = (boardDensity === "comfortable" ? 0 : 1)
-    + (boardGroupBy === "none" ? 0 : 1) + (boardSort === "position" ? 0 : 1);
-  /** Quantos recortes estão ligados — o número no botão "Filtros". */
-  const activeBoardFilters = useMemo(
-    () => [assigneeFilter, companyFilter, processFilter, dueFilter, slaFilter].filter((value) => value !== "all").length,
-    [assigneeFilter, companyFilter, dueFilter, processFilter, slaFilter]);
+  /**
+   * Quantos recortes estão ligados.
+   *
+   * Conta pela mesma definição que o quadro aplica, e não por uma lista escrita
+   * à mão: a versão anterior enumerava cinco dos filtros e por isso ignorava os
+   * que chegaram depois — o número dizia "2" com quatro recortes ligados, e o
+   * estado vazio do quadro continuava dizendo "não há demandas" quando o certo
+   * era "o recorte esconde".
+   */
+  const activeBoardFilters = useMemo(() => activeFilterCount(boardFilters), [boardFilters]);
 
   // Quais telas esta pessoa vê, uma vez só. Antes a mesma pergunta estava
   // escrita em treze botões — `hasModule("x") && role !== "guest" &&` — e as
@@ -1801,6 +1980,7 @@ export function WorkspaceApp({
       assigneeIds: card.assignees.map((assignee) => assignee.userId),
       labelIds: card.labels.map((label) => label.id),
       customValues: card.customValues,
+      nextStep: card.nextStep,
     });
     setNewChecklistItem("");
     setNewComment("");
@@ -1871,6 +2051,109 @@ export function WorkspaceApp({
       setToast("Demanda atualizada.");
       setCardModalOpen(false);
     }
+  }
+
+  /**
+   * Atribuir por arrasto, com a tela indo na frente (§10, §37).
+   *
+   * O quadro aplica a mudança antes de perguntar ao servidor. A alternativa —
+   * esperar a resposta — faz o cartão voltar para a coluna de origem por meio
+   * segundo, e é esse meio segundo que leva alguém a arrastar de novo; a
+   * segunda atribuição é a que gera a linha duplicada no histórico.
+   *
+   * Se o servidor recusar, o retrato anterior volta inteiro. Não é um desfazer
+   * campo a campo: entre o arrasto e a recusa, outra pessoa pode ter mexido na
+   * mesma demanda, e reverter só o responsável deixaria o resto do quadro
+   * descrito por um retrato que nunca existiu.
+   */
+  async function assignCard(cardId: string, userId: string, name: string) {
+    if (!canEdit || !snapshot) return;
+    const card = allCards.find((item) => item.id === cardId);
+    if (!card) return;
+    const anterior = snapshot;
+    const atual = card.assignees[0]?.name ?? card.assigneeName ?? "";
+    if ((userId ? name : "") === atual) return;
+
+    const membro = userId ? snapshot.members.find((member) => member.userId === userId) : undefined;
+    setSnapshot(applyAssigneeOptimistically(snapshot, cardId,
+      membro ? { userId: membro.userId, name: membro.name, email: membro.email } : null));
+    setBusy(true);
+    setError("");
+    try {
+      const next = await requestSnapshot(`/api/cards/${cardId}/assignee`, {
+        method: "POST",
+        body: JSON.stringify({ assigneeIds: userId ? [userId] : [] }),
+      });
+      applySnapshot(next, name ? `Demanda atribuída a ${name}.` : "Demanda devolvida para a fila comum.");
+    } catch (cause) {
+      setSnapshot(anterior);
+      setError(cause instanceof Error
+        ? `Não foi possível atualizar o responsável. ${cause.message}`
+        : "Não foi possível atualizar o responsável.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Uma ação sobre a seleção inteira. O servidor recusa tudo ou aplica tudo. */
+  async function runBulkAction(action: BulkAction) {
+    const cardIds = [...boardSelection];
+    if (cardIds.length === 0) return;
+    const next = await mutate("/api/cards/bulk", {
+      method: "POST",
+      body: JSON.stringify({ cardIds, ...action }),
+    }, `${cardIds.length} ${cardIds.length === 1 ? "demanda atualizada" : "demandas atualizadas"}.`);
+    if (next) setBoardSelection(new Set());
+  }
+
+  function toggleCardSelection(cardId: string, selected: boolean) {
+    setBoardSelection((atual) => {
+      const proximo = new Set(atual);
+      if (selected) proximo.add(cardId); else proximo.delete(cardId);
+      return proximo;
+    });
+  }
+
+  /** Guarda o recorte atual em "Meus filtros", no navegador de quem salvou. */
+  function saveCurrentBoardView() {
+    const workspaceId = snapshot?.workspace.id;
+    if (!workspaceId) return;
+    if (savedViews.length >= SAVED_VIEWS_LIMIT) {
+      setError(`Você já tem ${SAVED_VIEWS_LIMIT} recortes salvos. Remova um antes de salvar outro.`);
+      return;
+    }
+    const nome = window.prompt("Nome do recorte (ex.: Admissões atrasadas)")?.trim().slice(0, 40);
+    if (!nome) return;
+    const proximas = [...savedViews, { id: crypto.randomUUID(), name: nome, mode: boardMode, filters: boardFilters }];
+    persistBoardViews(workspaceId, proximas);
+    setToast(`Recorte "${nome}" salvo em Meus filtros.`);
+  }
+
+  function removeBoardView(id: string) {
+    const workspaceId = snapshot?.workspace.id;
+    if (!workspaceId) return;
+    persistBoardViews(workspaceId, savedViews.filter((view) => view.id !== id));
+  }
+
+  function persistBoardViews(workspaceId: string, views: readonly SavedBoardView[]) {
+    setSavedViews(views);
+    try {
+      window.localStorage.setItem(`vinculato-quadro-recortes:${workspaceId}`, JSON.stringify(views));
+    } catch {
+      /* Sem armazenamento, o recorte vale para esta sessão. Recusar a ação
+         seria pior: a pessoa perderia o recorte que acabou de montar. */
+    }
+  }
+
+  /** O que um indicador ou um alerta faz quando é clicado. */
+  function focusIndicator(indicator: IndicatorId) {
+    applyBoardFilters(toggleIndicator(boardFilters, indicator));
+    setBoardSelection(new Set());
+  }
+
+  function focusAlert(alert: BoardAlert) {
+    if (!alert.filters) return;
+    applyBoardFilters({ ...boardFilters, ...alert.filters });
   }
 
   async function moveCard(cardId: string, toListId: string) {
@@ -2356,6 +2639,14 @@ export function WorkspaceApp({
   const header = viewCatalog[view];
   const primaryAction = header.primaryAction;
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
+  /* O departamento por onde a pessoa responde, e a competência em curso.
+     A competência sai dos ciclos de folha quando existe um aberto — é o que o
+     DP chama de "o mês que está rodando" — e cai no mês corrente quando não
+     existe nenhum. Inventar sempre o mês corrente diria "set/2026" no dia 2 de
+     outubro para quem ainda está fechando setembro. */
+  const currentMemberDepartment = snapshot?.members.find((member) => member.email.toLowerCase() === user.email.toLowerCase())?.departmentName ?? "";
+  const currentCompetence = snapshot?.payrollCycles.find((cycle) => cycle.status !== "closed")?.competence
+    ?? new Date().toISOString().slice(0, 7);
   const principalCompany = snapshot.companies.find((company) => company.isPrincipal) ?? null;
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
 
@@ -2727,7 +3018,10 @@ export function WorkspaceApp({
      O tema escuro não foi removido: `.theme-dark` continua definido e medido em
      `dashboard-modern.css`; ele só deixou de ser o tema que o produto entrega. */
   return (
-    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view} data-theme={theme}>
+    /* `data-focus` no invólucro, e não no quadro: o que o modo foco esconde —
+       barra lateral, contexto do topo — está fora do quadro, e é justamente
+       isso que devolve a largura para as colunas. */
+    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view} data-theme={theme} data-focus={focusMode && view === "board" ? "on" : undefined}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -3043,6 +3337,18 @@ export function WorkspaceApp({
             <div className="dashboard-heading-meta">
               <div className={`dashboard-sync-status ${realtimeStatus}`} aria-live="polite"><RefreshCw aria-hidden="true" /><span>{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span></div>
               {view === "overview" && <div className="dashboard-date"><strong>{today}</strong></div>}
+              {/* Onde a pessoa está operando, e quando (§4).
+                  O quadro é lido o dia inteiro, e três coisas mudam a leitura de
+                  todo número que está abaixo: o departamento por onde ela
+                  responde, a competência em curso e a data de hoje. Nenhuma
+                  delas aparecia — quem abria o quadro às sete da manhã de uma
+                  segunda de fechamento via os mesmos números de uma
+                  quarta-feira qualquer, sem nada dizendo qual era o contexto. */}
+              {view === "board" && <div className="dashboard-date board-context">
+                <span>{currentMemberDepartment || "Operação"}</span>
+                <strong>{today}</strong>
+                <small>Competência {competenceLabel(currentCompetence)}</small>
+              </div>}
               {canEdit && primaryAction && <button className="new-demand"
                 onClick={primaryAction.kind === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>
                 <Plus aria-hidden="true" /><span>{primaryAction.label}</span>
@@ -3102,119 +3408,92 @@ export function WorkspaceApp({
             onOpenContractorPayment={(target) => { setContractorPaymentFocus(target); setView("contractorClosings"); }} />}
 
           {view === "board" && (
-            <section className="dp-demand-panel" aria-label="Painel de demandas do DP">
-              <div className="dp-model-switch" role="group" aria-label="Formato do quadro">
-                {boardModes.map((mode) => {
-                  const ModeIcon = mode.icon;
-                  return <button key={mode.id} type="button" aria-pressed={boardMode === mode.id}
-                    onClick={() => setBoardMode(mode.id)}><ModeIcon aria-hidden="true" />
-                    <span><strong>{mode.label}</strong><small>{mode.description}</small></span>
-                  </button>;
-                })}
-              </div>
-              {/* Indicadores do quadro e da empresa selecionada. Cada número
-                  abre o recorte correspondente; vencer hoje usa a data real,
-                  não a janela de advertência do SLA. */}
-              <div className="dashboard-stats board-summary" role="group" aria-label="Resumo do quadro">
-                {/* O total não é um recorte: ele é o estado de repouso da tela,
-                    e por isso não fica marcado. O que ele faz é desfazer — é o
-                    caminho de volta quando um dos três recortes está ligado. */}
-                <button type="button" className="board-summary-item"
-                  onClick={() => { setSlaFilter("all"); setAssigneeFilter("all"); setDueFilter("all"); }}>
-                  <span>Demandas abertas</span><strong>{boardSummary.open}</strong><small>{boardSummary.completed} concluídas no quadro</small>
-                </button>
-                <button type="button" className={`board-summary-item tone-danger${slaFilter === "overdue" ? " active" : ""}`}
-                  aria-pressed={slaFilter === "overdue"}
-                  onClick={() => { setDueFilter("all"); setSlaFilter((current) => current === "overdue" ? "all" : "overdue"); }}>
-                  <span>Com prazo vencido</span><strong>{boardSummary.overdue}</strong><small>Precisam de atenção do DP</small>
-                </button>
-                <button type="button" className={`board-summary-item tone-warn${dueFilter === "today" ? " active" : ""}`}
-                  aria-pressed={dueFilter === "today"}
-                  onClick={() => { setSlaFilter("all"); setDueFilter((current) => current === "today" ? "all" : "today"); }}>
-                  <span>Vencem hoje</span><strong>{boardSummary.dueToday}</strong><small>Entregas previstas para hoje</small>
-                </button>
-                <button type="button" className={`board-summary-item${slaFilter === "paused" ? " active" : ""}`}
-                  aria-pressed={slaFilter === "paused"}
-                  onClick={() => { setDueFilter("all"); setSlaFilter((current) => current === "paused" ? "all" : "paused"); }}>
-                  <span>Aguardando retorno</span><strong>{boardSummary.waiting}</strong><small>Demandas em espera</small>
-                </button>
-              </div>
+            <div className="board-shell" data-focus={focusMode || undefined}>
+              {/* Seis números, e cada um deles é o recorte que ele conta.
+                  A tira antiga tinha quatro e nenhum deles era "sem
+                  responsável" — que é justamente o primeiro que um gestor de DP
+                  procura de manhã, porque é a pilha que só sai do lugar se
+                  alguém a distribuir. */}
+              <BoardIndicators
+                indicators={boardIndicators}
+                filters={boardFilters}
+                alerts={boardAlerts}
+                onToggle={focusIndicator}
+                onAlert={focusAlert}
+              />
 
-              {/* Duas fileiras, e cada uma responde a uma pergunta.
-                  A de cima é "quais demandas eu quero ver" (recorte) e "de que
-                  jeito" (formato). A de baixo é o refino: busca e os três
-                  campos que mais recortam o quadro, com o resto atrás de
-                  "Filtros". Antes as duas perguntas dividiam a mesma linha —
-                  abas de formato ao lado de fichas de recorte —, e não havia
-                  como saber, olhando, que "Kanban" e "Atrasadas" faziam coisas
-                  de naturezas diferentes. */}
-              <div className="dashboard-board-head">
-                <div className="dashboard-tabs board-scope-tabs" role="group" aria-label="Recorte do quadro">
-                  <button type="button" className={boardScope === "all" ? "active" : ""} aria-pressed={boardScope === "all"}
-                    onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); setDueFilter("all"); }}>Todas</button>
-                  <button type="button" className={boardScope === "mine" ? "active" : ""} aria-pressed={boardScope === "mine"}
-                    onClick={() => { setSlaFilter("all"); setDueFilter("all"); setAssigneeFilter((current) => current === currentMemberName ? "all" : currentMemberName); }}>Minhas demandas</button>
-                  <button type="button" className={boardScope === "overdue" ? "active" : ""} aria-pressed={boardScope === "overdue"}
-                    onClick={() => { setAssigneeFilter("all"); setDueFilter("all"); setSlaFilter((current) => current === "overdue" ? "all" : "overdue"); }}>Atrasadas</button>
-                  <button type="button" className={boardScope === "waiting" ? "active" : ""} aria-pressed={boardScope === "waiting"}
-                    onClick={() => { setAssigneeFilter("all"); setDueFilter("all"); setSlaFilter((current) => current === "paused" ? "all" : "paused"); }}>Aguardando retorno</button>
-                </div>
-                <div className="board-view-switch board-view-tabs" role="group" aria-label="Consultas adicionais">
-                  <button type="button" className={boardMode === "process" ? "active" : ""} aria-pressed={boardMode === "process"} onClick={() => setBoardMode("process")}><Workflow aria-hidden="true" />Processos</button>
-                  <button type="button" className="archive-trigger" onClick={() => setArchiveOpen(true)}>
-                    <Archive aria-hidden="true" /> Arquivados <b>{snapshot.archivedCards.length}</b>
-                  </button>
-                </div>
-              </div>
+              <BoardToolbar
+                filters={boardFilters}
+                onFilters={applyBoardFilters}
+                mode={boardMode}
+                onMode={setBoardMode}
+                sort={boardSort}
+                onSort={setBoardSort}
+                companies={snapshot.companies}
+                lists={snapshot.lists}
+                members={snapshot.members}
+                processTypes={processTypes}
+                competences={boardCompetences}
+                currentMemberName={currentMemberName}
+                savedViews={savedViews}
+                onSaveView={saveCurrentBoardView}
+                onApplyView={(view_) => { applyBoardFilters(view_.filters); setBoardMode(view_.mode); }}
+                onRemoveView={removeBoardView}
+                focusMode={focusMode}
+                onFocusMode={setFocusMode}
+                density={boardDensity}
+                onDensity={setBoardDensity}
+                groupBy={boardGroupBy}
+                onGroupBy={setBoardGroupBy}
+                archivedCount={snapshot.archivedCards.length}
+                onOpenArchive={() => setArchiveOpen(true)}
+              />
 
-              <div className="dashboard-filters board-filter-bar">
-                <label className="board-search">
-                  <Search aria-hidden="true" />
-                  <input type="search" value={boardQuery} onChange={(event) => setBoardQuery(event.target.value)}
-                    placeholder="Buscar demanda, colaborador ou empresa" aria-label="Buscar no quadro" />
-                </label>
-                <label className="board-selector"><span>Quadro</span><select value={snapshot.board.id} onChange={(event) => void switchBoard(event.target.value)} aria-label="Selecionar quadro">{snapshot.boards.map((board) => <option value={board.id} key={board.id}>{board.name}</option>)}</select></label>
-                <label className="board-field"><span>Processo</span><select aria-label="Filtrar por tipo de demanda" value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}><option value="all">Todos</option>{processTypes.map((process) => <option key={process}>{process}</option>)}</select></label>
-                <label className="board-field"><span>Responsável</span><select aria-label="Filtrar por responsável" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}><option value="all">Todos</option>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label>
-                <label className="board-field"><span>Empresa</span><select aria-label="Filtrar por empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">Todas</option>{snapshot.companies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
-                {/* Exibição fica separada de Filtros porque responde a outra
-                    pergunta: filtro decide *o que aparece*, exibição decide
-                    *como*. Juntá-las faria "compacto" parecer um recorte. Só
-                    existe no quadro — lista, calendário e processos têm o
-                    próprio arranjo e nenhum deles tem coluna para adensar. */}
-                {boardMode === "kanban" && <details className="board-filter-details board-view-options">
-                  <summary><Settings2 aria-hidden="true" />Exibição <span>{activeBoardViewOptions || ""}</span></summary>
-                  <div className="board-filter-fields">
-                    <div className="board-view-density" role="group" aria-label="Densidade do quadro">
-                      <span>Densidade</span>
-                      <div>
-                        <button type="button" className={boardDensity === "comfortable" ? "active" : ""} aria-pressed={boardDensity === "comfortable"} onClick={() => setBoardDensity("comfortable")}>Confortável</button>
-                        <button type="button" className={boardDensity === "compact" ? "active" : ""} aria-pressed={boardDensity === "compact"} onClick={() => setBoardDensity("compact")}>Compacto</button>
-                      </div>
-                    </div>
-                    <label><span>Agrupar por</span><select value={boardGroupBy} onChange={(event) => setBoardGroupBy(event.target.value as BoardGroupBy)}><option value="none">Sem agrupamento</option><option value="company">Empresa</option><option value="assignee">Responsável</option></select></label>
-                    <label><span>Ordenar por</span><select value={boardSort} onChange={(event) => setBoardSort(event.target.value as BoardSort)}><option value="position">Ordem do quadro</option><option value="due">Prazo</option><option value="priority">Prioridade</option></select></label>
-                  </div>
-                </details>}
-                <details className="board-filter-details">
-                  <summary><SlidersHorizontal aria-hidden="true" />Filtros <span>{activeBoardFilters || ""}</span></summary>
-                  <div className="board-filter-fields">
-                    <label><span>Prazo</span><select aria-label="Filtrar por prazo" value={dueFilter} onChange={(event) => setDueFilter(event.target.value)}><option value="all">Todos</option><option value="today">Vence hoje</option><option value="week">Próximos 7 dias</option><option value="overdue">Já atrasados</option></select></label>
-                    <label><span>SLA</span><select aria-label="Filtrar por SLA" value={slaFilter} onChange={(event) => setSlaFilter(event.target.value)}><option value="all">Todos</option><option value="safe">No prazo</option><option value="warning">Vence hoje</option><option value="overdue">Atrasado</option><option value="paused">Pausado</option><option value="completed">Concluído</option></select></label>
-                  </div>
-                </details>
-                {(activeBoardFilters > 0 || boardQuery.trim() !== "") && <button type="button" className="filter-clear" onClick={() => { setAssigneeFilter("all"); setSlaFilter("all"); setCompanyFilter("all"); setProcessFilter("all"); setDueFilter("all"); setBoardQuery(""); }}>Limpar</button>}
-              </div>
+              {/* O painel das abas de modo. `tabIndex={-1}` e não `0`: o quadro
+                  tem os próprios alvos de foco — cartões, ações, caixas de
+                  seleção —, e uma parada de tabulação no invólucro faria o
+                  teclado passar por um contêiner vazio antes de chegar neles.
+                  O `-1` mantém o painel alcançável por programa, que é o que a
+                  aba precisa para apontar para ele. */}
+              <div id="board-view-panel" role="tabpanel" tabIndex={-1} aria-labelledby={`board-mode-${boardMode}`} className="board-view-panel">
+              {boardMode === "team" && <TeamBoard
+                cards={filteredActiveCards}
+                members={snapshot.members}
+                stageNames={stageNames}
+                sort={boardSort}
+                canEdit={canEdit}
+                now={boardNow}
+                selection={boardSelection}
+                filtered={activeBoardFilters > 0}
+                onOpen={openCard}
+                onToggleSelect={toggleCardSelection}
+                onAssign={(cardId, userId, name) => void assignCard(cardId, userId, name)}
+                onQuickAssign={(card) => { openCard(card); focusCardField("card-assignees"); }}
+                onQuickComment={(card) => { openCard(card); setCardTab("activity"); }}
+                onQuickDue={(card) => { openCard(card); focusCardField("card-due-at"); }}
+              />}
 
+              {boardMode === "queue" && <QueueBoard
+                cards={filteredActiveCards}
+                context={boardContext}
+                stageNames={stageNames}
+                canEdit={canEdit}
+                now={boardNow}
+                selection={boardSelection}
+                onOpen={openCard}
+                onToggleSelect={toggleCardSelection}
+                onQuickAssign={(card) => { openCard(card); focusCardField("card-assignees"); }}
+                onQuickComment={(card) => { openCard(card); setCardTab("activity"); }}
+                onQuickDue={(card) => { openCard(card); focusCardField("card-due-at"); }}
+              />}
+
+              {/* O quadro por etapa continua sendo o que sempre foi, com o
+                  arrasto que move de coluna. Ele não foi substituído: "em que
+                  pé está" é uma pergunta legítima, só não é a primeira. */}
               {boardMode === "kanban" && (boardGroupBy === "none"
                 ? <div className="dashboard-kanban" data-density={boardDensity}>
                     {snapshot.lists.map((list) => renderBoardColumn(list, boardLanes[0]?.cardsByList.get(list.id) ?? [], "todas"))}
                   </div>
-                /* Raias abertas por padrão e dobráveis uma a uma: quem agrupa
-                   por empresa está procurando *uma* empresa, e fechar as outras
-                   é o que traz a dela para perto do topo. O `details` nativo
-                   guarda o estado, responde ao teclado e é lido pelo leitor de
-                   tela sem nada além do rótulo. */
                 : <div className="board-lanes" data-density={boardDensity}>
                     {boardLanes.map((lane) => <details className="board-lane" key={lane.key} open>
                       <summary>
@@ -3229,10 +3508,24 @@ export function WorkspaceApp({
                     {boardLanes.length === 0 && <p className="dashboard-column-empty board-lanes-empty">Nenhuma demanda no recorte atual.</p>}
                   </div>
               )}
-              {boardMode === "table" && <DemandPriorityView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} renderAreaFlow={(card) => <DemandAreaFlow card={card} areas={snapshot.areas} />} onWaiting={() => { setSlaFilter("paused"); setDueFilter("all"); setBoardMode("kanban"); }} />}
+              {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
+              {/* O calendário é o do #138: ele substituiu o `DemandCalendarView`
+                  que existia aqui, e ressuscitar o antigo seria desfazer
+                  trabalho que já está na main sem nada a ganhar. */}
               {boardMode === "calendar" && <DemandDeadlineView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
               {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
-            </section>
+
+              </div>
+
+              {boardSelection.size > 0 && canEdit && <BulkBar
+                count={boardSelection.size}
+                members={snapshot.members}
+                lists={snapshot.lists}
+                busy={busy}
+                onRun={(action) => void runBulkAction(action)}
+                onClear={() => setBoardSelection(new Set())}
+              />}
+            </div>
           )}
 
           {view === "inbox" && <InboxView items={snapshot.inbox} busy={busy} canEdit={canEdit} onConvert={convertInbox} onNew={() => setInboxModalOpen(true)} />}
@@ -3385,6 +3678,40 @@ export function WorkspaceApp({
               })()}
               {(!selectedCard || cardTab === "details") &&
               <form className={`card-form ${!canEdit ? "read-only" : ""}`} onSubmit={saveCard}>
+                {/* PRÓXIMO PASSO — o primeiro bloco da gaveta, e não um campo
+                    perdido no meio do formulário (§14).
+                    A pergunta que alguém faz ao abrir uma demanda é "o que eu
+                    faço agora", e ela era respondida lendo a descrição, o fio
+                    de comentários e o checklist. Isso custa um minuto por
+                    demanda e é feito dezenas de vezes por dia — e o custo dobra
+                    quando a demanda é de outra pessoa.
+                    O campo fica primeiro porque é o que muda entre uma abertura
+                    e a seguinte: título, empresa e processo não mudam. */}
+                <section className="demand-next-step full">
+                  <header><span>PRÓXIMO PASSO</span></header>
+                  <textarea
+                    id="card-next-step"
+                    rows={2}
+                    maxLength={280}
+                    value={cardForm.nextStep}
+                    disabled={!canEdit}
+                    placeholder="O que precisa acontecer agora? Ex.: receber o comprovante pendente e conferir o cadastro."
+                    aria-label="Próximo passo da demanda"
+                    onChange={(event) => setCardForm({ ...cardForm, nextStep: event.target.value })}
+                  />
+                </section>
+                {/* A leitura de SLA por extenso. O cartão mostra "1d de atraso";
+                    aqui ficam a data exata, o que resta e o estado — as três
+                    coisas que alguém confere antes de prometer um prazo ao
+                    solicitante. */}
+                {selectedCard && (() => {
+                  const leitura = slaReading(selectedCard, boardNow);
+                  return <section className="demand-sla-reading full" data-sla={selectedCard.slaStatus}>
+                    <span><small>Prazo interno</small><strong>{leitura.deadline}</strong></span>
+                    <span><small>Tempo restante</small><strong>{leitura.remaining}</strong></span>
+                    <span><small>SLA</small><strong>{leitura.state}</strong></span>
+                  </section>;
+                })()}
                 <fieldset className="card-form-section full"><legend>Dados da demanda</legend>
                 {/* Origem da demanda (§10): o processo publicado.
                     A demanda é a EXECUÇÃO de um processo (§4), então escolher
@@ -3453,7 +3780,16 @@ export function WorkspaceApp({
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>
                 {!cardForm.processVersionId && <label>Coluna<select value={cardForm.listId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, listId: event.target.value })}><option value="">Automática pelas regras</option>{snapshot.lists.map((list) => <option value={list.id} key={list.id}>{list.name}</option>)}</select></label>}
-                <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>Selecione uma ou mais pessoas</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i>{member.name}</label>)}</div></section>
+                <section className="card-choice-section full" id="card-assignees" tabIndex={-1}><header><strong>Responsáveis</strong><span>A carga de cada um aparece junto do nome</span></header><div className="choice-chips">{snapshot.members.filter((member) => member.role === "admin" || member.role === "member").map((member) => {
+                  /* Quem já está com o quê, na hora de decidir para quem vai.
+                     Atribuir às cegas é como a sobrecarga se forma: a pessoa
+                     mais rápida recebe mais porque é a que vem à cabeça. O
+                     número **não impede** a atribuição — a decisão continua
+                     sendo de quem distribui; ele só deixa de ser tomada sem a
+                     informação que já existia no quadro. */
+                  const carga = assigneeLoad.get(member.name);
+                  return <label className={cardForm.assigneeIds.includes(member.userId) ? "selected" : ""} key={member.userId}><input type="checkbox" checked={cardForm.assigneeIds.includes(member.userId)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, assigneeIds: event.target.checked ? [...cardForm.assigneeIds, member.userId] : cardForm.assigneeIds.filter((id) => id !== member.userId) })} /><i>{initials(member.name)}</i><b>{member.name}</b>{carga && <small className="choice-load">{carga.open} {carga.open === 1 ? "aberta" : "abertas"}{carga.overdue > 0 ? ` · ${carga.overdue} ${carga.overdue === 1 ? "atrasada" : "atrasadas"}` : ""}</small>}</label>;
+                })}</div></section>
                 </fieldset>
                 <fieldset className="card-form-section full"><legend>Informações adicionais</legend>
                 <section className="card-choice-section full"><header><strong>Etiquetas</strong><span>Classifique sem alterar o processo</span></header><div className="choice-chips label-choices">{snapshot.labels.map((label) => <label className={cardForm.labelIds.includes(label.id) ? "selected" : ""} style={{ borderColor: cardForm.labelIds.includes(label.id) ? label.color : undefined }} key={label.id}><input type="checkbox" checked={cardForm.labelIds.includes(label.id)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, labelIds: event.target.checked ? [...cardForm.labelIds, label.id] : cardForm.labelIds.filter((id) => id !== label.id) })} /><i style={{ backgroundColor: label.color }} />{label.name}</label>)}</div></section>
