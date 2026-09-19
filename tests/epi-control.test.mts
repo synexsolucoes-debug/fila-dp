@@ -526,14 +526,19 @@ test("áreas operacionais são N:N e governam a origem e o destino das demandas"
   assert.match(membersRoute, /requireNamedCapability\(workspace, "departments\.manage_members"/u);
 });
 
-test("o fluxo entre áreas aparece no Kanban e na tabela sem depender de nomes fixos", async () => {
+test("o fluxo entre áreas aparece no quadro e na central sem depender de nomes fixos", async () => {
   const workspace = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
   assert.match(workspace, /function DemandAreaFlow/u);
   assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.requesterAreaId\)/u);
   assert.match(workspace, /areas\.find\(\(area\) => area\.id === card\.responsibleAreaId\)/u);
   assert.ok(workspace.includes('aria-label={`Fluxo entre áreas:'));
   assert.ok(workspace.includes('<DemandAreaFlow card={card} areas={snapshot.areas} />'));
-  assert.ok(workspace.includes('<td><DemandAreaFlow card={card} areas={areas} /></td>'));
+  /* As duas verificações do `renderAreaFlow` saíram com a `DemandPriorityView`
+     que as recebia: o quadro por responsável passou a responder "o que é mais
+     urgente e quem está com o quê", e manter a lista de prioridades ao lado
+     dele deixaria uma tela sem ninguém que a renderize. O que o teste protege
+     continua protegido — o fluxo entre áreas é desenhado a partir do catálogo
+     do grupo, e as duas linhas acima são as que garantem isso. */
   assert.doesNotMatch(workspace.match(/function DemandAreaFlow[\s\S]*?\n\}/u)?.[0] ?? "", /SESMT|Departamento Pessoal|Financeiro/u);
 });
 

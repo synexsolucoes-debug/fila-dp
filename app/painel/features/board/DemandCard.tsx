@@ -3,6 +3,7 @@
 import { CalendarClock, Clock3, ListChecks, MessageSquarePlus, Paperclip, UserPlus } from "lucide-react";
 import type { DragEvent } from "react";
 import type { Card } from "@/lib/fila-dp-types";
+import { DEMAND_NEXT_ACTION_FALLBACK, demandNextAction } from "@/lib/demand-dashboard";
 import { attentionRank, demandReference, dueBadge, responsibleName, slaReading } from "./board.model";
 import styles from "./board.module.css";
 
@@ -54,6 +55,8 @@ export function DemandCard(props: DemandCardProps) {
   const sla = slaReading(card, now);
   const atencao = attentionRank(card, now);
   const colaborador = card.customValues.matricula ?? "";
+  const derivado = demandNextAction(card);
+  const proximoPasso = card.nextStep || (derivado === DEMAND_NEXT_ACTION_FALLBACK ? "" : derivado);
 
   const arrastar = (event: DragEvent<HTMLElement>) => {
     if (!props.draggable) return;
@@ -130,7 +133,17 @@ export function DemandCard(props: DemandCardProps) {
         {!dono && <span className={styles.orphan}>Sem responsável</span>}
       </div>
 
-      {card.nextStep && <p className={styles.nextStep} title="Próximo passo">{card.nextStep}</p>}
+      {/* O próximo passo escrito vence o derivado.
+          Quando ninguém escreveu um, o cartão ainda assim diz o que fazer,
+          usando o que a demanda já tem: o item pendente do checklist ou o
+          motivo pelo qual o SLA está parado. O texto de reserva fica de fora —
+          "conferir os detalhes" repetido em sessenta cartões é uma linha de
+          ruído por cartão, e o cartão já tem título, empresa, prazo e etapa. */}
+      {proximoPasso && (
+        <p className={styles.nextStep} title="Próximo passo" data-derived={card.nextStep ? undefined : "true"}>
+          {proximoPasso}
+        </p>
+      )}
 
       {(props.onQuickAssign || props.onQuickComment || props.onQuickDue) && (
         <div className={styles.quickActions}>

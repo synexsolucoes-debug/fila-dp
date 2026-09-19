@@ -142,9 +142,25 @@ export function startOfDay(now: Date): number {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
 
+/**
+ * O prazo como número, com o meio-dia das datas puras.
+ *
+ * `new Date("2026-09-18")` é meia-noite **UTC** — que no fuso de Brasília é
+ * 21h do dia 17. Uma demanda com prazo só de data caía um dia para trás, e o
+ * efeito aparecia justamente onde dói: ela sumia de "vence hoje" e entrava em
+ * "atrasada" sem ter atrasado. Prazo com hora (`...T14:00`) não tem esse
+ * problema e é lido como está.
+ *
+ * O meio-dia é a convenção que o resto do produto já usa para datas puras, e
+ * esta função passou a segui-la depois que o mesmo defeito foi corrigido no
+ * painel de demandas pela #138 — a regra é a mesma, e ter duas leituras de
+ * data no mesmo quadro seria a próxima divergência a aparecer.
+ */
+const SO_DATA = /^\d{4}-\d{2}-\d{2}$/u;
+
 export function dueTime(card: Pick<Card, "dueAt">): number {
   if (!card.dueAt) return Number.POSITIVE_INFINITY;
-  const at = new Date(card.dueAt).getTime();
+  const at = new Date(SO_DATA.test(card.dueAt) ? `${card.dueAt}T12:00:00` : card.dueAt).getTime();
   return Number.isNaN(at) ? Number.POSITIVE_INFINITY : at;
 }
 

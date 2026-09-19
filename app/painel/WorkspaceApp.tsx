@@ -72,6 +72,7 @@ import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
 import { PRIORITY_LABELS } from "@/lib/work-items";
+import { demandNextAction } from "@/lib/demand-dashboard";
 import {
   nextThemePreference, themeLabels, THEME_COOKIE, THEME_COOKIE_MAX_AGE, THEME_SYSTEM_COOKIE,
   type ResolvedTheme, type ThemePreference,
@@ -95,6 +96,7 @@ import { LedgerView } from "./features/ledger";
 import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
+import { DemandDeadlineView } from "./features/work/DemandViews";
 import {
   BoardIndicators, BoardToolbar, BulkBar, QueueBoard, TeamBoard,
   activeFilterCount, demandIndicators, filterDemands, operationalAlerts,
@@ -2940,6 +2942,7 @@ export function WorkspaceApp({
             {concluidas} de {card.checklist.length} no checklist
           </span>}
         {card.customValues.matricula && <small className="dashboard-card-employee">Colaborador: {card.customValues.matricula}</small>}
+        <div className="dp-card-next"><span>Próximo passo</span><p>{demandNextAction(card)}</p></div>
         <div className="dashboard-task-bottom">
           <span className={`dashboard-sla ${card.slaStatus}${card.dueAt ? " has-due" : ""}`}
             title={card.dueAt ? `Prazo: ${formatDue(card.dueAt)}` : "Sem prazo definido"}>
@@ -3506,7 +3509,10 @@ export function WorkspaceApp({
                   </div>
               )}
               {boardMode === "table" && <DemandTableView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
-              {boardMode === "calendar" && <DemandCalendarView cards={filteredActiveCards} onOpen={openCard} />}
+              {/* O calendário é o do #138: ele substituiu o `DemandCalendarView`
+                  que existia aqui, e ressuscitar o antigo seria desfazer
+                  trabalho que já está na main sem nada a ganhar. */}
+              {boardMode === "calendar" && <DemandDeadlineView cards={filteredActiveCards} lists={snapshot.lists} onOpen={openCard} />}
               {boardMode === "process" && <ProcessTablesView cards={filteredActiveCards} lists={snapshot.lists} areas={snapshot.areas} onOpen={openCard} />}
 
               </div>
@@ -4661,28 +4667,6 @@ function DemandTableView({ cards, lists, areas, onOpen }: { cards: Card[]; lists
         </table>
         {cards.length === 0 && <div className="empty-view"><span>▤</span><strong>Nenhuma demanda encontrada</strong><p>Ajuste os filtros para ampliar a visão.</p></div>}
       </div>
-    </section>
-  );
-}
-
-function DemandCalendarView({ cards, onOpen }: { cards: Card[]; onOpen: (card: Card) => void }) {
-  const [cursor, setCursor] = useState(() => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), 1); });
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const leading = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = Array.from({ length: leading + daysInMonth }, (_, index) => index < leading ? null : index - leading + 1);
-  const cardsByDay = cards.reduce<Record<number, Card[]>>((accumulator, card) => {
-    if (!card.dueAt) return accumulator;
-    const [cardYear, cardMonth, cardDay] = card.dueAt.slice(0, 10).split("-").map(Number);
-    if (cardYear === year && cardMonth === month + 1) (accumulator[cardDay] ??= []).push(card);
-    return accumulator;
-  }, {});
-  return (
-    <section className="demand-calendar-view">
-      <header><button aria-label="Mês anterior" onClick={() => setCursor(new Date(year, month - 1, 1))}>←</button><div><strong>{new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(cursor)}</strong><span>{Object.values(cardsByDay).flat().length} prazo(s) neste mês</span></div><button aria-label="Próximo mês" onClick={() => setCursor(new Date(year, month + 1, 1))}>→</button></header>
-      <div className="calendar-grid"><div className="calendar-weekdays">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-days">{cells.map((day, index) => <article className={!day ? "empty" : ""} key={`${day ?? "empty"}-${index}`}>{day && <><b>{day}</b><div>{(cardsByDay[day] ?? []).slice(0, 3).map((card) => <button className={card.slaStatus} key={card.id} onClick={() => onOpen(card)} title={card.title}><i className={processColors[card.processType] ?? "gray"} />{card.title}</button>)}{(cardsByDay[day]?.length ?? 0) > 3 && <small>+{cardsByDay[day].length - 3} demanda(s)</small>}</div></>}</article>)}</div></div>
-      {cards.every((card) => !card.dueAt) && <div className="calendar-empty-note">Defina prazos nas demandas para visualizá-las no calendário.</div>}
     </section>
   );
 }
