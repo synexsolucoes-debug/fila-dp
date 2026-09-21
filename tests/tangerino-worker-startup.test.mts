@@ -145,3 +145,36 @@ test("a instalação exporta o perfil para a conferência de prontidão", async 
   assert.match(conferencia, /FDP_TANGERINO_PROFILE_ROOT/u);
   assert.match(script, /\$env:FDP_TANGERINO_PROFILE_ROOT = \$config\["FDP_TANGERINO_PROFILE_ROOT"\]/u);
 });
+
+test("o diagnóstico da fila sobe pelo mesmo caminho que o worker", async () => {
+  // Mesma armadilha do start-tangerino-worker.ps1: com
+  // `--experimental-strip-types` o script morre em ERR_UNSUPPORTED_DIR_IMPORT
+  // antes da primeira linha, e quem está diagnosticando um silêncio recebe
+  // outro silêncio.
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  const script = pkg.scripts["tangerino:diagnostico"] ?? "";
+  assert.match(script, /--import tsx/u);
+  assert.doesNotMatch(script, /experimental-strip-types/u);
+});
+
+test("o diagnóstico percorre toda a corrente que enche a fila", async () => {
+  // Cada elo vazio produz o mesmo sintoma — silêncio. Um diagnóstico que
+  // esquecesse um elo mandaria a pessoa procurar no lugar errado.
+  const fonte = await readFile(new URL("../scripts/windows/diagnosticar-tangerino.mts", import.meta.url), "utf8");
+  for (const elo of [
+    "fdp_workspace_module_grants",
+    "fdp_integrations",
+    "fdp_integration_credentials",
+    "fdp_employees",
+    "fdp_employee_external_refs",
+    "fdp_tangerino_admission_consultations",
+    "fdp_tangerino_worker_heartbeats",
+  ]) {
+    assert.match(fonte, new RegExp(elo, "u"), `o diagnóstico precisa olhar ${elo}`);
+  }
+  // E precisa abrir a credencial: é o único jeito de saber se a chave do cofre
+  // deste computador é a mesma que selou o segredo.
+  assert.match(fonte, /openCredentials\(/u);
+});
