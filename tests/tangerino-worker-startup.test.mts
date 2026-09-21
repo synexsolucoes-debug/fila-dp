@@ -198,3 +198,17 @@ test("o montador do ambiente pede o mapa de versões antes da chave única", asy
   assert.ok(plural > 0 && singular > 0, "as duas perguntas precisam existir");
   assert.ok(plural < singular, "o mapa de versões vem primeiro");
 });
+
+test("o montador recusa a string de conexão de exemplo", async () => {
+  // `postgres://usuario:senha@host:5432/banco` começa com postgres e passava na
+  // validação antiga. O worker só descobria em ENOTFOUND, longe daqui.
+  const script = await readFile(new URL("../scripts/windows/configurar-worker.ps1", import.meta.url), "utf8");
+  assert.match(script, /\$placeholders = @\(/u);
+  for (const exemplo of ['"host"', '"hostname"', '"example.com"']) {
+    assert.ok(script.includes(exemplo), `${exemplo} precisa ser recusado como servidor`);
+  }
+  // E o endereço lido é mostrado para conferência: é a única parte da string
+  // que quem configura reconhece de olho.
+  assert.match(script, /Servidor lido: \$servidor/u);
+  assert.match(script, /\[System\.Uri\]::new\(\$databaseUrl\)/u);
+});
