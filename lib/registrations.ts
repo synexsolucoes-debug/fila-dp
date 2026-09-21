@@ -46,7 +46,7 @@ export function enumValue<T extends string>(value: unknown, allowed: readonly T[
   return allowed.includes(value as T) ? value as T : fallback;
 }
 
-function isValidCpf(digits: string) {
+export function isValidCpf(digits: string) {
   if (!/^\d{11}$/.test(digits) || /^(\d)\1{10}$/.test(digits)) return false;
   const check = (length: number) => {
     let sum = 0;
