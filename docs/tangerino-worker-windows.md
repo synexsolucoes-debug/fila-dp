@@ -250,3 +250,37 @@ diagnóstico distingue os três casos e diz qual é:
 | Nenhuma chave | copie `FDP_TANGERINO_VAULT_KEYS` do deployment |
 | Versão local ≠ versão da credencial | o singular só serve à versão 1; use o plural |
 | Versão certa, conteúdo diferente | a chave não é a mesma que selou o segredo |
+
+### Se a chave estiver marcada como "Sensitive" na Vercel
+
+Uma variável de ambiente do tipo **Sensitive** é gravável, e não legível: depois
+de salva, ninguém lê o valor de volta — nem pelo painel, nem pela API, nem com
+`vercel env pull`. É a proteção funcionando como projetada, e ela cobra um preço
+exatamente aqui, porque o worker roda fora da Vercel e precisa da chave em mãos.
+
+Aparece como campo vazio no painel. Vazio ali não quer dizer "não configurado":
+quer dizer "não te mostro".
+
+Se ninguém guardou uma cópia quando a chave foi criada, ela não se recupera — e
+o caminho é rotacionar. O alcance dessa rotação é pequeno e vale estar escrito:
+
+| Prefixo | O que ele sela | A rotação do Tangerino afeta? |
+| --- | --- | --- |
+| `FDP_TANGERINO_*` | o login da Sólides guardado em `fdp_integration_credentials`, e as assinaturas efêmeras do worker | **sim** |
+| `FDP_INTEGRATION_*` | as fichas de contratação (`lib/admission-sheet.ts`) e os pagamentos (`lib/payments.ts`), que chamam `currentVaultKey()` sem canal | não |
+| `FDP_SANKHYA_*` | o acesso ao Sankhya | não |
+
+Ou seja: rotacionar a chave do Tangerino invalida **só** o login da Sólides
+guardado, que se resolve digitando usuário e senha de novo no painel. Ficha de
+contratação e dados de pagamento não são tocados.
+
+Ao rotacionar, três detalhes que fazem a diferença entre funcionar e falhar em
+silêncio:
+
+1. guarde a chave nova em algum lugar antes de salvar — a Vercel não devolve;
+2. `FDP_TANGERINO_VAULT_KEY_VERSION` precisa apontar para uma versão que exista
+   no mapa novo. Se ela ficar em `2` e o mapa passar a ter só `3`,
+   `currentVaultKey` pede a versão 2, não acha e falha na hora de salvar a
+   credencial;
+3. mudança de variável só vale no próximo deployment. Publique antes de
+   regravar o acesso da Sólides.
