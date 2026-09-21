@@ -32,6 +32,23 @@ const falha = (mensagem: string) => console.log(`   ERRO  ${mensagem}`);
 const titulo = (mensagem: string) => console.log(`\n== ${mensagem}`);
 
 /**
+ * O servidor de banco, sem a credencial.
+ *
+ * Endereço e porta são o que a pessoa precisa conferir contra o deployment;
+ * usuário e senha estão na mesma string e não têm por que aparecer na tela.
+ */
+function descreverServidor() {
+  const bruto = String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || "").trim();
+  if (!bruto) return "nada — a variável está vazia.";
+  try {
+    const url = new URL(bruto);
+    return `${url.hostname}:${url.port || "5432"}, banco "${url.pathname.replace(/^\//u, "") || "(sem nome)"}".`;
+  } catch {
+    return "um valor que não é uma string de conexão válida.";
+  }
+}
+
+/**
  * Quais versões do cofre existem NESTE computador — só os números, nunca as chaves.
  *
  * O número é o que resolve o caso mais confuso: `FDP_TANGERINO_VAULT_KEY`, no
@@ -63,7 +80,26 @@ const registrarElo = (elo: string, comoResolver: string) => {
 const d1 = getD1();
 
 titulo("Banco");
-const agora = await d1.prepare("SELECT CURRENT_TIMESTAMP::text AS agora").first<{ agora: string }>();
+/* Falha de conexão é o caso mais comum e era o pior atendido: o processo
+   morria com um stack trace do pg-pool, que fala de `getaddrinfo` e de
+   `processTicksAndRejections` — nada que diga o que corrigir. O endereço do
+   servidor aparece; usuário e senha, não. */
+let agora: { agora: string } | null = null;
+try {
+  agora = await d1.prepare("SELECT CURRENT_TIMESTAMP::text AS agora").first<{ agora: string }>();
+} catch (causa) {
+  const codigo = causa && typeof causa === "object" && "code" in causa ? String((causa as { code: unknown }).code) : "";
+  falha(`Não consegui falar com o banco${codigo ? ` (${codigo})` : ""}.`);
+  console.log(`   ---   DATABASE_URL aponta para ${descreverServidor()}`);
+  titulo("Conclusão");
+  console.log(codigo === "ENOTFOUND"
+    ? "   O endereço do servidor não existe — esse host não responde por DNS.\n\n"
+      + "   Confira a linha DATABASE_URL no .env.tangerino-worker.local. Um host chamado\n"
+      + "   'host' ou 'localhost' costuma ser o modelo de exemplo, colado sem substituir.\n"
+      + "   O valor tem que ser a MESMA string de conexão do deployment.\n"
+    : "   Confira a linha DATABASE_URL no .env.tangerino-worker.local e a conexão de rede.\n");
+  process.exit(1);
+}
 if (!agora?.agora) {
   falha("O banco respondeu sem horário — conexão instável.");
   process.exit(1);
