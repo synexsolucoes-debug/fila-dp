@@ -255,3 +255,65 @@ sessão de navegador, nem reautenticar, nem que a admissão ainda exista na tela
 uma ficha por demanda, o CHECK de contagem, e o ciclo selar → gravar → reler →
 abrir. O script recusa papel que ignore RLS, porque um ensaio que não pode
 falhar encerra a dúvida sem respondê-la.
+
+
+## 10. Preparo automático da ficha e o encaminhamento das filas
+
+### 10.1 O botão que não fazia nada
+
+**Executar agora**, no Agente Tangerino, mandava o trabalho por
+`queueIntegrationRun` — a fila genérica de integrações. O worker de navegador
+drena outra coisa: `fdp_tangerino_admission_consultations`. O job nascia numa
+fila que nenhum runner do Tangerino lê.
+
+O sintoma era o pior possível: a tela respondia "execução enfileirada", nada
+acontecia, e não havia erro em lugar nenhum para investigar. O trabalho ficava
+esperando a varredura periódica que o botão deveria ter antecipado.
+
+O cron tinha o desvio certo desde sempre; o botão não. Era a mesma regra escrita
+em dois lugares, com um deles desatualizado. A regra agora mora em
+`sweepTangerinoAdmissions` (`lib/tangerino/sweep.ts`) e os dois caminhos a
+chamam.
+
+A resposta também mudou: ela distingue **enfileirado**, **já estava na fila** e
+**nenhuma admissão elegível**. As três eram "sucesso" antes, e a terceira fazia
+a pessoa esperar por um trabalho que nunca foi criado.
+
+### 10.2 A ficha nasce sozinha quando o PDF chega
+
+A ficha só existia quando alguém abria a aba e clicava em "Ler a ficha". O
+agente entrava no Tangerino, baixava o PDF e anexava à demanda — e a transcrição
+continuava manual porque ninguém sabia que precisava dar aquele clique.
+
+Agora a conclusão da transferência
+(`POST /api/integrations/tangerino/attachments/[id]/complete`) prepara a ficha.
+Três estados, porque são três situações que pedem coisas diferentes de quem olha:
+
+| Estado | O que a tela diz |
+| --- | --- |
+| `pending` | Preparando a ficha — o documento chegou e está sendo lido. |
+| `ready` | Campos disponíveis para copiar. |
+| `failed` | O motivo, com o PDF à mão para conferência manual. |
+
+O CHECK `fdp_admission_sheets_ready_envelope_check` amarra estado e conteúdo:
+**pronta implica envelope cifrado presente**. É o que impede uma ficha vazia de
+se apresentar como lida.
+
+### 10.3 O que protege a correção manual
+
+Uma ficha já pronta **não** volta para `pending` porque a transferência rodou de
+novo com o mesmo arquivo. Quem conferiu e corrigiu campos não perde esse
+trabalho por um reprocessamento que ninguém pediu. O que reabre o preparo é um
+anexo **diferente** — documento novo é informação nova.
+
+### 10.4 Falha de leitura não provoca novo download
+
+O PDF já está guardado no Vinculato. Reprocessá-lo não custa navegador, não
+exige sessão autenticada e não depende da máquina do operador estar ligada. Por
+isso o preparo roda no servidor (cron) e não no worker do Windows — e por isso
+uma mudança de layout se resolve ajustando o extrator e relendo o arquivo
+existente.
+
+Arquivo que não é PDF, PDF sem camada de texto ou de outro modelo vai direto
+para `failed`, sem gastar três tentativas para chegar à mesma conclusão: são
+propriedades do arquivo, e não falhas transitórias.

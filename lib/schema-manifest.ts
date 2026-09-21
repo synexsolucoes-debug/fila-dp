@@ -95,6 +95,7 @@ export const expectedMigrations = [
   "0085_payroll_ledger.sql",
   "0086_demand_next_step.sql",
   "0087_admission_registration_sheet.sql",
+  "0088_admission_sheet_preparation.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

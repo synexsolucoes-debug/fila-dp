@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Copy, FileText, LoaderCircle, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
-import { requestSheet, type RegistrationSheet, type SheetBlock, type SheetField } from "./admission.api";
+import {
+  requestSheet, type RegistrationSheet, type SheetBlock, type SheetField, type SheetPayload,
+  type SheetPreparationState,
+} from "./admission.api";
 import styles from "./admission.module.css";
 
 /**
@@ -77,6 +80,49 @@ function FieldRow({ field, onCopy, copiedKey }: {
   );
 }
 
+/**
+ * O que a tela mostra quando ainda não há campos.
+ *
+ * Três situações, três instruções. Antes as três apareciam como "nenhuma ficha
+ * lida" — o que mandava a pessoa clicar em "Ler a ficha" durante uma leitura em
+ * curso, e não dizia nada a quem tinha um PDF que o leitor não entende.
+ */
+function PreparationState({ state, payload }: { state: SheetPreparationState; payload: SheetPayload | null }) {
+  if (state === "pending") {
+    return (
+      <div className={styles.empty}>
+        <strong>Preparando a ficha…</strong>
+        <p>
+          O documento chegou e está sendo lido. Isso acontece sozinho depois da transferência —
+          não é preciso clicar em nada. Atualize em instantes.
+          {payload?.attempts ? ` Tentativa ${payload.attempts} de ${payload.maxAttempts ?? 3}.` : ""}
+        </p>
+      </div>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <div className={styles.empty} data-tone="failed">
+        <strong>Não foi possível ler a ficha</strong>
+        <p>{payload?.errorMessage || "A leitura não pôde ser concluída."}</p>
+        <p>
+          O documento continua anexado à demanda e pode ser conferido à mão. Reler não baixa nada de novo:
+          o arquivo já está guardado aqui.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.empty}>
+      <strong>Nenhuma ficha ainda</strong>
+      <p>
+        Traga os arquivos com <b>Autorizar anexos da Sólides</b> na aba de anexos. Assim que o PDF chegar,
+        a ficha é preparada sozinha. Os valores ficam cifrados e são apagados quando a demanda é concluída.
+      </p>
+    </div>
+  );
+}
+
 export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pdfUrl }: {
   cardId: string;
   canBuild: boolean;
@@ -85,6 +131,7 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
   pdfUrl: string | null;
 }) {
   const [sheet, setSheet] = useState<RegistrationSheet | null>(null);
+  const [preparation, setPreparation] = useState<SheetPayload | null>(null);
   const [loading, setLoading] = useState(canRead);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -105,8 +152,8 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     let cancelled = false;
     void (async () => {
       try {
-        const payload = await requestSheet<{ sheet: RegistrationSheet | null }>(`/api/cards/${cardId}/registration-sheet`);
-        if (!cancelled) setSheet(payload.sheet);
+        const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`);
+        if (!cancelled) { setSheet(payload.sheet); setPreparation(payload); }
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : "Não foi possível ler a ficha.");
       } finally {
@@ -120,8 +167,9 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     setBusy(true);
     setError("");
     try {
-      const payload = await requestSheet<{ sheet: RegistrationSheet }>(`/api/cards/${cardId}/registration-sheet`, { method: "POST" });
+      const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`, { method: "POST" });
       setSheet(payload.sheet);
+      setPreparation(payload);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível ler a ficha.");
     } finally {
@@ -135,6 +183,7 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     try {
       await requestSheet(`/api/cards/${cardId}/registration-sheet`, { method: "DELETE" });
       setSheet(null);
+      setPreparation(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível apagar a ficha.");
     } finally {
@@ -207,15 +256,7 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
 
       {error && <p className={styles.alert} role="alert">{error}</p>}
 
-      {!loading && !sheet && (
-        <div className={styles.empty}>
-          <strong>Nenhuma ficha lida</strong>
-          <p>
-            Traga os arquivos com <b>Autorizar anexos da Sólides</b> na aba de anexos e depois use <b>Ler a ficha</b>.
-            Os valores ficam cifrados e são apagados quando a demanda é concluída.
-          </p>
-        </div>
-      )}
+      {!loading && !sheet && <PreparationState state={preparation?.state ?? "absent"} payload={preparation} />}
 
       {sheet?.blocks.map((block) => {
         const ready = block.fields.filter((field) => field.status === "ok").length;

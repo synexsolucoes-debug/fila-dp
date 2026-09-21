@@ -12,6 +12,27 @@ export type SheetField = {
 
 export type SheetBlock = { block: string; label: string; fields: SheetField[] };
 
+/**
+ * Em que pé está o preparo.
+ *
+ * `absent` e `pending` não podem virar a mesma tela: a primeira significa que
+ * o PDF ainda não chegou, a segunda que ele chegou e está sendo lido. Mandar a
+ * pessoa clicar em "Ler a ficha" no meio de uma leitura em curso é o tipo de
+ * ruído que faz a automação parecer quebrada.
+ */
+export type SheetPreparationState = "absent" | "pending" | "ready" | "failed";
+
+export type SheetPayload = {
+  state: SheetPreparationState;
+  sheet: RegistrationSheet | null;
+  attempts?: number;
+  maxAttempts?: number;
+  errorCode?: string;
+  errorMessage?: string;
+  sourceFilename?: string;
+  attachmentId?: string;
+};
+
 export type RegistrationSheet = {
   blocks: SheetBlock[];
   warnings: string[];

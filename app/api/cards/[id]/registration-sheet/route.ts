@@ -1,14 +1,13 @@
-import { getAttachmentsBucket } from "@/db";
 import { requireCapability } from "@/lib/authorization";
+import { chooseRegistrationFormAttachment, openSheet, sanitizeSheetWarnings } from "@/lib/admission-sheet";
 import {
-  chooseRegistrationFormAttachment, openSheet, sanitizeSheetWarnings, sealSheet,
-} from "@/lib/admission-sheet";
+  enqueueSheetPreparation, listCardAttachments, prepareAdmissionSheet, sheetErrorMessage, SHEET_MAX_ATTEMPTS,
+} from "@/lib/admission-sheet-service";
 import { buildRegistrationSheet } from "@/lib/employee-registration-form";
 import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import {
   getWorkspaceContext, prepareAuditEvent, recordActivity, requireCardCompanyAccess, requireWorkspaceRole,
 } from "@/lib/fila-dp-db";
-import { readRegistrationFormPdf } from "@/lib/registration-form-pdf";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -16,11 +15,14 @@ type StoredSheet = {
   id: string;
   attachment_id: string;
   source_filename: string;
-  encrypted_value: string;
-  initialization_vector: string;
-  auth_tag: string;
-  key_version: number;
+  encrypted_value: string | null;
+  initialization_vector: string | null;
+  auth_tag: string | null;
+  key_version: number | null;
   warnings_json: string;
+  state: "pending" | "ready" | "failed";
+  error_code: string;
+  attempts: number;
   created_by: string;
   updated_at: string;
 };
@@ -58,10 +60,29 @@ export async function GET(_request: Request, context: RouteContext) {
     requireCapability(workspace, "admission.sheet.read");
 
     const stored = await d1.prepare(`SELECT id, attachment_id, source_filename, encrypted_value,
-        initialization_vector, auth_tag, key_version, warnings_json, created_by, updated_at
+        initialization_vector, auth_tag, key_version, warnings_json, state, error_code, attempts,
+        created_by, updated_at
       FROM fdp_admission_sheets WHERE workspace_id = ? AND card_id = ?`)
       .bind(workspace.id, cardId).first<StoredSheet>();
-    if (!stored) return Response.json({ sheet: null });
+    if (!stored) return Response.json({ sheet: null, state: "absent" });
+
+    /* Pendente e falha não têm envelope para abrir, e não podem ser
+       apresentadas como "nenhuma ficha". A tela precisa distinguir "estamos
+       preparando" de "não foi possível ler" de "ninguém pediu ainda" — as três
+       pedem coisas diferentes de quem está olhando. */
+    if (stored.state !== "ready" || !stored.encrypted_value || !stored.initialization_vector
+      || !stored.auth_tag || stored.key_version === null) {
+      return Response.json({
+        sheet: null,
+        state: stored.state,
+        attempts: stored.attempts,
+        maxAttempts: SHEET_MAX_ATTEMPTS,
+        errorCode: stored.error_code,
+        errorMessage: sheetErrorMessage(stored.error_code),
+        sourceFilename: stored.source_filename,
+        attachmentId: stored.attachment_id,
+      });
+    }
 
     const fields = openSheet({
       encryptedValue: stored.encrypted_value,
@@ -82,6 +103,7 @@ export async function GET(_request: Request, context: RouteContext) {
     ]);
 
     return Response.json({
+      state: "ready",
       sheet: {
         ...sheet,
         warnings: [...sheet.warnings, ...sanitizeSheetWarnings(JSON.parse(stored.warnings_json || "[]"))],
@@ -106,63 +128,70 @@ export async function POST(_request: Request, context: RouteContext) {
     requireCapability(workspace, "attachments.write");
     requireCapability(workspace, "admission.sheet.read");
 
-    const attachments = await d1.prepare(`SELECT id, filename, content_type AS "contentType", object_key AS "objectKey"
-      FROM fdp_card_attachments WHERE workspace_id = ? AND card_id = ? ORDER BY created_at DESC`)
-      .bind(workspace.id, cardId).all<{ id: string; filename: string; contentType: string; objectKey: string }>();
-
-    const chosen = chooseRegistrationFormAttachment(attachments.results ?? []);
+    const chosen = chooseRegistrationFormAttachment(await listCardAttachments(d1, workspace.id, cardId));
     if (!chosen) {
       throw new ApiError(409, "REGISTRATION_FORM_NOT_ATTACHED",
         "Esta demanda ainda não tem a ficha de registro em PDF. Use \"Autorizar anexos da Sólides\" para trazê-la.");
     }
 
-    const object = await getAttachmentsBucket().get(chosen.objectKey);
-    if (!object) throw ApiError.notFound("O arquivo da ficha não está mais disponível.", "ATTACHMENT_NOT_FOUND");
-    const bytes = new Uint8Array(await new Response(object.body).arrayBuffer());
-
-    let extracted: Awaited<ReturnType<typeof readRegistrationFormPdf>>;
-    try {
-      extracted = await readRegistrationFormPdf(bytes);
-    } catch (cause) {
-      throw new ApiError(422, "REGISTRATION_FORM_UNREADABLE",
-        cause instanceof Error ? cause.message : "Não foi possível ler a ficha de registro.");
-    }
-
-    const sheet = buildRegistrationSheet(extracted.fields);
-    const sealed = sealSheet(extracted.fields);
-    const warnings = sanitizeSheetWarnings([...extracted.warnings, ...sheet.warnings]);
-    const sheetId = crypto.randomUUID();
-
-    // Uma ficha por demanda: reler substitui. Duas transcrições da mesma pessoa
-    // seriam duas respostas para a mesma pergunta, e a tela teria de escolher
-    // uma sem critério.
-    await d1.prepare(`INSERT INTO fdp_admission_sheets
-        (id, workspace_id, card_id, attachment_id, source_filename, encrypted_value, initialization_vector,
-         auth_tag, key_version, filled_count, readable_count, warnings_json, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (workspace_id, card_id) DO UPDATE SET
-        attachment_id = EXCLUDED.attachment_id, source_filename = EXCLUDED.source_filename,
-        encrypted_value = EXCLUDED.encrypted_value, initialization_vector = EXCLUDED.initialization_vector,
-        auth_tag = EXCLUDED.auth_tag, key_version = EXCLUDED.key_version,
-        filled_count = EXCLUDED.filled_count, readable_count = EXCLUDED.readable_count,
-        warnings_json = EXCLUDED.warnings_json, updated_at = CURRENT_TIMESTAMP`)
-      .bind(sheetId, workspace.id, cardId, chosen.id, chosen.filename.slice(0, 220), sealed.encryptedValue,
-        sealed.initializationVector, sealed.authTag, sealed.keyVersion, sheet.filled, sheet.readable,
-        JSON.stringify(warnings), user.id).run();
+    /* A releitura passa pelo mesmo serviço que a chegada do PDF e o cron usam.
+       Antes esta rota tinha a leitura inteira escrita aqui dentro, e foi assim
+       que o preparo automático nasceu sem existir: a regra morava num lugar que
+       só um clique alcançava. */
+    await enqueueSheetPreparation(d1, {
+      workspaceId: workspace.id, cardId, attachment: chosen,
+      requestedByKind: "user", createdBy: user.id,
+    });
+    const preparation = await prepareAdmissionSheet(d1, { workspaceId: workspace.id, cardId });
 
     await d1.batch([
       prepareAuditEvent({
         workspaceId: workspace.id, actorType: "user", actorEmail: auth.user.email,
         action: "admission.sheet.built", entityType: "card", entityId: cardId,
-        after: { attachmentId: chosen.id, filled: sheet.filled, readable: sheet.readable, warnings: warnings.length },
+        after: {
+          attachmentId: chosen.id, state: preparation.state,
+          filled: preparation.filled, readable: preparation.readable, errorCode: preparation.errorCode,
+        },
       }),
     ]);
     await recordActivity(workspace.id, cardId, auth.user.email, "admission.sheet.built", {
-      filled: sheet.filled, readable: sheet.readable,
+      state: preparation.state, filled: preparation.filled, readable: preparation.readable,
     });
 
+    /* Leitura que não chegou a `ready` não devolve 201 com ficha vazia: a
+       tela precisa da diferença entre "pronta" e "não deu", e um sucesso
+       genérico aqui esconderia a segunda. */
+    if (preparation.state !== "ready") {
+      return Response.json({
+        sheet: null,
+        state: preparation.state,
+        attempts: preparation.attempts,
+        maxAttempts: SHEET_MAX_ATTEMPTS,
+        errorCode: preparation.errorCode,
+        errorMessage: sheetErrorMessage(preparation.errorCode),
+        sourceFilename: chosen.filename,
+        attachmentId: chosen.id,
+      }, { status: 200 });
+    }
+
+    const ready = await d1.prepare(`SELECT encrypted_value, initialization_vector, auth_tag, key_version, warnings_json
+      FROM fdp_admission_sheets WHERE workspace_id = ? AND card_id = ?`)
+      .bind(workspace.id, cardId)
+      .first<{ encrypted_value: string; initialization_vector: string; auth_tag: string; key_version: number; warnings_json: string }>();
+    const sheet = buildRegistrationSheet(openSheet({
+      encryptedValue: ready!.encrypted_value,
+      initializationVector: ready!.initialization_vector,
+      authTag: ready!.auth_tag,
+      keyVersion: ready!.key_version,
+    }));
     return Response.json({
-      sheet: { ...sheet, warnings, sourceFilename: chosen.filename, attachmentId: chosen.id },
+      state: "ready",
+      sheet: {
+        ...sheet,
+        warnings: [...sheet.warnings, ...sanitizeSheetWarnings(JSON.parse(ready!.warnings_json || "[]"))],
+        sourceFilename: chosen.filename,
+        attachmentId: chosen.id,
+      },
     }, { status: 201 });
   } catch (error) {
     return apiError(error);

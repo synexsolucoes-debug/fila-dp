@@ -4064,10 +4064,17 @@ export const admissionSheets = pgTable("fdp_admission_sheets", {
   cardId: text("card_id").notNull(),
   attachmentId: text("attachment_id").notNull(),
   sourceFilename: text("source_filename").notNull().default(""),
-  encryptedValue: text("encrypted_value").notNull(),
-  initializationVector: text("initialization_vector").notNull(),
-  authTag: text("auth_tag").notNull(),
-  keyVersion: integer("key_version").notNull(),
+  /* Nulos enquanto a ficha está `pending`: antes da leitura não há o que
+     cifrar, e um envelope vazio faria pendente e pronta terem a mesma cara. */
+  encryptedValue: text("encrypted_value"),
+  initializationVector: text("initialization_vector"),
+  authTag: text("auth_tag"),
+  keyVersion: integer("key_version"),
+  state: text("state").notNull().default("ready"),
+  errorCode: text("error_code").notNull().default(""),
+  attempts: integer("attempts").notNull().default(0),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true, mode: "string" }),
+  requestedByKind: text("requested_by_kind").notNull().default("user"),
   filledCount: integer("filled_count").notNull().default(0),
   readableCount: integer("readable_count").notNull().default(0),
   warningsJson: text("warnings_json").notNull().default("[]"),
@@ -4079,6 +4086,14 @@ export const admissionSheets = pgTable("fdp_admission_sheets", {
   uniqueIndex("fdp_admission_sheets_workspace_id_uq").on(table.workspaceId, table.id),
   foreignKey({ name: "fdp_admission_sheets_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
   foreignKey({ name: "fdp_admission_sheets_attachment_fk", columns: [table.workspaceId, table.attachmentId], foreignColumns: [cardAttachments.workspaceId, cardAttachments.id] }).onDelete("cascade"),
+  index("fdp_admission_sheets_pending_idx").on(table.workspaceId, table.lastAttemptAt).where(sql`${table.state} = 'pending'`),
   check("fdp_admission_sheets_counts_check", sql`${table.readableCount} <= ${table.filledCount}`),
   check("fdp_admission_sheets_key_version_check", sql`${table.keyVersion} > 0`),
+  check("fdp_admission_sheets_state_check", sql`${table.state} IN ('pending', 'ready', 'failed')`),
+  check("fdp_admission_sheets_requested_by_kind_check", sql`${table.requestedByKind} IN ('user', 'transfer')`),
+  check("fdp_admission_sheets_attempts_check", sql`${table.attempts} >= 0 AND ${table.attempts} <= 20`),
+  /* Pronta implica envelope completo: é o que impede uma ficha vazia de se
+     apresentar como lida, e o que torna o estado uma garantia e não um rótulo. */
+  check("fdp_admission_sheets_ready_envelope_check", sql`${table.state} <> 'ready' OR (${table.encryptedValue} IS NOT NULL
+    AND ${table.initializationVector} IS NOT NULL AND ${table.authTag} IS NOT NULL AND ${table.keyVersion} IS NOT NULL)`),
 ]);
