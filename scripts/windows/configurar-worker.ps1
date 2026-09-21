@@ -52,10 +52,53 @@ Nada do que voce digitar aqui sai deste computador.
 # ---------------------------------------------------------------------------
 Titulo "1/3 - Conexao com o banco"
 Write-Host "  Copie DATABASE_URL (pode estar como POSTGRES_URL ou NEON_DATABASE_URL)."
+Write-Host "  Na Vercel ela e do tipo encrypted: tem o olhinho para revelar o valor."
+
+<#
+  Conferir so o prefixo nao basta.
+
+  `postgres://usuario:senha@host:5432/banco` — a linha de exemplo da
+  documentacao — comeca com postgres e passava inteira. O worker entao subia,
+  tentava resolver um servidor chamado "host" e morria em ENOTFOUND, longe daqui.
+  O que este bloco faz e mostrar o servidor lido e pedir confirmacao: o endereco
+  e a unica parte da string que quem configura consegue reconhecer de olho.
+#>
+$placeholders = @("host", "hostname", "servidor", "seu-host", "example.com", "meu-banco")
+
 do {
   $databaseUrl = (Read-Host "  DATABASE_URL").Trim()
-  $valido = $databaseUrl.StartsWith("postgres")
-  if (-not $valido) { Aviso "Precisa comecar com postgres:// ou postgresql://." }
+  $valido = $false
+
+  if (-not $databaseUrl.StartsWith("postgres")) {
+    Aviso "Precisa comecar com postgres:// ou postgresql://."
+    continue
+  }
+  if ($databaseUrl -match '[<>]') {
+    Aviso "Ainda tem < > no valor: isso e um modelo, nao a conexao real."
+    continue
+  }
+
+  $servidor = ""
+  $porta = ""
+  $banco = ""
+  try {
+    $uri = [System.Uri]::new($databaseUrl)
+    $servidor = $uri.Host
+    $porta = if ($uri.Port -gt 0) { $uri.Port } else { 5432 }
+    $banco = $uri.AbsolutePath.TrimStart("/")
+  } catch {
+    Aviso "Nao consegui ler essa string de conexao. Copiou inteira?"
+    continue
+  }
+
+  if ($placeholders -contains $servidor.ToLowerInvariant()) {
+    Aviso "O servidor ficou como `"$servidor`" — esse e o exemplo, nao o endereco real."
+    continue
+  }
+
+  Write-Host "  Servidor lido: $servidor, porta $porta, banco `"$banco`"." -ForegroundColor Cyan
+  $confere = Read-Host "  E esse mesmo o banco do Vinculato? (s = sim)"
+  if ($confere -match '^[sS]') { $valido = $true } else { Aviso "Cole de novo, entao." }
 } while (-not $valido)
 Ok "Conexao registrada."
 
