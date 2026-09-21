@@ -194,3 +194,41 @@ Se a janela ainda fechar sem nada na tela, o log responde por quê:
 ```powershell
 Get-Content "$env:LOCALAPPDATA\Vinculato\worker-tangerino.log" -Tail 40
 ```
+
+## O worker está de pé e não consulta nada
+
+É o estado mais confuso que existe aqui: parece falha, mas não tem mensagem. A
+fila depende de uma corrente, e **cada elo vazio produz o mesmo silêncio**:
+
+```
+módulo liberado → integração cadastrada → credencial que abre com a chave
+deste computador → colaboradores → vínculo com o Tangerino → candidatos da
+varredura → fila
+```
+
+Um comando percorre a corrente e diz qual é o primeiro elo vazio:
+
+```powershell
+npm run tangerino:diagnostico
+```
+
+Ele só lê. Não enfileira, não consulta o Tangerino e não escreve nada. E abre a
+credencial guardada — sem mostrar o conteúdo — porque é o único jeito de provar
+que `FDP_TANGERINO_VAULT_KEYS` neste computador é a mesma chave que selou o
+segredo. Uma chave errada deixa o worker subir normalmente e falhar só na hora
+de entrar na Sólides, ciclo após ciclo.
+
+### O elo que não se preenche sozinho
+
+A varredura automática só enxerga quem já tem vínculo com o Tangerino
+(`fdp_employee_external_refs` com `source = 'tangerino'`), e esse vínculo é
+gravado pela **primeira consulta bem-sucedida** — `saveExternalReference`, em
+`lib/tangerino/agent.ts`. Numa instalação nova ele não existe para ninguém.
+
+Consequência prática, e ela precisa estar escrita: **a automação não começa
+sozinha**. Alguém abre a ficha de um colaborador no Vinculato e pede a consulta
+ao Tangerino uma vez. Dali em diante ele entra nas varreduras seguintes sem
+ninguém lembrar dele.
+
+O importador do Sankhya não resolve isso: ele grava vínculo com
+`source = 'sankhya'`, que é outro sistema e outro identificador.
