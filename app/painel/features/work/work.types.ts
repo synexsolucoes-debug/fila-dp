@@ -142,8 +142,43 @@ export type AgentStatus = {
   proposals: { pendingTriage: number; suggested: number; applied: number; rejected: number };
 };
 
+/**
+ * Saúde do worker do Windows, separada da saúde do agendamento.
+ *
+ * As duas respondem perguntas diferentes e apontam para pessoas diferentes: um
+ * worker impecável não recebe tarefa se a varredura do servidor parou, e um
+ * agendamento em dia não consulta nada com o computador do DP desligado.
+ */
+export type WorkerAvailability = "online" | "stale" | "never_seen" | "needs_authentication";
+
+export type AgentWorkerHealth = {
+  availability: WorkerAvailability;
+  detail: string;
+  secondsSinceLastSeen: number | null;
+  pendingConsultations: number;
+  pendingAttachments: number;
+  heartbeat: {
+    workerId: string;
+    workerVersion: string;
+    lastSeenAt: string;
+    lastConsultationAt: string | null;
+    lastErrorCode: string;
+  } | null;
+};
+
+export type AgentScheduleHealth = {
+  configured: boolean;
+  scheduleEnabled: boolean;
+  overdue: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  detail: string;
+};
+
 export type AgentsPayload = {
   agents: AgentStatus[];
+  worker: AgentWorkerHealth | null;
+  schedule: AgentScheduleHealth | null;
   cadences: Array<{ key: string; label: string; description: string; intervalMinutes: number; businessHoursOnly: boolean }>;
   automation: { policy: string; label: string };
   permissions: { manage: boolean; execute: boolean; reprocess: boolean; viewLogs: boolean; resolveTriage: boolean };

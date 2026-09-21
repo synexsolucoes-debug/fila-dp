@@ -9,7 +9,9 @@ import {
   formatDateTime, formatDuration, normalizeAgentLog, normalizeAgentRun,
   normalizeAgentsPayload, requestJson,
 } from "./work.api";
-import type { AgentLogLine, AgentRun, AgentsPayload, AgentStatus } from "./work.types";
+import type {
+  AgentLogLine, AgentRun, AgentScheduleHealth, AgentsPayload, AgentStatus, AgentWorkerHealth,
+} from "./work.types";
 import styles from "./work.module.css";
 
 /**
@@ -38,6 +40,80 @@ type Confirmation = { agent: AgentStatus; kind: "run" | "pause" | "resume" } | n
 
 /** Os estados em que a pessoa ainda está montando o agente, e o roteiro ajuda. */
 const SETUP_STATES = new Set(["not_configured", "credential_pending", "test_pending", "ready"]);
+
+/**
+ * Saúde do worker e do agendamento, lado a lado.
+ *
+ * O painel dizia se o agente estava **habilitado** — uma linha de configuração
+ * que continua verde com o computador do DP desligado. Estas duas leituras são
+ * o que separa "configurado" de "funcionando", e elas ficam juntas porque a
+ * pergunta útil é qual das duas falhou: um worker impecável não recebe tarefa
+ * se a varredura do servidor parou, e um agendamento em dia não consulta nada
+ * com a máquina desligada.
+ */
+function WorkerHealthCard({ worker, schedule }: {
+  worker: AgentWorkerHealth | null;
+  schedule: AgentScheduleHealth | null;
+}) {
+  if (!worker && !schedule) return null;
+  const tone = worker?.availability === "online" ? "ok"
+    : worker?.availability === "needs_authentication" ? "attention"
+      : "problem";
+  const pending = (worker?.pendingConsultations ?? 0) + (worker?.pendingAttachments ?? 0);
+
+  return (
+    <section className={styles.workerHealth} data-tone={tone} aria-labelledby="worker-health-title">
+      <header>
+        <div>
+          <span>WORKER NO COMPUTADOR DO DP</span>
+          <h3 id="worker-health-title">
+            {worker?.availability === "online" ? "Ativo"
+              : worker?.availability === "needs_authentication" ? "Aguardando autenticação"
+                : worker?.availability === "stale" ? "Sem comunicação"
+                  : "Nunca se comunicou"}
+          </h3>
+        </div>
+        {pending > 0 && (
+          <strong className={styles.workerQueue}>
+            {pending} {pending === 1 ? "tarefa na fila" : "tarefas na fila"}
+          </strong>
+        )}
+      </header>
+      <p>{worker?.detail}</p>
+      <dl>
+        <div>
+          <dt>Última comunicação</dt>
+          <dd>{worker?.heartbeat?.lastSeenAt ? formatDateTime(worker.heartbeat.lastSeenAt) : "nunca"}</dd>
+        </div>
+        <div>
+          <dt>Última consulta concluída</dt>
+          <dd>{worker?.heartbeat?.lastConsultationAt ? formatDateTime(worker.heartbeat.lastConsultationAt) : "nenhuma"}</dd>
+        </div>
+        <div>
+          <dt>Consultas aguardando</dt>
+          <dd>{worker?.pendingConsultations ?? 0}</dd>
+        </div>
+        <div>
+          <dt>Documentos aguardando</dt>
+          <dd>{worker?.pendingAttachments ?? 0}</dd>
+        </div>
+      </dl>
+
+      {/* O agendamento é outro diagnóstico, e por isso outra caixa. */}
+      {schedule?.configured && (
+        <p className={schedule.overdue ? styles.scheduleOverdue : styles.scheduleNote}>
+          <strong>Agendamento do servidor:</strong> {schedule.detail}
+          {schedule.nextRunAt && schedule.scheduleEnabled ? ` Próxima varredura prevista para ${formatDateTime(schedule.nextRunAt)}.` : ""}
+        </p>
+      )}
+
+      <small>
+        O worker só funciona com este computador ligado, conectado e com a sessão do Windows aberta.
+        Desligado ou suspenso, nenhuma admissão é consultada.
+      </small>
+    </section>
+  );
+}
 
 /** A cor do estado. Cinza é o padrão: nem tudo que não é verde é alarme. */
 function agentStateTone(state: string): "critical" | "warning" | "positive" | undefined {
@@ -191,7 +267,9 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
         title="Nenhum agente disponível neste grupo"
         text="O Vinculato trabalha com três automações: Agente Teams, Agente Tangerino e Agente Sankhya. Se nenhuma aparece aqui, o grupo ainda não foi provisionado."
       />
-      : <div className={styles.agentGrid}>
+      : <>
+      <WorkerHealthCard worker={payload?.worker ?? null} schedule={payload?.schedule ?? null} />
+      <div className={styles.agentGrid}>
         {agents.map((agent) => <article key={agent.key} className={styles.agentCard}>
           <header>
             {agent.kind === "agent" ? <Bot aria-hidden="true" /> : <Cable aria-hidden="true" />}
@@ -341,7 +419,7 @@ export function AgentsView({ initialRunId = "" }: { initialRunId?: string }) {
             </div> : null}
           </div> : null}
         </article>)}
-      </div>}
+      </div></>}
 
     {confirmation ? <ConfirmDialog
       open

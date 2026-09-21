@@ -210,3 +210,51 @@ test("a auditoria da edição nomeia campos, nunca valores", () => {
   assert.match(route, /after: \{ fields: Object\.keys\(incoming\) \}/u,
     "registrar o conteúdo recriaria em texto aberto o que a cifra protege");
 });
+
+/* -------------------------------------------------------------------------- *
+ * Retentativa: o que repete sozinho e o que espera uma pessoa
+ * -------------------------------------------------------------------------- */
+
+test("cada falha decide repetir e pedir gente de forma independente", async () => {
+  const { tangerinoErrors } = await import("../lib/tangerino/errors.ts");
+
+  // Transitórias: repetem sozinhas, sem incomodar ninguém.
+  for (const falha of [tangerinoErrors.timeout("abrir admissão"), tangerinoErrors.unavailable("")]) {
+    assert.equal(falha.retryable, true, `${falha.code} é transitória`);
+    assert.equal(falha.requiresUserAction, false);
+  }
+
+  // Credencial e desafio de autenticação: repetir agrava. Senha errada tentada
+  // em laço é como se bloqueia a conta do cliente no sistema da outra empresa.
+  for (const falha of [tangerinoErrors.authenticationRequired(""), tangerinoErrors.credentialRequired()]) {
+    assert.equal(falha.retryable, false, `${falha.code} não pode repetir sozinha`);
+    assert.equal(falha.requiresUserAction, true);
+  }
+
+  // Resultado ambíguo não é erro nem sucesso: escolher um seria inventar o vínculo.
+  const empate = tangerinoErrors.multipleMatches(3);
+  assert.equal(empate.retryable, false);
+  assert.equal(empate.state, "MULTIPLE_MATCHES");
+
+  // Mudança de tela não melhora com insistência — melhora com alguém ajustando.
+  const layout = tangerinoErrors.uiChanged("download", "botão Baixar");
+  assert.equal(layout.retryable, false);
+  assert.equal(layout.state, "UI_CHANGED");
+});
+
+test("a preparação da ficha para de insistir, e falha de arquivo nem tenta", () => {
+  const service = source("../lib/admission-sheet-service.ts");
+  assert.match(service, /SHEET_MAX_ATTEMPTS = 3/u, "insistir para sempre esconde o problema de quem poderia resolvê-lo");
+  assert.match(service, /attempts >= SHEET_MAX_ATTEMPTS \? "failed" : "pending"/u);
+  /* Arquivo que não é PDF, sem camada de texto ou de outro modelo é propriedade
+     do arquivo, não falha transitória: três varreduras chegariam à mesma
+     conclusão gastando navegador à toa. */
+  assert.match(service, /state = 'failed', error_code = 'REGISTRATION_FORM_UNREADABLE'/u);
+});
+
+test("a releitura não provoca novo download", () => {
+  const service = source("../lib/admission-sheet-service.ts");
+  assert.match(service, /listCardAttachments/u);
+  assert.doesNotMatch(service, /downloadAdmissionArtifacts|playwright|TangerinoBrowserSession/u,
+    "o PDF já está guardado; reprocessá-lo não pode depender do navegador do operador");
+});

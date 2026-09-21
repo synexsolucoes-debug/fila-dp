@@ -134,3 +134,28 @@
 }
 .documents a:hover { background: var(--ui-surface-muted); }
 .documents a svg { width: 13px; height: 13px; }
+
+/* Etapas do trabalho dentro da demanda. */
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.steps li {
+  display: flex; align-items: center; gap: 5px; font-size: .74rem;
+  border: 1px solid var(--ui-border); border-radius: 999px; padding: 4px 10px;
+  color: var(--ui-text-muted); background: var(--ui-surface);
+}
+.steps li[data-state="done"] { color: var(--ui-success); border-color: var(--ui-success); }
+.steps li[data-state="current"] {
+  color: var(--ui-on-accent, #fff); background: var(--ui-primary); border-color: var(--ui-primary); font-weight: 600;
+}
+
+/* Conferido: marca pessoal de quem transcreve, distinta de copiado e cadastrado. */
+.checkField {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface-elevated);
+  padding: 4px 8px; font-size: .74rem; font-weight: 600; color: var(--ui-text); cursor: pointer;
+}
+.checkField[aria-pressed="true"] { color: var(--ui-success); border-color: var(--ui-success); }
+.checkField svg { width: 12px; height: 12px; }
+
+.field[data-checked] { background: color-mix(in srgb, var(--ui-success) 5%, transparent); }
+/* O foco precisa ser visível: a linha é navegável por teclado. */
+.field:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }

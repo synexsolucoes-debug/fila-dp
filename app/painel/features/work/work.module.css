@@ -262,3 +262,29 @@ div.counter:hover { transform: none; border-color: var(--work-border); }
    `.workspace .primaryButton` pesa (0,2,0) e vence, sem tocar na regra global
    nem em nenhuma outra tela. */
 .workspace .primaryButton { color: var(--work-on-accent); }
+
+/* Saúde do worker: o estado decide o tom, e o tom precisa dizer onde procurar. */
+.workerHealth {
+  border: 1px solid var(--ui-border); border-left-width: 3px; border-radius: 10px;
+  padding: 14px 16px; background: var(--ui-surface); margin-bottom: 16px;
+}
+.workerHealth[data-tone="ok"] { border-left-color: var(--ui-success); }
+.workerHealth[data-tone="attention"] { border-left-color: var(--ui-warning); }
+.workerHealth[data-tone="problem"] { border-left-color: var(--ui-danger); }
+.workerHealth > header { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; justify-content: space-between; }
+.workerHealth > header span { font-size: .66rem; letter-spacing: .08em; color: var(--ui-text-muted); font-weight: 600; }
+.workerHealth > header h3 { margin: 2px 0 0; font-size: 1rem; }
+.workerHealth > p { margin: 6px 0 10px; font-size: .86rem; color: var(--ui-text-soft); max-width: 72ch; }
+.workerHealth small { display: block; margin-top: 10px; font-size: .76rem; color: var(--ui-text-muted); max-width: 72ch; }
+
+.workerQueue {
+  font-size: .8rem; padding: 3px 9px; border-radius: 999px;
+  background: var(--ui-surface-muted); color: var(--ui-text);
+}
+
+.workerHealth dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0; }
+.workerHealth dl dt { font-size: .68rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); font-weight: 600; }
+.workerHealth dl dd { margin: 2px 0 0; font-size: .86rem; font-variant-numeric: tabular-nums; }
+
+.scheduleNote, .scheduleOverdue { margin: 10px 0 0; font-size: .82rem; color: var(--ui-text-soft); }
+.scheduleOverdue { color: var(--ui-warning); }

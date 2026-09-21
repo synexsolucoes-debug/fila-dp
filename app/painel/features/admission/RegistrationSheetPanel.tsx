@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BadgeCheck, Copy, FileText, LoaderCircle, Pencil, RefreshCw, ShieldAlert, Trash2, TriangleAlert } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { BadgeCheck, Check, Copy, FileText, LoaderCircle, Pencil, RefreshCw, ShieldAlert, Trash2, TriangleAlert } from "lucide-react";
 import {
   FIELD_SOURCE_LABELS, requestSheet, type FieldProvenance, type RegistrationSheet, type SheetBlock,
   type SheetField, type SheetPayload, type SheetPreparationState,
@@ -50,18 +50,38 @@ function statusLabel(status: SheetField["status"]) {
   return status === "blank" ? "Em branco no registro" : "Não foi possível ler";
 }
 
-function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit }: {
+function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit, checked, onToggleChecked }: {
   field: SheetField;
   provenance: FieldProvenance | undefined;
   onCopy: (field: SheetField) => void;
   copiedKey: string;
   canEdit: boolean;
   onEdit: (field: SheetField) => void;
+  checked: boolean;
+  onToggleChecked: (key: string) => void;
 }) {
   const ready = field.status === "ok";
   const source = provenance?.source ?? "document";
+
+  /* Teclado: C copia, V (ou espaço) marca conferido.
+     
+     A transcrição é uma sequência longa de campo → ERP → campo, e tirar a mão
+     do teclado a cada um é o que faz quem transcreve abandonar a conferência no
+     meio. O atalho só vale com o foco na linha, e não quando está dentro de um
+     campo de texto — senão digitar "c" num formulário copiaria algo. */
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!ready) return;
+    const pressed = event.key.toLowerCase();
+    if (pressed === "c") { event.preventDefault(); onCopy(field); }
+    if (pressed === "v" || pressed === " ") { event.preventDefault(); onToggleChecked(field.key); }
+  };
+
   return (
-    <div className={styles.field} data-status={field.status} data-source={source}>
+    <div className={styles.field} data-status={field.status} data-source={source}
+      data-checked={checked || undefined}
+      tabIndex={ready ? 0 : -1} onKeyDown={onKeyDown}
+      aria-label={ready ? `${field.label}: ${field.value}${checked ? " — conferido" : ""}` : undefined}>
       <dt>
         {field.label}
         {/* A origem fica junto do rótulo porque muda a confiança: um CPF lido do
@@ -78,6 +98,13 @@ function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit }: {
             <button type="button" className={styles.copyField} onClick={() => onCopy(field)}
               aria-label={`Copiar ${field.label}`}>
               <Copy aria-hidden="true" />{copiedKey === field.key ? "Copiado" : "Copiar"}
+            </button>
+          )}
+          {ready && (
+            <button type="button" className={styles.checkField} aria-pressed={checked}
+              onClick={() => onToggleChecked(field.key)}
+              aria-label={`Marcar ${field.label} como conferido`}>
+              <Check aria-hidden="true" />{checked ? "Conferido" : "Conferir"}
             </button>
           )}
           {canEdit && (
@@ -145,6 +172,62 @@ function PreparationState({ state, payload }: { state: SheetPreparationState; pa
 
 export type SheetDocument = { id: string; filename: string; downloadUrl: string };
 
+/**
+ * As cinco etapas do trabalho dentro da demanda.
+ *
+ * Elas existem para responder "em que pé isto está?" sem abrir três abas. A
+ * última não é derivada de nada que a máquina observe: só a confirmação de uma
+ * pessoa move para `cadastrada`, porque só ela sabe se o ERP salvou.
+ */
+const STEPS = [
+  { key: "documents", label: "Aguardando documentos" },
+  { key: "preparing", label: "Preparando ficha" },
+  { key: "review", label: "Aguardando conferência" },
+  { key: "ready", label: "Pronta para cadastro" },
+  { key: "registered", label: "Cadastro confirmado" },
+] as const;
+
+/**
+ * Marcas de conferência: estado pessoal de quem transcreve, no navegador.
+ *
+ * Copiar, conferir e cadastrar são três coisas distintas. `copiado` é
+ * transitório; `cadastrado` é registro compartilhado e auditado, e vive no
+ * banco; `conferido` fica no meio — é o risco que a pessoa marca para si
+ * enquanto compara campo e documento, e não uma afirmação sobre o trabalho dos
+ * outros. Guardá-lo no servidor faria a marca de um colega parecer conferência
+ * feita, que é exatamente a confusão que estes três estados evitam.
+ */
+function useCheckedFields(cardId: string) {
+  const storageKey = `vinculato:ficha-conferida:${cardId}`;
+  /* Leitura na inicialização preguiçosa, e não num efeito: a aba é montada com
+     `key` no cartão, então cada pessoa é uma instância nova — e escrever estado
+     dentro do efeito encadearia uma renderização a mais em toda abertura.
+     
+     Navegador anônimo ou armazenamento bloqueado caem no conjunto vazio: a
+     ficha funciona sem as marcas, e fingir que salvou seria pior que não
+     oferecer. */
+  const [checked, setChecked] = useState<ReadonlySet<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      return new Set(saved ? JSON.parse(saved) as string[] : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggle = useCallback((key: string) => {
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { window.localStorage.setItem(storageKey, JSON.stringify([...next])); } catch { /* sem persistência */ }
+      return next;
+    });
+  }, [storageKey]);
+
+  return { checked, toggle };
+}
+
 export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pdfUrl, documents = [] }: {
   cardId: string;
   canBuild: boolean;
@@ -164,6 +247,7 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
   const [draft, setDraft] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [registration, setRegistration] = useState("");
+  const { checked, toggle: toggleChecked } = useCheckedFields(cardId);
 
   /**
    * A primeira leitura acontece no efeito, e nenhum `setState` roda de forma
@@ -318,6 +402,27 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
         </div>
       </header>
 
+      {/* Em que pé está o trabalho. A última etapa não é observada pela
+          máquina: só a confirmação de uma pessoa move para "cadastrada",
+          porque só ela sabe se o ERP salvou. */}
+      {!loading && (
+        <ol className={styles.steps} aria-label="Etapas da admissão">
+          {STEPS.map((step, index) => {
+            const current = preparation?.confirmation ? 4
+              : preparation?.state === "ready"
+                ? (sheet && sheet.readable === sheet.filled ? 3 : 2)
+                : preparation?.state === "pending" ? 1
+                  : preparation?.state === "failed" ? 2 : 0;
+            return (
+              <li key={step.key} data-state={index < current ? "done" : index === current ? "current" : "todo"}
+                aria-current={index === current ? "step" : undefined}>
+                <span>{step.label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
       {error && <p className={styles.alert} role="alert">{error}</p>}
 
       {!loading && !sheet && <PreparationState state={preparation?.state ?? "absent"} payload={preparation} />}
@@ -350,6 +455,8 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
                   provenance={sheet?.provenance?.[field.key]}
                   copiedKey={copiedKey}
                   canEdit={canBuild && !archived && !preparation?.confirmation}
+                  checked={checked.has(field.key)}
+                  onToggleChecked={toggleChecked}
                   onCopy={(target) => void copy(target.value, target.key)}
                   onEdit={(target) => { setEditing(target); setDraft(target.value); }}
                 />
