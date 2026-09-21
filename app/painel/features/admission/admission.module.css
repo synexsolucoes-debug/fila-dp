@@ -121,3 +121,16 @@
 .confirmed strong { display: flex; align-items: center; gap: 6px; color: var(--ui-success); font-size: .92rem; }
 .confirmed strong svg { width: 16px; height: 16px; }
 .confirmed p { margin: 4px 0 0; font-size: .84rem; color: var(--ui-text-soft); }
+
+/* Documentos da pessoa, ao lado dos campos que eles sustentam. */
+.documents { border: 1px solid var(--ui-border); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface); }
+.documents h4 { margin: 0 0 2px; font-size: .86rem; }
+.documents p { margin: 0 0 8px; font-size: .78rem; color: var(--ui-text-soft); }
+.documents ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.documents a {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
+  border: 1px solid var(--ui-border); border-radius: 7px; padding: 5px 9px;
+  font-size: .78rem; color: var(--ui-text); background: var(--ui-surface-elevated);
+}
+.documents a:hover { background: var(--ui-surface-muted); }
+.documents a svg { width: 13px; height: 13px; }

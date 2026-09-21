@@ -143,12 +143,16 @@ function PreparationState({ state, payload }: { state: SheetPreparationState; pa
   );
 }
 
-export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pdfUrl }: {
+export type SheetDocument = { id: string; filename: string; downloadUrl: string };
+
+export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pdfUrl, documents = [] }: {
   cardId: string;
   canBuild: boolean;
   canRead: boolean;
   archived: boolean;
   pdfUrl: string | null;
+  /** Os demais documentos da pessoa, para conferir sem trocar de aba. */
+  documents?: readonly SheetDocument[];
 }) {
   const [sheet, setSheet] = useState<RegistrationSheet | null>(null);
   const [preparation, setPreparation] = useState<SheetPayload | null>(null);
@@ -424,6 +428,30 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
             <small>O valor lido do documento continua guardado e aparece ao lado da sua correção.</small>
           </form>
         </div>
+      )}
+
+      {/* Os documentos que sustentam os campos, à mão.
+          
+          A ficha cadastral é a consolidação que a Sólides fez dos documentos da
+          pessoa — ler as fotos do RG e da CTPS por OCR produziria uma segunda
+          versão dos mesmos dados, menos confiável justamente nos dígitos que
+          não podem errar. O papel destes arquivos é a conferência, e para isso
+          eles precisam estar aqui, não na outra aba. */}
+      {sheet && documents.length > 0 && (
+        <section className={styles.documents}>
+          <h4>Documentos desta pessoa</h4>
+          <p>Abra ao lado para conferir os campos antes de cadastrar no Sankhya.</p>
+          <ul>
+            {documents.map((document) => (
+              <li key={document.id}>
+                <a href={`${document.downloadUrl}${document.downloadUrl.includes("?") ? "&" : "?"}disposition=inline`}
+                  target="_blank" rel="noreferrer">
+                  <FileText aria-hidden="true" />{document.filename}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {sheet?.sourceFilename && (
