@@ -12,6 +12,22 @@ export type SheetField = {
 
 export type SheetBlock = { block: string; label: string; fields: SheetField[] };
 
+export type FieldSource = "document" | "registry" | "manual";
+
+export const FIELD_SOURCE_LABELS: Readonly<Record<FieldSource, string>> = {
+  document: "do documento",
+  registry: "do cadastro",
+  manual: "preenchido à mão",
+};
+
+/** Origem por campo. Sem valor — o conteúdo vem cifrado, junto da ficha. */
+export type FieldProvenance = { source: FieldSource; documentValue: string; by: string; at: string };
+
+/** Identidade: documento que não parece ser desta pessoa. */
+export type IdentityDivergence = { field: string; label: string; detail: string };
+
+export type SheetConfirmation = { erpRegistration: string; confirmedAt: string; confirmedBy: string };
+
 /**
  * Em que pé está o preparo.
  *
@@ -31,6 +47,8 @@ export type SheetPayload = {
   errorMessage?: string;
   sourceFilename?: string;
   attachmentId?: string;
+  divergences?: IdentityDivergence[];
+  confirmation?: SheetConfirmation | null;
 };
 
 export type RegistrationSheet = {
@@ -41,6 +59,7 @@ export type RegistrationSheet = {
   sourceFilename?: string;
   attachmentId?: string;
   updatedAt?: string;
+  provenance?: Record<string, FieldProvenance>;
 };
 
 /**

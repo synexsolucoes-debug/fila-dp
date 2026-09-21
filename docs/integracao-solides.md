@@ -317,3 +317,69 @@ existente.
 Arquivo que não é PDF, PDF sem camada de texto ou de outro modelo vai direto
 para `failed`, sem gastar três tentativas para chegar à mesma conclusão: são
 propriedades do arquivo, e não falhas transitórias.
+
+## 11. Origem de cada campo, identidade e conclusão
+
+### 11.1 Três origens, e por que a distinção não é decorativa
+
+| Origem | De onde vem |
+| --- | --- |
+| `document` | Lido do Registro de Empregado anexado |
+| `registry` | Do cadastro do colaborador já aprovado no Vinculato |
+| `manual` | Digitado por uma pessoa na própria ficha |
+
+Precedência: **manual > documento > cadastro**. Não é hierarquia de qualidade, é
+ordem de decisão — quem corrigiu um campo já olhou o documento e decidiu contra
+ele, e reler o PDF não pode desfazer isso sozinho. O valor extraído continua
+guardado e aparece ao lado, para que a divergência seja visível em vez de
+silenciosa.
+
+Os dois envelopes cifrados ficam na mesma linha: um para o que o documento
+disse, outro para o que a pessoa corrigiu. Um envelope só obrigaria a releitura
+a escolher entre perder a correção ou ignorar o documento novo, sem terceira
+opção.
+
+**Os dados bancários** vêm vazios no Registro de Empregado. `PATCH` na rota da
+ficha é a porta explícita para completá-los — sem ela, a ficha entregaria uma
+admissão que não fecha no ERP.
+
+### 11.2 Validação matemática não prova titularidade
+
+Um CPF com dígito verificador correto é um CPF válido — de alguém. Antes de
+trazer qualquer coisa do cadastro, a ficha compara o que o documento diz com o
+colaborador vinculado à demanda. Divergindo, **o preenchimento automático não
+acontece** e a divergência vira pendência na tela.
+
+A comparação de CPF usa os quatro últimos dígitos, que é o que o cadastro guarda
+(`protectCpf` grava HMAC e os quatro finais). Quatro dígitos não são prova de
+identidade, e o código não finge que são: é uma peneira para o caso real —
+documento de outra pessoa anexado na demanda errada.
+
+O nome só levanta divergência quando **nenhum sobrenome** coincide. Casamento,
+nome social e abreviação mudam o texto sem mudar quem é; um alarme a cada
+diferença tocaria em admissão legítima e seria ignorado por hábito.
+
+O cadastro nunca fornece documento pessoal — só cargo, empresa e data de
+admissão. RG e PIS do cadastro vieram de uma digitação anterior, e usá-los aqui
+transformaria erro antigo em confirmação nova.
+
+### 11.3 A demanda termina quando o DP confirma
+
+Baixar o documento, extrair campos e copiar para a área de transferência não
+provam cadastro nenhum — a área de transferência não sabe se o operador colou,
+se o ERP aceitou nem se a tela foi salva.
+
+`POST /api/cards/[id]/registration-sheet/confirm` registra a matrícula que o
+Sankhya devolveu, o responsável e a data. O banco cobra os três: `confirmed_at`
+sem matrícula e sem responsável é recusado por CHECK.
+
+### 11.4 Retenção explícita
+
+A conclusão marca `retention_until` (30 dias por padrão, configurável na
+confirmação) e o cron apaga quando vence. A versão anterior apagava no ato —
+parecia cuidadoso e era cedo demais: erro de digitação no ERP aparece no dia
+seguinte, e a conferência ficava sem o material que a sustentaria.
+
+Arquivar o cartão agenda a mesma janela, mas **não encurta** um prazo já
+definido pela confirmação: quem concluiu escolheu o prazo. Nenhuma ficha
+existente ganhou data retroativa — o expurgo só alcança linha com prazo marcado.

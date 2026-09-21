@@ -110,22 +110,27 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
     if (!result.meta.changes) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
 
-    /* Expurgo da ficha de contratação ao concluir a demanda.
+    /* Concluir a demanda agenda o expurgo da ficha, em vez de executá-lo.
      *
-     * A ficha é a única coisa no produto que guarda valor de documento — CPF,
-     * PIS, RG, CTPS —, e existe para um trabalho com fim: transcrever a
-     * admissão para o ERP. Terminado o trabalho, o dado não tem mais razão de
-     * estar aqui, e guardá-lo "por via das dúvidas" é como um vazamento deixa
-     * de ser hipótese.
+     * A versão anterior apagava no ato. Parecia cuidadoso e era cedo demais:
+     * erro de digitação no ERP aparece no dia seguinte, e a conferência ficava
+     * sem o material que a sustentaria — restava reabrir sessão de navegador e
+     * baixar tudo de novo, incomodando a origem por um problema nosso.
      *
-     * Apagar, e não marcar como expurgada: uma coluna de carimbo deixaria o
-     * valor no banco com um aviso de que não deveria estar lá. O arquivo
-     * anexado continua na demanda; o que some é a transcrição dele. */
-    const purged = await d1.prepare("DELETE FROM fdp_admission_sheets WHERE workspace_id = ? AND card_id = ?")
+     * A janela padrão cobre a conferência sem virar retenção indefinida, e o
+     * cron apaga quando ela vence. Uma ficha já confirmada mantém a data que a
+     * confirmação definiu: quem concluiu escolheu o prazo, e arquivar o cartão
+     * depois não pode encurtá-lo em silêncio. */
+    const retained = await d1.prepare(`UPDATE fdp_admission_sheets
+      SET retention_until = COALESCE(retention_until, CURRENT_TIMESTAMP + interval '30 days'),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND card_id = ? AND retention_until IS NULL`)
       .bind(workspace.id, id).run();
     await recordActivity(workspace.id, id, auth.user.email, "card.archived");
-    if (purged.meta.changes) {
-      await recordActivity(workspace.id, id, auth.user.email, "admission.sheet.purged", { reason: "card_archived" });
+    if (retained.meta.changes) {
+      await recordActivity(workspace.id, id, auth.user.email, "admission.sheet.retention_scheduled", {
+        reason: "card_archived", days: 30,
+      });
     }
     return Response.json(await getWorkspaceSnapshot(auth.user));
   } catch (error) {

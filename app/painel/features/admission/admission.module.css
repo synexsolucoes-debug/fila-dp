@@ -88,3 +88,36 @@
    anexado e a conferência manual continua possível. */
 .empty[data-tone="failed"] { border-color: var(--ui-warning); border-style: solid; }
 .empty[data-tone="failed"] strong { color: var(--ui-warning); }
+
+/* Origem do campo, junto do rótulo: muda a confiança de quem vai copiar. */
+.sourceTag {
+  margin-left: 6px; font-size: .64rem; font-weight: 500; letter-spacing: 0;
+  text-transform: none; color: var(--ui-text-muted);
+}
+.field[data-source="manual"] .sourceTag { color: var(--ui-info); }
+.field[data-source="registry"] .sourceTag { color: var(--ui-success); }
+
+.fieldActions { display: inline-flex; gap: 6px; flex: none; }
+
+/* Identidade divergente é bloqueio de atenção, não aviso de rodapé. */
+.divergences { border: 1px solid var(--ui-danger); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface); }
+.divergences h4 { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--ui-danger); }
+.divergences h4 svg { width: 16px; height: 16px; }
+.divergences ul { margin: 0 0 8px; padding-left: 18px; }
+.divergences li, .divergences p { font-size: .82rem; color: var(--ui-text-soft); margin: 0 0 4px; }
+
+.confirmBox, .editBox {
+  border: 1px solid var(--ui-border); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface);
+}
+.confirmBox form > div, .editBox form > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.confirmBox label, .editBox label { font-size: .78rem; font-weight: 600; color: var(--ui-text-soft); }
+.confirmBox input, .editBox input {
+  flex: 1 1 200px; min-width: 0; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--ui-border); background: var(--ui-surface-elevated); color: var(--ui-text);
+}
+.confirmBox small, .editBox small { display: block; font-size: .76rem; color: var(--ui-text-soft); max-width: 62ch; }
+
+.confirmed { border: 1px solid var(--ui-success); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface); }
+.confirmed strong { display: flex; align-items: center; gap: 6px; color: var(--ui-success); font-size: .92rem; }
+.confirmed strong svg { width: 16px; height: 16px; }
+.confirmed p { margin: 4px 0 0; font-size: .84rem; color: var(--ui-text-soft); }

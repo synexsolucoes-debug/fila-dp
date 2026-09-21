@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy, FileText, LoaderCircle, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
+import { BadgeCheck, Copy, FileText, LoaderCircle, Pencil, RefreshCw, ShieldAlert, Trash2, TriangleAlert } from "lucide-react";
 import {
-  requestSheet, type RegistrationSheet, type SheetBlock, type SheetField, type SheetPayload,
-  type SheetPreparationState,
+  FIELD_SOURCE_LABELS, requestSheet, type FieldProvenance, type RegistrationSheet, type SheetBlock,
+  type SheetField, type SheetPayload, type SheetPreparationState,
 } from "./admission.api";
 import styles from "./admission.module.css";
 
@@ -50,32 +50,52 @@ function statusLabel(status: SheetField["status"]) {
   return status === "blank" ? "Em branco no registro" : "Não foi possível ler";
 }
 
-function FieldRow({ field, onCopy, copiedKey }: {
+function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit }: {
   field: SheetField;
+  provenance: FieldProvenance | undefined;
   onCopy: (field: SheetField) => void;
   copiedKey: string;
+  canEdit: boolean;
+  onEdit: (field: SheetField) => void;
 }) {
   const ready = field.status === "ok";
+  const source = provenance?.source ?? "document";
   return (
-    <div className={styles.field} data-status={field.status}>
-      <dt>{field.label}</dt>
+    <div className={styles.field} data-status={field.status} data-source={source}>
+      <dt>
+        {field.label}
+        {/* A origem fica junto do rótulo porque muda a confiança: um CPF lido do
+            documento tem o arquivo ao lado para conferir; um digitado por um
+            colega tem uma pessoa e uma data. */}
+        {ready && <span className={styles.sourceTag}>{FIELD_SOURCE_LABELS[source]}</span>}
+      </dt>
       <dd>
         {ready
           ? <span className={styles.value}>{field.value}</span>
           : <span className={styles.missing}><TriangleAlert aria-hidden="true" />{statusLabel(field.status)}</span>}
-        {ready && (
-          <button
-            type="button"
-            className={styles.copyField}
-            onClick={() => onCopy(field)}
-            aria-label={`Copiar ${field.label}`}
-          >
-            <Copy aria-hidden="true" />
-            {copiedKey === field.key ? "Copiado" : "Copiar"}
-          </button>
-        )}
+        <span className={styles.fieldActions}>
+          {ready && (
+            <button type="button" className={styles.copyField} onClick={() => onCopy(field)}
+              aria-label={`Copiar ${field.label}`}>
+              <Copy aria-hidden="true" />{copiedKey === field.key ? "Copiado" : "Copiar"}
+            </button>
+          )}
+          {canEdit && (
+            <button type="button" className={styles.copyField} onClick={() => onEdit(field)}
+              aria-label={`${ready ? "Corrigir" : "Preencher"} ${field.label}`}>
+              <Pencil aria-hidden="true" />{ready ? "Corrigir" : "Preencher"}
+            </button>
+          )}
+        </span>
       </dd>
       {!ready && <p className={styles.note}>{field.note}</p>}
+      {/* Corrigir não apaga o que o documento disse — mostra os dois. */}
+      {provenance?.source === "manual" && provenance.documentValue && (
+        <p className={styles.note}>
+          O documento dizia <b>{provenance.documentValue}</b>
+          {provenance.by ? ` · corrigido por ${provenance.by}` : ""}
+        </p>
+      )}
     </div>
   );
 }
@@ -136,6 +156,10 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
+  const [editing, setEditing] = useState<SheetField | null>(null);
+  const [draft, setDraft] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [registration, setRegistration] = useState("");
 
   /**
    * A primeira leitura acontece no efeito, e nenhum `setState` roda de forma
@@ -186,6 +210,42 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
       setPreparation(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível apagar a ficha.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveField(key: string, value: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await requestSheet(`/api/cards/${cardId}/registration-sheet`, {
+        method: "PATCH", body: JSON.stringify({ fields: { [key]: value } }),
+      });
+      setEditing(null);
+      const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`);
+      setSheet(payload.sheet);
+      setPreparation(payload);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar o campo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRegistration() {
+    setBusy(true);
+    setError("");
+    try {
+      await requestSheet(`/api/cards/${cardId}/registration-sheet/confirm`, {
+        method: "POST", body: JSON.stringify({ erpRegistration: registration.trim() }),
+      });
+      setConfirming(false);
+      const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`);
+      setSheet(payload.sheet);
+      setPreparation(payload);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível registrar o cadastro.");
     } finally {
       setBusy(false);
     }
@@ -280,7 +340,15 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
             </header>
             <dl className={styles.fields}>
               {block.fields.map((field) => (
-                <FieldRow key={field.key} field={field} copiedKey={copiedKey} onCopy={(target) => void copy(target.value, target.key)} />
+                <FieldRow
+                  key={field.key}
+                  field={field}
+                  provenance={sheet?.provenance?.[field.key]}
+                  copiedKey={copiedKey}
+                  canEdit={canBuild && !archived && !preparation?.confirmation}
+                  onCopy={(target) => void copy(target.value, target.key)}
+                  onEdit={(target) => { setEditing(target); setDraft(target.value); }}
+                />
               ))}
             </dl>
           </article>
@@ -294,6 +362,68 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
               guardá-los em coluna aberta ao lado do envelope cifrado. */}
           <ul>{sheet.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
         </section>
+      )}
+
+      {/* Divergência de identidade fica ANTES dos campos: quem transcreve
+          precisa ver isso antes de copiar qualquer coisa, e não depois. */}
+      {(preparation?.divergences?.length ?? 0) > 0 && (
+        <section className={styles.divergences} role="alert">
+          <h4><ShieldAlert aria-hidden="true" /> O documento pode não ser desta pessoa</h4>
+          <ul>{preparation?.divergences?.map((item) => <li key={item.field}><b>{item.label}:</b> {item.detail}</li>)}</ul>
+          <p>
+            O preenchimento pelo cadastro foi suspenso. Confira o arquivo antes de usar qualquer campo —
+            anexar dados de outra pessoa a esta admissão é o erro mais difícil de perceber depois.
+          </p>
+        </section>
+      )}
+
+      {/* Confirmação do cadastro: é ela que conclui a demanda. Copiar não conclui. */}
+      {sheet && (preparation?.confirmation ? (
+        <section className={styles.confirmed}>
+          <strong><BadgeCheck aria-hidden="true" /> Cadastrado no Sankhya</strong>
+          <p>
+            Matrícula <b>{preparation.confirmation.erpRegistration}</b> · registrado por {preparation.confirmation.confirmedBy}
+          </p>
+        </section>
+      ) : canBuild && !archived && (
+        <section className={styles.confirmBox}>
+          {confirming ? (
+            <form onSubmit={(event) => { event.preventDefault(); void confirmRegistration(); }}>
+              <label htmlFor="erp-registration">Matrícula ou identificador gerado pelo Sankhya</label>
+              <div>
+                <input id="erp-registration" value={registration} maxLength={60} required
+                  onChange={(event) => setRegistration(event.target.value)} placeholder="Ex.: 549" />
+                <button type="submit" className={styles.primary} disabled={busy || !registration.trim()}>
+                  {busy ? "Registrando…" : "Confirmar cadastro"}
+                </button>
+                <button type="button" className={styles.secondary} onClick={() => setConfirming(false)}>Cancelar</button>
+              </div>
+              <small>
+                A demanda só é concluída por esta confirmação. Copiar os campos não prova que o ERP salvou.
+                A ficha fica disponível por 30 dias para conferência e depois é apagada.
+              </small>
+            </form>
+          ) : (
+            <button type="button" className={styles.primary} onClick={() => setConfirming(true)}>
+              <BadgeCheck aria-hidden="true" /> Já cadastrei no Sankhya
+            </button>
+          )}
+        </section>
+      ))}
+
+      {editing && (
+        <div className={styles.editBox} role="dialog" aria-label={`Editar ${editing.label}`}>
+          <form onSubmit={(event) => { event.preventDefault(); void saveField(editing.key, draft.trim()); }}>
+            <label htmlFor="sheet-field-draft">{editing.label}</label>
+            <div>
+              <input id="sheet-field-draft" value={draft} maxLength={220} autoFocus
+                onChange={(event) => setDraft(event.target.value)} />
+              <button type="submit" className={styles.primary} disabled={busy || !draft.trim()}>Salvar</button>
+              <button type="button" className={styles.secondary} onClick={() => setEditing(null)}>Cancelar</button>
+            </div>
+            <small>O valor lido do documento continua guardado e aparece ao lado da sua correção.</small>
+          </form>
+        </div>
       )}
 
       {sheet?.sourceFilename && (

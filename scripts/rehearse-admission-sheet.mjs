@@ -264,13 +264,51 @@ try {
   });
   conferir("a ficha continua pronta depois da tentativa de reprocessar", aindaPronta === "ready", String(aindaPronta));
 
-  // 7. Apagar o anexo apaga a ficha lida dele.
+  // 7. Confirmar sem matrícula e sem responsável é recusado pelo banco.
+  await recusa("confirmação sem matrícula é recusada", alfa.workspaceId,
+    (client) => client.query(
+      "UPDATE fdp_admission_sheets SET confirmed_at = CURRENT_TIMESTAMP WHERE card_id = $1", [alfa.cardId]));
+  await comTenant(alfa.workspaceId, (client) => client.query(
+    `UPDATE fdp_admission_sheets SET confirmed_at = CURRENT_TIMESTAMP, erp_registration = 'MAT-001',
+       confirmed_by = 'dp@ensaio.test' WHERE card_id = $1`, [alfa.cardId]));
+  const confirmada = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT erp_registration, confirmed_by FROM fdp_admission_sheets WHERE card_id = $1", [alfa.cardId]);
+    return rows[0];
+  });
+  conferir("confirmação com matrícula e responsável é aceita",
+    confirmada.erp_registration === "MAT-001" && confirmada.confirmed_by === "dp@ensaio.test");
+
+  // 8. O batimento do worker é isolado entre grupos.
+  for (const grupo of grupos) {
+    await comTenant(grupo.workspaceId, (client) => client.query(
+      `INSERT INTO fdp_tangerino_worker_heartbeats (id, workspace_id, integration_id, worker_id)
+       VALUES ($1, $2, $3, $4)`,
+      [`${grupo.workspaceId}-hb`, grupo.workspaceId, `${grupo.workspaceId}-int`, "worker-ensaio"]));
+  }
+  const batimentoVizinho = await comTenant(beta.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT count(*)::int AS total FROM fdp_tangerino_worker_heartbeats WHERE id = $1",
+      [`${alfa.workspaceId}-hb`]);
+    return rows[0].total;
+  });
+  conferir("o batimento de um grupo não é alcançável do outro", batimentoVizinho === 0,
+    `viu ${batimentoVizinho} linha(s)`);
+  // Mesmo `worker_id` em grupos diferentes convivem: a chave é composta.
+  const doisGrupos = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT count(*)::int AS total FROM fdp_tangerino_worker_heartbeats WHERE worker_id = 'worker-ensaio'");
+    return rows[0].total;
+  });
+  conferir("o mesmo worker atende vários grupos sem colidir", doisGrupos === 1, `${doisGrupos} linha(s) visíveis`);
+
+  // 9. Apagar o anexo apaga a ficha lida dele.
   await comTenant(alfa.workspaceId, (client) =>
     client.query("DELETE FROM fdp_card_attachments WHERE id = $1", [alfa.attachmentId]));
   const aposAnexo = await contar(alfa);
   conferir("apagar o anexo apaga a ficha lida dele", aposAnexo === 0, `${aposAnexo} linha(s)`);
 
-  // 7. Apagar a demanda apaga a ficha junto.
+  // 10. Apagar a demanda apaga a ficha junto.
   const aposCartaoAntes = await contar(beta);
   await comTenant(beta.workspaceId, (client) => client.query("DELETE FROM fdp_cards WHERE id = $1", [beta.cardId]));
   const aposCartao = await contar(beta);

@@ -1,5 +1,8 @@
 import { requireCapability } from "@/lib/authorization";
-import { chooseRegistrationFormAttachment, openSheet, sanitizeSheetWarnings } from "@/lib/admission-sheet";
+import { chooseRegistrationFormAttachment, openSheet, sanitizeSheetFields, sanitizeSheetWarnings, sealSheet } from "@/lib/admission-sheet";
+import {
+  detectIdentityDivergence, mergeSheetFields, registryFields, sanitizeFieldMeta, type FieldMetaMap,
+} from "@/lib/admission-sheet-fields";
 import {
   enqueueSheetPreparation, listCardAttachments, prepareAdmissionSheet, sheetErrorMessage, SHEET_MAX_ATTEMPTS,
 } from "@/lib/admission-sheet-service";
@@ -20,6 +23,14 @@ type StoredSheet = {
   auth_tag: string | null;
   key_version: number | null;
   warnings_json: string;
+  overrides_encrypted_value: string | null;
+  overrides_initialization_vector: string | null;
+  overrides_auth_tag: string | null;
+  overrides_key_version: number | null;
+  field_meta_json: string;
+  erp_registration: string;
+  confirmed_at: string | null;
+  confirmed_by: string;
   state: "pending" | "ready" | "failed";
   error_code: string;
   attempts: number;
@@ -61,6 +72,8 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const stored = await d1.prepare(`SELECT id, attachment_id, source_filename, encrypted_value,
         initialization_vector, auth_tag, key_version, warnings_json, state, error_code, attempts,
+        overrides_encrypted_value, overrides_initialization_vector, overrides_auth_tag, overrides_key_version,
+        field_meta_json, erp_registration, confirmed_at::text AS confirmed_at, confirmed_by,
         created_by, updated_at
       FROM fdp_admission_sheets WHERE workspace_id = ? AND card_id = ?`)
       .bind(workspace.id, cardId).first<StoredSheet>();
@@ -84,13 +97,25 @@ export async function GET(_request: Request, context: RouteContext) {
       });
     }
 
-    const fields = openSheet({
+    const extracted = openSheet({
       encryptedValue: stored.encrypted_value,
       initializationVector: stored.initialization_vector,
       authTag: stored.auth_tag,
       keyVersion: stored.key_version,
     });
-    const sheet = buildRegistrationSheet(fields);
+    const overrides = openOverrides(stored);
+    const meta = sanitizeFieldMeta(JSON.parse(stored.field_meta_json || "{}"));
+
+    /* O cadastro só entra quando a identidade bate. Um documento de outra
+       pessoa anexado na demanda errada é o erro mais caro desta tela — e o
+       único que ninguém percebe olhando para ela. */
+    const employee = await loadLinkedEmployee(d1, workspace.id, cardId);
+    const divergences = detectIdentityDivergence({ extracted, employee });
+    const registry = divergences.length === 0 ? registryFields(employee) : {};
+
+    const merged = mergeSheetFields({ extracted, overrides, registry, meta });
+    const sheet = buildRegistrationSheet(Object.fromEntries(
+      Object.entries(merged).map(([key, field]) => [key, field.value])));
 
     // Auditar o ACESSO, nunca o conteúdo: escrever os campos lidos no histórico
     // recriaria em texto aberto exatamente o que a cifra existe para proteger.
@@ -104,8 +129,15 @@ export async function GET(_request: Request, context: RouteContext) {
 
     return Response.json({
       state: "ready",
+      divergences,
+      confirmation: stored.confirmed_at
+        ? { erpRegistration: stored.erp_registration, confirmedAt: stored.confirmed_at, confirmedBy: stored.confirmed_by }
+        : null,
       sheet: {
         ...sheet,
+        provenance: Object.fromEntries(Object.entries(merged).map(([key, field]) => [key, {
+          source: field.source, documentValue: field.documentValue, by: field.by, at: field.at,
+        }])),
         warnings: [...sheet.warnings, ...sanitizeSheetWarnings(JSON.parse(stored.warnings_json || "[]"))],
         sourceFilename: stored.source_filename,
         attachmentId: stored.attachment_id,
@@ -220,6 +252,109 @@ export async function DELETE(_request: Request, context: RouteContext) {
       await recordActivity(workspace.id, cardId, auth.user.email, "admission.sheet.purged", { reason: "manual" });
     }
     return Response.json({ sheet: null });
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
+
+/** Abre o envelope das correções manuais. Ausente é ficha sem correção. */
+function openOverrides(stored: Pick<StoredSheet,
+  "overrides_encrypted_value" | "overrides_initialization_vector" | "overrides_auth_tag" | "overrides_key_version">) {
+  if (!stored.overrides_encrypted_value || !stored.overrides_initialization_vector
+    || !stored.overrides_auth_tag || stored.overrides_key_version === null) {
+    return {};
+  }
+  return openSheet({
+    encryptedValue: stored.overrides_encrypted_value,
+    initializationVector: stored.overrides_initialization_vector,
+    authTag: stored.overrides_auth_tag,
+    keyVersion: stored.overrides_key_version,
+  });
+}
+
+/** O colaborador vinculado à demanda, para conferir identidade e completar contrato. */
+async function loadLinkedEmployee(d1: Awaited<ReturnType<typeof getWorkspaceContext>>["d1"], workspaceId: string, cardId: string) {
+  const row = await d1.prepare(`SELECT employee.full_name, employee.cpf_last4, employee.admission_date::text AS admission_date,
+      position.name AS position_name, company.trade_name, company.legal_name
+    FROM fdp_cards card
+    JOIN fdp_employees employee ON employee.workspace_id = card.workspace_id AND employee.id = card.employee_id
+    LEFT JOIN fdp_positions position ON position.workspace_id = employee.workspace_id AND position.id = employee.position_id
+    LEFT JOIN fdp_companies company ON company.workspace_id = employee.workspace_id AND company.id = employee.company_id
+    WHERE card.workspace_id = ? AND card.id = ?`)
+    .bind(workspaceId, cardId).first<Record<string, unknown>>();
+  if (!row) return null;
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  return {
+    fullName: text(row.full_name),
+    cpfLast4: text(row.cpf_last4),
+    admissionDate: text(row.admission_date),
+    positionName: text(row.position_name),
+    companyName: text(row.trade_name) || text(row.legal_name),
+  };
+}
+
+/**
+ * Corrige ou completa um campo à mão.
+ *
+ * Os dados bancários vêm vazios no Registro de Empregado, e o ERP costuma
+ * exigi-los: sem esta porta, a ficha entregaria uma admissão que não fecha. O
+ * valor extraído continua guardado, e a tela mostra os dois quando divergem —
+ * corrigir não apaga o que o documento disse.
+ */
+export async function PATCH(request: Request, context: RouteContext) {
+  const auth = await getApiUser();
+  if (!auth.user) return auth.response;
+  try {
+    const { id: cardId } = await context.params;
+    const { d1, workspace, user } = await loadCard(auth.user, cardId);
+    requireWorkspaceRole(workspace.role, ["admin", "member"]);
+    requireCapability(workspace, "attachments.write");
+    requireCapability(workspace, "admission.sheet.read");
+
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const incoming = sanitizeSheetFields(body.fields);
+    if (Object.keys(incoming).length === 0) {
+      throw ApiError.badRequest("Informe ao menos um campo válido.", "ADMISSION_SHEET_FIELDS_REQUIRED");
+    }
+
+    const stored = await d1.prepare(`SELECT overrides_encrypted_value, overrides_initialization_vector,
+        overrides_auth_tag, overrides_key_version, field_meta_json, confirmed_at
+      FROM fdp_admission_sheets WHERE workspace_id = ? AND card_id = ?`)
+      .bind(workspace.id, cardId).first<StoredSheet & { confirmed_at: string | null }>();
+    if (!stored) throw ApiError.notFound("Esta demanda ainda não tem ficha.", "ADMISSION_SHEET_NOT_FOUND");
+    if (stored.confirmed_at) {
+      throw new ApiError(409, "ADMISSION_SHEET_CONFIRMED",
+        "Esta ficha já foi confirmada como cadastrada no ERP. Reabra a conferência antes de alterar campos.");
+    }
+
+    const merged = { ...openOverrides(stored), ...incoming };
+    const sealed = sealSheet(merged);
+    const meta: FieldMetaMap = sanitizeFieldMeta(JSON.parse(stored.field_meta_json || "{}"));
+    const at = new Date().toISOString();
+    for (const key of Object.keys(incoming)) meta[key] = { source: "manual", by: auth.user.email, at };
+
+    await d1.prepare(`UPDATE fdp_admission_sheets SET
+        overrides_encrypted_value = ?, overrides_initialization_vector = ?, overrides_auth_tag = ?,
+        overrides_key_version = ?, field_meta_json = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE workspace_id = ? AND card_id = ?`)
+      .bind(sealed.encryptedValue, sealed.initializationVector, sealed.authTag, sealed.keyVersion,
+        JSON.stringify(meta), workspace.id, cardId).run();
+
+    /* A auditoria nomeia os campos alterados e não os valores: registrar o
+       conteúdo recriaria em texto aberto o que a cifra existe para proteger. */
+    await d1.batch([
+      prepareAuditEvent({
+        workspaceId: workspace.id, actorType: "user", actorEmail: auth.user.email,
+        action: "admission.sheet.field_edited", entityType: "card", entityId: cardId,
+        after: { fields: Object.keys(incoming) },
+      }),
+    ]);
+    await recordActivity(workspace.id, cardId, auth.user.email, "admission.sheet.field_edited", {
+      fields: Object.keys(incoming).length,
+    });
+    void user;
+    return Response.json({ saved: Object.keys(incoming) });
   } catch (error) {
     return apiError(error);
   }

@@ -114,6 +114,13 @@ export async function GET(request: Request) {
            vencida e a chave de idempotência continua inédita. */
         await sweepOverdueTasks(scoped, workspace.id).catch(() => undefined);
 
+        /* Expurgo das fichas cuja retenção venceu. Apaga só o que tem data
+           marcada: ficha sem data é ficha de demanda em andamento, e nenhuma
+           linha existente antes desta política ganhou prazo retroativo. */
+        await scoped.prepare(`DELETE FROM fdp_admission_sheets
+          WHERE workspace_id = ? AND retention_until IS NOT NULL AND retention_until <= CURRENT_TIMESTAMP`)
+          .bind(workspace.id).run().catch(() => undefined);
+
         /* Fichas que a transferência enfileirou e a leitura imediata não
            resolveu. Ficam aqui, e não no worker de navegador: ler um PDF já
            guardado não precisa de sessão autenticada nem da máquina de alguém
