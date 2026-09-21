@@ -1,5 +1,5 @@
 import type {
-  AgentLogLine, AgentRun, AgentsPayload, AgentStatus, TriageItem, TriagePayload,
+  AgentLogLine, AgentRun, AgentsPayload, AgentStatus, TriageItem, TriagePayload, WorkerAvailability,
   WorkCounts, WorkItem, WorkPayload,
 } from "./work.types";
 
@@ -230,8 +230,40 @@ export function normalizeAgent(row: Row): AgentStatus {
 export function normalizeAgentsPayload(payload: Row): AgentsPayload {
   const automation = (payload.automation ?? {}) as Row;
   const permissions = (payload.permissions ?? {}) as Row;
+  const workerAvailabilities: WorkerAvailability[] = ["online", "stale", "never_seen", "needs_authentication"];
+  const worker = payload.worker as Row | null;
+  const schedule = payload.schedule as Row | null;
+  const heartbeat = (worker?.heartbeat ?? null) as Row | null;
   return {
     agents: rows(payload.agents).map(normalizeAgent),
+    worker: worker
+      ? {
+        /* Estado desconhecido cai em `never_seen`, e não em `online`: diante de
+           uma resposta que não reconhecemos, dizer que está tudo bem é o erro
+           mais caro — o painel ficaria verde com a máquina desligada. */
+        availability: workerAvailabilities.includes(text(worker.availability) as WorkerAvailability)
+          ? text(worker.availability) as WorkerAvailability
+          : "never_seen",
+        detail: text(worker.detail),
+        secondsSinceLastSeen: worker.secondsSinceLastSeen === null ? null : number(worker.secondsSinceLastSeen),
+        pendingConsultations: number(worker.pendingConsultations),
+        pendingAttachments: number(worker.pendingAttachments),
+        heartbeat: heartbeat
+          ? {
+            workerId: text(heartbeat.workerId), workerVersion: text(heartbeat.workerVersion),
+            lastSeenAt: text(heartbeat.lastSeenAt), lastConsultationAt: text(heartbeat.lastConsultationAt) || null,
+            lastErrorCode: text(heartbeat.lastErrorCode),
+          }
+          : null,
+      }
+      : null,
+    schedule: schedule
+      ? {
+        configured: bool(schedule.configured), scheduleEnabled: bool(schedule.scheduleEnabled),
+        overdue: bool(schedule.overdue), nextRunAt: text(schedule.nextRunAt) || null,
+        lastRunAt: text(schedule.lastRunAt) || null, detail: text(schedule.detail),
+      }
+      : null,
     cadences: rows(payload.cadences).map((row) => ({
       key: text(row.key), label: text(row.label), description: text(row.description),
       intervalMinutes: number(row.intervalMinutes), businessHoursOnly: bool(row.businessHoursOnly),

@@ -9,7 +9,8 @@ import { sweepOverdueTasks } from "@/lib/process-automations";
 import { log } from "@/lib/observability";
 import { nextSankhyaRunAt, parseSankhyaConfig } from "@/lib/sankhya/config";
 import { queueSankhyaRun } from "@/lib/sankhya/queue";
-import { prepareSweepCandidates, prepareSweepConsultation, toSweepCandidate } from "@/lib/tangerino/sweep";
+import { sweepTangerinoAdmissions } from "@/lib/tangerino/sweep";
+import { claimPendingSheets, prepareAdmissionSheet } from "@/lib/admission-sheet-service";
 import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
 
 export const runtime = "nodejs";
@@ -76,6 +77,7 @@ export async function GET(request: Request) {
     // Consultas de admissão enfileiradas pela varredura do Agente Tangerino.
     // Não confundir com `swept` na resposta, que conta workspaces varridos.
     let admissionsQueued = 0;
+    let sheetsPrepared = 0;
     let scheduleFailed = 0;
     let sankhyaScheduled = 0;
     let sankhyaPending = 0;
@@ -112,6 +114,24 @@ export async function GET(request: Request) {
            vencida e a chave de idempotência continua inédita. */
         await sweepOverdueTasks(scoped, workspace.id).catch(() => undefined);
 
+        /* Expurgo das fichas cuja retenção venceu. Apaga só o que tem data
+           marcada: ficha sem data é ficha de demanda em andamento, e nenhuma
+           linha existente antes desta política ganhou prazo retroativo. */
+        await scoped.prepare(`DELETE FROM fdp_admission_sheets
+          WHERE workspace_id = ? AND retention_until IS NOT NULL AND retention_until <= CURRENT_TIMESTAMP`)
+          .bind(workspace.id).run().catch(() => undefined);
+
+        /* Fichas que a transferência enfileirou e a leitura imediata não
+           resolveu. Ficam aqui, e não no worker de navegador: ler um PDF já
+           guardado não precisa de sessão autenticada nem da máquina de alguém
+           ligada, e é isso que permite reprocessar quando o layout mudar. */
+        for (const pendente of await claimPendingSheets(scoped, workspace.id).catch(() => [])) {
+          if (Date.now() >= deadline) break;
+          await prepareAdmissionSheet(scoped, { workspaceId: workspace.id, cardId: pendente.card_id })
+            .then((resultado) => { if (resultado.state === "ready") sheetsPrepared += 1; })
+            .catch(() => undefined);
+        }
+
         const agents = await listSchedulableAgents(scoped, workspace.id);
         for (const decision of decideAgentSchedule(agents, new Date())) {
           if (Date.now() >= deadline) break;
@@ -133,15 +153,11 @@ export async function GET(request: Request) {
                  O que ele compartilha com os demais é a **cadência**: quando
                  executar, com que espera depois de falhar, e quando parar de
                  insistir. Isso é decidido acima, igual para todos. */
-              const candidatos = await prepareSweepCandidates(scoped, workspace.id).all<Record<string, unknown>>();
-              for (const linha of candidatos.results) {
-                await prepareSweepConsultation(scoped, {
-                  workspaceId: workspace.id,
-                  integrationId: decision.agent.integrationId,
-                  candidate: toSweepCandidate(linha),
-                }).run();
-              }
-              admissionsQueued += candidatos.results.length;
+              const sweep = await sweepTangerinoAdmissions(scoped, {
+                workspaceId: workspace.id,
+                integrationId: decision.agent.integrationId,
+              });
+              admissionsQueued += sweep.queued;
             } else {
               await queueIntegrationRun(scoped, {
                 workspaceId: workspace.id,
@@ -236,12 +252,12 @@ export async function GET(request: Request) {
     }
 
     const workerDispatch = sankhyaPending ? await wakeSankhyaWorker({ route: "/api/cron/integrations" }) : null;
-    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed, workspacesFailed,
+    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sheetsPrepared, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed, workspacesFailed,
       skipped: skipped.length, workerDispatched: workerDispatch?.status === "dispatched" });
     // A varredura responde 500 quando algum tenant falhou. O workflow do GitHub
     // trata != 200 como falha, então o alerta chega em vez de a fila parar em
     // silêncio; os contadores continuam no corpo para dizer o que passou.
-    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed, workspacesFailed,
+    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sheetsPrepared, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed, workspacesFailed,
       // Até vinte recusas nomeadas: o suficiente para diagnosticar sem transformar
       // a resposta do cron em despejo da base.
       skipped: skipped.slice(0, 20) },

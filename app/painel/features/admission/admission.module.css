@@ -83,3 +83,79 @@
   .fields { grid-template-columns: 1fr; }
   .field { border-right: none; }
 }
+
+/* Falha de leitura é estado de atenção, não erro fatal: o documento continua
+   anexado e a conferência manual continua possível. */
+.empty[data-tone="failed"] { border-color: var(--ui-warning); border-style: solid; }
+.empty[data-tone="failed"] strong { color: var(--ui-warning); }
+
+/* Origem do campo, junto do rótulo: muda a confiança de quem vai copiar. */
+.sourceTag {
+  margin-left: 6px; font-size: .64rem; font-weight: 500; letter-spacing: 0;
+  text-transform: none; color: var(--ui-text-muted);
+}
+.field[data-source="manual"] .sourceTag { color: var(--ui-info); }
+.field[data-source="registry"] .sourceTag { color: var(--ui-success); }
+
+.fieldActions { display: inline-flex; gap: 6px; flex: none; }
+
+/* Identidade divergente é bloqueio de atenção, não aviso de rodapé. */
+.divergences { border: 1px solid var(--ui-danger); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface); }
+.divergences h4 { margin: 0 0 6px; display: flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--ui-danger); }
+.divergences h4 svg { width: 16px; height: 16px; }
+.divergences ul { margin: 0 0 8px; padding-left: 18px; }
+.divergences li, .divergences p { font-size: .82rem; color: var(--ui-text-soft); margin: 0 0 4px; }
+
+.confirmBox, .editBox {
+  border: 1px solid var(--ui-border); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface);
+}
+.confirmBox form > div, .editBox form > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.confirmBox label, .editBox label { font-size: .78rem; font-weight: 600; color: var(--ui-text-soft); }
+.confirmBox input, .editBox input {
+  flex: 1 1 200px; min-width: 0; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--ui-border); background: var(--ui-surface-elevated); color: var(--ui-text);
+}
+.confirmBox small, .editBox small { display: block; font-size: .76rem; color: var(--ui-text-soft); max-width: 62ch; }
+
+.confirmed { border: 1px solid var(--ui-success); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface); }
+.confirmed strong { display: flex; align-items: center; gap: 6px; color: var(--ui-success); font-size: .92rem; }
+.confirmed strong svg { width: 16px; height: 16px; }
+.confirmed p { margin: 4px 0 0; font-size: .84rem; color: var(--ui-text-soft); }
+
+/* Documentos da pessoa, ao lado dos campos que eles sustentam. */
+.documents { border: 1px solid var(--ui-border); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface); }
+.documents h4 { margin: 0 0 2px; font-size: .86rem; }
+.documents p { margin: 0 0 8px; font-size: .78rem; color: var(--ui-text-soft); }
+.documents ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.documents a {
+  display: inline-flex; align-items: center; gap: 5px; text-decoration: none;
+  border: 1px solid var(--ui-border); border-radius: 7px; padding: 5px 9px;
+  font-size: .78rem; color: var(--ui-text); background: var(--ui-surface-elevated);
+}
+.documents a:hover { background: var(--ui-surface-muted); }
+.documents a svg { width: 13px; height: 13px; }
+
+/* Etapas do trabalho dentro da demanda. */
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.steps li {
+  display: flex; align-items: center; gap: 5px; font-size: .74rem;
+  border: 1px solid var(--ui-border); border-radius: 999px; padding: 4px 10px;
+  color: var(--ui-text-muted); background: var(--ui-surface);
+}
+.steps li[data-state="done"] { color: var(--ui-success); border-color: var(--ui-success); }
+.steps li[data-state="current"] {
+  color: var(--ui-on-accent, #fff); background: var(--ui-primary); border-color: var(--ui-primary); font-weight: 600;
+}
+
+/* Conferido: marca pessoal de quem transcreve, distinta de copiado e cadastrado. */
+.checkField {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface-elevated);
+  padding: 4px 8px; font-size: .74rem; font-weight: 600; color: var(--ui-text); cursor: pointer;
+}
+.checkField[aria-pressed="true"] { color: var(--ui-success); border-color: var(--ui-success); }
+.checkField svg { width: 12px; height: 12px; }
+
+.field[data-checked] { background: color-mix(in srgb, var(--ui-success) 5%, transparent); }
+/* O foco precisa ser visível: a linha é navegável por teclado. */
+.field:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }

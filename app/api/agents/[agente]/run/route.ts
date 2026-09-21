@@ -6,6 +6,7 @@ import { manualRunKey } from "@/lib/agent-schedule";
 import { asAgentQueueConflict, prepareNextRun, requireSchedulableAgent } from "@/lib/agent-scheduler";
 import { queueIntegrationRun } from "@/lib/integration-engine";
 import { queueSankhyaRun } from "@/lib/sankhya/queue";
+import { sweepTangerinoAdmissions } from "@/lib/tangerino/sweep";
 import { agentCadence } from "@/lib/agent-schedule";
 
 /**
@@ -69,6 +70,46 @@ export async function POST(request: Request, { params }: RouteContext) {
     const requestId = request.headers.get("x-fila-dp-request-id");
 
     try {
+      /* O Agente Tangerino tem fila própria, e é por isso que ele não passa por
+         `queueIntegrationRun`.
+         
+         O worker de navegador drena `fdp_tangerino_admission_consultations`.
+         Um job na fila genérica nasce sem nenhum runner que saiba executá-lo:
+         a tela dizia "execução enfileirada", nada acontecia, e não havia erro
+         em lugar nenhum para investigar. A regra vive em
+         `sweepTangerinoAdmissions` e os dois caminhos — este e o cron — a
+         chamam, para não voltar a divergir. */
+      if (channel === "tangerino_browser") {
+        const sweep = await sweepTangerinoAdmissions(d1, {
+          workspaceId: workspace.id, integrationId: integration.id,
+        });
+        await prepareNextRun(d1, {
+          workspaceId: workspace.id, integrationId: integration.id,
+          cadence: agentCadence(integration.schedule_cadence).key,
+          timeZone: integration.schedule_timezone, from: at,
+        }).run();
+        await prepareAuditEvent({
+          workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
+          action: "agent.run_requested", entityType: "integration", entityId: integration.id,
+          after: { agentKey: channel, trigger: "manual", eligible: sweep.eligible, queued: sweep.queued },
+          requestId,
+        }).run();
+
+        /* Nenhuma admissão elegível não é erro nem sucesso: é uma resposta. Um
+           "enfileirado" genérico aqui faria a pessoa esperar por um trabalho
+           que nunca foi criado. */
+        return Response.json({
+          queued: sweep.queued > 0,
+          agent: { key: channel },
+          sweep,
+          detail: sweep.eligible === 0
+            ? "Nenhuma admissão pendente de conferência agora. Só entram na fila os colaboradores com vínculo no Tangerino cuja última leitura não terminou em desfecho e já passou da validade."
+            : sweep.queued === 0
+              ? `As ${sweep.eligible} admissões pendentes já estavam na fila. O worker as consulta na próxima varredura.`
+              : `${sweep.queued} ${sweep.queued === 1 ? "admissão enfileirada" : "admissões enfileiradas"}${sweep.skipped > 0 ? ` (${sweep.skipped} já estavam na fila)` : ""}. O resultado aparece na ficha de cada colaborador assim que o worker consultar.`,
+        }, { status: 202 });
+      }
+
       const run = channel === "sankhya_browser"
         ? await queueSankhyaRun(d1, {
           workspaceId: workspace.id, integrationId: integration.id,

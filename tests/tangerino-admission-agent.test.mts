@@ -809,3 +809,85 @@ test("o modo assistido libera só recursos do desafio e nunca a navegação prin
   assert.match(cliente, /interactiveChallengeResource && request\.isNavigationRequest\(\)[\s\S]*?mainFrame\(\)[\s\S]*?route\.abort/u);
 });
 
+
+/* -------------------------------------------------------------------------- *
+ * Encaminhamento para a fila certa
+ * -------------------------------------------------------------------------- */
+
+/**
+ * O defeito: **Executar agora** mandava o Agente Tangerino pela fila genérica
+ * de integrações, que nenhum runner do Tangerino lê. A tela respondia "execução
+ * enfileirada", nada acontecia e não havia erro para investigar.
+ *
+ * O cron tinha o desvio certo; o botão não. Era a mesma regra escrita em dois
+ * lugares, com um deles desatualizado — por isso os testes abaixo cobram que os
+ * dois caminhos chamem a MESMA função, e não que cada um acerte por conta.
+ */
+
+/** Stub mínimo: `prepare` devolve `all`/`first` conforme o que a consulta pede. */
+function fakeDatabase(candidates: Array<Record<string, unknown>>, inserted: boolean[]) {
+  let insertIndex = 0;
+  return {
+    prepare(sql: string) {
+      const statement = {
+        bind: () => statement,
+        all: async () => ({ results: /SELECT/iu.test(sql) ? candidates : [] }),
+        first: async () => (/INSERT/iu.test(sql)
+          ? (inserted[insertIndex++] ? { id: `consulta-${insertIndex}` } : null)
+          : null),
+        run: async () => ({ meta: { changes: 0 } }),
+      };
+      return statement;
+    },
+  } as never;
+}
+
+const candidato = (id: string) => ({
+  employee_id: id, company_id: "empresa", external_admission_id: `ext-${id}`,
+  registration_number: "", full_name: "Fulana de Tal",
+});
+
+test("a varredura conta o que entrou na fila, não o que foi tentado", async () => {
+  const { sweepTangerinoAdmissions } = await import("../lib/tangerino/sweep.ts");
+  // Três elegíveis; a do meio já estava na fila e o ON CONFLICT não insere.
+  const resultado = await sweepTangerinoAdmissions(
+    fakeDatabase([candidato("a"), candidato("b"), candidato("c")], [true, false, true]),
+    { workspaceId: "ws", integrationId: "int" },
+  );
+  assert.deepEqual(resultado, { eligible: 3, queued: 2, skipped: 1 },
+    "prometer três consultas quando duas foram criadas faz a tela esperar trabalho que não existe");
+});
+
+test("sem admissão elegível a varredura devolve zero, e não um engano", async () => {
+  const { sweepTangerinoAdmissions } = await import("../lib/tangerino/sweep.ts");
+  const resultado = await sweepTangerinoAdmissions(fakeDatabase([], []), { workspaceId: "ws", integrationId: "int" });
+  assert.deepEqual(resultado, { eligible: 0, queued: 0, skipped: 0 });
+});
+
+test("Executar agora não manda o Agente Tangerino pela fila genérica", () => {
+  const route = source("app/api/agents/[agente]/run/route.ts");
+  assert.match(route, /channel === "tangerino_browser"/u, "sem o desvio, o job nasce numa fila que ninguém drena");
+  assert.match(route, /sweepTangerinoAdmissions/u);
+
+  /* A ordem importa: o desvio precisa vir ANTES do ramo que chama
+     `queueIntegrationRun`, senão ele nunca é alcançado. */
+  assert.ok(route.indexOf("sweepTangerinoAdmissions") < route.indexOf("queueIntegrationRun(d1"),
+    "o desvio do Tangerino tem de preceder a fila genérica");
+});
+
+test("a resposta distingue enfileirado, já na fila e nada elegível", () => {
+  const route = source("app/api/agents/[agente]/run/route.ts");
+  assert.match(route, /Nenhuma admissão pendente de conferência/u);
+  assert.match(route, /já estavam na fila/u);
+  assert.match(route, /queued: sweep\.queued > 0/u,
+    "dizer 'enfileirado' com zero consultas criadas é anunciar sucesso sobre trabalho inexistente");
+});
+
+test("cron e botão compartilham a regra, em vez de repeti-la", () => {
+  const cron = source("app/api/cron/integrations/route.ts");
+  assert.match(cron, /sweepTangerinoAdmissions/u);
+  // A duplicação antiga não pode voltar: se o cron montar a varredura na mão,
+  // o próximo desvio volta a divergir do botão.
+  assert.doesNotMatch(cron, /prepareSweepConsultation/u,
+    "a varredura montada à mão no cron foi a origem da divergência");
+});

@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Copy, FileText, LoaderCircle, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
-import { requestSheet, type RegistrationSheet, type SheetBlock, type SheetField } from "./admission.api";
+import { useCallback, useEffect, useState } from "react";
+import { BadgeCheck, Check, Copy, FileText, LoaderCircle, Pencil, RefreshCw, ShieldAlert, Trash2, TriangleAlert } from "lucide-react";
+import {
+  FIELD_SOURCE_LABELS, requestSheet, type FieldProvenance, type RegistrationSheet, type SheetBlock,
+  type SheetField, type SheetPayload, type SheetPreparationState,
+} from "./admission.api";
 import styles from "./admission.module.css";
 
 /**
@@ -47,48 +50,204 @@ function statusLabel(status: SheetField["status"]) {
   return status === "blank" ? "Em branco no registro" : "Não foi possível ler";
 }
 
-function FieldRow({ field, onCopy, copiedKey }: {
+function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit, checked, onToggleChecked }: {
   field: SheetField;
+  provenance: FieldProvenance | undefined;
   onCopy: (field: SheetField) => void;
   copiedKey: string;
+  canEdit: boolean;
+  onEdit: (field: SheetField) => void;
+  checked: boolean;
+  onToggleChecked: (key: string) => void;
 }) {
   const ready = field.status === "ok";
+  const source = provenance?.source ?? "document";
+
+  /* Teclado: C copia, V (ou espaço) marca conferido.
+     
+     A transcrição é uma sequência longa de campo → ERP → campo, e tirar a mão
+     do teclado a cada um é o que faz quem transcreve abandonar a conferência no
+     meio. O atalho só vale com o foco na linha, e não quando está dentro de um
+     campo de texto — senão digitar "c" num formulário copiaria algo. */
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!ready) return;
+    const pressed = event.key.toLowerCase();
+    if (pressed === "c") { event.preventDefault(); onCopy(field); }
+    if (pressed === "v" || pressed === " ") { event.preventDefault(); onToggleChecked(field.key); }
+  };
+
   return (
-    <div className={styles.field} data-status={field.status}>
-      <dt>{field.label}</dt>
+    <div className={styles.field} data-status={field.status} data-source={source}
+      data-checked={checked || undefined}
+      tabIndex={ready ? 0 : -1} onKeyDown={onKeyDown}
+      aria-label={ready ? `${field.label}: ${field.value}${checked ? " — conferido" : ""}` : undefined}>
+      <dt>
+        {field.label}
+        {/* A origem fica junto do rótulo porque muda a confiança: um CPF lido do
+            documento tem o arquivo ao lado para conferir; um digitado por um
+            colega tem uma pessoa e uma data. */}
+        {ready && <span className={styles.sourceTag}>{FIELD_SOURCE_LABELS[source]}</span>}
+      </dt>
       <dd>
         {ready
           ? <span className={styles.value}>{field.value}</span>
           : <span className={styles.missing}><TriangleAlert aria-hidden="true" />{statusLabel(field.status)}</span>}
-        {ready && (
-          <button
-            type="button"
-            className={styles.copyField}
-            onClick={() => onCopy(field)}
-            aria-label={`Copiar ${field.label}`}
-          >
-            <Copy aria-hidden="true" />
-            {copiedKey === field.key ? "Copiado" : "Copiar"}
-          </button>
-        )}
+        <span className={styles.fieldActions}>
+          {ready && (
+            <button type="button" className={styles.copyField} onClick={() => onCopy(field)}
+              aria-label={`Copiar ${field.label}`}>
+              <Copy aria-hidden="true" />{copiedKey === field.key ? "Copiado" : "Copiar"}
+            </button>
+          )}
+          {ready && (
+            <button type="button" className={styles.checkField} aria-pressed={checked}
+              onClick={() => onToggleChecked(field.key)}
+              aria-label={`Marcar ${field.label} como conferido`}>
+              <Check aria-hidden="true" />{checked ? "Conferido" : "Conferir"}
+            </button>
+          )}
+          {canEdit && (
+            <button type="button" className={styles.copyField} onClick={() => onEdit(field)}
+              aria-label={`${ready ? "Corrigir" : "Preencher"} ${field.label}`}>
+              <Pencil aria-hidden="true" />{ready ? "Corrigir" : "Preencher"}
+            </button>
+          )}
+        </span>
       </dd>
       {!ready && <p className={styles.note}>{field.note}</p>}
+      {/* Corrigir não apaga o que o documento disse — mostra os dois. */}
+      {provenance?.source === "manual" && provenance.documentValue && (
+        <p className={styles.note}>
+          O documento dizia <b>{provenance.documentValue}</b>
+          {provenance.by ? ` · corrigido por ${provenance.by}` : ""}
+        </p>
+      )}
     </div>
   );
 }
 
-export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pdfUrl }: {
+/**
+ * O que a tela mostra quando ainda não há campos.
+ *
+ * Três situações, três instruções. Antes as três apareciam como "nenhuma ficha
+ * lida" — o que mandava a pessoa clicar em "Ler a ficha" durante uma leitura em
+ * curso, e não dizia nada a quem tinha um PDF que o leitor não entende.
+ */
+function PreparationState({ state, payload }: { state: SheetPreparationState; payload: SheetPayload | null }) {
+  if (state === "pending") {
+    return (
+      <div className={styles.empty}>
+        <strong>Preparando a ficha…</strong>
+        <p>
+          O documento chegou e está sendo lido. Isso acontece sozinho depois da transferência —
+          não é preciso clicar em nada. Atualize em instantes.
+          {payload?.attempts ? ` Tentativa ${payload.attempts} de ${payload.maxAttempts ?? 3}.` : ""}
+        </p>
+      </div>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <div className={styles.empty} data-tone="failed">
+        <strong>Não foi possível ler a ficha</strong>
+        <p>{payload?.errorMessage || "A leitura não pôde ser concluída."}</p>
+        <p>
+          O documento continua anexado à demanda e pode ser conferido à mão. Reler não baixa nada de novo:
+          o arquivo já está guardado aqui.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.empty}>
+      <strong>Nenhuma ficha ainda</strong>
+      <p>
+        Traga os arquivos com <b>Autorizar anexos da Sólides</b> na aba de anexos. Assim que o PDF chegar,
+        a ficha é preparada sozinha. Os valores ficam cifrados e são apagados quando a demanda é concluída.
+      </p>
+    </div>
+  );
+}
+
+export type SheetDocument = { id: string; filename: string; downloadUrl: string };
+
+/**
+ * As cinco etapas do trabalho dentro da demanda.
+ *
+ * Elas existem para responder "em que pé isto está?" sem abrir três abas. A
+ * última não é derivada de nada que a máquina observe: só a confirmação de uma
+ * pessoa move para `cadastrada`, porque só ela sabe se o ERP salvou.
+ */
+const STEPS = [
+  { key: "documents", label: "Aguardando documentos" },
+  { key: "preparing", label: "Preparando ficha" },
+  { key: "review", label: "Aguardando conferência" },
+  { key: "ready", label: "Pronta para cadastro" },
+  { key: "registered", label: "Cadastro confirmado" },
+] as const;
+
+/**
+ * Marcas de conferência: estado pessoal de quem transcreve, no navegador.
+ *
+ * Copiar, conferir e cadastrar são três coisas distintas. `copiado` é
+ * transitório; `cadastrado` é registro compartilhado e auditado, e vive no
+ * banco; `conferido` fica no meio — é o risco que a pessoa marca para si
+ * enquanto compara campo e documento, e não uma afirmação sobre o trabalho dos
+ * outros. Guardá-lo no servidor faria a marca de um colega parecer conferência
+ * feita, que é exatamente a confusão que estes três estados evitam.
+ */
+function useCheckedFields(cardId: string) {
+  const storageKey = `vinculato:ficha-conferida:${cardId}`;
+  /* Leitura na inicialização preguiçosa, e não num efeito: a aba é montada com
+     `key` no cartão, então cada pessoa é uma instância nova — e escrever estado
+     dentro do efeito encadearia uma renderização a mais em toda abertura.
+     
+     Navegador anônimo ou armazenamento bloqueado caem no conjunto vazio: a
+     ficha funciona sem as marcas, e fingir que salvou seria pior que não
+     oferecer. */
+  const [checked, setChecked] = useState<ReadonlySet<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      return new Set(saved ? JSON.parse(saved) as string[] : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggle = useCallback((key: string) => {
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { window.localStorage.setItem(storageKey, JSON.stringify([...next])); } catch { /* sem persistência */ }
+      return next;
+    });
+  }, [storageKey]);
+
+  return { checked, toggle };
+}
+
+export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pdfUrl, documents = [] }: {
   cardId: string;
   canBuild: boolean;
   canRead: boolean;
   archived: boolean;
   pdfUrl: string | null;
+  /** Os demais documentos da pessoa, para conferir sem trocar de aba. */
+  documents?: readonly SheetDocument[];
 }) {
   const [sheet, setSheet] = useState<RegistrationSheet | null>(null);
+  const [preparation, setPreparation] = useState<SheetPayload | null>(null);
   const [loading, setLoading] = useState(canRead);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copiedKey, setCopiedKey] = useState("");
+  const [editing, setEditing] = useState<SheetField | null>(null);
+  const [draft, setDraft] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [registration, setRegistration] = useState("");
+  const { checked, toggle: toggleChecked } = useCheckedFields(cardId);
 
   /**
    * A primeira leitura acontece no efeito, e nenhum `setState` roda de forma
@@ -105,8 +264,8 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     let cancelled = false;
     void (async () => {
       try {
-        const payload = await requestSheet<{ sheet: RegistrationSheet | null }>(`/api/cards/${cardId}/registration-sheet`);
-        if (!cancelled) setSheet(payload.sheet);
+        const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`);
+        if (!cancelled) { setSheet(payload.sheet); setPreparation(payload); }
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : "Não foi possível ler a ficha.");
       } finally {
@@ -120,8 +279,9 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     setBusy(true);
     setError("");
     try {
-      const payload = await requestSheet<{ sheet: RegistrationSheet }>(`/api/cards/${cardId}/registration-sheet`, { method: "POST" });
+      const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`, { method: "POST" });
       setSheet(payload.sheet);
+      setPreparation(payload);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível ler a ficha.");
     } finally {
@@ -135,8 +295,45 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     try {
       await requestSheet(`/api/cards/${cardId}/registration-sheet`, { method: "DELETE" });
       setSheet(null);
+      setPreparation(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível apagar a ficha.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveField(key: string, value: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await requestSheet(`/api/cards/${cardId}/registration-sheet`, {
+        method: "PATCH", body: JSON.stringify({ fields: { [key]: value } }),
+      });
+      setEditing(null);
+      const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`);
+      setSheet(payload.sheet);
+      setPreparation(payload);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar o campo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmRegistration() {
+    setBusy(true);
+    setError("");
+    try {
+      await requestSheet(`/api/cards/${cardId}/registration-sheet/confirm`, {
+        method: "POST", body: JSON.stringify({ erpRegistration: registration.trim() }),
+      });
+      setConfirming(false);
+      const payload = await requestSheet<SheetPayload>(`/api/cards/${cardId}/registration-sheet`);
+      setSheet(payload.sheet);
+      setPreparation(payload);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível registrar o cadastro.");
     } finally {
       setBusy(false);
     }
@@ -205,17 +402,30 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
         </div>
       </header>
 
+      {/* Em que pé está o trabalho. A última etapa não é observada pela
+          máquina: só a confirmação de uma pessoa move para "cadastrada",
+          porque só ela sabe se o ERP salvou. */}
+      {!loading && (
+        <ol className={styles.steps} aria-label="Etapas da admissão">
+          {STEPS.map((step, index) => {
+            const current = preparation?.confirmation ? 4
+              : preparation?.state === "ready"
+                ? (sheet && sheet.readable === sheet.filled ? 3 : 2)
+                : preparation?.state === "pending" ? 1
+                  : preparation?.state === "failed" ? 2 : 0;
+            return (
+              <li key={step.key} data-state={index < current ? "done" : index === current ? "current" : "todo"}
+                aria-current={index === current ? "step" : undefined}>
+                <span>{step.label}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
       {error && <p className={styles.alert} role="alert">{error}</p>}
 
-      {!loading && !sheet && (
-        <div className={styles.empty}>
-          <strong>Nenhuma ficha lida</strong>
-          <p>
-            Traga os arquivos com <b>Autorizar anexos da Sólides</b> na aba de anexos e depois use <b>Ler a ficha</b>.
-            Os valores ficam cifrados e são apagados quando a demanda é concluída.
-          </p>
-        </div>
-      )}
+      {!loading && !sheet && <PreparationState state={preparation?.state ?? "absent"} payload={preparation} />}
 
       {sheet?.blocks.map((block) => {
         const ready = block.fields.filter((field) => field.status === "ok").length;
@@ -239,7 +449,17 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
             </header>
             <dl className={styles.fields}>
               {block.fields.map((field) => (
-                <FieldRow key={field.key} field={field} copiedKey={copiedKey} onCopy={(target) => void copy(target.value, target.key)} />
+                <FieldRow
+                  key={field.key}
+                  field={field}
+                  provenance={sheet?.provenance?.[field.key]}
+                  copiedKey={copiedKey}
+                  canEdit={canBuild && !archived && !preparation?.confirmation}
+                  checked={checked.has(field.key)}
+                  onToggleChecked={toggleChecked}
+                  onCopy={(target) => void copy(target.value, target.key)}
+                  onEdit={(target) => { setEditing(target); setDraft(target.value); }}
+                />
               ))}
             </dl>
           </article>
@@ -252,6 +472,92 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
           {/* Os avisos nomeiam rótulos, nunca conteúdo — é o que permite
               guardá-los em coluna aberta ao lado do envelope cifrado. */}
           <ul>{sheet.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+        </section>
+      )}
+
+      {/* Divergência de identidade fica ANTES dos campos: quem transcreve
+          precisa ver isso antes de copiar qualquer coisa, e não depois. */}
+      {(preparation?.divergences?.length ?? 0) > 0 && (
+        <section className={styles.divergences} role="alert">
+          <h4><ShieldAlert aria-hidden="true" /> O documento pode não ser desta pessoa</h4>
+          <ul>{preparation?.divergences?.map((item) => <li key={item.field}><b>{item.label}:</b> {item.detail}</li>)}</ul>
+          <p>
+            O preenchimento pelo cadastro foi suspenso. Confira o arquivo antes de usar qualquer campo —
+            anexar dados de outra pessoa a esta admissão é o erro mais difícil de perceber depois.
+          </p>
+        </section>
+      )}
+
+      {/* Confirmação do cadastro: é ela que conclui a demanda. Copiar não conclui. */}
+      {sheet && (preparation?.confirmation ? (
+        <section className={styles.confirmed}>
+          <strong><BadgeCheck aria-hidden="true" /> Cadastrado no Sankhya</strong>
+          <p>
+            Matrícula <b>{preparation.confirmation.erpRegistration}</b> · registrado por {preparation.confirmation.confirmedBy}
+          </p>
+        </section>
+      ) : canBuild && !archived && (
+        <section className={styles.confirmBox}>
+          {confirming ? (
+            <form onSubmit={(event) => { event.preventDefault(); void confirmRegistration(); }}>
+              <label htmlFor="erp-registration">Matrícula ou identificador gerado pelo Sankhya</label>
+              <div>
+                <input id="erp-registration" value={registration} maxLength={60} required
+                  onChange={(event) => setRegistration(event.target.value)} placeholder="Ex.: 549" />
+                <button type="submit" className={styles.primary} disabled={busy || !registration.trim()}>
+                  {busy ? "Registrando…" : "Confirmar cadastro"}
+                </button>
+                <button type="button" className={styles.secondary} onClick={() => setConfirming(false)}>Cancelar</button>
+              </div>
+              <small>
+                A demanda só é concluída por esta confirmação. Copiar os campos não prova que o ERP salvou.
+                A ficha fica disponível por 30 dias para conferência e depois é apagada.
+              </small>
+            </form>
+          ) : (
+            <button type="button" className={styles.primary} onClick={() => setConfirming(true)}>
+              <BadgeCheck aria-hidden="true" /> Já cadastrei no Sankhya
+            </button>
+          )}
+        </section>
+      ))}
+
+      {editing && (
+        <div className={styles.editBox} role="dialog" aria-label={`Editar ${editing.label}`}>
+          <form onSubmit={(event) => { event.preventDefault(); void saveField(editing.key, draft.trim()); }}>
+            <label htmlFor="sheet-field-draft">{editing.label}</label>
+            <div>
+              <input id="sheet-field-draft" value={draft} maxLength={220} autoFocus
+                onChange={(event) => setDraft(event.target.value)} />
+              <button type="submit" className={styles.primary} disabled={busy || !draft.trim()}>Salvar</button>
+              <button type="button" className={styles.secondary} onClick={() => setEditing(null)}>Cancelar</button>
+            </div>
+            <small>O valor lido do documento continua guardado e aparece ao lado da sua correção.</small>
+          </form>
+        </div>
+      )}
+
+      {/* Os documentos que sustentam os campos, à mão.
+          
+          A ficha cadastral é a consolidação que a Sólides fez dos documentos da
+          pessoa — ler as fotos do RG e da CTPS por OCR produziria uma segunda
+          versão dos mesmos dados, menos confiável justamente nos dígitos que
+          não podem errar. O papel destes arquivos é a conferência, e para isso
+          eles precisam estar aqui, não na outra aba. */}
+      {sheet && documents.length > 0 && (
+        <section className={styles.documents}>
+          <h4>Documentos desta pessoa</h4>
+          <p>Abra ao lado para conferir os campos antes de cadastrar no Sankhya.</p>
+          <ul>
+            {documents.map((document) => (
+              <li key={document.id}>
+                <a href={`${document.downloadUrl}${document.downloadUrl.includes("?") ? "&" : "?"}disposition=inline`}
+                  target="_blank" rel="noreferrer">
+                  <FileText aria-hidden="true" />{document.filename}
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

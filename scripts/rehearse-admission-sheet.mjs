@@ -29,6 +29,8 @@
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { openSheet, sealSheet } from "../lib/admission-sheet.ts";
+import { getScopedD1 } from "../db/index.ts";
+import { enqueueSheetPreparation } from "../lib/admission-sheet-service.ts";
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 if (!databaseUrl?.startsWith("postgres")) {
@@ -224,13 +226,89 @@ try {
   await recusa("contagem impossível é recusada (conferidos > preenchidos)", alfa.workspaceId,
     (client) => client.query("UPDATE fdp_admission_sheets SET readable_count = filled_count + 1 WHERE card_id = $1", [alfa.cardId]));
 
-  // 5. Apagar o anexo apaga a ficha lida dele.
+  // 5. Ficha pendente existe sem envelope; "pronta" sem envelope não existe.
+  await comTenant(alfa.workspaceId, (client) => client.query(
+    "DELETE FROM fdp_admission_sheets WHERE card_id = $1", [alfa.cardId]));
+  await comTenant(alfa.workspaceId, (client) => client.query(
+    `INSERT INTO fdp_admission_sheets (id, workspace_id, card_id, attachment_id, state, created_by)
+     VALUES ($1, $2, $3, $4, 'pending', $5)`,
+    [`${alfa.sheetId}-p`, alfa.workspaceId, alfa.cardId, alfa.attachmentId, alfa.userId]));
+  const pendente = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT state, encrypted_value FROM fdp_admission_sheets WHERE card_id = $1", [alfa.cardId]);
+    return rows[0];
+  });
+  conferir("ficha pendente existe antes de haver o que cifrar",
+    pendente.state === "pending" && pendente.encrypted_value === null);
+
+  await recusa("ficha que se diz pronta sem envelope é recusada", alfa.workspaceId,
+    (client) => client.query("UPDATE fdp_admission_sheets SET state = 'ready' WHERE card_id = $1", [alfa.cardId]));
+
+  // 6. A correção manual sobrevive a um reprocessamento do MESMO documento.
+  await comTenant(alfa.workspaceId, (client) => client.query(
+    "DELETE FROM fdp_admission_sheets WHERE card_id = $1", [alfa.cardId]));
+  await gravarFicha(alfa);
+  /* Pelo adaptador de verdade, e não por um atalho: o que se quer provar é o
+     comportamento do UPSERT com a guarda, exatamente como a aplicação o executa. */
+  const escopado = getScopedD1({ workspaceId: alfa.workspaceId, userId: null });
+  const mesmoAnexo = await enqueueSheetPreparation(escopado, {
+    workspaceId: alfa.workspaceId, cardId: alfa.cardId,
+    attachment: { id: alfa.attachmentId, filename: "ficha-cadastral-solides.pdf" },
+    requestedByKind: "transfer", createdBy: alfa.userId,
+  });
+  conferir("reprocessar o MESMO documento não derruba a ficha já conferida",
+    mesmoAnexo.enqueued === false, `enqueued=${mesmoAnexo.enqueued}`);
+  const aindaPronta = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query("SELECT state FROM fdp_admission_sheets WHERE card_id = $1", [alfa.cardId]);
+    return rows[0]?.state;
+  });
+  conferir("a ficha continua pronta depois da tentativa de reprocessar", aindaPronta === "ready", String(aindaPronta));
+
+  // 7. Confirmar sem matrícula e sem responsável é recusado pelo banco.
+  await recusa("confirmação sem matrícula é recusada", alfa.workspaceId,
+    (client) => client.query(
+      "UPDATE fdp_admission_sheets SET confirmed_at = CURRENT_TIMESTAMP WHERE card_id = $1", [alfa.cardId]));
+  await comTenant(alfa.workspaceId, (client) => client.query(
+    `UPDATE fdp_admission_sheets SET confirmed_at = CURRENT_TIMESTAMP, erp_registration = 'MAT-001',
+       confirmed_by = 'dp@ensaio.test' WHERE card_id = $1`, [alfa.cardId]));
+  const confirmada = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT erp_registration, confirmed_by FROM fdp_admission_sheets WHERE card_id = $1", [alfa.cardId]);
+    return rows[0];
+  });
+  conferir("confirmação com matrícula e responsável é aceita",
+    confirmada.erp_registration === "MAT-001" && confirmada.confirmed_by === "dp@ensaio.test");
+
+  // 8. O batimento do worker é isolado entre grupos.
+  for (const grupo of grupos) {
+    await comTenant(grupo.workspaceId, (client) => client.query(
+      `INSERT INTO fdp_tangerino_worker_heartbeats (id, workspace_id, integration_id, worker_id)
+       VALUES ($1, $2, $3, $4)`,
+      [`${grupo.workspaceId}-hb`, grupo.workspaceId, `${grupo.workspaceId}-int`, "worker-ensaio"]));
+  }
+  const batimentoVizinho = await comTenant(beta.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT count(*)::int AS total FROM fdp_tangerino_worker_heartbeats WHERE id = $1",
+      [`${alfa.workspaceId}-hb`]);
+    return rows[0].total;
+  });
+  conferir("o batimento de um grupo não é alcançável do outro", batimentoVizinho === 0,
+    `viu ${batimentoVizinho} linha(s)`);
+  // Mesmo `worker_id` em grupos diferentes convivem: a chave é composta.
+  const doisGrupos = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT count(*)::int AS total FROM fdp_tangerino_worker_heartbeats WHERE worker_id = 'worker-ensaio'");
+    return rows[0].total;
+  });
+  conferir("o mesmo worker atende vários grupos sem colidir", doisGrupos === 1, `${doisGrupos} linha(s) visíveis`);
+
+  // 9. Apagar o anexo apaga a ficha lida dele.
   await comTenant(alfa.workspaceId, (client) =>
     client.query("DELETE FROM fdp_card_attachments WHERE id = $1", [alfa.attachmentId]));
   const aposAnexo = await contar(alfa);
   conferir("apagar o anexo apaga a ficha lida dele", aposAnexo === 0, `${aposAnexo} linha(s)`);
 
-  // 6. Apagar a demanda apaga a ficha junto.
+  // 10. Apagar a demanda apaga a ficha junto.
   const aposCartaoAntes = await contar(beta);
   await comTenant(beta.workspaceId, (client) => client.query("DELETE FROM fdp_cards WHERE id = $1", [beta.cardId]));
   const aposCartao = await contar(beta);

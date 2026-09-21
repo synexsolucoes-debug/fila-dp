@@ -6,6 +6,7 @@ import { agentAutomationPolicies, type AgentAutomationPolicy } from "@/lib/agent
 import { listAgentRuntime, readAgentAutomationPolicy, resolveAgentChannel } from "@/lib/agent-runtime";
 import { requireSchedulableAgent } from "@/lib/agent-scheduler";
 import { agentCadences, isAgentCadence, nextRunAt } from "@/lib/agent-schedule";
+import { readScheduleHealth, readWorkerHealth } from "@/lib/tangerino/worker-health";
 
 /**
  * Administração de agentes (§65) e kill switch (§66).
@@ -45,13 +46,23 @@ export async function GET() {
     const { d1, workspace } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "integrations.status.read", "consultar os agentes");
 
-    const [agents, policy] = await Promise.all([
+    const [agents, policy, workerHealth, scheduleHealth] = await Promise.all([
       listAgentRuntime(d1, workspace.id),
       readAgentAutomationPolicy(d1, workspace.id),
+      /* Saúde do worker e saúde do agendamento são leituras separadas porque
+         são problemas separados. Um worker impecável não recebe tarefa nenhuma
+         se a varredura do servidor parou, e um agendamento em dia não consulta
+         nada com o computador do DP desligado. Juntá-las num "agente com
+         problema" mandaria o operador procurar no lugar errado na metade dos
+         casos. */
+      readWorkerHealth(d1, workspace.id).catch(() => null),
+      readScheduleHealth(d1, workspace.id).catch(() => null),
     ]);
 
     return Response.json({
       agents,
+      worker: workerHealth,
+      schedule: scheduleHealth,
       /* O catálogo vai junto com o estado: a tela precisa oferecer as cadências
          possíveis com o que cada uma significa, e não um `select` de enums. */
       cadences: agentCadences.map((cadence) => ({

@@ -4064,10 +4064,31 @@ export const admissionSheets = pgTable("fdp_admission_sheets", {
   cardId: text("card_id").notNull(),
   attachmentId: text("attachment_id").notNull(),
   sourceFilename: text("source_filename").notNull().default(""),
-  encryptedValue: text("encrypted_value").notNull(),
-  initializationVector: text("initialization_vector").notNull(),
-  authTag: text("auth_tag").notNull(),
-  keyVersion: integer("key_version").notNull(),
+  /* Nulos enquanto a ficha está `pending`: antes da leitura não há o que
+     cifrar, e um envelope vazio faria pendente e pronta terem a mesma cara. */
+  encryptedValue: text("encrypted_value"),
+  initializationVector: text("initialization_vector"),
+  authTag: text("auth_tag"),
+  keyVersion: integer("key_version"),
+  state: text("state").notNull().default("ready"),
+  errorCode: text("error_code").notNull().default(""),
+  attempts: integer("attempts").notNull().default(0),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true, mode: "string" }),
+  requestedByKind: text("requested_by_kind").notNull().default("user"),
+  /* Segundo envelope: o que uma pessoa corrigiu ou preencheu. Separado do
+     primeiro para que reler o PDF não apague a correção — e para mostrar as
+     duas versões lado a lado quando divergirem. */
+  overridesEncryptedValue: text("overrides_encrypted_value"),
+  overridesInitializationVector: text("overrides_initialization_vector"),
+  overridesAuthTag: text("overrides_auth_tag"),
+  overridesKeyVersion: integer("overrides_key_version"),
+  /** Origem, autor e data por campo. Nenhum valor — por isso pode ficar aberto. */
+  fieldMetaJson: text("field_meta_json").notNull().default("{}"),
+  erpRegistration: text("erp_registration").notNull().default(""),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true, mode: "string" }),
+  confirmedBy: text("confirmed_by").notNull().default(""),
+  /** Quando a ficha pode ser apagada. Nulo enquanto a demanda não foi concluída. */
+  retentionUntil: timestamp("retention_until", { withTimezone: true, mode: "string" }),
   filledCount: integer("filled_count").notNull().default(0),
   readableCount: integer("readable_count").notNull().default(0),
   warningsJson: text("warnings_json").notNull().default("[]"),
@@ -4079,6 +4100,51 @@ export const admissionSheets = pgTable("fdp_admission_sheets", {
   uniqueIndex("fdp_admission_sheets_workspace_id_uq").on(table.workspaceId, table.id),
   foreignKey({ name: "fdp_admission_sheets_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
   foreignKey({ name: "fdp_admission_sheets_attachment_fk", columns: [table.workspaceId, table.attachmentId], foreignColumns: [cardAttachments.workspaceId, cardAttachments.id] }).onDelete("cascade"),
+  index("fdp_admission_sheets_pending_idx").on(table.workspaceId, table.lastAttemptAt).where(sql`${table.state} = 'pending'`),
   check("fdp_admission_sheets_counts_check", sql`${table.readableCount} <= ${table.filledCount}`),
   check("fdp_admission_sheets_key_version_check", sql`${table.keyVersion} > 0`),
+  check("fdp_admission_sheets_state_check", sql`${table.state} IN ('pending', 'ready', 'failed')`),
+  check("fdp_admission_sheets_requested_by_kind_check", sql`${table.requestedByKind} IN ('user', 'transfer')`),
+  check("fdp_admission_sheets_attempts_check", sql`${table.attempts} >= 0 AND ${table.attempts} <= 20`),
+  /* Confirmado implica matrícula e responsável: uma confirmação sem os dois é
+     uma afirmação que ninguém consegue conferir depois. */
+  check("fdp_admission_sheets_confirmation_check", sql`${table.confirmedAt} IS NULL
+    OR (length(${table.erpRegistration}) > 0 AND length(${table.confirmedBy}) > 0)`),
+  index("fdp_admission_sheets_retention_idx").on(table.workspaceId, table.retentionUntil)
+    .where(sql`${table.retentionUntil} IS NOT NULL`),
+  /* Pronta implica envelope completo: é o que impede uma ficha vazia de se
+     apresentar como lida, e o que torna o estado uma garantia e não um rótulo. */
+  check("fdp_admission_sheets_ready_envelope_check", sql`${table.state} <> 'ready' OR (${table.encryptedValue} IS NOT NULL
+    AND ${table.initializationVector} IS NOT NULL AND ${table.authTag} IS NOT NULL AND ${table.keyVersion} IS NOT NULL)`),
+]);
+
+/**
+ * Batimento do worker do Windows.
+ *
+ * Responde o que "agente habilitado" nunca respondeu: o processo está de pé?
+ * falou quando? tem fila esperando? parou pedindo uma pessoa? São perguntas
+ * diferentes, e confundi-las faz o painel dizer que está tudo bem com a
+ * máquina do operador desligada.
+ */
+export const tangerinoWorkerHeartbeats = pgTable("fdp_tangerino_worker_heartbeats", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  integrationId: text("integration_id").notNull(),
+  /** Identificador estável escolhido pelo worker — nunca o hostname da estação. */
+  workerId: text("worker_id").notNull(),
+  workerVersion: text("worker_version").notNull().default(""),
+  startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  lastConsultationAt: timestamp("last_consultation_at", { withTimezone: true, mode: "string" }),
+  pendingConsultations: integer("pending_consultations").notNull().default(0),
+  pendingAttachments: integer("pending_attachments").notNull().default(0),
+  needsAuthentication: integer("needs_authentication").notNull().default(0),
+  lastErrorCode: text("last_error_code").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_tangerino_worker_heartbeats_worker_uq").on(table.workspaceId, table.workerId),
+  uniqueIndex("fdp_tangerino_worker_heartbeats_workspace_id_uq").on(table.workspaceId, table.id),
+  check("fdp_tangerino_worker_heartbeats_pending_check",
+    sql`${table.pendingConsultations} >= 0 AND ${table.pendingAttachments} >= 0`),
+  check("fdp_tangerino_worker_heartbeats_needs_auth_check", sql`${table.needsAuthentication} IN (0, 1)`),
 ]);

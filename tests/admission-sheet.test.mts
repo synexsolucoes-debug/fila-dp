@@ -111,14 +111,37 @@ test("a rota da ficha cobra a permissão e audita o acesso, não o conteúdo", (
   const route = source("../app/api/cards/[id]/registration-sheet/route.ts");
   assert.match(route, /requireCapability\(workspace, "admission\.sheet\.read"\)/u);
   assert.match(route, /action: "admission\.sheet\.read"/u);
-  // O evento de auditoria só carrega contagem e identificador.
-  assert.doesNotMatch(route, /after: \{[^}]*fields/u, "auditar o conteúdo desfaria a cifra no histórico");
+
+  /* A asserção mudou junto com a rota, e a versão nova é mais estreita.
+     
+     Antes ela recusava qualquer `fields` dentro de `after`, o que era um proxy
+     grosseiro para "sem conteúdo". A edição manual precisa registrar QUAIS
+     campos mudaram — e `Object.keys` são nomes de campo, não valores. O que
+     não pode aparecer é o conteúdo, e é isso que se cobra agora. */
+  assert.match(route, /after: \{ fields: Object\.keys\(incoming\) \}/u,
+    "a auditoria da edição nomeia os campos alterados");
+  for (const vazamento of ["after: { fields: incoming", "after: { ...incoming", "after: { values"]) {
+    assert.ok(!route.includes(vazamento),
+      `auditar o conteúdo desfaria a cifra no histórico (${vazamento})`);
+  }
 });
 
-test("concluir a demanda apaga a ficha", () => {
+test("concluir a demanda agenda o expurgo, em vez de apagar no ato", () => {
+  /* Contrato trocado de propósito.
+     
+     A versão anterior apagava a ficha no instante da conclusão, e este teste
+     cobrava isso. Parecia cuidadoso e era cedo demais: erro de digitação no ERP
+     aparece no dia seguinte, e a conferência ficava sem o material que a
+     sustentaria — restava reabrir sessão de navegador e baixar tudo de novo,
+     incomodando a origem por um problema nosso.
+     
+     O dado continua tendo prazo; o que mudou é que ele passa a ser uma data
+     marcada, e não o relógio do clique. */
   const route = source("../app/api/cards/[id]/route.ts");
-  assert.match(route, /DELETE FROM fdp_admission_sheets WHERE workspace_id = \? AND card_id = \?/u);
+  assert.match(route, /retention_until = COALESCE\(retention_until/u);
   assert.match(route, /reason: "card_archived"/u);
+  assert.doesNotMatch(route, /DELETE FROM fdp_admission_sheets/u,
+    "apagar no ato tirava o material da conferência do dia seguinte");
 });
 
 test("a ficha não viaja no retrato do workspace", () => {

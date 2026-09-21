@@ -631,6 +631,20 @@
       "when": 1788440240000,
       "tag": "0087_admission_registration_sheet",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1788440280000,
+      "tag": "0088_admission_sheet_preparation",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1788440320000,
+      "tag": "0089_admission_flow_completion",
+      "breakpoints": true
     }
   ]
 }

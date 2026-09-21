@@ -144,3 +144,46 @@ export function toSweepCandidate(row: Record<string, unknown>): SweepCandidate {
     fullName: text(row.full_name),
   };
 }
+
+/**
+ * A varredura inteira, num lugar só.
+ *
+ * ## O defeito que esta função existe para não deixar voltar
+ *
+ * O Agente Tangerino não usa a fila genérica de integrações: ele enfileira
+ * consultas de admissão na fila própria que o worker de navegador drena. O cron
+ * sabia disso e tinha o desvio escrito (`app/api/cron/integrations`); o botão
+ * **Executar agora** não tinha, e mandava o agente por `queueIntegrationRun`.
+ *
+ * O efeito para quem clicava era o pior possível: a tela respondia "execução
+ * enfileirada", o job nascia numa fila que nenhum runner do Tangerino lê, e
+ * nada acontecia — sem erro, sem consulta, sem pista. O trabalho ficava parado
+ * esperando a varredura periódica que o botão deveria ter antecipado.
+ *
+ * A causa não foi distração: era a mesma regra escrita em dois lugares, e só um
+ * deles recebeu o desvio. Por isso ela passa a morar aqui, e os dois caminhos a
+ * chamam. Um terceiro caminho que apareça amanhã herda o comportamento certo
+ * por construção, em vez de depender de alguém lembrar.
+ */
+export async function sweepTangerinoAdmissions(d1: Database, input: {
+  workspaceId: string;
+  integrationId: string;
+  limit?: number;
+}) {
+  const candidates = await prepareSweepCandidates(d1, input.workspaceId, input.limit).all<Record<string, unknown>>();
+  const rows = candidates.results ?? [];
+  let queued = 0;
+  for (const row of rows) {
+    /* `ON CONFLICT DO NOTHING` devolve linha só quando inseriu. Contar o que
+       voltou, e não o que foi tentado, é o que faz a tela dizer "3 admissões
+       enfileiradas" quando duas já estavam na fila — em vez de prometer cinco
+       consultas que não vão acontecer. */
+    const inserted = await prepareSweepConsultation(d1, {
+      workspaceId: input.workspaceId,
+      integrationId: input.integrationId,
+      candidate: toSweepCandidate(row),
+    }).first<{ id: string }>();
+    if (inserted) queued += 1;
+  }
+  return { eligible: rows.length, queued, skipped: rows.length - queued };
+}
