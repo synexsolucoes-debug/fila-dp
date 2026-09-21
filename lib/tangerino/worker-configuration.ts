@@ -68,9 +68,13 @@ export function inspectWorkerConfiguration(
   if (!String(env.FDP_TANGERINO_VAULT_KEYS || env.FDP_TANGERINO_VAULT_KEY || "").trim()) {
     problems.push({
       variable: "FDP_TANGERINO_VAULT_KEYS",
-      remedy: "copie do deployment a mesma chave do cofre (FDP_TANGERINO_VAULT_KEYS ou FDP_TANGERINO_VAULT_KEY). "
-        + "Sem ela o worker não consegue abrir as credenciais da Sólides, e uma chave nova não serve: "
-        + "o que já foi guardado foi cifrado com a antiga.",
+      remedy: "copie do deployment o mapa FDP_TANGERINO_VAULT_KEYS, inteiro, com todas as versões. "
+        + "Sem ele o worker não abre as credenciais da Sólides, e uma chave nova não serve: "
+        + "o que já foi guardado foi cifrado com a antiga.\n"
+        + "     Campo em branco no painel da Vercel não quer dizer vazio: variável do tipo Sensitive "
+        + "é gravável e não legível, e nunca mostra o valor de volta.\n"
+        + "     Se você já teve a chave em FDP_TANGERINO_VAULT_KEY (no singular), ela pode ser a mesma — "
+        + "tente {\"<versão da credencial>\":\"<aquele mesmo valor>\"} antes de rotacionar.",
     });
   }
 
