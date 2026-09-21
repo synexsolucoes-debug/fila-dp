@@ -31,6 +31,29 @@ const vazio = (mensagem: string) => console.log(`   VAZIO ${mensagem}`);
 const falha = (mensagem: string) => console.log(`   ERRO  ${mensagem}`);
 const titulo = (mensagem: string) => console.log(`\n== ${mensagem}`);
 
+/**
+ * Quais versões do cofre existem NESTE computador — só os números, nunca as chaves.
+ *
+ * O número é o que resolve o caso mais confuso: `FDP_TANGERINO_VAULT_KEY`, no
+ * singular, registra somente a versão 1. Quem copiou a chave certa do
+ * deployment para a variável errada fica com uma configuração que parece
+ * completa e não abre nada selado depois da primeira rotação.
+ */
+function descreverVersoesLocais() {
+  const mapa = String(process.env.FDP_TANGERINO_VAULT_KEYS ?? "").trim();
+  if (mapa) {
+    try {
+      const versoes = Object.keys(JSON.parse(mapa) as Record<string, unknown>)
+        .map(Number).filter((numero) => Number.isInteger(numero) && numero > 0).sort((a, b) => a - b);
+      if (versoes.length) {
+        return versoes.length === 1 ? `a versão ${versoes[0]}` : `as versões ${versoes.join(", ")}`;
+      }
+    } catch { return "FDP_TANGERINO_VAULT_KEYS com conteúdo inválido"; }
+  }
+  if (String(process.env.FDP_TANGERINO_VAULT_KEY ?? "").trim()) return "somente a versão 1 (FDP_TANGERINO_VAULT_KEY, no singular)";
+  return "nenhuma chave";
+}
+
 /** O primeiro elo vazio é o único que importa: os seguintes são consequência. */
 let primeiroElo = "";
 const registrarElo = (elo: string, comoResolver: string) => {
@@ -110,10 +133,28 @@ for (const grupo of lista) {
       continue;
     }
     ok(`Credencial abre com a chave deste computador (versão ${credencial.key_version}).`);
-  } catch {
-    falha(`A credencial NÃO abre com a chave deste computador (versão ${credencial.key_version}).`);
-    registrarElo(`A chave do cofre deste computador não abre a credencial do grupo ${grupo.name}.`,
-      "FDP_TANGERINO_VAULT_KEYS precisa ser a MESMA do deployment. Uma chave nova não abre o que foi selado com a antiga.");
+  } catch (causa) {
+    /* Três causas diferentes, três remédios diferentes. Dizer só "não abre"
+       mandaria trocar a chave em duas delas — e numa a chave está certa. */
+    const codigo = causa && typeof causa === "object" && "code" in causa ? String((causa as { code: unknown }).code) : "";
+    const versaoNecessaria = Number(credencial.key_version);
+    falha(`A credencial NÃO abre com a chave deste computador (selada na versão ${versaoNecessaria}).`);
+
+    if (codigo === "VAULT_NOT_CONFIGURED") {
+      registrarElo("Este computador não tem chave do cofre nenhuma.",
+        "Copie do deployment FDP_TANGERINO_VAULT_KEYS (Vercel › Settings › Environment Variables)\n"
+        + "   para o .env.tangerino-worker.local.");
+    } else if (codigo === "VAULT_KEY_VERSION_MISSING") {
+      registrarElo(`Este computador tem ${descreverVersoesLocais()}, e a credencial foi selada na versão ${versaoNecessaria}.`,
+        "FDP_TANGERINO_VAULT_KEY (no singular) registra SOMENTE a versão 1 — por isso ela nunca abre\n"
+        + `   uma credencial da versão ${versaoNecessaria}, mesmo que o conteúdo da chave esteja certo.\n`
+        + "   Use FDP_TANGERINO_VAULT_KEYS (no plural), com o mapa de versões exatamente como está\n"
+        + "   no deployment, por exemplo: {\"1\":\"<chave antiga>\",\"2\":\"<chave atual>\"}\n"
+        + "   Apague a linha FDP_TANGERINO_VAULT_KEY do arquivo para não confundir as duas.");
+    } else {
+      registrarElo(`A chave da versão ${versaoNecessaria} deste computador não é a mesma que selou a credencial.`,
+        "O conteúdo precisa ser idêntico ao do deployment. Uma chave nova não abre o que foi selado com a antiga.");
+    }
     continue;
   }
 
