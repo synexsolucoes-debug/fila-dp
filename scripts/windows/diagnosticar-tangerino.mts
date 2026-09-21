@@ -56,19 +56,26 @@ function descreverServidor() {
  * deployment para a variável errada fica com uma configuração que parece
  * completa e não abre nada selado depois da primeira rotação.
  */
-function descreverVersoesLocais() {
+function versoesLocais(): { numeros: number[]; peloSingular: boolean } {
   const mapa = String(process.env.FDP_TANGERINO_VAULT_KEYS ?? "").trim();
   if (mapa) {
     try {
-      const versoes = Object.keys(JSON.parse(mapa) as Record<string, unknown>)
+      const numeros = Object.keys(JSON.parse(mapa) as Record<string, unknown>)
         .map(Number).filter((numero) => Number.isInteger(numero) && numero > 0).sort((a, b) => a - b);
-      if (versoes.length) {
-        return versoes.length === 1 ? `a versão ${versoes[0]}` : `as versões ${versoes.join(", ")}`;
-      }
-    } catch { return "FDP_TANGERINO_VAULT_KEYS com conteúdo inválido"; }
+      if (numeros.length) return { numeros, peloSingular: false };
+    } catch { return { numeros: [], peloSingular: false }; }
   }
-  if (String(process.env.FDP_TANGERINO_VAULT_KEY ?? "").trim()) return "somente a versão 1 (FDP_TANGERINO_VAULT_KEY, no singular)";
-  return "nenhuma chave";
+  /* A variável no singular registra a versão 1 e nenhuma outra. Quem copiou a
+     chave certa para ela fica com uma configuração que parece completa. */
+  if (String(process.env.FDP_TANGERINO_VAULT_KEY ?? "").trim()) return { numeros: [1], peloSingular: true };
+  return { numeros: [], peloSingular: false };
+}
+
+function descreverVersoesLocais() {
+  const { numeros, peloSingular } = versoesLocais();
+  if (peloSingular) return "somente a versão 1 (FDP_TANGERINO_VAULT_KEY, no singular)";
+  if (!numeros.length) return "nenhuma chave";
+  return numeros.length === 1 ? `a versão ${numeros[0]}` : `as versões ${numeros.join(", ")}`;
 }
 
 /** O primeiro elo vazio é o único que importa: os seguintes são consequência. */
@@ -181,12 +188,32 @@ for (const grupo of lista) {
         "Copie do deployment FDP_TANGERINO_VAULT_KEYS (Vercel › Settings › Environment Variables)\n"
         + "   para o .env.tangerino-worker.local.");
     } else if (codigo === "VAULT_KEY_VERSION_MISSING") {
-      registrarElo(`Este computador tem ${descreverVersoesLocais()}, e a credencial foi selada na versão ${versaoNecessaria}.`,
-        "FDP_TANGERINO_VAULT_KEY (no singular) registra SOMENTE a versão 1 — por isso ela nunca abre\n"
-        + `   uma credencial da versão ${versaoNecessaria}, mesmo que o conteúdo da chave esteja certo.\n`
-        + "   Use FDP_TANGERINO_VAULT_KEYS (no plural), com o mapa de versões exatamente como está\n"
-        + "   no deployment, por exemplo: {\"1\":\"<chave antiga>\",\"2\":\"<chave atual>\"}\n"
-        + "   Apague a linha FDP_TANGERINO_VAULT_KEY do arquivo para não confundir as duas.");
+      const { numeros, peloSingular } = versoesLocais();
+      const titulo = `Este computador tem ${descreverVersoesLocais()}, e a credencial foi selada na versão ${versaoNecessaria}.`;
+
+      if (peloSingular) {
+        registrarElo(titulo,
+          "FDP_TANGERINO_VAULT_KEY (no singular) registra SOMENTE a versão 1 — por isso ela nunca abre\n"
+          + `   uma credencial da versão ${versaoNecessaria}, mesmo que o conteúdo da chave esteja certo.\n`
+          + "   Use FDP_TANGERINO_VAULT_KEYS (no plural), com o mapa de versões exatamente como está\n"
+          + "   no deployment. Apague a linha do singular para não confundir as duas.");
+      } else if (numeros.every((numero) => numero > versaoNecessaria)) {
+        /* A chave desta máquina é mais NOVA que o selo da credencial. Não é
+           configuração errada: é uma rotação cuja segunda metade ficou pela
+           metade. A credencial guardada continua na chave antiga até alguém
+           regravá-la, e mandar mexer no arquivo aqui não resolveria nada. */
+        registrarElo(titulo,
+          "A chave deste computador é mais NOVA que o selo da credencial: falta terminar a rotação.\n"
+          + "   O arquivo daqui está certo — o que falta é do lado do deployment, nesta ordem:\n"
+          + `     1. publicar um deployment novo, para a chave da versão ${numeros[numeros.length - 1]} valer;\n`
+          + "     2. regravar usuário e senha da Sólides no painel, em Integrações › Agente Tangerino.\n"
+          + `   Só o passo 2 sela a credencial de novo, na versão ${numeros[numeros.length - 1]}. Até lá ela fica na ${versaoNecessaria}.`);
+      } else {
+        registrarElo(titulo,
+          `Falta a versão ${versaoNecessaria} no mapa FDP_TANGERINO_VAULT_KEYS deste computador.\n`
+          + "   Copie o mapa do deployment inteiro, com todas as versões — uma credencial antiga\n"
+          + "   continua selada na versão em que foi guardada.");
+      }
     } else {
       registrarElo(`A chave da versão ${versaoNecessaria} deste computador não é a mesma que selou a credencial.`,
         "O conteúdo precisa ser idêntico ao do deployment. Uma chave nova não abre o que foi selado com a antiga.");

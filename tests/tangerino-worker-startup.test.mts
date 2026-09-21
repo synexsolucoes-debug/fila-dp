@@ -212,3 +212,17 @@ test("o montador recusa a string de conexão de exemplo", async () => {
   assert.match(script, /Servidor lido: \$servidor/u);
   assert.match(script, /\[System\.Uri\]::new\(\$databaseUrl\)/u);
 });
+
+test("chave mais nova que o selo não vira conselho de mexer no arquivo", async () => {
+  // A máquina do DP ficou com a versão 3 e a credencial selada na 2: rotação
+  // pela metade, não configuração errada. A mensagem antiga mandava trocar de
+  // variável, o que ali não resolveria nada — o que falta é do lado do
+  // deployment, e só regravar o acesso no painel sela de novo.
+  const fonte = await readFile(new URL("../scripts/windows/diagnosticar-tangerino.mts", import.meta.url), "utf8");
+  assert.match(fonte, /numeros\.every\(\(numero\) => numero > versaoNecessaria\)/u);
+  assert.match(fonte, /falta terminar a rotação/u);
+  assert.match(fonte, /regravar usuário e senha da Sólides no painel/u);
+  // E os outros dois casos continuam separados, com remédios diferentes.
+  assert.match(fonte, /no singular\) registra SOMENTE a versão 1/u);
+  assert.match(fonte, /Falta a versão \$\{versaoNecessaria\} no mapa/u);
+});
