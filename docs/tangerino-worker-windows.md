@@ -73,7 +73,22 @@ de uma sessão gráfica quando houver desafio humano. Não configure a tarefa pa
 “Executar independentemente de o usuário estar conectado”.
 
 
-## Instalação em um comando, e o que ela garante
+## Instalação em dois comandos
+
+Primeiro a configuração, que monta o `.env.tangerino-worker.local` perguntando
+os três valores em vez de pedir edição à mão:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\configurar-worker.ps1
+```
+
+Ela existe porque editar o arquivo no Bloco de Notas falha de três jeitos
+invisíveis: o nome salvo como `.local.txt`, o BOM que o PowerShell 5.1 grava e
+que faz a primeira chave virar `<BOM>DATABASE_URL`, e a chave do cofre colada
+pela metade — esta última passa a instalação inteira e só quebra na primeira
+consulta, a uma hora de distância da causa. O script confere os três.
+
+Depois a instalação:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows\install-tangerino-worker.ps1
