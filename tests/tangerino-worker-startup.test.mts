@@ -122,3 +122,26 @@ test("a tarefa do Windows sobe o worker pelo mesmo caminho que o npm", async () 
   };
   assert.match(pkg.scripts["worker:tangerino:windows"] ?? "", /--import tsx worker\/tangerino\/windows\.ts/u);
 });
+
+test("a instalação concede o perfil por SID, e não por nome de grupo", async () => {
+  // "Administrators" e "SYSTEM" não existem num Windows em português — lá são
+  // "Administradores" e "SISTEMA". A concessão falhava calada, e o diretório com
+  // os cookies autenticados da Sólides ficava sem as regras pretendidas.
+  const script = await readFile(new URL("../scripts/windows/install-tangerino-worker.ps1", import.meta.url), "utf8");
+  assert.match(script, /S-1-5-18/u, "SISTEMA precisa ir por SID");
+  assert.match(script, /S-1-5-32-544/u, "Administradores precisa ir por SID");
+  // Só o código conta: o comentário acima da correção cita os nomes em inglês
+  // justamente para explicar por que eles não servem.
+  const codigo = script.split("\n").filter((linha) => !linha.trimStart().startsWith("#")).join("\n");
+  assert.doesNotMatch(codigo, /"Administrators"|"SYSTEM"/u);
+});
+
+test("a instalação exporta o perfil para a conferência de prontidão", async () => {
+  // check-tangerino-worker.mts cobra FDP_TANGERINO_PROFILE_ROOT do processo.
+  // Sem exportar, toda instalação acusava "não chegou ao processo" — um erro
+  // que descrevia o script, e não a configuração da pessoa.
+  const script = await readFile(new URL("../scripts/windows/install-tangerino-worker.ps1", import.meta.url), "utf8");
+  const conferencia = await readFile(new URL("../scripts/windows/check-tangerino-worker.mts", import.meta.url), "utf8");
+  assert.match(conferencia, /FDP_TANGERINO_PROFILE_ROOT/u);
+  assert.match(script, /\$env:FDP_TANGERINO_PROFILE_ROOT = \$config\["FDP_TANGERINO_PROFILE_ROOT"\]/u);
+});

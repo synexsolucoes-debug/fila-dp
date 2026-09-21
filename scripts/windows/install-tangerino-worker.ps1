@@ -114,16 +114,28 @@ if (-not (Test-Path $profileRoot)) { New-Item -ItemType Directory -Path $profile
 
 # O diretorio guarda cookies autenticados da Solides. Herdar as permissoes da
 # pasta pai deixaria qualquer conta da maquina ler a sessao do DP.
-$acl = Get-Acl $profileRoot
+#
+# As contas vao por SID, e nao por nome. "Administrators" e "SYSTEM" nao existem
+# num Windows em portugues, onde se chamam "Administradores" e "SISTEMA" — a
+# concessao falhava calada e o perfil ficava so com a conta do usuario, ou sem
+# regra nenhuma. SID e o mesmo em qualquer idioma.
+#
+# A lista e montada do zero, em vez de lida com Get-Acl e esvaziada: a leitura
+# traz as regras herdadas da pasta pai, e remover uma a uma depende de casar
+# cada objeto de regra — o que falha em silencio quando alguma vem de heranca.
+$acl = New-Object System.Security.AccessControl.DirectorySecurity
 $acl.SetAccessRuleProtection($true, $false)
-$acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) | Out-Null }
-foreach ($identidade in @($env:USERNAME, "SYSTEM", "Administrators")) {
-  try {
-    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
-      $identidade, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")))
-  } catch { Write-Host "   aviso: nao foi possivel conceder acesso a $identidade" -ForegroundColor Yellow }
+
+$contas = @(
+  [System.Security.Principal.WindowsIdentity]::GetCurrent().User   # quem roda o worker
+  [System.Security.Principal.SecurityIdentifier]::new("S-1-5-18")  # SISTEMA
+  [System.Security.Principal.SecurityIdentifier]::new("S-1-5-32-544")  # Administradores
+)
+foreach ($conta in $contas) {
+  $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+    $conta, "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow"))
 }
-Set-Acl -Path $profileRoot -AclObject $acl
+[System.IO.Directory]::SetAccessControl($profileRoot, $acl)
 Write-Ok "Perfil em $profileRoot, restrito a $env:USERNAME"
 
 # ---------------------------------------------------------------------------
@@ -150,6 +162,9 @@ Write-Step "Testando a conexao com o banco"
 Push-Location $repoRoot
 try {
   $env:DATABASE_URL = $config["DATABASE_URL"]
+  # A conferencia tambem cobra o perfil; sem exportar aqui, ela acusava
+  # "FDP_TANGERINO_PROFILE_ROOT nao chegou ao processo" em toda instalacao.
+  $env:FDP_TANGERINO_PROFILE_ROOT = $config["FDP_TANGERINO_PROFILE_ROOT"]
   $env:FDP_DB_DRIVER = "pg"
   & node --experimental-strip-types scripts/windows/check-tangerino-worker.mts
   if ($LASTEXITCODE -ne 0) { Fail "O worker nao consegue falar com o banco. Confira DATABASE_URL e a rede." }
