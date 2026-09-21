@@ -1,0 +1,85 @@
+/* A ficha de contratação.
+ *
+ * Os tokens são os semânticos do painel (`--ui-*`), e não cores literais: é o
+ * que faz a aba acompanhar o tema claro e o escuro sem uma segunda folha. */
+
+.panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; color: var(--ui-text); }
+
+.header { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; }
+.header h3 { margin: 2px 0 4px; font-size: 1.05rem; }
+.header p { margin: 0; color: var(--ui-text-soft); font-size: .86rem; max-width: 52ch; }
+.eyebrow { font-size: .68rem; letter-spacing: .08em; color: var(--ui-text-muted); font-weight: 600; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+.primary, .secondary, .danger {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 8px; padding: 7px 12px; font-size: .82rem; font-weight: 600;
+  border: 1px solid var(--ui-border); cursor: pointer; text-decoration: none;
+}
+.primary { background: var(--ui-primary); border-color: var(--ui-primary); color: var(--ui-on-accent, #fff); }
+.primary:hover:not(:disabled) { background: var(--ui-primary-hover); }
+.secondary { background: var(--ui-surface); color: var(--ui-text); }
+.secondary:hover:not(:disabled) { background: var(--ui-surface-muted); }
+.danger { background: var(--ui-surface); color: var(--ui-danger); border-color: var(--ui-danger); }
+.primary:disabled, .secondary:disabled, .danger:disabled { opacity: .55; cursor: not-allowed; }
+.primary svg, .secondary svg, .danger svg { width: 15px; height: 15px; }
+
+.spin { animation: admission-spin 1s linear infinite; }
+@keyframes admission-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.alert {
+  margin: 0; padding: 10px 12px; border-radius: 8px; font-size: .84rem;
+  background: var(--ui-surface-muted); color: var(--ui-danger); border: 1px solid var(--ui-danger);
+}
+
+.empty {
+  padding: 22px; border: 1px dashed var(--ui-border-strong); border-radius: 10px;
+  background: var(--ui-surface); text-align: center;
+}
+.empty strong { display: block; margin-bottom: 6px; }
+.empty p { margin: 0 auto; max-width: 56ch; color: var(--ui-text-soft); font-size: .86rem; }
+
+.block { border: 1px solid var(--ui-border); border-radius: 10px; background: var(--ui-surface); overflow: hidden; }
+.block > header {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--ui-surface-muted); border-bottom: 1px solid var(--ui-border);
+}
+.block > header strong { display: block; font-size: .92rem; }
+.block > header small { color: var(--ui-text-soft); font-size: .76rem; }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0; margin: 0; }
+
+.field { padding: 10px 14px; border-bottom: 1px solid var(--ui-border); border-right: 1px solid var(--ui-border); min-width: 0; }
+.field dt { font-size: .72rem; letter-spacing: .04em; color: var(--ui-text-muted); font-weight: 600; text-transform: uppercase; }
+.field dd { margin: 3px 0 0; display: flex; gap: 8px; align-items: center; justify-content: space-between; min-width: 0; }
+.field p { margin: 4px 0 0; font-size: .76rem; color: var(--ui-text-soft); }
+
+.value { font-size: .92rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+
+/* Ilegível e em branco não podem parecer a mesma coisa: pedem ações opostas. */
+.field[data-status="invalid"] { background: color-mix(in srgb, var(--ui-danger) 6%, transparent); }
+.missing { display: inline-flex; align-items: center; gap: 5px; font-size: .82rem; color: var(--ui-text-soft); }
+.field[data-status="invalid"] .missing { color: var(--ui-danger); }
+.missing svg { width: 14px; height: 14px; }
+
+.copyField {
+  display: inline-flex; align-items: center; gap: 4px; flex: none;
+  border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface-elevated);
+  padding: 4px 8px; font-size: .74rem; font-weight: 600; color: var(--ui-text); cursor: pointer;
+}
+.copyField:hover { background: var(--ui-surface-muted); }
+.copyField svg { width: 12px; height: 12px; }
+
+.warnings { border: 1px solid var(--ui-warning); border-radius: 10px; padding: 12px 14px; background: var(--ui-surface); }
+.warnings h4 { margin: 0 0 6px; font-size: .86rem; color: var(--ui-warning); }
+.warnings ul { margin: 0; padding-left: 18px; }
+.warnings li { font-size: .81rem; color: var(--ui-text-soft); margin-bottom: 3px; }
+
+.source { margin: 0; font-size: .8rem; color: var(--ui-text-soft); }
+
+@media (max-width: 640px) {
+  .fields { grid-template-columns: 1fr; }
+  .field { border-right: none; }
+}

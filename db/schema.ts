@@ -641,6 +641,10 @@ export const cardAttachments = pgTable("fdp_card_attachments", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("fdp_attachments_object_key_uq").on(table.objectKey),
+  /* Alvo da chave composta de `admissionSheets`: sem um único em
+     (workspace_id, id) o PostgreSQL recusa a FK, e a ficha ficaria sem como
+     morrer junto com o arquivo de onde foi lida. */
+  uniqueIndex("fdp_card_attachments_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_attachments_card_created_idx").on(table.cardId, table.createdAt),
   index("fdp_card_attachments_step_idx")
     .on(table.workspaceId, table.cardId, table.processStepId)
@@ -4042,4 +4046,39 @@ export const ledgerImportRows = pgTable("fdp_ledger_import_rows", {
   foreignKey({ name: "fdp_ledger_import_rows_entry_fk", columns: [table.workspaceId, table.entryId], foreignColumns: [ledgerEntries.workspaceId, ledgerEntries.id] }),
   check("fdp_ledger_import_rows_resolution_check", sql`${table.resolution} IN ('pending', 'resolved', 'ignored')`),
   check("fdp_ledger_import_rows_number_check", sql`${table.rowNumber} > 0`),
+]);
+
+/**
+ * Ficha de contratação — os campos do Registro de Empregado, cifrados.
+ *
+ * O valor do documento vive aqui e em nenhum outro lugar: as contagens e os
+ * avisos são metadado de qualidade da leitura, e não carregam conteúdo. É o que
+ * permite a tela dizer "37 de 44 prontos" sem abrir o envelope.
+ *
+ * A linha é apagada quando a demanda é concluída, e cai junto com o anexo de
+ * onde foi lida — transcrição não pode sobreviver ao documento que a originou.
+ */
+export const admissionSheets = pgTable("fdp_admission_sheets", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  cardId: text("card_id").notNull(),
+  attachmentId: text("attachment_id").notNull(),
+  sourceFilename: text("source_filename").notNull().default(""),
+  encryptedValue: text("encrypted_value").notNull(),
+  initializationVector: text("initialization_vector").notNull(),
+  authTag: text("auth_tag").notNull(),
+  keyVersion: integer("key_version").notNull(),
+  filledCount: integer("filled_count").notNull().default(0),
+  readableCount: integer("readable_count").notNull().default(0),
+  warningsJson: text("warnings_json").notNull().default("[]"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_admission_sheets_card_uq").on(table.workspaceId, table.cardId),
+  uniqueIndex("fdp_admission_sheets_workspace_id_uq").on(table.workspaceId, table.id),
+  foreignKey({ name: "fdp_admission_sheets_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_admission_sheets_attachment_fk", columns: [table.workspaceId, table.attachmentId], foreignColumns: [cardAttachments.workspaceId, cardAttachments.id] }).onDelete("cascade"),
+  check("fdp_admission_sheets_counts_check", sql`${table.readableCount} <= ${table.filledCount}`),
+  check("fdp_admission_sheets_key_version_check", sql`${table.keyVersion} > 0`),
 ]);
