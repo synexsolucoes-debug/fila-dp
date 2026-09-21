@@ -178,3 +178,23 @@ test("o diagnóstico percorre toda a corrente que enche a fila", async () => {
   // deste computador é a mesma que selou o segredo.
   assert.match(fonte, /openCredentials\(/u);
 });
+
+test("o diagnóstico separa versão ausente de chave errada", async () => {
+  // Três causas, três remédios. "Não abre" mandaria trocar a chave em duas
+  // delas — e numa a chave está certa, só falta registrar a versão.
+  const fonte = await readFile(new URL("../scripts/windows/diagnosticar-tangerino.mts", import.meta.url), "utf8");
+  assert.match(fonte, /VAULT_NOT_CONFIGURED/u);
+  assert.match(fonte, /VAULT_KEY_VERSION_MISSING/u);
+  assert.match(fonte, /no singular\) registra SOMENTE a versão 1/u);
+});
+
+test("o montador do ambiente pede o mapa de versões antes da chave única", async () => {
+  const script = await readFile(new URL("../scripts/windows/configurar-worker.ps1", import.meta.url), "utf8");
+  // FDP_TANGERINO_VAULT_KEY registra só a versão 1. Perguntar por ela primeiro
+  // levava quem tem deployment rotacionado a um arquivo que parece completo e
+  // não abre nada.
+  const plural = script.indexOf('Read-Host "  FDP_TANGERINO_VAULT_KEYS');
+  const singular = script.indexOf('Read-Host "  FDP_TANGERINO_VAULT_KEY"');
+  assert.ok(plural > 0 && singular > 0, "as duas perguntas precisam existir");
+  assert.ok(plural < singular, "o mapa de versões vem primeiro");
+});

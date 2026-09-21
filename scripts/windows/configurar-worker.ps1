@@ -75,9 +75,16 @@ Ok "Endereco registrado."
 # 3. Cofre
 # ---------------------------------------------------------------------------
 Titulo "3/3 - Chave do cofre do Agente Tangerino"
-Write-Host "  Copie FDP_TANGERINO_VAULT_KEY exatamente como esta na Vercel."
-Write-Host "  Se voce nao tiver o valor agora, deixe em branco: o script segue"
-Write-Host "  e grava o arquivo, avisando o que falta. Ctrl+C sai a qualquer momento."
+Write-Host "  Na Vercel, em Settings > Environment Variables, procure primeiro"
+Write-Host "  FDP_TANGERINO_VAULT_KEYS (no PLURAL) e copie o valor INTEIRO,"
+Write-Host "  com as chaves { } e todas as versoes."
+Write-Host ""
+Write-Host "  So use FDP_TANGERINO_VAULT_KEY (no singular) se o plural nao existir la:"
+Write-Host "  o singular registra SOMENTE a versao 1, e nao abre credencial selada"
+Write-Host "  depois de uma rotacao de chave." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  Sem o valor agora? Deixe em branco: o script segue, grava o arquivo"
+Write-Host "  e avisa o que falta. Ctrl+C sai a qualquer momento."
 
 <#
   A chave precisa decodificar para 32 bytes — e conferir isso aqui vale muito:
@@ -108,24 +115,33 @@ $vaultKey = ""
 $vaultKeys = ""
 $configurado = $false
 
-for ($tentativa = 1; $tentativa -le 3 -and -not $configurado; $tentativa++) {
-  $vaultKey = (Read-Host "  FDP_TANGERINO_VAULT_KEY").Trim()
+<#
+  O mapa vem primeiro, e nao a chave unica.
 
-  if (-not [string]::IsNullOrWhiteSpace($vaultKey)) {
-    if (Chave32Bytes $vaultKey) { $configurado = $true; break }
-    Aviso "Essa chave nao decodifica para 32 bytes. Copiou inteira, sem espacos?"
-    $vaultKey = ""
+  A ordem anterior perguntava pelo singular antes, e era uma armadilha: quem
+  copiava a chave certa do deployment para a variavel errada ficava com um
+  arquivo que parece completo e nao abre nada. FDP_TANGERINO_VAULT_KEY registra
+  somente a versao 1 — num deployment ja rotacionado, a credencial esta selada
+  na versao 2 e o worker falha sem nunca dizer por que.
+#>
+for ($tentativa = 1; $tentativa -le 3 -and -not $configurado; $tentativa++) {
+  $vaultKeys = (Read-Host "  FDP_TANGERINO_VAULT_KEYS (o mapa, comecando com {)").Trim()
+
+  if (-not [string]::IsNullOrWhiteSpace($vaultKeys)) {
+    if ($vaultKeys.StartsWith("{") -and $vaultKeys.EndsWith("}")) { $configurado = $true; break }
+    Aviso "O mapa precisa ser um JSON inteiro, como {`"1`":`"...`",`"2`":`"...`"}."
+    $vaultKeys = ""
     continue
   }
 
-  # Campo vazio: so perguntar pelo mapa se a pessoa disser que e esse o caso.
-  Write-Host "  Voce usa o mapa de versoes (FDP_TANGERINO_VAULT_KEYS) em vez da chave unica?"
-  $usaMapa = Read-Host "  (s = sim / n = nao tenho o valor agora)"
-  if ($usaMapa -match '^[sS]') {
-    $vaultKeys = (Read-Host "  FDP_TANGERINO_VAULT_KEYS (o mapa JSON)").Trim()
-    if ($vaultKeys.StartsWith("{") -and $vaultKeys.EndsWith("}")) { $configurado = $true; break }
-    Aviso "O mapa precisa ser um JSON, como {`"1`":`"...`"}."
-    $vaultKeys = ""
+  # Campo vazio: so oferecer a chave unica a quem disser que e esse o caso la.
+  Write-Host "  O deployment nao tem o plural, so FDP_TANGERINO_VAULT_KEY (no singular)?"
+  $usaSingular = Read-Host "  (s = sim / n = nao tenho o valor agora)"
+  if ($usaSingular -match '^[sS]') {
+    $vaultKey = (Read-Host "  FDP_TANGERINO_VAULT_KEY").Trim()
+    if (Chave32Bytes $vaultKey) { $configurado = $true; break }
+    Aviso "Essa chave nao decodifica para 32 bytes. Copiou inteira, sem espacos?"
+    $vaultKey = ""
     continue
   }
 
@@ -142,7 +158,8 @@ if (-not $configurado) {
 
   Onde encontrar, quando puder:
     Vercel -> seu projeto -> Settings -> Environment Variables -> Production
-    Procure FDP_TANGERINO_VAULT_KEY (ou FDP_TANGERINO_VAULT_KEYS).
+    Procure FDP_TANGERINO_VAULT_KEYS (no plural) primeiro; o singular so serve
+    a deployment que nunca rotacionou a chave.
 
   Se nenhuma das duas existir la, a chave ainda nao foi criada no deployment —
   e ai o worker nao tem como funcionar em nenhuma maquina. Fale com quem

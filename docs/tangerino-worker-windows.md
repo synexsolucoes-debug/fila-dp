@@ -232,3 +232,21 @@ ninguém lembrar dele.
 
 O importador do Sankhya não resolve isso: ele grava vínculo com
 `source = 'sankhya'`, que é outro sistema e outro identificador.
+
+### A armadilha da chave no singular
+
+`FDP_TANGERINO_VAULT_KEY`, no singular, registra **somente a versão 1**
+(`vaultKeys`, em `lib/integrations.ts`). Num deployment que já rotacionou a
+chave, a credencial está selada na versão 2 — e aí a variável no singular não
+abre nada, **mesmo com o conteúdo certo**. O worker sobe normalmente e falha só
+na hora de entrar na Sólides.
+
+O que vale no computador do worker é copiar `FDP_TANGERINO_VAULT_KEYS`, no
+plural, inteiro, com todas as versões, exatamente como está no deployment. O
+diagnóstico distingue os três casos e diz qual é:
+
+| O que ele encontra | O que dizer a quem opera |
+| --- | --- |
+| Nenhuma chave | copie `FDP_TANGERINO_VAULT_KEYS` do deployment |
+| Versão local ≠ versão da credencial | o singular só serve à versão 1; use o plural |
+| Versão certa, conteúdo diferente | a chave não é a mesma que selou o segredo |
