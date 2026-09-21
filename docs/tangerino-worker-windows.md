@@ -73,7 +73,22 @@ de uma sessão gráfica quando houver desafio humano. Não configure a tarefa pa
 “Executar independentemente de o usuário estar conectado”.
 
 
-## Instalação em um comando, e o que ela garante
+## Instalação em dois comandos
+
+Primeiro a configuração, que monta o `.env.tangerino-worker.local` perguntando
+os três valores em vez de pedir edição à mão:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\configurar-worker.ps1
+```
+
+Ela existe porque editar o arquivo no Bloco de Notas falha de três jeitos
+invisíveis: o nome salvo como `.local.txt`, o BOM que o PowerShell 5.1 grava e
+que faz a primeira chave virar `<BOM>DATABASE_URL`, e a chave do cofre colada
+pela metade — esta última passa a instalação inteira e só quebra na primeira
+consulta, a uma hora de distância da causa. O script confere os três.
+
+Depois a instalação:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows\install-tangerino-worker.ps1
@@ -148,3 +163,34 @@ O identificador do worker deriva do nome da máquina por HMAC e nunca aparece em
 claro: hostname de estação costuma carregar o nome de quem a usa, e isso ficaria
 visível para todo o grupo. `FDP_TANGERINO_WORKER_ID` permite escolher um nome
 próprio quando o operador quiser reconhecê-lo.
+
+## Quando a janela do worker abre e fecha na mesma hora
+
+Esse era o sintoma de dois defeitos distintos, e os dois estão fechados:
+
+1. **O comando de execução estava errado.** O script chamava
+   `node --experimental-strip-types worker/tangerino/windows.ts`. O código do
+   Vinculato importa diretórios (`../db`) e o atalho `@/db`, que o resolvedor de
+   módulos do Node recusa com `ERR_UNSUPPORTED_DIR_IMPORT` — antes de executar a
+   primeira linha, sem chance de imprimir nada. O worker sobe com
+   `node --import tsx`, o mesmo comando de `npm run worker:tangerino:windows`.
+2. **A parada não chegava a ninguém.** Faltando uma variável, o worker
+   encerrava com um evento estruturado que guarda só o nome do erro — a
+   mensagem, que é a lista das variáveis, ficava de fora de propósito, porque
+   mensagem de falha de navegação carrega URL com identificador de colaborador.
+   Falta de configuração passou a ser a exceção: ela sai em texto, com o nome de
+   cada variável e o que fazer, e nunca com o valor de nenhuma delas.
+
+O `start-tangerino-worker.ps1` agora também:
+
+* confere Node, dependências e arquivo de ambiente **antes** de chamar o worker,
+  porque cada um desses some sem deixar mensagem quando falha;
+* segura a janela aberta em qualquer saída, com `Pressione Enter para fechar`;
+* grava tudo em `%LOCALAPPDATA%\Vinculato\worker-tangerino.log`, para o caso de
+  a janela fechar assim mesmo — atualização, desligamento, antivírus.
+
+Se a janela ainda fechar sem nada na tela, o log responde por quê:
+
+```powershell
+Get-Content "$env:LOCALAPPDATA\Vinculato\worker-tangerino.log" -Tail 40
+```

@@ -3,6 +3,7 @@ import { runNextConsultation } from "../../lib/tangerino/agent.ts";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { processNextTangerinoHealthCheck } from "../../lib/tangerino/health-check.ts";
 import { runNextAttachmentAuthorization } from "../../lib/tangerino/attachments-worker.ts";
+import { assertWorkerConfiguration, type WorkerConfigurationOptions } from "../../lib/tangerino/worker-configuration.ts";
 import { PlaywrightTangerinoSession } from "./playwright-session.ts";
 
 export type TangerinoSweepSummary = {
@@ -10,16 +11,8 @@ export type TangerinoSweepSummary = {
   handled: number;
 };
 
-export function assertTangerinoWorkerConfiguration() {
-  const missing: string[] = [];
-  if (!String(process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || "").startsWith("postgres")) {
-    missing.push("DATABASE_URL");
-  }
-  if (!String(process.env.FDP_TANGERINO_VAULT_KEYS || process.env.FDP_TANGERINO_VAULT_KEY || "").trim()) {
-    missing.push("FDP_TANGERINO_VAULT_KEYS");
-  }
-  if (!tangerinoAgentConfig().enabled) missing.push("TANGERINO_BROWSER_AGENT_ENABLED");
-  if (missing.length) throw new Error(`Configuração obrigatória ausente: ${missing.join(", ")}`);
+export function assertTangerinoWorkerConfiguration(options: WorkerConfigurationOptions = {}) {
+  assertWorkerConfiguration(process.env, options);
 }
 
 async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: () => boolean) {

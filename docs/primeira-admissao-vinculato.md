@@ -6,10 +6,13 @@ Caminho completo, do zero até o cadastro confirmado no Sankhya. Quem segue isto
 ## 1. Preparar o computador do DP (uma vez)
 
 ```powershell
-copy .env.tangerino-worker.example .env.tangerino-worker.local
-notepad .env.tangerino-worker.local
+powershell -ExecutionPolicy Bypass -File scripts\windows\configurar-worker.ps1
 powershell -ExecutionPolicy Bypass -File scripts\windows\install-tangerino-worker.ps1
 ```
+
+O primeiro pergunta os três valores (conexão do banco, endereço do painel e
+chave do cofre — todos na Vercel) e monta o arquivo de ambiente no formato
+certo. O segundo instala.
 
 O script confere requisitos, ambiente, permissões do perfil, dependências,
 Chromium e **a conexão com o banco** antes de registrar a tarefa de logon. Ele
