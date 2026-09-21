@@ -17,6 +17,12 @@ export const capabilities = [
   "comments.write",
   "attachments.read",
   "attachments.write",
+  /* Ler a ficha de contratação é uma permissão à parte, e não `attachments.read`.
+     Ver que existe um PDF anexado e ler o CPF, o PIS e o RG já transcritos não
+     são o mesmo risco: o primeiro mostra um arquivo, o segundo entrega os
+     valores prontos para copiar. Quem acompanha a demanda de fora — o
+     observador — continua vendo os anexos e deixa de ver o conteúdo deles. */
+  "admission.sheet.read",
   "reports.read",
   "hr.read",
   "hr.write",
@@ -202,7 +208,7 @@ const roleCapabilities = {
   admin: new Set<Capability>(capabilities.filter((capability) => !ownerOnlyCapabilities.has(capability))),
   member: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "cards.write", "comments.write",
-    "attachments.read", "attachments.write", "reports.read", "hr.read", "hr.write",
+    "attachments.read", "attachments.write", "admission.sheet.read", "reports.read", "hr.read", "hr.write",
     "integrations.status.read", "integrations.view",
     // Quem confere admissão é o analista de DP; a consulta serve ao trabalho
     // dele. O que ele continua sem ter é configurar credencial e executar

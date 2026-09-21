@@ -77,6 +77,8 @@ import {
   nextThemePreference, themeLabels, THEME_COOKIE, THEME_COOKIE_MAX_AGE, THEME_SYSTEM_COOKIE,
   type ResolvedTheme, type ThemePreference,
 } from "@/lib/theme";
+import { RegistrationSheetPanel } from "./features/admission";
+import { chooseRegistrationFormAttachment } from "@/lib/registration-form-file";
 import { capabilitiesForRole, workspaceRoles } from "@/lib/authorization";
 import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
@@ -128,7 +130,7 @@ type BoardSort = DemandSort;
 /** Destinos que a faixa de indicadores alcança (§14). Subconjunto de `View`. */
 type OverviewFocusTarget = "board" | "processManagement" | "processes" | "integrations" | "history";
 
-type CardTab = "details" | "process" | "checklist" | "attachments" | "activity";
+type CardTab = "details" | "process" | "checklist" | "attachments" | "sheet" | "activity";
 type SettingsSection = "general" | "companies" | "columns" | "team" | "security" | "fields" | "templates" | "sla" | "automations";
 
 /**
@@ -825,6 +827,11 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** A ficha entre os anexos da demanda — decide se a aba existe e para onde o botão aponta. */
+function registrationFormAttachment(card: Card) {
+  return chooseRegistrationFormAttachment(card.attachments);
+}
+
 function SolidesAttachmentSyncPanel({ card, busy, canAuthorize, onAuthorize }: {
   card: Card;
   busy: boolean;
@@ -880,6 +887,8 @@ function activityLabel(activity: ActivityEvent) {
     "attachment.deleted": "removeu um anexo",
     "tangerino.attachments.authorized": "autorizou os anexos da Sólides",
     "tangerino.attachments.completed": "trouxe os anexos da Sólides",
+    "admission.sheet.built": "leu a ficha de contratação",
+    "admission.sheet.purged": "apagou a ficha de contratação",
     "card.restored": "restaurou a demanda",
     "automation.executed": "executou uma automação",
     /* Processo e automação na mesma linha do tempo (§45). Sem estas entradas, o
@@ -1775,6 +1784,11 @@ export function WorkspaceApp({
   const workspaceName = workspaceNameEdit ?? snapshot?.workspace.name ?? "";
   const userInitials = initials(user.displayName);
   const canEdit = snapshot ? ["admin", "member"].includes(snapshot.workspace.role) : false;
+  /* Ler a ficha transcrita não vem junto de ver os anexos: a aba só aparece
+     para quem tem a permissão própria, e o servidor cobra a mesma coisa. */
+  const canReadAdmissionSheet = snapshot
+    ? capabilitiesForRole(snapshot.workspace.role).includes("admission.sheet.read")
+    : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
   const activeDepartments = useMemo(
@@ -3609,7 +3623,7 @@ export function WorkspaceApp({
         <div className="workspace-modal-backdrop demand-drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
           <section className="workspace-modal card-modal demand-detail-modal demand-drawer" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
             <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}{selectedCard?.cancelledAt && <b className="demand-cancelled" title={selectedCard.cancellationReason}>CANCELADA</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Nova demanda"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
-            {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "process" ? "active" : ""} onClick={() => setCardTab("process")}>Processo</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button><button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
+            {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "process" ? "active" : ""} onClick={() => setCardTab("process")}>Processo</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button>{registrationFormAttachment(selectedCard) && <button className={cardTab === "sheet" ? "active" : ""} onClick={() => setCardTab("sheet")}>Ficha</button>}<button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
             <div className="card-modal-body single">
               {selectedCard && (() => {
                 /* O fluxo desta demanda já vem no snapshot — a mesma fonte que
@@ -3844,6 +3858,16 @@ export function WorkspaceApp({
                 </div>
               </section>}
 
+              {selectedCard && cardTab === "sheet" && <section className="card-tab-panel">
+                <RegistrationSheetPanel
+                  key={selectedCard.id}
+                  cardId={selectedCard.id}
+                  canBuild={canEdit}
+                  canRead={canReadAdmissionSheet}
+                  archived={selectedCard.archived}
+                  pdfUrl={registrationFormAttachment(selectedCard)?.downloadUrl ?? null}
+                />
+              </section>}
               {selectedCard && cardTab === "activity" && <section className="card-tab-panel activity-panel"><div className="card-collaboration"><header><span>COMENTÁRIOS</span><strong>{selectedCard.comments.length}</strong></header><div className="card-comments">{selectedCard.comments.length === 0 && <p className="card-empty-note">Nenhum comentário ainda.</p>}{selectedCard.comments.map((comment) => <article key={comment.id}><i>{initials(comment.authorName)}</i><div><strong>{comment.authorName}<time>{formatMoment(comment.createdAt)}</time></strong><p>{comment.body}</p>{selectedCard.attachments.filter((attachment) => attachment.commentId === comment.id).map((attachment) => <a key={attachment.id} href={attachment.downloadUrl} className="comment-attachment"><Paperclip aria-hidden="true" />{attachment.filename}</a>)}{(comment.authorEmail === user.email || isAdmin) && !selectedCard.archived && <div className="comment-actions"><button onClick={() => void editComment(comment.id, comment.body)}>Editar</button><button onClick={() => void deleteComment(comment.id)}>Excluir</button></div>}</div></article>)}</div>{canComment && !selectedCard.archived && <form className="comment-form" onSubmit={addComment}><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="Escreva uma atualização para a equipe. Use @nome para mencionar alguém." rows={3} maxLength={2000} /><label className="upload-button">Anexar arquivo<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx" disabled={busy} onChange={(event) => setCommentAttachment(event.target.files?.[0] ?? null)} /></label>{commentAttachment ? <small>Arquivo: {commentAttachment.name}</small> : null}<button disabled={!newComment.trim() || busy}>Publicar comentário</button></form>}<header className="activity-heading"><span>HISTÓRICO DA DEMANDA</span><strong>{plural(selectedCard.activities.length, "evento", "eventos")}</strong></header><ol className="activity-list">{selectedCard.activities.slice(0, 20).map((activity) => { const details = activityDetails(activity); return <li key={activity.id}><i /><div><strong>{activity.actorName}</strong> {activityLabel(activity)}{details.length > 0 && <ul className="activity-change-list">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}<time>{formatMoment(activity.createdAt)}</time></div></li>; })}</ol></div></section>}
             </div>
 

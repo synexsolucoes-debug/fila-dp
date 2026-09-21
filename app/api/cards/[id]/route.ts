@@ -109,7 +109,24 @@ export async function DELETE(_request: Request, context: RouteContext) {
     await requireCardCompanyAccess(d1, workspace.id, user.id, workspace.role, id);
     const result = await d1.prepare("UPDATE fdp_cards SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND board_id = ? AND archived = 0").bind(id, board.id).run();
     if (!result.meta.changes) throw ApiError.notFound("Demanda não encontrada.", "CARD_NOT_FOUND");
+
+    /* Expurgo da ficha de contratação ao concluir a demanda.
+     *
+     * A ficha é a única coisa no produto que guarda valor de documento — CPF,
+     * PIS, RG, CTPS —, e existe para um trabalho com fim: transcrever a
+     * admissão para o ERP. Terminado o trabalho, o dado não tem mais razão de
+     * estar aqui, e guardá-lo "por via das dúvidas" é como um vazamento deixa
+     * de ser hipótese.
+     *
+     * Apagar, e não marcar como expurgada: uma coluna de carimbo deixaria o
+     * valor no banco com um aviso de que não deveria estar lá. O arquivo
+     * anexado continua na demanda; o que some é a transcrição dele. */
+    const purged = await d1.prepare("DELETE FROM fdp_admission_sheets WHERE workspace_id = ? AND card_id = ?")
+      .bind(workspace.id, id).run();
     await recordActivity(workspace.id, id, auth.user.email, "card.archived");
+    if (purged.meta.changes) {
+      await recordActivity(workspace.id, id, auth.user.email, "admission.sheet.purged", { reason: "card_archived" });
+    }
     return Response.json(await getWorkspaceSnapshot(auth.user));
   } catch (error) {
     return apiError(error);

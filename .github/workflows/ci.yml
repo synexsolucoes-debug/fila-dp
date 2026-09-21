@@ -127,6 +127,17 @@ jobs:
           DATABASE_URL: postgresql://vinculato_app:app@localhost:5432/vinculato
         run: npm run verify:isolation
 
+      # A ficha de contratação é a única coisa no produto que guarda valor de
+      # documento. O que a cerca é decidido pelo banco — RLS, as cascatas que a
+      # fazem morrer junto do anexo e da demanda, e o CHECK que recusa contagem
+      # impossível —, e nada disso aparece em teste de unidade. Roda com o papel
+      # da aplicação pelo mesmo motivo do ensaio do portal: o próprio script
+      # reprova se o papel puder burlar as políticas.
+      - name: Provar as travas da ficha de contratação
+        env:
+          DATABASE_URL: postgresql://vinculato_app:app@localhost:5432/vinculato
+        run: npm run db:rehearse-admission-sheet
+
       # Backup só vale quando a restauração é provada, e uma prova que só roda
       # quando alguém lembra de rodar apodrece. O ensaio faz o ciclo inteiro —
       # migrations pelo executor de produção, dump, restore em banco vazio — e

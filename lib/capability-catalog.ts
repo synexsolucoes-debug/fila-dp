@@ -41,6 +41,7 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "comments.write": { area: "demands", label: "Comentar em demandas" },
   "attachments.read": { area: "demands", label: "Baixar anexos" },
   "attachments.write": { area: "demands", label: "Anexar e remover arquivos" },
+  "admission.sheet.read": { area: "demands", label: "Ler a ficha de contratação transcrita da admissão" },
   "reports.read": { area: "demands", label: "Abrir relatórios e indicadores" },
 
   "companies.read": { area: "registrations", label: "Ver empresas do grupo" },

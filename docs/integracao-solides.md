@@ -163,3 +163,95 @@ configurar recurso oficial e corte, guardar o token, publicar mapeamento `admiss
   Enquanto isso não estiver documentado, a carga é por consulta agendada, não por evento.
 - **Escrita de volta na Sólides**: o executor processa apenas mapeamentos de entrada ou bidirecionais.
 - **Documentos como arquivo**: nenhum dos dois produtos expõe download de anexo na API oficial.
+
+## 9. Ficha de contratação — o Registro de Empregado lido para o ERP
+
+O agente navegador já traz, junto dos documentos, a **ficha cadastral em PDF**
+(`worker/tangerino/playwright-session.ts`, botão *Exportar ficha do colaborador*).
+Até aqui ela era só mais um anexo: quem fazia a admissão no ERP abria o PDF de um
+lado, o ERP do outro, e transcrevia quarenta e poucos campos à mão.
+
+A aba **Ficha** da demanda lê esse PDF e apresenta os campos prontos para copiar.
+
+### 9.1 Por que o módulo não leva o nome da Sólides
+
+O documento é o **Registro de Empregado**, cujo conteúdo mínimo é fixado pela
+legislação trabalhista, não pelo fornecedor que o emite. Rótulos, blocos e ordem
+são os mesmos saindo da Sólides, do Domínio ou de um registro digitalizado. O
+acoplamento com a Sólides fica onde de fato existe — na obtenção do arquivo — e
+não na leitura dele (`lib/employee-registration-form.ts`,
+`lib/registration-form-pdf.ts`).
+
+### 9.2 Como a leitura se ancora
+
+`extractText` devolve o texto na ordem interna do PDF, que não é a ordem visual
+da grade. Em vez de supor a sequência, o extrator procura os **rótulos** — um
+conjunto fechado e conhecido —, reserva o trecho de cada um do mais longo para o
+mais curto, ordena pela posição real e fatia o valor entre um rótulo e o
+seguinte. Mudar a ordem interna do arquivo move os rótulos juntos, e o
+fatiamento continua certo.
+
+Quatro campos **não** são lidos, e é deliberado: `Categoria` aparece duas vezes
+na mesma ficha (habilitação e documento militar), e `Por` e `Nº` são curtos
+demais para distinguir. Eles saem em branco, o que manda buscar na origem —
+chutar produziria valor errado com aparência de certo.
+
+### 9.3 A regra que sustenta a ficha
+
+**Campo que não passa na conferência não vira valor copiável.** Dígito
+verificador de CPF, PIS/PASEP, CNH, título de eleitor e CNPJ é conferido antes
+de qualquer coisa ser oferecida para cópia.
+
+A assimetria é o motivo: campo vazio se denuncia sozinho a quem transcreve, mas
+campo preenchido com o número errado é aceito pelo ERP, atravessa a admissão
+inteira e só aparece no eSocial. Por isso a tela separa **em branco no registro**
+(buscar na origem) de **não foi possível ler** (conferir no arquivo) — pedem
+ações opostas.
+
+### 9.4 Inversão declarada da regra de privacidade
+
+Até a §8 deste documento valia: nenhum valor de documento entra em banco. A
+ficha inverte isso, porque não há como oferecer "copiar o CPF" sem ter o CPF. O
+que existe é o cerco, e ele é parte do desenho:
+
+| Trava | Onde |
+| --- | --- |
+| Valor cifrado em AES-256-GCM, com AAD próprio | `lib/admission-sheet.ts` |
+| Capability separada de `attachments.read` | `admission.sheet.read` |
+| Auditoria do **acesso**, nunca do conteúdo | rota da ficha |
+| Fora do retrato do workspace, buscada sob demanda | rota própria |
+| Apagada ao concluir a demanda | `DELETE /api/cards/[id]` |
+| Cai junto do anexo de onde foi lida | FK com `ON DELETE CASCADE` |
+
+O AAD (`fila-dp:admission-sheet:v{versão}`) é o que impede um envelope de
+credencial de ser aberto como ficha, e vice-versa, mesmo com a mesma chave.
+
+O observador continua vendo que existe um anexo e deixa de ver o conteúdo dele —
+é essa a fronteira que a capability desenha.
+
+### 9.5 Reprocessar sem abrir navegador
+
+A ficha guarda de qual anexo foi lida. Quando a Sólides mudar o layout, ajusta-se
+o extrator e usa-se **Reler a ficha** sobre o PDF já guardado: não é preciso nova
+sessão de navegador, nem reautenticar, nem que a admissão ainda exista na tela.
+
+### 9.6 O que ainda não está resolvido
+
+- **Campos bancários vêm vazios** na ficha analisada (`Domicílio bancário`,
+  `Nº banco`, `Agência código`, `Conta vinculada no banco`). Se o ERP exigir
+  banco na admissão, o dado precisa vir de outra origem.
+- **Os rótulos não foram confirmados contra uma ficha real da Sólides.** Rótulo
+  não encontrado vira aviso nomeando o rótulo, em vez de falhar calado — a
+  primeira leitura real mostra o que ajustar.
+- **Endpoint JSON da ficha**: a tela é Angular e chama
+  `POST /api/v1/ficha-cadastral/report/{id}` para gerar o PDF. Se houver um
+  endpoint JSON alimentando a mesma tela, ele substitui o extrator com vantagem
+  — campo tipado, sem expressão regular, imune a mudança de layout.
+
+### 9.7 Ensaio de banco
+
+`npm run db:rehearse-admission-sheet` prova contra PostgreSQL real, com papel
+**sem** superusuário: isolamento entre grupos, cascata do anexo e da demanda,
+uma ficha por demanda, o CHECK de contagem, e o ciclo selar → gravar → reler →
+abrir. O script recusa papel que ignore RLS, porque um ensaio que não pode
+falhar encerra a dúvida sem respondê-la.
