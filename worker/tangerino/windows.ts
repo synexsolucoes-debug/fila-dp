@@ -1,9 +1,9 @@
 import { hostname } from "node:os";
 import { createHash } from "node:crypto";
 import { getD1, getScopedD1 } from "../../db/index.ts";
-import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { log } from "../../lib/observability.ts";
 import { prepareWorkerHeartbeat } from "../../lib/tangerino/worker-health.ts";
+import { isWorkerConfigurationError } from "../../lib/tangerino/worker-configuration.ts";
 import { assertTangerinoWorkerConfiguration, sweepTangerinoQueue } from "./runner.ts";
 
 const pollMs = Math.min(60_000, Math.max(1_000, Number(process.env.FDP_TANGERINO_WORKER_POLL_MS) || 5_000));
@@ -77,11 +77,7 @@ async function waitForNextSweep() {
 }
 
 async function main() {
-  assertTangerinoWorkerConfiguration();
-  const config = tangerinoAgentConfig();
-  if (!config.profileRoot || !config.interactiveAuth || config.headless) {
-    throw new Error("O worker Windows exige FDP_TANGERINO_PROFILE_ROOT e FDP_TANGERINO_INTERACTIVE_AUTH=true fora da Vercel.");
-  }
+  assertTangerinoWorkerConfiguration({ requireInteractiveWindow: true });
   log("info", "tangerino.windows_worker_started", {}, { pollMs, concurrency: 1, workerId });
   while (!stopping) {
     let needsAuthentication = false;
@@ -121,6 +117,14 @@ main().catch((error) => {
   log("error", "tangerino.windows_worker_failed", {}, {
     errorName: error instanceof Error ? error.name : "UnknownError",
   });
+  /* O log estruturado guarda só o nome do erro de propósito: mensagem de falha
+     de navegação carrega URL com identificador de colaborador. Falta de
+     configuração é a exceção — a mensagem é uma lista de nomes de variável, e é
+     exatamente ela que a pessoa na frente do Windows precisa ler antes da
+     janela fechar. Sem esta linha, o worker some da tela sem dizer por quê. */
+  if (isWorkerConfigurationError(error)) {
+    process.stderr.write(`\n${(error as Error).message}\n\n`);
+  }
   process.exitCode = 1;
 });
 

@@ -77,7 +77,8 @@ if (-not (Test-Path $EnvFile)) {
 
 $env:PATHEXT = $env:PATHEXT  # evita aviso de variavel nao usada em modo estrito
 $config = @{}
-foreach ($line in Get-Content $EnvFile) {
+# ANSI por padrao no PowerShell 5.1 estragaria um caminho de perfil acentuado.
+foreach ($line in Get-Content $EnvFile -Encoding UTF8) {
   if ($line -match "^\s*#" -or $line -notmatch "=") { continue }
   $name, $value = $line -split "=", 2
   $config[$name.Trim()] = $value.Trim()
