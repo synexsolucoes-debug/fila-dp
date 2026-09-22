@@ -295,6 +295,7 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
   const dueDate = addBusinessDays(new Date().toISOString().slice(0, 10), targetDays, days, holidays);
   const dueAt = `${dueDate}T${dayEnd}`;
   const cardId = crypto.randomUUID();
+  const authorizationId = crypto.randomUUID();
   const title = `Admissão ERP — ${input.displayName}`.slice(0, 160);
   const description = demandDescription({
     displayName: input.displayName,
@@ -326,12 +327,26 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
     d1.prepare(`UPDATE fdp_tangerino_open_admissions SET card_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE workspace_id = ? AND id = ? AND card_id IS NULL`)
       .bind(cardId, input.workspaceId, input.openAdmissionId),
+    /* O DP pediu para não precisar clicar em "Autorizar anexos da Sólides"
+       nesta demanda: ela nasce autorizada. employee_id e authorized_by_user_id
+       ficam nulos pelo mesmo motivo do cartão — não há colaborador nem uma
+       pessoa clicando neste instante, e a tela já trata os dois casos
+       (`solidesAttachments` só lê `state`, nunca quem autorizou). O worker de
+       anexos já sabe seguir sem colaborador desde a PR #168. */
+    d1.prepare(`INSERT INTO fdp_tangerino_attachment_authorizations
+        (id, workspace_id, card_id, employee_id, integration_id, external_admission_id, authorized_by_user_id)
+      VALUES (?, ?, ?, NULL, ?, ?, NULL)`)
+      .bind(authorizationId, input.workspaceId, cardId, input.integrationId, externalAdmissionId),
     d1.prepare(`INSERT INTO fdp_activity_events
         (id, workspace_id, card_id, actor_email, event_type, payload_json)
       VALUES (?, ?, ?, 'SYSTEM', 'tangerino.open_admission_demand_created', ?::jsonb)`)
       .bind(crypto.randomUUID(), input.workspaceId, cardId, JSON.stringify({
         openAdmissionId: input.openAdmissionId, externalAdmissionId, admissionDate, stage: input.admission.stage,
       })),
+    d1.prepare(`INSERT INTO fdp_activity_events
+        (id, workspace_id, card_id, actor_email, event_type, payload_json)
+      VALUES (?, ?, ?, 'SYSTEM', 'tangerino.attachments.auto_authorized', ?::jsonb)`)
+      .bind(crypto.randomUUID(), input.workspaceId, cardId, JSON.stringify({ authorizationId, expiresInHours: 24 })),
     d1.prepare(`UPDATE fdp_integration_events SET status = 'processed', result_type = 'card', result_id = ?,
         error_code = '', error_message = '', processed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE workspace_id = ? AND id = ? AND status = 'processing'`)
@@ -354,6 +369,15 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
       entityType: "card",
       entityId: cardId,
       after: { openAdmissionId: input.openAdmissionId, externalAdmissionId, admissionDate, stage: input.admission.stage },
+    }),
+    prepareAuditEvent({
+      workspaceId: input.workspaceId,
+      actorType: "system",
+      actorEmail: "SYSTEM",
+      action: "tangerino.attachments.authorized",
+      entityType: "card",
+      entityId: cardId,
+      after: { authorizationId, auto: true, expiresInHours: 24 },
     }),
   ]);
   return { status: "created", cardId };

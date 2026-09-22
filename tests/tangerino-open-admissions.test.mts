@@ -504,3 +504,25 @@ test("o download da ficha tenta extrair o ID pelo link do cartão da busca antes
   assert.match(bloco, /if \(!extracted\) throw tangerinoErrors\.uiChanged\("download dos anexos", "identificador numérico da admissão"\);/u);
   assert.match(bloco, /admissionId = extracted;/u);
 });
+
+test("a coluna authorized_by_user_id da autorização de anexos aceita nulo", async () => {
+  const fonte = await readFile(new URL("../drizzle/postgres/0092_tangerino_attachment_auto_authorize.sql", import.meta.url), "utf8");
+  assert.match(fonte, /ALTER TABLE "fdp_tangerino_attachment_authorizations" ALTER COLUMN "authorized_by_user_id" DROP NOT NULL;/u);
+});
+
+test("a demanda nasce já autorizada — sem exigir o clique em Autorizar anexos da Sólides", async () => {
+  /* Pedido direto do DP: a admissão descoberta não tem colaborador nem uma
+     pessoa clicando no instante em que a demanda nasce, então
+     employee_id e authorized_by_user_id ficam nulos pelo mesmo motivo do
+     cartão. A tela (`fila-dp-db.ts`) só lê `state` para decidir o que
+     mostrar — nunca quem autorizou — e o worker de anexos já sabe seguir
+     sem colaborador desde a PR #168, então a fila do worker processa esta
+     autorização exatamente como processaria uma criada por um clique. */
+  const fonte = await readFile(new URL("../lib/tangerino/open-admissions.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(fonte.indexOf("await d1.batch(["), fonte.indexOf("return { status: \"created\", cardId };"));
+  assert.match(bloco, /INSERT INTO fdp_tangerino_attachment_authorizations/u);
+  assert.match(bloco, /VALUES \(\?, \?, \?, NULL, \?, \?, NULL\)/u);
+  assert.match(bloco, /\.bind\(authorizationId, input\.workspaceId, cardId, input\.integrationId, externalAdmissionId\)/u);
+  assert.match(bloco, /tangerino\.attachments\.authorized/u);
+  assert.match(bloco, /auto: true/u);
+});
