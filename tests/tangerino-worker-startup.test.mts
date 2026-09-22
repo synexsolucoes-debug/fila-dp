@@ -29,6 +29,32 @@ test("ambiente completo do Windows não acusa nada", () => {
   assert.doesNotThrow(() => assertWorkerConfiguration(completo, { requireInteractiveWindow: true }));
 });
 
+test("a versão ativa do cofre precisa existir no mapa antes de o worker subir", () => {
+  const problems = inspectWorkerConfiguration({
+    ...completo,
+    FDP_TANGERINO_VAULT_KEYS: '{"1":"antiga","3":"atual"}',
+    FDP_TANGERINO_VAULT_KEY_VERSION: "2",
+  }, { requireInteractiveWindow: true });
+  assert.deepEqual(problems.map((problem) => problem.variable), ["FDP_TANGERINO_VAULT_KEY_VERSION"]);
+  assert.match(problems[0]?.remedy ?? "", /versões 1, 3/u);
+});
+
+test("a chave singular registra somente a versão 1", () => {
+  const problems = inspectWorkerConfiguration({
+    ...completo,
+    FDP_TANGERINO_VAULT_KEYS: "",
+    FDP_TANGERINO_VAULT_KEY: "chave-singular",
+    FDP_TANGERINO_VAULT_KEY_VERSION: "2",
+  });
+  assert.deepEqual(problems.map((problem) => problem.variable), ["FDP_TANGERINO_VAULT_KEY_VERSION"]);
+  assert.match(problems[0]?.remedy ?? "", /obrigatoriamente é 1/u);
+});
+
+test("mapa inválido do cofre para o worker antes de abrir navegador", () => {
+  const problems = inspectWorkerConfiguration({ ...completo, FDP_TANGERINO_VAULT_KEYS: "não é JSON" });
+  assert.deepEqual(problems.map((problem) => problem.variable), ["FDP_TANGERINO_VAULT_KEYS"]);
+});
+
 test("cada variável ausente vira um nome e um passo, não um erro genérico", () => {
   const problems = inspectWorkerConfiguration({}, { requireInteractiveWindow: true });
   assert.deepEqual(problems.map((problem) => problem.variable).sort(), [
@@ -227,13 +253,20 @@ test("chave mais nova que o selo não vira conselho de mexer no arquivo", async 
   assert.match(fonte, /Falta a versão \$\{versaoNecessaria\} no mapa/u);
 });
 
-test("uma varredura reaproveita o navegador e drena os anexos que acabou de descobrir", async () => {
+test("o worker Windows mantém a sessão entre varreduras e drena o que acabou de descobrir", async () => {
   const runner = await readFile(new URL("../worker/tangerino/runner.ts", import.meta.url), "utf8");
   const cliente = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const windows = await readFile(new URL("../worker/tangerino/windows.ts", import.meta.url), "utf8");
   assert.match(runner, /PlaywrightTangerinoSession\.create\(\{ workspaceId, deferClose: true \}\)/u);
   assert.match(runner, /discovery\.demandsCreated \+ discovery\.attachmentsBackfilled > 0\) await drainQueuedWork\(\)/u);
-  assert.match(runner, /shared\.session\?\.dispose\(\)/u);
+  assert.match(runner, /if \(!sessionPool\) await shared\.session\?\.dispose\(\)/u);
+  assert.match(runner, /sessionPool\?\.set\(workspaceId, shared\.session\)/u);
+  assert.match(windows, /const sessionPool: TangerinoSessionPool = new Map/u);
+  assert.match(windows, /shouldStop: \(\) => stopping, sessionPool/u);
+  assert.match(windows, /sessionPool\.values\(\).*session\.dispose\(\)/u,
+    "a janela persistente precisa fechar quando o processo Windows parar");
   assert.match(cliente, /if \(this\.deferredClose\) return;/u);
+  assert.match(cliente, /isUsable\(\)/u);
   assert.match(cliente, /async dispose\(\)/u);
   assert.match(cliente, /this\.persistentProfile \? tangerinoAdmissionsEntryUrls\[0\] : input\.endpoint/u,
     "perfil com cookie válido deve testar a área autenticada antes de voltar ao login");
