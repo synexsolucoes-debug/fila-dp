@@ -149,6 +149,25 @@ export function tangerinoProfileDirectory(profileRoot: string, workspaceId: stri
   return join(root, opaqueId);
 }
 
+/**
+ * Extrai o número da ficha de um link interno do cartão, se houver.
+ *
+ * `ficha-colaborador/{id}` é a mesma convenção de URL que `openAdmission` e
+ * `downloadAdmissionArtifacts` já usam para navegar direto — não é seletor
+ * novo, é a mesma rota do produto lida a partir de um `href` em vez de escrita
+ * na barra de endereço. Puramente leitura: nunca clica no link.
+ */
+async function extractFichaColaboradorId(card: Locator): Promise<string | null> {
+  const hrefs = await card.locator("a[href]").evaluateAll(
+    (anchors) => anchors.map((anchor) => anchor.getAttribute("href") ?? ""),
+  ).catch(() => [] as string[]);
+  for (const href of hrefs) {
+    const match = /ficha-colaborador\/([1-9][0-9]{0,19})(?:[/?#]|$)/u.exec(href);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 /** Lê um cartão real sem abrir ficha, documentos ou qualquer ação de edição. */
 export async function readAdmissionCard(card: Locator): Promise<AdmissionSnapshot> {
   const title = card.locator(TangerinoSelectors.resultNameCss).first();
@@ -185,11 +204,40 @@ export async function readAdmissionCard(card: Locator): Promise<AdmissionSnapsho
     }
   }
 
+  const externalAdmissionId = await card.getAttribute("data-id").catch(() => null)
+    ?? await card.getAttribute("id").catch(() => null)
+    /* Terceira tentativa, e não invenção: o próprio agente já assume, em
+     * `openAdmission` e em `downloadAdmissionArtifacts`, que uma ficha vive em
+     * `ficha-colaborador/{id}` — essa é a convenção de URL do produto, não um
+     * palpite novo. Se o cartão tiver um link interno para a própria ficha, o
+     * número ali é tão estável quanto `data-id` seria. */
+    ?? await extractFichaColaboradorId(card)
+    ?? undefined;
+
+  /* Sem `data-id`/`id` E sem link para a ficha: a leitura de status e etapa deu
+   * certo, mas não há como gravar esta admissão sem inventar identidade —
+   * `isStableExternalAdmissionId` recusa o índice sintético por bom motivo
+   * (§47). Antes de tentar mais um seletor às cegas, o mesmo par
+   * log-sem-PII + evidência local do bloco acima decide o próximo passo. */
+  if (!externalAdmissionId) {
+    const hrefs = await card.locator("a[href]").evaluateAll(
+      (anchors) => anchors.map((anchor) => anchor.getAttribute("href") ?? "").slice(0, 10),
+    ).catch(() => [] as string[]);
+    log("warn", "tangerino.card_identifier_not_found", {}, {
+      externalIdWordLooselyPresent: hasCardTextLabel(cardText, TangerinoSelectors.externalIdLabels),
+      hrefCount: hrefs.length,
+      hrefWithDigitsCount: hrefs.filter((href) => /\d{2,}/u.test(href)).length,
+    });
+    const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
+    if (localLogPath) {
+      const directory = dirname(localLogPath);
+      await card.screenshot({ path: join(directory, "tangerino-card-identifier-not-found.png") }).catch(() => undefined);
+      await writeFile(join(directory, "tangerino-card-identifier-not-found.txt"), cardText, "utf8").catch(() => undefined);
+    }
+  }
+
   return {
-    // A interface mapeada não expõe protocolo nem data efetiva no cartão.
-    externalAdmissionId: await card.getAttribute("data-id").catch(() => null)
-      ?? await card.getAttribute("id").catch(() => null)
-      ?? undefined,
+    externalAdmissionId,
     rawStatus,
     stage,
     pendingReason: await readLabeledValue(card, TangerinoSelectors.pendingLabels),
