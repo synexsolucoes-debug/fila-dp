@@ -1,5 +1,6 @@
 import { getScopedD1 } from "@/db";
 import { ApiError, apiError } from "@/lib/fila-dp-api";
+import { runPendingPhotoOcrForCard } from "@/lib/admission-sheet-photo-ocr-service";
 import { prepareSheetAfterTransfer } from "@/lib/admission-sheet-service";
 import { log } from "@/lib/observability";
 import { prepareAuditEvent, recordActivity } from "@/lib/fila-dp-db";
@@ -77,6 +78,16 @@ export async function POST(request: Request, context: RouteContext) {
         errorName: cause instanceof Error ? cause.name : "UnknownError",
       });
     }
+
+    /* Mesma razão da ficha em PDF acima: os bytes das fotos já chegaram, e
+       esperar o próximo ciclo do cron para a primeira tentativa de OCR seria
+       atraso sem motivo. Uma foto que falhar aqui continua na fila do cron. */
+    await runPendingPhotoOcrForCard(d1, workspaceId, String(completed.card_id)).catch((cause) => {
+      log("warn", "admission.photo_ocr_after_transfer_failed", { workspaceId }, {
+        cardId: String(completed.card_id),
+        errorName: cause instanceof Error ? cause.name : "UnknownError",
+      });
+    });
 
     return Response.json({ completed: true, uploadedCount: Number(completed.uploaded_count), sheet });
   } catch (error) {

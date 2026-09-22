@@ -7,8 +7,8 @@ import {
   Maximize2, Minimize2, Pencil, RefreshCw, ShieldAlert, Trash2, TriangleAlert,
 } from "lucide-react";
 import {
-  FIELD_SOURCE_LABELS, requestSheet, type FieldProvenance, type RegistrationSheet, type SheetBlock,
-  type SheetField, type SheetPayload, type SheetPreparationState,
+  FIELD_SOURCE_LABELS, requestSheet, type FieldProvenance, type PhotoOcrSuggestion, type RegistrationSheet,
+  type SheetBlock, type SheetField, type SheetPayload, type SheetPreparationState,
 } from "./admission.api";
 import styles from "./admission.module.css";
 
@@ -54,7 +54,29 @@ function statusLabel(status: SheetField["status"]) {
   return status === "blank" ? "Em branco no registro" : "Não foi possível ler";
 }
 
-function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit, checked, onToggleChecked }: {
+type FieldSuggestion = { value: string; confidence: "ok" | "low"; sourceFilename: string };
+
+/**
+ * Uma foto pode render mais de uma sugestão para o mesmo campo (RG e CTPS
+ * às vezes repetem o CPF, por exemplo) — junta todas por campo, mais
+ * confiantes primeiro, para a tela oferecer sem escolher por quem transcreve.
+ */
+function suggestionsByField(photoSuggestions: readonly PhotoOcrSuggestion[] | undefined) {
+  const byField = new Map<string, FieldSuggestion[]>();
+  for (const photo of photoSuggestions ?? []) {
+    for (const [key, field] of Object.entries(photo.fields)) {
+      const list = byField.get(key) ?? [];
+      list.push({ value: field.value, confidence: field.confidence, sourceFilename: photo.sourceFilename });
+      byField.set(key, list);
+    }
+  }
+  for (const list of byField.values()) list.sort((first) => (first.confidence === "ok" ? -1 : 1));
+  return byField;
+}
+
+function FieldRow({
+  field, provenance, onCopy, copiedKey, canEdit, onEdit, checked, onToggleChecked, suggestions, onUseSuggestion,
+}: {
   field: SheetField;
   provenance: FieldProvenance | undefined;
   onCopy: (field: SheetField) => void;
@@ -63,6 +85,8 @@ function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit, check
   onEdit: (field: SheetField) => void;
   checked: boolean;
   onToggleChecked: (key: string) => void;
+  suggestions?: FieldSuggestion[];
+  onUseSuggestion: (field: SheetField, value: string) => void;
 }) {
   const ready = field.status === "ok";
   const source = provenance?.source ?? "document";
@@ -120,6 +144,23 @@ function FieldRow({ field, provenance, onCopy, copiedKey, canEdit, onEdit, check
         </span>
       </dd>
       {!ready && <p className={styles.note}>{field.note}</p>}
+      {/* Sugestão do OCR de foto: nunca preenche sozinha. O botão abre o mesmo
+          formulário de correção manual já usado para preencher à mão, só com
+          o valor lido pré-carregado — quem transcreve ainda confere e salva. */}
+      {!ready && canEdit && suggestions && suggestions.length > 0 && (
+        <div className={styles.note}>
+          {suggestions.map((suggestion) => (
+            <p key={`${suggestion.sourceFilename}:${suggestion.value}`}>
+              Sugestão lida em <b>{suggestion.sourceFilename}</b>: <b>{suggestion.value}</b>
+              {suggestion.confidence === "low" ? " (conferir com atenção — leitura de texto livre)" : ""}
+              {" "}
+              <button type="button" className={styles.copyField} onClick={() => onUseSuggestion(field, suggestion.value)}>
+                <Pencil aria-hidden="true" />Usar sugestão
+              </button>
+            </p>
+          ))}
+        </div>
+      )}
       {/* Corrigir não apaga o que o documento disse — mostra os dois. */}
       {provenance?.source === "manual" && provenance.documentValue && (
         <p className={styles.note}>
@@ -415,6 +456,8 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
     );
   }
 
+  const photoSuggestions = suggestionsByField(preparation?.photoSuggestions);
+
   return (
     <section className={styles.panel} data-expanded={expanded || undefined} aria-labelledby="registration-sheet-title">
       <header className={styles.header}>
@@ -520,6 +563,8 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
                   onToggleChecked={toggleChecked}
                   onCopy={(target) => void copy(target.value, target.key)}
                   onEdit={(target) => { setEditing(target); setDraft(target.value); }}
+                  suggestions={photoSuggestions.get(field.key)}
+                  onUseSuggestion={(target, value) => { setEditing(target); setDraft(value); }}
                 />
               ))}
             </dl>
@@ -592,12 +637,12 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
       )}
 
       {/* Os documentos que sustentam os campos, à mão.
-          
-          A ficha cadastral é a consolidação que a Sólides fez dos documentos da
-          pessoa — ler as fotos do RG e da CTPS por OCR produziria uma segunda
-          versão dos mesmos dados, menos confiável justamente nos dígitos que
-          não podem errar. O papel destes arquivos é a conferência, e para isso
-          eles precisam estar aqui, não na outra aba. */}
+
+          A leitura por OCR das fotos (RG, CPF, CTPS) vira sugestão nos campos
+          em branco acima — nunca substitui o valor sozinha, porque o layout
+          de uma foto varia e o OCR erra mais que a leitura do PDF. O papel
+          destes arquivos continua sendo a conferência visual, e por isso eles
+          seguem aqui, e não em outra aba. */}
       {sheet && documents.length > 0 && (
         <section className={styles.documents}>
           <h4>Documentos desta pessoa</h4>

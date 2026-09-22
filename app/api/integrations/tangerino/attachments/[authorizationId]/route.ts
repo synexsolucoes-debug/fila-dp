@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { getScopedD1 } from "@/db";
 import { ApiError, apiError } from "@/lib/fila-dp-api";
+import { enqueuePhotoOcr } from "@/lib/admission-sheet-photo-ocr-service";
 import { MAX_CARD_ATTACHMENT_SIZE, storeCardAttachment } from "@/lib/card-attachments";
 import { verifyTangerinoWorkerRequest } from "@/lib/tangerino/worker-auth";
 
@@ -46,6 +47,13 @@ export async function POST(request: Request, context: RouteContext) {
         SET uploaded_count = uploaded_count + 1, updated_at = CURRENT_TIMESTAMP
         WHERE workspace_id = ? AND id = ? AND state = 'RUNNING'`)
         .bind(workspaceId, authorizationId).run();
+      // Enfileira o OCR agora; a tentativa de verdade (chamada à rede) acontece
+      // na conclusão da transferência, não aqui — um upload não deve esperar
+      // outro arquivo terminar de ser lido.
+      await enqueuePhotoOcr(d1, {
+        workspaceId, cardId: String(authorization.card_id),
+        attachment: { id: stored.attachmentId, filename: file.name, contentType: file.type },
+      }).catch(() => undefined);
     }
     return Response.json({ attachmentId: stored.attachmentId, created: stored.created });
   } catch (error) {

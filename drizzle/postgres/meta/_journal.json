@@ -666,6 +666,13 @@
       "when": 1790042400000,
       "tag": "0092_tangerino_attachment_auto_authorize",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1790046000000,
+      "tag": "0093_admission_sheet_photo_ocr",
+      "breakpoints": true
     }
   ]
 }
