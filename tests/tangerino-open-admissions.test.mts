@@ -1,0 +1,100 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import { MockTangerinoSession } from "../worker/tangerino/mock-session.ts";
+import { isContractDataStage } from "../lib/tangerino/parser.ts";
+
+/**
+ * A descoberta inverte o sentido do agente.
+ *
+ * O fluxo antigo partia de `fdp_employees` e ia conferir a admissão na origem —
+ * e por isso nunca achava quem está sendo admitido, que é justamente quem ainda
+ * não existe no ERP. Os testes aqui guardam a inversão e os limites dela.
+ */
+
+test("a sessão lista admissões sem precisar de um nome", async () => {
+  // Pesquisar exige um nome em mãos. O nome de quem está sendo admitido não
+  // está em lugar nenhum do Vinculato — é a informação que falta.
+  const session = new MockTangerinoSession("multiple_matches");
+  await session.ensureAuthenticated();
+  await session.openAdmissions();
+  const hits = await session.listAdmissions();
+
+  assert.equal(hits.length, 2);
+  assert.deepEqual(session.calls, ["ensureAuthenticated", "openAdmissions", "listAdmissions"]);
+  assert.ok(hits.every((hit) => hit.label.length > 0), "cada cartão precisa trazer o nome");
+});
+
+test("lista vazia não é erro", async () => {
+  // Dia sem admissão nova é o caso comum, não uma falha do agente.
+  const session = new MockTangerinoSession("not_found");
+  assert.deepEqual(await session.listAdmissions(), []);
+});
+
+test("só a etapa de dados contratuais vira demanda", () => {
+  // Abrir demanda antes disso colocaria na fila do DP alguém que ainda está
+  // enviando documento — trabalho que não dá para fazer.
+  assert.equal(isContractDataStage("Dados contratuais"), true);
+  assert.equal(isContractDataStage("Preencher dados contratuais"), true);
+  assert.equal(isContractDataStage("Aguardando documentação"), false);
+  assert.equal(isContractDataStage("Aprovar documentos"), false);
+  assert.equal(isContractDataStage("Concluída"), false);
+});
+
+test("a descoberta tem teto por execução", async () => {
+  /* Cada cartão aberto é uma navegação contra o sistema de outra empresa, e um
+     lote sem limite viraria enxurrada. O teto é lido da fonte porque importar
+     o módulo traria o acesso ao banco junto, e este arquivo roda sem banco. */
+  const fonte = await readFile(new URL("../lib/tangerino/discovery.ts", import.meta.url), "utf8");
+  const teto = /export const DISCOVERY_BATCH_LIMIT = (\d+);/u.exec(fonte);
+  assert.ok(teto, "o teto precisa existir e ser explícito");
+  assert.ok(Number(teto[1]) > 0 && Number(teto[1]) <= 25);
+  assert.match(fonte, /Math\.min\(Number\(options\.limit\) \|\| DISCOVERY_BATCH_LIMIT, DISCOVERY_BATCH_LIMIT\)/u);
+});
+
+test("a demanda descoberta não inventa colaborador nem empresa", async () => {
+  const fonte = await readFile(new URL("../lib/tangerino/open-admissions.ts", import.meta.url), "utf8");
+  // A lista de colaboradores é espelho do ERP: criar alguém lá antes do
+  // cadastro transformaria toda conferência entre os dois sistemas em
+  // divergência falsa.
+  assert.doesNotMatch(fonte, /INSERT INTO fdp_employees/u);
+  // E o cartão nasce sem employee_id: o campo existe e fica nulo de propósito.
+  assert.match(fonte, /`employee_id` e `company_id` ficam nulos de propósito/u);
+  // Empresa só quando não há dúvida — configurada ou única do grupo.
+  assert.match(fonte, /companies\.length === 1 \? companies\[0\] : null/u);
+});
+
+test("descobrir a mesma admissão de novo não abre uma segunda demanda", async () => {
+  const fonte = await readFile(new URL("../lib/tangerino/open-admissions.ts", import.meta.url), "utf8");
+  // Duas proteções, e as duas importam: o índice único no processo da origem, e
+  // o evento de integração com chave derivada. Sem elas, a varredura de hora em
+  // hora encheria a fila do DP com a mesma pessoa.
+  assert.match(fonte, /ON CONFLICT \("workspace_id", "integration_id", "external_admission_id"\) DO UPDATE/u);
+  assert.match(fonte, /open-admission-contract-data:\$\{externalAdmissionId\}:\$\{admissionDate\}/u);
+  assert.match(fonte, /status === "processed" && event\.event\.result_id/u);
+});
+
+test("identificador instável não vira demanda", async () => {
+  // `card:0` serve para clicar nesta leitura e para mais nada. Gravá-lo faria a
+  // execução seguinte tratar dois cartões diferentes como a mesma admissão.
+  const fonte = await readFile(new URL("../lib/tangerino/discovery.ts", import.meta.url), "utf8");
+  assert.match(fonte, /isStableExternalAdmissionId\(candidate\)/u);
+  assert.match(fonte, /summary\.skipped \+= 1/u);
+});
+
+test("a descoberta roda depois da fila pedida por pessoas", async () => {
+  // Abrir o navegador para listar enquanto há consulta esperando atrasaria
+  // quem está na frente de uma tela aguardando resposta.
+  const runner = await readFile(new URL("../worker/tangerino/runner.ts", import.meta.url), "utf8");
+  assert.match(runner, /if \(!shouldStop\(\) && handled === 0\)/u);
+  // E uma falha na listagem não derruba a varredura já concluída — exceto o
+  // desafio de autenticação, que precisa chegar ao painel.
+  assert.match(runner, /if \(code === "AUTHENTICATION_REQUIRED"\) throw error/u);
+});
+
+test("a migração explica por que a admissão não vira colaborador", async () => {
+  const sql = await readFile(new URL("../drizzle/postgres/0090_tangerino_open_admissions.sql", import.meta.url), "utf8");
+  assert.match(sql, /FORCE ROW LEVEL SECURITY/u, "a tabela precisa do isolamento por workspace");
+  assert.match(sql, /fdp_tangerino_open_admissions_external_uq/u);
+  assert.match(sql, /espelho do ERP/u);
+});
