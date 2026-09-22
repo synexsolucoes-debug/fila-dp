@@ -278,6 +278,34 @@ test("a leitura de status/etapa do cartão ganha reforço quando a classe do val
   assert.match(corpo, /container\.replace\(label, ""\)\.replace\(\/\^\[\\s:–—-\]\+\/u, ""\)\.trim\(\)/u);
 });
 
+test("a leitura do cartão aceita o formato real de rótulo e valor em linhas consecutivas", async () => {
+  const { hasCardTextLabel, readCardTextValue } = await import("../lib/tangerino/card-text.ts");
+  const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
+  // Recorte anonimizado do dump local de 22/09/2026. Espaços e linhas vazias
+  // são preservados porque foram justamente o que tornou o diagnóstico
+  // anterior enganoso; nenhum dado de candidato entra na fixture.
+  const cardText = `Função: Assistente
+
+Admissão concluída
+ Data limite para envio dos documentos
+edit
+Vencida
+ Status da admissão
+
+ Concluído
+
+ Status da etapa
+
+Admissão concluída
+
+Página do colaborador`;
+
+  assert.equal(readCardTextValue(cardText, TangerinoSelectors.statusLabels), "Concluído");
+  assert.equal(readCardTextValue(cardText, TangerinoSelectors.stageLabels), "Admissão concluída");
+  assert.equal(hasCardTextLabel(cardText, TangerinoSelectors.statusLabels), true);
+  assert.equal(hasCardTextLabel(cardText, TangerinoSelectors.stageLabels), true);
+});
+
 test("quando situação ou etapa não são achadas, o cartão vira evidência — sem PII no log", async () => {
   /* Duas rodadas reais devolveram a mesma falha mesmo depois do reforço em
      readCardValue — sinal de que o próprio rótulo não está sendo achado como
@@ -291,7 +319,7 @@ test("quando situação ou etapa não são achadas, o cartão vira evidência �
   const bloco = fonte.slice(fonte.indexOf("if (!rawStatus || !stage) {"), fonte.indexOf("return {\n    // A interface mapeada"));
   assert.match(bloco, /rawStatusFound: Boolean\(rawStatus\), stageFound: Boolean\(stage\)/u);
   assert.match(bloco, /cardTextLength: cardText\.length/u);
-  assert.match(bloco, /statusWordLooselyPresent: hasAny\(cardText, TangerinoSelectors\.statusLabels\)/u);
+  assert.match(bloco, /statusWordLooselyPresent: hasCardTextLabel\(cardText, TangerinoSelectors\.statusLabels\)/u);
   // O log() da telemetria só recebe cardText.length — nunca cardText inteiro.
   const chamadaDoLog = bloco.slice(bloco.indexOf('log("warn"'), bloco.indexOf("});") + 3);
   assert.doesNotMatch(chamadaDoLog, /:\s*cardText\s*[,}]/u, "o texto do cartão não pode ir para o log estruturado");

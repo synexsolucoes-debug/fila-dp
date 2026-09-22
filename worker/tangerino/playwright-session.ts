@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
+import { hasCardTextLabel, readCardTextValue } from "../../lib/tangerino/card-text.ts";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { tangerinoErrors, TangerinoAgentError } from "../../lib/tangerino/errors.ts";
 import { tangerinoAdmissionsEntryUrls, tangerinoAdmissionsOverviewUrl, tangerinoBrowserHosts } from "../../lib/tangerino/hosts.ts";
@@ -81,8 +82,8 @@ export async function readLabeledValue(page: TangerinoLocatorScope, labels: read
   return undefined;
 }
 
-/** Lê o `p.info-status` que está no mesmo bloco do rótulo do cartão. */
-async function readCardValue(card: Locator, labels: readonly RegExp[]): Promise<string | undefined> {
+/** Lê o valor que está no mesmo bloco — ou na linha seguinte — do rótulo. */
+async function readCardValue(card: Locator, labels: readonly RegExp[], cardText: string): Promise<string | undefined> {
   for (const label of labels) {
     const marker = card.getByText(label).first();
     if (!await isVisible(marker)) continue;
@@ -101,7 +102,12 @@ async function readCardValue(card: Locator, labels: readonly RegExp[]): Promise<
     const stripped = container.replace(label, "").replace(/^[\s:–—-]+/u, "").trim();
     if (stripped && stripped.length <= 200) return stripped;
   }
-  return undefined;
+  /* Evidência real de 22/09/2026: o cartão completo estava certo e trazia os
+     pares "Status da admissão"/"Concluído" e "Status da etapa"/"Admissão
+     concluída" em linhas consecutivas, embora `getByText` não encontrasse um
+     nó isolado para os rótulos. Lemos exatamente esse formato observado, sem
+     acrescentar seletor CSS inventado. */
+  return readCardTextValue(cardText, labels);
 }
 
 /**
@@ -148,14 +154,13 @@ export async function readAdmissionCard(card: Locator): Promise<AdmissionSnapsho
   const title = card.locator(TangerinoSelectors.resultNameCss).first();
   const displayName = await title.getAttribute("title").catch(() => null)
     ?? await title.innerText().catch(() => "");
-  const rawStatus = await readCardValue(card, TangerinoSelectors.statusLabels);
-  const stage = await readCardValue(card, TangerinoSelectors.stageLabels);
+  const cardText = await card.innerText().catch(() => "");
+  const rawStatus = await readCardValue(card, TangerinoSelectors.statusLabels, cardText);
+  const stage = await readCardValue(card, TangerinoSelectors.stageLabels, cardText);
 
-  /* O reforço em `readCardValue` só ajuda quando o RÓTULO é achado e é só o
-   * valor ao lado que muda de classe. Duas rodadas reais devolveram a mesma
-   * falha ("situação da admissão" não encontrada) mesmo depois desse reforço
-   * — sinal de que o rótulo em si não está sendo achado como nó de texto
-   * isolado, e não dá para saber por quê sem olhar o cartão de verdade.
+  /* `readCardValue` tenta primeiro o DOM conhecido e depois o par de linhas
+   * confirmado no dump local. Se os dois falharem, este diagnóstico separa
+   * ausência real de mudança na estrutura, sem revelar o conteúdo do cartão.
    *
    * Nada de PII vai para o log estruturado — ele é o que a pessoa que opera
    * cola direto nesta conversa. `looselyPresent` só diz se a PALAVRA aparece
@@ -166,12 +171,11 @@ export async function readAdmissionCard(card: Locator): Promise<AdmissionSnapsho
    * e só quando `FDP_TANGERINO_LOCAL_LOG_PATH` está definido.
    */
   if (!rawStatus || !stage) {
-    const cardText = await card.innerText().catch(() => "");
     log("warn", "tangerino.card_field_not_found", {}, {
       rawStatusFound: Boolean(rawStatus), stageFound: Boolean(stage),
       cardTextLength: cardText.length,
-      statusWordLooselyPresent: hasAny(cardText, TangerinoSelectors.statusLabels),
-      stageWordLooselyPresent: hasAny(cardText, TangerinoSelectors.stageLabels),
+      statusWordLooselyPresent: hasCardTextLabel(cardText, TangerinoSelectors.statusLabels),
+      stageWordLooselyPresent: hasCardTextLabel(cardText, TangerinoSelectors.stageLabels),
     });
     const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
     if (localLogPath) {
