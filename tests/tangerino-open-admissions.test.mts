@@ -437,3 +437,70 @@ test("sem nenhuma fonte técnica, o nome completo vira identificador — decisã
   // O identificador nasce do que já estava em memória — nenhuma navegação, nenhum clique novo.
   assert.doesNotMatch(bloco, /\.click\(/u);
 });
+
+/**
+ * Descoberta funcionando em produção (PR #167: recorded:5, demandsCreated:5)
+ * expôs o próximo problema: o resto do caminho — autorizar anexos, baixar
+ * documentos, montar a ficha — já existe e funciona, mas foi construído
+ * assumindo que toda demanda tem employee_id. A demanda da descoberta nasce
+ * sem colaborador de propósito (é por isso que ela existe), e isso quebra a
+ * cadeia em quatro pontos: a coluna não aceita NULL, a rota de autorização
+ * não reconhece o evento novo, o guard do worker recusa antes de tentar
+ * buscar por nome, e o termo de busca tentaria digitar o prefixo "nome:"
+ * literal no campo da Sólides.
+ */
+
+test("a coluna employee_id da autorização de anexos aceita nulo", async () => {
+  const fonte = await readFile(new URL("../drizzle/postgres/0091_tangerino_attachment_employee_optional.sql", import.meta.url), "utf8");
+  assert.match(fonte, /ALTER TABLE "fdp_tangerino_attachment_authorizations" ALTER COLUMN "employee_id" DROP NOT NULL;/u);
+});
+
+test("a rota de autorização reconhece a demanda da descoberta, sem exigir employee_id", async () => {
+  const fonte = await readFile(new URL("../app/api/cards/[id]/solides-attachments/authorize/route.ts", import.meta.url), "utf8");
+  assert.match(fonte, /employee_id: string \| null;/u);
+  assert.match(fonte, /admission\.open_contract_data_ready/u);
+  // O filtro final não pode mais exigir employee_id — só quem a origem 1/2 já garante.
+  assert.doesNotMatch(fonte, /length\(COALESCE\(employee_id, ''\)\) > 0/u);
+  assert.match(fonte, /WHERE length\(COALESCE\(integration_id, ''\)\) > 0/u);
+});
+
+test("o worker de anexos aceita nome extraído do título da demanda, não só empregado ou ID numérico", async () => {
+  const fonte = await readFile(new URL("../lib/tangerino/attachments-worker.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(fonte.indexOf("const [employee, credential, integration]"), fonte.indexOf("const config = tangerinoAgentConfig();"));
+  assert.match(bloco, /const legacyName = employee \? "" : legacyAdmissionNameFromCard\(claimed\.card_title, claimed\.card_description\);/u);
+  assert.match(bloco, /if \(!employee && !legacyName && !\/\^\[1-9\]\[0-9\]\{0,119\}\$\/u\.test\(claimed\.external_admission_id\)\) \{/u);
+});
+
+test("o termo de busca nunca digita o prefixo nome: no campo da Sólides", async () => {
+  /* `nome:Fulano de Tal` é estável o bastante para gravar e desduplicar
+     (PR #164) — não para pesquisar: datilografado no campo da Sólides, o
+     prefixo por si só já garante zero resultado. */
+  const fonte = await readFile(new URL("../lib/tangerino/parser.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(
+    fonte.indexOf("export function admissionSearchTerm"),
+    fonte.indexOf("export function legacyAdmissionNameFromCard"),
+  );
+  assert.match(bloco, /!rawExternalId\.startsWith\("nome:"\)/u);
+
+  const { admissionSearchTerm } = await import("../lib/tangerino/parser.ts");
+  assert.equal(
+    admissionSearchTerm({ externalAdmissionId: "nome:Fulano de Tal", registrationNumber: "", fullName: "Fulano de Tal" }),
+    "Fulano de Tal",
+  );
+  assert.equal(
+    admissionSearchTerm({ externalAdmissionId: "ADM-4711", registrationNumber: "", fullName: "Fulano de Tal" }),
+    "ADM-4711",
+  );
+});
+
+test("o download da ficha tenta extrair o ID pelo link do cartão da busca antes de desistir", async () => {
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(
+    fonte.indexOf("async downloadAdmissionArtifacts"),
+    fonte.indexOf("await mkdir(input.targetDirectory"),
+  );
+  assert.match(bloco, /let admissionId = input\.externalAdmissionId\.trim\(\);/u);
+  assert.match(bloco, /const extracted = this\.selectedAdmissionCard \? await extractFichaColaboradorId\(this\.selectedAdmissionCard\) : null;/u);
+  assert.match(bloco, /if \(!extracted\) throw tangerinoErrors\.uiChanged\("download dos anexos", "identificador numérico da admissão"\);/u);
+  assert.match(bloco, /admissionId = extracted;/u);
+});

@@ -8,7 +8,7 @@ import { requireCapability } from "@/lib/authorization";
 type RouteContext = { params: Promise<{ id: string }> };
 
 type DemandSource = {
-  employee_id: string;
+  employee_id: string | null;
   integration_id: string;
   external_admission_id: string;
 };
@@ -32,6 +32,11 @@ export async function POST(_request: Request, context: RouteContext) {
     // O destino não vem do navegador. Ele é reconstituído do evento que criou
     // o cartão; assim um pedido adulterado não consegue apontar para outra
     // pessoa ou para outro processo da Sólides.
+    //
+    // A terceira origem é a descoberta (§90/§91): a admissão ainda não tem
+    // colaborador vinculado — é por isso que a demanda existe —, então
+    // employee_id nasce nulo de propósito. O worker já sabe pesquisar pelo
+    // nome da própria demanda quando não há colaborador (`attachments-worker`).
     const source = await d1.prepare(`SELECT employee_id, integration_id, external_admission_id FROM (
         SELECT 1 AS priority,
           event.payload_json->>'employeeId' AS employee_id,
@@ -53,12 +58,20 @@ export async function POST(_request: Request, context: RouteContext) {
          AND consultation.id = (activity.payload_json::jsonb)->>'consultationId'
         WHERE activity.workspace_id = ? AND activity.card_id = ?
           AND activity.event_type = 'tangerino.erp_demand_created'
+        UNION ALL
+        SELECT 3 AS priority,
+          NULL AS employee_id,
+          event.integration_id,
+          event.payload_json->>'externalAdmissionId' AS external_admission_id,
+          event.processed_at AS linked_at
+        FROM fdp_integration_events event
+        WHERE event.workspace_id = ? AND event.result_type = 'card' AND event.result_id = ?
+          AND event.connector = 'tangerino_browser' AND event.event_type = 'admission.open_contract_data_ready'
       ) source
-      WHERE length(COALESCE(employee_id, '')) > 0
-        AND length(COALESCE(integration_id, '')) > 0
+      WHERE length(COALESCE(integration_id, '')) > 0
         AND length(COALESCE(external_admission_id, '')) > 0
       ORDER BY priority, linked_at DESC LIMIT 1`)
-      .bind(workspace.id, cardId, workspace.id, cardId).first<DemandSource>();
+      .bind(workspace.id, cardId, workspace.id, cardId, workspace.id, cardId).first<DemandSource>();
     if (!source) {
       throw new ApiError(409, "TANGERINO_DEMAND_LINK_MISSING",
         "Esta demanda não possui um vínculo verificável com a admissão da Sólides.");
