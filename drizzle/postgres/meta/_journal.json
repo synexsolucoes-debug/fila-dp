@@ -659,6 +659,13 @@
       "when": 1790038800000,
       "tag": "0091_tangerino_attachment_employee_optional",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1790042400000,
+      "tag": "0092_tangerino_attachment_auto_authorize",
+      "breakpoints": true
     }
   ]
 }
