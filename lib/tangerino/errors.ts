@@ -99,6 +99,15 @@ export const tangerinoErrors = {
  */
 export function safeTangerinoError(error: unknown): TangerinoAgentError {
   if (error instanceof TangerinoAgentError) return error;
+  const originalCode = error && typeof error === "object" && "code" in error
+    ? String((error as { code: unknown }).code) : "";
+  if (["VAULT_KEY_VERSION_MISSING", "VAULT_NOT_CONFIGURED", "VAULT_KEYS_INVALID", "VAULT_KEY_INVALID"].includes(originalCode)) {
+    return new TangerinoAgentError(
+      "TANGERINO_VAULT_CONFIGURATION", "CONSULTATION_FAILED",
+      "A configuração local do cofre do Tangerino precisa ser corrigida antes de continuar.",
+      { requiresUserAction: true },
+    );
+  }
   const raw = error instanceof Error ? error.message : "Falha inesperada no agente Tangerino.";
   const sanitized = raw
     /* `Authorization: Bearer abc.def` tem o segredo na SEGUNDA palavra. Um padrão
