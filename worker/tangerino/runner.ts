@@ -21,54 +21,71 @@ export function assertTangerinoWorkerConfiguration(options: WorkerConfigurationO
 async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: () => boolean) {
   const d1 = getScopedD1({ workspaceId, userId: null });
   let handled = 0;
-  while (!shouldStop() && handled < maxJobs) {
-    /* O teste de conexão vem primeiro: ele é curto, desbloqueia o setup e não
-       deve esperar atrás de uma varredura de dezenas de colaboradores. */
-    const healthCheck = await processNextTangerinoHealthCheck(
-      d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
-    );
-    const attachmentTransfer = healthCheck ? null : await runNextAttachmentAuthorization(
-      d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
-    );
-    const result = healthCheck ?? attachmentTransfer ?? await runNextConsultation(
-      d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
-    );
-    if (!result) break;
-    handled += 1;
-  }
+  let processedJobs = 0;
+  const shared = { session: null as PlaywrightTangerinoSession | null };
+  const createSession = async () => {
+    shared.session ??= await PlaywrightTangerinoSession.create({ workspaceId, deferClose: true });
+    return shared.session;
+  };
 
-  /* A descoberta vem depois da fila, e não antes: o que uma pessoa pediu tem
-     precedência sobre a varredura automática. E só quando a fila secou — abrir
-     o navegador para listar admissões enquanto há consulta esperando atrasaria
-     justamente quem está na frente de uma tela aguardando resposta. */
-  if (!shouldStop() && handled === 0) {
-    try {
-      const discovery = await discoverOpenAdmissions(
-        d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
-      );
-      if (discovery) handled += discovery.demandsCreated + discovery.attachmentsBackfilled;
-    } catch (error) {
-      /* Uma descoberta que falha não pode derrubar a varredura: a fila pedida
-         por pessoas já foi drenada acima, e perder isso por causa de uma
-         listagem seria trocar o certo pelo incerto. */
-      const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
-      if (code === "AUTHENTICATION_REQUIRED") throw error;
-      /* A mensagem, não só o código — é ela que diz QUAL etapa e QUAL elemento
-       * faltaram (`uiChanged` embute os dois: "a etapa \"X\" não encontrou
-       * \"Y\""). "TANGERINO_UI_CHANGED" sozinho é o mesmo código para mais de
-       * dez pontos de falha diferentes no cliente de navegador — sem a
-       * mensagem, cada leitura deste log é uma reconstrução às cegas de qual
-       * deles disparou. `safeTangerinoError` já expurga segredo de sessão
-       * antes de qualquer coisa chegar aqui.
-       */
-      const safe = safeTangerinoError(error);
-      log("warn", "tangerino.discovery_failed", { workspaceId }, {
-        errorName: error instanceof Error ? error.name : "UnknownError", errorCode: code.slice(0, 120),
-        errorMessage: safe.message,
-      });
+  const drainQueuedWork = async () => {
+    let drained = 0;
+    while (!shouldStop() && processedJobs < maxJobs) {
+      /* O teste de conexão vem primeiro: ele é curto, desbloqueia o setup e não
+         deve esperar atrás de uma varredura de dezenas de colaboradores. */
+      const healthCheck = await processNextTangerinoHealthCheck(d1, workspaceId, createSession);
+      const attachmentTransfer = healthCheck ? null : await runNextAttachmentAuthorization(d1, workspaceId, createSession);
+      const result = healthCheck ?? attachmentTransfer ?? await runNextConsultation(d1, workspaceId, createSession);
+      if (!result) break;
+      handled += 1;
+      processedJobs += 1;
+      drained += 1;
     }
+    return drained;
+  };
+
+  try {
+    await drainQueuedWork();
+
+    /* A descoberta vem depois da fila, e não antes: o que uma pessoa pediu tem
+       precedência sobre a varredura automática. A mesma sessão permanece viva
+       até o fim deste sweep; abrir e fechar Chromium para cada etapa era o que
+       reapresentava CAPTCHA mesmo com os cookies persistidos. */
+    if (!shouldStop() && handled === 0) {
+      try {
+        const discovery = await discoverOpenAdmissions(d1, workspaceId, createSession);
+        if (discovery) {
+          handled += discovery.demandsCreated + discovery.attachmentsBackfilled;
+          /* Uma demanda descoberta já nasce com anexos autorizados. Drená-la
+           * agora reaproveita a sessão que acabou de listar os cartões, em vez
+           * de esperar cinco segundos e abrir outro navegador. */
+          if (discovery.demandsCreated + discovery.attachmentsBackfilled > 0) await drainQueuedWork();
+        }
+      } catch (error) {
+        /* Uma descoberta que falha não pode derrubar a varredura: a fila pedida
+           por pessoas já foi drenada acima, e perder isso por causa de uma
+           listagem seria trocar o certo pelo incerto. */
+        const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+        if (code === "AUTHENTICATION_REQUIRED") throw error;
+        /* A mensagem, não só o código — é ela que diz QUAL etapa e QUAL elemento
+         * faltaram (`uiChanged` embute os dois: "a etapa \"X\" não encontrou
+         * \"Y\""). "TANGERINO_UI_CHANGED" sozinho é o mesmo código para mais de
+         * dez pontos de falha diferentes no cliente de navegador — sem a
+         * mensagem, cada leitura deste log é uma reconstrução às cegas de qual
+         * deles disparou. `safeTangerinoError` já expurga segredo de sessão
+         * antes de qualquer coisa chegar aqui.
+         */
+        const safe = safeTangerinoError(error);
+        log("warn", "tangerino.discovery_failed", { workspaceId }, {
+          errorName: error instanceof Error ? error.name : "UnknownError", errorCode: code.slice(0, 120),
+          errorMessage: safe.message,
+        });
+      }
+    }
+    return handled;
+  } finally {
+    await shared.session?.dispose().catch(() => undefined);
   }
-  return handled;
 }
 
 /**
@@ -108,4 +125,3 @@ export async function sweepTangerinoQueue(options: {
   }
   return { workspaces: workspaces.results.length, handled };
 }
-
