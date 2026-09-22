@@ -79,7 +79,18 @@ export const TangerinoSelectors = Object.freeze({
    */
   admissionsParentCategories: ["Empregador", "Colaboradores", "Recrutamento e seleção", "Admissão e demissão"],
   admissionsFrameCss: 'iframe[src*="admissao-demissao.tangerino.com.br"]',
-  admissionsPageMarkers: [/^admiss[ãa]o$/iu, /^todas admiss[õo]es$/iu],
+  /**
+   * "Todas admissões" vem primeiro de propósito.
+   *
+   * Uma conta real mostrou o marcador batendo com "Admissão" sozinho antes de
+   * a navegação sequer sair da tela inicial — o texto do item de MENU também
+   * casa com esse padrão, então ele prova só que a palavra existe em algum
+   * lugar da página, não que a lista está na tela. "Todas admissões" é o nome
+   * de uma aba real da lista (confirmado no print do operador, com contagem
+   * ao lado — "Todas admissões 84") e não aparece em menu nenhum. `firstVisible`
+   * para no primeiro que encontrar, então a ordem decide qual prova é aceita.
+   */
+  admissionsPageMarkers: [/^todas admiss[õo]es$/iu, /^admiss[ãa]o$/iu],
 
   /** Pesquisa do colaborador dentro da área de admissão. */
   searchPlaceholders: [/^digite o nome$/iu],
