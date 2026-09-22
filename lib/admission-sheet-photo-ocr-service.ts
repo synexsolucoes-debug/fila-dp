@@ -2,7 +2,7 @@
  * O preparo do OCR de fotos, fora da tela — mesmo desenho de `admission-sheet-service.ts`.
  *
  * Entre "a foto chegou" e "a sugestão está pronta" existe um intervalo (a
- * chamada ao Google Vision não é instantânea), e a tela precisa dizer o que
+ * chamada ao provedor de OCR não é instantânea), e a tela precisa dizer o que
  * está acontecendo. Três estados pela mesma razão da ficha em PDF:
  *
  *   `pending` — enfileirada, ainda não lida.

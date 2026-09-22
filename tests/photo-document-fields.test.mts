@@ -14,7 +14,7 @@ import { sliceByLabels } from "../lib/label-anchored-text.ts";
  * (mais de um CPF/PIS válido no mesmo texto) não produz sugestão nenhuma, e
  * que nome nunca sai com confiança alta por ser texto livre.
  *
- * O que eles NÃO provam — que o Google Vision devolve texto nesse formato
+ * O que eles NÃO provam — que o provedor de OCR devolve texto nesse formato
  * para uma foto real de RG ou CTPS. Isso só uma foto real responde.
  */
 
