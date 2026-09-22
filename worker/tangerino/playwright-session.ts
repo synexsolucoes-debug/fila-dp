@@ -824,8 +824,16 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
      * não um botão de ação — e só afeta esta sessão (`listAdmissions` só é
      * chamado pela descoberta; a consulta nomeada usa `searchAdmission`,
      * numa sessão própria). */
+    /* `isVisible` sozinho (1.5s) devolveu falso numa execução real, no mesmo
+     * instante em que a barra de abas ainda não tinha renderizado — a prova
+     * veio do diagnóstico logo abaixo, que a encontrou poucos segundos depois,
+     * já com os cartões carregados. `waitFor` dá à aba o mesmo tipo de tempo
+     * que já é dado ao primeiro cartão, em vez de decidir cedo demais que ela
+     * não existe. */
     const contractDataTab = frame.getByText(TangerinoSelectors.admissionsContractDataTab).first();
-    const contractDataTabClicked = await isVisible(contractDataTab);
+    const contractDataTabClicked = await contractDataTab.waitFor({
+      state: "visible", timeout: Math.min(10_000, tangerinoAgentConfig().timeoutMs),
+    }).then(() => true).catch(() => false);
     if (contractDataTabClicked) {
       await contractDataTab.click().catch(() => undefined);
       await page.waitForTimeout(2_500);

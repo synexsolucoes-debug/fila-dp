@@ -275,13 +275,29 @@ test("a descoberta clica na aba Dados contratuais em vez de confiar na aba que f
     fonte.indexOf("let hits = await collectSearchHits(frame);"),
   );
   assert.match(bloco, /TangerinoSelectors\.admissionsContractDataTab/u);
-  assert.match(bloco, /const contractDataTabClicked = await isVisible\(contractDataTab\);/u);
   assert.match(bloco, /if \(contractDataTabClicked\) \{/u);
   assert.match(bloco, /await contractDataTab\.click\(\)\.catch\(\(\) => undefined\);/u);
 
   const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
   assert.equal(TangerinoSelectors.admissionsContractDataTab.test("Dados contratuais 5"), true);
   assert.equal(TangerinoSelectors.admissionsContractDataTab.test("Concluídas 63"), false);
+});
+
+test("o clique na aba espera a barra renderizar, em vez de decidir em 1.5s que ela não existe", async () => {
+  /* Uma execução real devolveu contractDataTabClicked:false no exato momento
+     em que a barra de abas ainda não tinha renderizado — o diagnóstico logo
+     abaixo, que roda alguns segundos depois (já com os cartões carregados),
+     achou "Dados contratuais" visível com o MESMO padrão. `isVisible` sozinho
+     usa 1.5s fixos; o cartão já ganha um `waitFor` com o teto configurado, e
+     a aba passa a ganhar o mesmo tratamento. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(
+    fonte.indexOf("const contractDataTab = frame.getByText"),
+    fonte.indexOf("let hits = await collectSearchHits(frame);"),
+  );
+  assert.match(bloco, /const contractDataTabClicked = await contractDataTab\.waitFor\(\{/u);
+  assert.match(bloco, /state: "visible", timeout: Math\.min\(10_000, tangerinoAgentConfig\(\)\.timeoutMs\),/u);
+  assert.match(bloco, /\}\)\.then\(\(\) => true\)\.catch\(\(\) => false\);/u);
 });
 
 test("depois de chegar na Admissão, o worker ainda precisa clicar em Visão Geral", async () => {
