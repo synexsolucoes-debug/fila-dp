@@ -1001,9 +1001,19 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
    * download; nenhum seletor genérico de ação entra neste caminho.
    */
   async downloadAdmissionArtifacts(input: { externalAdmissionId: string; targetDirectory: string }) {
-    const admissionId = input.externalAdmissionId.trim();
+    let admissionId = input.externalAdmissionId.trim();
     if (!/^\d{1,20}$/u.test(admissionId)) {
-      throw tangerinoErrors.uiChanged("download dos anexos", "identificador numérico da admissão");
+      /* Motivo, não invenção: nesta conta o cartão da lista não expõe
+       * protocolo (PRs #163/#164), então `externalAdmissionId` pode ser o
+       * nome prefixado (`nome:...`), não um identificador real do Tangerino.
+       * Antes de desistir, tenta o mesmo link para a ficha que
+       * `readAdmissionCard` já procura, agora no cartão que a busca por
+       * nome selecionou — um resultado de busca pode expor mais do que a
+       * lista sem filtro expunha. Se também faltar, o erro abaixo continua
+       * claro sobre o que falta. */
+      const extracted = this.selectedAdmissionCard ? await extractFichaColaboradorId(this.selectedAdmissionCard) : null;
+      if (!extracted) throw tangerinoErrors.uiChanged("download dos anexos", "identificador numérico da admissão");
+      admissionId = extracted;
     }
     if (!this.selectedAdmissionCard && !this.directAdmission) {
       throw tangerinoErrors.uiChanged("download dos anexos", "cartão selecionado");

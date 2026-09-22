@@ -237,7 +237,14 @@ export async function runNextAttachmentAuthorization(
         WHERE workspace_id = ? AND id = ? AND channel = 'tangerino_browser'`)
         .bind(workspaceId, claimed.integration_id).first<{ id: string }>(),
     ]);
-    if (!employee && !/^[1-9][0-9]{0,119}$/u.test(claimed.external_admission_id)) {
+    /* Sem colaborador, ainda há dois caminhos: um identificador numérico direto
+     * (ficha antiga já vinculada), ou o nome extraído do próprio título da
+     * demanda — a mesma extração que a linha `fullName` logo abaixo já usa
+     * para quem nunca teve `employee_id`. O guard antigo só reconhecia o
+     * primeiro caminho e recusava a descoberta antes mesmo de tentar buscar
+     * por nome. */
+    const legacyName = employee ? "" : legacyAdmissionNameFromCard(claimed.card_title, claimed.card_description);
+    if (!employee && !legacyName && !/^[1-9][0-9]{0,119}$/u.test(claimed.external_admission_id)) {
       throw tangerinoErrors.notFound();
     }
     if (!credential || !integration) throw tangerinoErrors.credentialRequired();
@@ -257,7 +264,7 @@ export async function runNextAttachmentAuthorization(
       workspaceId, companyId: claimed.company_id, employeeId: claimed.employee_id ?? `legacy:${claimed.card_id}`,
       externalAdmissionId: claimed.external_admission_id,
       registrationNumber: String(employee?.registration_number ?? ""),
-      fullName: String(employee?.full_name ?? legacyAdmissionNameFromCard(claimed.card_title, claimed.card_description)),
+      fullName: String(employee?.full_name ?? legacyName),
     };
     const primaryTerm = admissionSearchTerm(target);
     let hits = await session.searchAdmission(primaryTerm);

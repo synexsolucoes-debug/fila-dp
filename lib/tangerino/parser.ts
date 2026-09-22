@@ -123,10 +123,19 @@ export function chooseAdmission(hits: readonly AdmissionSearchHit[], knownExtern
  *
  * O termo é sempre derivado no servidor, do cadastro do colaborador. O frontend
  * manda o `employeeId` e nada mais (§17).
+ *
+ * `nome:` (PR #164) é estável o bastante para gravar e desduplicar — não para
+ * digitar. Ele existe porque esta conta não expõe protocolo nenhum no cartão;
+ * datilografado no campo de busca, o prefixo por si só já garante zero
+ * resultado. `isStableExternalAdmissionId` responde "dá para gravar?", e essa
+ * é uma pergunta diferente de "dá para pesquisar?" — por isso o filtro aqui é
+ * local, e não uma mudança na função que a descoberta depende para
+ * idempotência.
  */
 export function admissionSearchTerm(target: { externalAdmissionId: string; registrationNumber: string; fullName: string }) {
-  const externalId = isStableExternalAdmissionId(target.externalAdmissionId)
-    ? clean(target.externalAdmissionId, 120)
+  const rawExternalId = clean(target.externalAdmissionId, 120);
+  const externalId = isStableExternalAdmissionId(rawExternalId) && !rawExternalId.startsWith("nome:")
+    ? rawExternalId
     : "";
   const term = externalId || clean(target.registrationNumber, 60) || clean(target.fullName, 160);
   if (!term) {
