@@ -66,6 +66,18 @@ export const TangerinoSelectors = Object.freeze({
   admissionsMenuCss: "a.item-menu.item-modulo-menu-pricing",
   admissionsMenuText: [/^admiss[ãa]o$/iu],
   admissionsOverviewLinks: [/^vis[ãa]o geral$/iu],
+  /**
+   * Categorias sob as quais "Admissão" pode estar aninhada.
+   *
+   * Uma conta real mostrou o menu de topo sem "Admissão" nenhuma ao lado das
+   * outras categorias — só "Tela inicial, Empregador, Cadastros gerais,
+   * Financeiro, Ponto". Nesse tipo de produto a função de admissão costuma
+   * morar dentro da categoria voltada a quem já é ou vai ser empregado, então
+   * "Empregador" é a primeira candidata; as demais cobrem nomenclatura comum
+   * em produtos equivalentes. Provisório até uma sessão real confirmar qual
+   * delas — ou nenhuma — é o caminho certo.
+   */
+  admissionsParentCategories: ["Empregador", "Colaboradores", "Recrutamento e seleção", "Admissão e demissão"],
   admissionsFrameCss: 'iframe[src*="admissao-demissao.tangerino.com.br"]',
   admissionsPageMarkers: [/^admiss[ãa]o$/iu, /^todas admiss[õo]es$/iu],
 

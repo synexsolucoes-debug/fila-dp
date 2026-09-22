@@ -158,3 +158,46 @@ test("a lista é reconhecida mesmo sem iframe", async () => {
   // E as duas condições continuam obrigatórias: marcador da página E busca.
   assert.match(fonte, /if \(pageMarker && searchField\) return page;/u);
 });
+
+test("quando o rótulo do menu falha, o agente tenta achar Admissão por outros três caminhos", async () => {
+  /* Uma conta real mostrou o menu sem "Admissão" visível ao lado das outras
+     categorias (Empregador, Cadastros gerais, Financeiro, Ponto). Adivinhar um
+     seletor novo e torcer teria o mesmo risco do §72 alerta: achar "alguma
+     coisa" e ler o campo errado. As três rotas aqui buscam o destino por
+     propriedades que sobrevivem a um rótulo de texto ausente — o endereço, o
+     estado de "recolhido", e a hipótese de estar dentro de uma categoria — em
+     vez de inventar uma classe CSS sem tê-la visto. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /a\[href\*="admissao-demissao" i\], a\[href\*="admissao_demissao" i\]/u, "rota B: buscar pelo endereço");
+  assert.match(fonte, /\[aria-expanded="false"\]/u, "rota C: a barra pode estar recolhida");
+  assert.match(fonte, /for \(const category of TangerinoSelectors\.admissionsParentCategories\)/u, "rota D: categoria-pai");
+});
+
+test("a categoria-pai mais provável é a de quem já é ou vai ser empregado", async () => {
+  const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
+  assert.equal(TangerinoSelectors.admissionsParentCategories[0], "Empregador");
+});
+
+test("o diagnóstico final separa link escondido de link inexistente", async () => {
+  // "Não achei" e "não existe" têm conserto diferente: um pede expandir menu ou
+  // abrir submenu; o outro pede conferir a permissão da conta usada pelo agente.
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /admissionHrefs: \[\.\.\.new Set\(admissionHrefs\)\], collapsibleCount/u);
+  assert.match(fonte, /getAttribute\("title"\)\.catch\(\(\) => null\)\)\s*\n?\s*\|\| \(await candidate\.getAttribute\("aria-label"\)/u);
+});
+
+test("a busca por Admissão não depende de tipo de elemento nem de classe fixa", async () => {
+  // O rótulo "Admissão" existia na tela real e não apareceu na varredura de
+  // `a, [role=link], button` que gerou o diagnóstico — sinal de que o item é
+  // outro tipo de elemento, ou que a classe CSS conhecida ficou desatualizada.
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /getByRole\("menuitem", \{ name: text \}\)/u);
+  assert.match(fonte, /getByText\(text, \{ exact: true \}\)/u);
+  // E uma segunda tentativa depois de uma pausa, para o menu que ainda monta.
+  assert.match(fonte, /if \(!entry\) \{\s*\n\s*await page\.waitForTimeout\(2_500\);/u);
+});
+
+test("depois de achar Admissão, o clique em Visão geral também aceita texto sem link", async () => {
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /admissionsOverviewLinks\.map\(\(name\) => page\.getByText\(name, \{ exact: true \}\)\)/u);
+});

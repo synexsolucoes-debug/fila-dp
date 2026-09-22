@@ -352,15 +352,32 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       if (!source) continue;
       try { iframeHosts.push(new URL(source, page.url()).hostname); } catch { iframeHosts.push("(src inválido)"); }
     }
+    /* Rótulo visível primeiro; título ou rótulo de acessibilidade quando não há
+       texto — um item de menu recolhido a ícone costuma só ter um dos dois. */
     const menuLabels: string[] = [];
     const links = page.locator('a, [role="link"], button');
-    const totalLinks = Math.min(await links.count().catch(() => 0), 40);
-    for (let index = 0; index < totalLinks && menuLabels.length < 25; index += 1) {
+    const totalLinks = Math.min(await links.count().catch(() => 0), 120);
+    for (let index = 0; index < totalLinks && menuLabels.length < 40; index += 1) {
       const candidate = links.nth(index);
       if (!await isVisible(candidate)) continue;
-      const label = (await candidate.innerText().catch(() => "")).replace(/\s+/gu, " ").trim();
+      const visible = (await candidate.innerText().catch(() => "")).replace(/\s+/gu, " ").trim();
+      const fallback = visible || (await candidate.getAttribute("title").catch(() => null))
+        || (await candidate.getAttribute("aria-label").catch(() => null)) || "";
+      const label = fallback.replace(/\s+/gu, " ").trim();
       if (label && label.length <= 40) menuLabels.push(label);
     }
+    /* Todo href que mencione admissão, visível ou não — isso separa "o link
+       existe mas está escondido" (barra recolhida, submenu fechado) de "o link
+       não existe nesta conta" (permissão negada, feature diferente), que têm
+       conserto completamente diferente. */
+    const admissionHrefs: string[] = [];
+    const anchors = page.locator("a[href]");
+    const totalAnchors = Math.min(await anchors.count().catch(() => 0), 300);
+    for (let index = 0; index < totalAnchors && admissionHrefs.length < 10; index += 1) {
+      const source = await anchors.nth(index).getAttribute("href").catch(() => null);
+      if (source && /admiss/iu.test(source)) admissionHrefs.push(source.slice(0, 160));
+    }
+    const collapsibleCount = await page.locator("[aria-expanded]").count().catch(() => 0);
     const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
     if (localLogPath) {
       await page.screenshot({ path: join(dirname(localLogPath), "tangerino-admissions-not-found.png"), fullPage: true })
@@ -369,6 +386,7 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     log("warn", "tangerino.admissions_frame_not_found", {}, {
       iframeCount: totalFrames, pageHost: local.host, pagePath: local.path,
       iframeHosts: [...new Set(iframeHosts)], menuLabels,
+      admissionHrefs: [...new Set(admissionHrefs)], collapsibleCount,
     });
     return null;
   }
@@ -484,18 +502,113 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       this.selectedAdmissionCard = null;
       return;
     }
-    const entry = await firstVisible([
+    /* Rota A: clicar em "Admissão" e depois em "Visão geral" — o caminho que
+     * uma pessoa realmente usa (Tela inicial → Admissão → Visão geral → aba
+     * "Dados contratuais"), confirmado numa conta real.
+     *
+     * A busca não se limita à classe CSS conhecida nem ao tipo de elemento: um
+     * item de menu de SPA é tão frequentemente uma `<div>`/`<li>` com um
+     * ouvinte de clique quanto um `<a>`, e a classe muda entre contas e versões
+     * do shell (era esse o caso aqui — o rótulo "Admissão" não apareceu na
+     * varredura de `a, [role=link], button` que gerou o diagnóstico §92,
+     * mesmo existindo na tela). Uma segunda tentativa depois de uma pausa
+     * cobre o menu que ainda está montando quando a primeira olha.
+     */
+    const findAdmissionEntry = () => firstVisible([
       ...TangerinoSelectors.admissionsMenuText.map((text) =>
         page.locator(TangerinoSelectors.admissionsMenuCss).filter({ hasText: text })),
+      ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByRole("link", { name: text })),
+      ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByRole("button", { name: text })),
+      ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByRole("menuitem", { name: text })),
+      ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByText(text, { exact: true })),
     ]);
+    let entry = await findAdmissionEntry();
+    if (!entry) {
+      await page.waitForTimeout(2_500);
+      entry = await findAdmissionEntry();
+    }
     if (entry) {
       await entry.click();
-      const overview = await firstVisible(TangerinoSelectors.admissionsOverviewLinks.map((name) =>
-        page.getByRole("link", { name })));
+      const overview = await firstVisible([
+        ...TangerinoSelectors.admissionsOverviewLinks.map((name) => page.getByRole("link", { name })),
+        ...TangerinoSelectors.admissionsOverviewLinks.map((name) => page.getByText(name, { exact: true })),
+      ]);
       if (overview) await overview.click();
     }
 
     let frame = await this.resolveAdmissionsFrame(Math.min(5_000, tangerinoAgentConfig().timeoutMs));
+
+    /* Rota B: procurar pelo destino, não pelo rótulo.
+     *
+     * O texto do menu muda entre contas — uma delas nem mostrou "Admissão"
+     * entre os rótulos visíveis (`tangerino.admissions_entry_attempt` §90). O
+     * endereço do módulo não muda do mesmo jeito: ele é a própria allowlist.
+     * Clicar em vez de navegar direto importa aqui — este produto tem cara de
+     * aplicação com estado de sessão por página (Wicket): uma navegação "fria"
+     * para o endereço profundo pode não achar esse estado e voltar para a
+     * página inicial, enquanto um clique carrega a partir de uma página que já
+     * o tem.
+     */
+    if (!frame) {
+      const byHref = page.locator('a[href*="admissao-demissao" i], a[href*="admissao_demissao" i]').first();
+      if (await isVisible(byHref)) {
+        await byHref.click();
+        frame = await this.resolveAdmissionsFrame(Math.min(8_000, tangerinoAgentConfig().timeoutMs));
+      }
+    }
+
+    /* Rota C: a barra pode estar recolhida.
+     *
+     * Um menu lateral fechado em ícones esconde o rótulo de texto que as duas
+     * rotas acima procuram — e foi exatamente essa a aparência do print que
+     * motivou este mapeamento. Um alvo de expansão é reconhecido pela função,
+     * não pelo nome da classe: `aria-expanded="false"` ou um rótulo de
+     * acessibilidade que diga "menu"/"expandir", perto do topo da barra.
+     */
+    if (!frame) {
+      const toggle = await firstVisible([
+        page.locator('[aria-expanded="false"]').first(),
+        page.getByRole("button", { name: /^(expandir|abrir) menu$/iu }),
+        page.getByLabel(/^(expandir|abrir) menu$/iu),
+      ]);
+      if (toggle) {
+        await toggle.click().catch(() => undefined);
+        const afterExpand = await firstVisible([
+          ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByRole("link", { name: text })),
+          ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByText(text, { exact: true })),
+        ]);
+        if (afterExpand) {
+          await afterExpand.click();
+          frame = await this.resolveAdmissionsFrame(Math.min(8_000, tangerinoAgentConfig().timeoutMs));
+        }
+      }
+    }
+
+    /* Rota D: Admissão pode viver DENTRO de uma categoria, não ao lado dela.
+     *
+     * Uma conta real mostrou um menu de categorias (Empregador, Cadastros
+     * gerais, Financeiro, Ponto) sem "Admissão" nenhuma visível ao lado — o
+     * padrão comum nesse tipo de produto é a função morar dentro da categoria
+     * de RH. Cada candidata é clicada e revertida (`back`, sem submeter nada)
+     * se não revelar o que procuramos, para não deixar o menu aberto atrapalhar
+     * a rota seguinte.
+     */
+    if (!frame) {
+      for (const category of TangerinoSelectors.admissionsParentCategories) {
+        const parent = page.getByText(category, { exact: true }).first();
+        if (!await isVisible(parent)) continue;
+        await parent.click().catch(() => undefined);
+        const revealed = await firstVisible([
+          ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByRole("link", { name: text })),
+          ...TangerinoSelectors.admissionsMenuText.map((text) => page.getByText(text, { exact: true })),
+        ]);
+        if (revealed) {
+          await revealed.click();
+          frame = await this.resolveAdmissionsFrame(Math.min(8_000, tangerinoAgentConfig().timeoutMs));
+        }
+        if (frame) break;
+      }
+    }
 
     /* A classe do item de menu varia entre versões do shell legado, então a
        navegação direta é o caminho confiável. As entradas são tentadas em
@@ -506,9 +619,25 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     for (const candidate of tangerinoAdmissionsEntryUrls) {
       if (frame) break;
       const directUrl = await assertAllowedTangerinoUrl(candidate);
-      await page.goto(directUrl.toString(), {
+      const navigated = await page.goto(directUrl.toString(), {
         waitUntil: "domcontentloaded", timeout: tangerinoAgentConfig().timeoutMs,
-      }).catch(() => undefined);
+      }).then(() => true).catch(() => false);
+
+      /* Onde a navegação PAROU, e não para onde ela foi pedida. Um endereço de
+         módulo que volta para a home é a assinatura de conta sem acesso àquele
+         módulo — e sem registrar o destino real isso fica indistinguível de
+         rota errada, que tem conserto completamente diferente. */
+      const landed = (() => {
+        try { const url = new URL(page.url()); return `${url.hostname}${url.pathname}`; }
+        catch { return ""; }
+      })();
+      const mentionsAdmission = await page.locator("body").innerText()
+        .then((body) => /admiss[ãa]o/iu.test(body)).catch(() => false);
+      log("info", "tangerino.admissions_entry_attempt", {}, {
+        pedido: new URL(directUrl.toString()).pathname, chegou: landed,
+        navegou: navigated, telaFalaEmAdmissao: mentionsAdmission,
+      });
+
       frame = await this.resolveAdmissionsFrame(Math.min(15_000, tangerinoAgentConfig().timeoutMs));
     }
     if (!frame) throw tangerinoErrors.uiChanged("abertura da Admissão", "lista de admissões");

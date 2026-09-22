@@ -730,7 +730,13 @@ test("nenhum comando do cliente de navegador encosta numa ação de alteração"
      navegador não referencia `forbiddenActions` em nenhum clique. */
   const cliente = source("worker/tangerino/playwright-session.ts");
   const cliques = [...cliente.matchAll(/\.click\(\)/gu)];
-  assert.ok(cliques.length > 0 && cliques.length <= 9, `${cliques.length} cliques: um agente de leitura clica em navegação e downloads autorizados`);
+  /* O teto sobe quando a navegação precisa de mais um caminho para achar
+     Admissão numa conta cujo menu não mostrava o rótulo de texto (§92: link
+     por href, barra recolhida, categoria-pai) — nunca porque um clique passou
+     a tocar escrita. Cada clique novo continua sendo navegação: os dois
+     asserts abaixo, sobre `forbiddenActions` e sobre nomes de botão de
+     alteração, são o que garante isso, não o número em si. */
+  assert.ok(cliques.length > 0 && cliques.length <= 15, `${cliques.length} cliques: um agente de leitura clica em navegação e downloads autorizados`);
   assert.doesNotMatch(cliente, /forbiddenActions/u, "o cliente encostou na lista de ações proibidas");
   assert.doesNotMatch(cliente, /getByRole\("button", \{ name: \/(?:salvar|aprovar|admitir|excluir)/iu);
   // O runner efêmero mantém contexto novo. O persistente usa diretório opaco
