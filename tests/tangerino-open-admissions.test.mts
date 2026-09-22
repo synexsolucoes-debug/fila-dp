@@ -501,7 +501,8 @@ test("o download da ficha tenta extrair o ID pelo link do cartão da busca antes
   );
   assert.match(bloco, /let admissionId = input\.externalAdmissionId\.trim\(\);/u);
   assert.match(bloco, /const extracted = this\.selectedAdmissionCard \? await extractFichaColaboradorId\(this\.selectedAdmissionCard\) : null;/u);
-  assert.match(bloco, /if \(!extracted\) throw tangerinoErrors\.uiChanged\("download dos anexos", "identificador numérico da admissão"\);/u);
+  assert.match(bloco, /if \(!extracted\) \{/u);
+  assert.match(bloco, /throw tangerinoErrors\.uiChanged\("download dos anexos", "identificador numérico da admissão"\);/u);
   assert.match(bloco, /admissionId = extracted;/u);
 });
 
@@ -548,4 +549,25 @@ test("a descoberta cura sozinha as demandas antigas que ficaram sem autorizaçã
   assert.match(loop, /await ensureOpenAdmissionAttachmentAuthorization\(d1, \{/u);
   assert.match(loop, /if \(backfill\.status === "created"\) summary\.attachmentsBackfilled \+= 1;/u);
   assert.match(loop, /continue;/u);
+});
+
+test("quando nem a busca expõe o identificador numérico da ficha, o cartão vira evidência — sem PII no log", async () => {
+  /* Uma execução real falhou exatamente neste ponto — mesmo com o cartão
+     vindo da busca por nome, não do resultado sem filtro — e não deixou
+     rastro nenhum: este era o único ponto de falha do arquivo sem screenshot
+     nem log estruturado, só a mensagem repetida. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(
+    fonte.indexOf("const extracted = this.selectedAdmissionCard ? await extractFichaColaboradorId"),
+    fonte.indexOf("admissionId = extracted;"),
+  );
+  assert.match(bloco, /log\("warn", "tangerino\.download_identifier_not_found", \{\}, \{/u);
+  assert.match(bloco, /exportButtonWordLooselyPresent: hasCardTextLabel\(cardText, TangerinoSelectors\.exportRegistrationFormButtons\)/u);
+  // O log() da telemetria não pode receber o texto do cartão — só o comprimento.
+  const chamadaDoLog = bloco.slice(bloco.indexOf('log("warn", "tangerino.download_identifier_not_found"'), bloco.indexOf("});") + 3);
+  assert.doesNotMatch(chamadaDoLog, /:\s*cardText\s*[,}]/u, "o texto do cartão não pode ir para o log estruturado");
+  assert.match(chamadaDoLog, /cardText\.length/u);
+  assert.match(bloco, /if \(localLogPath && card\) \{/u);
+  assert.match(bloco, /card\.screenshot\(\{ path: join\(directory, "tangerino-download-identifier-not-found\.png"\) \}\)/u);
+  assert.match(bloco, /writeFile\(join\(directory, "tangerino-download-identifier-not-found\.txt"\), cardText, "utf8"\)/u);
 });
