@@ -205,6 +205,25 @@ test("a edição manual não altera ficha já confirmada", () => {
   assert.match(route, /ADMISSION_SHEET_CONFIRMED/u);
 });
 
+test("a ficha oferece emissão própria, tela cheia e fotos para conferência", () => {
+  const panel = source("../app/painel/features/admission/RegistrationSheetPanel.tsx");
+  const styles = source("../app/painel/features/admission/admission.module.css");
+  assert.match(panel, /Emitir ficha Vinculato/u);
+  assert.match(panel, /Ver em tela cheia/u);
+  assert.match(panel, /documents\.filter\(isImageDocument\)/u);
+  assert.match(panel, /<Image[\s\S]*unoptimized/u);
+  assert.match(styles, /\.panel\[data-expanded\]/u);
+  assert.match(styles, /\.photoGrid/u);
+});
+
+test("rótulos ausentes são resumidos sem esconder os campos em branco", () => {
+  const panel = source("../app/painel/features/admission/RegistrationSheetPanel.tsx");
+  assert.match(panel, /missingLabels\.length/u);
+  assert.match(panel, /Em branco no registro/u);
+  assert.doesNotMatch(panel, /sheet\.warnings\.map/u,
+    "a parede com dezenas de rótulos ausentes não deve voltar");
+});
+
 test("a auditoria da edição nomeia campos, nunca valores", () => {
   const route = source("../app/api/cards/[id]/registration-sheet/route.ts");
   assert.match(route, /after: \{ fields: Object\.keys\(incoming\) \}/u,

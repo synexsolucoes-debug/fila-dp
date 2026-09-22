@@ -138,7 +138,9 @@ export async function GET(_request: Request, context: RouteContext) {
         provenance: Object.fromEntries(Object.entries(merged).map(([key, field]) => [key, {
           source: field.source, documentValue: field.documentValue, by: field.by, at: field.at,
         }])),
-        warnings: [...sheet.warnings, ...sanitizeSheetWarnings(JSON.parse(stored.warnings_json || "[]"))],
+        warnings: sanitizeSheetWarnings([
+          ...sheet.warnings, ...sanitizeSheetWarnings(JSON.parse(stored.warnings_json || "[]")),
+        ]),
         sourceFilename: stored.source_filename,
         attachmentId: stored.attachment_id,
         updatedAt: stored.updated_at,

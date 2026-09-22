@@ -107,8 +107,8 @@ export function openSheet(sealed: SealedSheet): RegistrationFormRaw {
  */
 export function sanitizeSheetWarnings(value: unknown) {
   const list = Array.isArray(value) ? value : [];
-  return list.filter((entry): entry is string => typeof entry === "string")
+  return [...new Set(list.filter((entry): entry is string => typeof entry === "string")
     .map((entry) => entry.replace(/\s+/gu, " ").trim().slice(0, 200))
-    .filter(Boolean)
+    .filter(Boolean))]
     .slice(0, 60);
 }

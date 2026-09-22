@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { extractText, getDocumentProxy } from "unpdf";
 
 process.env.FDP_INTEGRATION_VAULT_KEY ??= Buffer.alloc(32, 7).toString("base64");
 
 const { openSheet, sanitizeSheetFields, sanitizeSheetWarnings, sealSheet } = await import("../lib/admission-sheet.ts");
 const { chooseRegistrationFormAttachment, REGISTRATION_FORM_FILENAME } = await import("../lib/registration-form-file.ts");
 const { capabilitiesForRole } = await import("../lib/authorization.ts");
+const { buildRegistrationSheet } = await import("../lib/employee-registration-form.ts");
 const { sealCredentials } = await import("../lib/integrations.ts");
+const { buildVinculatoAdmissionSheetPdf } = await import("../lib/vinculato-admission-sheet-pdf.ts");
 
 /**
  * O envelope da ficha de contratação e a fronteira que ele protege.
@@ -77,6 +80,29 @@ test("os avisos guardados em coluna aberta são metadado, com teto", () => {
   assert.equal(warnings[0], "CPF: valor lido não passou na conferência.");
   assert.ok(warnings.length <= 60, "coluna aberta cresce sem ninguém olhar");
   assert.ok(warnings.every((warning) => warning.length <= 200));
+  assert.equal(sanitizeSheetWarnings(["aviso repetido", "aviso repetido"]).length, 1,
+    "o mesmo problema não deve aparecer duas vezes na demanda");
+});
+
+test("o Vinculato emite uma ficha PDF própria com campos e pendências visíveis", async () => {
+  const sheet = buildRegistrationSheet({
+    fullName: "FULANA DE TAL",
+    admissionDate: "13/10/2025",
+    taxId: "111.222.333-00",
+  });
+  const bytes = await buildVinculatoAdmissionSheetPdf({
+    sheet,
+    provenance: { fullName: { source: "document" }, admissionDate: { source: "registry" } },
+    sourceFilename: "ficha-cadastral.pdf",
+    generatedAt: new Date("2026-09-22T12:00:00.000Z"),
+  });
+  assert.equal(bytes.subarray(0, 5).toString("ascii"), "%PDF-");
+  const parsed = await getDocumentProxy(new Uint8Array(bytes));
+  const { text } = await extractText(parsed, { mergePages: true });
+  assert.match(text, /FICHA DE ADMISSÃO/u);
+  assert.match(text, /FULANA DE TAL/u);
+  assert.match(text, /Conferir no documento/u,
+    "campo inválido precisa continuar evidente na ficha emitida");
 });
 
 test("a ficha é reconhecida entre os anexos, inclusive renumerada pelo ZIP", () => {
@@ -124,6 +150,15 @@ test("a rota da ficha cobra a permissão e audita o acesso, não o conteúdo", (
     assert.ok(!route.includes(vazamento),
       `auditar o conteúdo desfaria a cifra no histórico (${vazamento})`);
   }
+});
+
+test("a emissão da ficha Vinculato reutiliza a mesma rota protegida", () => {
+  const route = source("../app/api/cards/[id]/registration-sheet/pdf/route.ts");
+  assert.match(route, /GET as getRegistrationSheet/u,
+    "o PDF não pode criar um segundo caminho sem a permissão e auditoria da ficha");
+  assert.match(route, /buildVinculatoAdmissionSheetPdf/u);
+  assert.match(route, /Content-Type": "application\/pdf/u);
+  assert.match(route, /Cache-Control": "no-store/u);
 });
 
 test("concluir a demanda agenda o expurgo, em vez de apagar no ato", () => {
