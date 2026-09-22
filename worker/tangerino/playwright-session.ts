@@ -822,6 +822,23 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       await page.waitForTimeout(2_500);
       hits = await collectSearchHits(frame);
     }
+
+    /* Cinco cartões achados duas vezes seguidas, sempre "Admissão concluída",
+     * numa conta que tem 84 admissões e só 5 em Dados contratuais — a
+     * coincidência mais barata de descartar é a leitura estar caindo no
+     * resumo "Admissões vencendo" do painel Visão Geral, e não na lista real.
+     * Nome de aba e contagem não são PII (é rótulo de interface, igual ao que
+     * já está nos comentários deste arquivo): seguro no log estruturado.
+     */
+    const tabLabels: string[] = [];
+    for (const pattern of TangerinoSelectors.admissionsTabLabels) {
+      const label = frame.getByText(pattern).first();
+      if (await isVisible(label)) tabLabels.push((await label.innerText().catch(() => "")).trim().slice(0, 60));
+    }
+    log("info", "tangerino.admissions_list_diagnostic", {}, {
+      cardCount: hits.length, tabLabelsFound: tabLabels,
+    });
+
     return hits;
   }
 
