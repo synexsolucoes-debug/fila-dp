@@ -640,6 +640,50 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   }
 
   /**
+   * A rota legada muda para `LoginPage` antes de o JavaScript montar o
+   * formulário. A URL já é evidência suficiente de que precisamos autenticar,
+   * mas não de que os campos estão prontos para receber dados. Esperar aqui
+   * evita classificar uma tela ainda carregando como mudança de interface.
+   */
+  private async waitForLoginForm(timeoutMs: number) {
+    const page = this.requirePage();
+    const deadline = Date.now() + Math.max(1_000, Math.min(timeoutMs, 20_000));
+    let waitingLogged = false;
+
+    while (Date.now() < deadline) {
+      const barrier = await this.currentAuthBarrier();
+      if (barrier !== "login") {
+        return { barrier, user: null, secret: null, submit: null };
+      }
+
+      const user = await firstVisible([
+        ...TangerinoSelectors.usernameLabels.map((label) => page.getByLabel(label)),
+        ...TangerinoSelectors.usernameCss.map((css) => page.locator(css)),
+      ]);
+      const secret = await firstVisible([
+        ...TangerinoSelectors.passwordLabels.map((label) => page.getByLabel(label)),
+        ...TangerinoSelectors.passwordCss.map((css) => page.locator(css)),
+      ]);
+      const submit = await firstVisible(TangerinoSelectors.submitButtons.map((name) =>
+        page.getByRole("button", { name })));
+      if (user && secret && submit) return { barrier, user, secret, submit };
+
+      if (!waitingLogged) {
+        waitingLogged = true;
+        const location = new URL(page.url());
+        log("info", "tangerino.login_form_waiting", {}, {
+          pageHost: location.host,
+          pagePath: location.pathname,
+          timeoutMs: Math.max(1_000, Math.min(timeoutMs, 20_000)),
+        });
+      }
+      await page.waitForTimeout(500);
+    }
+
+    return { barrier: await this.currentAuthBarrier(), user: null, secret: null, submit: null };
+  }
+
+  /**
    * Garante sessão — e só aguarda barreira humana no worker visível autorizado.
    *
    * No runner efêmero, MFA e CAPTCHA devolvem `AUTHENTICATION_REQUIRED`. No
@@ -666,18 +710,23 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     }
 
     if (barrier === "login") {
-      const user = await firstVisible([
-        ...TangerinoSelectors.usernameLabels.map((label) => page.getByLabel(label)),
-        ...TangerinoSelectors.usernameCss.map((css) => page.locator(css)),
-      ]);
-      const secret = await firstVisible([
-        ...TangerinoSelectors.passwordLabels.map((label) => page.getByLabel(label)),
-        ...TangerinoSelectors.passwordCss.map((css) => page.locator(css)),
-      ]);
+      let form = await this.waitForLoginForm(input.timeoutMs);
+      if (form.barrier === "mfa" || form.barrier === "captcha") {
+        barrier = await this.waitForManualAuthentication(form.barrier);
+        if (barrier === "login") form = await this.waitForLoginForm(input.timeoutMs);
+        else form = { barrier, user: null, secret: null, submit: null };
+      }
+      if (form.barrier === "denied") {
+        throw tangerinoErrors.authenticationRequired("A conta usada pelo agente não tem acesso à Admissão Digital.");
+      }
+      if (form.barrier !== "login") {
+        this.authenticatedAt = Date.now();
+        return;
+      }
+      const { user, secret, submit } = form;
       if (!user || !secret) throw tangerinoErrors.uiChanged("autenticação", "campos de usuário e senha");
       await user.fill(input.username);
       await secret.fill(input.password);
-      const submit = await firstVisible(TangerinoSelectors.submitButtons.map((name) => page.getByRole("button", { name })));
       if (!submit) throw tangerinoErrors.uiChanged("autenticação", "botão de entrar");
       await submit.click();
       await page.waitForLoadState("domcontentloaded", { timeout: input.timeoutMs }).catch(() => undefined);
