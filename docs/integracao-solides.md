@@ -494,15 +494,20 @@ bytes já em mãos), e o que não terminar entra na fila do cron
 uma foto já guardada não precisa de sessão de navegador nem de o worker do
 Windows estar ligado, só da chave do provedor.
 
-O provedor é o **Google Cloud Vision** (`lib/photo-ocr.ts`), REST, sem SDK.
-Configura-se com `FDP_OCR_GOOGLE_VISION_API_KEY` (ver `.env.example`). Sem essa
-variável, `ocrConfigured()` volta falso e toda tentativa termina em
-`OCR_NOT_CONFIGURED` — a foto continua anexada normalmente, só não gera
-sugestão. Ativar isto é uma decisão deliberada sobre dado pessoal sensível: a
-foto do documento é enviada ao Google para ser lida. É o mesmo tipo de escolha
-que levou a Sólides a entrar como conector (§1) — trocar isolamento total por
-uma tarefa que, sem automação, alguém teria que fazer o mesmo lendo o mesmo
-documento na tela.
+O provedor é o **OCR.space** (`lib/photo-ocr.ts`), REST, sem SDK. Configura-se
+com `FDP_OCR_SPACE_API_KEY` (ver `.env.example`; chave gratuita por email em
+https://ocr.space/ocrapi, sem cartão de crédito). Sem essa variável,
+`ocrConfigured()` volta falso e toda tentativa termina em `OCR_NOT_CONFIGURED`
+— a foto continua anexada normalmente, só não gera sugestão. Ativar isto é uma
+decisão deliberada sobre dado pessoal sensível: a foto do documento é enviada
+ao provedor para ser lida. É o mesmo tipo de escolha que levou a Sólides a
+entrar como conector (§1) — trocar isolamento total por uma tarefa que, sem
+automação, alguém teria que fazer o mesmo lendo o mesmo documento na tela.
+
+A cota gratuita do OCR.space limita o arquivo a 1 MB, bem abaixo do que uma
+foto de celular normalmente pesa. Por isso `runDocumentOcr` sempre normaliza a
+foto antes de enviar — reorienta pelo EXIF, redimensiona e recomprime com
+`sharp` até caber no teto — em vez de recusar a maioria das fotos reais.
 
 ### 13.4 O mesmo cerco da ficha, reaplicado
 

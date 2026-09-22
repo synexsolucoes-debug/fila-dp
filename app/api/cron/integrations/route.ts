@@ -136,7 +136,7 @@ export async function GET(request: Request) {
 
         /* Fotos (RG, CPF, CTPS) cujo OCR não terminou na hora da transferência —
            mesma razão da fila de fichas acima: reler uma foto já guardada não
-           precisa de sessão do navegador, só da chave do Google Vision. */
+           precisa de sessão do navegador, só da chave do provedor de OCR. */
         for (const pendente of await claimPendingPhotoOcr(scoped, workspace.id).catch(() => [])) {
           if (Date.now() >= deadline) break;
           await preparePhotoOcr(scoped, {
