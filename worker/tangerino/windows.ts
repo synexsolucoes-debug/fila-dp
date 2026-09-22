@@ -4,10 +4,15 @@ import { getD1, getScopedD1 } from "../../db/index.ts";
 import { log } from "../../lib/observability.ts";
 import { prepareWorkerHeartbeat } from "../../lib/tangerino/worker-health.ts";
 import { isWorkerConfigurationError } from "../../lib/tangerino/worker-configuration.ts";
-import { assertTangerinoWorkerConfiguration, sweepTangerinoQueue } from "./runner.ts";
+import { PlaywrightTangerinoSession } from "./playwright-session.ts";
+import { assertTangerinoWorkerConfiguration, sweepTangerinoQueue, type TangerinoSessionPool } from "./runner.ts";
 
 const pollMs = Math.min(60_000, Math.max(1_000, Number(process.env.FDP_TANGERINO_WORKER_POLL_MS) || 5_000));
 let stopping = false;
+/* Um contexto por workspace durante toda a vida do processo. Cookies de sessão
+ * do Tangerino podem morrer quando o Chromium fecha mesmo com userDataDir; o
+ * processo Windows é justamente o lugar seguro para manter a janela viva. */
+const sessionPool: TangerinoSessionPool = new Map<string, PlaywrightTangerinoSession>();
 
 /**
  * O identificador do processo, estável entre reinícios da mesma máquina.
@@ -79,36 +84,43 @@ async function waitForNextSweep() {
 async function main() {
   assertTangerinoWorkerConfiguration({ requireInteractiveWindow: true });
   log("info", "tangerino.windows_worker_started", {}, { pollMs, concurrency: 1, workerId });
-  while (!stopping) {
-    let needsAuthentication = false;
-    let lastErrorCode = "";
-    try {
-      const summary = await sweepTangerinoQueue({ concurrency: 1, shouldStop: () => stopping });
-      if (summary.handled > 0) {
-        log("info", "tangerino.windows_worker_sweep_completed", {}, summary);
+  try {
+    while (!stopping) {
+      let needsAuthentication = false;
+      let lastErrorCode = "";
+      try {
+        const summary = await sweepTangerinoQueue({
+          concurrency: 1, shouldStop: () => stopping, sessionPool,
+        });
+        if (summary.handled > 0) {
+          log("info", "tangerino.windows_worker_sweep_completed", {}, summary);
+        }
+      } catch (error) {
+        /* Desafio de autenticação não é falha do worker: ele está de pé e parado
+           esperando uma pessoa. O painel precisa dizer isso em vez de "agente com
+           problema", que mandaria o operador procurar no lugar errado. */
+        const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+        needsAuthentication = code === "AUTHENTICATION_REQUIRED";
+        lastErrorCode = code.slice(0, 120);
+        log(needsAuthentication ? "warn" : "error", "tangerino.windows_worker_sweep_failed", {}, {
+          errorName: error instanceof Error ? error.name : "UnknownError", errorCode: lastErrorCode,
+        });
       }
-    } catch (error) {
-      /* Desafio de autenticação não é falha do worker: ele está de pé e parado
-         esperando uma pessoa. O painel precisa dizer isso em vez de "agente com
-         problema", que mandaria o operador procurar no lugar errado. */
-      const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
-      needsAuthentication = code === "AUTHENTICATION_REQUIRED";
-      lastErrorCode = code.slice(0, 120);
-      log(needsAuthentication ? "warn" : "error", "tangerino.windows_worker_sweep_failed", {}, {
-        errorName: error instanceof Error ? error.name : "UnknownError", errorCode: lastErrorCode,
+
+      /* O batimento vai mesmo depois de falha — é justamente aí que o painel
+         precisa dele: um worker que só se anuncia quando dá certo some da tela
+         exatamente no momento em que alguém deveria olhar para ele. */
+      await recordHeartbeats(needsAuthentication, lastErrorCode).catch((error) => {
+        log("warn", "tangerino.windows_worker_heartbeat_failed", {}, {
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        });
       });
+
+      await waitForNextSweep();
     }
-
-    /* O batimento vai mesmo depois de falha — é justamente aí que o painel
-       precisa dele: um worker que só se anuncia quando dá certo some da tela
-       exatamente no momento em que alguém deveria olhar para ele. */
-    await recordHeartbeats(needsAuthentication, lastErrorCode).catch((error) => {
-      log("warn", "tangerino.windows_worker_heartbeat_failed", {}, {
-        errorName: error instanceof Error ? error.name : "UnknownError",
-      });
-    });
-
-    await waitForNextSweep();
+  } finally {
+    await Promise.all([...sessionPool.values()].map((session) => session.dispose().catch(() => undefined)));
+    sessionPool.clear();
   }
   log("info", "tangerino.windows_worker_stopped");
 }
@@ -127,4 +139,3 @@ main().catch((error) => {
   }
   process.exitCode = 1;
 });
-
