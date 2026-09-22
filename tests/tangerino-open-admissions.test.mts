@@ -526,3 +526,26 @@ test("a demanda nasce já autorizada — sem exigir o clique em Autorizar anexos
   assert.match(bloco, /tangerino\.attachments\.authorized/u);
   assert.match(bloco, /auto: true/u);
 });
+
+test("a descoberta cura sozinha as demandas antigas que ficaram sem autorização de anexos", async () => {
+  /* Pedido do DP: os cinco cartões que a descoberta criou antes da PR #169
+     não têm autorização nenhuma — e ninguém quer clicar em "Autorizar
+     anexos" um por um. Em vez de um script de migração único, cada ciclo da
+     descoberta verifica e completa sozinho: mais barato do que pedir cinco
+     cliques, e cobre qualquer lacuna futura pelo mesmo motivo. */
+  const fonte = await readFile(new URL("../lib/tangerino/open-admissions.ts", import.meta.url), "utf8");
+  const funcao = fonte.slice(
+    fonte.indexOf("export async function ensureOpenAdmissionAttachmentAuthorization"),
+    fonte.length,
+  );
+  assert.match(funcao, /WHERE NOT EXISTS \(\s*SELECT 1 FROM fdp_tangerino_attachment_authorizations existing\s*WHERE existing\.workspace_id = \? AND existing\.card_id = \?\s*\)/u);
+  // Sem filtro de estado: uma autorização FAILED não é recriada sozinha — só pelo botão manual.
+  assert.doesNotMatch(funcao, /existing\.state/u);
+
+  const discoveryFonte = await readFile(new URL("../lib/tangerino/discovery.ts", import.meta.url), "utf8");
+  const loop = discoveryFonte.slice(discoveryFonte.indexOf("if (!record) { summary.skipped"), discoveryFonte.indexOf("if (!isContractDataStage(admission.stage)) continue;"));
+  assert.match(loop, /if \(record\.cardId\) \{/u);
+  assert.match(loop, /await ensureOpenAdmissionAttachmentAuthorization\(d1, \{/u);
+  assert.match(loop, /if \(backfill\.status === "created"\) summary\.attachmentsBackfilled \+= 1;/u);
+  assert.match(loop, /continue;/u);
+});

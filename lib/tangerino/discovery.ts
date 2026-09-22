@@ -25,7 +25,7 @@ import { log } from "../observability.ts";
 import { tangerinoAgentConfig } from "./config.ts";
 import { tangerinoErrors } from "./errors.ts";
 import { tangerinoBrowserLoginUrl } from "./hosts.ts";
-import { ensureOpenAdmissionDemand, recordOpenAdmission } from "./open-admissions.ts";
+import { ensureOpenAdmissionAttachmentAuthorization, ensureOpenAdmissionDemand, recordOpenAdmission } from "./open-admissions.ts";
 import { isContractDataStage, isStableExternalAdmissionId, parseAdmission } from "./parser.ts";
 import type { TangerinoSessionFactory } from "./types.ts";
 
@@ -72,6 +72,7 @@ export type DiscoverySummary = {
   listed: number;
   recorded: number;
   demandsCreated: number;
+  attachmentsBackfilled: number;
   skipped: number;
 };
 
@@ -126,7 +127,7 @@ export async function discoverOpenAdmissions(
 
   const config = tangerinoAgentConfig();
   const limit = Math.max(1, Math.min(Number(options.limit) || DISCOVERY_BATCH_LIMIT, DISCOVERY_BATCH_LIMIT));
-  const summary: DiscoverySummary = { listed: 0, recorded: 0, demandsCreated: 0, skipped: 0 };
+  const summary: DiscoverySummary = { listed: 0, recorded: 0, demandsCreated: 0, attachmentsBackfilled: 0, skipped: 0 };
 
   const session = await createSession({ workspaceId, integrationId });
   try {
@@ -167,7 +168,19 @@ export async function discoverOpenAdmissions(
       if (!record) { summary.skipped += 1; continue; }
       summary.recorded += 1;
 
-      if (!isContractDataStage(admission.stage) || record.cardId) continue;
+      /* A demanda já existe: a única lacuna que resta é a autorização de
+         anexos, para quem foi descoberto antes da PR #169. Curar aqui evita
+         pedir um clique manual por demanda antiga, e não interfere na
+         retentativa manual de uma autorização que já falhou (§ acima). */
+      if (record.cardId) {
+        const backfill = await ensureOpenAdmissionAttachmentAuthorization(d1, {
+          workspaceId, cardId: record.cardId, integrationId, externalAdmissionId: record.externalAdmissionId,
+        });
+        if (backfill.status === "created") summary.attachmentsBackfilled += 1;
+        continue;
+      }
+
+      if (!isContractDataStage(admission.stage)) continue;
       const demand = await ensureOpenAdmissionDemand(d1, {
         workspaceId,
         integrationId,
