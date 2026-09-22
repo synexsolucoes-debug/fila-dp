@@ -34,6 +34,40 @@ type Database = ReturnType<typeof getD1>;
 /** Cartões abertos por execução. O resto fica para o ciclo seguinte. */
 export const DISCOVERY_BATCH_LIMIT = 15;
 
+/**
+ * Intervalo mínimo entre duas descobertas do mesmo grupo.
+ *
+ * Sem ele a varredura roda a cada ciclo do worker — cinco segundos —, e cada
+ * execução abre o navegador e faz login de novo. Na primeira vez em produção
+ * isso apareceu como CAPTCHA atrás de CAPTCHA na tela do DP, e é exatamente o
+ * padrão de acesso que faz o provedor tratar a conta como uso anômalo.
+ *
+ * Admissão não aparece de minuto em minuto. Quinze minutos é frequente o
+ * bastante para o DP não sentir atraso e raro o bastante para não parecer robô.
+ */
+export const DISCOVERY_MIN_INTERVAL_MS = 15 * 60_000;
+
+/**
+ * Quando cada grupo foi varrido pela última vez, neste processo.
+ *
+ * Em memória de propósito: o que precisa ser contido é a repetição dentro de um
+ * worker de pé, que é onde o laço acontece. Um reinício custa uma descoberta a
+ * mais, e isso é barato — enquanto uma tabela nova para guardar um carimbo de
+ * tempo seria schema para sempre por um problema de laço.
+ */
+const lastDiscoveryAt = new Map<string, number>();
+
+/** Só para o teste conseguir exercitar o intervalo sem esperar quinze minutos. */
+export function resetDiscoverySchedule() {
+  lastDiscoveryAt.clear();
+}
+
+/** Se já passou tempo suficiente desde a última varredura deste grupo. */
+export function discoveryIsDue(workspaceId: string, now = Date.now()) {
+  const previous = lastDiscoveryAt.get(workspaceId);
+  return previous === undefined || now - previous >= DISCOVERY_MIN_INTERVAL_MS;
+}
+
 export type DiscoverySummary = {
   listed: number;
   recorded: number;
@@ -61,11 +95,19 @@ export async function discoverOpenAdmissions(
   createSession: TangerinoSessionFactory,
   options: { limit?: number } = {},
 ): Promise<DiscoverySummary | null> {
+  if (!discoveryIsDue(workspaceId)) return null;
+
   const integration = await d1.prepare(`SELECT id FROM fdp_integrations
     WHERE workspace_id = ? AND channel = 'tangerino_browser'`)
     .bind(workspaceId).first<{ id: string }>();
   if (!integration) return null;
   const integrationId = String(integration.id);
+
+  /* O carimbo é gravado ANTES de abrir o navegador, e não depois de dar certo.
+     Marcar só no sucesso faria a falha voltar no ciclo seguinte, cinco segundos
+     depois — que é precisamente o laço de login e CAPTCHA que este intervalo
+     existe para impedir. Tela que mudou não se conserta tentando mais rápido. */
+  lastDiscoveryAt.set(workspaceId, Date.now());
 
   const credential = await d1.prepare(`SELECT encrypted_value, initialization_vector, auth_tag, key_version
     FROM fdp_integration_credentials
