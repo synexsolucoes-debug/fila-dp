@@ -97,6 +97,7 @@ export const expectedMigrations = [
   "0087_admission_registration_sheet.sql",
   "0088_admission_sheet_preparation.sql",
   "0089_admission_flow_completion.sql",
+  "0090_tangerino_open_admissions.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

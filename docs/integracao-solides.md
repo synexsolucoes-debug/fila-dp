@@ -383,3 +383,58 @@ seguinte, e a conferência ficava sem o material que a sustentaria.
 Arquivar o cartão agenda a mesma janela, mas **não encurta** um prazo já
 definido pela confirmação: quem concluiu escolheu o prazo. Nenhuma ficha
 existente ganhou data retroativa — o expurgo só alcança linha com prazo marcado.
+
+## 12. Admissão aberta na Sólides vira demanda (descoberta)
+
+Até a versão anterior o agente sabia fazer uma coisa só: pegar um colaborador
+que **já existia** no Vinculato e conferir a admissão dele na origem. Isso serve
+para conciliar cadastro — e não serve para o trabalho que o DP faz todo dia.
+
+Quem aparece em "Dados contratuais" na Sólides é exatamente quem **ainda não foi
+cadastrado no ERP**. Essa pessoa nunca esteve no Sankhya, logo nunca esteve em
+`fdp_employees`, logo a varredura não tinha por onde começar e a demanda não
+tinha a quem se prender. Em produção o sintoma foi exato: 107 colaboradores
+ativos, 5 admissões abertas na origem, e nenhuma demanda.
+
+### O sentido certo
+
+```
+lista de admissões na Sólides → registro da admissão aberta → demanda na fila
+     (listAdmissions)            (fdp_tangerino_open_admissions)      (cartão)
+```
+
+`discoverOpenAdmissions` (em `lib/tangerino/discovery.ts`) lê a lista que a tela
+já mostra — sem pesquisar, porque pesquisar exigiria um nome que o Vinculato não
+tem —, abre cada cartão para ler situação e etapa, e registra o que viu. Quem
+chegou a "Dados contratuais" ganha uma demanda com o checklist do cadastro no
+ERP, para alguém assumir, conferir a ficha e concluir.
+
+### O que ela deliberadamente não faz
+
+**Não cria colaborador.** A lista de colaboradores é o espelho do ERP; enchê-la
+de gente que ainda não está lá transformaria toda conferência entre os dois
+sistemas em divergência falsa. A admissão vive como o que é — processo em aberto
+na origem — e `employee_id` só é preenchido quando o cadastro acontece de
+verdade e a importação traz a pessoa.
+
+**Não chuta empresa.** A empresa do cartão sai da configuração da integração
+(`companyId`) ou da única empresa do grupo. Com duas ou mais e nenhuma escolhida,
+o cartão nasce sem empresa e quem assume preenche — CNPJ errado numa admissão é
+pior do que campo em branco.
+
+**Não duplica.** Duas proteções, e as duas importam: o índice único sobre o
+processo da origem, e o evento de integração com chave derivada do processo e da
+data. A varredura pode rodar de hora em hora sem encher a fila com a mesma
+pessoa.
+
+**Não abre demanda com identificador instável.** Um `card:0` serve para clicar
+naquela leitura e para mais nada; gravá-lo faria a execução seguinte tratar dois
+cartões diferentes como a mesma admissão.
+
+### Onde ela roda
+
+No fim do ciclo do worker, e **só quando a fila secou**: o que uma pessoa pediu
+tem precedência sobre a varredura automática, e abrir o navegador para listar
+enquanto há consulta esperando atrasaria quem está na frente de uma tela. Uma
+falha na listagem não derruba a varredura já concluída — exceto o desafio de
+autenticação, que precisa chegar ao painel.

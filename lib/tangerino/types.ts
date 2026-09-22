@@ -140,6 +140,14 @@ export interface TangerinoBrowserSession {
   openAdmissions(): Promise<void>;
   /** Pesquisa e devolve os cartões encontrados, sem escolher nenhum. */
   searchAdmission(term: string): Promise<AdmissionSearchHit[]>;
+  /**
+   * Lê os cartões que a lista já mostra, sem pesquisar por ninguém.
+   *
+   * É o que permite descobrir admissão de quem o Vinculato ainda não conhece.
+   * Pesquisar exige um nome em mãos; e o caso que importa aqui é justamente a
+   * pessoa que ainda não existe no ERP, e portanto não está em `fdp_employees`.
+   */
+  listAdmissions(): Promise<AdmissionSearchHit[]>;
   /** Seleciona em memória um cartão já identificado, sem abrir ações da ficha. */
   openAdmission(hit: AdmissionSearchHit): Promise<void>;
   /** Lê situação e etapa do cartão selecionado. */
@@ -162,7 +170,14 @@ export interface TangerinoArtifactSession extends TangerinoBrowserSession {
 export type TangerinoSessionFactory = (input: {
   workspaceId: string;
   integrationId: string;
-  consultationId: string;
+  /**
+   * A consulta que pediu a sessão, quando existe uma.
+   *
+   * A varredura de descoberta não tem consulta: ela nasce antes de haver alguém
+   * a consultar. Exigir o campo obrigaria a inventar um identificador só para
+   * satisfazer o tipo, e identificador inventado acaba gravado em algum log.
+   */
+  consultationId?: string;
 }) => Promise<TangerinoBrowserSession>;
 
 /**

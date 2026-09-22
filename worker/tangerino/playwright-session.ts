@@ -483,6 +483,26 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
    * cliente escolher a linha aqui esconderia a decisão dentro da automação, onde
    * ela não tem teste possível sem navegador.
    */
+  async listAdmissions(): Promise<AdmissionSearchHit[]> {
+    /* Sem preencher a busca: a lista já chega povoada com as admissões em
+       aberto, e é essa a leitura que descobre quem o Vinculato não conhece.
+       A segunda tentativa existe pelo mesmo motivo da busca — os cartões são
+       montados por uma chamada assíncrona, e ler cedo demais devolveria zero
+       onde há gente. */
+    const page = this.requirePage();
+    const frame = this.requireAdmissionsFrame();
+    await frame.locator(TangerinoSelectors.resultCardCss).first()
+      .waitFor({ state: "visible", timeout: Math.min(15_000, tangerinoAgentConfig().timeoutMs) })
+      .catch(() => undefined);
+    this.selectedAdmissionCard = null;
+    let hits = await collectSearchHits(frame);
+    if (hits.length === 0) {
+      await page.waitForTimeout(2_500);
+      hits = await collectSearchHits(frame);
+    }
+    return hits;
+  }
+
   async searchAdmission(term: string): Promise<AdmissionSearchHit[]> {
     const page = this.requirePage();
     const frame = this.requireAdmissionsFrame();

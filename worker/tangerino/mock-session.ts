@@ -63,6 +63,18 @@ export class MockTangerinoSession implements TangerinoBrowserSession {
     if (this.scenario === "ui_changed") throw tangerinoErrors.uiChanged("abertura da Admissão", "menu de Admissão Digital");
   }
 
+  async listAdmissions(): Promise<AdmissionSearchHit[]> {
+    this.calls.push("listAdmissions");
+    if (this.scenario === "not_found") return [];
+    if (this.scenario === "multiple_matches") {
+      return [
+        { id: "ADM-4711", label: "Maria de Souza — 01/09/2026" },
+        { id: "ADM-4899", label: "Joana Lima — 15/09/2026" },
+      ];
+    }
+    return [{ id: "ADM-4711", label: "Maria de Souza — 01/09/2026" }];
+  }
+
   async searchAdmission(term: string): Promise<AdmissionSearchHit[]> {
     this.calls.push(`searchAdmission:${term}`);
     if (this.scenario === "not_found") return [];

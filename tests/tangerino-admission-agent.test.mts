@@ -289,7 +289,14 @@ test("a sessão do agente não expõe nenhum comando de escrita", () => {
     assert.doesNotMatch(corpo, new RegExp(proibido, "iu"), `o contrato ganhou um comando "${proibido}"`);
   }
   const metodos = [...corpo.matchAll(/^ {2}(\w+)\(/gmu)].map((match) => match[1]).sort();
-  assert.deepEqual(metodos, ["back", "close", "ensureAuthenticated", "openAdmission", "openAdmissions", "readAdmission", "searchAdmission"]);
+  /* A lista é fechada de propósito: método novo no contrato reprova aqui até
+     alguém escrever por que ele é leitura. `listAdmissions` entrou com a
+     descoberta de admissões — lê os cartões que a tela já mostra, sem
+     pesquisar, sem abrir formulário e sem tocar em nada na origem. */
+  assert.deepEqual(metodos, [
+    "back", "close", "ensureAuthenticated", "listAdmissions",
+    "openAdmission", "openAdmissions", "readAdmission", "searchAdmission",
+  ]);
 });
 
 test("a autorização do worker é assinada por workspace, job e prazo curto", () => {

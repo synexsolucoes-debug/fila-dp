@@ -3,6 +3,8 @@ import { runNextConsultation } from "../../lib/tangerino/agent.ts";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { processNextTangerinoHealthCheck } from "../../lib/tangerino/health-check.ts";
 import { runNextAttachmentAuthorization } from "../../lib/tangerino/attachments-worker.ts";
+import { discoverOpenAdmissions } from "../../lib/tangerino/discovery.ts";
+import { log } from "../../lib/observability.ts";
 import { assertWorkerConfiguration, type WorkerConfigurationOptions } from "../../lib/tangerino/worker-configuration.ts";
 import { PlaywrightTangerinoSession } from "./playwright-session.ts";
 
@@ -32,6 +34,28 @@ async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: 
     );
     if (!result) break;
     handled += 1;
+  }
+
+  /* A descoberta vem depois da fila, e não antes: o que uma pessoa pediu tem
+     precedência sobre a varredura automática. E só quando a fila secou — abrir
+     o navegador para listar admissões enquanto há consulta esperando atrasaria
+     justamente quem está na frente de uma tela aguardando resposta. */
+  if (!shouldStop() && handled === 0) {
+    try {
+      const discovery = await discoverOpenAdmissions(
+        d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
+      );
+      if (discovery && discovery.demandsCreated > 0) handled += discovery.demandsCreated;
+    } catch (error) {
+      /* Uma descoberta que falha não pode derrubar a varredura: a fila pedida
+         por pessoas já foi drenada acima, e perder isso por causa de uma
+         listagem seria trocar o certo pelo incerto. */
+      const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
+      if (code === "AUTHENTICATION_REQUIRED") throw error;
+      log("warn", "tangerino.discovery_failed", { workspaceId }, {
+        errorName: error instanceof Error ? error.name : "UnknownError", errorCode: code.slice(0, 120),
+      });
+    }
   }
   return handled;
 }
