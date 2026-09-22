@@ -201,3 +201,25 @@ test("depois de achar Admissão, o clique em Visão geral também aceita texto s
   const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
   assert.match(fonte, /admissionsOverviewLinks\.map\(\(name\) => page\.getByText\(name, \{ exact: true \}\)\)/u);
 });
+
+test("a falha final distingue \"nunca foi a tela certa\" de \"faltou só um dos dois\"", async () => {
+  /* Uma conta real chegou exatamente na URL pedida com "admissão" no corpo da
+     página e mesmo assim a resolução falhou — sem saber qual dos dois
+     (marcador de página, campo de busca) faltou, o próximo palpite seria às
+     cegas de novo. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /let lastPageDiag = \{ pageIsAdmissionsApp: false, pageMarkerFound: false, searchFieldFound: false \}/u);
+  assert.match(fonte, /lastPageDiag = \{ pageIsAdmissionsApp, pageMarkerFound: Boolean\(pageMarker\), searchFieldFound: Boolean\(searchField\) \}/u);
+  assert.match(fonte, /\.\.\.lastPageDiag,/u);
+});
+
+test("a navegação fria para o módulo ganha o orçamento inteiro, não um teto curto", async () => {
+  // Uma conta real chegou exatamente onde pedimos, com "admissão" no corpo da
+  // página, e ainda assim não formou marcador+busca dentro de 15s: bootstrap
+  // frio de SPA é mais lento que um clique dentro do aplicativo já carregado.
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /frame = await this\.resolveAdmissionsFrame\(tangerinoAgentConfig\(\)\.timeoutMs\);\s*\n\s*\}/u);
+  // E as rotas de clique dentro do app continuam com teto curto — não há
+  // bootstrap frio ali para esperar.
+  assert.match(fonte, /resolveAdmissionsFrame\(Math\.min\(8_000, tangerinoAgentConfig\(\)\.timeoutMs\)\)/u);
+});
