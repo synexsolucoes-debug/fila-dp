@@ -277,3 +277,26 @@ test("a leitura de status/etapa do cartão ganha reforço quando a classe do val
   assert.match(corpo, /if \(await isVisible\(value\)\) \{/u);
   assert.match(corpo, /container\.replace\(label, ""\)\.replace\(\/\^\[\\s:–—-\]\+\/u, ""\)\.trim\(\)/u);
 });
+
+test("quando situação ou etapa não são achadas, o cartão vira evidência — sem PII no log", async () => {
+  /* Duas rodadas reais devolveram a mesma falha mesmo depois do reforço em
+     readCardValue — sinal de que o próprio rótulo não está sendo achado como
+     nó de texto isolado, e não dava para saber por quê sem ver o cartão. O
+     log estruturado é o que a pessoa que opera cola direto nesta conversa, e
+     por isso ele não carrega texto do cartão — só sinais sem identidade
+     (achou a palavra solta? quantos caracteres tem o cartão?). O que tem
+     nome de pessoa só vai para o disco da própria máquina, e só quando
+     FDP_TANGERINO_LOCAL_LOG_PATH está configurado. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(fonte.indexOf("if (!rawStatus || !stage) {"), fonte.indexOf("return {\n    // A interface mapeada"));
+  assert.match(bloco, /rawStatusFound: Boolean\(rawStatus\), stageFound: Boolean\(stage\)/u);
+  assert.match(bloco, /cardTextLength: cardText\.length/u);
+  assert.match(bloco, /statusWordLooselyPresent: hasAny\(cardText, TangerinoSelectors\.statusLabels\)/u);
+  // O log() da telemetria só recebe cardText.length — nunca cardText inteiro.
+  const chamadaDoLog = bloco.slice(bloco.indexOf('log("warn"'), bloco.indexOf("});") + 3);
+  assert.doesNotMatch(chamadaDoLog, /:\s*cardText\s*[,}]/u, "o texto do cartão não pode ir para o log estruturado");
+  assert.match(chamadaDoLog, /cardText\.length/u);
+  assert.match(bloco, /if \(localLogPath\) \{/u);
+  assert.match(bloco, /card\.screenshot\(\{ path: join\(directory, "tangerino-card-field-not-found\.png"\) \}\)/u);
+  assert.match(bloco, /writeFile\(join\(directory, "tangerino-card-field-not-found\.txt"\), cardText, "utf8"\)/u);
+});
