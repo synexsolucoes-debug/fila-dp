@@ -355,3 +355,18 @@ test("identificador do cartão tenta o link da ficha antes de desistir, e sem id
   assert.match(bloco, /card\.screenshot\(\{ path: join\(directory, "tangerino-card-identifier-not-found\.png"\) \}\)/u);
   assert.match(bloco, /writeFile\(join\(directory, "tangerino-card-identifier-not-found\.txt"\), cardText, "utf8"\)/u);
 });
+
+test("sem nenhuma fonte técnica, o nome completo vira identificador — decisão confirmada com o DP", async () => {
+  /* Uma execução real provou, nos cinco cartões lidos, que esta conta não
+     expõe data-id, id, nem link algum: hrefCount 0 e nenhuma palavra de
+     protocolo em lugar nenhum do texto. Perguntado, o DP escolheu nome
+     completo como identificador — é o único dado estável que sobra, e o
+     prefixo "nome:" deixa registrado, no banco e no log, que ele não veio de
+     um protocolo da origem. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(fonte.indexOf("const trimmedDisplayName ="), fonte.indexOf("if (!externalAdmissionId) {"));
+  assert.match(bloco, /const trimmedDisplayName = displayName\.trim\(\);/u);
+  assert.match(bloco, /\?\? \(trimmedDisplayName \? `nome:\$\{trimmedDisplayName\}` : undefined\);/u);
+  // O identificador nasce do que já estava em memória — nenhuma navegação, nenhum clique novo.
+  assert.doesNotMatch(bloco, /\.click\(/u);
+});
