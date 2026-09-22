@@ -417,7 +417,7 @@ export async function ensureOpenAdmissionAttachmentAuthorization(d1: Database, i
         AND existing.authorized_by_user_id IS NULL
         AND existing.state = 'FAILED' AND existing.attempt < 3
         AND (existing.attempt < 2 OR existing.error_code IN
-          ('TANGERINO_VAULT_CONFIGURATION', 'TANGERINO_UNEXPECTED_ERROR'))
+          ('TANGERINO_VAULT_CONFIGURATION', 'TANGERINO_UNEXPECTED_ERROR', 'TANGERINO_TIMEOUT'))
       RETURNING existing.id
     ), inserted AS (
       INSERT INTO fdp_tangerino_attachment_authorizations
