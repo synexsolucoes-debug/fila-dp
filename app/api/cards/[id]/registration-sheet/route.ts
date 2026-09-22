@@ -3,7 +3,9 @@ import { chooseRegistrationFormAttachment, openSheet, sanitizeSheetFields, sanit
 import {
   detectIdentityDivergence, mergeSheetFields, registryFields, sanitizeFieldMeta, type FieldMetaMap,
 } from "@/lib/admission-sheet-fields";
-import { loadPhotoOcrSuggestions } from "@/lib/admission-sheet-photo-ocr-service";
+import {
+  backfillPhotoOcrForCard, loadPhotoOcrSuggestions, runPendingPhotoOcrForCard,
+} from "@/lib/admission-sheet-photo-ocr-service";
 import {
   enqueueSheetPreparation, listCardAttachments, prepareAdmissionSheet, sheetErrorMessage, SHEET_MAX_ATTEMPTS,
 } from "@/lib/admission-sheet-service";
@@ -82,7 +84,11 @@ export async function GET(_request: Request, context: RouteContext) {
     /* Sugestões do OCR de fotos (RG, CPF, CTPS): independem da ficha em PDF
        existir. Uma demanda pode ter só fotos anexadas ainda, e mesmo com a
        ficha pronta a foto pode ter achado um campo que o PDF não tinha
-       (dados bancários não saem do Registro de Empregado, por exemplo). */
+       (dados bancários não saem do Registro de Empregado, por exemplo).
+       O backfill cobre demandas que já tinham fotos anexadas antes deste
+       recurso existir — sem ele, essas fotos ficariam mudas para sempre. É
+       só inserção, sem chamada de rede, e por isso cabe numa leitura. */
+    await backfillPhotoOcrForCard(d1, workspace.id, cardId).catch(() => undefined);
     const photoSuggestions = await loadPhotoOcrSuggestions(d1, workspace.id, cardId)
       .then((rows) => rows.filter((row) => Object.keys(row.fields).length > 0))
       .catch(() => []);
@@ -173,6 +179,16 @@ export async function POST(_request: Request, context: RouteContext) {
     requireWorkspaceRole(workspace.role, ["admin", "member"]);
     requireCapability(workspace, "attachments.write");
     requireCapability(workspace, "admission.sheet.read");
+
+    /* Mesmo backfill do GET, mas seguido de tentativa de verdade: quem clicou
+       em "Ler a ficha" está olhando a tela e esperando, então vale a pena
+       gastar algumas chamadas de rede agora — limitado para o clique não
+       ficar preso numa demanda com muitas fotos. O resto continua na fila do
+       cron (`claimPendingPhotoOcr`). Roda antes da checagem do PDF: uma
+       demanda só com fotos, sem Registro de Empregado ainda, não deveria
+       deixar as fotos mudas só porque não há PDF. */
+    await backfillPhotoOcrForCard(d1, workspace.id, cardId).catch(() => undefined);
+    await runPendingPhotoOcrForCard(d1, workspace.id, cardId, 5).catch(() => 0);
 
     const chosen = chooseRegistrationFormAttachment(await listCardAttachments(d1, workspace.id, cardId));
     if (!chosen) {

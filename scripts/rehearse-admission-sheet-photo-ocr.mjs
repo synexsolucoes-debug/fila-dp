@@ -31,7 +31,7 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { openSheet, sealSheet } from "../lib/admission-sheet.ts";
 import { getScopedD1 } from "../db/index.ts";
-import { enqueuePhotoOcr } from "../lib/admission-sheet-photo-ocr-service.ts";
+import { backfillPhotoOcrForCard, enqueuePhotoOcr } from "../lib/admission-sheet-photo-ocr-service.ts";
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 if (!databaseUrl?.startsWith("postgres")) {
@@ -51,6 +51,10 @@ const grupos = ["a", "b"].map((letra) => {
     listId: `${workspaceId}-list`,
     cardId: `${workspaceId}-card`,
     attachmentId: `${workspaceId}-foto`,
+    /* Uma segunda foto, sem nenhuma linha de OCR — é o cenário do backfill:
+       anexo que chegou antes do recurso existir, ou que por algum motivo
+       nunca foi enfileirado. */
+    attachmentId2: `${workspaceId}-foto2`,
     ocrId: `${workspaceId}-ocr`,
   };
 });
@@ -132,6 +136,10 @@ function semear(grupo) {
         (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by)
       VALUES ($1, $2, $3, $4, 'rg-frente.jpg', 'image/jpeg', 2048, $5)`,
       [attachmentId, workspaceId, cardId, `${workspaceId}/rg-frente.jpg`, userId]);
+    await client.query(`INSERT INTO fdp_card_attachments
+        (id, workspace_id, card_id, object_key, filename, content_type, size_bytes, uploaded_by)
+      VALUES ($1, $2, $3, $4, 'rg-verso.jpg', 'image/jpeg', 2048, $5)`,
+      [grupo.attachmentId2, workspaceId, cardId, `${workspaceId}/rg-verso.jpg`, userId]);
   });
 }
 
@@ -254,6 +262,31 @@ try {
   await recusa("tentativas acima do teto são recusadas", alfa.workspaceId,
     (client) => client.query(
       "UPDATE fdp_admission_sheet_photo_ocr SET attempts = 21 WHERE attachment_id = $1", [alfa.attachmentId]));
+
+  // 8b. `backfillPhotoOcrForCard` enfileira o anexo sem nenhuma linha, e não
+  // mexe no que já existe — nem numa sugestão `failed`, ao contrário de
+  // `enqueuePhotoOcr` (verificação 4 acima, que reseta ao reenviar o mesmo
+  // arquivo). É a diferença que justifica ter uma função própria: rodar o
+  // backfill a cada abertura da ficha não pode reiniciar tentativa esgotada
+  // a cada visita.
+  await comTenant(alfa.workspaceId, (client) => client.query(
+    `UPDATE fdp_admission_sheet_photo_ocr SET state = 'failed', attempts = 3, error_code = 'OCR_REQUEST_FAILED'
+     WHERE attachment_id = $1`, [alfa.attachmentId]));
+  const enfileirados = await backfillPhotoOcrForCard(escopado, alfa.workspaceId, alfa.cardId);
+  conferir("o backfill enfileira só o anexo sem nenhuma linha", enfileirados === 1, `enfileirados=${enfileirados}`);
+  const foto2 = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT state FROM fdp_admission_sheet_photo_ocr WHERE attachment_id = $1", [alfa.attachmentId2]);
+    return rows[0];
+  });
+  conferir("a foto sem linha nenhuma vira pendente pelo backfill", foto2?.state === "pending", String(foto2?.state));
+  const aindaFalhou = await comTenant(alfa.workspaceId, async (client) => {
+    const { rows } = await client.query(
+      "SELECT state, attempts FROM fdp_admission_sheet_photo_ocr WHERE attachment_id = $1", [alfa.attachmentId]);
+    return rows[0];
+  });
+  conferir("o backfill não reseta uma sugestão já tentada (failed continua failed)",
+    aindaFalhou?.state === "failed" && aindaFalhou?.attempts === 3, JSON.stringify(aindaFalhou));
 
   // 9. Apagar o anexo apaga a sugestão lida dele.
   await comTenant(alfa.workspaceId, (client) =>
