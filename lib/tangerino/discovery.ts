@@ -176,7 +176,7 @@ export async function discoverOpenAdmissions(
         const backfill = await ensureOpenAdmissionAttachmentAuthorization(d1, {
           workspaceId, cardId: record.cardId, integrationId, externalAdmissionId: record.externalAdmissionId,
         });
-        if (backfill.status === "created") summary.attachmentsBackfilled += 1;
+        if (backfill.status === "created" || backfill.status === "requeued") summary.attachmentsBackfilled += 1;
         continue;
       }
 

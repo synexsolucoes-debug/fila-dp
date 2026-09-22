@@ -393,21 +393,29 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
  * buraco que o clique manual existia para cobrir. Em vez de pedir um clique
  * por demanda antiga, cada ciclo da descoberta verifica e completa sozinho.
  *
- * Só cria quando NÃO existe autorização nenhuma, de nenhum estado: se já
- * houver uma — inclusive `FAILED` —, quem decide tentar de novo é uma
- * pessoa, pelo botão "Autorizar novamente". A descoberta nunca força
- * retentativa automática, para não mascarar um problema que se repete a
- * cada ciclo.
+ * Uma autorização automática que falhou na primeira tentativa por mudança de
+ * tela ganha uma única retomada (`attempt < 2`). Isso cura as demandas que
+ * ficaram `FAILED` antes de uma correção do worker sem pedir clique manual, e
+ * ao mesmo tempo impede um laço infinito a cada descoberta de 15 minutos.
  */
 export async function ensureOpenAdmissionAttachmentAuthorization(d1: Database, input: {
   workspaceId: string;
   cardId: string;
   integrationId: string;
   externalAdmissionId: string;
-}): Promise<{ status: "created" | "already_present" }> {
+}): Promise<{ status: "created" | "requeued" | "already_present" }> {
   const authorizationId = crypto.randomUUID();
-  const inserted = await d1.prepare(`WITH lock AS (
+  const recovered = await d1.prepare(`WITH lock AS (
       SELECT pg_advisory_xact_lock(hashtext(?))
+    ), requeued AS (
+      UPDATE fdp_tangerino_attachment_authorizations existing
+      SET state = 'QUEUED', error_code = '', started_at = NULL, completed_at = NULL,
+          expires_at = CURRENT_TIMESTAMP + interval '24 hours', updated_at = CURRENT_TIMESTAMP
+      FROM lock
+      WHERE existing.workspace_id = ? AND existing.card_id = ?
+        AND existing.authorized_by_user_id IS NULL
+        AND existing.state = 'FAILED' AND existing.attempt < 2
+      RETURNING existing.id
     ), inserted AS (
       INSERT INTO fdp_tangerino_attachment_authorizations
         (id, workspace_id, card_id, employee_id, integration_id, external_admission_id, authorized_by_user_id)
@@ -417,11 +425,14 @@ export async function ensureOpenAdmissionAttachmentAuthorization(d1: Database, i
         WHERE existing.workspace_id = ? AND existing.card_id = ?
       )
       RETURNING id
-    ) SELECT id FROM inserted`)
-    .bind(`tangerino-attachments:${input.workspaceId}:${input.cardId}`, authorizationId, input.workspaceId, input.cardId,
+    ) SELECT id, 'requeued'::text AS status FROM requeued
+      UNION ALL SELECT id, 'created'::text AS status FROM inserted`)
+    .bind(`tangerino-attachments:${input.workspaceId}:${input.cardId}`,
+      input.workspaceId, input.cardId,
+      authorizationId, input.workspaceId, input.cardId,
       input.integrationId, text(input.externalAdmissionId, 120), input.workspaceId, input.cardId)
-    .first<{ id: string }>();
-  if (!inserted) return { status: "already_present" };
+    .first<{ id: string; status: "created" | "requeued" }>();
+  if (!recovered) return { status: "already_present" };
 
   await d1.batch([
     prepareAuditEvent({
@@ -431,11 +442,13 @@ export async function ensureOpenAdmissionAttachmentAuthorization(d1: Database, i
       action: "tangerino.attachments.authorized",
       entityType: "card",
       entityId: input.cardId,
-      after: { authorizationId, auto: true, backfilled: true, expiresInHours: 24 },
+      after: { authorizationId: recovered.id, auto: true, backfilled: true,
+        recovered: recovered.status === "requeued", expiresInHours: 24 },
     }),
   ]);
   await recordActivity(input.workspaceId, input.cardId, "SYSTEM", "tangerino.attachments.auto_authorized", {
-    authorizationId, expiresInHours: 24, backfilled: true,
+    authorizationId: recovered.id, expiresInHours: 24, backfilled: true,
+    recovered: recovered.status === "requeued",
   });
-  return { status: "created" };
+  return { status: recovered.status };
 }

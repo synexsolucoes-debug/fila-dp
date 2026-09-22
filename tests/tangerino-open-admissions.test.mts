@@ -129,11 +129,14 @@ test("quando a tela muda, o log diz onde o navegador parou", async () => {
 test("as entradas da tela de Admissão passam pela allowlist de navegação", async () => {
   // Rota nova que não passa na barreira vira falha de navegação em produção, e
   // o sintoma seria idêntico ao que já enfrentamos: tela não encontrada.
-  const { assertAllowedTangerinoUrl } = await import("../lib/tangerino/navigation-security.ts");
+  // A resolução DNS pública/privada já tem teste próprio; este teste de catálogo
+  // não deve depender de a máquina de CI alcançar o DNS do fornecedor.
+  const { isAllowedTangerinoHost } = await import("../lib/tangerino/navigation-security.ts");
   const { tangerinoAdmissionsEntryUrls } = await import("../lib/tangerino/hosts.ts");
   for (const entrada of tangerinoAdmissionsEntryUrls) {
-    const url = await assertAllowedTangerinoUrl(entrada);
+    const url = new URL(entrada);
     assert.equal(url.protocol, "https:");
+    assert.equal(isAllowedTangerinoHost(url.hostname), true);
   }
 });
 
@@ -493,17 +496,29 @@ test("o termo de busca nunca digita o prefixo nome: no campo da Sólides", async
   );
 });
 
-test("o download da ficha tenta extrair o ID pelo link do cartão da busca antes de desistir", async () => {
+test("o download abre o cartão antes de desistir por falta de ID", async () => {
   const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
   const bloco = fonte.slice(
     fonte.indexOf("async downloadAdmissionArtifacts"),
-    fonte.indexOf("await mkdir(input.targetDirectory"),
+    fonte.indexOf("const formPage = await this.context?.newPage()"),
   );
-  assert.match(bloco, /let admissionId = input\.externalAdmissionId\.trim\(\);/u);
-  assert.match(bloco, /const extracted = this\.selectedAdmissionCard \? await extractFichaColaboradorId\(this\.selectedAdmissionCard\) : null;/u);
-  assert.match(bloco, /if \(!extracted\) \{/u);
-  assert.match(bloco, /throw tangerinoErrors\.uiChanged\("download dos anexos", "identificador numérico da admissão"\);/u);
-  assert.match(bloco, /admissionId = extracted;/u);
+  assert.match(bloco, /admissionId = await extractFichaColaboradorId\(this\.selectedAdmissionCard\) \?\? "";/u);
+  assert.match(bloco, /page\.on\("request", observeAdmissionRequest\)/u);
+  assert.match(bloco, /admissionIdFromRequest\(sentArchiveRequest\.url\(\), sentArchiveRequest\.postData\(\)\)/u);
+  assert.match(bloco, /exportRegistrationFormFromScope\(scope\)/u);
+  const clique = bloco.indexOf("await openDocuments.click()");
+  const falha = bloco.indexOf('throw tangerinoErrors.uiChanged("download da ficha cadastral", "identificador numérico após abrir o cartão")');
+  assert.ok(clique > 0 && falha > clique, "a falta de ID só pode falhar depois de abrir o cartão");
+});
+
+test("o ID da ficha vem apenas de rota ou campo semanticamente identificado", async () => {
+  const { admissionIdFromRequest } = await import("../worker/tangerino/playwright-session.ts");
+  assert.equal(admissionIdFromRequest("https://admissao-demissao.tangerino.com.br/ficha-colaborador/194851", null), "194851");
+  assert.equal(admissionIdFromRequest("https://apis.tangerino.com.br/api/v1/documentos/admissao/download-zip",
+    JSON.stringify({ idAdmissao: 194851 })), "194851");
+  assert.equal(admissionIdFromRequest("https://apis.tangerino.com.br/api/v1/documentos/admissao/download-zip",
+    JSON.stringify({ cpf: 12345678901, documentoId: 77 })), null);
+  assert.equal(admissionIdFromRequest("https://apis.tangerino.com.br/qualquer/12345", null), null);
 });
 
 test("a coluna authorized_by_user_id da autorização de anexos aceita nulo", async () => {
@@ -540,14 +555,16 @@ test("a descoberta cura sozinha as demandas antigas que ficaram sem autorizaçã
     fonte.length,
   );
   assert.match(funcao, /WHERE NOT EXISTS \(\s*SELECT 1 FROM fdp_tangerino_attachment_authorizations existing\s*WHERE existing\.workspace_id = \? AND existing\.card_id = \?\s*\)/u);
-  // Sem filtro de estado: uma autorização FAILED não é recriada sozinha — só pelo botão manual.
-  assert.doesNotMatch(funcao, /existing\.state/u);
+  // Uma falha automática anterior ganha uma única retomada; attempt 2 encerra o laço.
+  assert.match(funcao, /existing\.authorized_by_user_id IS NULL/u);
+  assert.match(funcao, /existing\.state = 'FAILED' AND existing\.attempt < 2/u);
+  assert.match(funcao, /SET state = 'QUEUED'/u);
 
   const discoveryFonte = await readFile(new URL("../lib/tangerino/discovery.ts", import.meta.url), "utf8");
   const loop = discoveryFonte.slice(discoveryFonte.indexOf("if (!record) { summary.skipped"), discoveryFonte.indexOf("if (!isContractDataStage(admission.stage)) continue;"));
   assert.match(loop, /if \(record\.cardId\) \{/u);
   assert.match(loop, /await ensureOpenAdmissionAttachmentAuthorization\(d1, \{/u);
-  assert.match(loop, /if \(backfill\.status === "created"\) summary\.attachmentsBackfilled \+= 1;/u);
+  assert.match(loop, /backfill\.status === "created" \|\| backfill\.status === "requeued"/u);
   assert.match(loop, /continue;/u);
 });
 
@@ -557,11 +574,11 @@ test("quando nem a busca expõe o identificador numérico da ficha, o cartão vi
      rastro nenhum: este era o único ponto de falha do arquivo sem screenshot
      nem log estruturado, só a mensagem repetida. */
   const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
-  const bloco = fonte.slice(
-    fonte.indexOf("const extracted = this.selectedAdmissionCard ? await extractFichaColaboradorId"),
-    fonte.indexOf("admissionId = extracted;"),
-  );
+  const finalLog = fonte.indexOf('log("warn", "tangerino.download_identifier_not_found"');
+  const bloco = fonte.slice(fonte.lastIndexOf("if (!admissionId) {", finalLog),
+    fonte.indexOf("const formPage = await this.context?.newPage()"));
   assert.match(bloco, /log\("warn", "tangerino\.download_identifier_not_found", \{\}, \{/u);
+  assert.match(bloco, /documentArchiveReceived: true/u);
   assert.match(bloco, /exportButtonWordLooselyPresent: hasCardTextLabel\(cardText, TangerinoSelectors\.exportRegistrationFormButtons\)/u);
   // O log() da telemetria não pode receber o texto do cartão — só o comprimento.
   const chamadaDoLog = bloco.slice(bloco.indexOf('log("warn", "tangerino.download_identifier_not_found"'), bloco.indexOf("});") + 3);

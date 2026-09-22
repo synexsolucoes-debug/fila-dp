@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Locator, type Page, type Request } from "playwright";
 import { hasCardTextLabel, readCardTextValue } from "../../lib/tangerino/card-text.ts";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { tangerinoErrors, TangerinoAgentError } from "../../lib/tangerino/errors.ts";
@@ -132,7 +132,16 @@ export function detectAuthBarrier(text: string, captchaWidgetPresent = false): "
 /** O desafio existe no DOM mesmo quando a página não escreve a palavra. */
 export async function hasCaptchaWidget(page: Page) {
   for (const selector of TangerinoSelectors.captchaWidgets) {
-    if (await page.locator(selector).count().catch(() => 0)) return true;
+    const widgets = page.locator(selector);
+    const total = Math.min(await widgets.count().catch(() => 0), 10);
+    for (let index = 0; index < total; index += 1) {
+      /* O shell mantém iframes de reCAPTCHA montados e escondidos depois que a
+       * sessão já foi aceita. Contar qualquer nó do DOM transformava esse
+       * resíduo invisível em desafio real e fazia o operador "autorizar" cada
+       * navegador novo. Um desafio que exige uma pessoa ocupa espaço visível;
+       * o iframe oculto, não. */
+      if (await isVisible(widgets.nth(index))) return true;
+    }
   }
   return false;
 }
@@ -166,6 +175,53 @@ async function extractFichaColaboradorId(card: Locator): Promise<string | null> 
     if (match) return match[1];
   }
   return null;
+}
+
+/**
+ * Recupera o ID da admissão das navegações que a própria interface realizou.
+ *
+ * O cartão real desta conta não expõe `data-id`, `id` nem link. Depois que ele
+ * é aberto, porém, a SPA precisa enviar o identificador ao backend para montar
+ * documentos e ficha. Lemos somente rotas e campos com significado explícito
+ * de admissão/colaborador; um número genérico nunca é aceito como identidade.
+ */
+export function admissionIdFromRequest(urlRaw: string, postData: string | null | undefined): string | null {
+  const candidates = new Set<string>();
+  const accept = (value: unknown) => {
+    const candidate = String(value ?? "").trim();
+    if (/^[1-9][0-9]{0,19}$/u.test(candidate)) candidates.add(candidate);
+  };
+  const semanticKey = /^(?:(?:id|codigo)[_-]?)?(?:admiss(?:ao|ão)|admission|colaborador|ficha)(?:[_-]?(?:id|codigo))?$/iu;
+
+  try {
+    const parsedUrl = new URL(urlRaw);
+    for (const pattern of [
+      /\/ficha-colaborador\/([1-9][0-9]{0,19})(?:[/?#]|$)/u,
+      /\/ficha-cadastral\/report\/([1-9][0-9]{0,19})(?:[/?#]|$)/u,
+    ]) {
+      const match = pattern.exec(parsedUrl.pathname);
+      if (match) accept(match[1]);
+    }
+    for (const [key, value] of parsedUrl.searchParams) if (semanticKey.test(key)) accept(value);
+  } catch { /* URL incompleta não fornece evidência. */ }
+
+  if (postData) {
+    try {
+      const visit = (value: unknown, key = "", depth = 0): void => {
+        if (depth > 6) return;
+        if (semanticKey.test(key) && (typeof value === "string" || typeof value === "number")) accept(value);
+        if (Array.isArray(value)) {
+          for (const item of value) visit(item, key, depth + 1);
+        } else if (value && typeof value === "object") {
+          for (const [childKey, child] of Object.entries(value as Record<string, unknown>)) {
+            visit(child, childKey, depth + 1);
+          }
+        }
+      };
+      visit(JSON.parse(postData));
+    } catch { /* Corpo não JSON não vira fonte de identidade. */ }
+  }
+  return candidates.size === 1 ? [...candidates][0] : null;
 }
 
 /** Lê um cartão real sem abrir ficha, documentos ou qualquer ação de edição. */
@@ -304,13 +360,15 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   private selectedAdmissionCard: Locator | null = null;
   private directAdmission = false;
   private persistentProfile = false;
+  private deferredClose = false;
   private authenticatedAt = 0;
   /** Requisições de alteração que a página tentou. Só método e caminho. */
   readonly blockedWrites: Array<{ method: string; path: string }> = [];
 
-  static async create(options: { workspaceId?: string } = {}) {
+  static async create(options: { workspaceId?: string; deferClose?: boolean } = {}) {
     const config = tangerinoAgentConfig();
     const session = new PlaywrightTangerinoSession();
+    session.deferredClose = options.deferClose === true;
     const browserOptions = {
       headless: config.headless,
       chromiumSandbox: process.env.FDP_TANGERINO_CHROMIUM_SANDBOX === "true",
@@ -570,8 +628,15 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   async ensureAuthenticated(input: { endpoint: string; username: string; password: string; timeoutMs: number }) {
     const page = this.requirePage();
     if (this.sessionIsFresh()) return;
-    const url = await assertAllowedTangerinoUrl(input.endpoint);
+    /* Com perfil persistente, validar a sessão pela própria área de Admissão.
+     * Ir sempre à tela de login, mesmo com cookie válido, era suficiente para o
+     * provedor montar um novo widget antifraude a cada processo. Se a sessão
+     * expirou, o próprio destino redireciona para o login e o fluxo abaixo
+     * continua igual; se está válida, não tocamos no portão novamente. */
+    const authenticationProbe = this.persistentProfile ? tangerinoAdmissionsEntryUrls[0] : input.endpoint;
+    const url = await assertAllowedTangerinoUrl(authenticationProbe);
     await page.goto(url.toString(), { waitUntil: "domcontentloaded", timeout: input.timeoutMs });
+    if (this.persistentProfile) await page.waitForTimeout(1_000);
 
     let barrier = await this.currentAuthBarrier();
     if (barrier === "mfa" || barrier === "captcha") barrier = await this.waitForManualAuthentication(barrier);
@@ -1001,45 +1066,10 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
    * download; nenhum seletor genérico de ação entra neste caminho.
    */
   async downloadAdmissionArtifacts(input: { externalAdmissionId: string; targetDirectory: string }) {
-    let admissionId = input.externalAdmissionId.trim();
-    if (!/^\d{1,20}$/u.test(admissionId)) {
-      /* Motivo, não invenção: nesta conta o cartão da lista não expõe
-       * protocolo (PRs #163/#164), então `externalAdmissionId` pode ser o
-       * nome prefixado (`nome:...`), não um identificador real do Tangerino.
-       * Antes de desistir, tenta o mesmo link para a ficha que
-       * `readAdmissionCard` já procura, agora no cartão que a busca por
-       * nome selecionou — um resultado de busca pode expor mais do que a
-       * lista sem filtro expunha. Se também faltar, o erro abaixo continua
-       * claro sobre o que falta. */
-      const extracted = this.selectedAdmissionCard ? await extractFichaColaboradorId(this.selectedAdmissionCard) : null;
-      if (!extracted) {
-        /* Uma execução real falhou exatamente aqui, sem deixar rastro: este
-         * ponto nunca salvava evidência local, então a única pista era a
-         * mensagem de erro repetida. Mesmo padrão sem PII do resto do
-         * arquivo — log estruturado só com sinais, e a evidência com nome
-         * de pessoa só no disco do DP, e só quando
-         * FDP_TANGERINO_LOCAL_LOG_PATH está configurado. */
-        const card = this.selectedAdmissionCard;
-        const cardText = card ? await card.innerText().catch(() => "") : "";
-        const hrefs = card ? await card.locator("a[href]").evaluateAll(
-          (anchors) => anchors.map((anchor) => anchor.getAttribute("href") ?? "").slice(0, 10),
-        ).catch(() => [] as string[]) : [];
-        log("warn", "tangerino.download_identifier_not_found", {}, {
-          hasSelectedCard: Boolean(card),
-          cardTextLength: cardText.length,
-          hrefCount: hrefs.length,
-          hrefWithDigitsCount: hrefs.filter((href) => /\d{2,}/u.test(href)).length,
-          exportButtonWordLooselyPresent: hasCardTextLabel(cardText, TangerinoSelectors.exportRegistrationFormButtons),
-        });
-        const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
-        if (localLogPath && card) {
-          const directory = dirname(localLogPath);
-          await card.screenshot({ path: join(directory, "tangerino-download-identifier-not-found.png") }).catch(() => undefined);
-          await writeFile(join(directory, "tangerino-download-identifier-not-found.txt"), cardText, "utf8").catch(() => undefined);
-        }
-        throw tangerinoErrors.uiChanged("download dos anexos", "identificador numérico da admissão");
-      }
-      admissionId = extracted;
+    const suppliedId = input.externalAdmissionId.trim();
+    let admissionId = /^\d{1,20}$/u.test(suppliedId) ? suppliedId : "";
+    if (!admissionId && this.selectedAdmissionCard) {
+      admissionId = await extractFichaColaboradorId(this.selectedAdmissionCard) ?? "";
     }
     if (!this.selectedAdmissionCard && !this.directAdmission) {
       throw tangerinoErrors.uiChanged("download dos anexos", "cartão selecionado");
@@ -1053,6 +1083,45 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
         await page.screenshot({ path: join(dirname(localLogPath), filename), fullPage: true })
           .catch(() => undefined);
       }
+    };
+
+    const downloadRegistrationForm = async (eventPage: Page, exportButton: Locator) => {
+      const formResponse = eventPage.waitForResponse((response) => {
+        try {
+          const path = new URL(response.url()).pathname;
+          return response.request().method() === "POST"
+            && /\/api\/v1\/ficha-cadastral\/report\/\d+$/u.test(path);
+        } catch { return false; }
+      }, {
+        timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs),
+      });
+      const formRequest = eventPage.waitForRequest((request) => {
+        try {
+          const path = new URL(request.url()).pathname;
+          return request.method() === "POST"
+            && /\/api\/v1\/ficha-cadastral\/report\/\d+$/u.test(path);
+        } catch { return false; }
+      }, {
+        timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs),
+      });
+      // A interface cria o PDF em JavaScript. Um clique de ponteiro forçado
+      // pode acertar visualmente o botão sem executar o listener Angular quando
+      // o overlay de carregamento está terminando. O `click()` nativo atua no
+      // mesmo botão exato e dispara o listener registrado no próprio elemento.
+      await exportButton.evaluate((element) => (element as HTMLButtonElement).click());
+      const request = await formRequest;
+      admissionId ||= admissionIdFromRequest(request.url(), request.postData()) ?? "";
+      log("info", "tangerino.attachments_registration_form_request_sent");
+      const form = await formResponse;
+      await assertAllowedTangerinoUrl(form.url());
+      if (!form.ok()) throw tangerinoErrors.unavailable("A Sólides não concluiu o download da ficha cadastral.");
+      const formBytes = await form.body();
+      if (formBytes.byteLength < 5 || formBytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
+        throw tangerinoErrors.unavailable("A Sólides devolveu uma ficha cadastral inválida.");
+      }
+      const registrationFormPath = join(input.targetDirectory, "ficha-cadastral-solides.pdf");
+      await writeFile(registrationFormPath, formBytes);
+      return registrationFormPath;
     };
 
     const exportRegistrationForm = async (formPage: Page) => {
@@ -1079,41 +1148,13 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
         await saveArtifactDiagnostic("tangerino-registration-form-not-found.png");
         throw tangerinoErrors.uiChanged("download da ficha cadastral", "botão Exportar ficha do colaborador");
       }
-      const formResponse = formPage.waitForResponse((response) => {
-        try {
-          const path = new URL(response.url()).pathname;
-          return response.request().method() === "POST"
-            && /\/api\/v1\/ficha-cadastral\/report\/\d+$/u.test(path);
-        } catch { return false; }
-      }, {
-        timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs),
-      });
-      const formRequest = formPage.waitForRequest((request) => {
-        try {
-          const path = new URL(request.url()).pathname;
-          return request.method() === "POST"
-            && /\/api\/v1\/ficha-cadastral\/report\/\d+$/u.test(path);
-        } catch { return false; }
-      }, {
-        timeout: Math.min(60_000, tangerinoAgentConfig().timeoutMs),
-      });
-      // A interface cria o PDF em JavaScript. Um clique de ponteiro forçado
-      // pode acertar visualmente o botão sem executar o listener Angular quando
-      // o overlay de carregamento está terminando. O `click()` nativo atua no
-      // mesmo botão exato e dispara o listener registrado no próprio elemento.
-      await exportButton.evaluate((element) => (element as HTMLButtonElement).click());
-      await formRequest;
-      log("info", "tangerino.attachments_registration_form_request_sent");
-      const form = await formResponse;
-      await assertAllowedTangerinoUrl(form.url());
-      if (!form.ok()) throw tangerinoErrors.unavailable("A Sólides não concluiu o download da ficha cadastral.");
-      const formBytes = await form.body();
-      if (formBytes.byteLength < 5 || formBytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
-        throw tangerinoErrors.unavailable("A Sólides devolveu uma ficha cadastral inválida.");
-      }
-      const registrationFormPath = join(input.targetDirectory, "ficha-cadastral-solides.pdf");
-      await writeFile(registrationFormPath, formBytes);
-      return registrationFormPath;
+      return downloadRegistrationForm(formPage, exportButton);
+    };
+
+    const exportRegistrationFormFromScope = async (formScope: TangerinoLocatorScope) => {
+      const exportButton = await firstVisible(TangerinoSelectors.exportRegistrationFormButtons.map((name) =>
+        formScope.getByRole("button", { name })));
+      return exportButton ? downloadRegistrationForm(page, exportButton) : null;
     };
 
     let registrationFormPath: string | null = null;
@@ -1142,9 +1183,23 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
         this.selectedAdmissionCard?.getByRole("button", { name }) ?? page.locator("__never__")));
       const openDetails = await firstVisible(TangerinoSelectors.openAdmissionDetailsButtons.map((name) =>
         this.selectedAdmissionCard?.getByRole("button", { name }) ?? page.locator("__never__")));
-      if (openDocuments) await openDocuments.click();
-      else if (openDetails) await openDetails.click();
-      else await this.selectedAdmissionCard.click();
+      const observedIds = new Set<string>();
+      const observeAdmissionRequest = (request: Request) => {
+        const found = admissionIdFromRequest(request.url(), request.postData());
+        if (found) observedIds.add(found);
+      };
+      page.on("request", observeAdmissionRequest);
+      try {
+        if (openDocuments) await openDocuments.click();
+        else if (openDetails) await openDetails.click();
+        else await this.selectedAdmissionCard.click();
+        await page.waitForTimeout(1_000);
+      } finally {
+        page.off("request", observeAdmissionRequest);
+      }
+      if (!admissionId && observedIds.size === 1) admissionId = [...observedIds][0];
+      admissionId ||= admissionIdFromRequest(page.url(), null) ?? "";
+      admissionId ||= await extractFichaColaboradorId(this.selectedAdmissionCard) ?? "";
 
       // O primeiro botão só expande a linha do tempo. "Aprovar documentos" é o
       // cabeçalho de um `nz-collapse-panel`; o texto fica visível mesmo quando o
@@ -1203,7 +1258,8 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     // camada visual intercepte o evento antes de ele alcançar o listener
     // Angular `downloadTodosArquivos` confirmado no bundle oficial.
     await downloadAll.evaluate((element) => (element as HTMLButtonElement).click());
-    await archiveRequest;
+    const sentArchiveRequest = await archiveRequest;
+    admissionId ||= admissionIdFromRequest(sentArchiveRequest.url(), sentArchiveRequest.postData()) ?? "";
     log("info", "tangerino.attachments_archive_request_sent");
     const archive = await archiveResponse;
     await assertAllowedTangerinoUrl(archive.url());
@@ -1218,6 +1274,59 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     await writeFile(documentArchivePath, archiveBytes);
 
     if (registrationFormPath) return { documentArchivePath, registrationFormPath };
+
+    /* O cartão pode revelar o botão da ficha somente depois de ser aberto. Esse
+     * é o caminho preferido quando a lista não expõe ID: usa a própria ação de
+     * exportação da tela e não precisa reconstruir URL nenhuma. */
+    registrationFormPath = await exportRegistrationFormFromScope(scope);
+    if (!registrationFormPath && this.selectedAdmissionCard) {
+      const openDetails = await firstVisible(TangerinoSelectors.openAdmissionDetailsButtons.map((name) =>
+        this.selectedAdmissionCard?.getByRole("button", { name }) ?? page.locator("__never__")));
+      if (openDetails) {
+        const observedIds = new Set<string>();
+        const observeAdmissionRequest = (request: Request) => {
+          const found = admissionIdFromRequest(request.url(), request.postData());
+          if (found) observedIds.add(found);
+        };
+        page.on("request", observeAdmissionRequest);
+        try {
+          await openDetails.click();
+          await page.waitForTimeout(1_000);
+        } finally {
+          page.off("request", observeAdmissionRequest);
+        }
+        if (!admissionId && observedIds.size === 1) admissionId = [...observedIds][0];
+        admissionId ||= admissionIdFromRequest(page.url(), null) ?? "";
+        registrationFormPath = await exportRegistrationFormFromScope(scope)
+          ?? await exportRegistrationFormFromScope(page);
+      }
+    }
+    if (registrationFormPath) return { documentArchivePath, registrationFormPath };
+
+    if (!admissionId) {
+      /* Só falha depois de abrir o cartão e concluir o ZIP. Antes, a falta de
+       * ID interrompia o fluxo sem deixar a SPA revelar o identificador nem o
+       * botão de exportação que ela própria usa. */
+      const card = this.selectedAdmissionCard;
+      const cardText = card ? await card.innerText().catch(() => "") : "";
+      const hrefs = card ? await card.locator("a[href]").evaluateAll(
+        (anchors) => anchors.map((anchor) => anchor.getAttribute("href") ?? "").slice(0, 10),
+      ).catch(() => [] as string[]) : [];
+      log("warn", "tangerino.download_identifier_not_found", {}, {
+        hasSelectedCard: Boolean(card), cardOpened: true,
+        documentArchiveReceived: true, cardTextLength: cardText.length,
+        hrefCount: hrefs.length,
+        hrefWithDigitsCount: hrefs.filter((href) => /\d{2,}/u.test(href)).length,
+        exportButtonWordLooselyPresent: hasCardTextLabel(cardText, TangerinoSelectors.exportRegistrationFormButtons),
+      });
+      const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
+      if (localLogPath && card) {
+        const directory = dirname(localLogPath);
+        await card.screenshot({ path: join(directory, "tangerino-download-identifier-not-found.png") }).catch(() => undefined);
+        await writeFile(join(directory, "tangerino-download-identifier-not-found.txt"), cardText, "utf8").catch(() => undefined);
+      }
+      throw tangerinoErrors.uiChanged("download da ficha cadastral", "identificador numérico após abrir o cartão");
+    }
 
     const formPage = await this.context?.newPage();
     if (!formPage) throw tangerinoErrors.unavailable("Não foi possível abrir a ficha cadastral.");
@@ -1244,6 +1353,12 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   }
 
   async close() {
+    if (this.deferredClose) return;
+    await this.dispose();
+  }
+
+  /** Encerra uma sessão compartilhada pelo sweep, ignorando o close da lease. */
+  async dispose() {
     /* Sem logout deliberado.
        "Sair" é um clique numa tela do cliente, e a §8 tira do agente todo clique
        que não seja navegação de leitura. Destruir o contexto já apaga cookie,
@@ -1260,6 +1375,6 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     this.directAdmission = false;
     this.authenticatedAt = 0;
     this.persistentProfile = false;
+    this.deferredClose = false;
   }
 }
-
