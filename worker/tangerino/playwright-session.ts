@@ -1012,7 +1012,33 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
        * lista sem filtro expunha. Se também faltar, o erro abaixo continua
        * claro sobre o que falta. */
       const extracted = this.selectedAdmissionCard ? await extractFichaColaboradorId(this.selectedAdmissionCard) : null;
-      if (!extracted) throw tangerinoErrors.uiChanged("download dos anexos", "identificador numérico da admissão");
+      if (!extracted) {
+        /* Uma execução real falhou exatamente aqui, sem deixar rastro: este
+         * ponto nunca salvava evidência local, então a única pista era a
+         * mensagem de erro repetida. Mesmo padrão sem PII do resto do
+         * arquivo — log estruturado só com sinais, e a evidência com nome
+         * de pessoa só no disco do DP, e só quando
+         * FDP_TANGERINO_LOCAL_LOG_PATH está configurado. */
+        const card = this.selectedAdmissionCard;
+        const cardText = card ? await card.innerText().catch(() => "") : "";
+        const hrefs = card ? await card.locator("a[href]").evaluateAll(
+          (anchors) => anchors.map((anchor) => anchor.getAttribute("href") ?? "").slice(0, 10),
+        ).catch(() => [] as string[]) : [];
+        log("warn", "tangerino.download_identifier_not_found", {}, {
+          hasSelectedCard: Boolean(card),
+          cardTextLength: cardText.length,
+          hrefCount: hrefs.length,
+          hrefWithDigitsCount: hrefs.filter((href) => /\d{2,}/u.test(href)).length,
+          exportButtonWordLooselyPresent: hasCardTextLabel(cardText, TangerinoSelectors.exportRegistrationFormButtons),
+        });
+        const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
+        if (localLogPath && card) {
+          const directory = dirname(localLogPath);
+          await card.screenshot({ path: join(directory, "tangerino-download-identifier-not-found.png") }).catch(() => undefined);
+          await writeFile(join(directory, "tangerino-download-identifier-not-found.txt"), cardText, "utf8").catch(() => undefined);
+        }
+        throw tangerinoErrors.uiChanged("download dos anexos", "identificador numérico da admissão");
+      }
       admissionId = extracted;
     }
     if (!this.selectedAdmissionCard && !this.directAdmission) {
