@@ -736,7 +736,7 @@ test("nenhum comando do cliente de navegador encosta numa ação de alteração"
      a tocar escrita. Cada clique novo continua sendo navegação: os dois
      asserts abaixo, sobre `forbiddenActions` e sobre nomes de botão de
      alteração, são o que garante isso, não o número em si. */
-  assert.ok(cliques.length > 0 && cliques.length <= 15, `${cliques.length} cliques: um agente de leitura clica em navegação e downloads autorizados`);
+  assert.ok(cliques.length > 0 && cliques.length <= 16, `${cliques.length} cliques: um agente de leitura clica em navegação e downloads autorizados`);
   assert.doesNotMatch(cliente, /forbiddenActions/u, "o cliente encostou na lista de ações proibidas");
   assert.doesNotMatch(cliente, /getByRole\("button", \{ name: \/(?:salvar|aprovar|admitir|excluir)/iu);
   // O runner efêmero mantém contexto novo. O persistente usa diretório opaco
@@ -802,6 +802,8 @@ test("o CAPTCHA é detectado pelo widget, e não só pela palavra", () => {
   assert.match(cliente, /waitForManualAuthentication/u);
   const helperCaptcha = cliente.slice(cliente.indexOf("export async function hasCaptchaWidget"), cliente.indexOf("export function tangerinoProfileDirectory"));
   assert.doesNotMatch(helperCaptcha, /\.click\(/u, "o worker tentou clicar dentro do CAPTCHA");
+  assert.match(helperCaptcha, /isVisible\(widgets\.nth\(index\)\)/u,
+    "iframe oculto deixado pelo shell não pode pedir autorização de novo");
 });
 
 test("o modo assistido libera só recursos do desafio e nunca a navegação principal", () => {
