@@ -44,6 +44,7 @@
  */
 import { extractText, getDocumentProxy } from "unpdf";
 import type { RegistrationFormRaw } from "./employee-registration-form.ts";
+import { extractFichaCadastralSolidesFields, looksLikeFichaCadastralSolides } from "./ficha-cadastral-solides-pdf.ts";
 import { sliceByLabels } from "./label-anchored-text.ts";
 
 /**
@@ -170,7 +171,18 @@ export async function registrationFormText(bytes: Uint8Array) {
   return text;
 }
 
-/** Caminho completo: bytes do PDF anexado à demanda até os campos crus. */
+/**
+ * Caminho completo: bytes do PDF anexado à demanda até os campos crus.
+ *
+ * Dois layouts diferentes chegam por este mesmo caminho (ver o comentário de
+ * `ficha-cadastral-solides-pdf.ts`): a Ficha Cadastral que esta conta da
+ * Sólides realmente exporta, e o Registro de Empregado que o módulo
+ * originalmente pressupunha — mantido para o dia em que outra fonte anexar
+ * esse formato. `looksLikeFichaCadastralSolides` decide qual dos dois ler,
+ * pelo marcador de seção que só um deles tem.
+ */
 export async function readRegistrationFormPdf(bytes: Uint8Array) {
-  return extractRegistrationFields(await registrationFormText(bytes));
+  const text = await registrationFormText(bytes);
+  if (looksLikeFichaCadastralSolides(text)) return extractFichaCadastralSolidesFields(text);
+  return extractRegistrationFields(text);
 }

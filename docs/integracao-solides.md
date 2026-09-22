@@ -237,16 +237,16 @@ sessão de navegador, nem reautenticar, nem que a admissão ainda exista na tela
 
 ### 9.6 O que ainda não está resolvido
 
-- **Campos bancários vêm vazios** na ficha analisada (`Domicílio bancário`,
-  `Nº banco`, `Agência código`, `Conta vinculada no banco`). Se o ERP exigir
-  banco na admissão, o dado precisa vir de outra origem.
-- **Os rótulos não foram confirmados contra uma ficha real da Sólides.** Rótulo
-  não encontrado vira aviso nomeando o rótulo, em vez de falhar calado — a
-  primeira leitura real mostra o que ajustar.
 - **Endpoint JSON da ficha**: a tela é Angular e chama
   `POST /api/v1/ficha-cadastral/report/{id}` para gerar o PDF. Se houver um
   endpoint JSON alimentando a mesma tela, ele substitui o extrator com vantagem
-  — campo tipado, sem expressão regular, imune a mudança de layout.
+  — campo tipado, sem expressão regular, imune a mudança de layout. O próprio
+  nome do endpoint já era a pista: ver §9.8.
+
+~~Campos bancários vêm vazios~~ — resolvido em parte pela ficha cadastral
+(§9.8), que traz agência. ~~Rótulos não confirmados contra uma ficha real~~ —
+a primeira ficha real, lida em produção, mostrou que a suposição do módulo
+inteiro estava errada: ver §9.8.
 
 ### 9.7 Ensaio de banco
 
@@ -255,6 +255,66 @@ sessão de navegador, nem reautenticar, nem que a admissão ainda exista na tela
 uma ficha por demanda, o CHECK de contagem, e o ciclo selar → gravar → reler →
 abrir. O script recusa papel que ignore RLS, porque um ensaio que não pode
 falhar encerra a dúvida sem respondê-la.
+
+### 9.8 A ficha não é o Registro de Empregado — é a Ficha Cadastral
+
+A primeira ficha real, lida em produção, mostrou uma ficha quase toda em
+branco (10 de 53 campos prontos) e vários campos com texto de lugares
+diferentes colados junto (`Endereço` terminando em "Dados do colaborador
+Nome: ...", `Sexo` terminando em "Email: ... Telefone: ..."). A hipótese
+inicial — rótulo errado, precisa ajustar um por um — estava errada pela raiz:
+o arquivo `ficha-cadastral-solides.pdf` **não é** o Registro de Empregado.
+É um resumo interno da Sólides, com o nome que o próprio endpoint já dizia
+(§9.6) — `ficha-cadastral`, não `registro-de-empregado` — organizado em
+seções ("Dados do empregador", "Dados do colaborador", "Endereço",
+"Dependentes", "Dados bancários", "Contatos de emergência", "Informações
+contratuais") com pares `Rótulo: valor`. Nome, CPF, RG, endereço e filiação
+aparecem **uma vez cada**, não espalhados como o extrator original (feito
+para outro layout) enxergava — o texto que "colava" nos campos era o começo
+da seção seguinte, que o extrator antigo não sabia reconhecer como fronteira.
+
+`lib/ficha-cadastral-solides-pdf.ts` lê esse formato, num desenho de duas
+passadas:
+
+1. **Corta em seções** pelos cabeçalhos, usando o mesmo `sliceByLabels` da
+   ficha antiga (§9.2) — só que aqui as âncoras são os títulos de seção, não
+   os rótulos de campo.
+2. **Dentro de cada seção**, roda `sliceByLabels` de novo, com só os rótulos
+   daquela seção.
+
+A pergunta óbvia é por que não uma passada só, com todos os rótulos juntos —
+e a resposta é a mesma dor do extrator antigo, elevada ao quadrado: "CPF",
+"Telefone" e principalmente **"Endereço"** aparecem mais de uma vez no
+documento, com significados diferentes (endereço do empregador vs. seção do
+endereço residencial; CPF do colaborador vs. dos dependentes). Cortar em
+seção primeiro resolve a ambiguidade ENTRE seções; rodar de novo dentro de
+cada uma resolve rótulo repetido DENTRO da mesma seção, sem os dois se
+atrapalharem. A seção do endereço residencial é ancorada em **"CEP"**, não em
+"Endereço": o próprio cabeçalho da seção é a palavra "Endereço" sozinha, e
+essa palavra já é rótulo de campo poucas linhas antes (o endereço do
+empregador) — a primeira ocorrência no texto inteiro é a errada. "CEP"
+aparece uma vez só, bem no início da seção certa.
+
+Todo rótulo que o documento imprime mas a ficha não usa (Nome social, Gênero,
+Email, Quant. filhos, e a dúzia de campos de "Informações contratuais" que
+não têm equivalente na ficha) ainda entra como âncora — só não vira campo.
+Sem isso, o valor do campo vizinho anterior atravessaria até o próximo rótulo
+reconhecido, o mesmo problema que motivou tudo isto. E `"-"` — como este
+documento escreve "não preenchido" — é descartado antes de virar valor: sem
+esse filtro, um campo genuinamente vazio (CTPS, Matrícula eSocial, Órgão de
+classe) apareceria preenchido com um traço.
+
+**O extrator antigo não foi apagado.** `readRegistrationFormPdf`
+(`lib/registration-form-pdf.ts`) decide qual dos dois ler pela presença do
+marcador "Dados do colaborador" — só esta ficha cadastral o tem. Se outra
+fonte um dia anexar o Registro de Empregado de verdade (ou outra conta da
+Sólides exportar de outro jeito), o caminho antigo continua ali.
+
+Com a ficha real, 28 dos 53 campos saem prontos, sem nenhum aviso de
+fatiamento — incluindo os que dependem de dígito verificador (CPF, PIS,
+título de eleitor). O que fica em branco é porque o documento genuinamente
+não traz (FGTS — opção, cargo/função separados, horário de trabalho) — não
+porque a leitura falhou.
 
 
 ## 10. Preparo automático da ficha e o encaminhamento das filas
