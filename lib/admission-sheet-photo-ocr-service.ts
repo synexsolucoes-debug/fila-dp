@@ -144,11 +144,17 @@ export async function preparePhotoOcr(d1: Database, input: {
  * mãos (bytes acabaram de chegar), e esperar o próximo ciclo do cron para a
  * primeira tentativa seria atraso sem motivo. Uma foto que falhar aqui ainda
  * cai na fila do cron (`claimPendingPhotoOcr`) para as tentativas seguintes.
+ *
+ * `limit` existe para o chamador que roda dentro de uma requisição do
+ * usuário (o botão "Reler a ficha"): sem teto, uma demanda com muitas fotos
+ * faria o clique esperar uma chamada de rede por foto, uma atrás da outra.
  */
-export async function runPendingPhotoOcrForCard(d1: Database, workspaceId: string, cardId: string) {
+export async function runPendingPhotoOcrForCard(d1: Database, workspaceId: string, cardId: string, limit = 25) {
   const rows = await d1.prepare(`SELECT attachment_id FROM fdp_admission_sheet_photo_ocr
-    WHERE workspace_id = ? AND card_id = ? AND state = 'pending' AND attempts < ?`)
-    .bind(workspaceId, cardId, PHOTO_OCR_MAX_ATTEMPTS)
+    WHERE workspace_id = ? AND card_id = ? AND state = 'pending' AND attempts < ?
+    ORDER BY last_attempt_at NULLS FIRST, created_at
+    LIMIT ?`)
+    .bind(workspaceId, cardId, PHOTO_OCR_MAX_ATTEMPTS, Math.max(1, Math.min(25, limit)))
     .all<{ attachment_id: string }>();
   let prepared = 0;
   for (const row of rows.results ?? []) {
@@ -157,6 +163,40 @@ export async function runPendingPhotoOcrForCard(d1: Database, workspaceId: strin
     if (result?.state === "ready") prepared += 1;
   }
   return prepared;
+}
+
+/**
+ * Enfileira o OCR das fotos já anexadas que nunca passaram por isto.
+ *
+ * O recurso só existe a partir de quando o código dele subiu — nada
+ * reprocessa sozinho o que já estava anexado antes disso (mesmo problema que
+ * `ensureOpenAdmissionAttachmentAuthorization` resolveu para a autorização de
+ * anexos). Sem isto, toda demanda criada antes do OCR de fotos ficaria com
+ * as fotos mudas para sempre, mesmo depois do recurso estar funcionando.
+ *
+ * Só insere quando NÃO existe nenhuma linha para o anexo — ao contrário de
+ * `enqueuePhotoOcr` (que reseta `failed`/`pending` ao reenviar o MESMO
+ * arquivo), este backfill roda a cada abertura da ficha, e resetar uma foto
+ * já tentada a cada visita gastaria a cota do provedor sem necessidade.
+ */
+export async function backfillPhotoOcrForCard(d1: Database, workspaceId: string, cardId: string) {
+  const attachments = await d1.prepare(`SELECT id, filename, content_type FROM fdp_card_attachments
+    WHERE workspace_id = ? AND card_id = ?`)
+    .bind(workspaceId, cardId)
+    .all<{ id: string; filename: string; content_type: string }>();
+  let enqueued = 0;
+  for (const attachment of attachments.results ?? []) {
+    if (!isImageAttachment(String(attachment.content_type), String(attachment.filename))) continue;
+    const row = await d1.prepare(`INSERT INTO fdp_admission_sheet_photo_ocr
+        (id, workspace_id, card_id, attachment_id, source_filename, state)
+      VALUES (?, ?, ?, ?, ?, 'pending')
+      ON CONFLICT (workspace_id, attachment_id) DO NOTHING
+      RETURNING id`)
+      .bind(crypto.randomUUID(), workspaceId, cardId, String(attachment.id), String(attachment.filename).slice(0, 220))
+      .first<{ id: string }>();
+    if (row) enqueued += 1;
+  }
+  return enqueued;
 }
 
 export type PhotoOcrSuggestion = {

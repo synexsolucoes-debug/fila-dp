@@ -527,3 +527,23 @@ conteúdo — é metadado sobre a qualidade da leitura — e por isso fica em co
 aberta, como já acontece com os avisos da ficha. RLS forçado, cascata para
 `fdp_workspaces` / `fdp_cards` / `fdp_card_attachments`, um resultado por
 anexo: reler substitui, nunca acumula.
+
+### 13.5 Fotos anexadas antes do recurso existir
+
+`enqueuePhotoOcr` só é chamado no upload de uma foto nova — uma demanda com
+fotos anexadas antes deste recurso subir (ou que por qualquer outro motivo
+nunca entraram na fila) ficaria muda para sempre, porque nada mais descobre
+anexo antigo sozinho. Mesmo problema que `ensureOpenAdmissionAttachmentAuthorization`
+(§12) resolveu para a autorização de anexos.
+
+`backfillPhotoOcrForCard` cobre isso: roda a cada `GET` da ficha (só
+`INSERT ... ON CONFLICT DO NOTHING`, sem chamada de rede, cabe numa leitura)
+e a cada clique em **Ler a ficha** / **Reler a ficha** — este último seguido
+de `runPendingPhotoOcrForCard` com um teto (5), para o clique não ficar preso
+numa demanda com muitas fotos; o resto continua na fila do cron.
+
+Ele **nunca** mexe numa linha que já existe, nem para resetar `failed` — ao
+contrário de `enqueuePhotoOcr` (que reseta ao reenviar o mesmo arquivo). A
+diferença importa: rodar a cada abertura de tela não pode reiniciar uma
+tentativa esgotada a cada visita, ou uma foto genuinamente ilegível gastaria
+a cota do provedor sem fim.
