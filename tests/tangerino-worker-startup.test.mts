@@ -29,6 +29,32 @@ test("ambiente completo do Windows não acusa nada", () => {
   assert.doesNotThrow(() => assertWorkerConfiguration(completo, { requireInteractiveWindow: true }));
 });
 
+test("a versão ativa do cofre precisa existir no mapa antes de o worker subir", () => {
+  const problems = inspectWorkerConfiguration({
+    ...completo,
+    FDP_TANGERINO_VAULT_KEYS: '{"1":"antiga","3":"atual"}',
+    FDP_TANGERINO_VAULT_KEY_VERSION: "2",
+  }, { requireInteractiveWindow: true });
+  assert.deepEqual(problems.map((problem) => problem.variable), ["FDP_TANGERINO_VAULT_KEY_VERSION"]);
+  assert.match(problems[0]?.remedy ?? "", /versões 1, 3/u);
+});
+
+test("a chave singular registra somente a versão 1", () => {
+  const problems = inspectWorkerConfiguration({
+    ...completo,
+    FDP_TANGERINO_VAULT_KEYS: "",
+    FDP_TANGERINO_VAULT_KEY: "chave-singular",
+    FDP_TANGERINO_VAULT_KEY_VERSION: "2",
+  });
+  assert.deepEqual(problems.map((problem) => problem.variable), ["FDP_TANGERINO_VAULT_KEY_VERSION"]);
+  assert.match(problems[0]?.remedy ?? "", /obrigatoriamente é 1/u);
+});
+
+test("mapa inválido do cofre para o worker antes de abrir navegador", () => {
+  const problems = inspectWorkerConfiguration({ ...completo, FDP_TANGERINO_VAULT_KEYS: "não é JSON" });
+  assert.deepEqual(problems.map((problem) => problem.variable), ["FDP_TANGERINO_VAULT_KEYS"]);
+});
+
 test("cada variável ausente vira um nome e um passo, não um erro genérico", () => {
   const problems = inspectWorkerConfiguration({}, { requireInteractiveWindow: true });
   assert.deepEqual(problems.map((problem) => problem.variable).sort(), [
