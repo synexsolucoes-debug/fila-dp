@@ -18,13 +18,24 @@ export function assertTangerinoWorkerConfiguration(options: WorkerConfigurationO
   assertWorkerConfiguration(process.env, options);
 }
 
-async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: () => boolean) {
+export type TangerinoSessionPool = Map<string, PlaywrightTangerinoSession>;
+
+async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: () => boolean,
+  sessionPool?: TangerinoSessionPool) {
   const d1 = getScopedD1({ workspaceId, userId: null });
   let handled = 0;
   let processedJobs = 0;
-  const shared = { session: null as PlaywrightTangerinoSession | null };
+  const pooled = sessionPool?.get(workspaceId) ?? null;
+  if (pooled && !pooled.isUsable()) {
+    sessionPool?.delete(workspaceId);
+    await pooled.dispose().catch(() => undefined);
+  }
+  const shared = { session: pooled?.isUsable() ? pooled : null as PlaywrightTangerinoSession | null };
   const createSession = async () => {
-    shared.session ??= await PlaywrightTangerinoSession.create({ workspaceId, deferClose: true });
+    if (!shared.session?.isUsable()) {
+      shared.session = await PlaywrightTangerinoSession.create({ workspaceId, deferClose: true });
+      sessionPool?.set(workspaceId, shared.session);
+    }
     return shared.session;
   };
 
@@ -84,7 +95,11 @@ async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: 
     }
     return handled;
   } finally {
-    await shared.session?.dispose().catch(() => undefined);
+    /* No Windows, o pool pertence ao processo inteiro. Fechar o Chromium a
+       cada sweep descarta cookies de sessão (`JSESSIONID`) que o perfil em
+       disco não é obrigado a restaurar. Runner efêmero continua limpando ao
+       fim da varredura. */
+    if (!sessionPool) await shared.session?.dispose().catch(() => undefined);
   }
 }
 
@@ -101,6 +116,7 @@ export async function sweepTangerinoQueue(options: {
   concurrency?: number;
   maxJobsPerWorkspace?: number;
   shouldStop?: () => boolean;
+  sessionPool?: TangerinoSessionPool;
 } = {}): Promise<TangerinoSweepSummary> {
   assertTangerinoWorkerConfiguration();
   const config = tangerinoAgentConfig();
@@ -120,7 +136,8 @@ export async function sweepTangerinoQueue(options: {
   let handled = 0;
   for (let index = 0; index < workspaces.results.length && !shouldStop(); index += concurrency) {
     const slice = workspaces.results.slice(index, index + concurrency);
-    const results = await Promise.all(slice.map((workspace) => drainWorkspace(String(workspace.id), maxJobs, shouldStop)));
+    const results = await Promise.all(slice.map((workspace) =>
+      drainWorkspace(String(workspace.id), maxJobs, shouldStop, options.sessionPool)));
     for (const count of results) handled += count;
   }
   return { workspaces: workspaces.results.length, handled };
