@@ -316,7 +316,7 @@ test("quando situação ou etapa não são achadas, o cartão vira evidência �
      nome de pessoa só vai para o disco da própria máquina, e só quando
      FDP_TANGERINO_LOCAL_LOG_PATH está configurado. */
   const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
-  const bloco = fonte.slice(fonte.indexOf("if (!rawStatus || !stage) {"), fonte.indexOf("return {\n    // A interface mapeada"));
+  const bloco = fonte.slice(fonte.indexOf("if (!rawStatus || !stage) {"), fonte.indexOf("const externalAdmissionId ="));
   assert.match(bloco, /rawStatusFound: Boolean\(rawStatus\), stageFound: Boolean\(stage\)/u);
   assert.match(bloco, /cardTextLength: cardText\.length/u);
   assert.match(bloco, /statusWordLooselyPresent: hasCardTextLabel\(cardText, TangerinoSelectors\.statusLabels\)/u);
@@ -327,4 +327,31 @@ test("quando situação ou etapa não são achadas, o cartão vira evidência �
   assert.match(bloco, /if \(localLogPath\) \{/u);
   assert.match(bloco, /card\.screenshot\(\{ path: join\(directory, "tangerino-card-field-not-found\.png"\) \}\)/u);
   assert.match(bloco, /writeFile\(join\(directory, "tangerino-card-field-not-found\.txt"\), cardText, "utf8"\)/u);
+});
+
+test("identificador do cartão tenta o link da ficha antes de desistir, e sem identificador vira evidência sem PII", async () => {
+  /* `discovery.ts` recusa gravar um `card:N` sintético (identidade instável),
+     e uma conta real devolveu exatamente isso para as cinco admissões lidas:
+     nem `data-id` nem `id` no cartão. `ficha-colaborador/{id}` já é a rota
+     que `openAdmission` e `downloadAdmissionArtifacts` usam para navegar
+     direto — lê-la de um `href` do cartão é reaproveitar essa convenção, não
+     inventar seletor novo. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /async function extractFichaColaboradorId\(card: Locator\)/u);
+  assert.match(fonte, /ficha-colaborador\\\/\(\[1-9\]\[0-9\]\{0,19\}\)/u);
+  // Nunca clica no link — só lê o atributo href.
+  const extractor = fonte.slice(
+    fonte.indexOf("async function extractFichaColaboradorId"),
+    fonte.indexOf("/** Lê um cartão real"),
+  );
+  assert.doesNotMatch(extractor, /\.click\(/u);
+
+  const bloco = fonte.slice(fonte.indexOf("const externalAdmissionId ="), fonte.indexOf("return {\n    externalAdmissionId,"));
+  assert.match(bloco, /\?\? await extractFichaColaboradorId\(card\)/u);
+  assert.match(bloco, /if \(!externalAdmissionId\) \{/u);
+  const chamadaDoLog = bloco.slice(bloco.indexOf('log("warn", "tangerino.card_identifier_not_found"'), bloco.indexOf("});") + 3);
+  assert.doesNotMatch(chamadaDoLog, /:\s*cardText\s*[,}]/u, "o texto do cartão não pode ir para o log estruturado");
+  assert.match(chamadaDoLog, /externalIdWordLooselyPresent: hasCardTextLabel\(cardText, TangerinoSelectors\.externalIdLabels\)/u);
+  assert.match(bloco, /card\.screenshot\(\{ path: join\(directory, "tangerino-card-identifier-not-found\.png"\) \}\)/u);
+  assert.match(bloco, /writeFile\(join\(directory, "tangerino-card-identifier-not-found\.txt"\), cardText, "utf8"\)/u);
 });
