@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
 import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { tangerinoErrors, TangerinoAgentError } from "../../lib/tangerino/errors.ts";
-import { tangerinoAdmissionsOverviewUrl } from "../../lib/tangerino/hosts.ts";
+import { tangerinoAdmissionsEntryUrls, tangerinoAdmissionsOverviewUrl, tangerinoBrowserHosts } from "../../lib/tangerino/hosts.ts";
 import { assertAllowedTangerinoChallengeUrl, assertAllowedTangerinoUrl } from "../../lib/tangerino/navigation-security.ts";
 import { log } from "../../lib/observability.ts";
 import { readOnlyDecision, readOnlyViolationDetail } from "../../lib/tangerino/read-only.ts";
@@ -292,9 +292,16 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     const page = this.requirePage();
     const deadline = Date.now() + timeoutMs;
     do {
+      /* A lista nem sempre vem em iframe. Na conta real ela é a própria página
+         do shell — e exigir o host do aplicativo autônomo fazia o worker olhar
+         para a tela certa e concluir que não era ela. O que identifica a lista
+         é o que ela mostra: o marcador da página E o campo de busca exato. Os
+         dois juntos, num host da allowlist, não casam com outra tela. */
       const pageIsAdmissionsApp = (() => {
-        try { return new URL(page.url()).hostname === "admissao-demissao.tangerino.com.br"; }
-        catch { return false; }
+        try {
+          const host = new URL(page.url()).hostname;
+          return tangerinoBrowserHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+        } catch { return false; }
       })();
       if (pageIsAdmissionsApp && await isVisible(page.locator("body"))) {
         const pageMarker = await firstVisible(TangerinoSelectors.admissionsPageMarkers.map((text) => page.getByText(text)));
@@ -489,18 +496,22 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
     }
 
     let frame = await this.resolveAdmissionsFrame(Math.min(5_000, tangerinoAgentConfig().timeoutMs));
-    if (!frame) {
-      /* A classe do item de menu varia entre versões do shell legado. A rota
-         oficial da funcionalidade é mais estável e evita transformar mudança
-         cosmética do menu em falha da integração. Continua sendo GET para um
-         host fixo validado pela mesma barreira de navegação do login. */
-      const directUrl = await assertAllowedTangerinoUrl(tangerinoAdmissionsOverviewUrl);
+
+    /* A classe do item de menu varia entre versões do shell legado, então a
+       navegação direta é o caminho confiável. As entradas são tentadas em
+       ordem porque uma conta real mostrou que a primeira nem sempre serve: o
+       aplicativo autônomo redirecionava de volta ao painel do shell, e o worker
+       ficava parado numa tela sem admissão nenhuma. Continuam sendo GET, para
+       hosts da allowlist, validadas pela mesma barreira do login. */
+    for (const candidate of tangerinoAdmissionsEntryUrls) {
+      if (frame) break;
+      const directUrl = await assertAllowedTangerinoUrl(candidate);
       await page.goto(directUrl.toString(), {
         waitUntil: "domcontentloaded", timeout: tangerinoAgentConfig().timeoutMs,
-      });
+      }).catch(() => undefined);
       frame = await this.resolveAdmissionsFrame(Math.min(15_000, tangerinoAgentConfig().timeoutMs));
     }
-    if (!frame) throw tangerinoErrors.uiChanged("abertura da Admissão", "iframe da lista de admissões");
+    if (!frame) throw tangerinoErrors.uiChanged("abertura da Admissão", "lista de admissões");
     this.admissionsFrame = frame;
     this.selectedAdmissionCard = null;
     this.directAdmission = false;

@@ -30,3 +30,23 @@ export const tangerinoBrowserLoginUrl = "https://app.tangerino.com.br/Tangerino/
  */
 export const tangerinoAdmissionsOverviewUrl =
   "https://admissao-demissao.tangerino.com.br/dashboard";
+
+/**
+ * As entradas da tela de Admissão, na ordem em que vale tentar.
+ *
+ * Só ir ao aplicativo autônomo não bastou: numa conta real a navegação direta
+ * para `admissao-demissao.tangerino.com.br/dashboard` terminou redirecionada de
+ * volta para `/Tangerino/`, e o worker ficou olhando para o painel do shell —
+ * onde não há iframe de admissão nenhum, e por isso `iframeCount: 0`.
+ *
+ * A rota que a conta realmente usa é a página do shell que hospeda o módulo. O
+ * `funcionalidade=113` é o identificador do item no Wicket; ele pode variar
+ * entre contas e perfis de permissão, então a mesma rota sem o parâmetro vem
+ * logo em seguida, e o aplicativo autônomo fica por último como rede de
+ * segurança. Todas são GET, dentro da mesma allowlist.
+ */
+export const tangerinoAdmissionsEntryUrls = [
+  "https://app.tangerino.com.br/Tangerino/pages/admissao-demissao?funcionalidade=113",
+  "https://app.tangerino.com.br/Tangerino/pages/admissao-demissao",
+  tangerinoAdmissionsOverviewUrl,
+] as const;
