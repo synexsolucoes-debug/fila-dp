@@ -258,3 +258,22 @@ test("a falha da descoberta loga a mensagem, não só o código", async () => {
   assert.match(fonte, /const safe = safeTangerinoError\(error\);/u);
   assert.match(fonte, /errorMessage: safe\.message,/u);
 });
+
+test("a leitura de status/etapa do cartão ganha reforço quando a classe do valor muda", async () => {
+  /* Chegamos até a lista de verdade e abrimos um cartão real — a falha final
+     desta rodada foi "a etapa 'leitura do processo' não encontrou 'situação
+     da admissão'": o rótulo existe (bate com o print real do operador,
+     "Status da admissão: Em andamento"), só a classe fixa `p.info-status` não
+     achou o valor ao lado dele. O reforço reaproveita a mesma estratégia que
+     `readLabeledValue` já usa com sucesso — ler o pai do rótulo e descontar o
+     próprio texto do rótulo — em vez de inventar uma classe CSS nova sem tê-la
+     visto (§72). */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const corpo = fonte.slice(fonte.indexOf("async function readCardValue"), fonte.indexOf("async function readCardValue") + 1400);
+  // A classe conhecida continua sendo a primeira tentativa.
+  assert.match(corpo, /marker\.locator\("xpath=\.\."\)\.locator\(TangerinoSelectors\.cardValueCss\)\.first\(\)/u);
+  // E só cai para o reforço se ela não achar nada — nunca sobrescreve um valor
+  // que já veio certo pela classe conhecida.
+  assert.match(corpo, /if \(await isVisible\(value\)\) \{/u);
+  assert.match(corpo, /container\.replace\(label, ""\)\.replace\(\/\^\[\\s:–—-\]\+\/u, ""\)\.trim\(\)/u);
+});

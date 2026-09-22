@@ -87,9 +87,19 @@ async function readCardValue(card: Locator, labels: readonly RegExp[]): Promise<
     const marker = card.getByText(label).first();
     if (!await isVisible(marker)) continue;
     const value = marker.locator("xpath=..").locator(TangerinoSelectors.cardValueCss).first();
-    if (!await isVisible(value)) continue;
-    const text = (await value.innerText().catch(() => "")).trim();
-    if (text) return text;
+    if (await isVisible(value)) {
+      const text = (await value.innerText().catch(() => "")).trim();
+      if (text) return text;
+    }
+    /* Reforço, não seletor novo: o rótulo já foi achado (`marker` está
+       visível), só a classe específica do valor mudou ou não é essa. O mesmo
+       recurso que `readLabeledValue` já usa e já se provou — ler o pai do
+       rótulo e descontar o próprio texto do rótulo — funciona aqui pelo mesmo
+       motivo: o valor costuma estar ao lado do rótulo, dentro do mesmo bloco,
+       mesmo quando a classe do elemento que o carrega é outra. */
+    const container = (await marker.locator("xpath=..").innerText().catch(() => "")).trim();
+    const stripped = container.replace(label, "").replace(/^[\s:–—-]+/u, "").trim();
+    if (stripped && stripped.length <= 200) return stripped;
   }
   return undefined;
 }
