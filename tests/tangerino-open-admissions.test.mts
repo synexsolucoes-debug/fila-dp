@@ -98,3 +98,30 @@ test("a migração explica por que a admissão não vira colaborador", async () 
   assert.match(sql, /fdp_tangerino_open_admissions_external_uq/u);
   assert.match(sql, /espelho do ERP/u);
 });
+
+test("a descoberta não repete a cada ciclo do worker", async () => {
+  /* Em produção a primeira versão rodou a cada cinco segundos: cada execução
+     abria o navegador, fazia login e esbarrava no CAPTCHA de novo. Isso enche a
+     tela de quem opera e é o padrão de acesso que faz o provedor tratar a conta
+     como uso anômalo. */
+  const fonte = await readFile(new URL("../lib/tangerino/discovery.ts", import.meta.url), "utf8");
+  const intervalo = /export const DISCOVERY_MIN_INTERVAL_MS = (\d+) \* 60_000;/u.exec(fonte);
+  assert.ok(intervalo, "o intervalo mínimo precisa ser explícito");
+  assert.ok(Number(intervalo[1]) >= 5, "menos de cinco minutos volta a parecer robô");
+  assert.match(fonte, /if \(!discoveryIsDue\(workspaceId\)\) return null;/u);
+  // E o carimbo vai antes de abrir o navegador: marcar só no sucesso faria a
+  // falha voltar no ciclo seguinte, que é exatamente o laço a evitar.
+  const marcacao = fonte.indexOf("lastDiscoveryAt.set(workspaceId, Date.now())");
+  const sessao = fonte.indexOf("await createSession(");
+  assert.ok(marcacao > 0 && sessao > marcacao, "o carimbo precisa vir antes da sessão");
+});
+
+test("quando a tela muda, o log diz onde o navegador parou", async () => {
+  // "Não achei o iframe" não conserta nada. Host, caminho e os rótulos do menu
+  // são o que permite adaptar os seletores sem estar na frente da máquina.
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /pageHost: local\.host, pagePath: local\.path/u);
+  assert.match(fonte, /iframeHosts: \[\.\.\.new Set\(iframeHosts\)\], menuLabels/u);
+  // Sem query string: parâmetro de URL nesse produto carrega token de sessão.
+  assert.doesNotMatch(fonte, /pageSearch|url\.search/u);
+});

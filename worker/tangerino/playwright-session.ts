@@ -329,9 +329,39 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       await page.waitForTimeout(250);
     } while (Date.now() < deadline);
 
-    const pagePath = (() => { try { return new URL(page.url()).pathname; } catch { return ""; } })();
+    /* "Não achei" não conserta nada: o que resolve é saber ONDE o navegador
+       parou e o que a tela oferecia. Host e caminho, sem query — parâmetro de
+       URL nesse produto carrega token de sessão. Os rótulos do menu são texto
+       de interface, e são eles que dizem se a navegação mudou de lugar. */
+    const local = (() => {
+      try { const url = new URL(page.url()); return { host: url.hostname, path: url.pathname }; }
+      catch { return { host: "", path: "" }; }
+    })();
+    const iframeHosts: string[] = [];
+    const frames = page.locator("iframe");
+    const totalFrames = Math.min(await frames.count().catch(() => 0), 10);
+    for (let index = 0; index < totalFrames; index += 1) {
+      const source = await frames.nth(index).getAttribute("src").catch(() => null);
+      if (!source) continue;
+      try { iframeHosts.push(new URL(source, page.url()).hostname); } catch { iframeHosts.push("(src inválido)"); }
+    }
+    const menuLabels: string[] = [];
+    const links = page.locator('a, [role="link"], button');
+    const totalLinks = Math.min(await links.count().catch(() => 0), 40);
+    for (let index = 0; index < totalLinks && menuLabels.length < 25; index += 1) {
+      const candidate = links.nth(index);
+      if (!await isVisible(candidate)) continue;
+      const label = (await candidate.innerText().catch(() => "")).replace(/\s+/gu, " ").trim();
+      if (label && label.length <= 40) menuLabels.push(label);
+    }
+    const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
+    if (localLogPath) {
+      await page.screenshot({ path: join(dirname(localLogPath), "tangerino-admissions-not-found.png"), fullPage: true })
+        .catch(() => undefined);
+    }
     log("warn", "tangerino.admissions_frame_not_found", {}, {
-      iframeCount: await page.locator("iframe").count().catch(() => 0), pagePath,
+      iframeCount: totalFrames, pageHost: local.host, pagePath: local.path,
+      iframeHosts: [...new Set(iframeHosts)], menuLabels,
     });
     return null;
   }
