@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import sharp from "sharp";
 import { ocrConfigured, photoOcrError, runDocumentOcr } from "../lib/photo-ocr.ts";
 
 /**
@@ -11,15 +10,16 @@ import { ocrConfigured, photoOcrError, runDocumentOcr } from "../lib/photo-ocr.t
  * testes PROVAM é o contrato do módulo — quando ele recusa antes de chamar a
  * rede, como interpreta a resposta do provedor, e como mapeia falha em
  * `ApiError` — não o comportamento real do serviço do OCR.space.
+ *
+ * Este módulo deliberadamente NÃO depende de biblioteca de imagem nenhuma
+ * (nem `sharp`, que uma versão anterior usava para redimensionar): o binário
+ * nativo dela não carrega no runtime serverless da Vercel, e como este
+ * módulo é importado pela mesma rota que lê a ficha em PDF, aquela falha
+ * derrubava a ficha inteira. Ver o comentário de `lib/photo-ocr.ts`.
  */
 
 const originalKey = process.env.FDP_OCR_SPACE_API_KEY;
 const originalFetch = globalThis.fetch;
-
-/** Uma foto de verdade, mínima — a normalização (`sharp`) precisa de bytes reais. */
-const validPhoto = await sharp({
-  create: { width: 8, height: 8, channels: 3, background: { r: 255, g: 255, b: 255 } },
-}).jpeg().toBuffer();
 
 test.afterEach(() => {
   if (originalKey === undefined) delete process.env.FDP_OCR_SPACE_API_KEY;
@@ -41,7 +41,7 @@ test("sem chave configurada, o OCR recusa antes de tocar a rede", async () => {
   let called = false;
   globalThis.fetch = (async () => { called = true; throw new Error("não deveria ser chamado"); }) as typeof fetch;
   await assert.rejects(
-    () => runDocumentOcr({ bytes: new Uint8Array(validPhoto), contentType: "image/jpeg" }),
+    () => runDocumentOcr({ bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" }),
     /OCR_NOT_CONFIGURED|não está configurado/u,
   );
   assert.equal(called, false, "sem chave, a rede nunca é chamada — é o que impede vazar a foto por engano");
@@ -52,7 +52,7 @@ test("tipo de arquivo fora da lista permitida é recusado antes da rede", async 
   let called = false;
   globalThis.fetch = (async () => { called = true; throw new Error("não deveria ser chamado"); }) as typeof fetch;
   await assert.rejects(
-    () => runDocumentOcr({ bytes: new Uint8Array(validPhoto), contentType: "application/pdf" }),
+    () => runDocumentOcr({ bytes: new Uint8Array([1, 2, 3]), contentType: "application/pdf" }),
     /suportada/u,
   );
   assert.equal(called, false);
@@ -62,19 +62,19 @@ test("foto vazia é recusada antes da rede", async () => {
   process.env.FDP_OCR_SPACE_API_KEY = "chave-de-teste";
   await assert.rejects(
     () => runDocumentOcr({ bytes: new Uint8Array([]), contentType: "image/jpeg" }),
-    /vazia|grande demais/u,
+    /vazia|1 MB/u,
   );
 });
 
-test("foto que não é uma imagem de verdade falha na normalização, não em exceção crua", async () => {
+test("foto acima de 1 MB é recusada antes da rede, sem tentar redimensionar", async () => {
   process.env.FDP_OCR_SPACE_API_KEY = "chave-de-teste";
   let called = false;
   globalThis.fetch = (async () => { called = true; throw new Error("não deveria ser chamado"); }) as typeof fetch;
   await assert.rejects(
-    () => runDocumentOcr({ bytes: new Uint8Array(64).fill(7), contentType: "image/jpeg" }),
-    /OCR_IMAGE_UNREADABLE|processar/u,
+    () => runDocumentOcr({ bytes: new Uint8Array(1024 * 1024 + 1), contentType: "image/jpeg" }),
+    /1 MB/u,
   );
-  assert.equal(called, false, "bytes que o sharp não consegue ler nunca chegam à rede");
+  assert.equal(called, false);
 });
 
 test("resposta de sucesso do OCR.space devolve o texto reconhecido", async () => {
@@ -83,7 +83,7 @@ test("resposta de sucesso do OCR.space devolve o texto reconhecido", async () =>
     IsErroredOnProcessing: false,
     ParsedResults: [{ ParsedText: "CPF 111.222.333-96" }],
   }), { status: 200 })) as typeof fetch;
-  const text = await runDocumentOcr({ bytes: new Uint8Array(validPhoto), contentType: "image/jpeg" });
+  const text = await runDocumentOcr({ bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" });
   assert.equal(text, "CPF 111.222.333-96");
 });
 
@@ -93,14 +93,14 @@ test("resposta sem texto reconhecido devolve string vazia, não erro", async () 
     IsErroredOnProcessing: false,
     ParsedResults: [{}],
   }), { status: 200 })) as typeof fetch;
-  const text = await runDocumentOcr({ bytes: new Uint8Array(validPhoto), contentType: "image/png" });
+  const text = await runDocumentOcr({ bytes: new Uint8Array([1, 2, 3]), contentType: "image/png" });
   assert.equal(text, "");
 });
 
 test("erro HTTP do OCR.space vira falha nomeada", async () => {
   process.env.FDP_OCR_SPACE_API_KEY = "chave-de-teste";
   globalThis.fetch = (async () => new Response("", { status: 500 })) as typeof fetch;
-  await assert.rejects(() => runDocumentOcr({ bytes: new Uint8Array(validPhoto), contentType: "image/jpeg" }), /HTTP 500/u);
+  await assert.rejects(() => runDocumentOcr({ bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" }), /HTTP 500/u);
 });
 
 test("erro reportado dentro da resposta 200 do OCR.space também vira falha", async () => {
@@ -109,7 +109,7 @@ test("erro reportado dentro da resposta 200 do OCR.space também vira falha", as
     IsErroredOnProcessing: true,
     ErrorMessage: "Bad image data.",
   }), { status: 200 })) as typeof fetch;
-  await assert.rejects(() => runDocumentOcr({ bytes: new Uint8Array(validPhoto), contentType: "image/jpeg" }), /Bad image data/u);
+  await assert.rejects(() => runDocumentOcr({ bytes: new Uint8Array([1, 2, 3]), contentType: "image/jpeg" }), /Bad image data/u);
 });
 
 test("photoOcrError mapeia falha conhecida para 422 com o código original", async () => {

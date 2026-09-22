@@ -505,9 +505,18 @@ entrar como conector (§1) — trocar isolamento total por uma tarefa que, sem
 automação, alguém teria que fazer o mesmo lendo o mesmo documento na tela.
 
 A cota gratuita do OCR.space limita o arquivo a 1 MB, bem abaixo do que uma
-foto de celular normalmente pesa. Por isso `runDocumentOcr` sempre normaliza a
-foto antes de enviar — reorienta pelo EXIF, redimensiona e recomprime com
-`sharp` até caber no teto — em vez de recusar a maioria das fotos reais.
+foto de celular normalmente pesa — `runDocumentOcr` recusa o que passa disso
+com uma mensagem clara (`OCR_IMAGE_SIZE_INVALID`), em vez de tentar enviar
+mesmo assim.
+
+**Por que não redimensiona a foto para caber no teto**: a primeira versão
+deste módulo usava `sharp` para reorientar e recomprimir antes de enviar. O
+binário nativo do `sharp` não carrega no runtime serverless da Vercel
+(`ERR_DLOPEN_FAILED: libvips-cpp.so`) — e como este módulo é importado pela
+mesma rota que lê a ficha em PDF (`app/api/cards/[id]/registration-sheet`), a
+falha ao carregar `sharp` derrubava a leitura da ficha inteira, não só a da
+foto. Uma foto grande demais sendo recusada é um problema menor do que a
+ficha parar de funcionar.
 
 ### 13.4 O mesmo cerco da ficha, reaplicado
 
