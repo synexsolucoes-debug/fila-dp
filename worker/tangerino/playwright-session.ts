@@ -129,6 +129,21 @@ export function detectAuthBarrier(text: string, captchaWidgetPresent = false): "
   return null;
 }
 
+/**
+ * O shell legado nem sempre escreve "Entrar" no corpo, mas a própria rota é
+ * inequívoca. Sem esta verificação, `/LoginPage` podia conter o item
+ * "Empregador", ser confundida com tela autenticada e consumir cinco minutos
+ * procurando uma lista que jamais seria montada.
+ */
+export function authBarrierFromUrl(raw: string): "denied" | "login" | null {
+  try {
+    const path = new URL(raw).pathname;
+    if (/\/access-denied(?:\/|$)/iu.test(path)) return "denied";
+    if (/\/LoginPage(?:[;/]|$)/iu.test(path)) return "login";
+  } catch { /* URL inválida não acrescenta evidência. */ }
+  return null;
+}
+
 /** O desafio existe no DOM mesmo quando a página não escreve a palavra. */
 export async function hasCaptchaWidget(page: Page) {
   for (const selector of TangerinoSelectors.captchaWidgets) {
@@ -584,6 +599,12 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   private async currentAuthBarrier() {
     const page = this.requirePage();
     const text = await bodyText(page);
+    const detected = detectAuthBarrier(text, await hasCaptchaWidget(page));
+    /* CAPTCHA/MFA têm precedência sobre a rota: ambos costumam continuar em
+       LoginPage, e a senha nunca pode ser digitada dentro de um desafio. */
+    if (detected === "mfa" || detected === "captcha") return detected;
+    const locationBarrier = authBarrierFromUrl(page.url());
+    if (locationBarrier) return locationBarrier;
     /* Alguns SPAs mantêm o DOM antigo escondido depois do login. Um iframe de
        CAPTCHA invisível não pode prender para sempre uma tela que já mostra os
        marcadores autenticados e não mostra mais o formulário de acesso. */
@@ -591,7 +612,7 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
         && !hasAny(text, [...TangerinoSelectors.loginMarkers, ...TangerinoSelectors.sessionExpiredMarkers])) {
       return null;
     }
-    return detectAuthBarrier(text, await hasCaptchaWidget(page));
+    return detected;
   }
 
   /**
@@ -1355,6 +1376,11 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   async close() {
     if (this.deferredClose) return;
     await this.dispose();
+  }
+
+  /** O processo Windows pode reutilizar a instância enquanto a janela existir. */
+  isUsable() {
+    return Boolean(this.context && this.page && !this.page.isClosed());
   }
 
   /** Encerra uma sessão compartilhada pelo sweep, ignorando o close da lease. */
