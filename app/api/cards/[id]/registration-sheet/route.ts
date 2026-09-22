@@ -3,6 +3,7 @@ import { chooseRegistrationFormAttachment, openSheet, sanitizeSheetFields, sanit
 import {
   detectIdentityDivergence, mergeSheetFields, registryFields, sanitizeFieldMeta, type FieldMetaMap,
 } from "@/lib/admission-sheet-fields";
+import { loadPhotoOcrSuggestions } from "@/lib/admission-sheet-photo-ocr-service";
 import {
   enqueueSheetPreparation, listCardAttachments, prepareAdmissionSheet, sheetErrorMessage, SHEET_MAX_ATTEMPTS,
 } from "@/lib/admission-sheet-service";
@@ -77,7 +78,16 @@ export async function GET(_request: Request, context: RouteContext) {
         created_by, updated_at
       FROM fdp_admission_sheets WHERE workspace_id = ? AND card_id = ?`)
       .bind(workspace.id, cardId).first<StoredSheet>();
-    if (!stored) return Response.json({ sheet: null, state: "absent" });
+
+    /* Sugestões do OCR de fotos (RG, CPF, CTPS): independem da ficha em PDF
+       existir. Uma demanda pode ter só fotos anexadas ainda, e mesmo com a
+       ficha pronta a foto pode ter achado um campo que o PDF não tinha
+       (dados bancários não saem do Registro de Empregado, por exemplo). */
+    const photoSuggestions = await loadPhotoOcrSuggestions(d1, workspace.id, cardId)
+      .then((rows) => rows.filter((row) => Object.keys(row.fields).length > 0))
+      .catch(() => []);
+
+    if (!stored) return Response.json({ sheet: null, state: "absent", photoSuggestions });
 
     /* Pendente e falha não têm envelope para abrir, e não podem ser
        apresentadas como "nenhuma ficha". A tela precisa distinguir "estamos
@@ -94,6 +104,7 @@ export async function GET(_request: Request, context: RouteContext) {
         errorMessage: sheetErrorMessage(stored.error_code),
         sourceFilename: stored.source_filename,
         attachmentId: stored.attachment_id,
+        photoSuggestions,
       });
     }
 
@@ -145,6 +156,7 @@ export async function GET(_request: Request, context: RouteContext) {
         attachmentId: stored.attachment_id,
         updatedAt: stored.updated_at,
       },
+      photoSuggestions,
     });
   } catch (error) {
     return apiError(error);

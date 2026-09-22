@@ -11,6 +11,7 @@ import { nextSankhyaRunAt, parseSankhyaConfig } from "@/lib/sankhya/config";
 import { queueSankhyaRun } from "@/lib/sankhya/queue";
 import { sweepTangerinoAdmissions } from "@/lib/tangerino/sweep";
 import { claimPendingSheets, prepareAdmissionSheet } from "@/lib/admission-sheet-service";
+import { claimPendingPhotoOcr, preparePhotoOcr } from "@/lib/admission-sheet-photo-ocr-service";
 import { wakeSankhyaWorker } from "@/lib/sankhya/actions-dispatch";
 
 export const runtime = "nodejs";
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
     // Não confundir com `swept` na resposta, que conta workspaces varridos.
     let admissionsQueued = 0;
     let sheetsPrepared = 0;
+    let photosOcrRead = 0;
     let scheduleFailed = 0;
     let sankhyaScheduled = 0;
     let sankhyaPending = 0;
@@ -129,6 +131,18 @@ export async function GET(request: Request) {
           if (Date.now() >= deadline) break;
           await prepareAdmissionSheet(scoped, { workspaceId: workspace.id, cardId: pendente.card_id })
             .then((resultado) => { if (resultado.state === "ready") sheetsPrepared += 1; })
+            .catch(() => undefined);
+        }
+
+        /* Fotos (RG, CPF, CTPS) cujo OCR não terminou na hora da transferência —
+           mesma razão da fila de fichas acima: reler uma foto já guardada não
+           precisa de sessão do navegador, só da chave do Google Vision. */
+        for (const pendente of await claimPendingPhotoOcr(scoped, workspace.id).catch(() => [])) {
+          if (Date.now() >= deadline) break;
+          await preparePhotoOcr(scoped, {
+            workspaceId: workspace.id, cardId: pendente.card_id, attachmentId: pendente.attachment_id,
+          })
+            .then((resultado) => { if (resultado.state === "ready") photosOcrRead += 1; })
             .catch(() => undefined);
         }
 
@@ -252,12 +266,12 @@ export async function GET(request: Request) {
     }
 
     const workerDispatch = sankhyaPending ? await wakeSankhyaWorker({ route: "/api/cron/integrations" }) : null;
-    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sheetsPrepared, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed, workspacesFailed,
+    log("info", "integrations.cron_swept", {}, { workspaces: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sheetsPrepared, photosOcrRead, sankhyaScheduled, sankhyaPending, scheduleFailed, processed, failed, workspacesFailed,
       skipped: skipped.length, workerDispatched: workerDispatch?.status === "dispatched" });
     // A varredura responde 500 quando algum tenant falhou. O workflow do GitHub
     // trata != 200 como falha, então o alerta chega em vez de a fila parar em
     // silêncio; os contadores continuam no corpo para dizer o que passou.
-    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sheetsPrepared, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed, workspacesFailed,
+    return Response.json({ swept: workspaces.results.length, touched: touched.length, scheduled, admissionsQueued, sheetsPrepared, photosOcrRead, sankhyaScheduled, sankhyaPending, workerDispatch: workerDispatch?.status ?? "not_needed", scheduleFailed, processed, failed, workspacesFailed,
       // Até vinte recusas nomeadas: o suficiente para diagnosticar sem transformar
       // a resposta do cron em despejo da base.
       skipped: skipped.slice(0, 20) },

@@ -138,6 +138,15 @@ jobs:
           DATABASE_URL: postgresql://vinculato_app:app@localhost:5432/vinculato
         run: npm run db:rehearse-admission-sheet
 
+      # Mesma prova, para a tabela irmã da ficha: a sugestão de campo lida por
+      # OCR de foto de documento (RG, CPF, CTPS). Tem o mesmo cerco — RLS, as
+      # mesmas cascatas, o mesmo CHECK de envelope — e nada disso aparece em
+      # teste de unidade.
+      - name: Provar as travas do OCR de fotos de documento
+        env:
+          DATABASE_URL: postgresql://vinculato_app:app@localhost:5432/vinculato
+        run: npm run db:rehearse-admission-sheet-photo-ocr
+
       # Backup só vale quando a restauração é provada, e uma prova que só roda
       # quando alguém lembra de rodar apodrece. O ensaio faz o ciclo inteiro —
       # migrations pelo executor de produção, dump, restore em banco vazio — e

@@ -29,6 +29,24 @@ export type IdentityDivergence = { field: string; label: string; detail: string 
 export type SheetConfirmation = { erpRegistration: string; confirmedAt: string; confirmedBy: string };
 
 /**
+ * Sugestão de campo lida por OCR numa foto de documento (RG, CPF, CTPS).
+ *
+ * Nunca é a ficha — é candidato. `confidence: "low"` marca o que o OCR não
+ * conseguiu conferir sozinho (ex.: nome, texto livre); `"ok"` marca o que
+ * passou numa checagem própria (dígito verificador do CPF/PIS, data válida).
+ * Confirmar uma sugestão usa o mesmo PATCH de correção manual que a ficha já
+ * tem — este tipo só carrega o que a tela precisa para oferecer o valor.
+ */
+export type PhotoFieldConfidence = "ok" | "low";
+
+export type PhotoOcrSuggestion = {
+  attachmentId: string;
+  sourceFilename: string;
+  state: "pending" | "ready" | "failed";
+  fields: Record<string, { value: string; confidence: PhotoFieldConfidence }>;
+};
+
+/**
  * Em que pé está o preparo.
  *
  * `absent` e `pending` não podem virar a mesma tela: a primeira significa que
@@ -49,6 +67,7 @@ export type SheetPayload = {
   attachmentId?: string;
   divergences?: IdentityDivergence[];
   confirmation?: SheetConfirmation | null;
+  photoSuggestions?: PhotoOcrSuggestion[];
 };
 
 export type RegistrationSheet = {

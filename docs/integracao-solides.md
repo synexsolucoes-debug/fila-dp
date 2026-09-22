@@ -438,3 +438,78 @@ tem precedência sobre a varredura automática, e abrir o navegador para listar
 enquanto há consulta esperando atrasaria quem está na frente de uma tela. Uma
 falha na listagem não derruba a varredura já concluída — exceto o desafio de
 autenticação, que precisa chegar ao painel.
+
+## 13. OCR de fotos de documento — sugestão, nunca origem
+
+A ficha (§9-§11) lê o Registro de Empregado, um PDF de layout fixo e texto
+selecionável. Boa parte dos anexos que chegam pela Sólides, porém, são **fotos**
+de RG, CPF e CTPS — tiradas por celular, às vezes tortas ou mal iluminadas. O
+extrator de PDF não serve para isso, e forçar o mesmo caminho produziria erro
+silencioso.
+
+### 13.1 Por que é uma quarta coisa, não uma quarta origem
+
+A tabela de origens do campo (§11.1) tem três entradas — `document`, `registry`,
+`manual` — e a leitura de foto **não vira uma quarta**. A diferença não é de
+nome: as três origens da ficha alimentam `mergeSheetFields` e podem preencher um
+campo sozinhas. O resultado do OCR nunca faz isso. Ele fica em
+`fdp_admission_sheet_photo_ocr` — tabela própria, um candidato por foto anexada —
+e só vira valor de verdade quando uma pessoa o copia para dentro do mesmo
+`PATCH /api/cards/[id]/registration-sheet` que já existia para correção manual.
+Confirmar uma sugestão **é** preencher à mão; a proveniência gravada é `manual`,
+como qualquer outra correção.
+
+A razão é a mesma do §13 introdutório: o layout de uma foto de RG varia por
+estado, a foto pode estar torta, e o OCR erra mais nos dígitos que não podem
+errar. Colocar o resultado no mesmo pé que a leitura do PDF esconderia essa
+diferença de confiabilidade atrás de uma tela igual.
+
+### 13.2 O que é lido, e o que deliberadamente não é
+
+`lib/photo-document-fields.ts` só produz candidato para quatro campos:
+
+| Campo | Como é aceito |
+| --- | --- |
+| `taxId` (CPF) | Dígito verificador confere, e só há **um** candidato plausível no texto |
+| `pisNumber` (PIS/PASEP) | Mesma regra do CPF — dígito verificador e candidato único |
+| `birthDate` | Rótulo "Data de Nascimento" encontrado e a data passa na mesma validação da ficha |
+| `fullName` | Rótulo "Nome" encontrado — sempre marcado `confidence: "low"`, por ser texto livre |
+
+Número de RG, número e série da CTPS, e qualquer outro rótulo curto ou
+ambíguo ficam de fora, pela mesma razão dos rótulos ambíguos do extrator de PDF
+(§9.2): sem um jeito de conferir o valor sozinho, chutar produz um dado errado
+com aparência de certo — e esse é justamente o tipo de erro que este recurso
+existe para reduzir, não para introduzir. Quando o texto tem **mais de um**
+candidato plausível a CPF ou PIS (duas pessoas fotografadas, ou dois números na
+mesma imagem), nenhum é aceito — a ambiguidade vira nenhuma sugestão, não uma
+sugestão arriscada.
+
+### 13.3 Onde a leitura acontece, e o que precisa estar configurado
+
+A engrenagem é a mesma da ficha em PDF (§10): o upload de cada foto enfileira
+o OCR (`enqueuePhotoOcr`), a conclusão da transferência tenta ler na hora
+(`runPendingPhotoOcrForCard`, para não esperar o próximo ciclo do cron com os
+bytes já em mãos), e o que não terminar entra na fila do cron
+(`claimPendingPhotoOcr` / `preparePhotoOcr`, `/api/cron/integrations`) — reler
+uma foto já guardada não precisa de sessão de navegador nem de o worker do
+Windows estar ligado, só da chave do provedor.
+
+O provedor é o **Google Cloud Vision** (`lib/photo-ocr.ts`), REST, sem SDK.
+Configura-se com `FDP_OCR_GOOGLE_VISION_API_KEY` (ver `.env.example`). Sem essa
+variável, `ocrConfigured()` volta falso e toda tentativa termina em
+`OCR_NOT_CONFIGURED` — a foto continua anexada normalmente, só não gera
+sugestão. Ativar isto é uma decisão deliberada sobre dado pessoal sensível: a
+foto do documento é enviada ao Google para ser lida. É o mesmo tipo de escolha
+que levou a Sólides a entrar como conector (§1) — trocar isolamento total por
+uma tarefa que, sem automação, alguém teria que fazer o mesmo lendo o mesmo
+documento na tela.
+
+### 13.4 O mesmo cerco da ficha, reaplicado
+
+O valor sugerido é documento pessoal, então guarda no mesmo envelope
+AES-256-GCM que `fdp_admission_sheets` usa (`lib/admission-sheet.ts`,
+reaproveitado sem alteração). A confiança por campo (`"ok"` ou `"low"`) não é
+conteúdo — é metadado sobre a qualidade da leitura — e por isso fica em coluna
+aberta, como já acontece com os avisos da ficha. RLS forçado, cascata para
+`fdp_workspaces` / `fdp_cards` / `fdp_card_attachments`, um resultado por
+anexo: reler substitui, nunca acumula.

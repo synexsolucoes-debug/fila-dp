@@ -100,6 +100,7 @@ export const expectedMigrations = [
   "0090_tangerino_open_admissions.sql",
   "0091_tangerino_attachment_employee_optional.sql",
   "0092_tangerino_attachment_auto_authorize.sql",
+  "0093_admission_sheet_photo_ocr.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
