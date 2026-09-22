@@ -90,7 +90,22 @@ export const TangerinoSelectors = Object.freeze({
    * ao lado — "Todas admissões 84") e não aparece em menu nenhum. `firstVisible`
    * para no primeiro que encontrar, então a ordem decide qual prova é aceita.
    */
-  admissionsPageMarkers: [/^todas admiss[õo]es$/iu, /^admiss[ãa]o$/iu],
+  admissionsPageMarkers: [/^todas admiss[õo]es(?:\s*\d+)?$/iu, /^admiss[ãa]o$/iu],
+
+  /**
+   * Nomes das abas da lista, tal como o print do operador mostrou — cada uma
+   * com a contagem ao lado ("Todas admissões 84", "Dados contratuais 5",
+   * "Concluídas 63"...). Não serve para clicar em nada: é só diagnóstico, para
+   * provar em qual tela a descoberta está lendo cartões quando o número bate
+   * ("5") mas a etapa não é a esperada — a suspeita mais barata de descartar
+   * é a tela ser o resumo "Admissões vencendo" do painel Visão Geral, e não a
+   * lista real, já que as duas podem devolver cinco cartões por coincidência.
+   */
+  admissionsTabLabels: [
+    /^todas admiss[õo]es/iu, /^pr[ée]-admiss[ãa]o/iu, /^aguardando documenta[çc][ãa]o/iu,
+    /^aprovar documentos/iu, /^dados contratuais/iu, /^aguardando assinatura/iu,
+    /^conclu[íi]das/iu, /^cancelad[ao]s/iu,
+  ],
 
   /** Pesquisa do colaborador dentro da área de admissão. */
   searchPlaceholders: [/^digite o nome$/iu],

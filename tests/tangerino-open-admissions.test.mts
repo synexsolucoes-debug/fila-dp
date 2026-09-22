@@ -228,9 +228,34 @@ test("\"Todas admissões\" prova a lista; \"Admissão\" sozinho também bate com
   // Uma conta real mostrou o marcador batendo com o próprio item de MENU antes
   // de a navegação sair da tela inicial — "Admissão" sozinho não prova que a
   // lista está na tela. "Todas admissões" é uma aba real, com contagem ao
-  // lado no print do operador, e não aparece em menu nenhum.
+  // lado no print do operador ("Todas admissões 84"), e não aparece em menu
+  // nenhum — por isso o marcador aceita o número colado ao rótulo, e não só
+  // o rótulo isolado.
   const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
-  assert.equal(TangerinoSelectors.admissionsPageMarkers[0].source, /^todas admiss[õo]es$/iu.source);
+  assert.equal(TangerinoSelectors.admissionsPageMarkers[0].source, /^todas admiss[õo]es(?:\s*\d+)?$/iu.source);
+  assert.equal(TangerinoSelectors.admissionsPageMarkers[0].test("Todas admissões"), true);
+  assert.equal(TangerinoSelectors.admissionsPageMarkers[0].test("Todas admissões 84"), true);
+});
+
+test("a descoberta desconfia de cinco cartões coincidirem com a contagem de Dados contratuais", async () => {
+  /* Duas execuções reais seguidas acharam exatamente 5 cartões, sempre
+     "Admissão concluída" — e a conta tem 84 admissões, só 5 delas em Dados
+     contratuais. A suspeita mais barata de descartar sem chutar mais um
+     seletor: a leitura pode estar caindo no resumo "Admissões vencendo" do
+     painel Visão Geral (que o print do operador mostrou como "4/4"), e não
+     na lista real. O diagnóstico não é PII — nome de aba e contagem são
+     rótulo de interface, não dado de admissão. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(fonte.indexOf("let hits = await collectSearchHits(frame);"), fonte.indexOf("return hits;\n  }\n\n  async searchAdmission"));
+  assert.match(bloco, /for \(const pattern of TangerinoSelectors\.admissionsTabLabels\)/u);
+  assert.match(bloco, /log\("info", "tangerino\.admissions_list_diagnostic", \{\}, \{/u);
+  assert.match(bloco, /cardCount: hits\.length, tabLabelsFound: tabLabels,/u);
+  // O rótulo da aba (texto de interface) é seguro no log — nunca nome de candidato.
+  assert.doesNotMatch(bloco, /displayName|fullName|candidat/iu);
+
+  const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
+  assert.equal(TangerinoSelectors.admissionsTabLabels.length, 8);
+  assert.equal(TangerinoSelectors.admissionsTabLabels[4].test("Dados contratuais 5"), true);
 });
 
 test("depois de chegar na Admissão, o worker ainda precisa clicar em Visão Geral", async () => {
