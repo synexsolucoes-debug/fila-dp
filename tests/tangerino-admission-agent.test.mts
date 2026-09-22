@@ -826,6 +826,23 @@ test("a própria URL identifica login e acesso negado mesmo quando o texto engan
     < cliente.indexOf("authBarrierFromUrl(page.url())"), "CAPTCHA/MFA precisa vencer a rota LoginPage");
 });
 
+test("a rota de login aguarda o formulário dinâmico antes de declarar mudança de tela", () => {
+  const cliente = source("worker/tangerino/playwright-session.ts");
+  const espera = cliente.slice(cliente.indexOf("private async waitForLoginForm"),
+    cliente.indexOf("async ensureAuthenticated"));
+  assert.match(espera, /Math\.min\(timeoutMs, 20_000\)/u);
+  assert.match(espera, /this\.currentAuthBarrier\(\)/u,
+    "a espera precisa continuar respeitando CAPTCHA, MFA e acesso negado");
+  assert.match(espera, /page\.waitForTimeout\(500\)/u);
+  assert.match(espera, /tangerino\.login_form_waiting/u);
+
+  const autenticacao = cliente.slice(cliente.indexOf("async ensureAuthenticated"),
+    cliente.indexOf("async openAdmissions"));
+  assert.ok(autenticacao.indexOf("waitForLoginForm(input.timeoutMs)")
+    < autenticacao.indexOf('uiChanged("autenticação", "campos de usuário e senha")'),
+  "UI_CHANGED só pode acontecer depois da espera pelo formulário");
+});
+
 test("o modo assistido libera só recursos do desafio e nunca a navegação principal", () => {
   for (const url of [
     "https://www.google.com/recaptcha/api2/anchor",
