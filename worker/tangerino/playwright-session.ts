@@ -291,6 +291,13 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
   private async resolveAdmissionsFrame(timeoutMs: number) {
     const page = this.requirePage();
     const deadline = Date.now() + timeoutMs;
+    /* O estado da ÚLTIMA volta do laço, não a primeira: se a página chegar a
+       falar em admissão mas nunca juntar marcador de página com campo de
+       busca, essa distinção é o que separa "quase lá" — vale esperar mais, ou
+       o rótulo do marcador mudou — de "nunca foi a tela certa". Sem isso o
+       diagnóstico final resume tudo em "não achei", que já se mostrou pouco
+       acionável duas vezes seguidas nesta conta. */
+    let lastPageDiag = { pageIsAdmissionsApp: false, pageMarkerFound: false, searchFieldFound: false };
     do {
       /* A lista nem sempre vem em iframe. Na conta real ela é a própria página
          do shell — e exigir o host do aplicativo autônomo fazia o worker olhar
@@ -306,6 +313,7 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       if (pageIsAdmissionsApp && await isVisible(page.locator("body"))) {
         const pageMarker = await firstVisible(TangerinoSelectors.admissionsPageMarkers.map((text) => page.getByText(text)));
         const searchField = await firstVisible(TangerinoSelectors.searchPlaceholders.map((text) => page.getByPlaceholder(text)));
+        lastPageDiag = { pageIsAdmissionsApp, pageMarkerFound: Boolean(pageMarker), searchFieldFound: Boolean(searchField) };
         if (pageMarker && searchField) return page;
       }
       const preferred = page.locator(TangerinoSelectors.admissionsFrameCss);
@@ -387,6 +395,12 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       iframeCount: totalFrames, pageHost: local.host, pagePath: local.path,
       iframeHosts: [...new Set(iframeHosts)], menuLabels,
       admissionHrefs: [...new Set(admissionHrefs)], collapsibleCount,
+      /* A ÚLTIMA leitura antes de desistir: se pageMarkerFound e
+         searchFieldFound vierem os dois false com pageIsAdmissionsApp true, a
+         página nunca teve o marcador nem a busca — a tela real é outra coisa.
+         Se um dos dois vier true, faltou só o outro — provável questão de
+         tempo, ou aquele seletor específico mudou. */
+      ...lastPageDiag,
     });
     return null;
   }
@@ -638,7 +652,15 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
         navegou: navigated, telaFalaEmAdmissao: mentionsAdmission,
       });
 
-      frame = await this.resolveAdmissionsFrame(Math.min(15_000, tangerinoAgentConfig().timeoutMs));
+      /* O orçamento inteiro, e não um teto de 15s: uma navegação FRIA para uma
+       * SPA bootstrapa do zero — sem o estado que um clique dentro do
+       * aplicativo já carrega. Uma conta real chegou exatamente no endereço
+       * pedido e com "admissão" no corpo da página (`telaFalaEmAdmissao:
+       * true`) e ainda assim não formou o par marcador+busca a tempo dentro de
+       * 15s. As outras rotas (clique dentro do app) continuam com o teto
+       * curto, porque ali não há bootstrap frio para esperar.
+       */
+      frame = await this.resolveAdmissionsFrame(tangerinoAgentConfig().timeoutMs);
     }
     if (!frame) throw tangerinoErrors.uiChanged("abertura da Admissão", "lista de admissões");
     this.admissionsFrame = frame;

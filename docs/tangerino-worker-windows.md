@@ -284,3 +284,27 @@ silêncio:
    credencial;
 3. mudança de variável só vale no próximo deployment. Publique antes de
    regravar o acesso da Sólides.
+
+## Quando a lista de admissões não é encontrada mesmo chegando na tela certa
+
+A descoberta (`lib/tangerino/discovery.ts`) precisa confirmar duas coisas ao
+mesmo tempo antes de confiar que está na lista: um marcador de texto da página
+("Admissão" ou "Todas admissões") **e** o campo de busca exato ("Digite o
+nome"). As duas juntas, e não uma navegação bem-sucedida sozinha — chegar no
+endereço certo não é o mesmo que a tela ter terminado de montar.
+
+Se `tangerino.admissions_frame_not_found` aparecer mesmo depois da navegação
+mostrar `telaFalaEmAdmissao: true`, o evento agora traz `pageMarkerFound` e
+`searchFieldFound` separados: qual dos dois faltou, e não só "não achei".
+
+Para ver a tela exatamente como o worker a encontrou, adicione ao
+`.env.tangerino-worker.local`:
+
+```
+FDP_TANGERINO_LOCAL_LOG_PATH=C:\ProgramData\Vinculato\tangerino-worker.log
+```
+
+Na próxima falha desse tipo, uma captura de tela é salva ao lado desse arquivo,
+em `tangerino-admissions-not-found.png`. Ela mostra o estado real do navegador
+no momento da desistência — o jeito mais rápido de sair de "tentar mais um
+seletor" e ver o que está lá.
