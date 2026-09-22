@@ -148,13 +148,46 @@ export async function readAdmissionCard(card: Locator): Promise<AdmissionSnapsho
   const title = card.locator(TangerinoSelectors.resultNameCss).first();
   const displayName = await title.getAttribute("title").catch(() => null)
     ?? await title.innerText().catch(() => "");
+  const rawStatus = await readCardValue(card, TangerinoSelectors.statusLabels);
+  const stage = await readCardValue(card, TangerinoSelectors.stageLabels);
+
+  /* O reforço em `readCardValue` só ajuda quando o RÓTULO é achado e é só o
+   * valor ao lado que muda de classe. Duas rodadas reais devolveram a mesma
+   * falha ("situação da admissão" não encontrada) mesmo depois desse reforço
+   * — sinal de que o rótulo em si não está sendo achado como nó de texto
+   * isolado, e não dá para saber por quê sem olhar o cartão de verdade.
+   *
+   * Nada de PII vai para o log estruturado — ele é o que a pessoa que opera
+   * cola direto nesta conversa. `looselyPresent` só diz se a PALAVRA aparece
+   * em algum lugar do texto do cartão (o que distingue "nunca existiu aqui"
+   * de "existe, mas não como nó isolado, colado a outra coisa"), e o
+   * comprimento do texto, nunca o texto em si. O que TEM PII — texto e
+   * imagem do cartão inteiro — só sai para o disco da própria máquina do DP,
+   * e só quando `FDP_TANGERINO_LOCAL_LOG_PATH` está definido.
+   */
+  if (!rawStatus || !stage) {
+    const cardText = await card.innerText().catch(() => "");
+    log("warn", "tangerino.card_field_not_found", {}, {
+      rawStatusFound: Boolean(rawStatus), stageFound: Boolean(stage),
+      cardTextLength: cardText.length,
+      statusWordLooselyPresent: hasAny(cardText, TangerinoSelectors.statusLabels),
+      stageWordLooselyPresent: hasAny(cardText, TangerinoSelectors.stageLabels),
+    });
+    const localLogPath = String(process.env.FDP_TANGERINO_LOCAL_LOG_PATH ?? "").trim();
+    if (localLogPath) {
+      const directory = dirname(localLogPath);
+      await card.screenshot({ path: join(directory, "tangerino-card-field-not-found.png") }).catch(() => undefined);
+      await writeFile(join(directory, "tangerino-card-field-not-found.txt"), cardText, "utf8").catch(() => undefined);
+    }
+  }
+
   return {
     // A interface mapeada não expõe protocolo nem data efetiva no cartão.
     externalAdmissionId: await card.getAttribute("data-id").catch(() => null)
       ?? await card.getAttribute("id").catch(() => null)
       ?? undefined,
-    rawStatus: await readCardValue(card, TangerinoSelectors.statusLabels),
-    stage: await readCardValue(card, TangerinoSelectors.stageLabels),
+    rawStatus,
+    stage,
     pendingReason: await readLabeledValue(card, TangerinoSelectors.pendingLabels),
     admissionDate: await readLabeledValue(card, TangerinoSelectors.admissionDateLabels),
     sourceUpdatedAt: await readLabeledValue(card, TangerinoSelectors.updatedAtLabels),
