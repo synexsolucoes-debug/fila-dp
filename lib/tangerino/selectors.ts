@@ -106,6 +106,15 @@ export const TangerinoSelectors = Object.freeze({
     /^aprovar documentos/iu, /^dados contratuais/iu, /^aguardando assinatura/iu,
     /^conclu[íi]das/iu, /^cancelad[ao]s/iu,
   ],
+  /**
+   * A mesma aba "Dados contratuais" acima, isolada para clicar nela.
+   *
+   * A descoberta existe para achar quem está pronto para o ERP — e é
+   * exatamente o que essa aba filtra. Sem clicar, a lista mostra a aba que
+   * ficou ativa da última vez (cinco cartões, sempre "Admissão concluída",
+   * em duas execuções reais seguidas) e nunca chega nos cinco que interessam.
+   */
+  admissionsContractDataTab: /^dados contratuais/iu,
 
   /** Pesquisa do colaborador dentro da área de admissão. */
   searchPlaceholders: [/^digite o nome$/iu],
