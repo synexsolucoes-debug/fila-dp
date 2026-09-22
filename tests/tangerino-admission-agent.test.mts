@@ -411,6 +411,16 @@ test("a mensagem de erro não carrega senha, token nem cookie", () => {
   assert.equal(safeTangerinoError(nomeada), nomeada);
 });
 
+test("falha de versão do cofre vira configuração acionável, não erro inesperado", () => {
+  const falha = Object.assign(new Error("A versão ativa do cofre não está disponível."), {
+    code: "VAULT_KEY_VERSION_MISSING",
+  });
+  const segura = safeTangerinoError(falha);
+  assert.equal(segura.code, "TANGERINO_VAULT_CONFIGURATION");
+  assert.equal(segura.retryable, false);
+  assert.equal(segura.requiresUserAction, true);
+});
+
 /* ── Caminho do agente ─────────────────────────────────────────────────────── */
 
 test("o caminho feliz percorre exatamente os comandos previstos", async () => {
@@ -804,6 +814,16 @@ test("o CAPTCHA é detectado pelo widget, e não só pela palavra", () => {
   assert.doesNotMatch(helperCaptcha, /\.click\(/u, "o worker tentou clicar dentro do CAPTCHA");
   assert.match(helperCaptcha, /isVisible\(widgets\.nth\(index\)\)/u,
     "iframe oculto deixado pelo shell não pode pedir autorização de novo");
+});
+
+test("a própria URL identifica login e acesso negado mesmo quando o texto engana", async () => {
+  const { authBarrierFromUrl } = await import("../worker/tangerino/playwright-session.ts");
+  assert.equal(authBarrierFromUrl("https://app.tangerino.com.br/Tangerino/pages/LoginPage;jsessionid=abc"), "login");
+  assert.equal(authBarrierFromUrl("https://admissao-demissao.tangerino.com.br/access-denied"), "denied");
+  assert.equal(authBarrierFromUrl("https://app.tangerino.com.br/Tangerino/pages/admissao-demissao"), null);
+  const cliente = source("worker/tangerino/playwright-session.ts");
+  assert.ok(cliente.indexOf('detected === "mfa" || detected === "captcha"')
+    < cliente.indexOf("authBarrierFromUrl(page.url())"), "CAPTCHA/MFA precisa vencer a rota LoginPage");
 });
 
 test("o modo assistido libera só recursos do desafio e nunca a navegação principal", () => {
