@@ -65,7 +65,9 @@ export function inspectWorkerConfiguration(
     });
   }
 
-  if (!String(env.FDP_TANGERINO_VAULT_KEYS || env.FDP_TANGERINO_VAULT_KEY || "").trim()) {
+  const vaultMap = String(env.FDP_TANGERINO_VAULT_KEYS ?? "").trim();
+  const vaultSingle = String(env.FDP_TANGERINO_VAULT_KEY ?? "").trim();
+  if (!vaultMap && !vaultSingle) {
     problems.push({
       variable: "FDP_TANGERINO_VAULT_KEYS",
       remedy: "copie do deployment o mapa FDP_TANGERINO_VAULT_KEYS, inteiro, com todas as versões. "
@@ -76,6 +78,38 @@ export function inspectWorkerConfiguration(
         + "     Se você já teve a chave em FDP_TANGERINO_VAULT_KEY (no singular), ela pode ser a mesma — "
         + "tente {\"<versão da credencial>\":\"<aquele mesmo valor>\"} antes de rotacionar.",
     });
+  } else {
+    let versions: number[] = [];
+    if (vaultMap) {
+      try {
+        const parsed = JSON.parse(vaultMap) as Record<string, unknown>;
+        versions = Object.entries(parsed)
+          .filter(([version, value]) => Number.isInteger(Number(version)) && Number(version) > 0
+            && typeof value === "string" && value.trim().length > 0)
+          .map(([version]) => Number(version));
+        if (!versions.length) throw new Error("empty keyring");
+      } catch {
+        problems.push({
+          variable: "FDP_TANGERINO_VAULT_KEYS",
+          remedy: "o valor precisa ser o mapa JSON completo copiado do deployment, por exemplo {\"1\":\"...\"}. Não informe nem publique a chave em logs.",
+        });
+      }
+    } else {
+      /* A variável singular nunca representa uma rotação: por contrato ela
+       * registra apenas a versão 1, independentemente do número escrito na
+       * variável de versão ativa. */
+      versions = [1];
+    }
+
+    const configuredVersion = String(env.FDP_TANGERINO_VAULT_KEY_VERSION ?? "").trim();
+    const activeVersion = configuredVersion ? Number(configuredVersion) : Math.max(...versions);
+    if (versions.length && (!Number.isInteger(activeVersion) || activeVersion <= 0 || !versions.includes(activeVersion))) {
+      problems.push({
+        variable: "FDP_TANGERINO_VAULT_KEY_VERSION",
+        remedy: `aponte para uma versão existente em FDP_TANGERINO_VAULT_KEYS. Neste computador existem apenas as versões ${versions.join(", ") || "nenhuma"}. `
+          + "Se estiver usando FDP_TANGERINO_VAULT_KEY no singular, a versão obrigatoriamente é 1.",
+      });
+    }
   }
 
   const config = tangerinoAgentConfig(env);

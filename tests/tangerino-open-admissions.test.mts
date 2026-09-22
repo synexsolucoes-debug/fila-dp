@@ -555,9 +555,10 @@ test("a descoberta cura sozinha as demandas antigas que ficaram sem autorizaçã
     fonte.length,
   );
   assert.match(funcao, /WHERE NOT EXISTS \(\s*SELECT 1 FROM fdp_tangerino_attachment_authorizations existing\s*WHERE existing\.workspace_id = \? AND existing\.card_id = \?\s*\)/u);
-  // Uma falha automática anterior ganha uma única retomada; attempt 2 encerra o laço.
+  // A falha antiga genérica do cofre pode ter consumido duas tentativas; a terceira é o teto.
   assert.match(funcao, /existing\.authorized_by_user_id IS NULL/u);
-  assert.match(funcao, /existing\.state = 'FAILED' AND existing\.attempt < 2/u);
+  assert.match(funcao, /existing\.state = 'FAILED' AND existing\.attempt < 3/u);
+  assert.match(funcao, /'TANGERINO_VAULT_CONFIGURATION', 'TANGERINO_UNEXPECTED_ERROR', 'TANGERINO_TIMEOUT'/u);
   assert.match(funcao, /SET state = 'QUEUED'/u);
 
   const discoveryFonte = await readFile(new URL("../lib/tangerino/discovery.ts", import.meta.url), "utf8");

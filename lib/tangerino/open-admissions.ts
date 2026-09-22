@@ -394,9 +394,10 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
  * por demanda antiga, cada ciclo da descoberta verifica e completa sozinho.
  *
  * Uma autorização automática que falhou na primeira tentativa por mudança de
- * tela ganha uma única retomada (`attempt < 2`). Isso cura as demandas que
- * ficaram `FAILED` antes de uma correção do worker sem pedir clique manual, e
- * ao mesmo tempo impede um laço infinito a cada descoberta de 15 minutos.
+ * tela ganha uma retomada. A falha antiga genérica do cofre pode ter consumido
+ * as duas tentativas antes de dizer a causa; ela ganha uma terceira e última
+ * tentativa depois que a configuração for corrigida. O teto impede um laço
+ * infinito a cada descoberta de 15 minutos.
  */
 export async function ensureOpenAdmissionAttachmentAuthorization(d1: Database, input: {
   workspaceId: string;
@@ -414,7 +415,9 @@ export async function ensureOpenAdmissionAttachmentAuthorization(d1: Database, i
       FROM lock
       WHERE existing.workspace_id = ? AND existing.card_id = ?
         AND existing.authorized_by_user_id IS NULL
-        AND existing.state = 'FAILED' AND existing.attempt < 2
+        AND existing.state = 'FAILED' AND existing.attempt < 3
+        AND (existing.attempt < 2 OR existing.error_code IN
+          ('TANGERINO_VAULT_CONFIGURATION', 'TANGERINO_UNEXPECTED_ERROR', 'TANGERINO_TIMEOUT'))
       RETURNING existing.id
     ), inserted AS (
       INSERT INTO fdp_tangerino_attachment_authorizations
