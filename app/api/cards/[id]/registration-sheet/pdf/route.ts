@@ -15,6 +15,7 @@ export async function GET(request: Request, context: RouteContext) {
   const payload = await response.json() as {
     state?: string;
     sheet?: Parameters<typeof buildVinculatoAdmissionSheetPdf>[0]["sheet"] | null;
+    photoSuggestions?: Parameters<typeof buildVinculatoAdmissionSheetPdf>[0]["photoSuggestions"];
   };
   if (payload.state !== "ready" || !payload.sheet) {
     return Response.json({
@@ -30,6 +31,7 @@ export async function GET(request: Request, context: RouteContext) {
   const pdf = await buildVinculatoAdmissionSheetPdf({
     sheet,
     provenance: sheet.provenance,
+    photoSuggestions: payload.photoSuggestions,
     sourceFilename: sheet.sourceFilename,
   });
   return new Response(new Uint8Array(pdf), {

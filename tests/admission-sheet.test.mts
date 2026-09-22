@@ -105,6 +105,41 @@ test("o Vinculato emite uma ficha PDF própria com campos e pendências visívei
     "campo inválido precisa continuar evidente na ficha emitida");
 });
 
+test("sugestão de foto aparece só nos campos que não vieram do documento, nunca sobre um valor confirmado", async () => {
+  const sheet = buildRegistrationSheet({
+    fullName: "FULANA DE TAL",
+    admissionDate: "13/10/2025",
+    taxId: "111.222.333-00",
+  });
+  const bytes = await buildVinculatoAdmissionSheetPdf({
+    sheet,
+    photoSuggestions: [{
+      sourceFilename: "rg-frente.jpg",
+      fields: {
+        taxId: { value: "111.222.333-96", confidence: "ok" },
+        birthDate: { value: "22/03/1996", confidence: "ok" },
+        fullName: { value: "FULANA DE TAL SILVA", confidence: "low" },
+      },
+    }],
+    generatedAt: new Date("2026-09-22T12:00:00.000Z"),
+  });
+  const parsed = await getDocumentProxy(new Uint8Array(bytes));
+  const { text } = await extractText(parsed, { mergePages: true });
+  assert.match(text, /Conferir e confirmar \(foto\): 111\.222\.333-96/u, "campo inválido ganha a sugestão da foto");
+  assert.match(text, /Conferir e confirmar \(foto\): 22\/03\/1996/u, "campo em branco ganha a sugestão da foto");
+  assert.doesNotMatch(text, /FULANA DE TAL SILVA/u,
+    "campo já confirmado pelo documento não é sobrescrito por sugestão de foto");
+  assert.match(text, /lido por OCR de foto, ainda não confirmado/u, "a legenda explica a cor da sugestão");
+});
+
+test("sem nenhuma sugestão de foto, a legenda não aparece", async () => {
+  const sheet = buildRegistrationSheet({ fullName: "FULANA DE TAL" });
+  const bytes = await buildVinculatoAdmissionSheetPdf({ sheet, generatedAt: new Date("2026-09-22T12:00:00.000Z") });
+  const parsed = await getDocumentProxy(new Uint8Array(bytes));
+  const { text } = await extractText(parsed, { mergePages: true });
+  assert.doesNotMatch(text, /lido por OCR de foto/u);
+});
+
 test("a ficha é reconhecida entre os anexos, inclusive renumerada pelo ZIP", () => {
   const pdf = "application/pdf";
   assert.equal(chooseRegistrationFormAttachment([
