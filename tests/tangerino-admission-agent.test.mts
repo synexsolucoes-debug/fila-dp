@@ -411,6 +411,16 @@ test("a mensagem de erro não carrega senha, token nem cookie", () => {
   assert.equal(safeTangerinoError(nomeada), nomeada);
 });
 
+test("falha de versão do cofre vira configuração acionável, não erro inesperado", () => {
+  const falha = Object.assign(new Error("A versão ativa do cofre não está disponível."), {
+    code: "VAULT_KEY_VERSION_MISSING",
+  });
+  const segura = safeTangerinoError(falha);
+  assert.equal(segura.code, "TANGERINO_VAULT_CONFIGURATION");
+  assert.equal(segura.retryable, false);
+  assert.equal(segura.requiresUserAction, true);
+});
+
 /* ── Caminho do agente ─────────────────────────────────────────────────────── */
 
 test("o caminho feliz percorre exatamente os comandos previstos", async () => {
