@@ -46,7 +46,7 @@ async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: 
       const discovery = await discoverOpenAdmissions(
         d1, workspaceId, async () => PlaywrightTangerinoSession.create({ workspaceId }),
       );
-      if (discovery && discovery.demandsCreated > 0) handled += discovery.demandsCreated;
+      if (discovery) handled += discovery.demandsCreated + discovery.attachmentsBackfilled;
     } catch (error) {
       /* Uma descoberta que falha não pode derrubar a varredura: a fila pedida
          por pessoas já foi drenada acima, e perder isso por causa de uma

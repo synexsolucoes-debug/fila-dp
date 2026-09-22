@@ -26,7 +26,7 @@
 import type { getD1 } from "../../db/index.ts";
 import { addBusinessDays } from "../fila-dp-relations.ts";
 import { workingDayMinutes } from "../fila-dp-sla.ts";
-import { prepareAuditEvent } from "../fila-dp-db.ts";
+import { prepareAuditEvent, recordActivity } from "../fila-dp-db.ts";
 import { recordIntegrationEvent } from "../integration-events.ts";
 import { prepareDomainEvent } from "../outbox.ts";
 import { isContractDataStage } from "./parser.ts";
@@ -381,4 +381,61 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
     }),
   ]);
   return { status: "created", cardId };
+}
+
+/**
+ * Cura, no próprio ciclo da descoberta, a demanda que ficou sem autorização.
+ *
+ * A autorização automática (PR #169) só passou a existir a partir de quando
+ * o código dela subiu. As demandas que a descoberta já tinha criado antes
+ * disso continuam com `employee_id`/`authorized_by_user_id` nulos no cartão,
+ * mas nenhuma linha em `fdp_tangerino_attachment_authorizations` — o mesmo
+ * buraco que o clique manual existia para cobrir. Em vez de pedir um clique
+ * por demanda antiga, cada ciclo da descoberta verifica e completa sozinho.
+ *
+ * Só cria quando NÃO existe autorização nenhuma, de nenhum estado: se já
+ * houver uma — inclusive `FAILED` —, quem decide tentar de novo é uma
+ * pessoa, pelo botão "Autorizar novamente". A descoberta nunca força
+ * retentativa automática, para não mascarar um problema que se repete a
+ * cada ciclo.
+ */
+export async function ensureOpenAdmissionAttachmentAuthorization(d1: Database, input: {
+  workspaceId: string;
+  cardId: string;
+  integrationId: string;
+  externalAdmissionId: string;
+}): Promise<{ status: "created" | "already_present" }> {
+  const authorizationId = crypto.randomUUID();
+  const inserted = await d1.prepare(`WITH lock AS (
+      SELECT pg_advisory_xact_lock(hashtext(?))
+    ), inserted AS (
+      INSERT INTO fdp_tangerino_attachment_authorizations
+        (id, workspace_id, card_id, employee_id, integration_id, external_admission_id, authorized_by_user_id)
+      SELECT ?, ?, ?, NULL, ?, ?, NULL FROM lock
+      WHERE NOT EXISTS (
+        SELECT 1 FROM fdp_tangerino_attachment_authorizations existing
+        WHERE existing.workspace_id = ? AND existing.card_id = ?
+      )
+      RETURNING id
+    ) SELECT id FROM inserted`)
+    .bind(`tangerino-attachments:${input.workspaceId}:${input.cardId}`, authorizationId, input.workspaceId, input.cardId,
+      input.integrationId, text(input.externalAdmissionId, 120), input.workspaceId, input.cardId)
+    .first<{ id: string }>();
+  if (!inserted) return { status: "already_present" };
+
+  await d1.batch([
+    prepareAuditEvent({
+      workspaceId: input.workspaceId,
+      actorType: "system",
+      actorEmail: "SYSTEM",
+      action: "tangerino.attachments.authorized",
+      entityType: "card",
+      entityId: input.cardId,
+      after: { authorizationId, auto: true, backfilled: true, expiresInHours: 24 },
+    }),
+  ]);
+  await recordActivity(input.workspaceId, input.cardId, "SYSTEM", "tangerino.attachments.auto_authorized", {
+    authorizationId, expiresInHours: 24, backfilled: true,
+  });
+  return { status: "created" };
 }
