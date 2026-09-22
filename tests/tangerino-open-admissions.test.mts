@@ -125,3 +125,36 @@ test("quando a tela muda, o log diz onde o navegador parou", async () => {
   // Sem query string: parâmetro de URL nesse produto carrega token de sessão.
   assert.doesNotMatch(fonte, /pageSearch|url\.search/u);
 });
+
+test("as entradas da tela de Admissão passam pela allowlist de navegação", async () => {
+  // Rota nova que não passa na barreira vira falha de navegação em produção, e
+  // o sintoma seria idêntico ao que já enfrentamos: tela não encontrada.
+  const { assertAllowedTangerinoUrl } = await import("../lib/tangerino/navigation-security.ts");
+  const { tangerinoAdmissionsEntryUrls } = await import("../lib/tangerino/hosts.ts");
+  for (const entrada of tangerinoAdmissionsEntryUrls) {
+    const url = await assertAllowedTangerinoUrl(entrada);
+    assert.equal(url.protocol, "https:");
+  }
+});
+
+test("a rota do shell vem antes do aplicativo autônomo", async () => {
+  /* Numa conta real o aplicativo autônomo redirecionava de volta ao painel do
+     shell, e o worker ficava parado numa tela sem admissão nenhuma —
+     `iframeCount: 0`. A rota que a conta usa é a página do shell. */
+  const { tangerinoAdmissionsEntryUrls } = await import("../lib/tangerino/hosts.ts");
+  assert.match(tangerinoAdmissionsEntryUrls[0], /app\.tangerino\.com\.br\/Tangerino\/pages\/admissao-demissao/u);
+  // E a mesma rota sem o parâmetro logo depois: `funcionalidade` é identificador
+  // do item no Wicket e pode variar entre contas e perfis de permissão.
+  assert.equal(tangerinoAdmissionsEntryUrls[1], "https://app.tangerino.com.br/Tangerino/pages/admissao-demissao");
+  assert.match(tangerinoAdmissionsEntryUrls[2], /admissao-demissao\.tangerino\.com\.br/u);
+});
+
+test("a lista é reconhecida mesmo sem iframe", async () => {
+  // Exigir o host do aplicativo autônomo fazia o worker olhar para a tela certa
+  // e concluir que não era ela. O que identifica a lista é o que ela mostra.
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(fonte, /tangerinoBrowserHosts\.some\(\(allowed\) => host === allowed \|\| host\.endsWith\(`\.\$\{allowed\}`\)\)/u);
+  assert.match(fonte, /for \(const candidate of tangerinoAdmissionsEntryUrls\)/u);
+  // E as duas condições continuam obrigatórias: marcador da página E busca.
+  assert.match(fonte, /if \(pageMarker && searchField\) return page;/u);
+});
