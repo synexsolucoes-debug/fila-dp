@@ -4,6 +4,7 @@ import { tangerinoAgentConfig } from "../../lib/tangerino/config.ts";
 import { processNextTangerinoHealthCheck } from "../../lib/tangerino/health-check.ts";
 import { runNextAttachmentAuthorization } from "../../lib/tangerino/attachments-worker.ts";
 import { discoverOpenAdmissions } from "../../lib/tangerino/discovery.ts";
+import { safeTangerinoError } from "../../lib/tangerino/errors.ts";
 import { log } from "../../lib/observability.ts";
 import { assertWorkerConfiguration, type WorkerConfigurationOptions } from "../../lib/tangerino/worker-configuration.ts";
 import { PlaywrightTangerinoSession } from "./playwright-session.ts";
@@ -52,8 +53,18 @@ async function drainWorkspace(workspaceId: string, maxJobs: number, shouldStop: 
          listagem seria trocar o certo pelo incerto. */
       const code = error && typeof error === "object" && "code" in error ? String((error as { code: unknown }).code) : "";
       if (code === "AUTHENTICATION_REQUIRED") throw error;
+      /* A mensagem, não só o código — é ela que diz QUAL etapa e QUAL elemento
+       * faltaram (`uiChanged` embute os dois: "a etapa \"X\" não encontrou
+       * \"Y\""). "TANGERINO_UI_CHANGED" sozinho é o mesmo código para mais de
+       * dez pontos de falha diferentes no cliente de navegador — sem a
+       * mensagem, cada leitura deste log é uma reconstrução às cegas de qual
+       * deles disparou. `safeTangerinoError` já expurga segredo de sessão
+       * antes de qualquer coisa chegar aqui.
+       */
+      const safe = safeTangerinoError(error);
       log("warn", "tangerino.discovery_failed", { workspaceId }, {
         errorName: error instanceof Error ? error.name : "UnknownError", errorCode: code.slice(0, 120),
+        errorMessage: safe.message,
       });
     }
   }

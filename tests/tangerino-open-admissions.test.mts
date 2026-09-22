@@ -245,3 +245,16 @@ test("depois de chegar na Admissão, o worker ainda precisa clicar em Visão Ger
   assert.match(corpo, /admissionsOverviewLinks\.map\(\(name\) => page\.getByRole\("button", \{ name \}\)\)/u);
   assert.match(corpo, /admissionsOverviewLinks\.map\(\(name\) => page\.getByText\(name, \{ exact: true \}\)\)/u);
 });
+
+test("a falha da descoberta loga a mensagem, não só o código", async () => {
+  /* "TANGERINO_UI_CHANGED" sozinho é o mesmo código para mais de dez pontos de
+     falha diferentes no cliente de navegador (openAdmissions, listAdmissions,
+     searchAdmission, downloadAdmissionArtifacts, ...). Sem a mensagem —
+     "a etapa X não encontrou Y" —, cada leitura do log é uma reconstrução às
+     cegas de qual delas disparou. Foi exatamente essa reconstrução que tomou
+     várias rodadas nesta sessão antes de a causa aparecer. */
+  const fonte = await readFile(new URL("../worker/tangerino/runner.ts", import.meta.url), "utf8");
+  assert.match(fonte, /import \{ safeTangerinoError \} from "\.\.\/\.\.\/lib\/tangerino\/errors\.ts";/u);
+  assert.match(fonte, /const safe = safeTangerinoError\(error\);/u);
+  assert.match(fonte, /errorMessage: safe\.message,/u);
+});
