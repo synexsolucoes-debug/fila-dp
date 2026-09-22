@@ -1,7 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
-import { BadgeCheck, Check, Copy, FileText, LoaderCircle, Pencil, RefreshCw, ShieldAlert, Trash2, TriangleAlert } from "lucide-react";
+import {
+  BadgeCheck, Check, Copy, Download, FileText, Image as ImageIcon, LoaderCircle,
+  Maximize2, Minimize2, Pencil, RefreshCw, ShieldAlert, Trash2, TriangleAlert,
+} from "lucide-react";
 import {
   FIELD_SOURCE_LABELS, requestSheet, type FieldProvenance, type RegistrationSheet, type SheetBlock,
   type SheetField, type SheetPayload, type SheetPreparationState,
@@ -170,7 +174,35 @@ function PreparationState({ state, payload }: { state: SheetPreparationState; pa
   );
 }
 
-export type SheetDocument = { id: string; filename: string; downloadUrl: string };
+export type SheetDocument = { id: string; filename: string; contentType?: string; downloadUrl: string };
+
+function inlineDocumentUrl(document: SheetDocument) {
+  return `${document.downloadUrl}${document.downloadUrl.includes("?") ? "&" : "?"}disposition=inline`;
+}
+
+function isImageDocument(document: SheetDocument) {
+  return document.contentType?.startsWith("image/") || /\.(?:jpe?g|png|webp)$/iu.test(document.filename);
+}
+
+/** Rótulo ausente já aparece no campo como "Em branco"; aqui basta resumir. */
+function WarningSummary({ warnings }: { warnings: readonly string[] }) {
+  const unique = [...new Set(warnings)];
+  const missingLabels = unique.filter((warning) => warning.startsWith("Rótulo não encontrado no documento:"));
+  const actionable = unique.filter((warning) => !warning.startsWith("Rótulo não encontrado no documento:"));
+  if (!unique.length) return null;
+  return (
+    <section className={styles.warnings} aria-labelledby="registration-sheet-warnings">
+      <h4 id="registration-sheet-warnings">Pendências para conferência</h4>
+      {missingLabels.length > 0 && (
+        <p>
+          {missingLabels.length} {missingLabels.length === 1 ? "campo não aparece" : "campos não aparecem"} na ficha da Sólides.
+          Eles já estão identificados acima como <b>Em branco no registro</b>; confira nas fotos dos documentos.
+        </p>
+      )}
+      {actionable.length > 0 && <ul>{actionable.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+    </section>
+  );
+}
 
 /**
  * As cinco etapas do trabalho dentro da demanda.
@@ -247,7 +279,22 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
   const [draft, setDraft] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [registration, setRegistration] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const { checked, toggle: toggleChecked } = useCheckedFields(cardId);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [expanded]);
 
   /**
    * A primeira leitura acontece no efeito, e nenhum `setState` roda de forma
@@ -369,7 +416,7 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
   }
 
   return (
-    <section className={styles.panel} aria-labelledby="registration-sheet-title">
+    <section className={styles.panel} data-expanded={expanded || undefined} aria-labelledby="registration-sheet-title">
       <header className={styles.header}>
         <div>
           <span className={styles.eyebrow}>FICHA DE CONTRATAÇÃO</span>
@@ -378,15 +425,29 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
             {loading
               ? "Carregando…"
               : sheet
-                ? `${sheet.readable} de ${sheet.filled} campos preenchidos passaram na conferência.`
+                ? `${sheet.readable} campos prontos; ${Math.max(0, sheet.blocks.reduce((total, block) => total + block.fields.length, 0) - sheet.readable)} precisam ser preenchidos ou conferidos.`
                 : "A ficha ainda não foi lida. O Registro de Empregado precisa estar anexado à demanda."}
           </p>
         </div>
         <div className={styles.actions}>
           {pdfUrl && (
-            <a className={styles.secondary} href={pdfUrl} target="_blank" rel="noreferrer">
-              <FileText aria-hidden="true" /> Abrir o PDF
+            <a className={styles.secondary}
+              href={`${pdfUrl}${pdfUrl.includes("?") ? "&" : "?"}disposition=inline`}
+              target="_blank" rel="noreferrer">
+              <FileText aria-hidden="true" /> Ficha da Sólides
             </a>
+          )}
+          {sheet && (
+            <a className={styles.primary} href={`/api/cards/${cardId}/registration-sheet/pdf`}>
+              <Download aria-hidden="true" /> Emitir ficha Vinculato
+            </a>
+          )}
+          {sheet && (
+            <button type="button" className={styles.secondary} onClick={() => setExpanded((current) => !current)}
+              aria-pressed={expanded}>
+              {expanded ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
+              {expanded ? "Sair da tela cheia" : "Ver em tela cheia"}
+            </button>
           )}
           {canBuild && !archived && (
             <button type="button" className={styles.primary} onClick={() => void build()} disabled={busy || loading}>
@@ -466,14 +527,7 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
         );
       })}
 
-      {sheet && sheet.warnings.length > 0 && (
-        <section className={styles.warnings} aria-labelledby="registration-sheet-warnings">
-          <h4 id="registration-sheet-warnings">O que a leitura não resolveu</h4>
-          {/* Os avisos nomeiam rótulos, nunca conteúdo — é o que permite
-              guardá-los em coluna aberta ao lado do envelope cifrado. */}
-          <ul>{sheet.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-        </section>
-      )}
+      {sheet && <WarningSummary warnings={sheet.warnings} />}
 
       {/* Divergência de identidade fica ANTES dos campos: quem transcreve
           precisa ver isso antes de copiar qualquer coisa, e não depois. */}
@@ -547,12 +601,23 @@ export function RegistrationSheetPanel({ cardId, canBuild, canRead, archived, pd
       {sheet && documents.length > 0 && (
         <section className={styles.documents}>
           <h4>Documentos desta pessoa</h4>
-          <p>Abra ao lado para conferir os campos antes de cadastrar no Sankhya.</p>
-          <ul>
-            {documents.map((document) => (
-              <li key={document.id}>
-                <a href={`${document.downloadUrl}${document.downloadUrl.includes("?") ? "&" : "?"}disposition=inline`}
+          <p>As fotos ficam visíveis aqui para conferir RG, CPF e CTPS sem sair da ficha.</p>
+          {documents.some(isImageDocument) && (
+            <div className={styles.photoGrid}>
+              {documents.filter(isImageDocument).map((document) => (
+                <a key={document.id} className={styles.photoCard} href={inlineDocumentUrl(document)}
                   target="_blank" rel="noreferrer">
+                  <Image src={inlineDocumentUrl(document)} alt={`Documento ${document.filename}`}
+                    width={520} height={360} unoptimized />
+                  <span><ImageIcon aria-hidden="true" />{document.filename}</span>
+                </a>
+              ))}
+            </div>
+          )}
+          <ul>
+            {documents.filter((document) => !isImageDocument(document)).map((document) => (
+              <li key={document.id}>
+                <a href={inlineDocumentUrl(document)} target="_blank" rel="noreferrer">
                   <FileText aria-hidden="true" />{document.filename}
                 </a>
               </li>
