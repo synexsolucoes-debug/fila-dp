@@ -662,6 +662,30 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
        */
       frame = await this.resolveAdmissionsFrame(tangerinoAgentConfig().timeoutMs);
     }
+
+    /* Rota E: "Admissão" tem uma tela intermediária própria, com o seu botão
+     * "Visão Geral" — não a lista.
+     *
+     * Confirmado por captura de tela numa conta real: clicar "Admissão" (ou
+     * navegar direto para o módulo) leva a um painel do tipo "Boa noite,
+     * OPYT!" com atalhos e sugestões, e é dali que se clica em "Visão Geral"
+     * para chegar na lista com as abas (Todas admissões, Dados contratuais,
+     * ...). As rotas acima clicam nesse botão só uma vez, logo depois de abrir
+     * o menu — antes de essa tela intermediária existir. Aqui é a última
+     * chance, depois de qualquer navegação ter parado numa página que fala em
+     * admissão sem ainda ser a lista.
+     */
+    if (!frame) {
+      const overview = await firstVisible([
+        ...TangerinoSelectors.admissionsOverviewLinks.map((name) => page.getByRole("link", { name })),
+        ...TangerinoSelectors.admissionsOverviewLinks.map((name) => page.getByRole("button", { name })),
+        ...TangerinoSelectors.admissionsOverviewLinks.map((name) => page.getByText(name, { exact: true })),
+      ]);
+      if (overview) {
+        await overview.click();
+        frame = await this.resolveAdmissionsFrame(Math.min(10_000, tangerinoAgentConfig().timeoutMs));
+      }
+    }
     if (!frame) throw tangerinoErrors.uiChanged("abertura da Admissão", "lista de admissões");
     this.admissionsFrame = frame;
     this.selectedAdmissionCard = null;

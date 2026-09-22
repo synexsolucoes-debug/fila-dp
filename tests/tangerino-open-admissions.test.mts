@@ -223,3 +223,25 @@ test("a navegação fria para o módulo ganha o orçamento inteiro, não um teto
   // bootstrap frio ali para esperar.
   assert.match(fonte, /resolveAdmissionsFrame\(Math\.min\(8_000, tangerinoAgentConfig\(\)\.timeoutMs\)\)/u);
 });
+
+test("\"Todas admissões\" prova a lista; \"Admissão\" sozinho também bate com o item de menu", async () => {
+  // Uma conta real mostrou o marcador batendo com o próprio item de MENU antes
+  // de a navegação sair da tela inicial — "Admissão" sozinho não prova que a
+  // lista está na tela. "Todas admissões" é uma aba real, com contagem ao
+  // lado no print do operador, e não aparece em menu nenhum.
+  const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
+  assert.equal(TangerinoSelectors.admissionsPageMarkers[0].source, /^todas admiss[õo]es$/iu.source);
+});
+
+test("depois de chegar na Admissão, o worker ainda precisa clicar em Visão Geral", async () => {
+  /* Confirmado por captura de tela: "Admissão" leva a uma tela intermediária
+     própria ("Boa noite, OPYT!", com sugestões e atalhos), não à lista. O
+     botão "Visão Geral" dessa tela é o que leva às abas de verdade. As rotas
+     anteriores só clicavam nele uma vez, cedo demais para essa tela existir. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const indiceRotaE = fonte.indexOf("Rota E:");
+  assert.ok(indiceRotaE > 0, "a rota de fechamento precisa existir");
+  const corpo = fonte.slice(indiceRotaE);
+  assert.match(corpo, /admissionsOverviewLinks\.map\(\(name\) => page\.getByRole\("button", \{ name \}\)\)/u);
+  assert.match(corpo, /admissionsOverviewLinks\.map\(\(name\) => page\.getByText\(name, \{ exact: true \}\)\)/u);
+});
