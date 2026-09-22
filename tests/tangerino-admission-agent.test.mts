@@ -816,6 +816,16 @@ test("o CAPTCHA é detectado pelo widget, e não só pela palavra", () => {
     "iframe oculto deixado pelo shell não pode pedir autorização de novo");
 });
 
+test("a própria URL identifica login e acesso negado mesmo quando o texto engana", async () => {
+  const { authBarrierFromUrl } = await import("../worker/tangerino/playwright-session.ts");
+  assert.equal(authBarrierFromUrl("https://app.tangerino.com.br/Tangerino/pages/LoginPage;jsessionid=abc"), "login");
+  assert.equal(authBarrierFromUrl("https://admissao-demissao.tangerino.com.br/access-denied"), "denied");
+  assert.equal(authBarrierFromUrl("https://app.tangerino.com.br/Tangerino/pages/admissao-demissao"), null);
+  const cliente = source("worker/tangerino/playwright-session.ts");
+  assert.ok(cliente.indexOf('detected === "mfa" || detected === "captcha"')
+    < cliente.indexOf("authBarrierFromUrl(page.url())"), "CAPTCHA/MFA precisa vencer a rota LoginPage");
+});
+
 test("o modo assistido libera só recursos do desafio e nunca a navegação principal", () => {
   for (const url of [
     "https://www.google.com/recaptcha/api2/anchor",
