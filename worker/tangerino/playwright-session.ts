@@ -813,6 +813,24 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
        onde há gente. */
     const page = this.requirePage();
     const frame = this.requireAdmissionsFrame();
+
+    /* Duas execuções reais confirmaram, com as oito abas visíveis
+     * (`admissions_list_diagnostic`), que a lista real é a tela certa — e
+     * mesmo assim só cinco cartões apareciam, sempre "Admissão concluída".
+     * A aba ativa por padrão não é "Todas admissões": é a que ficou
+     * selecionada da última vez, e sem clicar a descoberta nunca chega nos
+     * cinco processos em "Dados contratuais" que o DP confirmou existirem.
+     * Clicar é seguro — é a mesma aba que o print do operador já mostrou,
+     * não um botão de ação — e só afeta esta sessão (`listAdmissions` só é
+     * chamado pela descoberta; a consulta nomeada usa `searchAdmission`,
+     * numa sessão própria). */
+    const contractDataTab = frame.getByText(TangerinoSelectors.admissionsContractDataTab).first();
+    const contractDataTabClicked = await isVisible(contractDataTab);
+    if (contractDataTabClicked) {
+      await contractDataTab.click().catch(() => undefined);
+      await page.waitForTimeout(2_500);
+    }
+
     await frame.locator(TangerinoSelectors.resultCardCss).first()
       .waitFor({ state: "visible", timeout: Math.min(15_000, tangerinoAgentConfig().timeoutMs) })
       .catch(() => undefined);
@@ -823,20 +841,15 @@ export class PlaywrightTangerinoSession implements TangerinoArtifactSession {
       hits = await collectSearchHits(frame);
     }
 
-    /* Cinco cartões achados duas vezes seguidas, sempre "Admissão concluída",
-     * numa conta que tem 84 admissões e só 5 em Dados contratuais — a
-     * coincidência mais barata de descartar é a leitura estar caindo no
-     * resumo "Admissões vencendo" do painel Visão Geral, e não na lista real.
-     * Nome de aba e contagem não são PII (é rótulo de interface, igual ao que
-     * já está nos comentários deste arquivo): seguro no log estruturado.
-     */
+    /* Nome de aba e contagem não são PII (é rótulo de interface, igual ao que
+     * já está nos comentários deste arquivo): seguro no log estruturado. */
     const tabLabels: string[] = [];
     for (const pattern of TangerinoSelectors.admissionsTabLabels) {
       const label = frame.getByText(pattern).first();
       if (await isVisible(label)) tabLabels.push((await label.innerText().catch(() => "")).trim().slice(0, 60));
     }
     log("info", "tangerino.admissions_list_diagnostic", {}, {
-      cardCount: hits.length, tabLabelsFound: tabLabels,
+      cardCount: hits.length, tabLabelsFound: tabLabels, contractDataTabClicked,
     });
 
     return hits;

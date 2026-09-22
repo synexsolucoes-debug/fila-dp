@@ -253,9 +253,35 @@ test("a descoberta desconfia de cinco cartões coincidirem com a contagem de Dad
   // O rótulo da aba (texto de interface) é seguro no log — nunca nome de candidato.
   assert.doesNotMatch(bloco, /displayName|fullName|candidat/iu);
 
+  assert.match(bloco, /contractDataTabClicked,/u);
+
   const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
   assert.equal(TangerinoSelectors.admissionsTabLabels.length, 8);
   assert.equal(TangerinoSelectors.admissionsTabLabels[4].test("Dados contratuais 5"), true);
+});
+
+test("a descoberta clica na aba Dados contratuais em vez de confiar na aba que ficou ativa", async () => {
+  /* Com as oito abas confirmadas visíveis (admissions_list_diagnostic real),
+     a suspeita da tela errada caiu — e mesmo assim só cinco cartões
+     apareciam, sempre "Admissão concluída". A aba ativa por padrão não é
+     "Todas admissões": é a que ficou selecionada da vez anterior. Clicar em
+     "Dados contratuais" é seguro — é a mesma aba do print do operador, não
+     um botão de ação — e só afeta a sessão da descoberta: `searchAdmission`
+     (usado pela consulta nomeada) roda numa sessão própria e nunca chama
+     `listAdmissions`. */
+  const fonte = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  const bloco = fonte.slice(
+    fonte.indexOf("const contractDataTab = frame.getByText"),
+    fonte.indexOf("let hits = await collectSearchHits(frame);"),
+  );
+  assert.match(bloco, /TangerinoSelectors\.admissionsContractDataTab/u);
+  assert.match(bloco, /const contractDataTabClicked = await isVisible\(contractDataTab\);/u);
+  assert.match(bloco, /if \(contractDataTabClicked\) \{/u);
+  assert.match(bloco, /await contractDataTab\.click\(\)\.catch\(\(\) => undefined\);/u);
+
+  const { TangerinoSelectors } = await import("../lib/tangerino/selectors.ts");
+  assert.equal(TangerinoSelectors.admissionsContractDataTab.test("Dados contratuais 5"), true);
+  assert.equal(TangerinoSelectors.admissionsContractDataTab.test("Concluídas 63"), false);
 });
 
 test("depois de chegar na Admissão, o worker ainda precisa clicar em Visão Geral", async () => {
