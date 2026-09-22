@@ -204,6 +204,7 @@ export async function readAdmissionCard(card: Locator): Promise<AdmissionSnapsho
     }
   }
 
+  const trimmedDisplayName = displayName.trim();
   const externalAdmissionId = await card.getAttribute("data-id").catch(() => null)
     ?? await card.getAttribute("id").catch(() => null)
     /* Terceira tentativa, e não invenção: o próprio agente já assume, em
@@ -212,13 +213,23 @@ export async function readAdmissionCard(card: Locator): Promise<AdmissionSnapsho
      * palpite novo. Se o cartão tiver um link interno para a própria ficha, o
      * número ali é tão estável quanto `data-id` seria. */
     ?? await extractFichaColaboradorId(card)
-    ?? undefined;
+    /* Última tentativa, e decisão de produto — não seletor: uma execução real
+     * provou, nos cinco cartões lidos, que esta conta não expõe protocolo nem
+     * link algum (nem `hrefCount`, nem a palavra "protocolo" em lugar nenhum
+     * do texto). Sem NENHUMA fonte técnica, o nome completo já lido no
+     * cartão é o único dado estável disponível — confirmado com o DP como
+     * aceitável para este grupo (risco de colisão só em homônimo exato
+     * admitido ao mesmo tempo, na mesma empresa). O prefixo `nome:` deixa
+     * claro, no banco e no log, que este identificador não veio de um
+     * protocolo da origem. */
+    ?? (trimmedDisplayName ? `nome:${trimmedDisplayName}` : undefined);
 
-  /* Sem `data-id`/`id` E sem link para a ficha: a leitura de status e etapa deu
-   * certo, mas não há como gravar esta admissão sem inventar identidade —
-   * `isStableExternalAdmissionId` recusa o índice sintético por bom motivo
-   * (§47). Antes de tentar mais um seletor às cegas, o mesmo par
-   * log-sem-PII + evidência local do bloco acima decide o próximo passo. */
+  /* Sem `data-id`/`id`, sem link para a ficha E sem nome legível: a leitura de
+   * status e etapa deu certo, mas não há como gravar esta admissão sem
+   * inventar identidade — `isStableExternalAdmissionId` recusa o índice
+   * sintético por bom motivo (§47). Antes de tentar mais um seletor às cegas,
+   * o mesmo par log-sem-PII + evidência local do bloco acima decide o
+   * próximo passo. */
   if (!externalAdmissionId) {
     const hrefs = await card.locator("a[href]").evaluateAll(
       (anchors) => anchors.map((anchor) => anchor.getAttribute("href") ?? "").slice(0, 10),
