@@ -226,3 +226,15 @@ test("chave mais nova que o selo não vira conselho de mexer no arquivo", async 
   assert.match(fonte, /no singular\) registra SOMENTE a versão 1/u);
   assert.match(fonte, /Falta a versão \$\{versaoNecessaria\} no mapa/u);
 });
+
+test("uma varredura reaproveita o navegador e drena os anexos que acabou de descobrir", async () => {
+  const runner = await readFile(new URL("../worker/tangerino/runner.ts", import.meta.url), "utf8");
+  const cliente = await readFile(new URL("../worker/tangerino/playwright-session.ts", import.meta.url), "utf8");
+  assert.match(runner, /PlaywrightTangerinoSession\.create\(\{ workspaceId, deferClose: true \}\)/u);
+  assert.match(runner, /discovery\.demandsCreated \+ discovery\.attachmentsBackfilled > 0\) await drainQueuedWork\(\)/u);
+  assert.match(runner, /shared\.session\?\.dispose\(\)/u);
+  assert.match(cliente, /if \(this\.deferredClose\) return;/u);
+  assert.match(cliente, /async dispose\(\)/u);
+  assert.match(cliente, /this\.persistentProfile \? tangerinoAdmissionsEntryUrls\[0\] : input\.endpoint/u,
+    "perfil com cookie válido deve testar a área autenticada antes de voltar ao login");
+});
