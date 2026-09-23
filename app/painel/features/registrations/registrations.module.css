@@ -70,7 +70,10 @@
 .primaryButton { border: 1px solid var(--reg-mint); background: var(--reg-mint); color: var(--reg-on-mint, #fff) !important; box-shadow: none; }
 .primaryButton:hover { filter: brightness(.93); }
 .secondaryButton { border: 1px solid var(--reg-border); background: var(--reg-surface); color: var(--reg-text); }
-.secondaryButton:hover { border-color: color-mix(in srgb, var(--reg-mint) 54%, var(--reg-border)); background: var(--reg-mint-soft); color: var(--reg-mint); }
+/* --reg-mint sobre --reg-mint-soft mede 2.37:1 no tema escuro — abaixo do
+   4.5:1 exigido. --reg-mint-text é a variante já pensada para texto sobre
+   fundo tingido (usada em .tabs .activeTab); aqui rende 7.55:1. */
+.secondaryButton:hover { border-color: color-mix(in srgb, var(--reg-mint) 54%, var(--reg-border)); background: var(--reg-mint-soft); color: var(--reg-mint-text); }
 .dangerButton { border: 1px solid var(--ui-danger); background: var(--ui-danger); color: var(--brand-contrast) !important; }
 .primaryButton:disabled,
 .secondaryButton:disabled,
