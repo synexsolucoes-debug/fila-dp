@@ -136,8 +136,14 @@ async function main() {
    * tabela**, forma que nenhuma substituição aproxima. O número maior aqui
    * acompanha uma cobertura maior, não uma cobertura menor: as 25 restantes são
    * todas `FROM ${...}`, e estão listadas quando o teto estoura.
+   *
+   * Subiu de 25 para 28 com a importação de catálogo Sankhya
+   * (app/api/registrations/catalogs/[resource]/import/route.ts): três
+   * consultas novas que também interpolam o nome da tabela do cadastro
+   * auxiliar (cargo/departamento/sindicato), no mesmo desenho já usado pelo
+   * resto do CRUD de cadastros auxiliares logo acima nesta lista.
    */
-  const MAXIMO_NAO_VERIFICADAS = 25;
+  const MAXIMO_NAO_VERIFICADAS = 28;
   if (naoVerificadas.length > MAXIMO_NAO_VERIFICADAS) {
     console.error(`\nRegressão de cobertura: ${naoVerificadas.length} consultas sem verificação, o teto é ${MAXIMO_NAO_VERIFICADAS}.`);
     console.error("Uma consulta que era verificável deixou de ser — provavelmente ela quebrou.");
