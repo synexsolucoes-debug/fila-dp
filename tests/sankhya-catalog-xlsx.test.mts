@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ExcelJS from "exceljs";
 import { readSankhyaCatalogWorkbook } from "../lib/sankhya-catalog-xlsx.ts";
+import { readSankhyaWorkScheduleWorkbook } from "../lib/sankhya-work-schedule-xlsx.ts";
 
 /**
  * Os cadastros auxiliares (cargo, departamento, sindicato) ganharam
@@ -73,13 +74,86 @@ test("importação de catálogo exige a mesma capability e faz upsert por códig
   assert.match(route, /requireCompanyAccess/u);
   assert.match(route, /ON CONFLICT \(workspace_id, company_id, code\) DO UPDATE/u);
   assert.match(route, /positions: "positions", departments: "departments", unions: "unions"/u);
-  // Centro de custo e jornada não têm planilha Sankhya equivalente ainda.
+  assert.match(route, /key === "work-schedules"/u);
+  // Centro de custo não tem planilha Sankhya equivalente ainda.
   assert.doesNotMatch(route, /"cost-centers":\s*"/u);
 });
 
-test("cadastro de sindicatos aparece no painel com botão de importação Sankhya", async () => {
+test("cadastro de sindicatos e jornadas aparece no painel com botão de importação Sankhya", async () => {
   const view = await readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8");
   assert.match(view, /unions: \{ label: "Sindicatos"/u);
-  assert.match(view, /catalogImportable: Partial<Record<CatalogResource, true>> = \{ positions: true, departments: true, unions: true \}/u);
+  assert.match(view, /catalogImportable: Partial<Record<CatalogResource, true>> = \{ positions: true, departments: true, unions: true, "work-schedules": true \}/u);
   assert.match(view, /CatalogImportDialog resource=\{catalogResource\}/u);
+});
+
+/**
+ * A carga horária vem em formato bem diferente dos outros cadastros: uma
+ * linha por dia da semana × turno, não uma linha por jornada. As colunas e a
+ * forma dos dados (DIASEM 1=domingo, ENTRADA/SAÍDA em HHMM) reproduzem o
+ * "Resultado da Query" real; os horários abaixo são fabricados.
+ */
+
+async function buildScheduleWorkbook(rows: Array<[number, number, number | string, number | string]>) {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Resultado da Query");
+  sheet.addRow(["Resultado da Query"]);
+  sheet.addRow(["Emissão:22/09/2026 21:54:03", "Total de registros:" + rows.length]);
+  sheet.addRow(["CODCARGAHOR", "DIASEM", "ENTRADA", "SAIDA", "TURNO", "DESCANSOSEM"]);
+  for (const [code, diasem, entrada, saida] of rows) sheet.addRow([code, diasem, entrada, saida, 1, entrada === "" ? "S" : "N"]);
+  return (await workbook.xlsx.writeBuffer()) as unknown as ArrayBuffer;
+}
+
+test("soma segunda a sexta 8h-12h e 14h-18h, sábado 8h-12h, para 44h semanais", async () => {
+  const buffer = await buildScheduleWorkbook([
+    [1, 1, "", ""], // domingo, folga
+    [1, 2, 800, 1200], [1, 2, 1400, 1800],
+    [1, 3, 800, 1200], [1, 3, 1400, 1800],
+    [1, 4, 800, 1200], [1, 4, 1400, 1800],
+    [1, 5, 800, 1200], [1, 5, 1400, 1800],
+    [1, 6, 800, 1200], [1, 6, 1400, 1800],
+    [1, 7, 800, 1200],
+  ]);
+  const [record] = await readSankhyaWorkScheduleWorkbook(buffer);
+  assert.equal(record.code, "1");
+  assert.equal(record.weeklyHours, 44);
+  assert.equal(record.name, "44h semanais");
+  assert.equal(record.description, "Seg a Sex: 08:00–12:00 e 14:00–18:00 · Sáb: 08:00–12:00");
+});
+
+test("horário quebrado (não múltiplo de hora) aparece na descrição e arredonda nas horas semanais", async () => {
+  const buffer = await buildScheduleWorkbook([
+    [2, 2, 800, 1200], [2, 2, 1330, 1800],
+    [2, 3, 800, 1200], [2, 3, 1330, 1800],
+    [2, 4, 800, 1200], [2, 4, 1330, 1800],
+    [2, 5, 800, 1200], [2, 5, 1330, 1800],
+    [2, 6, 800, 1200], [2, 6, 1330, 1800],
+  ]);
+  const [record] = await readSankhyaWorkScheduleWorkbook(buffer);
+  assert.equal(record.weeklyHours, 43); // 42.5h arredondado
+  assert.equal(record.name, "42h30 semanais");
+  assert.equal(record.description, "Seg a Sex: 08:00–12:00 e 13:30–18:00");
+});
+
+test("linhas sem horário (folga) não entram na conta nem na descrição", async () => {
+  const buffer = await buildScheduleWorkbook([
+    [3, 1, "", ""], [3, 7, "", ""],
+    [3, 2, 900, 1300], [3, 3, 900, 1300], [3, 4, 900, 1300], [3, 5, 900, 1300], [3, 6, 900, 1300],
+  ]);
+  const [record] = await readSankhyaWorkScheduleWorkbook(buffer);
+  assert.equal(record.weeklyHours, 20);
+  assert.equal(record.description, "Seg a Sex: 09:00–13:00");
+});
+
+test("hora semanal fica dentro de 1 e 60 mesmo sem nenhum turno com horário", async () => {
+  const buffer = await buildScheduleWorkbook([[0, 1, "", ""]]);
+  await assert.rejects(readSankhyaWorkScheduleWorkbook(buffer), /Nenhuma jornada/u);
+});
+
+test("jornada rejeita planilha sem os cabeçalhos esperados", async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Resultado da Query");
+  sheet.addRow(["CODIGO", "DESCRICAO"]);
+  sheet.addRow([1, "X"]);
+  const buffer = (await workbook.xlsx.writeBuffer()) as unknown as ArrayBuffer;
+  await assert.rejects(readSankhyaWorkScheduleWorkbook(buffer), /CODCARGAHOR, DIASEM, ENTRADA, SAIDA/u);
 });

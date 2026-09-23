@@ -58,7 +58,7 @@ const catalogMeta: Record<CatalogResource, { label: string; singular: string; de
 };
 
 /** Só estes têm exportação equivalente no Sankhya — ver import/route.ts. */
-const catalogImportable: Partial<Record<CatalogResource, true>> = { positions: true, departments: true, unions: true };
+const catalogImportable: Partial<Record<CatalogResource, true>> = { positions: true, departments: true, unions: true, "work-schedules": true };
 
 const emptyCompany: CompanyDraft = {
   companyType: "branch", parentCompanyId: null, legalName: "", tradeName: "", taxId: "", externalCode: "", email: "", phone: "",

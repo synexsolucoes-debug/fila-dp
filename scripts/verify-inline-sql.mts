@@ -142,8 +142,11 @@ async function main() {
    * consultas novas que também interpolam o nome da tabela do cadastro
    * auxiliar (cargo/departamento/sindicato), no mesmo desenho já usado pelo
    * resto do CRUD de cadastros auxiliares logo acima nesta lista.
+   *
+   * Subiu de 28 para 29 quando a mesma importação passou a aceitar também a
+   * jornada (carga horária): um INSERT a mais, na mesma forma.
    */
-  const MAXIMO_NAO_VERIFICADAS = 28;
+  const MAXIMO_NAO_VERIFICADAS = 29;
   if (naoVerificadas.length > MAXIMO_NAO_VERIFICADAS) {
     console.error(`\nRegressão de cobertura: ${naoVerificadas.length} consultas sem verificação, o teto é ${MAXIMO_NAO_VERIFICADAS}.`);
     console.error("Uma consulta que era verificável deixou de ser — provavelmente ela quebrou.");
