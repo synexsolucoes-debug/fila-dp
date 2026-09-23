@@ -32,6 +32,7 @@ import { ContractorsPanel } from "./ContractorsPanel";
 import { EmployeeEpiPanel } from "../epi";
 import { TangerinoAdmissionPanel } from "./TangerinoAdmissionPanel";
 import { SankhyaImportDialog } from "./SankhyaImportDialog";
+import { CatalogImportDialog } from "./CatalogImportDialog";
 import styles from "./registrations.module.css";
 import type {
   CatalogItem,
@@ -53,7 +54,11 @@ const catalogMeta: Record<CatalogResource, { label: string; singular: string; de
   positions: { label: "Cargos", singular: "Cargo", description: "Funções e códigos CBO" },
   "cost-centers": { label: "Centros de custo", singular: "Centro de custo", description: "Alocação contábil da operação" },
   "work-schedules": { label: "Jornadas", singular: "Jornada", description: "Cargas horárias e escalas" },
+  unions: { label: "Sindicatos", singular: "Sindicato", description: "Convenções e acordos coletivos" },
 };
+
+/** Só estes têm exportação equivalente no Sankhya — ver import/route.ts. */
+const catalogImportable: Partial<Record<CatalogResource, true>> = { positions: true, departments: true, unions: true, "work-schedules": true };
 
 const emptyCompany: CompanyDraft = {
   companyType: "branch", parentCompanyId: null, legalName: "", tradeName: "", taxId: "", externalCode: "", email: "", phone: "",
@@ -165,12 +170,13 @@ export function RegistrationsView({ role, onOpenContractorPayment }: {
   const [cursor, setCursor] = useState("");
   const [cursorHistory, setCursorHistory] = useState<string[]>([]);
   const [catalogResource, setCatalogResource] = useState<CatalogResource>("departments");
-  const [catalogs, setCatalogs] = useState<CatalogMap>({ departments: [], positions: [], "cost-centers": [], "work-schedules": [] });
+  const [catalogs, setCatalogs] = useState<CatalogMap>({ departments: [], positions: [], "cost-centers": [], "work-schedules": [], unions: [] });
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogEditor, setCatalogEditor] = useState<CatalogItem | "new" | null>(null);
   const [companyEditor, setCompanyEditor] = useState<Company | "new" | null>(null);
   const [employeeEditor, setEmployeeEditor] = useState<Employee | "new" | null>(null);
   const [employeeImportOpen, setEmployeeImportOpen] = useState(false);
+  const [catalogImportOpen, setCatalogImportOpen] = useState(false);
   const [employeeEditing, setEmployeeEditing] = useState(false);
   const [employeeDetailTab, setEmployeeDetailTab] = useState<EmployeeDetailTab>("personal");
   const [history, setHistory] = useState<HistoryEvent[]>([]);
@@ -326,7 +332,7 @@ export function RegistrationsView({ role, onOpenContractorPayment }: {
           <button className={tab === "contractors" ? styles.activeTab : ""} onClick={() => setTab("contractors")}><Briefcase aria-hidden="true" /> Prestadores PJ</button>
           <button className={tab === "catalogs" ? styles.activeTab : ""} onClick={() => setTab("catalogs")}><SlidersHorizontal aria-hidden="true" /> Cadastros auxiliares</button>
         </nav>
-        <div className={styles.commandActions}>{tab === "employees" && canManageRegistrations && <button className={styles.secondaryButton} onClick={() => setEmployeeImportOpen(true)} disabled={companiesLoading || !companies.length}><FileSpreadsheet aria-hidden="true" /> Importar Sankhya</button>}<button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button></div>
+        <div className={styles.commandActions}>{tab === "employees" && canManageRegistrations && <button className={styles.secondaryButton} onClick={() => setEmployeeImportOpen(true)} disabled={companiesLoading || !companies.length}><FileSpreadsheet aria-hidden="true" /> Importar Sankhya</button>}{tab === "catalogs" && canManageRegistrations && catalogImportable[catalogResource] && <button className={styles.secondaryButton} onClick={() => setCatalogImportOpen(true)} disabled={companiesLoading || !companies.length}><FileSpreadsheet aria-hidden="true" /> Importar Sankhya</button>}<button className={styles.primaryButton} onClick={contextualCreate} disabled={companiesLoading}><Plus aria-hidden="true" /> {tab === "employees" ? "Novo colaborador" : tab === "contractors" ? "Novo prestador" : `Novo ${catalogMeta[catalogResource].singular.toLowerCase()}`}</button></div>
       </header>
 
       {error && <ErrorBanner message={error} onDismiss={() => setError("")} />}
@@ -363,6 +369,8 @@ export function RegistrationsView({ role, onOpenContractorPayment }: {
         onSaved={async (saved) => { setEmployeeEditor(saved); setEmployeeEditing(false); setToast(employeeEditor === "new" ? "Colaborador cadastrado." : "Colaborador atualizado."); await loadEmployees(); }} />}
 
       {employeeImportOpen && <SankhyaImportDialog companies={companies} initialCompanyId={selectedCompanyId} onClose={() => setEmployeeImportOpen(false)} onImported={async (message) => { setEmployeeImportOpen(false); setToast(message); await loadEmployees(); }} />}
+
+      {catalogImportOpen && <CatalogImportDialog resource={catalogResource} label={catalogMeta[catalogResource].label} companies={companies} initialCompanyId={selectedCompanyId} onClose={() => setCatalogImportOpen(false)} onImported={async (message) => { setCatalogImportOpen(false); setToast(message); await loadCatalog(catalogResource, selectedCompanyId); }} />}
 
       {confirmAction && <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmAction(null); }}><section className={styles.confirm} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><span className={styles.confirmIcon}><CircleAlert /></span><h2 id="confirm-title">{confirmAction.title}</h2><p>{confirmAction.description}</p><div><button className={styles.secondaryButton} onClick={() => setConfirmAction(null)}>Cancelar</button><button className={styles.dangerButton} disabled={busy} onClick={() => void confirmAction.run()}>{busy ? <LoaderCircle className={styles.spin} /> : null} {confirmAction.confirmLabel ?? "Inativar"}</button></div></section></div>}
       {toast && <div className={styles.toast} role="status"><Check aria-hidden="true" /> {toast}</div>}
