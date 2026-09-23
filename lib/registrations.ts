@@ -9,6 +9,7 @@ export const catalogResources = {
   positions: { table: "fdp_positions", label: "Cargo" },
   "cost-centers": { table: "fdp_cost_centers", label: "Centro de custo" },
   "work-schedules": { table: "fdp_work_schedules", label: "Jornada" },
+  unions: { table: "fdp_unions", label: "Sindicato" },
 } as const;
 
 export type CatalogResource = keyof typeof catalogResources;
