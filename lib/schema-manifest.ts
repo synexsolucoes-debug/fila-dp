@@ -109,6 +109,7 @@ export const expectedMigrations = [
   "0099_epi_requirement_establishment.sql",
   "0100_occupational_exams.sql",
   "0101_epi_delivery_ack_links.sql",
+  "0102_mandatory_trainings.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

@@ -89,6 +89,9 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
     // própria (§4.8 de docs/arquitetura-operacional.md): negar Cadastros
     // precisa fechar esta escrita também, ou sobraria uma rota sem tela.
     "exams.manage", "exams.delete",
+    // Mesmo raciocínio para o treinamento obrigatório (§4.10): também mora na
+    // ficha do colaborador, e negar Cadastros precisa fechar esta escrita.
+    "trainings.manage", "trainings.delete",
   ],
   epi: [
     "epi.create", "epi.edit", "epi.delete", "epi.deliver", "epi.return",

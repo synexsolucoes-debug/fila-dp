@@ -3756,6 +3756,39 @@ export const occupationalExams = pgTable("fdp_occupational_exams", {
 ]);
 
 /**
+ * Treinamentos obrigatórios (NR), passo 1.
+ *
+ * `trainingName` é texto livre pelo mesmo motivo de
+ * `positions.specialActivities` (0098): o produto não decide quais NRs
+ * existem, e fechar isso em vocabulário seria inventar uma taxonomia que não
+ * é do Vinculato inventar.
+ */
+export const trainings = pgTable("fdp_trainings", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  trainingName: text("training_name").notNull(),
+  completedOn: date("completed_on", { mode: "string" }).notNull(),
+  validUntil: date("valid_until", { mode: "string" }),
+  providerName: text("provider_name").notNull().default(""),
+  certificateNumber: text("certificate_number").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_trainings_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_trainings_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.completedOn),
+  index("fdp_trainings_workspace_due_idx").on(table.workspaceId, table.validUntil).where(sql`${table.validUntil} IS NOT NULL`),
+  foreignKey({ name: "fdp_trainings_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_trainings_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }).onDelete("cascade"),
+  check("fdp_trainings_name_check", sql`length(trim(${table.trainingName})) > 0`),
+  check("fdp_trainings_validity_check", sql`${table.validUntil} IS NULL OR ${table.validUntil} >= ${table.completedOn}`),
+]);
+
+/**
  * Adiantamentos e Descontos (§ migration 0085).
  *
  * O lote de conferência da competência. Não é um segundo fechamento: é a

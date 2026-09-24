@@ -138,6 +138,11 @@ export const capabilities = [
   "exams.view",
   "exams.manage",
   "exams.delete",
+  // Treinamentos obrigatórios (NR). Mesma separação de exams.*: apagar um
+  // registro apagaria a prova de que o colaborador cumpriu a NR naquela data.
+  "trainings.view",
+  "trainings.manage",
+  "trainings.delete",
   /* Adiantamentos e Descontos. A separação segue as três etapas que o módulo
      insiste em não confundir: aprovar o lançamento, pagar o adiantamento e
      confirmar o desconto são decisões diferentes, de pessoas frequentemente
@@ -251,6 +256,9 @@ const roleCapabilities = {
     // própria equipe de SESMT/DP, que opera como membro. Excluir fica fora
     // pelo mesmo motivo de sempre — é a ação que apaga a prova, não corrige.
     "exams.view", "exams.manage",
+    // Mesmo raciocínio de exams.*: quem lança o treinamento é o próprio
+    // DP/SESMT, e excluir fica fora pelo mesmo motivo — apaga a prova.
+    "trainings.view", "trainings.manage",
     // O analista de DP opera o módulo inteiro: lança, aprova, paga o
     // adiantamento, confirma o desconto e fecha a conferência do mês. Estornar
     // fica com ele porque é a única forma de corrigir uma confirmação errada, e
@@ -269,7 +277,7 @@ const roleCapabilities = {
     "companies.read", "employees.read", "departments.view",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "invoice.read", "time.read",
-    "epi.view", "safety.view", "exams.view", "ledger.read",
+    "epi.view", "safety.view", "exams.view", "trainings.view", "ledger.read",
   ]),
   guest: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "comments.write",
