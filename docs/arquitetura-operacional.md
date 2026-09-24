@@ -298,6 +298,34 @@ lugar do produto e registrar uma fonte aqui, nunca uma tabela nova.
 | A união prepara contra o schema real | `npm run db:rehearse-work` |
 | O plano e o tempo com volume de cliente grande | `npm run db:measure-work` |
 
+### 4.4 Unidade — o primeiro passo da Matriz de Requisitos
+
+`fdp_establishments` é um cadastro auxiliar novo, no mesmo desenho simples de
+`fdp_departments`/`fdp_positions`/`fdp_cost_centers`/`fdp_work_schedules`/
+`fdp_unions` (código, nome, status, recortado por empresa e workspace): a
+análise de produto de set/2026 nomeou a falta de uma unidade/estabelecimento
+distinta da empresa — cliente com mais de um endereço físico sob o mesmo CNPJ
+(matriz e obra, loja e depósito) não tinha onde registrar isso além do nome da
+própria empresa. Por já existir o framework genérico de cadastros auxiliares
+(`app/api/registrations/catalogs/[resource]/route.ts`), a unidade entrou sem
+nenhuma rota nova: só a entrada em `lib/registrations.ts` e a tela em
+`RegistrationsView.tsx`, exatamente como `unions` entrou antes dela.
+
+**O que isto ainda não faz** — e é deliberado, para não entregar um cadastro
+inerte disfarçado de recurso pronto: nenhuma outra tabela referencia
+`fdp_establishments` ainda. Colaborador não escolhe unidade, obrigação legal
+não é localizada por unidade, e a Matriz de Requisitos genérica (que juntaria
+EPI, exame ocupacional e treinamento sob um mesmo cadastro, hoje só
+`fdp_epi_requirements` existe) continua sendo o próximo passo, não este. Cada
+vínculo é um incremento à parte, pelo mesmo motivo de `fdp_unions` ter entrado
+sozinho: mudar `fdp_employees` ou `fdp_compliance_obligations` sem um
+consumidor real do vínculo seria a "tabela para o futuro" que a regra de
+arquitetura deste documento recusa (§93).
+
+| Verificação | Onde |
+| --- | --- |
+| RLS forçado e o mesmo desenho tenant-scoped dos outros cadastros auxiliares | `tests/sankhya-catalog-xlsx.test.mts` |
+
 ---
 
 ## 5. Agentes

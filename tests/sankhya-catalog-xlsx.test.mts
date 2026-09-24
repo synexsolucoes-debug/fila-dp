@@ -68,6 +68,21 @@ test("fdp_unions segue o mesmo desenho tenant-scoped dos outros cadastros auxili
   assert.match(migration, /fdp_unions_workspace_company_code_uq/u);
 });
 
+test("fdp_establishments segue o mesmo desenho tenant-scoped dos outros cadastros auxiliares", async () => {
+  const [schema, migration, registrations] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/postgres/0095_registrations_establishments_catalog.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/registrations.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /export const establishments = pgTable\("fdp_establishments"/u);
+  assert.match(migration, /ALTER TABLE "fdp_establishments" FORCE ROW LEVEL SECURITY/u);
+  assert.match(migration, /CREATE POLICY "fdp_establishments_workspace_isolation"/u);
+  assert.match(migration, /fdp_establishments_workspace_company_code_uq/u);
+  assert.match(registrations, /establishments: \{ table: "fdp_establishments", label: "Unidade" \}/u);
+  // Unidade não tem planilha Sankhya equivalente: é cadastro só no Vinculato.
+  assert.doesNotMatch(await readFile(new URL("../app/api/registrations/catalogs/[resource]/import/route.ts", import.meta.url), "utf8"), /establishments:\s*"/u);
+});
+
 test("importação de catálogo exige a mesma capability e faz upsert por código", async () => {
   const route = await readFile(new URL("../app/api/registrations/catalogs/[resource]/import/route.ts", import.meta.url), "utf8");
   assert.match(route, /requireCapability\(workspace, "registrations\.catalogs\.manage"\)/u);
@@ -84,6 +99,8 @@ test("cadastro de sindicatos e jornadas aparece no painel com botão de importa�
   assert.match(view, /unions: \{ label: "Sindicatos"/u);
   assert.match(view, /catalogImportable: Partial<Record<CatalogResource, true>> = \{ positions: true, departments: true, unions: true, "work-schedules": true \}/u);
   assert.match(view, /CatalogImportDialog resource=\{catalogResource\}/u);
+  // Unidade aparece na navegação de cadastros, mas fora da lista importável.
+  assert.match(view, /establishments: \{ label: "Unidades"/u);
 });
 
 /**
