@@ -165,6 +165,48 @@ segundo define um fluxo executável. A transição é por adoção, não por mig
 forçada — e `demands_from_process` (§8) é o número que dirá quando o legado
 puder ser aposentado.
 
+### 3.5 Motor de Jornadas — evento de domínio inicia processo sozinho
+
+Até aqui, uma versão publicada só virava demanda quando alguém clicava em
+"iniciar processo". O gatilho `domain_event` do motor de automação
+(`lib/automation-rules.ts`, `lib/domain-event-automations.ts`) fecha o primeiro
+elo do que a documentação de produto chama de **Jornada**: um evento de
+domínio (`employee.admitted`, por enquanto — o único emitido em produção,
+pela criação manual de colaborador em `POST /api/employees`) inicia sozinho a
+versão publicada que uma regra do workspace escolheu, sem esperar alguém abrir
+a tela.
+
+A regra funciona assim:
+
+- **Gatilho** `domain_event` + **condição** `{ domainEvent: "employee.admitted", … }`
+  — a rota (`app/api/catalog/route.ts`) recusa gravar sem um nome de evento que
+  o catálogo (`lib/domain-events.ts`) reconheça.
+- **Ação** `{ instantiateProcessVersionId, boardId? }` — a única ação que faz
+  sentido aqui, porque é a única que não pressupõe um `cardId` que ainda não
+  existe. A rota recusa qualquer outro par (gatilho ≠ `domain_event` com esta
+  ação, ou `domain_event` com outra ação): uma regra assim seria salva e nunca
+  faria nada.
+- **Execução**: `runDomainEventAutomations` roda **depois** do lote que gravou
+  o evento — nunca dentro dele. Iniciar um processo é consequência de o fato
+  já existir, não parte do mesmo fato: se a versão foi despublicada ou o
+  quadro removido, o cadastro que disparou o evento continua valendo, e a
+  regra é apenas ignorada com o motivo (nunca lança).
+- **Idempotência**: a chave do evento `process.instance_started` amarra a
+  regra ao evento que a disparou (`automation:{ruleId}:{event.idempotencyKey}`).
+  A mesma ocorrência não abre uma segunda demanda, e duas regras diferentes
+  para o mesmo evento não colidem entre si.
+- A demanda nasce pela **mesma** `prepareProcessInstance` da instanciação
+  manual — checklist da etapa inicial, prazo calculado, evento de domínio
+  gravado no mesmo lote — só a origem do gatilho muda.
+
+O que isto deliberadamente ainda não faz: não há subprocesso paralelo com
+junção (uma etapa por área, todas ao mesmo tempo, um veredito que espera
+todas) — hoje a versão publicada continua sendo um fluxo sequencial só, com
+fan-out para outras áreas via `create_task` nas automações de etapa
+(`lib/process-automations.ts`). E só um evento tem emissor em produção: ligar
+`termination.requested`, `role.change_requested` e os demais do catálogo a um
+ponto real de emissão é o próximo passo, não este.
+
 ---
 
 ## 4. Unidade de trabalho e a Central de Trabalho

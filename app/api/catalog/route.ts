@@ -1,7 +1,10 @@
 import { apiError, getApiUser, text, validDate, validProcessType } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
+import { ApiError } from "@/lib/api-errors";
 import { parseRuleAction, parseRuleTrigger } from "@/lib/automation-rules";
+import { findDomainEvent } from "@/lib/domain-events";
+import { loadPublishedVersion } from "@/lib/process-instances";
 
 const colors = new Set(["#dc2626", "#ea580c", "#d97706", "#16a34a", "#0891b2", "#2563eb", "#7c3aed", "#64748b"]);
 
@@ -95,6 +98,42 @@ export async function POST(request: Request) {
         if (!name) return Response.json({ error: "Informe o nome da automação." }, { status: 400 });
         if (!trigger) return Response.json({ error: "Escolha um gatilho que o produto reconheça." }, { status: 400 });
         if (!action) return Response.json({ error: "Escolha uma ação que o produto saiba executar." }, { status: 400 });
+
+        /* `domain_event` e `instantiateProcessVersionId` só existem juntos
+           (§ Motor de Jornadas — `lib/domain-event-automations.ts`): o primeiro
+           reage a um fato que ainda não tem cartão, e a segunda é a única ação
+           que não pressupõe um. Salvar um sem o outro produziria uma regra que
+           nunca faz nada — o defeito que este arquivo já recusa para gatilho e
+           ação desconhecidos. */
+        const instantiates = "instantiateProcessVersionId" in action;
+        if (trigger === "domain_event" && !instantiates) {
+          return Response.json({ error: "Uma regra de evento de domínio só pode iniciar uma versão de processo." }, { status: 400 });
+        }
+        if (instantiates && trigger !== "domain_event") {
+          return Response.json({ error: "Iniciar um processo só é possível a partir de um evento de domínio." }, { status: 400 });
+        }
+        if (trigger === "domain_event") {
+          const domainEvent = findDomainEvent(condition.domainEvent);
+          if (!domainEvent) {
+            return Response.json({ error: "Escolha um evento de domínio que o produto reconheça." }, { status: 400 });
+          }
+          // Só o nome entra na condição gravada — o que a rota recebeu pode
+          // trazer campos que `findDomainEvent` nem olhou.
+          condition.domainEvent = domainEvent.name;
+          try {
+            await loadPublishedVersion(d1, workspace.id, (action as { instantiateProcessVersionId: string }).instantiateProcessVersionId);
+          } catch (error) {
+            if (error instanceof ApiError) return Response.json({ error: error.message }, { status: 400 });
+            throw error;
+          }
+          const boardId = (action as { boardId?: string }).boardId;
+          if (boardId) {
+            const board = await d1.prepare("SELECT id FROM fdp_boards WHERE workspace_id = ? AND id = ?")
+              .bind(workspace.id, boardId).first<{ id: string }>();
+            if (!board) return Response.json({ error: "Quadro selecionado não encontrado." }, { status: 400 });
+          }
+        }
+
         if (id) await d1.prepare("UPDATE fdp_automation_rules SET name = ?, trigger = ?, condition_json = ?, action_json = ?, enabled = ? WHERE id = ? AND workspace_id = ?").bind(name, trigger, JSON.stringify(condition), JSON.stringify(action), body.enabled === false ? 0 : 1, id, workspace.id).run();
         else {
           const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS value FROM fdp_automation_rules WHERE workspace_id = ?").bind(workspace.id).first<{ value: number }>();

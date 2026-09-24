@@ -1,5 +1,5 @@
 /**
- * O vocabulário das automações (§27).
+ * O vocabulário das automações (§27, e a Jornada que vem depois dele).
  *
  * ## Por que existe um módulo só para isto
  *
@@ -21,6 +21,21 @@
  * concluída → iniciar Registro" e "processo concluído → registrar evento" são
  * exatamente isso. E das ações, nenhuma avisava ninguém — a automação mexia no
  * quadro em silêncio, e a pessoa descobria depois.
+ *
+ * ## `domain_event` — o início do Motor de Jornadas
+ *
+ * Todo gatilho anterior pressupõe uma demanda que já existe. `domain_event` é
+ * diferente: ele reage a um evento de domínio (`employee.admitted`,
+ * `termination.requested`…) que ainda **não tem** cartão nenhum — é o que
+ * inicia um processo, não o que reage a um que já anda. Por isso ele só
+ * combina com a ação `instantiateProcessVersionId` (`lib/domain-event-automations.ts`
+ * é quem executa): as demais ações leem ou escrevem em cima de um
+ * `cardId` que, neste gatilho, ainda não existe.
+ *
+ * A condição de uma regra `domain_event` sempre nomeia o evento em
+ * `condition.domainEvent` — a rota recusa salvar sem isso, porque uma regra
+ * disparando em "qualquer evento de domínio" alcançaria fatos que ela nunca
+ * deveria ver.
  */
 
 /** Os eventos que uma regra pode escutar. */
@@ -32,6 +47,7 @@ export const RULE_TRIGGERS = [
   "sla.tick",
   "process.step_advanced",
   "process.instance_completed",
+  "domain_event",
 ] as const;
 
 export type RuleTrigger = (typeof RULE_TRIGGERS)[number];
@@ -47,6 +63,7 @@ export const RULE_TRIGGER_LABELS: Record<RuleTrigger, string> = {
   "sla.tick": "o SLA for avaliado",
   "process.step_advanced": "uma etapa do processo for concluída",
   "process.instance_completed": "um processo for concluído",
+  "domain_event": "um evento de domínio for registrado",
 };
 
 export function parseRuleTrigger(raw: unknown): RuleTrigger | null {
@@ -59,14 +76,21 @@ export function parseRuleTrigger(raw: unknown): RuleTrigger | null {
  * -------------------------------------------------------------------------- */
 
 /** As ações que o executor sabe executar — nem uma a mais. */
-export const RULE_ACTIONS = ["moveTo", "slaStatus", "labelId", "notify"] as const;
+export const RULE_ACTIONS = ["moveTo", "slaStatus", "labelId", "notify", "instantiateProcessVersionId"] as const;
 export type RuleActionKind = (typeof RULE_ACTIONS)[number];
 
 export type RuleAction =
   | { moveTo: string }
   | { slaStatus: string }
   | { labelId: string }
-  | { notify: string };
+  | { notify: string }
+  /**
+   * Inicia uma versão publicada quando o `domain_event` da regra acontece
+   * (`lib/domain-event-automations.ts`). `boardId` é opcional: sem ele, o
+   * executor resolve o quadro mais antigo do grupo — o mesmo tipo de padrão
+   * que a instanciação manual já usa quando ninguém escolhe um quadro.
+   */
+  | { instantiateProcessVersionId: string; boardId?: string };
 
 const SLA_STATUSES = new Set(["safe", "overdue", "paused", "completed", "recalculate"]);
 
@@ -101,6 +125,13 @@ export function parseRuleAction(raw: unknown): RuleAction | null {
   }
   if (typeof action.notify === "string" && safeText(action.notify, 160)) {
     return { notify: safeText(action.notify, 160) };
+  }
+  if (typeof action.instantiateProcessVersionId === "string" && action.instantiateProcessVersionId.trim()) {
+    const boardId = typeof action.boardId === "string" ? safeText(action.boardId, 120) : "";
+    return {
+      instantiateProcessVersionId: safeText(action.instantiateProcessVersionId, 120),
+      ...(boardId ? { boardId } : {}),
+    };
   }
   return null;
 }
