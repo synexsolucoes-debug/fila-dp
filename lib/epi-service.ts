@@ -257,6 +257,23 @@ export function prepareStockChange(d1: Database, input: {
     .bind(input.workspaceId, input.productId, input.stockLocationId, input.delta, input.actorId);
 }
 
+/**
+ * Assina a entrega a partir do link de ciência (`POST /api/portal/epi/[token]`).
+ *
+ * `PATCH /api/epi/deliveries/[id]` também assina, mas dentro de uma escrita
+ * mais ampla que aceita qualquer status e observação — o portal só faz uma
+ * coisa (confirmar), então ganha a versão estreita em vez de reusar a rota
+ * inteira do painel para uma pessoa sem sessão.
+ */
+export function prepareSignDelivery(d1: Database, input: {
+  workspaceId: string; deliveryId: string; signatureName: string; updatedBy: string;
+}) {
+  return d1.prepare(`UPDATE fdp_epi_deliveries SET status = 'signed', signature_name = ?,
+      signed_at = COALESCE(signed_at, now()), updated_by = ?, updated_at = now()
+    WHERE workspace_id = ? AND id = ?`)
+    .bind(input.signatureName, input.updatedBy, input.workspaceId, input.deliveryId);
+}
+
 export type DiscountDemandInput = {
   workspaceId: string;
   boardId: string;

@@ -500,6 +500,42 @@ direta do cadastro.
 | --- | --- |
 | A função pura só bloqueia por "inapto", e a rota consulta o exame certo na transição certa | `tests/occupational-exams.test.mts` |
 
+### 4.10 Link assinado genérico, passo 1 — dar ciência da entrega de EPI
+
+O roteiro de produto pede um "link assinado genérico" (aprovar, responder,
+enviar documento, dar ciência), reaproveitando o portal do prestador
+(`lib/contractor-invoice-portal.ts`, §84). Ciência de entrega de EPI é o
+primeiro consumidor real dele: hoje `fdp_epi_deliveries.signature_name` só
+existe se alguém do DP/SESMT digitar o nome do colaborador pela tela — quem
+entrega o EPI precisa estar junto de quem tem acesso ao sistema.
+
+O token, o hash e o prazo são exatamente os do portal do prestador — mesmo
+`<workspace>.<segredo>`, mesmo hash guardado em vez do token, mesmo teto de
+dias. É reuso deliberado da mesma primitiva, não uma segunda implementação: a
+tabela nova (`fdp_epi_delivery_ack_links`) e a rota pública
+(`/portal/epi/[token]`) seguem o desenho de `fdp_contractor_invoice_portal_links`
+e `/portal/nota/[token]` ponto a ponto — um link vivo por entrega, RLS
+resolvida a partir do próprio token, toda recusa como o mesmo 404 genérico.
+
+A confirmação assina a entrega pela mesma coluna que `PATCH
+/api/epi/deliveries/[id]` já assina, mas por uma escrita mais estreita
+(`lib/epi-service.ts#prepareSignDelivery`): o portal só faz uma coisa
+(confirmar), então não reusa a rota inteira do painel — que aceita qualquer
+status e observação — para uma pessoa sem sessão.
+
+**O que isto ainda não faz** — e é deliberado: o arquivo
+`lib/contractor-invoice-portal.ts` continua com o nome da nota fiscal mesmo
+emprestando a primitiva para EPI — renomeá-lo para algo neutro é limpeza
+adiada, não parte deste passo; não há geração em lote (o portal de nota gera
+para toda uma competência de uma vez, este gera um link por entrega, do jeito
+que o `signDelivery` manual já funciona hoje); e o link não vira aviso por
+e-mail automático — quem gera copia e envia, como já acontece com o texto do
+portal de nota.
+
+| Verificação | Onde |
+| --- | --- |
+| Isolamento por tenant, um link vivo por entrega, situação e recusa por código, e a escrita estreita de assinatura | `tests/epi-delivery-ack-link.test.mts` |
+
 ---
 
 ## 5. Agentes

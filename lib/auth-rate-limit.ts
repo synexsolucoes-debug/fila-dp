@@ -106,6 +106,10 @@ const publicPolicies = {
      nota, não trinta. O teto por endereço é o que impede varredura — quem tenta
      adivinhar segredos gasta o orçamento do IP antes de chegar perto de um. */
   contractor_portal: { identityLimit: 30, addressLimit: 60, windowMinutes: 60 },
+  /* O mesmo raciocínio do portal do prestador, para o link de ciência de EPI:
+     um colaborador legítimo abre a página e confirma o recebimento, não
+     trinta vezes. */
+  epi_ack_portal: { identityLimit: 20, addressLimit: 60, windowMinutes: 60 },
 } as const;
 
 async function consumePublicKey(hash: string, limit: number, windowMinutes: number) {

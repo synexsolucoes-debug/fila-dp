@@ -80,12 +80,18 @@ test("toda rota de escrita passa por alguma autorização", () => {
      capacidade, e está no bloco logo abaixo. */
   const PESSOAIS = new Set(["shortcuts/route.ts"]);
   /* Rotas cuja autorização é um token portador, e não uma sessão: o portal em
-     que o prestador envia a nota fiscal. Quem chega ali não é membro do grupo e
+     que o prestador envia a nota fiscal, e o portal em que o colaborador dá
+     ciência da entrega de EPI (§4.9). Quem chega ali não é membro do grupo e
      nunca vai ser — exigir capacidade seria exigir uma conta, que é exatamente
      o que o portal existe para não pedir.
      Elas também não ficam sem conferência: a regra delas é mais estreita que
-     uma capacidade, e está no bloco logo abaixo. */
-  const POR_TOKEN = new Set(["portal/nota/[token]/route.ts"]);
+     uma capacidade, e está no bloco logo abaixo. Cada uma tem sua própria
+     função de "link ainda serve" e sua própria ação de limite de tentativas,
+     porque cada portal guarda um recurso diferente. */
+  const POR_TOKEN = new Map([
+    ["portal/nota/[token]/route.ts", { usableFn: "assertPortalLinkUsable", rateLimitAction: "contractor_portal" }],
+    ["portal/epi/[token]/route.ts", { usableFn: "assertEpiAckLinkUsable", rateLimitAction: "epi_ack_portal" }],
+  ]);
   for (const [caminho, fonte] of routes) {
     if (!/export async function (POST|PATCH|PUT|DELETE)/u.test(fonte)) continue;
     if (PUBLICAS.has(caminho) || PESSOAIS.has(caminho) || POR_TOKEN.has(caminho)) continue;
@@ -122,7 +128,7 @@ test("toda rota de escrita passa por alguma autorização", () => {
         milissegundos, se um segredo existe;
      4. a situação do link é conferida antes da escrita: revogado, vencido e já
         usado não gravam nada. */
-  for (const caminho of POR_TOKEN) {
+  for (const [caminho, regra] of POR_TOKEN) {
     const fonte = routes.find(([nome]) => nome === caminho)?.[1];
     assert.ok(fonte, `${caminho} não existe mais — tire da lista de rotas por token`);
     assert.match(fonte, /hashPortalToken\(/u, `${caminho} precisa comparar o token por hash`);
@@ -130,9 +136,9 @@ test("toda rota de escrita passa por alguma autorização", () => {
       `${caminho} compara o segredo em claro`);
     assert.match(fonte, /getScopedD1\(\{ workspaceId: parsed\.workspaceId \}\)/u,
       `${caminho} precisa prender a conexão ao inquilino do token`);
-    assert.match(fonte, /consumePublicAuthRateLimit\("contractor_portal"/u,
+    assert.match(fonte, new RegExp(`consumePublicAuthRateLimit\\("${regra.rateLimitAction}"`, "u"),
       `${caminho} precisa limitar tentativas`);
-    assert.match(fonte, /assertPortalLinkUsable\(/u,
+    assert.match(fonte, new RegExp(`${regra.usableFn}\\(`, "u"),
       `${caminho} precisa recusar link revogado, vencido ou já usado`);
   }
 });

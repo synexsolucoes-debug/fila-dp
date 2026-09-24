@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowLeftRight, BadgeCheck, Boxes, Building2, Check, ClipboardList, Download,
-  FileSignature, HardHat, Info, LayoutDashboard, PackageCheck, RefreshCw, Scale, ShieldAlert,
+  FileSignature, HardHat, Info, LayoutDashboard, Link2, PackageCheck, RefreshCw, Scale, ShieldAlert,
   ShieldCheck, Sparkles, Trash2, Undo2, Users,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
@@ -277,6 +277,24 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
     } finally { setBusy(false); }
   }
 
+  /**
+   * Gera o link de ciência (§4.10 de docs/arquitetura-operacional.md) e copia
+   * para a área de transferência — o mesmo padrão de `ContractorPortalLinks`.
+   * A assinatura continua podendo ser digitada na tela, como hoje; o link é
+   * uma segunda forma de coletar a mesma confirmação, para quem não está no
+   * mesmo lugar que o colaborador.
+   */
+  async function generateAckLink(delivery: EpiDelivery) {
+    setBusy(true);
+    try {
+      const response = await requestJson<{ url: string }>(`/api/epi/deliveries/${delivery.id}/ack-link`, { method: "POST", body: "{}" });
+      await navigator.clipboard.writeText(response.url);
+      setToast("Link de ciência copiado. Envie para o colaborador confirmar o recebimento.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível gerar o link de ciência.");
+    } finally { setBusy(false); }
+  }
+
   async function sanitizeReturn(item: EpiReturn, action: "start" | "complete") {
     const result = action === "complete" ? window.prompt("Resultado da higienização:", "EPI higienizado e liberado para uso") : "";
     if (action === "complete" && !result) return;
@@ -446,7 +464,8 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
       onCreate={() => { setDialogError(""); setEditor({ kind: "delivery" }); }}
       onReturn={(delivery) => { setDialogError(""); setEditor({ kind: "return", delivery }); }}
       onDamage={(delivery) => { setDialogError(""); setEditor({ kind: "damage", delivery }); }}
-      onSign={(delivery) => void signDelivery(delivery)} />}
+      onSign={(delivery) => void signDelivery(delivery)}
+      onAckLink={(delivery) => void generateAckLink(delivery)} />}
 
     {!tabLoading && tab === "damages" && <DamagesPanel damages={damages} permissions={permissions}
       onCreate={() => { setDialogError(""); setEditor({ kind: "damage" }); }} />}
@@ -633,10 +652,11 @@ function StockOperations({ products, onChanged }: { products: EpiProduct[]; onCh
   </section>;
 }
 
-function DeliveriesPanel({ deliveries, filters, onFilters, permissions, busy, onCreate, onReturn, onDamage, onSign }: {
+function DeliveriesPanel({ deliveries, filters, onFilters, permissions, busy, onCreate, onReturn, onDamage, onSign, onAckLink }: {
   deliveries: EpiDelivery[]; filters: Record<string, string>; onFilters: (value: Record<string, string>) => void;
   permissions?: EpiOverview["permissions"]; busy: boolean; onCreate: () => void;
   onReturn: (delivery: EpiDelivery) => void; onDamage: (delivery: EpiDelivery) => void; onSign: (delivery: EpiDelivery) => void;
+  onAckLink: (delivery: EpiDelivery) => void;
 }) {
   return <>
     <PanelHeader eyebrow="ENTREGAS" title="EPIs entregues a colaboradores"
@@ -664,6 +684,9 @@ function DeliveriesPanel({ deliveries, filters, onFilters, permissions, busy, on
           <td><div className={styles.rowActions}>
             {permissions?.deliver && delivery.status === "pending_signature" && <button disabled={busy} onClick={() => onSign(delivery)}>
               <BadgeCheck aria-hidden="true" /> Assinar
+            </button>}
+            {permissions?.deliver && delivery.status === "pending_signature" && <button disabled={busy} onClick={() => onAckLink(delivery)}>
+              <Link2 aria-hidden="true" /> Link de ciência
             </button>}
             {permissions?.receiveReturn && delivery.outstanding > 0 && <button onClick={() => onReturn(delivery)}>
               <Undo2 aria-hidden="true" /> Devolver
