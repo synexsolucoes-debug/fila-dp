@@ -3419,6 +3419,8 @@ export function WorkspaceApp({
           {view === "agents" && <AgentsView />}
 
           {view === "registrations" && <RegistrationsView role={snapshot.workspace.role}
+            initialEmployeeId={initialLocation.view === "registrations" ? initialLocation.recordId : ""}
+            initialEmployeeTab={initialLocation.view === "registrations" ? initialLocation.recordTab : ""}
             onOpenContractorPayment={(target) => { setContractorPaymentFocus(target); setView("contractorClosings"); }} />}
 
           {view === "board" && (

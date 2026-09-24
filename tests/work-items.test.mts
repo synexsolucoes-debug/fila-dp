@@ -100,6 +100,39 @@ test("EPI é do workspace, não de uma empresa — a fonte não recorta por empr
   assert.equal(epi.mineCondition, "");
 });
 
+test("ASO e treinamento vencendo entram na Central sem tabela nova (Motor de Prazos, passo 2)", () => {
+  const keys = workItemSources.map((source) => source.key);
+  assert.ok(keys.includes("occupational_exam_due"), "vencimento de ASO ausente");
+  assert.ok(keys.includes("training_due"), "vencimento de treinamento ausente");
+});
+
+test("ASO e treinamento vencendo têm FK real, então recortam por empresa, mas não por dono individual", () => {
+  const exam = workItemSources.find((source) => source.key === "occupational_exam_due")!;
+  const training = workItemSources.find((source) => source.key === "training_due")!;
+  assert.equal(exam.companyColumn, "e.company_id");
+  assert.equal(training.companyColumn, "t.company_id");
+  assert.equal(exam.mineCondition, "");
+  assert.equal(training.mineCondition, "");
+});
+
+test("ASO e treinamento só entram na janela de ação, com a mesma régua de urgência do CA de EPI", () => {
+  const exam = workItemSources.find((source) => source.key === "occupational_exam_due")!;
+  const training = workItemSources.find((source) => source.key === "training_due")!;
+  for (const source of [exam, training]) {
+    assert.match(source.sql, /<= CURRENT_DATE \+ 60/u);
+    assert.match(source.sql, /'overdue'/u);
+    assert.match(source.sql, /ELSE 'safe' END AS status/u);
+  }
+});
+
+test("o item de ASO/treinamento vencendo abre o colaborador, não o registro — o registro não tem tela própria", () => {
+  assert.equal(workItemHref("occupational_exam_due", "exam-1", "emp-1"), "/painel/cadastros/emp-1?aba=exams");
+  assert.equal(workItemHref("training_due", "tr-1", "emp-1"), "/painel/cadastros/emp-1?aba=trainings");
+  // Sem o colaborador (linha sem employee_id — não deveria acontecer, mas a
+  // fonte também não deixa o link ir para lugar nenhum se acontecer).
+  assert.equal(workItemHref("occupational_exam_due", "exam-1"), "/painel/cadastros");
+});
+
 test("a nova ambiguidade de `blocked` não reaproveita a frase do fechamento", () => {
   // pending_item e compliance_obligation agora dividem o status 'blocked', e a
   // razão de estar bloqueada não é a mesma nos dois. Reaproveitar a frase do
@@ -363,7 +396,7 @@ test("o item traz um destino real no painel, e não um link para lugar nenhum", 
   assert.equal(workItemHref("card", "abc"), "/painel/demandas/abc");
   for (const source of [
     "card", "approval", "movement", "auxiliary", "pending_item", "triage", "integration_failure",
-    "compliance_obligation", "epi_ca_expiry",
+    "compliance_obligation", "epi_ca_expiry", "occupational_exam_due", "training_due",
   ] as const) {
     const href = workItemHref(source, "x");
     const [path] = href.split("?");
