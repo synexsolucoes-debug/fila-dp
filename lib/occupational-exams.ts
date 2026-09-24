@@ -110,6 +110,25 @@ export type OccupationalExamRecord = OccupationalExamInput & {
 
 const asText = (value: unknown) => value == null ? "" : String(value);
 
+/**
+ * Retorno ao trabalho não passa por cima do exame ocupacional, passo 1.
+ *
+ * O problema que a análise de produto nomeou é preciso: "retorno sem ASO;
+ * gestor escala quem não pode". A parte que já dá para resolver sem o Motor
+ * de Jornadas (ainda não construído) é a mais grave — quando já existe um
+ * exame dizendo que o colaborador está inapto, reativá-lo mesmo assim é o
+ * próprio passivo de SST que o módulo existe para evitar.
+ *
+ * Deliberadamente não bloqueia por *falta* de exame: a maioria dos
+ * colaboradores hoje não tem nenhum registrado (o módulo acabou de nascer),
+ * e transformar a ausência de dado em bloqueio universal pararia reativações
+ * legítimas em empresas que ainda não usam ASO. Exigir o exame de retorno
+ * antes de liberar é passo 2, depois de validar este com uso real.
+ */
+export function blocksReturnToWork(result: ExamResult | null | undefined): boolean {
+  return result === "unfit";
+}
+
 export function occupationalExamFromRow(row: Record<string, unknown>): OccupationalExamRecord {
   return {
     id: asText(row.id),
