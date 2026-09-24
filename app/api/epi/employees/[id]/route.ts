@@ -25,7 +25,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "epi.view", "consultar os EPIs do colaborador");
     const employee = await d1.prepare(`SELECT e.id, e.company_id, e.full_name, e.social_name, e.registration_number,
-        e.department_id, e.position_id, COALESCE(dep.name, '') AS department_name, COALESCE(pos.name, '') AS position_name,
+        e.department_id, e.position_id, e.establishment_id, COALESCE(dep.name, '') AS department_name, COALESCE(pos.name, '') AS position_name,
         c.legal_name AS company_legal_name, c.trade_name AS company_trade_name, c.tax_id AS company_tax_id
       FROM fdp_employees e
       JOIN fdp_companies c ON c.workspace_id = e.workspace_id AND c.id = e.company_id
@@ -84,6 +84,7 @@ export async function GET(_request: Request, context: RouteContext) {
         WHERE r.workspace_id = ? AND r.active = 1 AND p.status <> 'inactive'
           AND (r.department_id IS NULL OR r.department_id = e.department_id)
           AND (r.position_id IS NULL OR r.position_id = e.position_id)
+          AND (r.establishment_id IS NULL OR r.establishment_id = e.establishment_id)
         ORDER BY p.name`).bind(id, workspace.id).all<Record<string, unknown>>(),
     ]);
 
@@ -103,7 +104,8 @@ export async function GET(_request: Request, context: RouteContext) {
     const requirementInput: EpiRequirementInput[] = requirements.results.map((row) => ({
       id: String(row.id), companyId: String(row.company_id), departmentId: String(row.department_id ?? ""),
       departmentName: String(row.department_name ?? ""), positionId: String(row.position_id ?? ""),
-      positionName: String(row.position_name ?? ""), productId: String(row.product_id), productName: String(row.product_name),
+      positionName: String(row.position_name ?? ""), establishmentId: String(row.establishment_id ?? ""),
+      productId: String(row.product_id), productName: String(row.product_name),
       caNumber: String(row.ca_number ?? ""), caExpiresOn: String(row.ca_expires_on ?? "").slice(0, 10),
       productExpiresOn: String(row.product_expires_on ?? "").slice(0, 10), quantity: Number(row.quantity),
       replacementDays: Number(row.replacement_days), warningDays: Number(row.warning_days),
@@ -113,6 +115,7 @@ export async function GET(_request: Request, context: RouteContext) {
       name: String(employee.social_name || employee.full_name), registrationNumber: String(employee.registration_number),
       departmentId: String(employee.department_id ?? ""), departmentName: String(employee.department_name ?? ""),
       positionId: String(employee.position_id ?? ""), positionName: String(employee.position_name ?? ""),
+      establishmentId: String(employee.establishment_id ?? ""),
     }], requirementInput, [...holdingMap.values()], new Date().toISOString().slice(0, 10))[0];
 
     return Response.json({

@@ -54,6 +54,8 @@ export type EpiRequirement = {
   departmentName: string;
   positionId: string;
   positionName: string;
+  establishmentId: string;
+  establishmentName: string;
   productId: string;
   productName: string;
   caNumber: string;

@@ -77,6 +77,8 @@ export function normalizeRequirement(row: Row): EpiRequirement {
     departmentName: text(value(row, "departmentName", "department_name")),
     positionId: text(value(row, "positionId", "position_id")),
     positionName: text(value(row, "positionName", "position_name")),
+    establishmentId: text(value(row, "establishmentId", "establishment_id")),
+    establishmentName: text(value(row, "establishmentName", "establishment_name")),
     productId: text(value(row, "productId", "product_id")), productName: text(value(row, "productName", "product_name")),
     caNumber: text(value(row, "caNumber", "ca_number")), quantity: number(row.quantity),
     replacementDays: number(value(row, "replacementDays", "replacement_days")),

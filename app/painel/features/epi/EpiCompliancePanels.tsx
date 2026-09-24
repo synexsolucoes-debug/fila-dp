@@ -164,11 +164,12 @@ export function EpiPeoplePanel({ employees, initialStatus, products, onDeliver }
   </>;
 }
 
-export function EpiRequirementsPanel({ companyId, requirements, departments, positions, products, canManage, busy, onCreate, onUpdate, onReload }: {
+export function EpiRequirementsPanel({ companyId, requirements, departments, positions, establishments, products, canManage, busy, onCreate, onUpdate, onReload }: {
   companyId: string;
   requirements: EpiRequirement[];
   departments: EpiCatalogOption[];
   positions: EpiCatalogOption[];
+  establishments: EpiCatalogOption[];
   products: EpiProduct[];
   canManage: boolean;
   busy: boolean;
@@ -179,10 +180,10 @@ export function EpiRequirementsPanel({ companyId, requirements, departments, pos
   const [editing, setEditing] = useState<EpiRequirement | null>(null);
   return <div className={styles.requirementsStack}>
     <PanelHeader eyebrow="REGRAS DE COBERTURA" title="EPIs obrigatórios por lotação"
-      description="Defina por empresa, departamento e/ou cargo. Deixe cargo ou departamento em branco para aplicar a todos daquele recorte."
+      description="Defina por empresa, unidade, departamento e/ou cargo. Deixe qualquer um em branco para aplicar a todos daquele recorte."
       action={<button className={styles.secondaryButton} onClick={onReload}><RefreshCw aria-hidden="true" /> Atualizar</button>} />
     {canManage ? <RequirementEditor key={editing?.id ?? "new"} companyId={companyId} requirement={editing}
-      departments={departments} positions={positions} products={products} busy={busy}
+      departments={departments} positions={positions} establishments={establishments} products={products} busy={busy}
       onCancel={() => setEditing(null)} onSave={async (payload) => {
         if (editing) await onUpdate(editing.id, payload); else await onCreate(payload);
         setEditing(null);
@@ -192,7 +193,7 @@ export function EpiRequirementsPanel({ companyId, requirements, departments, pos
       <table className={styles.dataTable}>
         <thead><tr><th>Aplicação</th><th>EPI obrigatório</th><th>Qtd.</th><th>Ciclo de troca</th><th>Alerta</th><th>Status</th><th /></tr></thead>
         <tbody>{requirements.map((item) => <tr key={item.id}>
-          <td><strong>{item.departmentName || "Todos os departamentos"}</strong><small>{item.positionName || "Todos os cargos"}</small></td>
+          <td><strong>{item.departmentName || "Todos os departamentos"}</strong><small>{item.positionName || "Todos os cargos"} · {item.establishmentName || "Todas as unidades"}</small></td>
           <td><strong>{item.productName}</strong><small>{item.caNumber ? `CA ${item.caNumber}` : "CA não informado"}</small></td>
           <td>{item.quantity}</td>
           <td>{item.replacementDays ? `A cada ${item.replacementDays} dias` : "Sem ciclo automático"}</td>
@@ -209,12 +210,14 @@ export function EpiRequirementsPanel({ companyId, requirements, departments, pos
   </div>;
 }
 
-function RequirementEditor({ companyId, requirement, departments, positions, products, busy, onSave, onCancel }: {
+function RequirementEditor({ companyId, requirement, departments, positions, establishments, products, busy, onSave, onCancel }: {
   companyId: string; requirement: EpiRequirement | null; departments: EpiCatalogOption[]; positions: EpiCatalogOption[];
+  establishments: EpiCatalogOption[];
   products: EpiProduct[]; busy: boolean; onSave: (payload: Record<string, unknown>) => Promise<void>; onCancel: () => void;
 }) {
   const [departmentId, setDepartmentId] = useState(requirement?.departmentId ?? "");
   const [positionId, setPositionId] = useState(requirement?.positionId ?? "");
+  const [establishmentId, setEstablishmentId] = useState(requirement?.establishmentId ?? "");
   const [productId, setProductId] = useState(requirement?.productId ?? products.find((item) => item.status !== "inactive")?.id ?? "");
   const [quantity, setQuantity] = useState(String(requirement?.quantity ?? 1));
   const [replacementDays, setReplacementDays] = useState(String(requirement?.replacementDays ?? 180));
@@ -223,13 +226,15 @@ function RequirementEditor({ companyId, requirement, departments, positions, pro
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      await onSave({ companyId, departmentId: departmentId || null, positionId: positionId || null, productId,
+      await onSave({ companyId, departmentId: departmentId || null, positionId: positionId || null,
+        establishmentId: establishmentId || null, productId,
         quantity: Number(quantity), replacementDays: Number(replacementDays), warningDays: Number(warningDays), notes });
     } catch { /* o banner do módulo preserva a edição e mostra o erro do servidor */ }
   }
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
     <header><div><span>{requirement ? "EDITAR REGRA" : "NOVA REGRA"}</span><h3>{requirement ? requirement.productName : "Definir EPI obrigatório"}</h3></div>{requirement && <button type="button" className={styles.closeButton} onClick={onCancel} aria-label="Cancelar edição"><XCircle aria-hidden="true" /></button>}</header>
     <div className={styles.stockOperationForm}>
+      <label><span>UNIDADE</span><select value={establishmentId} onChange={(event) => setEstablishmentId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todas</option>{establishments.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label><span>DEPARTAMENTO</span><select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todos</option>{departments.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label><span>CARGO</span><select value={positionId} onChange={(event) => setPositionId(event.target.value)} disabled={Boolean(requirement)}><option value="">Todos</option>{positions.filter((item) => item.status === "active").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label><span>EPI *</span><select required value={productId} onChange={(event) => setProductId(event.target.value)} disabled={Boolean(requirement)}><option value="">Selecione</option>{products.filter((item) => item.status !== "inactive").map((item) => <option key={item.id} value={item.id}>{item.name} · {item.size}</option>)}</select></label>

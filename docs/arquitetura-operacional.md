@@ -362,10 +362,10 @@ obrigação (`OperationDialogs.tsx`) ganhou o campo, sempre opcional: uma
 obrigação sem unidade continua válida, exatamente como hoje.
 
 **O que isto ainda não faz** — e é deliberado, para não entregar mais do que
-os dois vínculos em si: a Matriz de Requisitos genérica (que juntaria EPI,
-exame ocupacional e treinamento sob um mesmo cadastro, hoje só
-`fdp_epi_requirements` existe) continua sendo o próximo passo, não este, e
-nenhuma tela ainda filtra ou agrupa por unidade — o dado existe para ser
+os vínculos em si: a Matriz de Requisitos genérica (que juntaria EPI, exame
+ocupacional e treinamento sob um mesmo cadastro, hoje cada um seria uma
+tabela à parte) continua sendo o próximo passo, não este, e nenhuma tela
+ainda filtra ou agrupa obrigação legal por unidade — o dado existe para ser
 preenchido e consultado depois, não para gerar um relatório novo já neste
 incremento. Cada vínculo é um incremento à parte, pelo mesmo motivo de
 `fdp_unions` ter entrado sozinho: mudar uma tabela sem um consumidor real do
@@ -400,6 +400,30 @@ próximos passos.
 | Verificação | Onde |
 | --- | --- |
 | Colunas novas com default seguro, vocabulário fechado no risco, e a importação do Sankhya não sobrescreve o que foi cadastrado manualmente | `tests/position-risk-profile.test.mts` |
+
+### 4.7 Unidade como terceira dimensão da regra de EPI obrigatório
+
+`fdp_epi_requirements` já tinha duas dimensões de escopo — departamento e
+cargo, com NULL significando "qualquer um" (0048_epi_compliance.sql). Unidade
+entrou como a terceira, no mesmo desenho: obra e escritório da mesma empresa
+podem exigir EPIs diferentes para o mesmo cargo, e até aqui a única saída era
+duplicar o cargo por endereço. Diferente dos vínculos de §4.5, este toca a
+função pura que decide conformidade
+(`lib/epi-compliance.ts#buildEpiCompliance`): a precedência "regra mais
+específica vence" (`specificity`) passa a contar as três dimensões, não duas,
+e as três rotas que leem a matriz (`/api/epi/requirements`,
+`/api/epi/employees/[id]`, `/api/epi/dashboard`, `/api/epi/reports`) recortam
+por `establishment_id` do mesmo jeito que já recortavam por
+`department_id`/`position_id`.
+
+O índice único da regra (`fdp_epi_requirements_scope_product_uq`) precisou
+ser recriado para incluir `COALESCE(establishment_id, '')`: como toda regra
+existente tem unidade nula, a chave nova é estritamente mais restritiva que a
+anterior — nenhuma regra que já era única deixa de ser.
+
+| Verificação | Onde |
+| --- | --- |
+| A coluna é nova e nula, e a função pura trata unidade como mais uma dimensão de especificidade | `tests/epi-requirement-establishment.test.mts` |
 
 ---
 

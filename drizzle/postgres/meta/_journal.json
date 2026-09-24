@@ -708,6 +708,13 @@
       "when": 1790064000000,
       "tag": "0098_position_risk_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1790067600000,
+      "tag": "0099_epi_requirement_establishment",
+      "breakpoints": true
     }
   ]
 }
