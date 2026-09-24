@@ -17,7 +17,7 @@ import { parseTrainingInput, trainingStatus } from "../lib/trainings.ts";
  * NRs existem.
  */
 
-const migration = await readFile(new URL("../drizzle/postgres/0101_mandatory_trainings.sql", import.meta.url), "utf8");
+const migration = await readFile(new URL("../drizzle/postgres/0102_mandatory_trainings.sql", import.meta.url), "utf8");
 const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
 const criar = await readFile(new URL("../app/api/trainings/route.ts", import.meta.url), "utf8");
 const editar = await readFile(new URL("../app/api/trainings/[id]/route.ts", import.meta.url), "utf8");

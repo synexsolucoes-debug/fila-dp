@@ -726,8 +726,8 @@
     {
       "idx": 103,
       "version": "7",
-      "when": 1790078400000,
-      "tag": "0101_mandatory_trainings",
+      "when": 1790082000000,
+      "tag": "0102_mandatory_trainings",
       "breakpoints": true
     }
   ]

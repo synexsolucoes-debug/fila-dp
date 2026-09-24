@@ -108,7 +108,7 @@ export const expectedMigrations = [
   "0098_position_risk_profile.sql",
   "0099_epi_requirement_establishment.sql",
   "0100_occupational_exams.sql",
-  "0101_mandatory_trainings.sql",
+  "0102_mandatory_trainings.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

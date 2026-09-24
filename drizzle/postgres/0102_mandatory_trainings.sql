@@ -12,7 +12,7 @@
 -- brigada de incêndio e a lista muda por atividade e por convenção coletiva.
 -- Fechar isso em enum seria o produto inventando uma taxonomia que não é
 -- dele para inventar.
-SELECT pg_advisory_xact_lock(hashtext('0101_mandatory_trainings'));
+SELECT pg_advisory_xact_lock(hashtext('0102_mandatory_trainings'));
 --> statement-breakpoint
 
 CREATE TABLE "fdp_trainings" (
