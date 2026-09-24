@@ -2,7 +2,9 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
-import { cleanText, getCatalogResource } from "@/lib/registrations";
+import { cleanText, enumValue, getCatalogResource } from "@/lib/registrations";
+
+const positionRiskLevels = ["none", "low", "medium", "high"] as const;
 
 type Context = { params: Promise<{ resource: string }> };
 
@@ -17,7 +19,7 @@ export async function GET(request: Request, context: Context) {
     const companyId = cleanText(new URL(request.url).searchParams.get("companyId"), 120);
     if (!companyId) throw ApiError.badRequest("Selecione uma empresa.", "COMPANY_REQUIRED");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
-    const extra = key === "positions" ? ", cbo_code" : key === "work-schedules" ? ", weekly_hours, description" : key === "departments" ? ", parent_department_id" : "";
+    const extra = key === "positions" ? ", cbo_code, risk_level, special_activities" : key === "work-schedules" ? ", weekly_hours, description" : key === "departments" ? ", parent_department_id" : "";
     const result = await d1.prepare(`SELECT id, company_id, code, name, status${extra}, created_at, updated_at FROM ${resource.table} WHERE workspace_id = ? AND company_id = ? ORDER BY status, name`)
       .bind(workspace.id, companyId).all();
     return Response.json({ items: result.results });
@@ -44,8 +46,9 @@ export async function POST(request: Request, context: Context) {
     const status = body.status === "inactive" ? "inactive" : "active";
     let insert: D1PreparedStatement;
     if (key === "positions") {
-      insert = d1.prepare(`INSERT INTO ${resource.table} (id, workspace_id, company_id, code, name, cbo_code, status) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-        .bind(id, workspace.id, companyId, code, name, cleanText(body.cboCode, 20), status);
+      insert = d1.prepare(`INSERT INTO ${resource.table} (id, workspace_id, company_id, code, name, cbo_code, risk_level, special_activities, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(id, workspace.id, companyId, code, name, cleanText(body.cboCode, 20),
+          enumValue(body.riskLevel, positionRiskLevels, "none"), cleanText(body.specialActivities, 500), status);
     } else if (key === "work-schedules") {
       const weeklyHours = Math.min(Math.max(Number(body.weeklyHours) || 44, 1), 60);
       insert = d1.prepare(`INSERT INTO ${resource.table} (id, workspace_id, company_id, code, name, weekly_hours, description, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)

@@ -951,6 +951,8 @@ export const positions = pgTable("fdp_positions", {
   code: text("code").notNull(),
   name: text("name").notNull(),
   cboCode: text("cbo_code").notNull().default(""),
+  riskLevel: text("risk_level").notNull().default("none"),
+  specialActivities: text("special_activities").notNull().default(""),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -959,6 +961,7 @@ export const positions = pgTable("fdp_positions", {
   uniqueIndex("fdp_positions_workspace_company_id_uq").on(table.workspaceId, table.companyId, table.id),
   foreignKey({ name: "fdp_positions_workspace_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
   check("fdp_positions_status_check", sql`${table.status} IN ('active', 'inactive')`),
+  check("fdp_positions_risk_level_check", sql`${table.riskLevel} IN ('none', 'low', 'medium', 'high')`),
 ]);
 
 export const costCenters = pgTable("fdp_cost_centers", {

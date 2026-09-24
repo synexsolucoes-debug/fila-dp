@@ -377,6 +377,30 @@ documento recusa (§93).
 | RLS forçado e o mesmo desenho tenant-scoped dos outros cadastros auxiliares | `tests/sankhya-catalog-xlsx.test.mts` |
 | Colaborador e obrigação legal aceitam unidade do mesmo jeito que aceitam centro de custo e jornada | `tests/sankhya-catalog-xlsx.test.mts`, `tests/obligation-establishment.test.mts` |
 
+### 4.6 Cargo rico, passo 1 — grau de risco e atividades especiais
+
+`fdp_positions` já tinha CBO como dado "rico" do cargo, sem consumidor além da
+própria tela de cadastro (0013_registrations_foundation.sql). Grau de risco
+(`risk_level`, vocabulário fechado none/low/medium/high) e atividades
+especiais (`special_activities`, texto livre) entram no mesmo padrão — nenhum
+dos dois tem taxonomia imposta pelo produto, porque não é o Vinculato quem
+decide o que é "atividade especial" no cliente. A análise de produto de
+set/2026 nomeou isto como base da Matriz de Requisitos e do futuro controle
+de exames ocupacionais: sem saber o risco de um cargo, não há como decidir
+depois quais exames ou treinamentos ele exige.
+
+**O que isto ainda não faz** — e é deliberado: nenhuma regra usa `risk_level`
+ainda para decidir nada automaticamente (nenhum EPI obrigatório é sugerido a
+partir do risco, nenhum exame é exigido a partir da atividade especial). Os
+dois campos são hoje só cadastro, consumidos pela própria tela de cargo,
+exatamente como `cbo_code` já era antes deles. Controle de exames
+ocupacionais (ASO) e a Matriz de Requisitos genérica continuam sendo os
+próximos passos.
+
+| Verificação | Onde |
+| --- | --- |
+| Colunas novas com default seguro, vocabulário fechado no risco, e a importação do Sankhya não sobrescreve o que foi cadastrado manualmente | `tests/position-risk-profile.test.mts` |
+
 ---
 
 ## 5. Agentes
