@@ -103,6 +103,7 @@ export const expectedMigrations = [
   "0093_admission_sheet_photo_ocr.sql",
   "0094_registrations_unions_catalog.sql",
   "0095_registrations_establishments_catalog.sql",
+  "0096_employee_establishment.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

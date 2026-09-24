@@ -39,6 +39,8 @@ export type Employee = {
   costCenterName: string;
   workScheduleId: string | null;
   workScheduleName: string;
+  establishmentId: string | null;
+  establishmentName: string;
   managerEmployeeId: string | null;
   registrationNumber: string;
   fullName: string;
@@ -91,6 +93,7 @@ export type EmployeeDraft = {
   positionId: string;
   costCenterId: string;
   workScheduleId: string;
+  establishmentId: string;
   admissionDate: string;
   birthDate: string;
   terminationDate: string;
