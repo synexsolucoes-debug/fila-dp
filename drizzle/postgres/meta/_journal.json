@@ -694,6 +694,13 @@
       "when": 1790056800000,
       "tag": "0096_employee_establishment",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1790060400000,
+      "tag": "0097_obligation_establishment",
+      "breakpoints": true
     }
   ]
 }

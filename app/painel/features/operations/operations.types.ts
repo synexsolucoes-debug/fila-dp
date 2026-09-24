@@ -25,7 +25,7 @@ export type ClosingItem = {
 };
 export type Obligation = {
   id: string; obligationType: string; title: string; dueDate: string; status: "open" | "in_progress" | "blocked" | "completed";
-  ownerUserId: string; cardId: string; notes: string;
+  ownerUserId: string; cardId: string; establishmentId: string; notes: string;
   /** Recibo devolvido pelo portal. O produto não transmite, então ele vem de fora. */
   protocol: string;
   /** Link para o comprovante, que vive no ambiente do cliente. */
@@ -38,6 +38,7 @@ export type PendingItem = {
 export type ProcessDefinition = { id: string; code: string; name: string; category: string; status: string; latestVersion: number; publishedVersion: number };
 export type ProcessVersion = { id: string; definitionId: string; version: number; status: "draft" | "published" | "retired"; configuration: Record<string, unknown>; publishedAt: string };
 export type Approver = { id: string; name: string; email: string; role: string };
+export type EstablishmentOption = { id: string; name: string };
 export type EmployeeOption = { id: string; name: string; registrationNumber: string };
 export type OperationPermissions = {
   manageCompetences: boolean; transitionCompetences: boolean; manageMovements: boolean; decideApprovals: boolean;
@@ -46,7 +47,7 @@ export type OperationPermissions = {
 export type OverviewPayload = {
   competence: string; cycle: Cycle | null; cycles: Cycle[]; demands: Demand[]; obligations: Obligation[];
   closingItems: ClosingItem[]; pendingItems: PendingItem[]; processes: ProcessDefinition[]; movements: Movement[];
-  approvals: Approval[]; approvers: Approver[]; permissions: OperationPermissions;
+  approvals: Approval[]; approvers: Approver[]; establishments: EstablishmentOption[]; permissions: OperationPermissions;
 };
 
 export type EditorState =

@@ -189,7 +189,7 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
       } else if (state.kind === "approval") {
         await mutate(`/api/operations/approvals/${state.approval.id}/decision`, { method: "POST", body: JSON.stringify({ decision: field(form, "decision"), comment: field(form, "comment") }) }, "Decisão registrada na trilha de auditoria.");
       } else if (state.kind === "obligation") {
-        await mutate("/api/operations/obligations", { method: "POST", body: JSON.stringify({ companyId, competenceId: cycle?.id, obligationType: field(form, "obligationType"), title: field(form, "title"), dueDate: field(form, "dueDate"), ownerUserId: field(form, "ownerUserId") || null, cardId: field(form, "cardId") || null, notes: field(form, "notes"), protocol: field(form, "protocol"), evidenceUrl: field(form, "evidenceUrl") }) }, "Obrigação incluída no ciclo.");
+        await mutate("/api/operations/obligations", { method: "POST", body: JSON.stringify({ companyId, competenceId: cycle?.id, obligationType: field(form, "obligationType"), title: field(form, "title"), dueDate: field(form, "dueDate"), ownerUserId: field(form, "ownerUserId") || null, cardId: field(form, "cardId") || null, establishmentId: field(form, "establishmentId") || null, notes: field(form, "notes"), protocol: field(form, "protocol"), evidenceUrl: field(form, "evidenceUrl") }) }, "Obrigação incluída no ciclo.");
       } else if (state.kind === "pending") {
         await mutate("/api/operations/pending-items", { method: "POST", body: JSON.stringify({ companyId, competenceId: cycle?.id, severity: field(form, "severity"), title: field(form, "title"), dueDate: field(form, "dueDate") || null, sourceType: field(form, "sourceType"), sourceId: cycle?.id, ownerUserId: field(form, "ownerUserId") || null, blocking: form.get("blocking") === "on" }) }, "Pendência registrada.");
       } else if (state.kind === "pending-resolution") {
@@ -260,7 +260,7 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
         {tab === "library" && <LibraryPanel processes={libraryProcesses.length ? libraryProcesses : data?.processes ?? []} versions={versions} canManage={Boolean(data?.permissions.manageProcesses)} canPublish={Boolean(data?.permissions.publishProcesses && role === "admin")} onCreate={() => setEditor({ kind: "process" })} onVersion={(process) => setEditor({ kind: "process-version", process })} onPublish={(process, version) => setEditor({ kind: "process-publish", process, version })} />}
       </div>
 
-      {editor && <OperationDialog editor={editor} cycle={cycle} companyId={companyId} competence={competence} openCompetences={openCompetences} employees={employees} approvers={data?.approvers ?? []} busy={busy} onClose={() => setEditor(null)} onSubmit={handleDialogSubmit} />}
+      {editor && <OperationDialog editor={editor} cycle={cycle} companyId={companyId} competence={competence} openCompetences={openCompetences} employees={employees} approvers={data?.approvers ?? []} establishments={data?.establishments ?? []} busy={busy} onClose={() => setEditor(null)} onSubmit={handleDialogSubmit} />}
       {toast && <div className={styles.toast} role="status"><CheckCircle2 aria-hidden="true" />{toast}</div>}
     </section>
   );

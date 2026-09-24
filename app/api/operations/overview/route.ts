@@ -21,10 +21,10 @@ export async function GET(request: Request) {
     const competence = requestedCompetence || String(cyclesResult.results[0]?.competence ?? new Date().toISOString().slice(0, 7));
     const cycle = cyclesResult.results.find((item) => item.competence === competence) ?? null;
     const cycleId = cycle ? String(cycle.id) : "";
-    const [demands, obligations, closingItems, pendingItems, processes, approvers] = await Promise.all([
+    const [demands, obligations, closingItems, pendingItems, processes, approvers, establishments] = await Promise.all([
       d1.prepare(`SELECT id, title, process_type, priority, due_at, legal_due_at, sla_status, archived, list_id
         FROM fdp_cards WHERE workspace_id = ? AND company_id = ? AND competence = ? ORDER BY COALESCE(legal_due_at, due_at), updated_at DESC LIMIT 80`).bind(workspace.id, companyId, competence).all(),
-      cycleId ? d1.prepare(`SELECT id, obligation_type, title, due_date, status, owner_user_id, card_id, notes
+      cycleId ? d1.prepare(`SELECT id, obligation_type, title, due_date, status, owner_user_id, card_id, establishment_id, notes
         FROM fdp_compliance_obligations WHERE workspace_id = ? AND company_id = ? AND payroll_cycle_id = ? ORDER BY due_date, title`).bind(workspace.id, companyId, cycleId).all() : Promise.resolve({ results: [] }),
       cycleId ? d1.prepare(`SELECT id, phase, category, title, status, owner_user_id, due_date, completed_at, notes, position
         FROM fdp_payroll_cycle_items WHERE workspace_id = ? AND company_id = ? AND payroll_cycle_id = ? ORDER BY phase, position, title`).bind(workspace.id, companyId, cycleId).all() : Promise.resolve({ results: [] }),
@@ -39,6 +39,7 @@ export async function GET(request: Request) {
         WHERE wm.workspace_id = ? AND wm.role IN ('admin', 'member') AND (
           wm.role = 'admin' OR EXISTS (SELECT 1 FROM fdp_member_company_access mca WHERE mca.workspace_id = wm.workspace_id AND mca.user_id = wm.user_id AND mca.company_id = ?)
         ) ORDER BY u.name`).bind(workspace.id, companyId).all(),
+      d1.prepare(`SELECT id, name FROM fdp_establishments WHERE workspace_id = ? AND company_id = ? AND status = 'active' ORDER BY name`).bind(workspace.id, companyId).all(),
     ]);
     let movements: unknown[] = [];
     let approvals: unknown[] = [];
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
     return Response.json({
       competence, cycle, cycles: cyclesResult.results, demands: demands.results, obligations: obligations.results,
       closingItems: closingItems.results, pendingItems: pendingItems.results, processes: processes.results, movements, approvals,
-      approvers: approvers.results,
+      approvers: approvers.results, establishments: establishments.results,
       permissions: {
         manageCompetences: hasCapability(workspace, "competences.manage"), transitionCompetences: hasCapability(workspace, "competences.transition"),
         manageMovements: hasCapability(workspace, "movements.manage"), decideApprovals: hasCapability(workspace, "approvals.decide"),
