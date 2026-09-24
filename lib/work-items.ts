@@ -83,7 +83,9 @@ export type WorkItemSource =
   | "auxiliary"
   | "pending_item"
   | "triage"
-  | "integration_failure";
+  | "integration_failure"
+  | "compliance_obligation"
+  | "epi_ca_expiry";
 
 export type WorkItemScope = "mine" | "team";
 
@@ -261,6 +263,70 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
       JOIN fdp_integrations i ON i.workspace_id = j.workspace_id AND i.id = j.integration_id
       WHERE j.workspace_id = ? AND j.status = 'dead_letter'`,
   },
+  /* ---------------------------------------------------------------------- *
+   * Motor de Prazos — passo 1
+   *
+   * Cada módulo já sabia a própria data de vencimento (a obrigação legal, o CA
+   * do EPI); o que faltava era uma resposta única para "o que vence esta
+   * semana?", sem duplicar a data em uma tabela nova que divergiria da fonte no
+   * primeiro `PATCH`. As duas fontes abaixo não guardam prazo nenhum — elas só
+   * leem o que já existe e devolvem no mesmo contrato das demais, para caírem
+   * na mesma união, na mesma urgência e na mesma página.
+   * ---------------------------------------------------------------------- */
+  {
+    key: "compliance_obligation",
+    label: "Obrigações legais",
+    capability: "obligations.read",
+    companyColumn: "o.company_id",
+    mineCondition: "o.owner_user_id = ?",
+    mineParameters: 1,
+    /* O status é o mesmo que a tela de Operação DP já usa (aberta, em
+       andamento, bloqueada) — não um sintético "vencendo"/"vencida". Quem
+       decide a urgência é `due_at` combinado com esse status, na mesma
+       `URGENCY_SQL` que todo o resto da união usa: uma obrigação bloqueada já
+       ordena junto do que está vencido, esteja o prazo perto ou não. */
+    sql: `SELECT 'compliance_obligation' AS source_type, o.id AS source_id, o.title,
+        'Obrigação legal' AS description, 'normal' AS priority, o.company_id,
+        COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        NULL::text AS employee_id, o.due_date::timestamptz AS due_at, o.created_at, o.updated_at,
+        o.status, NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_compliance_obligations o
+      LEFT JOIN fdp_companies co ON co.workspace_id = o.workspace_id AND co.id = o.company_id
+      WHERE o.workspace_id = ? AND o.status IN ('open', 'in_progress', 'blocked') {{company}} {{mine}}`,
+  },
+  {
+    key: "epi_ca_expiry",
+    label: "CA de EPI vencendo",
+    capability: "epi.view",
+    /* O catálogo de EPI é do workspace, não de uma empresa (docs/controle-de-epi.md
+       §"O SKU e o saldo pertencem ao workspace") — recortar por empresa
+       esconderia o vencimento de quem usa o produto em outra empresa do grupo. */
+    companyColumn: "",
+    /* Sem responsável individual pelo cadastro: é o mesmo motivo de `triage` e
+       `integration_failure` não terem `mineCondition` — o fato pertence ao
+       grupo, não a uma pessoa, e "minha fila" continua mostrando o que só o
+       grupo pode resolver. */
+    mineCondition: "",
+    mineParameters: 0,
+    /* Só o que entra na janela de ação (vencido ou vencendo em até 60 dias):
+       sem o corte, todo CA do catálogo apareceria na Central pela vida inteira
+       do produto. `safe`/`warning`/`overdue` é o mesmo vocabulário de
+       `sla_status` que a fonte `card` já usa — a urgência do conjunto não
+       precisa de uma terceira régua para entender o que é crítico. */
+    sql: `SELECT 'epi_ca_expiry' AS source_type, p.id AS source_id,
+        'CA ' || p.ca_number || ' — ' || p.name AS title,
+        'Certificado de Aprovação do EPI' AS description, 'normal' AS priority,
+        NULL::text AS company_id, NULL::text AS company_name, NULL::text AS employee_id,
+        p.ca_expires_on::timestamptz AS due_at, p.created_at, p.updated_at,
+        CASE WHEN p.ca_expires_on < CURRENT_DATE THEN 'overdue'
+             WHEN p.ca_expires_on = CURRENT_DATE THEN 'warning' ELSE 'safe' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'epi' AS origin
+      FROM fdp_epi_products p
+      WHERE p.workspace_id = ? AND p.status = 'active'
+        AND p.ca_expires_on IS NOT NULL AND p.ca_expires_on <= CURRENT_DATE + 60 {{company}} {{mine}}`,
+  },
 ];
 
 /* -------------------------------------------------------------------------- *
@@ -303,6 +369,7 @@ const ORIGIN_LABELS: Record<string, string> = {
   manual: "Criada no Vinculato",
   operacao: "Operação DP",
   auxiliares: "Módulos auxiliares",
+  epi: "Controle de EPI",
   process: "Processo publicado",
   teams: "Microsoft Teams",
   tangerino: "Tangerino",
@@ -333,6 +400,8 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
   pending_item: "Resolver a pendência do fechamento",
   triage: "Confirmar de quem é a entrada",
   integration_failure: "Verificar o agente e reprocessar",
+  compliance_obligation: "Cumprir e registrar a obrigação",
+  epi_ca_expiry: "Substituir o produto ou renovar o CA",
 };
 
 /**
@@ -358,6 +427,8 @@ export function workItemHref(source: WorkItemSource, id: string): string {
     case "auxiliary": return `/painel/auxiliares?execucao=${item}`;
     case "triage": return `/painel/triagem/movimentacao-${item}`;
     case "integration_failure": return `/painel/agentes?execucao=${item}`;
+    case "compliance_obligation": return `/painel/operacao?obrigacao=${item}`;
+    case "epi_ca_expiry": return `/painel/epi?ca=${item}`;
     default: return "/painel";
   }
 }
@@ -381,11 +452,18 @@ function toneOf(status: string, dueAt: string | null, priority: string, today: s
  * bloqueio da etapa — isso é trabalho da tela da demanda, que tem o motivo
  * exato. Aqui a frase existe para a pessoa decidir se abre agora ou depois.
  */
-function blockedReasonOf(status: string, dueAt: string | null, today: string): string {
+function blockedReasonOf(sourceType: WorkItemSource, status: string, dueAt: string | null, today: string): string {
   if (status === "dead_letter") return "A execução esgotou as tentativas e não segue sozinha.";
   if (status === "pending_approval") return "Aguardando decisão de quem aprova.";
   if (status === "rejected") return "Foi recusada e precisa de correção.";
-  if (status === "blocked") return "Bloqueada por uma pendência do fechamento.";
+  // "blocked" significa coisas diferentes conforme a fonte: pendência de
+  // fechamento numa, e obrigação legal travada por outro motivo na outra.
+  // Misturar as duas frases contaria uma causa que a linha não tem como saber.
+  if (status === "blocked") {
+    return sourceType === "compliance_obligation"
+      ? "Está bloqueada — confira o motivo na Operação DP."
+      : "Bloqueada por uma pendência do fechamento.";
+  }
   if (dueAt && dueAt.slice(0, 10) < today) return "O prazo já venceu.";
   return "";
 }
@@ -421,7 +499,7 @@ export function toWorkItem(row: Record<string, unknown>, today = new Date().toIS
     processStep: text(row.process_step) || undefined,
     origin,
     originLabel: originLabel(origin),
-    blockedReason: blockedReasonOf(status, dueAt || null, today) || undefined,
+    blockedReason: blockedReasonOf(sourceType, status, dueAt || null, today) || undefined,
     nextAction: NEXT_ACTIONS[sourceType] ?? "Abrir o item",
     href: workItemHref(sourceType, sourceId),
     tone: toneOf(status, dueAt || null, priority, today),

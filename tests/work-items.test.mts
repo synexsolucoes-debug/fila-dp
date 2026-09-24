@@ -54,6 +54,75 @@ test("falha operacional que exige ação humana também é trabalho (§4)", () =
   assert.equal(workItemHref("integration_failure", "j1"), "/painel/agentes?execucao=j1");
 });
 
+/* ── Motor de Prazos ──────────────────────────────────────────────────────── */
+
+test("obrigação legal e CA de EPI vencendo entram na Central sem tabela nova (Motor de Prazos)", () => {
+  const keys = workItemSources.map((source) => source.key);
+  assert.ok(keys.includes("compliance_obligation"), "obrigação legal ausente");
+  assert.ok(keys.includes("epi_ca_expiry"), "vencimento de CA de EPI ausente");
+});
+
+test("obrigação concluída sai da fila — o status é lido, não reinventado", () => {
+  const obligation = workItemSources.find((source) => source.key === "compliance_obligation")!;
+  assert.match(obligation.sql, /status IN \('open', 'in_progress', 'blocked'\)/u);
+  assert.doesNotMatch(obligation.sql, /'completed'/u, "concluída não deveria ser buscada de novo");
+});
+
+test("obrigação bloqueada já ordena com o que está vencido, mesmo com prazo longe", () => {
+  // A URGENCY_SQL trata 'blocked' como tier 0, igual a vencido — é a mesma
+  // régua que pending_item e o resto da união já usam para isso.
+  const obligation = workItemSources.find((source) => source.key === "compliance_obligation")!;
+  assert.match(obligation.sql, /o\.status,/u, "o status real da obrigação precisa atravessar, não um sintético");
+});
+
+test("obrigação legal é recortada por empresa e por dono", () => {
+  const obligation = workItemSources.find((source) => source.key === "compliance_obligation")!;
+  assert.equal(obligation.companyColumn, "o.company_id");
+  assert.equal(obligation.mineCondition, "o.owner_user_id = ?");
+});
+
+test("CA de EPI só entra na janela de ação — não o catálogo inteiro pela vida toda", () => {
+  const epi = workItemSources.find((source) => source.key === "epi_ca_expiry")!;
+  assert.match(epi.sql, /ca_expires_on <= CURRENT_DATE \+ 60/u);
+  assert.match(epi.sql, /p\.status = 'active'/u, "produto baixado não deveria gerar prazo");
+});
+
+test("CA de EPI usa o mesmo vocabulário de urgência que a demanda, não um terceiro", () => {
+  const epi = workItemSources.find((source) => source.key === "epi_ca_expiry")!;
+  assert.match(epi.sql, /'overdue'/u);
+  assert.match(epi.sql, /'warning'/u);
+  assert.match(epi.sql, /ELSE 'safe' END AS status/u);
+});
+
+test("EPI é do workspace, não de uma empresa — a fonte não recorta por empresa nem por dono", () => {
+  const epi = workItemSources.find((source) => source.key === "epi_ca_expiry")!;
+  assert.equal(epi.companyColumn, "");
+  assert.equal(epi.mineCondition, "");
+});
+
+test("a nova ambiguidade de `blocked` não reaproveita a frase do fechamento", () => {
+  // pending_item e compliance_obligation agora dividem o status 'blocked', e a
+  // razão de estar bloqueada não é a mesma nos dois. Reaproveitar a frase do
+  // fechamento para uma obrigação contaria uma causa que a linha não tem.
+  const obligation = toWorkItem({
+    source_type: "compliance_obligation", source_id: "o1", title: "GRF",
+    description: "", priority: "normal", company_id: "c1", company_name: "Empresa",
+    employee_id: null, due_at: "2099-01-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z", status: "blocked", process_id: null, process_step: null,
+    process_version: "", origin: "operacao",
+  });
+  const pending = toWorkItem({
+    source_type: "pending_item", source_id: "p1", title: "Fechamento",
+    description: "", priority: "normal", company_id: "c1", company_name: "Empresa",
+    employee_id: null, due_at: "2099-01-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z", status: "blocked", process_id: null, process_step: null,
+    process_version: "", origin: "operacao",
+  });
+  assert.notEqual(obligation.blockedReason, pending.blockedReason);
+  assert.match(pending.blockedReason ?? "", /fechamento/u);
+  assert.doesNotMatch(obligation.blockedReason ?? "", /fechamento/u);
+});
+
 test("nenhuma fonte escreve: a central agrega, ela não opera", async () => {
   const source = await readFile(new URL("../lib/work-items.ts", import.meta.url), "utf8");
   for (const forbidden of [/\bINSERT\s+INTO\b/iu, /\bUPDATE\s+\w/iu, /\bDELETE\s+FROM\b/iu]) {
@@ -292,7 +361,10 @@ test("a chave de grupo do item é a mesma que o banco conta", () => {
 
 test("o item traz um destino real no painel, e não um link para lugar nenhum", () => {
   assert.equal(workItemHref("card", "abc"), "/painel/demandas/abc");
-  for (const source of ["card", "approval", "movement", "auxiliary", "pending_item", "triage", "integration_failure"] as const) {
+  for (const source of [
+    "card", "approval", "movement", "auxiliary", "pending_item", "triage", "integration_failure",
+    "compliance_obligation", "epi_ca_expiry",
+  ] as const) {
     const href = workItemHref(source, "x");
     const [path] = href.split("?");
     const location = parsePanelPath(path);

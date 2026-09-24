@@ -246,7 +246,7 @@ agrupamento, contadores e página. A tela decide só a apresentação. Filtrar n
 navegador exigiria baixar a fila inteira para esconder metade dela, e é assim
 que uma lista de trabalho fica lenta justamente para quem tem mais trabalho.
 
-Sete fontes entram em um `UNION ALL` único. Consultar fonte a fonte obriga a
+Nove fontes entram em um `UNION ALL` único. Consultar fonte a fonte obriga a
 trazer `limite` linhas de **cada** uma para escolher as `limite` primeiras do
 conjunto: o custo cresce com o número de fontes, não com o tamanho da página.
 
@@ -255,9 +255,43 @@ urgência, prazo, criação e identificador. Página numerada devolveria item
 repetido e pularia outro, porque a fila muda enquanto a pessoa lê; e um cursor
 por uma coluna só pularia itens empatados.
 
-Uma das sete fontes é a **falha de execução que esgotou as tentativas**. Ela não
+Uma das nove fontes é a **falha de execução que esgotou as tentativas**. Ela não
 segue sozinha e exige decisão humana; se existisse apenas na tela de
 integrações, ficaria esperando alguém abrir aquela tela por acaso.
+
+### 4.3 Motor de Prazos — passo 1: ler o vencimento onde ele já mora
+
+Duas fontes novas respondem "o que vence esta semana?" sem criar a tabela de
+prazos que a análise de produto cogitava: **obrigação legal**
+(`fdp_compliance_obligations`, aberta ou em andamento) e **CA de EPI vencendo**
+(`fdp_epi_products.ca_expires_on`, dentro de 60 dias ou já vencido). Nenhuma das
+duas guarda uma data própria — elas leem a que já existe, porque uma segunda
+cópia da mesma data divergiria da fonte no primeiro `PATCH` que uma esquecesse
+de atualizar as duas.
+
+- **Obrigação legal** mantém o próprio status de sempre (`open`, `in_progress`,
+  `blocked`) — não um "vencendo"/"vencida" sintético. A urgência do conjunto já
+  trata `blocked` como tier 0, igual a vencido: uma obrigação travada ordena
+  junto do que está atrasado, o prazo estando perto ou não.
+- **CA de EPI** não tem status de fluxo — só existe ou não existe o produto. A
+  fonte sintetiza `safe`/`warning`/`overdue` a partir da data, o mesmo
+  vocabulário que `sla_status` de demanda já usa: a Central não ganhou uma
+  terceira régua de urgência, ela reaproveitou a que já tinha.
+- Nenhuma das duas é recortada por `mineCondition` de propósito distinto:
+  obrigação tem dono (`owner_user_id`) e é recortada por ele; EPI é do
+  workspace, não de uma pessoa nem de uma empresa (o mesmo motivo de `triage` e
+  `integration_failure` não terem recorte pessoal).
+- `blockedReasonOf` passou a receber a fonte, porque `blocked` significa duas
+  coisas diferentes agora — pendência de fechamento numa, motivo próprio da
+  obrigação na outra — e reaproveitar a mesma frase contaria uma causa que a
+  linha não tem como saber.
+
+**O que isto ainda não faz**, com a mesma honestidade do resto do documento:
+não há motor de antecedência configurável (avisar 45/15/5 dias antes, por
+tipo), não há escalonamento por notificação externa, e só dois tipos de
+vencimento têm fonte — experiência, férias, contrato PJ e documento continuam
+sem uma. Cada um desses é a mesma receita: achar a data que já existe em algum
+lugar do produto e registrar uma fonte aqui, nunca uma tabela nova.
 
 | Verificação | Onde |
 | --- | --- |
