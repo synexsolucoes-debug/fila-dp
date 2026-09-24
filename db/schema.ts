@@ -993,6 +993,22 @@ export const unions = pgTable("fdp_unions", {
   check("fdp_unions_status_check", sql`${table.status} IN ('active', 'inactive')`),
 ]);
 
+export const establishments = pgTable("fdp_establishments", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_establishments_workspace_company_code_uq").on(table.workspaceId, table.companyId, table.code),
+  uniqueIndex("fdp_establishments_workspace_company_id_uq").on(table.workspaceId, table.companyId, table.id),
+  foreignKey({ name: "fdp_establishments_workspace_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  check("fdp_establishments_status_check", sql`${table.status} IN ('active', 'inactive')`),
+]);
+
 export const workSchedules = pgTable("fdp_work_schedules", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),

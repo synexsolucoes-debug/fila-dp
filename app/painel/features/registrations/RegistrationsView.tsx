@@ -55,6 +55,7 @@ const catalogMeta: Record<CatalogResource, { label: string; singular: string; de
   "cost-centers": { label: "Centros de custo", singular: "Centro de custo", description: "Alocação contábil da operação" },
   "work-schedules": { label: "Jornadas", singular: "Jornada", description: "Cargas horárias e escalas" },
   unions: { label: "Sindicatos", singular: "Sindicato", description: "Convenções e acordos coletivos" },
+  establishments: { label: "Unidades", singular: "Unidade", description: "Endereços físicos de uma mesma empresa" },
 };
 
 /** Só estes têm exportação equivalente no Sankhya — ver import/route.ts. */
@@ -170,7 +171,7 @@ export function RegistrationsView({ role, onOpenContractorPayment }: {
   const [cursor, setCursor] = useState("");
   const [cursorHistory, setCursorHistory] = useState<string[]>([]);
   const [catalogResource, setCatalogResource] = useState<CatalogResource>("departments");
-  const [catalogs, setCatalogs] = useState<CatalogMap>({ departments: [], positions: [], "cost-centers": [], "work-schedules": [], unions: [] });
+  const [catalogs, setCatalogs] = useState<CatalogMap>({ departments: [], positions: [], "cost-centers": [], "work-schedules": [], unions: [], establishments: [] });
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogEditor, setCatalogEditor] = useState<CatalogItem | "new" | null>(null);
   const [companyEditor, setCompanyEditor] = useState<Company | "new" | null>(null);

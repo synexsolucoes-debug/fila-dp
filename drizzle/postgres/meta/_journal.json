@@ -680,6 +680,13 @@
       "when": 1790049600000,
       "tag": "0094_registrations_unions_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1790053200000,
+      "tag": "0095_registrations_establishments_catalog",
+      "breakpoints": true
     }
   ]
 }
