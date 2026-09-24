@@ -68,6 +68,8 @@ export type CatalogItem = {
   name: string;
   status: RecordStatus;
   cboCode: string;
+  riskLevel: "none" | "low" | "medium" | "high";
+  specialActivities: string;
   weeklyHours: number | null;
   description: string;
   parentDepartmentId: string | null;
