@@ -443,3 +443,18 @@
   .importDialog > footer button { flex: 1; }
   .toast { right: 12px; bottom: 12px; left: 12px; }
 }
+
+.employeePanel { display: grid; gap: 14px; min-width: 0; }
+.sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sectionTitle h3 { margin: 0; font-size: .84rem; }
+.sectionTitle span { color: var(--reg-soft); font-size: .7rem; }
+.requirementEditor {
+  display: grid; gap: 12px; border: 1px solid var(--reg-border); border-radius: 12px;
+  background: color-mix(in srgb, var(--reg-muted) 48%, var(--reg-surface)); padding: 14px;
+}
+.requirementEditor > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.requirementEditor > header > div { display: grid; gap: 2px; }
+.requirementEditor > header span { color: var(--reg-soft); font-size: .58rem; font-weight: 800; letter-spacing: .09em; }
+.requirementEditor > header h3 { margin: 0; font-size: .86rem; }
+.requirementEditor > footer { display: flex; align-items: center; gap: 9px; }
+.requirementEditor > footer > span { flex: 1; }

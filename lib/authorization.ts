@@ -132,6 +132,12 @@ export const capabilities = [
   "safety.manage",
   "safety.delete",
   "safety.export",
+  // Exame ocupacional (ASO). Excluir fica separado pelo mesmo motivo de
+  // `epi.dispose`/`safety.delete`: apagar um exame apaga a prova de que a
+  // empresa cumpriu a NR-7 naquela data.
+  "exams.view",
+  "exams.manage",
+  "exams.delete",
   /* Adiantamentos e Descontos. A separação segue as três etapas que o módulo
      insiste em não confundir: aprovar o lançamento, pagar o adiantamento e
      confirmar o desconto são decisões diferentes, de pessoas frequentemente
@@ -241,6 +247,10 @@ const roleCapabilities = {
     // corrige editando, e apagar é a única ação que faz o número sumir sem
     // deixar o que sobrou explicar a diferença.
     "safety.view", "safety.manage", "safety.export",
+    // Mesmo raciocínio do dashboard de acidentes: quem alimenta o ASO é a
+    // própria equipe de SESMT/DP, que opera como membro. Excluir fica fora
+    // pelo mesmo motivo de sempre — é a ação que apaga a prova, não corrige.
+    "exams.view", "exams.manage",
     // O analista de DP opera o módulo inteiro: lança, aprova, paga o
     // adiantamento, confirma o desconto e fecha a conferência do mês. Estornar
     // fica com ele porque é a única forma de corrigir uma confirmação errada, e
@@ -259,7 +269,7 @@ const roleCapabilities = {
     "companies.read", "employees.read", "departments.view",
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "invoice.read", "time.read",
-    "epi.view", "safety.view", "ledger.read",
+    "epi.view", "safety.view", "exams.view", "ledger.read",
   ]),
   guest: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "comments.write",

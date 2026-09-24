@@ -85,6 +85,10 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
   registrations: [
     "companies.manage", "employees.manage", "registrations.catalogs.manage",
     "departments.create", "departments.edit", "departments.manage_members", "departments.archive",
+    // O exame ocupacional ainda mora na ficha do colaborador, não numa tela
+    // própria (§4.8 de docs/arquitetura-operacional.md): negar Cadastros
+    // precisa fechar esta escrita também, ou sobraria uma rota sem tela.
+    "exams.manage", "exams.delete",
   ],
   epi: [
     "epi.create", "epi.edit", "epi.delete", "epi.deliver", "epi.return",

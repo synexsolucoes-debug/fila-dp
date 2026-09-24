@@ -715,6 +715,13 @@
       "when": 1790067600000,
       "tag": "0099_epi_requirement_establishment",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1790071200000,
+      "tag": "0100_occupational_exams",
+      "breakpoints": true
     }
   ]
 }
