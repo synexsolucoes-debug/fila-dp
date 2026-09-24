@@ -298,7 +298,42 @@ lugar do produto e registrar uma fonte aqui, nunca uma tabela nova.
 | A união prepara contra o schema real | `npm run db:rehearse-work` |
 | O plano e o tempo com volume de cliente grande | `npm run db:measure-work` |
 
-### 4.4 Unidade — o primeiro passo da Matriz de Requisitos
+### 4.4 Notificação externa — convite e recuperação de acesso por e-mail
+
+Até aqui só a confirmação de cadastro (`sendSignupConfirmationEmail`, §80)
+enviava e-mail de verdade — convite de membro e link de recuperação
+**geravam o link e paravam**: a tela devolvia a URL para o administrador
+copiar e mandar por fora. `lib/email.ts` generalizou o adaptador do Resend
+(`dispatchTransactionalEmail`) e `POST /api/members` e
+`POST /api/members/[id]/recovery` passaram a chamar
+`sendMemberActivationEmail`/`sendAccessRecoveryEmail` logo depois de gravar o
+token de recuperação, usando o `id` da própria linha do token como
+`Idempotency-Key` do Resend.
+
+A postura é deliberadamente diferente da confirmação de cadastro:
+
+- **Nunca bloqueia.** As duas funções devolvem `null` sem e-mail configurado
+  e nunca lançam — uma falha de envio vira log
+  (`members.activation_email_failed` / `members.recovery_email_failed`) e a
+  resposta da rota continua sendo o convite ou o link criado, exatamente como
+  hoje. O comportamento que o administrador já usa (copiar o link e mandar
+  por fora) não deixou de existir; o e-mail é um canal a mais.
+- A resposta ganhou `emailSent: boolean`, para a tela distinguir "enviei e
+  também copiei o link" de "só copiei o link" sem adivinhar pela ausência de
+  erro.
+
+**O que isto ainda não faz**: não existe "esqueci minha senha" autosserviço
+(o link de recuperação continua sendo gerado por um administrador para um
+membro específico, nunca pelo próprio usuário), e não existe um primitivo de
+link assinado genérico reutilizável por outras ações (aprovação por e-mail,
+por exemplo) — cada fluxo ainda tem seu próprio token
+(`fdp_access_recovery_tokens`, `fdp_contractor_invoice_tokens`).
+
+| Verificação | Onde |
+| --- | --- |
+| O adaptador e as duas mensagens nunca lançam sem provedor configurado | `tests/email.test.mts` |
+
+### 4.5 Unidade — o primeiro passo da Matriz de Requisitos
 
 `fdp_establishments` é um cadastro auxiliar novo, no mesmo desenho simples de
 `fdp_departments`/`fdp_positions`/`fdp_cost_centers`/`fdp_work_schedules`/
