@@ -2,6 +2,8 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { createRecoveryToken } from "@/lib/fila-dp-recovery";
+import { sendAccessRecoveryEmail } from "@/lib/email";
+import { log } from "@/lib/observability";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -18,16 +20,24 @@ export async function POST(request: Request, context: RouteContext) {
       WHERE wm.workspace_id = ? AND wm.user_id = ?`).bind(workspace.id, id).first<{ id: string; email: string; name: string }>();
     if (!member) return Response.json({ error: "Membro não encontrado neste workspace." }, { status: 404 });
     const { token, hash } = createRecoveryToken();
+    const tokenId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     await d1.batch([
       d1.prepare("UPDATE fdp_access_recovery_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = ? AND used_at IS NULL").bind(member.id),
-      d1.prepare("INSERT INTO fdp_access_recovery_tokens (id, user_id, token_hash, created_by, expires_at) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), member.id, hash, auth.user.email, expiresAt),
+      d1.prepare("INSERT INTO fdp_access_recovery_tokens (id, user_id, token_hash, created_by, expires_at) VALUES (?, ?, ?, ?, ?)").bind(tokenId, member.id, hash, auth.user.email, expiresAt),
     ]);
     await recordActivity(workspace.id, null, auth.user.email, "workspace.recovery_link_created", { email: member.email, expiresAt });
     const recoveryUrl = new URL("/recuperar", request.url);
     recoveryUrl.searchParams.set("token", token);
     recoveryUrl.searchParams.set("email", member.email);
-    return Response.json({ snapshot: await getWorkspaceSnapshot(auth.user), recoveryUrl: recoveryUrl.toString(), expiresAt, memberName: member.name });
+    let emailSent = false;
+    try {
+      const result = await sendAccessRecoveryEmail({ to: member.email, name: member.name, recoveryUrl: recoveryUrl.toString(), idempotencyKey: tokenId });
+      emailSent = result !== null;
+    } catch (error) {
+      log("error", "members.recovery_email_failed", { workspaceId: workspace.id }, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return Response.json({ snapshot: await getWorkspaceSnapshot(auth.user), recoveryUrl: recoveryUrl.toString(), expiresAt, memberName: member.name, emailSent });
   } catch (error) {
     return apiError(error);
   }

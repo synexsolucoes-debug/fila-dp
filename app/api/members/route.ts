@@ -5,6 +5,8 @@ import { createRecoveryToken } from "@/lib/fila-dp-recovery";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { ApiError } from "@/lib/api-errors";
 import { prepareMemberDepartmentAccess, resolveMemberDepartmentAccess } from "@/lib/member-departments";
+import { sendMemberActivationEmail } from "@/lib/email";
+import { log } from "@/lib/observability";
 
 const memberRoles: WorkspaceRole[] = ["admin", "member", "observer", "guest"];
 
@@ -94,18 +96,26 @@ export async function POST(request: Request) {
       }),
     ]);
 
-    let activation: { url: string; expiresAt: string; name: string } | null = null;
+    let activation: { url: string; expiresAt: string; name: string; emailSent: boolean } | null = null;
     if (createdNow || !invitedUser.password_hash) {
       const { token, hash } = createRecoveryToken();
+      const tokenId = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
       await d1.batch([
         d1.prepare("UPDATE fdp_access_recovery_tokens SET used_at = CURRENT_TIMESTAMP WHERE user_id = ? AND used_at IS NULL").bind(invitedUser.id),
-        d1.prepare("INSERT INTO fdp_access_recovery_tokens (id, user_id, token_hash, created_by, expires_at) VALUES (?, ?, ?, ?, ?)").bind(crypto.randomUUID(), invitedUser.id, hash, auth.user.email, expiresAt),
+        d1.prepare("INSERT INTO fdp_access_recovery_tokens (id, user_id, token_hash, created_by, expires_at) VALUES (?, ?, ?, ?, ?)").bind(tokenId, invitedUser.id, hash, auth.user.email, expiresAt),
       ]);
       const url = new URL("/recuperar", request.url);
       url.searchParams.set("token", token);
       url.searchParams.set("email", email);
-      activation = { url: url.toString(), expiresAt, name };
+      let emailSent = false;
+      try {
+        const result = await sendMemberActivationEmail({ to: email, name, activationUrl: url.toString(), idempotencyKey: tokenId });
+        emailSent = result !== null;
+      } catch (error) {
+        log("error", "members.activation_email_failed", { workspaceId: workspace.id }, { error: error instanceof Error ? error.message : String(error) });
+      }
+      activation = { url: url.toString(), expiresAt, name, emailSent };
     }
 
     await recordActivity(workspace.id, null, auth.user.email, "workspace.member_added", {
