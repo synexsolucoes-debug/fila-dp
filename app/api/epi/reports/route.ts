@@ -137,9 +137,11 @@ const reports: Record<string, ReportDefinition> = {
           WHERE candidate.workspace_id = e.workspace_id AND candidate.company_id = e.company_id AND candidate.active = 1
             AND (candidate.department_id IS NULL OR candidate.department_id = e.department_id)
             AND (candidate.position_id IS NULL OR candidate.position_id = e.position_id)
+            AND (candidate.establishment_id IS NULL OR candidate.establishment_id = e.establishment_id)
           ORDER BY candidate.product_id,
             (CASE WHEN candidate.department_id IS NULL THEN 0 ELSE 1 END
-              + CASE WHEN candidate.position_id IS NULL THEN 0 ELSE 1 END) DESC,
+              + CASE WHEN candidate.position_id IS NULL THEN 0 ELSE 1 END
+              + CASE WHEN candidate.establishment_id IS NULL THEN 0 ELSE 1 END) DESC,
             candidate.quantity DESC
         ) r ON true
         LEFT JOIN fdp_epi_products p ON p.workspace_id = r.workspace_id AND p.id = r.product_id AND p.status <> 'inactive'

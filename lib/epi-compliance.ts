@@ -32,6 +32,8 @@ export type EpiComplianceEmployeeInput = {
   departmentName: string;
   positionId: string;
   positionName: string;
+  /** Ausente ou vazio: o colaborador não tem unidade e só casa com regras de todas as unidades. */
+  establishmentId?: string;
 };
 
 export type EpiRequirementInput = {
@@ -41,6 +43,8 @@ export type EpiRequirementInput = {
   departmentName: string;
   positionId: string;
   positionName: string;
+  /** Ausente ou vazio: vale para todas as unidades, como departamento e cargo em branco. */
+  establishmentId?: string;
   productId: string;
   productName: string;
   caNumber: string;
@@ -109,7 +113,13 @@ function earlierDate(left: string, right: string) {
 function applies(requirement: EpiRequirementInput, employee: EpiComplianceEmployeeInput) {
   return requirement.companyId === employee.companyId
     && (!requirement.departmentId || requirement.departmentId === employee.departmentId)
-    && (!requirement.positionId || requirement.positionId === employee.positionId);
+    && (!requirement.positionId || requirement.positionId === employee.positionId)
+    && (!requirement.establishmentId || requirement.establishmentId === employee.establishmentId);
+}
+
+function specificity(requirement: EpiRequirementInput) {
+  return Number(Boolean(requirement.departmentId)) + Number(Boolean(requirement.positionId))
+    + Number(Boolean(requirement.establishmentId));
 }
 
 function itemStatus(requirement: EpiRequirementInput, holding: EpiHoldingInput | undefined, today: string) {
@@ -165,12 +175,10 @@ export function buildEpiCompliance(
     const byProduct = new Map<string, EpiRequirementInput>();
     for (const requirement of requirements.filter((item) => applies(item, employee))) {
       const current = byProduct.get(requirement.productId);
-      const specificity = Number(Boolean(requirement.departmentId)) + Number(Boolean(requirement.positionId));
-      const currentSpecificity = current
-        ? Number(Boolean(current.departmentId)) + Number(Boolean(current.positionId))
-        : -1;
-      if (!current || specificity > currentSpecificity
-        || (specificity === currentSpecificity && requirement.quantity > current.quantity)) {
+      const candidateSpecificity = specificity(requirement);
+      const currentSpecificity = current ? specificity(current) : -1;
+      if (!current || candidateSpecificity > currentSpecificity
+        || (candidateSpecificity === currentSpecificity && requirement.quantity > current.quantity)) {
         byProduct.set(requirement.productId, requirement);
       }
     }

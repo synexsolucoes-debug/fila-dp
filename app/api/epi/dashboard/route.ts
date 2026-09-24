@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     const range = monthRange(month);
 
     const [employeeRows, requirementRows, holdingRows, utilizationRows, monthTotals] = await Promise.all([
-      d1.prepare(`SELECT e.id, e.company_id, e.registration_number, e.department_id, e.position_id,
+      d1.prepare(`SELECT e.id, e.company_id, e.registration_number, e.department_id, e.position_id, e.establishment_id,
           COALESCE(NULLIF(e.social_name, ''), e.full_name) AS employee_name,
           COALESCE(d.name, '') AS department_name, COALESCE(po.name, '') AS position_name
         FROM fdp_employees e
@@ -107,11 +107,12 @@ export async function GET(request: Request) {
       id: asText(row.id), companyId: asText(row.company_id), name: asText(row.employee_name),
       registrationNumber: asText(row.registration_number), departmentId: asText(row.department_id),
       departmentName: asText(row.department_name), positionId: asText(row.position_id), positionName: asText(row.position_name),
+      establishmentId: asText(row.establishment_id),
     }));
     const requirements: EpiRequirementInput[] = requirementRows.results.map((row) => ({
       id: asText(row.id), companyId: asText(row.company_id), departmentId: asText(row.department_id),
       departmentName: asText(row.department_name), positionId: asText(row.position_id), positionName: asText(row.position_name),
-      productId: asText(row.product_id), productName: asText(row.product_name), caNumber: asText(row.ca_number),
+      establishmentId: asText(row.establishment_id), productId: asText(row.product_id), productName: asText(row.product_name), caNumber: asText(row.ca_number),
       caExpiresOn: asText(row.ca_expires_on).slice(0, 10), productExpiresOn: asText(row.product_expires_on).slice(0, 10),
       quantity: asNumber(row.quantity), replacementDays: asNumber(row.replacement_days), warningDays: asNumber(row.warning_days),
     }));

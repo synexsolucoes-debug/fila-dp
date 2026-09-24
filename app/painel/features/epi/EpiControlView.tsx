@@ -89,6 +89,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
   const [requirements, setRequirements] = useState<EpiRequirement[]>([]);
   const [departments, setDepartments] = useState<EpiCatalogOption[]>([]);
   const [positions, setPositions] = useState<EpiCatalogOption[]>([]);
+  const [establishments, setEstablishments] = useState<EpiCatalogOption[]>([]);
   const [products, setProducts] = useState<EpiProduct[]>([]);
   const [deliveries, setDeliveries] = useState<EpiDelivery[]>([]);
   const [returns, setReturns] = useState<EpiReturn[]>([]);
@@ -153,12 +154,13 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
         const params = new URLSearchParams({ companyId, month });
         setDashboard(normalizeDashboard(await requestJson<Row>(`/api/epi/dashboard?${params}`)));
       } else if (target === "requirements") {
-        const payload = await requestJson<{ requirements?: Row[]; departments?: Row[]; positions?: Row[] }>(
+        const payload = await requestJson<{ requirements?: Row[]; departments?: Row[]; positions?: Row[]; establishments?: Row[] }>(
           `/api/epi/requirements?companyId=${encodeURIComponent(companyId)}`,
         );
         setRequirements((payload.requirements ?? []).map(normalizeRequirement));
         setDepartments((payload.departments ?? []).map(normalizeCatalogOption));
         setPositions((payload.positions ?? []).map(normalizeCatalogOption));
+        setEstablishments((payload.establishments ?? []).map(normalizeCatalogOption));
       } else if (target === "stock") {
         const params = query(); params.delete("companyId");
         const payload = await requestJson<{ products?: Row[] }>(`/api/epi/products?${params}`);
@@ -426,7 +428,7 @@ export function EpiControlView({ role }: { role: WorkspaceRole }) {
       onDeliver={(employee, product) => { setDialogError(""); setEditor({ kind: "delivery", product, employee }); }} />}
 
     {!tabLoading && tab === "requirements" && <EpiRequirementsPanel companyId={companyId}
-      requirements={requirements} departments={departments} positions={positions} products={products}
+      requirements={requirements} departments={departments} positions={positions} establishments={establishments} products={products}
       canManage={Boolean(dashboard?.canManageRequirements ?? permissions?.edit)} busy={busy}
       onCreate={(payload) => saveRequirement(null, payload)} onUpdate={(id, payload) => saveRequirement(id, payload)}
       onReload={() => void loadTab("requirements")} />}

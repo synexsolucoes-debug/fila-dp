@@ -701,6 +701,13 @@
       "when": 1790060400000,
       "tag": "0097_obligation_establishment",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1790064000000,
+      "tag": "0098_epi_requirement_establishment",
+      "breakpoints": true
     }
   ]
 }
