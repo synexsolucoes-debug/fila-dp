@@ -8,12 +8,13 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 async function getEmployee(d1: D1Database, workspaceId: string, id: string) {
   return d1.prepare(`SELECT e.*, c.legal_name AS company_name, d.name AS department_name, p.name AS position_name,
-    cc.name AS cost_center_name, ws.name AS work_schedule_name
+    cc.name AS cost_center_name, ws.name AS work_schedule_name, est.name AS establishment_name
     FROM fdp_employees e JOIN fdp_companies c ON c.id = e.company_id AND c.workspace_id = e.workspace_id
     LEFT JOIN fdp_departments d ON d.id = e.department_id AND d.workspace_id = e.workspace_id
     LEFT JOIN fdp_positions p ON p.id = e.position_id AND p.workspace_id = e.workspace_id
     LEFT JOIN fdp_cost_centers cc ON cc.id = e.cost_center_id AND cc.workspace_id = e.workspace_id
     LEFT JOIN fdp_work_schedules ws ON ws.id = e.work_schedule_id AND ws.workspace_id = e.workspace_id
+    LEFT JOIN fdp_establishments est ON est.id = e.establishment_id AND est.workspace_id = e.workspace_id
     WHERE e.workspace_id = ? AND e.id = ?`).bind(workspaceId, id).first<Record<string, unknown>>();
 }
 
@@ -60,6 +61,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       companyId, registrationNumber, fullName,
       departmentId: pick("departmentId", "department_id"), positionId: pick("positionId", "position_id"),
       costCenterId: pick("costCenterId", "cost_center_id"), workScheduleId: pick("workScheduleId", "work_schedule_id"),
+      establishmentId: pick("establishmentId", "establishment_id"),
       managerEmployeeId: pick("managerEmployeeId", "manager_employee_id"),
       socialName: Object.hasOwn(body, "socialName") ? cleanText(body.socialName, 160) : String(current.social_name),
       email: Object.hasOwn(body, "email") ? cleanText(body.email, 160) : String(current.email),
@@ -74,10 +76,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     };
     await d1.batch([
       d1.prepare(`UPDATE fdp_employees SET company_id = ?, department_id = ?, position_id = ?, cost_center_id = ?, work_schedule_id = ?,
-        manager_employee_id = ?, registration_number = ?, full_name = ?, social_name = ?, cpf_hash = ?, cpf_last4 = ?, email = ?, phone = ?,
+        establishment_id = ?, manager_employee_id = ?, registration_number = ?, full_name = ?, social_name = ?, cpf_hash = ?, cpf_last4 = ?, email = ?, phone = ?,
         birth_date = ?, admission_date = ?, termination_date = ?, employment_status = ?, employment_type = ?, work_model = ?, notes = ?,
         updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?`)
-        .bind(next.companyId, next.departmentId, next.positionId, next.costCenterId, next.workScheduleId, next.managerEmployeeId,
+        .bind(next.companyId, next.departmentId, next.positionId, next.costCenterId, next.workScheduleId, next.establishmentId, next.managerEmployeeId,
           next.registrationNumber, next.fullName, next.socialName, cpf.cpfHash, cpf.cpfLast4, next.email, next.phone, next.birthDate,
           next.admissionDate, next.terminationDate, next.employmentStatus, next.employmentType, next.workModel, next.notes, user.id, workspace.id, id),
       prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "employee.updated",

@@ -10,7 +10,7 @@ import { cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "
 
 const employeeSelect = `SELECT e.id, e.company_id, c.legal_name AS company_name, e.department_id, d.name AS department_name,
   e.position_id, p.name AS position_name, e.cost_center_id, cc.name AS cost_center_name,
-  e.work_schedule_id, ws.name AS work_schedule_name, e.manager_employee_id,
+  e.work_schedule_id, ws.name AS work_schedule_name, e.establishment_id, est.name AS establishment_name, e.manager_employee_id,
   e.registration_number, e.full_name, e.social_name, e.cpf_last4, e.email, e.phone, e.birth_date,
   e.admission_date, e.termination_date, e.employment_status, e.employment_type, e.work_model,
   e.source_system, e.external_id, e.notes, e.created_at, e.updated_at
@@ -19,7 +19,8 @@ const employeeSelect = `SELECT e.id, e.company_id, c.legal_name AS company_name,
   LEFT JOIN fdp_departments d ON d.id = e.department_id AND d.workspace_id = e.workspace_id
   LEFT JOIN fdp_positions p ON p.id = e.position_id AND p.workspace_id = e.workspace_id
   LEFT JOIN fdp_cost_centers cc ON cc.id = e.cost_center_id AND cc.workspace_id = e.workspace_id
-  LEFT JOIN fdp_work_schedules ws ON ws.id = e.work_schedule_id AND ws.workspace_id = e.workspace_id`;
+  LEFT JOIN fdp_work_schedules ws ON ws.id = e.work_schedule_id AND ws.workspace_id = e.workspace_id
+  LEFT JOIN fdp_establishments est ON est.id = e.establishment_id AND est.workspace_id = e.workspace_id`;
 
 export async function GET(request: Request) {
   const auth = await getApiUser();
@@ -79,7 +80,8 @@ export async function POST(request: Request) {
     const row = {
       id: crypto.randomUUID(), companyId, departmentId: cleanText(body.departmentId, 120) || null,
       positionId: cleanText(body.positionId, 120) || null, costCenterId: cleanText(body.costCenterId, 120) || null,
-      workScheduleId: cleanText(body.workScheduleId, 120) || null, managerEmployeeId: cleanText(body.managerEmployeeId, 120) || null,
+      workScheduleId: cleanText(body.workScheduleId, 120) || null, establishmentId: cleanText(body.establishmentId, 120) || null,
+      managerEmployeeId: cleanText(body.managerEmployeeId, 120) || null,
       registrationNumber, fullName, socialName: cleanText(body.socialName, 160), cpfLast4: cpf.cpfLast4,
       email: cleanText(body.email, 160), phone: cleanText(body.phone, 40), birthDate: optionalDate(body.birthDate),
       admissionDate: optionalDate(body.admissionDate, true), terminationDate: optionalDate(body.terminationDate),
@@ -104,10 +106,10 @@ export async function POST(request: Request) {
     });
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_employees (id, workspace_id, company_id, department_id, position_id, cost_center_id, work_schedule_id,
-        manager_employee_id, registration_number, full_name, social_name, cpf_hash, cpf_last4, email, phone, birth_date, admission_date,
+        establishment_id, manager_employee_id, registration_number, full_name, social_name, cpf_hash, cpf_last4, email, phone, birth_date, admission_date,
         termination_date, employment_status, employment_type, work_model, source_system, external_id, notes, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', '', ?, ?, ?)`)
-        .bind(row.id, workspace.id, row.companyId, row.departmentId, row.positionId, row.costCenterId, row.workScheduleId,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', '', ?, ?, ?)`)
+        .bind(row.id, workspace.id, row.companyId, row.departmentId, row.positionId, row.costCenterId, row.workScheduleId, row.establishmentId,
           row.managerEmployeeId, row.registrationNumber, row.fullName, row.socialName, cpf.cpfHash, row.cpfLast4, row.email, row.phone,
           row.birthDate, row.admissionDate, row.terminationDate, row.employmentStatus, row.employmentType, row.workModel, row.notes, user.id, user.id),
       prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "employee.created",

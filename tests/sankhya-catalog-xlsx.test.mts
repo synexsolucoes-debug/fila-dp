@@ -83,6 +83,27 @@ test("fdp_establishments segue o mesmo desenho tenant-scoped dos outros cadastro
   assert.doesNotMatch(await readFile(new URL("../app/api/registrations/catalogs/[resource]/import/route.ts", import.meta.url), "utf8"), /establishments:\s*"/u);
 });
 
+test("colaborador pode ser vinculado a uma unidade, no mesmo padrão de centro de custo e jornada", async () => {
+  const [schema, migration, collection, detail, view, types] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/postgres/0096_employee_establishment.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/employees/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/employees/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/registrations.types.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /establishmentId: text\("establishment_id"\)/u);
+  assert.match(schema, /fdp_employees_workspace_establishment_fk/u);
+  // Coluna nova sem migrar dado nenhum: nenhum colaborador existente tem unidade.
+  assert.doesNotMatch(migration, /UPDATE\s+"?fdp_employees"?/iu);
+  assert.match(migration, /ADD COLUMN IF NOT EXISTS "establishment_id" text;/u);
+  assert.match(collection, /establishment_id, est\.name AS establishment_name/u);
+  assert.match(collection, /establishmentId: cleanText\(body\.establishmentId, 120\) \|\| null/u);
+  assert.match(detail, /pick\("establishmentId", "establishment_id"\)/u);
+  assert.match(view, /catalogs\.establishments\.filter/u);
+  assert.match(types, /establishmentId: string \| null;/u);
+});
+
 test("importação de catálogo exige a mesma capability e faz upsert por código", async () => {
   const route = await readFile(new URL("../app/api/registrations/catalogs/[resource]/import/route.ts", import.meta.url), "utf8");
   assert.match(route, /requireCapability\(workspace, "registrations\.catalogs\.manage"\)/u);

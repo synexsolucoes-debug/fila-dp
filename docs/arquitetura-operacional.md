@@ -346,20 +346,26 @@ própria empresa. Por já existir o framework genérico de cadastros auxiliares
 nenhuma rota nova: só a entrada em `lib/registrations.ts` e a tela em
 `RegistrationsView.tsx`, exatamente como `unions` entrou antes dela.
 
-**O que isto ainda não faz** — e é deliberado, para não entregar um cadastro
-inerte disfarçado de recurso pronto: nenhuma outra tabela referencia
-`fdp_establishments` ainda. Colaborador não escolhe unidade, obrigação legal
-não é localizada por unidade, e a Matriz de Requisitos genérica (que juntaria
-EPI, exame ocupacional e treinamento sob um mesmo cadastro, hoje só
-`fdp_epi_requirements` existe) continua sendo o próximo passo, não este. Cada
-vínculo é um incremento à parte, pelo mesmo motivo de `fdp_unions` ter entrado
-sozinho: mudar `fdp_employees` ou `fdp_compliance_obligations` sem um
-consumidor real do vínculo seria a "tabela para o futuro" que a regra de
-arquitetura deste documento recusa (§93).
+Colaborador já escolhe a unidade: `fdp_employees.establishment_id`
+(0096_employee_establishment.sql) é uma FK opcional, no mesmo padrão de
+`cost_center_id`/`work_schedule_id` — nula para todo colaborador existente,
+sem migração de dado nenhum, porque nenhum tinha unidade antes de a coluna
+existir. `POST`/`PATCH /api/employees` e a tela de cadastro aceitam o campo
+exatamente como aceitam centro de custo e jornada.
+
+**O que isto ainda não faz** — e é deliberado, para não entregar mais do que
+o vínculo em si: obrigação legal não é localizada por unidade, e a Matriz de
+Requisitos genérica (que juntaria EPI, exame ocupacional e treinamento sob um
+mesmo cadastro, hoje só `fdp_epi_requirements` existe) continua sendo o
+próximo passo, não este. Cada vínculo é um incremento à parte, pelo mesmo
+motivo de `fdp_unions` ter entrado sozinho: mudar `fdp_compliance_obligations`
+sem um consumidor real do vínculo seria a "tabela para o futuro" que a regra
+de arquitetura deste documento recusa (§93).
 
 | Verificação | Onde |
 | --- | --- |
 | RLS forçado e o mesmo desenho tenant-scoped dos outros cadastros auxiliares | `tests/sankhya-catalog-xlsx.test.mts` |
+| Colaborador aceita unidade do mesmo jeito que aceita centro de custo e jornada | `tests/sankhya-catalog-xlsx.test.mts` |
 
 ---
 
