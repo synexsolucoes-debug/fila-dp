@@ -5,7 +5,7 @@ import { capabilities, hasCapability } from "../lib/authorization.ts";
 import { capabilityCatalog } from "../lib/capability-catalog.ts";
 import { moduleWriteCapabilities } from "../lib/modules.ts";
 import {
-  assertNoClinicalData, examResults, examTypes, parseOccupationalExamInput,
+  assertNoClinicalData, blocksReturnToWork, examResults, examTypes, parseOccupationalExamInput,
 } from "../lib/occupational-exams.ts";
 
 /**
@@ -27,6 +27,7 @@ const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8
 const criar = await readFile(new URL("../app/api/occupational-exams/route.ts", import.meta.url), "utf8");
 const editar = await readFile(new URL("../app/api/occupational-exams/[id]/route.ts", import.meta.url), "utf8");
 const libExams = await readFile(new URL("../lib/occupational-exams.ts", import.meta.url), "utf8");
+const employeePatch = await readFile(new URL("../app/api/employees/[id]/route.ts", import.meta.url), "utf8");
 
 /* -------------------------------------------------------------------------- */
 /* Migration, schema e RLS                                                    */
@@ -177,4 +178,23 @@ test("a aba de exames aparece na ficha do colaborador", async () => {
   assert.match(view, /"exams"/u);
   assert.match(view, /Exames \(ASO\)/u);
   assert.match(view, /EmployeeExamsPanel employeeId=\{employee\.id\} companyId=\{employee\.companyId\} canManage=\{canManageExams\}/u);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Retorno ao trabalho não passa por cima do exame ocupacional, passo 1      */
+/* -------------------------------------------------------------------------- */
+
+test("só o resultado inapto bloqueia a reativação — falta de exame não bloqueia", () => {
+  assert.equal(blocksReturnToWork("unfit"), true);
+  assert.equal(blocksReturnToWork("fit"), false);
+  assert.equal(blocksReturnToWork("fit_with_restriction"), false);
+  assert.equal(blocksReturnToWork(null), false);
+  assert.equal(blocksReturnToWork(undefined), false);
+});
+
+test("a rota de colaborador consulta o último exame só na transição afastado → ativo", () => {
+  assert.match(employeePatch, /current\.employment_status === "on_leave" && next\.employmentStatus === "active"/u);
+  assert.match(employeePatch, /SELECT result FROM fdp_occupational_exams[\s\S]{0,120}ORDER BY exam_date DESC, created_at DESC LIMIT 1/u);
+  assert.match(employeePatch, /blocksReturnToWork\(latestExam\.result as ExamResult\)/u);
+  assert.match(employeePatch, /"EMPLOYEE_RETURN_BLOCKED_BY_EXAM"/u);
 });

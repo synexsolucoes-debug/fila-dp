@@ -472,7 +472,35 @@ ainda não construída); e não há tela própria fora da ficha do colaborador.
 | --- | --- |
 | Isolamento por tenant, FK real para o colaborador, vocabulário fechado, restrição só com o resultado certo, fronteira clínica e permissões por capacidade | `tests/occupational-exams.test.mts` |
 
-### 4.9 Link assinado genérico, passo 1 — dar ciência da entrega de EPI
+### 4.9 Retorno ao trabalho não passa por cima do exame ocupacional, passo 1
+
+O problema que a análise de produto nomeou é preciso: "retorno sem ASO; gestor
+escala quem não pode". `PATCH /api/employees/[id]` é hoje o único lugar que
+muda `employment_status` — não existe ainda um "Motor de Jornadas" com um
+evento próprio de afastamento/retorno — então é ali que a regra entra: na
+transição de `on_leave` para `active`, a rota consulta o exame ocupacional
+mais recente do colaborador e recusa a reativação se o resultado for
+"inapto".
+
+Deliberadamente **não** bloqueia por falta de exame. O módulo de ASO acabou
+de nascer (§4.8); a maioria dos colaboradores hoje não tem nenhum registro, e
+tratar a ausência de dado como bloqueio pararia reativações legítimas em
+empresas que ainda não usam o controle de exames. Exigir o exame de retorno
+antes de liberar — a régua mais rígida que a NR-7 pede — é o próximo passo,
+depois de validar este com uso real.
+
+**O que isto ainda não faz** — e é deliberado: não exige que um exame de
+retorno exista (só reage ao que já está registrado como inapto); não avisa o
+gestor sobre uma restrição funcional ativa (`fit_with_restriction`) ao montar
+a escala, porque isso depende do Motor de Jornadas, ainda não construído; e
+não cobre afastamento/retorno como evento de negócio — continua sendo edição
+direta do cadastro.
+
+| Verificação | Onde |
+| --- | --- |
+| A função pura só bloqueia por "inapto", e a rota consulta o exame certo na transição certa | `tests/occupational-exams.test.mts` |
+
+### 4.10 Link assinado genérico, passo 1 — dar ciência da entrega de EPI
 
 O roteiro de produto pede um "link assinado genérico" (aprovar, responder,
 enviar documento, dar ciência), reaproveitando o portal do prestador

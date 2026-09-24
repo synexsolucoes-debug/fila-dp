@@ -3,6 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
+import { blocksReturnToWork, type ExamResult } from "@/lib/occupational-exams";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -74,6 +75,21 @@ export async function PATCH(request: Request, context: RouteContext) {
       workModel: enumValue(body.workModel, ["onsite", "hybrid", "remote"] as const, current.work_model as "onsite" | "hybrid" | "remote"),
       notes: Object.hasOwn(body, "notes") ? cleanText(body.notes, 2000) : String(current.notes),
     };
+    /* Retorno ao trabalho não passa por cima do exame ocupacional, passo 1
+       (docs/arquitetura-operacional.md §4.9): só bloqueia quando já existe um
+       exame dizendo inapto — não exige que o exame exista, para não travar
+       reativações em empresas que ainda não registram ASO. */
+    if (current.employment_status === "on_leave" && next.employmentStatus === "active") {
+      const latestExam = await d1.prepare(`SELECT result FROM fdp_occupational_exams
+        WHERE workspace_id = ? AND employee_id = ? ORDER BY exam_date DESC, created_at DESC LIMIT 1`)
+        .bind(workspace.id, id).first<{ result: string }>();
+      if (latestExam && blocksReturnToWork(latestExam.result as ExamResult)) {
+        throw ApiError.badRequest(
+          "O último exame ocupacional registra este colaborador como inapto. Registre um novo exame de retorno antes de reativar.",
+          "EMPLOYEE_RETURN_BLOCKED_BY_EXAM",
+        );
+      }
+    }
     await d1.batch([
       d1.prepare(`UPDATE fdp_employees SET company_id = ?, department_id = ?, position_id = ?, cost_center_id = ?, work_schedule_id = ?,
         establishment_id = ?, manager_employee_id = ?, registration_number = ?, full_name = ?, social_name = ?, cpf_hash = ?, cpf_last4 = ?, email = ?, phone = ?,
