@@ -353,19 +353,29 @@ sem migração de dado nenhum, porque nenhum tinha unidade antes de a coluna
 existir. `POST`/`PATCH /api/employees` e a tela de cadastro aceitam o campo
 exatamente como aceitam centro de custo e jornada.
 
+Obrigação legal também já é localizada por unidade:
+`fdp_compliance_obligations.establishment_id` (0097_obligation_establishment.sql)
+segue o mesmo padrão — FK opcional, nula em toda obrigação existente. A visão
+geral de Operações (`/api/operations/overview`) passou a devolver a lista de
+unidades ativas da empresa junto com aprovadores, e o formulário de nova
+obrigação (`OperationDialogs.tsx`) ganhou o campo, sempre opcional: uma
+obrigação sem unidade continua válida, exatamente como hoje.
+
 **O que isto ainda não faz** — e é deliberado, para não entregar mais do que
-o vínculo em si: obrigação legal não é localizada por unidade, e a Matriz de
-Requisitos genérica (que juntaria EPI, exame ocupacional e treinamento sob um
-mesmo cadastro, hoje só `fdp_epi_requirements` existe) continua sendo o
-próximo passo, não este. Cada vínculo é um incremento à parte, pelo mesmo
-motivo de `fdp_unions` ter entrado sozinho: mudar `fdp_compliance_obligations`
-sem um consumidor real do vínculo seria a "tabela para o futuro" que a regra
-de arquitetura deste documento recusa (§93).
+os dois vínculos em si: a Matriz de Requisitos genérica (que juntaria EPI,
+exame ocupacional e treinamento sob um mesmo cadastro, hoje só
+`fdp_epi_requirements` existe) continua sendo o próximo passo, não este, e
+nenhuma tela ainda filtra ou agrupa por unidade — o dado existe para ser
+preenchido e consultado depois, não para gerar um relatório novo já neste
+incremento. Cada vínculo é um incremento à parte, pelo mesmo motivo de
+`fdp_unions` ter entrado sozinho: mudar uma tabela sem um consumidor real do
+vínculo seria a "tabela para o futuro" que a regra de arquitetura deste
+documento recusa (§93).
 
 | Verificação | Onde |
 | --- | --- |
 | RLS forçado e o mesmo desenho tenant-scoped dos outros cadastros auxiliares | `tests/sankhya-catalog-xlsx.test.mts` |
-| Colaborador aceita unidade do mesmo jeito que aceita centro de custo e jornada | `tests/sankhya-catalog-xlsx.test.mts` |
+| Colaborador e obrigação legal aceitam unidade do mesmo jeito que aceitam centro de custo e jornada | `tests/sankhya-catalog-xlsx.test.mts`, `tests/obligation-establishment.test.mts` |
 
 ---
 

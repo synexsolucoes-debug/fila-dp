@@ -3,14 +3,14 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, BookOpenCheck, CheckCircle2, FilePlus2, ShieldCheck, X } from "lucide-react";
 import { nextFreeCompetence } from "../shared";
-import type { Approval, Approver, Cycle, EditorState, EmployeeOption } from "./operations.types";
+import type { Approval, Approver, Cycle, EditorState, EmployeeOption, EstablishmentOption } from "./operations.types";
 import styles from "./operations.module.css";
 
 type DialogProps = {
   editor: NonNullable<EditorState>; cycle: Cycle | null; companyId: string; competence: string;
   /** Competências que já têm ciclo nesta empresa — o servidor recusa repetir. */
   openCompetences?: string[];
-  employees: EmployeeOption[]; approvers: Approver[]; busy: boolean; onClose: () => void;
+  employees: EmployeeOption[]; approvers: Approver[]; establishments: EstablishmentOption[]; busy: boolean; onClose: () => void;
   onSubmit: (editor: NonNullable<EditorState>, data: FormData) => Promise<void>;
 };
 
@@ -78,7 +78,7 @@ export function OperationDialog(props: DialogProps) {
             {editor.kind === "competence" && <CompetenceFields competence={props.competence} openCompetences={props.openCompetences ?? []} />}
             {editor.kind === "movement" && <MovementFields editor={editor} employees={props.employees} approvers={props.approvers} cycle={props.cycle} />}
             {editor.kind === "approval" && <ApprovalFields approval={editor.approval} />}
-            {editor.kind === "obligation" && <ObligationFields approvers={props.approvers} />}
+            {editor.kind === "obligation" && <ObligationFields approvers={props.approvers} establishments={props.establishments} />}
             {editor.kind === "pending" && <PendingFields approvers={props.approvers} />}
             {editor.kind === "pending-resolution" && <ResolutionFields editor={editor} />}
             {editor.kind === "transition" && <TransitionFields target={editor.target} />}
@@ -155,12 +155,13 @@ function ApprovalFields({ approval }: { approval: Approval }) {
   </>;
 }
 
-function ObligationFields({ approvers }: { approvers: Approver[] }) {
+function ObligationFields({ approvers, establishments }: { approvers: Approver[]; establishments: EstablishmentOption[] }) {
   return <div className={styles.formGrid}>
     <label><span>Tipo</span><select name="obligationType" defaultValue="payroll"><option value="payroll">Folha</option><option value="social_security">Previdenciária</option><option value="tax">Tributária</option><option value="reporting">Declaração</option><option value="union">Sindical</option><option value="other">Outra</option></select></label>
     <label><span>Prazo legal</span><input name="dueDate" type="date" required /></label>
     <label className={styles.spanTwo}><span>Título</span><input name="title" required maxLength={180} placeholder="Ex.: Enviar DCTFWeb" /></label>
     <label><span>Responsável</span><select name="ownerUserId"><option value="">Não atribuído</option>{approvers.map((person) => <option key={person.id} value={person.id}>{person.name || person.email}</option>)}</select></label>
+    <label><span>Unidade (opcional)</span><select name="establishmentId"><option value="">Não localizada</option>{establishments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     <label><span>ID da demanda (opcional)</span><input name="cardId" /></label>
     {/* O Vinculato não transmite ao portal: o protocolo vem de fora e é a única
         prova de que a obrigação foi cumprida. Por isso ele tem campo próprio,
