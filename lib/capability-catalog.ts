@@ -130,6 +130,9 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "exams.view": { area: "safety", label: "Consultar exames ocupacionais (ASO) dos colaboradores" },
   "exams.manage": { area: "safety", label: "Registrar e corrigir exames ocupacionais (ASO)" },
   "exams.delete": { area: "safety", label: "Excluir um exame ocupacional lançado por engano" },
+  "trainings.view": { area: "safety", label: "Consultar treinamentos obrigatórios (NR) dos colaboradores" },
+  "trainings.manage": { area: "safety", label: "Registrar e corrigir treinamentos obrigatórios (NR)" },
+  "trainings.delete": { area: "safety", label: "Excluir um treinamento lançado por engano" },
 
   "ledger.read": { area: "operations", label: "Ver adiantamentos, descontos, parcelas e saldos" },
   "ledger.request": { area: "operations", label: "Solicitar um desconto ou adiantamento" },

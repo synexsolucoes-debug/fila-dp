@@ -472,6 +472,37 @@ ainda não construída); e não há tela própria fora da ficha do colaborador.
 | --- | --- |
 | Isolamento por tenant, FK real para o colaborador, vocabulário fechado, restrição só com o resultado certo, fronteira clínica e permissões por capacidade | `tests/occupational-exams.test.mts` |
 
+### 4.9 Treinamentos obrigatórios (NR), passo 1
+
+Mesmo passivo do ASO (§4.8), com a mesma causa: "quando vence o próximo
+treinamento?" mora em planilha ou memória, e um treinamento vencido em
+atividade de risco (trabalho em altura, espaço confinado, elétrica) é auto de
+infração antes de ser acidente.
+
+Diferente do exame ocupacional, o produto não fecha o vocabulário do
+treinamento (`training_name` é texto livre) — a mesma razão de
+`fdp_positions.special_activities` (0098): o Vinculato não decide quais NRs
+existem nem quais delas o cliente aplica, e fechar isso em vocabulário seria
+inventar uma taxonomia que não é do produto inventar. Só a validade é
+estruturada, porque é ela que responde "está em dia?", e a mesma régua de
+`epi_ca_expiry` (§4.3) — vencido, vencendo em 60 dias, no prazo — decide a
+situação exibida.
+
+A tela segue o mesmo lugar do ASO: embutida na ficha do colaborador
+(`EmployeeTrainingsPanel`), porque treinamento também não tem página própria
+ainda. As capacidades (`trainings.view/manage/delete`) entram no módulo
+`registrations` pelo mesmo motivo de `exams.*`.
+
+**O que isto ainda não faz** — e é deliberado: `valid_until` não alimenta a
+Central de Trabalho ainda (mesmo estado do ASO); nenhuma regra deriva quais
+treinamentos um cargo exige a partir do `risk_level` ou das
+`special_activities` (isso seria a Matriz de Requisitos genérica); e não há
+tela própria fora da ficha do colaborador.
+
+| Verificação | Onde |
+| --- | --- |
+| Isolamento por tenant, FK real para o colaborador, nome livre mas não vazio, validade não anterior à conclusão, e a régua de situação | `tests/mandatory-trainings.test.mts` |
+
 ---
 
 ## 5. Agentes

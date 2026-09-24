@@ -722,6 +722,13 @@
       "when": 1790071200000,
       "tag": "0100_occupational_exams",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1790078400000,
+      "tag": "0101_mandatory_trainings",
+      "breakpoints": true
     }
   ]
 }
