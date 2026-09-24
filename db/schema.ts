@@ -3676,6 +3676,44 @@ export const workAccidents = pgTable("fdp_work_accidents", {
 ]);
 
 /**
+ * Controle de exames ocupacionais (ASO), passo 1 (migration 0100).
+ *
+ * Diferente de `workAccidents`, que anonimiza o colaborador porque é
+ * estatístico, este módulo existe para responder "este colaborador
+ * específico está com o exame em dia?" — por isso tem FK real para
+ * `employees`, no mesmo padrão de `psychologySessions`. `result` é fechado
+ * em apto/inapto/apto com restrição; `restrictionNotes` descreve a
+ * restrição de função, nunca a causa clínica dela.
+ */
+export const occupationalExams = pgTable("fdp_occupational_exams", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  examType: text("exam_type").notNull(),
+  examDate: date("exam_date", { mode: "string" }).notNull(),
+  result: text("result").notNull(),
+  restrictionNotes: text("restriction_notes").notNull().default(""),
+  nextDueDate: date("next_due_date", { mode: "string" }),
+  clinicName: text("clinic_name").notNull().default(""),
+  doctorName: text("doctor_name").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_occupational_exams_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_occupational_exams_workspace_employee_idx").on(table.workspaceId, table.employeeId, table.examDate),
+  index("fdp_occupational_exams_workspace_due_idx").on(table.workspaceId, table.nextDueDate).where(sql`${table.nextDueDate} IS NOT NULL`),
+  foreignKey({ name: "fdp_occupational_exams_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_occupational_exams_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }).onDelete("cascade"),
+  check("fdp_occupational_exams_type_check", sql`${table.examType} IN ('admission', 'periodic', 'return_to_work', 'role_change', 'termination', 'other')`),
+  check("fdp_occupational_exams_result_check", sql`${table.result} IN ('fit', 'unfit', 'fit_with_restriction')`),
+  check("fdp_occupational_exams_restriction_check", sql`${table.result} = 'fit_with_restriction' OR ${table.restrictionNotes} = ''`),
+]);
+
+/**
  * Adiantamentos e Descontos (§ migration 0085).
  *
  * O lote de conferência da competência. Não é um segundo fechamento: é a

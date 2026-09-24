@@ -19,7 +19,7 @@ export const capabilityAreas = [
   { key: "payments", label: "Pagamentos auxiliares" },
   { key: "time", label: "Ponto" },
   { key: "epi", label: "Controle de EPI" },
-  { key: "safety", label: "Acidentes de trabalho" },
+  { key: "safety", label: "SESMT" },
   { key: "platform", label: "Integrações, plano e auditoria" },
 ] as const;
 
@@ -126,6 +126,10 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "safety.manage": { area: "safety", label: "Registrar e corrigir acidentes de trabalho" },
   "safety.delete": { area: "safety", label: "Excluir um acidente lançado por engano" },
   "safety.export": { area: "safety", label: "Exportar os acidentes do período em planilha" },
+
+  "exams.view": { area: "safety", label: "Consultar exames ocupacionais (ASO) dos colaboradores" },
+  "exams.manage": { area: "safety", label: "Registrar e corrigir exames ocupacionais (ASO)" },
+  "exams.delete": { area: "safety", label: "Excluir um exame ocupacional lançado por engano" },
 
   "ledger.read": { area: "operations", label: "Ver adiantamentos, descontos, parcelas e saldos" },
   "ledger.request": { area: "operations", label: "Solicitar um desconto ou adiantamento" },

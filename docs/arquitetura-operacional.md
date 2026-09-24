@@ -425,6 +425,53 @@ anterior — nenhuma regra que já era única deixa de ser.
 | --- | --- |
 | A coluna é nova e nula, e a função pura trata unidade como mais uma dimensão de especificidade | `tests/epi-requirement-establishment.test.mts` |
 
+### 4.8 Controle de exames ocupacionais (ASO), passo 1
+
+`fdp_occupational_exams` é o segundo consumidor real do grau de risco
+descrito em §4.6: se um cargo tem risco, o próximo passo é saber se o
+colaborador está com o ASO em dia para ele. Diferente do Dashboard de
+Acidente de Trabalho (`fdp_work_accidents`, 0083), que anonimiza o
+colaborador porque é estatístico, o exame ocupacional tem FK real para
+`fdp_employees` — é a própria razão do módulo existir: "este colaborador
+específico está apto?", não "quantos acidentes tivemos este mês?".
+
+O vocabulário é fechado nos dois eixos que importam: `exam_type`
+(admissional/periódico/retorno ao trabalho/mudança de função/demissional/
+outro) e `result` (apto/inapto/apto com restrição), ambos com `CHECK` no
+banco e validados de novo em `lib/occupational-exams.ts`. Restrição
+funcional (`restriction_notes`) só existe quando o resultado é "apto com
+restrição" — imposto por `CHECK` e pela validação de entrada.
+
+A fronteira clínica segue a mesma praticada em Psicologia
+(`lib/auxiliary.ts#assertNoClinicalData`, tests/psychology-clinical-boundary):
+o fato administrativo (apto/inapto/restrição funcional) entra, diagnóstico,
+prontuário, medicação e sintoma não. A guarda ficou em
+`lib/occupational-exams.ts#assertNoClinicalData` — dedicada, não reaproveitou
+a de `lib/auxiliary.ts`, porque aquela é escopada a `moduleType ===
+"psychology"` e pensada para o sistema de provedores (psicólogo/operadora de
+benefício/terceirizada) que não existe em ASO.
+
+A tela ainda não tem página própria: vive embutida na ficha do colaborador
+(`EmployeeExamsPanel`, aba "Exames (ASO)" em `RegistrationsView.tsx`), no
+mesmo padrão de onde os painéis de EPI e psicologia já vivem antes de terem
+tela dedicada. Por isso a capacidade de escrita (`exams.manage`,
+`exams.delete`) entrou no módulo `registrations`, não num módulo "safety" —
+negar Cadastros fecha a aba, e isso é o correto hoje.
+
+A coluna `next_due_date` tem índice parcial (`WHERE next_due_date IS NOT
+NULL`) pensado para o Motor de Prazos (§4.3), mas ainda não está ligada a
+ele.
+
+**O que isto ainda não faz** — e é deliberado: `next_due_date` não alimenta a
+Central de Trabalho ainda (nenhuma unidade de trabalho nasce quando um exame
+vence); `risk_level` do cargo não determina automaticamente que tipos de
+exame um colaborador precisa (isso seria a Matriz de Requisitos genérica,
+ainda não construída); e não há tela própria fora da ficha do colaborador.
+
+| Verificação | Onde |
+| --- | --- |
+| Isolamento por tenant, FK real para o colaborador, vocabulário fechado, restrição só com o resultado certo, fronteira clínica e permissões por capacidade | `tests/occupational-exams.test.mts` |
+
 ---
 
 ## 5. Agentes
