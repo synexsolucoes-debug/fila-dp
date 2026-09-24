@@ -71,6 +71,33 @@ test("o aviso tem teto de tamanho", () => {
   assert.equal(action.notify.length, 160);
 });
 
+/* ── `domain_event` e `instantiateProcessVersionId` (Motor de Jornadas) ──── */
+
+test("evento de domínio passa a ser gatilho", () => {
+  assert.equal(parseRuleTrigger("domain_event"), "domain_event");
+});
+
+test("iniciar processo é ação, e sem versão não vira nada", () => {
+  assert.equal(parseRuleAction({ instantiateProcessVersionId: "" }), null);
+  assert.equal(parseRuleAction({ instantiateProcessVersionId: "   " }), null);
+  assert.deepEqual(
+    parseRuleAction({ instantiateProcessVersionId: "ver-4" }),
+    { instantiateProcessVersionId: "ver-4" },
+  );
+});
+
+test("iniciar processo aceita quadro explícito, mas não exige", () => {
+  assert.deepEqual(
+    parseRuleAction({ instantiateProcessVersionId: "ver-4", boardId: "board-1" }),
+    { instantiateProcessVersionId: "ver-4", boardId: "board-1" },
+  );
+  assert.deepEqual(
+    parseRuleAction({ instantiateProcessVersionId: "ver-4", boardId: "" }),
+    { instantiateProcessVersionId: "ver-4" },
+    "quadro vazio não vira uma chave vazia guardada à toa",
+  );
+});
+
 /* ── Os dois lados leem a mesma lista ──────────────────────────────────── */
 
 test("a tela oferece exatamente os gatilhos que o servidor aceita", async () => {
@@ -92,6 +119,20 @@ test("a rota recusa em vez de aceitar calada", async () => {
   const route = await readFile(new URL("../app/api/catalog/route.ts", import.meta.url), "utf8");
   assert.match(route, /Escolha um gatilho que o produto reconheça/u);
   assert.match(route, /Escolha uma ação que o produto saiba executar/u);
+});
+
+test("a rota recusa `domain_event` sem `instantiateProcessVersionId`, e vice-versa", async () => {
+  /* Uma regra `domain_event` com outra ação (ou uma `instantiateProcessVersionId`
+     presa a `card.created`) seria salva e nunca faria nada: a primeira porque
+     as demais ações pressupõem um `cardId` que este gatilho não tem, a segunda
+     porque nenhum outro gatilho passa por `runDomainEventAutomations`. */
+  const route = await readFile(new URL("../app/api/catalog/route.ts", import.meta.url), "utf8");
+  assert.match(route, /trigger === "domain_event" && !instantiates/u);
+  assert.match(route, /instantiates && trigger !== "domain_event"/u);
+  assert.match(route, /findDomainEvent\(condition\.domainEvent\)/u,
+    "a regra precisa nomear um evento que o catálogo reconheça, não qualquer texto");
+  assert.match(route, /loadPublishedVersion\(d1, workspace\.id, /u,
+    "salvar a regra já confere que a versão existe, está publicada e é deste grupo");
 });
 
 /* ── O motor ───────────────────────────────────────────────────────────── */
@@ -117,11 +158,34 @@ test("o executor sabe notificar, e a notificação é idempotente", async () => 
     "quem é avisado é quem responde pela demanda, não quem disparou o evento");
 });
 
+/**
+ * `instantiateProcessVersionId` roda num executor diferente de propósito
+ * (`lib/domain-event-automations.ts`): `runAutomations` pressupõe um `cardId`
+ * que já existe, e é exatamente isso que falta quando o gatilho é
+ * `domain_event` — o evento que inicia um processo. As demais ações continuam
+ * sob o mesmo teto de sempre.
+ */
+const DOMAIN_EVENT_ONLY_ACTIONS = new Set(["instantiateProcessVersionId"]);
+
 test("toda ação declarada tem tratamento no executor", async () => {
   const db = await readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8");
   const executor = db.slice(db.indexOf("export async function runAutomations"));
   for (const action of RULE_ACTIONS) {
+    if (DOMAIN_EVENT_ONLY_ACTIONS.has(action)) continue;
     assert.match(executor, new RegExp(`action\\.${action}`, "u"),
       `${action} é oferecido e o executor não sabe executar`);
+  }
+});
+
+test("a ação de iniciar processo roda no executor de eventos de domínio, não no de cartão", async () => {
+  const domainExecutor = await readFile(new URL("../lib/domain-event-automations.ts", import.meta.url), "utf8");
+  for (const action of DOMAIN_EVENT_ONLY_ACTIONS) {
+    assert.match(domainExecutor, new RegExp(`action\\.${action}`, "u"), `${action} sem tratamento`);
+  }
+  const cardExecutor = await readFile(new URL("../lib/fila-dp-db.ts", import.meta.url), "utf8");
+  const executor = cardExecutor.slice(cardExecutor.indexOf("export async function runAutomations"));
+  for (const action of DOMAIN_EVENT_ONLY_ACTIONS) {
+    assert.doesNotMatch(executor, new RegExp(`action\\.${action}`, "u"),
+      `${action} não pressupõe cartão — não deveria aparecer no executor que exige um`);
   }
 });

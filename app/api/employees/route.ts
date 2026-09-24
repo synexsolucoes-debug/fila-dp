@@ -2,6 +2,10 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
+import { runDomainEventAutomations } from "@/lib/domain-event-automations";
+import { buildDomainEvent } from "@/lib/domain-events";
+import { log } from "@/lib/observability";
+import { prepareDomainEventFromEnvelope } from "@/lib/outbox";
 import { cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
 
 const employeeSelect = `SELECT e.id, e.company_id, c.legal_name AS company_name, e.department_id, d.name AS department_name,
@@ -84,6 +88,20 @@ export async function POST(request: Request) {
       workModel: enumValue(body.workModel, ["onsite", "hybrid", "remote"] as const, "onsite"),
       notes: cleanText(body.notes, 2000),
     };
+    const requestId = request.headers.get("x-fila-dp-request-id");
+    /* Todo colaborador criado por aqui é, por definição, uma admissão para o
+       produto: é o único ponto de criação manual, e a rota só insere, nunca
+       atualiza. `employee.admitted` é o gatilho do Motor de Jornadas
+       (`lib/domain-event-automations.ts`) — sem emiti-lo, nenhuma regra
+       `domain_event` configurada para admissão jamais dispararia a partir
+       daqui. */
+    const admissionEvent = buildDomainEvent({
+      name: "employee.admitted",
+      origin: "internal",
+      workspaceId: workspace.id,
+      entityId: row.id,
+      payload: { companyId: row.companyId, admissionDate: row.admissionDate ?? undefined },
+    });
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_employees (id, workspace_id, company_id, department_id, position_id, cost_center_id, work_schedule_id,
         manager_employee_id, registration_number, full_name, social_name, cpf_hash, cpf_last4, email, phone, birth_date, admission_date,
@@ -94,8 +112,29 @@ export async function POST(request: Request) {
           row.birthDate, row.admissionDate, row.terminationDate, row.employmentStatus, row.employmentType, row.workModel, row.notes, user.id, user.id),
       prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "employee.created",
         entityType: "employee", entityId: row.id, after: { ...row, cpfLast4: row.cpfLast4 ? `***${row.cpfLast4}` : "" },
-        metadata: { sourceSystem: "manual" }, requestId: request.headers.get("x-fila-dp-request-id") }),
+        metadata: { sourceSystem: "manual" }, requestId }),
+      prepareDomainEventFromEnvelope(d1, admissionEvent, { actorUserId: user.id, requestId, onConflict: "ignore" }),
     ]);
+
+    /* Fora do lote acima, de propósito: instanciar um processo é consequência
+       do colaborador já existir, não parte do mesmo fato. Uma automação mal
+       configurada (versão despublicada, quadro removido) não pode impedir o
+       cadastro que já foi confirmado — `runDomainEventAutomations` nunca
+       lança por regra própria, e o `catch` aqui cobre uma falha de infra na
+       consulta das regras em si. */
+    await runDomainEventAutomations(
+      d1, workspace.id,
+      { name: admissionEvent.name, entityId: admissionEvent.entityId, payload: admissionEvent.payload, idempotencyKey: admissionEvent.idempotencyKey, correlationId: admissionEvent.correlationId },
+      { userId: user.id, email: auth.user.email },
+      requestId,
+    ).catch((error) => {
+      log("error", "employees.admission_automation_failed", { workspaceId: workspace.id }, {
+        employeeId: row.id,
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message.slice(0, 300) : undefined,
+      });
+    });
+
     const created = await d1.prepare(`${employeeSelect} WHERE e.workspace_id = ? AND e.id = ?`).bind(workspace.id, row.id).first<Record<string, unknown>>();
     return Response.json({ employee: created ? publicEmployee(created) : { ...row, source_system: "manual" } }, { status: 201 });
   } catch (error) {
