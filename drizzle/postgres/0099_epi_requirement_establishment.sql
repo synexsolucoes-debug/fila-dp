@@ -6,7 +6,7 @@
 -- NULL continua significando "qualquer unidade", exatamente como já
 -- significava para departamento e cargo: toda regra existente segue valendo
 -- para todo colaborador que ela já cobria.
-SELECT pg_advisory_xact_lock(hashtext('0098_epi_requirement_establishment'));
+SELECT pg_advisory_xact_lock(hashtext('0099_epi_requirement_establishment'));
 --> statement-breakpoint
 
 ALTER TABLE "fdp_epi_requirements" ADD COLUMN IF NOT EXISTS "establishment_id" text;

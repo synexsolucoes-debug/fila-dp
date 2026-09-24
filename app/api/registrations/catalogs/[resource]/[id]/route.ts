@@ -2,7 +2,9 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
-import { cleanText, getCatalogResource } from "@/lib/registrations";
+import { cleanText, enumValue, getCatalogResource } from "@/lib/registrations";
+
+const positionRiskLevels = ["none", "low", "medium", "high"] as const;
 
 type Context = { params: Promise<{ resource: string; id: string }> };
 
@@ -26,8 +28,11 @@ export async function PATCH(request: Request, context: Context) {
     if (duplicate) throw new ApiError(409, "CATALOG_CODE_CONFLICT", `Já existe ${resource.label.toLowerCase()} com este código.`);
     let update: D1PreparedStatement;
     if (key === "positions") {
-      update = d1.prepare(`UPDATE ${resource.table} SET code = ?, name = ?, cbo_code = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?`)
-        .bind(code, name, Object.hasOwn(body, "cboCode") ? cleanText(body.cboCode, 20) : current.cbo_code, status, workspace.id, id);
+      update = d1.prepare(`UPDATE ${resource.table} SET code = ?, name = ?, cbo_code = ?, risk_level = ?, special_activities = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?`)
+        .bind(code, name, Object.hasOwn(body, "cboCode") ? cleanText(body.cboCode, 20) : current.cbo_code,
+          Object.hasOwn(body, "riskLevel") ? enumValue(body.riskLevel, positionRiskLevels, "none") : current.risk_level,
+          Object.hasOwn(body, "specialActivities") ? cleanText(body.specialActivities, 500) : current.special_activities,
+          status, workspace.id, id);
     } else if (key === "work-schedules") {
       const weeklyHours = Object.hasOwn(body, "weeklyHours") ? Math.min(Math.max(Number(body.weeklyHours) || 44, 1), 60) : current.weekly_hours;
       update = d1.prepare(`UPDATE ${resource.table} SET code = ?, name = ?, weekly_hours = ?, description = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?`)

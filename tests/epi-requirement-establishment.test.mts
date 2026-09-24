@@ -5,7 +5,7 @@ import { buildEpiCompliance } from "../lib/epi-compliance.ts";
 
 /**
  * Unidade entra como terceira dimensão de escopo da regra de EPI obrigatório
- * (0098_epi_requirement_establishment.sql), ao lado de departamento e cargo
+ * (0099_epi_requirement_establishment.sql), ao lado de departamento e cargo
  * (0048_epi_compliance.sql). Obra e escritório da mesma empresa podem exigir
  * EPIs diferentes para o mesmo cargo; até aqui a única saída era duplicar o
  * cargo por endereço.
@@ -14,7 +14,7 @@ import { buildEpiCompliance } from "../lib/epi-compliance.ts";
  * departamento e cargo em branco já tinham.
  */
 
-const migration = await readFile(new URL("../drizzle/postgres/0098_epi_requirement_establishment.sql", import.meta.url), "utf8");
+const migration = await readFile(new URL("../drizzle/postgres/0099_epi_requirement_establishment.sql", import.meta.url), "utf8");
 const schema = await readFile(new URL("../db/schema.ts", import.meta.url), "utf8");
 const criar = await readFile(new URL("../app/api/epi/requirements/route.ts", import.meta.url), "utf8");
 const porColaborador = await readFile(new URL("../app/api/epi/employees/[id]/route.ts", import.meta.url), "utf8");
