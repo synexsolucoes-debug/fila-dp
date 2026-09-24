@@ -1,0 +1,164 @@
+/**
+ * A folha da página do prestador.
+ *
+ * Ela não herda a casca do painel de propósito: quem abre esta página não é
+ * usuário do produto, abre no celular, no meio do dia, a partir de um link no
+ * WhatsApp. O que vale aqui é corpo grande, um caminho só e alvo de toque
+ * confortável — não densidade operacional.
+ *
+ * Os tokens vêm do `globals.css`, com valor de reserva ao lado: esta página
+ * pode ser servida antes de qualquer casca ter redefinido a paleta, e um
+ * `var()` sem reserva deixaria texto sem cor sobre fundo sem cor.
+ */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px 64px;
+  background: var(--ui-bg, #F5F7FB);
+  color: var(--ui-text, #1B2233);
+}
+
+.card {
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  gap: 22px;
+  padding: 28px 24px 26px;
+  border: 1px solid var(--ui-border, #D9E1EC);
+  border-radius: 14px;
+  background: var(--ui-surface, #FFFFFF);
+  box-shadow: 0 12px 34px rgb(24 34 58 / 8%);
+}
+
+.header { display: grid; gap: 8px; }
+.eyebrow {
+  color: var(--ui-text-soft, #55607A);
+  font-size: .64rem;
+  font-weight: 780;
+  letter-spacing: .1em;
+}
+.header h1 { margin: 0; font-size: 1.35rem; line-height: 1.25; }
+.header p { margin: 0; color: var(--ui-text-soft, #55607A); font-size: .95rem; line-height: 1.55; }
+.amount { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+/* Os dados de emissão são os mesmos da mensagem de aviso, e ficam à vista
+   enquanto o formulário é preenchido: quem emite a nota em outra aba precisa
+   copiar CNPJ e razão social sem voltar ao WhatsApp. */
+.issuer {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--ui-border, #D9E1EC);
+  border-radius: 10px;
+  background: var(--ui-surface-muted, #EEF2F8);
+}
+.issuer > div { display: grid; gap: 3px; }
+.issuer dt { color: var(--ui-text-soft, #55607A); font-size: .7rem; font-weight: 700; letter-spacing: .04em; }
+.issuer dd { margin: 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.mono { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+.form { display: grid; gap: 18px; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.spanTwo { grid-column: 1 / -1; }
+
+.grid label { display: grid; gap: 6px; min-width: 0; }
+.grid label > span { font-size: .78rem; font-weight: 650; }
+.grid label > small { color: var(--ui-text-soft, #55607A); font-size: .72rem; }
+.grid input {
+  /* 44px é o alvo de toque confortável, e 16px no campo é o que impede o iOS de
+     dar zoom ao focar — um zoom que desalinha a página inteira no meio do
+     preenchimento. */
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border, #D9E1EC);
+  border-radius: 9px;
+  background: var(--ui-surface, #FFFFFF);
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+}
+.grid input[type="file"] { padding: 10px 12px; font-size: .85rem; }
+.grid input:focus-visible, .submit:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand-accent, #1F6FEB) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.deadline { margin: 0; color: var(--ui-text-soft, #55607A); font-size: .8rem; }
+
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border: 1px solid var(--brand-accent, #1F6FEB);
+  border-radius: 10px;
+  background: var(--brand-accent, #1F6FEB);
+  color: #FFFFFF;
+  font: inherit;
+  font-weight: 680;
+  cursor: pointer;
+}
+.submit:hover { filter: brightness(.94); }
+.submit:disabled { cursor: not-allowed; opacity: .55; filter: none; }
+
+.alert, .success {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 15px;
+  border-radius: 10px;
+  font-size: .88rem;
+  line-height: 1.5;
+}
+.alert {
+  border: 1px solid color-mix(in srgb, var(--vin-warning, #a15c07) 34%, transparent);
+  background: color-mix(in srgb, var(--vin-warning, #a15c07) 8%, transparent);
+  color: var(--vin-warning-strong, #7d4705);
+}
+.success {
+  border: 1px solid color-mix(in srgb, var(--vin-success, #137a4f) 34%, transparent);
+  background: color-mix(in srgb, var(--vin-success, #137a4f) 8%, transparent);
+  color: var(--vin-success, #137a4f);
+}
+.alert p, .success p { margin: 0; }
+.alert svg, .success svg { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; }
+.success h1 { margin: 0 0 6px; font-size: 1.15rem; }
+.success > div { display: grid; }
+
+.loading { display: flex; align-items: center; gap: 9px; margin: 0; color: var(--ui-text-soft, #55607A); }
+.footnote { margin: 0; color: var(--ui-text-soft, #55607A); font-size: .82rem; }
+
+.privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--ui-border, #D9E1EC);
+  color: var(--ui-text-soft, #55607A);
+  font-size: .78rem;
+  line-height: 1.5;
+}
+.privacy svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; }
+
+.spin { animation: portal-spin 1s linear infinite; }
+
+@keyframes portal-spin { to { transform: rotate(360deg); } }
+
+/* Movimento é decoração aqui; o estado já é dito em texto. */
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+}
+
+@media (max-width: 520px) {
+  .page { padding: 16px 16px 48px; }
+  .card { padding: 22px 18px 20px; border-radius: 12px; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .spanTwo { grid-column: auto; }
+}

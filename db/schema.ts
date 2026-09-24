@@ -3290,6 +3290,48 @@ export const epiDeliveries = pgTable("fdp_epi_deliveries", {
   check("fdp_epi_deliveries_value_check", sql`${table.unitValue} >= 0`),
 ]);
 
+/**
+ * Link assinado genérico, passo 1: dar ciência da entrega de EPI sem conta.
+ *
+ * Mesmo desenho de `contractorInvoicePortalLinks` (0084) — `<workspace>.
+ * <segredo>`, só o hash guardado, prazo com teto. É reuso deliberado da
+ * mesma primitiva (`lib/contractor-invoice-portal.ts`), não uma segunda
+ * implementação: o colaborador confirma o que já sabia (a entrega, o EPI, a
+ * data); o `PATCH /api/epi/deliveries/[id]` continua sendo o único caminho
+ * que assina a entrega.
+ */
+export const epiDeliveryAckLinks = pgTable("fdp_epi_delivery_ack_links", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  deliveryId: text("delivery_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+  firstOpenedAt: timestamp("first_opened_at", { withTimezone: true, mode: "string" }),
+  openedCount: integer("opened_count").notNull().default(0),
+  acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true, mode: "string" }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
+  revokedBy: text("revoked_by"),
+  revokeReason: text("revoke_reason").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_epi_delivery_ack_links_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_epi_delivery_ack_links_token_uq").on(table.tokenHash),
+  uniqueIndex("fdp_epi_delivery_ack_links_open_uq").on(table.workspaceId, table.deliveryId)
+    .where(sql`${table.revokedAt} IS NULL AND ${table.acknowledgedAt} IS NULL`),
+  index("fdp_epi_delivery_ack_links_delivery_idx").on(table.workspaceId, table.deliveryId),
+  index("fdp_epi_delivery_ack_links_creator_idx").on(table.workspaceId, table.createdBy),
+  foreignKey({ name: "fdp_epi_delivery_ack_links_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_epi_delivery_ack_links_delivery_fk", columns: [table.workspaceId, table.deliveryId], foreignColumns: [epiDeliveries.workspaceId, epiDeliveries.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_epi_delivery_ack_links_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_epi_delivery_ack_links_revoker_fk", columns: [table.workspaceId, table.revokedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_epi_delivery_ack_links_opened_check", sql`${table.openedCount} >= 0`),
+  check("fdp_epi_delivery_ack_links_revoke_check",
+    sql`(${table.revokedAt} IS NULL AND ${table.revokedBy} IS NULL) OR (${table.revokedAt} IS NOT NULL AND ${table.revokedBy} IS NOT NULL)`),
+]);
+
 export const epiDisposals = pgTable("fdp_epi_disposals", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
