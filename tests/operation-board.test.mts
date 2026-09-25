@@ -80,6 +80,8 @@ function membro(name: string, patch: Partial<WorkspaceMember> = {}): WorkspaceMe
     companyIds: [],
     departmentId: "dp",
     departmentName: "Departamento Pessoal",
+    employeeId: null,
+    employeeName: "",
     ...patch,
   };
 }

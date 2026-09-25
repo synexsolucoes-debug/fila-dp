@@ -1,0 +1,44 @@
+/**
+ * A folha do Portal do Gestor (§4.20), no mesmo espírito de
+ * `app/portal/epi/[token]/portal.module.css`: casca própria, não a do
+ * painel — quem abre esta tela é um gestor de área, não o DP, e não precisa
+ * da densidade operacional do produto inteiro.
+ */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px 64px;
+  background: var(--ui-bg, #F5F7FB);
+  color: var(--ui-text, #1B2233);
+}
+
+.card {
+  width: 100%;
+  max-width: 640px;
+  display: grid;
+  gap: 20px;
+  padding: 28px 24px 26px;
+  border: 1px solid var(--ui-border, #D9E1EC);
+  border-radius: 14px;
+  background: var(--ui-surface, #FFFFFF);
+  box-shadow: 0 12px 34px rgb(24 34 58 / 8%);
+}
+
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.header h1 { margin: 4px 0 0; font-size: 1.3rem; }
+.eyebrow { color: var(--ui-text-soft, #55607A); font-size: .64rem; font-weight: 780; letter-spacing: .09em; }
+.signOut { flex: 0 0 auto; color: var(--ui-text-soft, #55607A); font-size: .78rem; text-decoration: none; white-space: nowrap; }
+.signOut:hover { text-decoration: underline; }
+
+.state { margin: 0; color: var(--ui-text-soft, #55607A); font-size: .88rem; line-height: 1.5; }
+.stateError { margin: 0; color: #B3261E; font-size: .88rem; line-height: 1.5; }
+
+.team { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.member { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--ui-border, #D9E1EC); border-radius: 10px; }
+.member div { display: grid; gap: 2px; min-width: 0; }
+.member strong { font-size: .92rem; }
+.member small { color: var(--ui-text-soft, #55607A); font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatar { display: grid; flex: 0 0 auto; place-items: center; width: 40px; height: 40px; border-radius: 999px; background: var(--ui-accent, #1F3B73); color: #fff; font-size: .78rem; font-weight: 720; }

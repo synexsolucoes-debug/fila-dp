@@ -12,20 +12,38 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!auth.user) return auth.response;
   try {
     const { id } = await context.params;
-    const body = await request.json() as { role?: WorkspaceRole; companyIds?: unknown[]; departmentId?: unknown; moduleKeys?: unknown[] };
+    const body = await request.json() as { role?: WorkspaceRole; companyIds?: unknown[]; departmentId?: unknown; moduleKeys?: unknown[]; employeeId?: unknown };
     if (body.role !== undefined && !memberRoles.includes(body.role)) {
       return Response.json({ error: "Papel de acesso inválido." }, { status: 400 });
     }
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "members.manage");
     const member = await d1.prepare(
-      `SELECT u.email, wm.role, CASE WHEN w.owner_user_id = wm.user_id THEN 1 ELSE 0 END AS is_owner
+      `SELECT u.email, wm.role, wm.employee_id, CASE WHEN w.owner_user_id = wm.user_id THEN 1 ELSE 0 END AS is_owner
        FROM fdp_workspace_members wm
        JOIN fdp_users u ON u.id = wm.user_id
        JOIN fdp_workspaces w ON w.id = wm.workspace_id
        WHERE wm.workspace_id = ? AND wm.user_id = ?`,
-    ).bind(workspace.id, id).first<{ email: string; role: WorkspaceRole; is_owner: number }>();
+    ).bind(workspace.id, id).first<{ email: string; role: WorkspaceRole; employee_id: string | null; is_owner: number }>();
     if (!member) throw ApiError.notFound("Membro não encontrado.", "MEMBER_NOT_FOUND");
+    // Portal do Gestor, passo 1 (§4.20): liga a conta ao colaborador que ela
+    // representa. `undefined` mantém o vínculo atual; string vazia remove;
+    // qualquer outro valor precisa ser um colaborador de verdade deste
+    // workspace, e só um, porque duas contas afirmando ser o mesmo
+    // colaborador tornaria "quem é o gestor dele" ambíguo.
+    let employeeId: string | null | undefined;
+    if (Object.hasOwn(body, "employeeId")) {
+      const raw = typeof body.employeeId === "string" ? body.employeeId.trim().slice(0, 120) : "";
+      employeeId = raw || null;
+      if (employeeId) {
+        const employee = await d1.prepare("SELECT id FROM fdp_employees WHERE workspace_id = ? AND id = ?")
+          .bind(workspace.id, employeeId).first<{ id: string }>();
+        if (!employee) throw ApiError.badRequest("Colaborador não encontrado neste grupo.", "MEMBER_EMPLOYEE_NOT_FOUND");
+        const linkedElsewhere = await d1.prepare("SELECT user_id FROM fdp_workspace_members WHERE workspace_id = ? AND employee_id = ? AND user_id <> ?")
+          .bind(workspace.id, employeeId, id).first<{ user_id: string }>();
+        if (linkedElsewhere) throw new ApiError(409, "MEMBER_EMPLOYEE_ALREADY_LINKED", "Este colaborador já está vinculado a outra conta de acesso.");
+      }
+    }
     if (Boolean(member.is_owner) && body.role !== undefined && body.role !== "admin") {
       return Response.json({ error: "O proprietário precisa permanecer administrador." }, { status: 400 });
     }
@@ -66,6 +84,10 @@ export async function PATCH(request: Request, context: RouteContext) {
         access: departmentAccess,
       }));
     }
+    if (employeeId !== undefined) {
+      statements.push(d1.prepare("UPDATE fdp_workspace_members SET employee_id = ? WHERE workspace_id = ? AND user_id = ?")
+        .bind(employeeId, workspace.id, id));
+    }
     const nextCompanyIds = companyIds ?? currentAccess.results.map((row) => String(row.company_id));
     statements.push(
       prepareActivity(workspace.id, null, auth.user.email, "workspace.member_access_changed", { email: member.email, role: body.role ?? null, companyIds }),
@@ -80,12 +102,14 @@ export async function PATCH(request: Request, context: RouteContext) {
           role: member.role,
           companyIds: currentAccess.results.map((row) => String(row.company_id)),
           departmentId: currentDepartment?.area_id ?? null,
+          employeeId: member.employee_id,
         },
         after: {
           role: body.role ?? member.role,
           companyIds: nextCompanyIds,
           departmentId: departmentAccess?.department.id ?? currentDepartment?.area_id ?? null,
           moduleKeys: departmentAccess?.selectedModuleKeys,
+          employeeId: employeeId !== undefined ? employeeId : member.employee_id,
         },
         requestId: request.headers.get("x-fila-dp-request-id"),
       }),

@@ -743,6 +743,13 @@
       "when": 1790085600000,
       "tag": "0103_accident_investigation_demand",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1790092800000,
+      "tag": "0104_manager_portal_link",
+      "breakpoints": true
     }
   ]
 }

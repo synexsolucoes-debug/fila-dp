@@ -87,8 +87,18 @@ export const workspaceMembers = pgTable("fdp_workspace_members", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: text("role").notNull().default("admin"),
+  /** Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta representa. */
+  employeeId: text("employee_id"),
   joinedAt: timestamp("joined_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
-}, (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })]);
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.userId] }),
+  uniqueIndex("fdp_workspace_members_workspace_employee_uq").on(table.workspaceId, table.employeeId).where(sql`${table.employeeId} IS NOT NULL`),
+  foreignKey({
+    name: "fdp_workspace_members_employee_fk",
+    columns: [table.workspaceId, table.employeeId],
+    foreignColumns: [employees.workspaceId, employees.id],
+  }).onDelete("set null"),
+]);
 
 export const memberCompanyAccess = pgTable("fdp_member_company_access", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),

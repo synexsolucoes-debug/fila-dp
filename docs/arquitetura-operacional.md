@@ -910,6 +910,86 @@ desta tela.
 | --- | --- |
 | As cinco contagens são SQL agregado (não a tabela inteira filtrada em memória) e genuinamente parametrizado com ANY(?::text[]), CAT pendente e obrigação vencida ignoram o período e acidentes o usa, a conformidade de EPI reaproveita `buildEpiCompliance` numa única passada sem N+1 e exclui quem não tem regra do denominador, e a tela não inventa número antes do relatório chegar | `tests/command-center-safety.test.mts` |
 
+### 4.20 Portal do Gestor, passo 1 — minha equipe
+
+O roteiro de produto nomeou o Portal do Gestor como P1: "DP como central
+telefônica" — um gestor de área liga ou manda WhatsApp para o DP perguntar
+algo que ele mesmo resolveria se tivesse onde olhar. A visão completa tem
+quatro peças (catálogo em linguagem de gestor, acompanhamento, minhas
+pendências, minha equipe), mas as três primeiras pressupõem a quarta: sem
+saber quem cada gestor gerencia, não há o que catalogar, acompanhar ou
+enfileirar. Por isso "minha equipe" é o primeiro passo, sozinho.
+
+`fdp_employees.manager_employee_id` já existia desde a fundação dos
+cadastros (0013) e já tinha um consumidor real — a guarda de exclusão em
+`app/api/employees/[id]/route.ts` recusa apagar um colaborador que ainda é
+gestor de alguém — mas nenhuma tela jamais preenchia esse campo, e nada lia
+"quem esta pessoa gerencia" a partir dele. A lacuna maior, porém, era outra:
+uma conta de plataforma (`fdp_users`/`fdp_workspace_members`) e um
+colaborador (`fdp_employees`) são dois cadastros hoje sem ligação nenhuma —
+o gestor loga com uma conta, mas o "quem ele gerencia" mora no cadastro do
+colaborador que ele *é*.
+
+`fdp_workspace_members.employee_id` (0104) fecha exatamente essa segunda
+lacuna. A decisão de fazer o vínculo explícito, em vez de casar contas e
+colaboradores por e-mail, foi deliberada: `fdp_employees.email` é opcional e
+não único (0013 não tem `UNIQUE` nela) — um e-mail em branco casaria com
+qualquer conta sem vínculo, inflando a equipe de qualquer gestor com gente
+que não tem nada a ver com ele. Uma coluna explícita, preenchida por quem
+administra o grupo, não tem esse risco: nula até alguém vincular (a maioria
+das contas continua sem corresponder a nenhum colaborador — donos, DP, TI),
+única por colaborador (duas contas não podem afirmar ser a mesma pessoa), e
+com `ON DELETE SET NULL` — perder o cadastro do colaborador não derruba a
+conta de acesso.
+
+O vínculo entra pelos dois lados que já existiam, sem tela nova:
+
+- Na ficha do colaborador (`RegistrationsView`, aba "Vínculo e lotação"), o
+  campo **Gestor** grava `manager_employee_id` — o campo que a rota já
+  aceitava desde 0013, mas nenhum formulário preenchia.
+- Em "Usuários e acessos" (`WorkspaceApp.tsx`), cada linha ganha
+  **colaborador vinculado**, que grava `employee_id` no membro.
+
+Os dois usam o mesmo desenho: busca por nome/matrícula
+(`GET /api/employees?search=`) em vez de uma lista só, pelo mesmo motivo que
+a própria ficha de colaboradores pagina e busca — o cadastro pode ter
+milhares de linhas. Nenhum dos dois entrou na consulta do snapshot do
+workspace (`getWorkspaceSnapshot`): ela é carregada a cada troca de tela e de
+grupo, e `tests/registrations-phase3.test.mts` já garante que essa consulta
+fica livre de `fdp_employees` — o nome de quem já está vinculado é resolvido
+à parte, sob demanda (`GET /api/employees/[id]`), não juntado ali.
+
+`GET /api/gestor/team` é autosserviço puro: não recebe parâmetro nenhum, só
+lê o `employee_id` da própria conta autenticada e devolve quem tem
+`manager_employee_id` apontando para ela, entre os colaboradores ativos. Três
+estados, três mensagens diferentes — não inventar dado importa tanto aqui
+quanto no Dossiê (§4.18): conta sem vínculo ("fale com o administrador"),
+vínculo sem ninguém reportando ("equipe vazia agora") e a lista de fato, cada
+um uma situação real e distinguível, nunca a mesma tela genérica de "nada
+aqui".
+
+A tela vive em `/gestor`, endereço próprio — decisão do produto, não deste
+passo: quem abre esta tela é um gestor de área, não o DP, e não deveria
+precisar da densidade operacional do painel inteiro só para ver o próprio
+time. Mesma sessão de sempre (`requireChatGPTUser`), casca diferente, no
+mesmo espírito de `app/portal/epi/[token]` — corpo grande, um caminho só.
+
+**O que isto ainda não faz** — e é deliberado: nenhum catálogo de pedidos,
+acompanhamento ou fila de pendências — as outras três peças do Portal do
+Gestor, que dependiam desta primeira; a tela não mostra situação de EPI/ASO/
+treinamento de cada colaborador da equipe, só o roster (nome, cargo, empresa,
+admissão); `DEPARTMENT_MANAGER`/`EMPLOYEE_MANAGER` como modo de
+responsabilidade num processo (`lib/process-management.ts`) continuam
+configuráveis no modelador mas não verificados em
+`lib/process-instances.ts` — o vínculo que este passo criou poderia alimentar
+essa verificação, mas isso é fatia futura, não parte deste passo; e não há
+como um gestor delegar ou ver a equipe de outro gestor (hierarquia de vários
+níveis) — só a própria, direta.
+
+| Verificação | Onde |
+| --- | --- |
+| O vínculo é opcional, único por colaborador e `SET NULL` ao apagar o colaborador; a rota de vínculo recusa colaborador de outro grupo ou já vinculado a outra conta; `GET /api/gestor/team` nunca aceita parâmetro de entrada e distingue sem-vínculo de equipe-vazia; e nem o vínculo nem o nome do colaborador entram na consulta do snapshot | `tests/gestor-portal.test.mts` |
+
 ---
 
 ## 5. Agentes

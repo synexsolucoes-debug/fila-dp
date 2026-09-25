@@ -289,6 +289,9 @@ export type WorkspaceMember = {
   /** Departamento principal no Workspace; dá os módulos padrão da pessoa. */
   departmentId: string | null;
   departmentName: string;
+  /** Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta representa. */
+  employeeId: string | null;
+  employeeName: string;
 };
 
 export type AvailableWorkspace = {
