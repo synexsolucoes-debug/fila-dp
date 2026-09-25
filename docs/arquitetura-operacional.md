@@ -837,7 +837,7 @@ gráfico, sem resumo executivo, sem assinatura digital do documento.
 | --- | --- |
 | Uma seção sem permissão nunca aparece como "0 registros", o PDF nasce válido com listas vazias e com seções nulas, e a tela baixa pelo mesmo padrão de blob do recibo PJ | `tests/employee-dossier-pdf.test.mts` |
 
-### 4.19 Command Center, passo 1 — saúde e conformidade em Relatórios
+### 4.19 Command Center — saúde e conformidade em Relatórios
 
 O roteiro de produto nomeou a lacuna com precisão: "diretoria sem visão de
 saúde". `IndicatorsView` (a tela "Relatórios") já respondia turnover e custo
@@ -872,17 +872,38 @@ diretoria mudou o filtro de data para "últimos 7 dias". Acidentes, ao
 contrário, usam a mesma janela `from`/`to` do resto do relatório — é
 "quantos aconteceram nesse recorte", uma pergunta diferente.
 
-**O que isto ainda não faz** — e é deliberado: não inclui taxa de
-conformidade de EPI (`lib/epi-compliance.ts#buildEpiCompliance` calcula por
-colaborador, e agregar isso num número único de grupo pede decidir o que
-"conformidade do grupo" significa — deixado para um passo futuro); os cinco
-números não têm link para a tela que os resolve, diferente da Central de
-Trabalho (§9) — é leitura de painel, não uma fila acionável; e não entra na
-exportação CSV existente desta tela.
+**Passo 2 — taxa de conformidade de EPI.** O passo 1 deixou essa métrica de
+fora porque agregar `lib/epi-compliance.ts#buildEpiCompliance` (que calcula
+por colaborador) num número único de grupo pedia decidir o que "conformidade
+do grupo" significa. A decisão: dos colaboradores ativos do recorte que têm
+pelo menos uma regra de EPI aplicável, qual fração está com o status
+`compliant`. Quem não tem regra nenhuma cadastrada (`unconfigured`) fica fora
+do denominador — não é "descumprindo", é "sem regra ainda", uma situação
+diferente que inflaria ou esvaziaria a taxa sem dizer nada sobre conformidade
+real. Quando o denominador é zero (nenhum colaborador do recorte tem regra
+cadastrada), a taxa é `null` — a tela mostra "—", nunca "100%" nem "0%", que
+seriam ambos falsos.
+
+Diferente das cinco contagens do passo 1 (um `SELECT count(*)` cada), a
+conformidade de EPI é um cálculo em memória — `buildEpiCompliance` já existe,
+é puro, e é a mesma função que o dashboard de EPI por empresa usa
+(`app/api/epi/dashboard/route.ts`); duplicar sua lógica de precedência de
+regras em SQL teria criado exatamente o risco que o próprio módulo evita
+("ninguém aparece em dia numa tela e sem EPI noutra"). A alternativa a essa
+duplicação não é um laço de uma consulta por empresa (N+1) — `applies()`
+dentro de `buildEpiCompliance` já casa cada regra pela empresa do
+colaborador, então três consultas (colaborador, regra, saldo) cobrem o
+recorte inteiro numa única passada, escopadas pelo mesmo primitivo
+`(?::boolean OR company_id = ANY(?::text[]))` das outras cinco.
+
+**O que isto ainda não faz** — e é deliberado: os seis números não têm link
+para a tela que os resolve, diferente da Central de Trabalho (§9) — é leitura
+de painel, não uma fila acionável; e não entra na exportação CSV existente
+desta tela.
 
 | Verificação | Onde |
 | --- | --- |
-| As cinco contagens são SQL agregado (não a tabela inteira filtrada em memória) e genuinamente parametrizado com ANY(?::text[]), CAT pendente e obrigação vencida ignoram o período e acidentes o usa, e a tela não inventa número antes do relatório chegar | `tests/command-center-safety.test.mts` |
+| As cinco contagens são SQL agregado (não a tabela inteira filtrada em memória) e genuinamente parametrizado com ANY(?::text[]), CAT pendente e obrigação vencida ignoram o período e acidentes o usa, a conformidade de EPI reaproveita `buildEpiCompliance` numa única passada sem N+1 e exclui quem não tem regra do denominador, e a tela não inventa número antes do relatório chegar | `tests/command-center-safety.test.mts` |
 
 ---
 
