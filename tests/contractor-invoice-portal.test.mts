@@ -76,7 +76,12 @@ test("a comparação de hash não vaza pelo tempo nem aceita tamanho diferente",
   assert.equal(samePortalHash(hash, hash), true);
   assert.equal(samePortalHash(hash, `${hash}x`), false);
   assert.equal(samePortalHash(hash, hash.slice(0, -1)), false);
-  assert.equal(samePortalHash(hash, hash.replace(/.$/u, "0")), false);
+  // O último dígito hexadecimal precisa virar outro diferente dele mesmo —
+  // trocar sempre por "0" é flake: quando o hash já termina em "0" (1 em 16
+  // execuções), a troca não muda nada e a comparação passa a valer, não falhar.
+  const lastDigit = hash.at(-1);
+  const differentDigit = lastDigit === "0" ? "1" : "0";
+  assert.equal(samePortalHash(hash, `${hash.slice(0, -1)}${differentDigit}`), false);
 });
 
 /* -------------------------------------------------------------------------- */
