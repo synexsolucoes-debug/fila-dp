@@ -4,11 +4,12 @@ import test from "node:test";
 import { capabilities, hasCapability } from "../lib/authorization.ts";
 import { capabilityCatalog } from "../lib/capability-catalog.ts";
 import { moduleWriteCapabilities } from "../lib/modules.ts";
+import { areaModuleKeys } from "../lib/areas.ts";
 import { panelViews, panelPath, parsePanelPath } from "../lib/panel-routes.ts";
 import { groupOfView, viewsWithoutProcess } from "../lib/process-navigation.ts";
 import {
   accidentBodyParts, accidentGenders, accidentShifts, accidentTypes, catDeadline,
-  matchesPeriod, summarizeAccidents, UNASSIGNED_SECTOR,
+  investigationDemandTitle, matchesPeriod, summarizeAccidents, UNASSIGNED_SECTOR,
   type WorkAccidentRecord,
 } from "../lib/work-accidents.ts";
 
@@ -37,7 +38,7 @@ const accident = (over: Partial<WorkAccidentRecord> = {}): WorkAccidentRecord =>
   id: crypto.randomUUID(), companyId: "empresa-1", companyName: "Empresa 1",
   occurredOn: "2026-03-10", accidentType: "typical", bodyPart: "hand", sector: "Operacional",
   shift: "morning", gender: "male", employeeLabel: "", leaveDays: 0, expenseAmount: 0,
-  catNumber: "", catIssued: false, description: "", ...over,
+  catNumber: "", catIssued: false, description: "", investigationCardId: null, ...over,
 });
 
 /* -------------------------------------------------------------------------- */
@@ -235,6 +236,7 @@ test("cada rota do módulo confere a própria permissão", async () => {
     ["overview/route.ts", "safety.view"],
     ["accidents/route.ts", "safety.view"],
     ["accidents/[id]/route.ts", "safety.manage"],
+    ["accidents/[id]/investigation/route.ts", "safety.manage"],
     ["export/route.ts", "safety.export"],
   ] as const;
   for (const [caminho, capability] of rotas) {
@@ -246,4 +248,41 @@ test("cada rota do módulo confere a própria permissão", async () => {
   }
   const escrita = await readFile(new URL("../app/api/safety/accidents/[id]/route.ts", import.meta.url), "utf8");
   assert.ok(escrita.includes('requireNamedCapability(workspace, "safety.delete"'), "excluir precisa de permissão própria");
+});
+
+/* -------------------------------------------------------------------------- */
+/* Plano de ação — demanda de investigação (§4.14)                            */
+/* -------------------------------------------------------------------------- */
+
+test("o título da demanda de investigação nomeia o setor e a data, para distinguir dois acidentes do mesmo setor", () => {
+  assert.equal(investigationDemandTitle("Operacional", "2026-03-10"), "Investigar acidente de trabalho — Operacional (2026-03-10)");
+  assert.equal(investigationDemandTitle("", "2026-03-10"), `Investigar acidente de trabalho — ${UNASSIGNED_SECTOR} (2026-03-10)`);
+});
+
+test("a área de investigação de acidentes está no catálogo de roteamento, ao lado das áreas de EPI", () => {
+  assert.ok(areaModuleKeys.includes("safety.investigation"));
+});
+
+test("o cartão de investigação nasce antes de o acidente apontar para ele — a FK exige que ele já exista", async () => {
+  const rota = await readFile(new URL("../app/api/safety/accidents/[id]/investigation/route.ts", import.meta.url), "utf8");
+  const servico = await readFile(new URL("../lib/work-accidents-service.ts", import.meta.url), "utf8");
+  const batchStart = rota.indexOf("await d1.batch([");
+  const insertIndex = rota.indexOf("demand.statement", batchStart);
+  const updateIndex = rota.indexOf("UPDATE fdp_work_accidents SET investigation_card_id", batchStart);
+  assert.ok(insertIndex > batchStart && updateIndex > insertIndex,
+    "o INSERT do cartão precisa vir antes do UPDATE que vincula o acidente a ele");
+  assert.match(servico, /resolveAreaModule\(d1, input\.workspaceId, "safety\.investigation"\)/u);
+});
+
+test("duplo clique não abre dois planos de ação — a guarda está na condição do UPDATE, não numa checagem antes", () => {
+  return readFile(new URL("../app/api/safety/accidents/[id]/investigation/route.ts", import.meta.url), "utf8").then((rota) => {
+    assert.match(rota, /WHERE workspace_id = \? AND id = \? AND investigation_card_id IS NULL/u);
+    assert.match(rota, /if \(accident\.investigation_card_id\)/u, "checagem otimista também existe, para recusar cedo o caso comum");
+  });
+});
+
+test("a tela mostra o botão de abrir plano de ação só para quem gerencia, e chama a rota certa", async () => {
+  const view = await readFile(new URL("../app/painel/features/safety/WorkAccidentDashboardView.tsx", import.meta.url), "utf8");
+  assert.match(view, /requestJson\(`\/api\/safety\/accidents\/\$\{record\.id\}\/investigation`, \{ method: "POST" \}\)/u);
+  assert.match(view, /record\.investigationCardId\s*\n?\s*\?\s*"Aberto em Demandas"/u);
 });

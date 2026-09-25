@@ -1,7 +1,7 @@
 import { ApiError } from "./api-errors.ts";
 import { cleanText } from "./clean-text.ts";
 
-export const areaModuleKeys = ["epi.owner", "epi.discount_analysis"] as const;
+export const areaModuleKeys = ["epi.owner", "epi.discount_analysis", "safety.investigation"] as const;
 export type AreaModuleKey = typeof areaModuleKeys[number];
 
 export function areaCode(value: unknown) {
@@ -35,7 +35,9 @@ export async function resolveAreaModule(
     WHERE ma.workspace_id = ? AND ma.module_key = ? AND a.status = 'active'`)
     .bind(workspaceId, moduleKey).first<{ id: string; name: string; code: string }>();
   if (!area) {
-    const label = moduleKey === "epi.owner" ? "responsável pelo EPI/SESMT" : "responsável pela análise do DP";
+    const label = moduleKey === "epi.owner" ? "responsável pelo EPI/SESMT"
+      : moduleKey === "safety.investigation" ? "responsável pela investigação de acidentes"
+      : "responsável pela análise do DP";
     throw ApiError.badRequest(
       `Configure uma área ativa como ${label} em Plataforma → Operações → Workspace → Acessos e módulos antes de continuar.`,
       "AREA_MODULE_NOT_CONFIGURED",

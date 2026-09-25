@@ -110,6 +110,7 @@ export const expectedMigrations = [
   "0100_occupational_exams.sql",
   "0101_epi_delivery_ack_links.sql",
   "0102_mandatory_trainings.sql",
+  "0103_accident_investigation_demand.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */
