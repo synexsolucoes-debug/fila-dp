@@ -56,9 +56,10 @@ export function sanitizeMovementDetails(type: typeof movementTypes[number], valu
  * trilha de auditoria — mas nada nunca levava o status até "applied", e
  * `fdp_employees.employment_status` continuava sendo editado à parte, sem
  * relação com a movimentação aprovada. As demais movimentações (salário,
- * férias, transferência, benefício, conciliação, desconto de EPI) não têm
- * efeito aqui ainda: aplicar apenas marca `status = 'applied'`, porque a
- * situação de emprego não é o que elas mudam.
+ * férias, benefício, conciliação, desconto de EPI) não têm efeito aqui
+ * ainda: aplicar apenas marca `status = 'applied'`, porque a situação de
+ * emprego não é o que elas mudam. Transferência tem o próprio efeito, em
+ * `movementTransferEffect` (passo 2 — §4.17).
  */
 export type MovementEmploymentEffect = { employmentStatus: "on_leave" | "terminated"; requiredCurrentStatus: "active" };
 
@@ -66,6 +67,31 @@ export function movementEmploymentEffect(movementType: string): MovementEmployme
   if (movementType === "leave") return { employmentStatus: "on_leave", requiredCurrentStatus: "active" };
   if (movementType === "termination") return { employmentStatus: "terminated", requiredCurrentStatus: "active" };
   return null;
+}
+
+/**
+ * O efeito de uma transferência aplicada (Motor de Jornadas, passo 2 —
+ * §4.17). `targetCompanyId` é obrigatório na tela desde que o tipo existe,
+ * então "sem destino" só acontece por uma movimentação criada fora da tela —
+ * `missing_target` cobre esse caso em vez de aplicar em silêncio.
+ *
+ * Mudar de empresa cruzaria RLS (o colaborador pertence a uma empresa por
+ * `workspace_id + company_id`, e `fdp_employees` não tem trilha de "empresa
+ * anterior") — decisão própria, ainda não tomada. `cross_company` recusa com
+ * um motivo claro, e a movimentação continua "aprovada": aplicar é
+ * tudo-ou-nada, nunca um sucesso parcial que finge ter movido o colaborador.
+ */
+export type MovementTransferEffect =
+  | { kind: "missing_target" }
+  | { kind: "cross_company" }
+  | { kind: "same_company"; departmentId: string | null; positionId: string | null; costCenterId: string | null };
+
+export function movementTransferEffect(details: Record<string, unknown>, currentCompanyId: string): MovementTransferEffect {
+  const targetCompanyId = typeof details.targetCompanyId === "string" ? details.targetCompanyId.trim() : "";
+  if (!targetCompanyId) return { kind: "missing_target" };
+  if (targetCompanyId !== currentCompanyId) return { kind: "cross_company" };
+  const pick = (key: string) => typeof details[key] === "string" && details[key] ? details[key] as string : null;
+  return { kind: "same_company", departmentId: pick("departmentId"), positionId: pick("positionId"), costCenterId: pick("costCenterId") };
 }
 
 export function sanitizeProcessConfiguration(value: unknown) {

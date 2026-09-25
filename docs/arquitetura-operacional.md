@@ -761,17 +761,49 @@ movimentação e `employment_status = ?` (o valor exigido antes de aplicar) no
 `UPDATE` do colaborador. Um segundo clique depois do primeiro já ter passado
 não corrompe nada — as duas atualizações simplesmente afetam zero linhas.
 
-**O que isto ainda não faz** — e é deliberado: `transfer` não move
-departamento/cargo/empresa ainda (mudar de empresa cruzaria RLS e mereceria
-decisão própria); não há retorno automático de afastamento na data de fim —
-a reativação continua sendo o `PATCH` de sempre, já guardado pelo exame
-ocupacional (§4.9); aplicar não respeita `effective_date` — quem aplica
-decide quando, a data de vigência é só informativa; e admissão continua fora
-de propósito (§6.2: "a admissão digital é executada na Sólides").
+**O que isto ainda não faz** — e é deliberado: `transfer` entre empresas
+diferentes ainda não move nada (§4.17 cobre o motivo); não há retorno
+automático de afastamento na data de fim — a reativação continua sendo o
+`PATCH` de sempre, já guardado pelo exame ocupacional (§4.9); aplicar não
+respeita `effective_date` — quem aplica decide quando, a data de vigência é
+só informativa; e admissão continua fora de propósito (§6.2: "a admissão
+digital é executada na Sólides").
 
 | Verificação | Onde |
 | --- | --- |
 | Só movimentação aprovada aplica, a guarda contra duplo clique está na condição do UPDATE, e só afastamento/desligamento tocam a situação do colaborador | `tests/movement-apply.test.mts` |
+
+### 4.17 Motor de Jornadas, passo 2 — aplicar transferência na mesma empresa
+
+Continuação de §4.16: `transfer` era o único tipo de movimentação sensível
+que "aplicar" ainda deixava de fora, e a lacuna nomeada ali (mudar de empresa
+cruzaria RLS) só existe para o caso entre empresas — dentro da mesma empresa
+não há fronteira nenhuma para cruzar, é o mesmo `UPDATE` que
+`PATCH /api/employees/[id]` já faz para departamento, cargo e centro de
+custo.
+
+`lib/operations.ts#movementTransferEffect` decide os três casos:
+`targetCompanyId` ausente (`missing_target` — a tela exige o campo, então só
+acontece por uma movimentação criada fora dela), empresa diferente da atual
+(`cross_company` — recusa com motivo claro), e mesma empresa
+(`same_company` — aplica o que foi informado, com `COALESCE` preservando o
+que não foi). A recusa acontece **antes** do `d1.batch`, nunca dentro dele:
+aplicar é tudo-ou-nada, e uma transferência entre empresas recusada continua
+"aprovada" — nunca "aplicada" para um efeito que não aconteceu.
+
+**O que isto ainda não faz** — e é deliberado: transferência entre empresas
+continua sem caminho de aplicação automática; quem precisa disso move o
+colaborador manualmente e a movimentação fica "aprovada" sem fechar — não há
+hoje um jeito de marcá-la resolvida sem o efeito real acontecer. E os
+campos de destino (`departmentId`, `positionId`, `costCenterId`) continuam
+sendo texto livre na tela, sem validar que o identificador existe antes de
+aprovar — o mesmo risco que `PATCH /api/employees/[id]` já aceita hoje para
+os mesmos campos; um identificador inválido só aparece na hora de aplicar,
+como erro de banco.
+
+| Verificação | Onde |
+| --- | --- |
+| `missing_target`, `cross_company` e `same_company` cobrem os três casos, a recusa de empresa diferente vem antes do batch, e o UPDATE preserva com COALESCE o que não foi informado | `tests/movement-apply.test.mts` |
 
 ---
 
