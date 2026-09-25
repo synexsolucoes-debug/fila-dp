@@ -168,6 +168,24 @@ export type WorkAccidentDashboard = {
 
 const isFinitePositive = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value > 0;
 
+/**
+ * Prazo da CAT: um dia útil depois do acidente.
+ *
+ * "Um dia útil" aqui só pula sábado e domingo — feriado municipal, estadual e
+ * nacional não entram, porque o produto não tem calendário de feriados por
+ * empresa. O prazo real da CAT (Lei 8.213/91, art. 22) é o mesmo do INSS, que
+ * considera feriados; esta função é deliberadamente mais permissiva que a lei
+ * (nunca marca vencido antes da hora), nunca mais rígida.
+ */
+export function catDeadline(occurredOn: string) {
+  const date = new Date(`${occurredOn}T12:00:00Z`);
+  if (Number.isNaN(date.getTime())) return occurredOn;
+  const day = date.getUTCDay(); // 0=domingo … 6=sábado
+  const add = day === 5 ? 3 : day === 6 ? 2 : 1;
+  date.setUTCDate(date.getUTCDate() + add);
+  return date.toISOString().slice(0, 10);
+}
+
 /** Ano de uma data `AAAA-MM-DD`; `0` quando a data não é utilizável. */
 export function accidentYear(occurredOn: string) {
   const year = Number(String(occurredOn).slice(0, 4));

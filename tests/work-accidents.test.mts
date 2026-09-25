@@ -7,7 +7,7 @@ import { moduleWriteCapabilities } from "../lib/modules.ts";
 import { panelViews, panelPath, parsePanelPath } from "../lib/panel-routes.ts";
 import { groupOfView, viewsWithoutProcess } from "../lib/process-navigation.ts";
 import {
-  accidentBodyParts, accidentGenders, accidentShifts, accidentTypes,
+  accidentBodyParts, accidentGenders, accidentShifts, accidentTypes, catDeadline,
   matchesPeriod, summarizeAccidents, UNASSIGNED_SECTOR,
   type WorkAccidentRecord,
 } from "../lib/work-accidents.ts";
@@ -140,6 +140,17 @@ test("base vazia não quebra nenhum gráfico", () => {
   assert.deepEqual(dashboard.byType, []);
   assert.equal(dashboard.byMonth.length, 12);
   assert.deepEqual(dashboard.years, []);
+});
+
+test("o prazo da CAT pula sábado e domingo, e só isso — feriado não entra porque não há calendário por empresa", () => {
+  // Quinta 2026-01-08: prazo é sexta (dia seguinte).
+  assert.equal(catDeadline("2026-01-08"), "2026-01-09");
+  // Sexta 2026-01-09: prazo pula para segunda.
+  assert.equal(catDeadline("2026-01-09"), "2026-01-12");
+  // Sábado 2026-01-10: prazo também cai na segunda.
+  assert.equal(catDeadline("2026-01-10"), "2026-01-12");
+  // Domingo 2026-01-11: o dia seguinte já é segunda, sem ajuste extra.
+  assert.equal(catDeadline("2026-01-11"), "2026-01-12");
 });
 
 /* -------------------------------------------------------------------------- */

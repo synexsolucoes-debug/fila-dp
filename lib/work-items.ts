@@ -88,7 +88,8 @@ export type WorkItemSource =
   | "compliance_obligation"
   | "epi_ca_expiry"
   | "occupational_exam_due"
-  | "training_due";
+  | "training_due"
+  | "cat_pending";
 
 export type WorkItemScope = "mine" | "team";
 
@@ -391,6 +392,49 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
       LEFT JOIN fdp_employees emp ON emp.workspace_id = t.workspace_id AND emp.id = t.employee_id
       WHERE t.workspace_id = ? AND t.valid_until IS NOT NULL AND t.valid_until <= CURRENT_DATE + 60 {{company}} {{mine}}`,
   },
+  /* ---------------------------------------------------------------------- *
+   * Motor de Prazos — terceiro passo
+   *
+   * A CAT tem um prazo que os outros itens não têm: um dia útil (Lei 8.213/91,
+   * art. 22), não uma janela de meses. Passado o prazo, o item não sai da
+   * fila sozinho como o CA de EPI vencido em 60 dias — ele fica até alguém
+   * registrar a CAT (`cat_issued = 1`), porque a obrigação não prescreve.
+   *
+   * O recorte a `leave_days > 0` segue a mesma convenção que o próprio
+   * dashboard já usa para a métrica de CAT (`lib/work-accidents.ts`, "o
+   * subconjunto que a CAT pesa") — não é este PR que decide o escopo, é o
+   * módulo que já decidiu. `fdp_work_accidents` não tem FK de colaborador
+   * (é anonimizado, §83), então o link vai para a tela do módulo, não para
+   * uma pessoa. */
+  {
+    key: "cat_pending",
+    label: "CAT pendente",
+    capability: "safety.view",
+    companyColumn: "a.company_id",
+    mineCondition: "",
+    mineParameters: 0,
+    sql: `SELECT 'cat_pending' AS source_type, a.id AS source_id,
+        'CAT pendente — ' || COALESCE(NULLIF(a.employee_label, ''), 'colaborador não identificado') AS title,
+        'Acidente de trabalho com afastamento' AS description, 'urgent' AS priority, a.company_id,
+        COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        NULL::text AS employee_id,
+        (CASE EXTRACT(ISODOW FROM a.occurred_on)::int
+           WHEN 5 THEN a.occurred_on + 3
+           WHEN 6 THEN a.occurred_on + 2
+           ELSE a.occurred_on + 1
+         END)::timestamptz AS due_at,
+        a.created_at, a.updated_at,
+        CASE WHEN (CASE EXTRACT(ISODOW FROM a.occurred_on)::int
+                     WHEN 5 THEN a.occurred_on + 3
+                     WHEN 6 THEN a.occurred_on + 2
+                     ELSE a.occurred_on + 1
+                   END) < CURRENT_DATE THEN 'overdue' ELSE 'warning' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_work_accidents a
+      LEFT JOIN fdp_companies co ON co.workspace_id = a.workspace_id AND co.id = a.company_id
+      WHERE a.workspace_id = ? AND a.cat_issued = 0 AND a.leave_days > 0 {{company}} {{mine}}`,
+  },
 ];
 
 /* -------------------------------------------------------------------------- *
@@ -468,6 +512,7 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
   epi_ca_expiry: "Substituir o produto ou renovar o CA",
   occupational_exam_due: "Agendar o exame com o colaborador",
   training_due: "Agendar a reciclagem do treinamento",
+  cat_pending: "Emitir a CAT",
 };
 
 /**
@@ -499,6 +544,8 @@ export function workItemHref(source: WorkItemSource, id: string, employeeId?: st
     // pessoa que a tela precisa mostrar, e o registro não tem tela própria.
     case "occupational_exam_due": return employeeId ? employeePath(employeeId, "exams") : "/painel/cadastros";
     case "training_due": return employeeId ? employeePath(employeeId, "trainings") : "/painel/cadastros";
+    // Sem FK de colaborador (§83) — o link vai para a tela do módulo.
+    case "cat_pending": return "/painel/acidentes";
     default: return "/painel";
   }
 }

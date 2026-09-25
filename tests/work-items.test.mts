@@ -133,6 +133,23 @@ test("o item de ASO/treinamento vencendo abre o colaborador, não o registro —
   assert.equal(workItemHref("occupational_exam_due", "exam-1"), "/painel/cadastros");
 });
 
+test("CAT pendente entra na Central sem tabela nova, recortada ao mesmo subconjunto que o dashboard já usa", () => {
+  const cat = workItemSources.find((source) => source.key === "cat_pending")!;
+  assert.ok(cat, "CAT pendente ausente");
+  assert.equal(cat.companyColumn, "a.company_id");
+  assert.equal(cat.mineCondition, "", "acidente não tem responsável individual, é fato do grupo");
+  assert.match(cat.sql, /cat_issued = 0 AND a\.leave_days > 0/u);
+});
+
+test("CAT pendente não some sozinha da fila — ela não tem janela de 60 dias como o CA de EPI", () => {
+  const cat = workItemSources.find((source) => source.key === "cat_pending")!;
+  assert.doesNotMatch(cat.sql, /CURRENT_DATE \+ 60/u, "a obrigação da CAT não prescreve com o tempo");
+});
+
+test("o item de CAT pendente abre a tela do módulo — o acidente não tem FK de colaborador (§83)", () => {
+  assert.equal(workItemHref("cat_pending", "acc-1"), "/painel/acidentes");
+});
+
 test("a nova ambiguidade de `blocked` não reaproveita a frase do fechamento", () => {
   // pending_item e compliance_obligation agora dividem o status 'blocked', e a
   // razão de estar bloqueada não é a mesma nos dois. Reaproveitar a frase do
@@ -396,7 +413,7 @@ test("o item traz um destino real no painel, e não um link para lugar nenhum", 
   assert.equal(workItemHref("card", "abc"), "/painel/demandas/abc");
   for (const source of [
     "card", "approval", "movement", "auxiliary", "pending_item", "triage", "integration_failure",
-    "compliance_obligation", "epi_ca_expiry", "occupational_exam_due", "training_due",
+    "compliance_obligation", "epi_ca_expiry", "occupational_exam_due", "training_due", "cat_pending",
   ] as const) {
     const href = workItemHref(source, "x");
     const [path] = href.split("?");
