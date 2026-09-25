@@ -837,6 +837,44 @@ gráfico, sem resumo executivo, sem assinatura digital do documento.
 | --- | --- |
 | Uma seção sem permissão nunca aparece como "0 registros", o PDF nasce válido com listas vazias e com seções nulas, e a tela baixa pelo mesmo padrão de blob do recibo PJ | `tests/employee-dossier-pdf.test.mts` |
 
+### 4.19 Command Center, passo 1 — saúde e conformidade em Relatórios
+
+O roteiro de produto nomeou a lacuna com precisão: "diretoria sem visão de
+saúde". `IndicatorsView` (a tela "Relatórios") já respondia turnover e custo
+de folha (`hrMetrics`) — mas quem dirige o grupo não abre EPI, ASO ou o
+painel de acidentes todo dia, e nenhum desses três aparecia em lugar
+nenhum fora do próprio módulo.
+
+Os quatro números que a nova seção soma já existem: exame vencido
+(`fdp_occupational_exams.next_due_date`, §4.8), treinamento vencido
+(`fdp_trainings.valid_until`, §4.11), acidente no período
+(`fdp_work_accidents.occurred_on`, §83) e CAT pendente — a mesma condição
+(`cat_issued = 0 AND leave_days > 0`) que já decide o item `cat_pending` da
+Central de Trabalho (§4.13). Nada de tabela nova: `GET /api/reports` ganhou
+quatro `SELECT count(*)` a mais, escopados por empresa do mesmo jeito que
+`hrMetrics` já era — sem filtro para admin, `company_id = ?` para uma
+empresa selecionada, `IN (...)` para acesso restrito a um conjunto, e `AND
+false` para quem não tem nenhuma empresa liberada (a contagem sai zero, não
+o total do grupo).
+
+CAT pendente é estado atual, não recorte de período: um caso pendente não
+deveria sumir do painel simplesmente porque a diretoria mudou o filtro de
+data para "últimos 7 dias". Acidentes, ao contrário, usam a mesma janela
+`from`/`to` do resto do relatório — é "quantos aconteceram nesse recorte",
+uma pergunta diferente.
+
+**O que isto ainda não faz** — e é deliberado: não inclui taxa de
+conformidade de EPI (`lib/epi-compliance.ts#buildEpiCompliance` calcula por
+colaborador, e agregar isso num número único de grupo pede decidir o que
+"conformidade do grupo" significa — deixado para um passo 2); os quatro
+números não têm link para a tela que os resolve, diferente da Central de
+Trabalho (§9) — é leitura de painel, não uma fila acionável; e não entra na
+exportação CSV existente desta tela.
+
+| Verificação | Onde |
+| --- | --- |
+| As quatro contagens são SQL agregado (não a tabela inteira filtrada em memória), o escopo por empresa cobre os quatro casos, CAT pendente ignora o período e acidentes o usa, e a tela não inventa número antes do relatório chegar | `tests/command-center-safety.test.mts` |
+
 ---
 
 ## 5. Agentes

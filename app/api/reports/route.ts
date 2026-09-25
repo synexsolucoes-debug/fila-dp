@@ -19,7 +19,20 @@ export async function GET(request: Request) {
     // números do grupo inteiro em Relatórios, sem nada dizendo isso.
     const companyId = (url.searchParams.get("companyId") ?? "").trim().slice(0, 120);
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
-    const [cards, hrMetrics] = await Promise.all([
+    /* Command Center, passo 1 (§4.19): a mesma condição de escopo por empresa
+       que `noEscopo` aplica em memória para cards/hrMetrics, mas em SQL — as
+       quatro consultas de saúde/conformidade abaixo são só contagem, e trazer
+       a tabela inteira para filtrar depois seria o N+1 que a Central de
+       Trabalho já evita (§12). */
+    const companyScope = companyId
+      ? { sql: "AND company_id = ?", params: [companyId] as unknown[] }
+      : companyAccess.unrestricted
+        ? { sql: "", params: [] as unknown[] }
+        : companyAccess.companyIds.size
+          ? { sql: `AND company_id IN (${[...companyAccess.companyIds].map(() => "?").join(", ")})`, params: [...companyAccess.companyIds] as unknown[] }
+          : { sql: "AND false", params: [] as unknown[] };
+
+    const [cards, hrMetrics, overdueExams, overdueTrainings, accidentsInPeriod, catPending] = await Promise.all([
       d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.archived, c.company_id,
       COALESCE(c.assignee_name, '') AS assignee_name
       FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id
@@ -27,6 +40,20 @@ export async function GET(request: Request) {
       d1.prepare(`SELECT m.period, m.headcount, m.admissions, m.terminations, m.payroll_cost, m.company_id, COALESCE(c.legal_name, 'Sem empresa') AS company_name
         FROM fdp_hr_metrics m LEFT JOIN fdp_companies c ON c.id = m.company_id
         WHERE m.workspace_id = ? AND m.period BETWEEN ? AND ? ORDER BY m.period`).bind(workspace.id, from.slice(0, 7), to.slice(0, 7)).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT count(*)::int AS total FROM fdp_occupational_exams
+        WHERE workspace_id = ? AND next_due_date IS NOT NULL AND next_due_date < CURRENT_DATE ${companyScope.sql}`)
+        .bind(workspace.id, ...companyScope.params).first<{ total: number }>(),
+      d1.prepare(`SELECT count(*)::int AS total FROM fdp_trainings
+        WHERE workspace_id = ? AND valid_until IS NOT NULL AND valid_until < CURRENT_DATE ${companyScope.sql}`)
+        .bind(workspace.id, ...companyScope.params).first<{ total: number }>(),
+      d1.prepare(`SELECT count(*)::int AS total FROM fdp_work_accidents
+        WHERE workspace_id = ? AND occurred_on BETWEEN ? AND ? ${companyScope.sql}`)
+        .bind(workspace.id, from, to, ...companyScope.params).first<{ total: number }>(),
+      // CAT pendente é estado atual, não recorte de período — a mesma condição
+      // de `cat_pending` na Central de Trabalho (lib/work-items.ts, §4.13).
+      d1.prepare(`SELECT count(*)::int AS total FROM fdp_work_accidents
+        WHERE workspace_id = ? AND cat_issued = 0 AND leave_days > 0 ${companyScope.sql}`)
+        .bind(workspace.id, ...companyScope.params).first<{ total: number }>(),
     ]);
     const noEscopo = (row: Record<string, unknown>) => {
       const empresa = String(row.company_id ?? "");
@@ -83,6 +110,12 @@ export async function GET(request: Request) {
         payrollCostTotal: Math.round(payrollCostTotal * 100) / 100,
         turnoverRate,
         payrollByCompany,
+      },
+      safetyMetrics: {
+        overdueExams: overdueExams?.total ?? 0,
+        overdueTrainings: overdueTrainings?.total ?? 0,
+        accidentsInPeriod: accidentsInPeriod?.total ?? 0,
+        catPending: catPending?.total ?? 0,
       },
     });
   } catch (error) { return apiError(error); }

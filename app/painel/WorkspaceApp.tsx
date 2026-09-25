@@ -5109,10 +5109,14 @@ function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRu
     admissions: number; terminations: number; averageHeadcount: number;
     payrollCostTotal: number; turnoverRate: number; payrollByCompany: Record<string, number>;
   };
+  /** Command Center, passo 1 (§4.19): saúde e conformidade, para quem não abre EPI/ASO/acidentes todo dia. */
+  type ReportSafetyMetrics = {
+    overdueExams: number; overdueTrainings: number; accidentsInPeriod: number; catPending: number;
+  };
   type ReportSummary = {
     from: string; to: string; total: number; completed: number; completionRate: number;
     averageCompletionHours: number; activityCount: number; byProcess: Record<string, number>;
-    hrMetrics?: ReportHrMetrics;
+    hrMetrics?: ReportHrMetrics; safetyMetrics?: ReportSafetyMetrics;
   };
   const [report, setReport] = useState<ReportSummary | null>(null);
   const [reportDays, setReportDays] = useState("30");
@@ -5144,6 +5148,12 @@ function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRu
   return (
     <div className="indicators-layout">
       <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência · {scopeLabel}</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><Users aria-hidden="true" /><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><Plus aria-hidden="true" /><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><ArrowRight aria-hidden="true" /><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><WalletCards aria-hidden="true" /><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
+      {/* Command Center, passo 1 (§4.19): a diretoria não abre EPI, ASO ou o
+          painel de acidentes todo dia — este é o resumo que ela vê sem entrar
+          em nenhum dos três. Não substitui os módulos: cada número aqui já
+          existe em algum deles, apenas juntos num lugar que não exige saber
+          onde procurar. */}
+      <section className="safety-indicators-panel"><header><div><strong>Saúde e conformidade</strong><span>SST e ASO no grupo · {scopeLabel}</span></div><HardHat aria-hidden="true" /></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueExams ?? 0}</strong><span>Exames (ASO) vencidos</span></article><article><ClipboardList aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueTrainings ?? 0}</strong><span>Treinamentos vencidos</span></article><article><AlertTriangle aria-hidden="true" /><strong>{report?.safetyMetrics?.accidentsInPeriod ?? 0}</strong><span>Acidentes no período</span></article><article><HardHat aria-hidden="true" /><strong>{report?.safetyMetrics?.catPending ?? 0}</strong><span>CAT pendente</span></article></div></section>
       <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s) · {scopeLabel}</span></div><div className="export-actions">
         <button className="export-button" onClick={onExport}><Download aria-hidden="true" /> Exportar CSV</button>
         {/* A exportação completa do grupo (§50) mora aqui porque esta é a tela
