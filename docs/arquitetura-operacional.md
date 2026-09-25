@@ -606,6 +606,42 @@ um item destes nasce — a Central mostra, mas ninguém é notificado ainda (iss
 | --- | --- |
 | O colaborador tem endereço próprio, a aba não sobrevive sem o registro, e o link do Motor de Prazos aponta para a pessoa | `tests/panel-routes.test.mts`, `tests/work-items.test.mts` |
 
+### 4.13 CAT pendente — Motor de Prazos, passo 3
+
+A análise de produto nomeou o problema com precisão: "prazo de 1 dia útil;
+investigação solta". A CAT (Comunicação de Acidente de Trabalho) tem um prazo
+que nenhum outro item do Motor de Prazos tinha até aqui — um dia útil (Lei
+8.213/91, art. 22), não uma janela de meses — e passado o prazo a obrigação
+não prescreve: o item fica na fila até alguém emitir a CAT, do mesmo jeito que
+uma falha de integração fica até alguém reprocessar (§4, `integration_failure`),
+não como o CA de EPI que sai sozinho da fila em 60 dias.
+
+`catDeadline` (`lib/work-accidents.ts`) só pula sábado e domingo — feriado
+municipal, estadual e nacional não entram, porque o produto não tem
+calendário de feriados por empresa. A função é deliberadamente mais
+permissiva que a lei (nunca marca vencido antes da hora), nunca mais rígida:
+um prazo que soasse vencido cedo demais seria pior que um que soa vencido
+tarde demais.
+
+O recorte a acidentes com afastamento (`leave_days > 0`) segue a mesma
+convenção que o dashboard já usa para a métrica de CAT — "o subconjunto que a
+CAT pesa" (§83) — não é este passo que decide o escopo, é o módulo que já
+decidiu. `fdp_work_accidents` não tem FK de colaborador (é anonimizado, de
+propósito, §83), então o link vai para a tela do módulo (`/painel/acidentes`),
+não para uma pessoa como ASO e treinamento (§4.12).
+
+**O que isto ainda não faz** — e é deliberado: não considera feriados (só
+sábado e domingo); não cobre acidentes sem afastamento, que a lei também
+exige CAT em um dia útil — isso pediria decidir se o produto quer alertar
+sobre todo acidente ou só os que já entram na métrica hoje, e essa decisão
+não é deste passo; e não é o "plano de ação" que a análise de produto também
+nomeou — investigação e ações corretivas continuam sem registro estruturado,
+só o prazo da CAT ganhou fila.
+
+| Verificação | Onde |
+| --- | --- |
+| O prazo pula fim de semana e mais nada, o item não some sozinho da fila, e o recorte é o mesmo do dashboard | `tests/work-accidents.test.mts`, `tests/work-items.test.mts` |
+
 ---
 
 ## 5. Agentes
