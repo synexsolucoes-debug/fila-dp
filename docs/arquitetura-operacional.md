@@ -728,6 +728,51 @@ não como destino de aviso.
 | --- | --- |
 | Sem item vencido não há e-mail, a consulta usa o escopo do time e não o de "meus itens", a chave de idempotência inclui o dia, e a rota exige o segredo agendado | `tests/work-digest.test.mts`, `tests/email.test.mts` |
 
+### 4.16 Motor de Jornadas, passo 1 — aplicar afastamento e desligamento
+
+O roteiro de produto pede um "Motor de Jornadas" para admissão, desligamento,
+transferência, mudança de função, afastamento e retorno como eventos de
+negócio — hoje cada um é edição direta do cadastro, sem trilha própria. Mas
+`fdp_employee_movements` (0014, "operação DP") já existe desde antes deste
+roteiro, com aprovação, segregação de função para tipos sensíveis e os
+próprios tipos `leave` e `termination` no vocabulário — só faltava alguém
+usá-lo. `status = 'applied'` estava no `CHECK` da coluna desde a criação da
+tabela, e nenhuma rota jamais escrevia esse valor: uma movimentação aprovada
+ficava aprovada para sempre, e `fdp_employees.employment_status` continuava
+mudando só por `PATCH /api/employees/[id]`, sem relação nenhuma com a
+aprovação que acabara de acontecer em paralelo.
+
+`POST /api/operations/movements/[id]/apply` fecha essa lacuna para os dois
+tipos que representam entrar ou sair da folha ativa. Segue o único precedente
+que o produto já tinha para "aplicar": `app/api/registrations/contractors/
+[id]/movements/[movementId]/route.ts` — aplicar é a única transição que
+escreve no cadastro, e escreve na mesma transação que marca a movimentação
+como aplicada, para não existir um estado intermediário onde uma vale e a
+outra não. `lib/operations.ts#movementEmploymentEffect` é a função pura que
+decide o efeito: `leave` → `on_leave`, `termination` → `terminated` (com
+`termination_date` gravado a partir de `lastWorkingDate`, quando informado),
+e nenhum dos outros seis tipos (salário, férias, transferência, benefício,
+conciliação, desconto de EPI) toca `employment_status` — eles não decidem
+isso, e aplicar continua só marcando `applied` para eles.
+
+A guarda contra corrida dupla está na condição do próprio `UPDATE`, não só na
+checagem que vem antes dela: `status = 'approved'` no `UPDATE` da
+movimentação e `employment_status = ?` (o valor exigido antes de aplicar) no
+`UPDATE` do colaborador. Um segundo clique depois do primeiro já ter passado
+não corrompe nada — as duas atualizações simplesmente afetam zero linhas.
+
+**O que isto ainda não faz** — e é deliberado: `transfer` não move
+departamento/cargo/empresa ainda (mudar de empresa cruzaria RLS e mereceria
+decisão própria); não há retorno automático de afastamento na data de fim —
+a reativação continua sendo o `PATCH` de sempre, já guardado pelo exame
+ocupacional (§4.9); aplicar não respeita `effective_date` — quem aplica
+decide quando, a data de vigência é só informativa; e admissão continua fora
+de propósito (§6.2: "a admissão digital é executada na Sólides").
+
+| Verificação | Onde |
+| --- | --- |
+| Só movimentação aprovada aplica, a guarda contra duplo clique está na condição do UPDATE, e só afastamento/desligamento tocam a situação do colaborador | `tests/movement-apply.test.mts` |
+
 ---
 
 ## 5. Agentes

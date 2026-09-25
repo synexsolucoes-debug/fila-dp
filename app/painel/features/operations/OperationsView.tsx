@@ -216,6 +216,17 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
     catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível atualizar o status."); }
   }
 
+  /**
+   * Motor de Jornadas, passo 1 (§4.16): aplicar é o que muda a situação do
+   * colaborador — afastamento ou desligamento —, na mesma transação que marca
+   * a movimentação como aplicada. Sem este botão, a aprovação ficava parada em
+   * "aprovada" para sempre, e o cadastro só mudava por edição manual paralela.
+   */
+  async function applyMovement(id: string) {
+    try { await mutate(`/api/operations/movements/${id}/apply`, { method: "POST", body: "{}" }, "Movimentação aplicada ao cadastro."); await refreshAfterMutation(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível aplicar a movimentação."); }
+  }
+
   if (loading && !data) return <CockpitLoading />;
   if (!companies.length && !loading) return <EmptyCompanyState error={error} onRetry={loadCompanies} />;
 
@@ -252,7 +263,7 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
 
       <div className={styles.tabSurface}>
         {tab === "overview" && <OverviewPanel data={data} companyName={selectedCompany?.name ?? "Empresa"} />}
-        {tab === "movements" && <MovementsPanel movements={filteredMovements} filter={movementFilter} setFilter={setMovementFilter} canManage={Boolean(data?.permissions.manageMovements && cycle)} onCreate={() => setEditor({ kind: "movement" })} onOpen={(movement) => void openMovement(movement)} />}
+        {tab === "movements" && <MovementsPanel movements={filteredMovements} filter={movementFilter} setFilter={setMovementFilter} canManage={Boolean(data?.permissions.manageMovements && cycle)} onCreate={() => setEditor({ kind: "movement" })} onOpen={(movement) => void openMovement(movement)} onApply={(id) => void applyMovement(id)} />}
         {tab === "approvals" && <ApprovalsPanel approvals={data?.approvals ?? []} canDecide={Boolean(data?.permissions.decideApprovals)} onDecide={(approval) => setEditor({ kind: "approval", approval })} />}
         {tab === "closing" && <ClosingPanel items={data?.closingItems ?? []} canManage={Boolean(data?.permissions.manageCompetences)} onStatus={(id, status) => void patchStatus("closing", id, status)} />}
         {tab === "obligations" && <ObligationsPanel items={data?.obligations ?? []} canManage={Boolean(data?.permissions.manageObligations && cycle)} onCreate={() => setEditor({ kind: "obligation" })} onStatus={(id, status) => void patchStatus("obligation", id, status)} />}
@@ -294,8 +305,8 @@ function OverviewPanel({ data, companyName }: { data: OverviewPayload | null; co
   </div>;
 }
 
-function MovementsPanel({ movements, filter, setFilter, canManage, onCreate, onOpen }: { movements: Movement[]; filter: string; setFilter: (value: string) => void; canManage: boolean; onCreate: () => void; onOpen: (movement: Movement) => void }) {
-  return <><PanelHeader eyebrow="MOVIMENTAÇÕES" title="Entradas que alteram a folha" description="Rascunhos, aprovações e aplicações da competência — sem fluxo de admissão." action={canManage && <button className={styles.primaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Nova movimentação</button>} /><div className={styles.tableTools}><label><Search aria-hidden="true" /><input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Buscar colaborador ou movimentação" aria-label="Buscar movimentação" /></label><span>{movements.length} registro(s)</span></div>{movements.length ? <div className={styles.tableWrap}><table className={styles.dataTable}><thead><tr><th>Colaborador</th><th>Movimentação</th><th>Vigência</th><th>Status</th><th /></tr></thead><tbody>{movements.map((item) => <tr key={item.id}><td data-label="Colaborador"><strong>{item.socialName || item.employeeName}</strong><small>{item.employeeName}</small></td><td data-label="Movimentação"><strong>{item.title}</strong><small>{movementLabels[item.movementType]}</small></td><td data-label="Vigência"><time>{isoDate(item.effectiveDate)}</time></td><td data-label="Status">{pill(item.status)}</td><td>{canManage && ["draft", "rejected"].includes(item.status) && <button className={styles.rowAction} onClick={() => onOpen(item)}>Abrir <ChevronRight aria-hidden="true" /></button>}</td></tr>)}</tbody></table></div> : <EmptyState icon={UsersRound} title="Nenhuma movimentação neste ciclo" text="Crie rascunhos para férias, alterações, afastamentos e conciliações já concluídas na Sólides." action={canManage && <button className={styles.secondaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Criar rascunho</button>} />}</>;
+function MovementsPanel({ movements, filter, setFilter, canManage, onCreate, onOpen, onApply }: { movements: Movement[]; filter: string; setFilter: (value: string) => void; canManage: boolean; onCreate: () => void; onOpen: (movement: Movement) => void; onApply: (id: string) => void }) {
+  return <><PanelHeader eyebrow="MOVIMENTAÇÕES" title="Entradas que alteram a folha" description="Rascunhos, aprovações e aplicações da competência — sem fluxo de admissão." action={canManage && <button className={styles.primaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Nova movimentação</button>} /><div className={styles.tableTools}><label><Search aria-hidden="true" /><input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Buscar colaborador ou movimentação" aria-label="Buscar movimentação" /></label><span>{movements.length} registro(s)</span></div>{movements.length ? <div className={styles.tableWrap}><table className={styles.dataTable}><thead><tr><th>Colaborador</th><th>Movimentação</th><th>Vigência</th><th>Status</th><th /></tr></thead><tbody>{movements.map((item) => <tr key={item.id}><td data-label="Colaborador"><strong>{item.socialName || item.employeeName}</strong><small>{item.employeeName}</small></td><td data-label="Movimentação"><strong>{item.title}</strong><small>{movementLabels[item.movementType]}</small></td><td data-label="Vigência"><time>{isoDate(item.effectiveDate)}</time></td><td data-label="Status">{pill(item.status)}</td><td>{canManage && ["draft", "rejected"].includes(item.status) && <button className={styles.rowAction} onClick={() => onOpen(item)}>Abrir <ChevronRight aria-hidden="true" /></button>}{canManage && item.status === "approved" && <button className={styles.rowAction} onClick={() => onApply(item.id)}>Aplicar <Check aria-hidden="true" /></button>}</td></tr>)}</tbody></table></div> : <EmptyState icon={UsersRound} title="Nenhuma movimentação neste ciclo" text="Crie rascunhos para férias, alterações, afastamentos e conciliações já concluídas na Sólides." action={canManage && <button className={styles.secondaryButton} onClick={onCreate}><Plus aria-hidden="true" /> Criar rascunho</button>} />}</>;
 }
 
 function ApprovalsPanel({ approvals, canDecide, onDecide }: { approvals: OverviewPayload["approvals"]; canDecide: boolean; onDecide: (item: OverviewPayload["approvals"][number]) => void }) {
