@@ -49,6 +49,25 @@ export function sanitizeMovementDetails(type: typeof movementTypes[number], valu
   return { description: cleanText(input.description, 1000) };
 }
 
+/**
+ * O único efeito colateral que "aplicar" tem sobre o cadastro do colaborador
+ * (Motor de Jornadas, passo 1 — §4.16). `fdp_employee_movements` já cobria
+ * afastamento e desligamento como tipo de movimentação, com aprovação e
+ * trilha de auditoria — mas nada nunca levava o status até "applied", e
+ * `fdp_employees.employment_status` continuava sendo editado à parte, sem
+ * relação com a movimentação aprovada. As demais movimentações (salário,
+ * férias, transferência, benefício, conciliação, desconto de EPI) não têm
+ * efeito aqui ainda: aplicar apenas marca `status = 'applied'`, porque a
+ * situação de emprego não é o que elas mudam.
+ */
+export type MovementEmploymentEffect = { employmentStatus: "on_leave" | "terminated"; requiredCurrentStatus: "active" };
+
+export function movementEmploymentEffect(movementType: string): MovementEmploymentEffect | null {
+  if (movementType === "leave") return { employmentStatus: "on_leave", requiredCurrentStatus: "active" };
+  if (movementType === "termination") return { employmentStatus: "terminated", requiredCurrentStatus: "active" };
+  return null;
+}
+
 export function sanitizeProcessConfiguration(value: unknown) {
   const input = objectValue(value);
   const steps = Array.isArray(input.steps) ? input.steps.slice(0, 30).map((raw, index) => {
