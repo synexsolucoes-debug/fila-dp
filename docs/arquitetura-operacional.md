@@ -678,6 +678,56 @@ que a análise de desconto de EPI já cobra.
 | --- | --- |
 | O cartão nasce antes do vínculo, a guarda contra duplo clique está na condição do UPDATE, e a mesma área resolve as duas pontas | `tests/work-accidents.test.mts` |
 
+### 4.15 Resumo diário por e-mail, passo 1 — o que está vencido
+
+O roteiro de produto pede "notificação externa (e-mail + Teams; WhatsApp em
+seguida) com resumo diário": quem não abre o sistema não é alcançado. §4.4
+generalizou o adaptador de e-mail, mas só para convite e recuperação de
+acesso — nunca para trabalho pendente. Este é o primeiro consumidor real do
+canal para esse fim.
+
+Não é uma fonte nova de trabalho: é a mesma pergunta que `/api/work?prazo=
+vencido` já resolve, perguntada por fora, uma vez por dia. `lib/work-
+digest.ts` monta a união de `buildWorkCenterQuery`/`buildWorkCountsQuery`
+(§9) com `scope: "team"` e `due: "overdue"`, para o conjunto de fontes que o
+papel `admin` enxerga — o único papel que hoje vê todas as empresas do
+workspace sem depender de `fdp_member_company_access`. Só administradores
+recebem, e só quando há pelo menos um item vencido: um resumo vazio todo dia
+é ruído, não aviso, e a mesma régua de "nunca notifica sem necessidade" que
+o resto do produto já segue.
+
+`GET /api/cron/work-digest` segue o desenho do executor de integrações
+(§29): lista os workspaces ativos de uma conexão sem tenant, processa cada
+um com a conexão escopada dele dentro de um `try` que isola falha de um
+tenant do restante da varredura, e autentica por `Authorization: Bearer`
+(`CRON_SECRET` ou `FDP_WORK_DIGEST_CRON_SECRET`) — o mesmo motivo de sempre
+para não ser uma rota da Vercel Cron: o plano Hobby recusa mais de um
+disparo diário por rota, e o GitHub Actions (`work-digest-cron.yml`,
+11h UTC) cobre isso sem custo. A chave de idempotência do Resend
+(`work-digest:{workspaceId}:{userId}:{data}`) impede que um reprocessamento
+do mesmo dia vire e-mail duplicado. Segue a mesma postura de convite e
+recuperação (§4.4): nunca lança — sem `FDP_APP_URL` configurado, a rota nem
+tenta montar o resumo, porque nenhum link do e-mail funcionaria.
+
+**O que isto ainda não faz** — e é deliberado: só administradores recebem;
+um membro com acesso restrito por empresa (`fdp_member_company_access`) não
+recebe nada, porque cada um veria um recorte diferente e isso pediria
+repetir a consulta por destinatário — deixado para quando houver um segundo
+consumidor real dessa segmentação. Não há preferência de opt-out por
+workspace ou por pessoa (ainda): o canal liga sozinho assim que
+`FDP_APP_URL` e o provedor de e-mail estão configurados. E o resumo cobre
+só "vencido" — "vencendo em breve" (a janela de 60 dias que a Central já
+usa para EPI, ASO e treinamento) fica de fora, porque misturar as duas
+coisas no mesmo e-mail exigiria decidir como apresentá-las juntas sem
+confundir o que já é urgente com o que ainda não é. Teams e WhatsApp,
+que o roteiro pede em seguida, ainda não têm canal de saída nenhum — hoje
+Teams só existe como **origem** de movimentação (`lib/teams-integration.ts`),
+não como destino de aviso.
+
+| Verificação | Onde |
+| --- | --- |
+| Sem item vencido não há e-mail, a consulta usa o escopo do time e não o de "meus itens", a chave de idempotência inclui o dia, e a rota exige o segredo agendado | `tests/work-digest.test.mts`, `tests/email.test.mts` |
+
 ---
 
 ## 5. Agentes

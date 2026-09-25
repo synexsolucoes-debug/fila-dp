@@ -9,6 +9,7 @@ import {
   sendAccessRecoveryEmail,
   sendMemberActivationEmail,
   sendSignupConfirmationEmail,
+  sendWorkDigestEmail,
   transactionalEmailConfigured,
 } from "../lib/email.ts";
 
@@ -185,6 +186,38 @@ test("o nome do convidado é escapado no HTML do e-mail", async () => {
 });
 
 /* ── confirmação de cadastro: continua exigindo o provedor ────────────────── */
+
+/* ── `sendWorkDigestEmail`: mesma postura de nunca lançar ─────────────────── */
+
+test("sem provedor configurado, sendWorkDigestEmail devolve null em vez de lançar", async () => {
+  clearEmailConfig();
+  try {
+    const result = await sendWorkDigestEmail({ to: "a@b.com", subject: "s", html: "<p>x</p>", idempotencyKey: "work-digest:w1:u1:2026-01-01" });
+    assert.equal(result, null);
+  } finally {
+    restoreEnv();
+  }
+});
+
+test("com provedor configurado, sendWorkDigestEmail chega ao Resend com a chave de idempotência do dia", async () => {
+  env.RESEND_API_KEY = "re_test_key";
+  env.FDP_EMAIL_FROM = "no-reply@vinculato.com";
+  let seenHeaders: Record<string, string> | undefined;
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    seenHeaders = init?.headers as Record<string, string>;
+    return { ok: true, json: async () => ({ id: "resend-456" }) } as Response;
+  }) as typeof fetch;
+  try {
+    const result = await sendWorkDigestEmail({
+      to: "admin@acme.com", subject: "Resumo do dia", html: "<p>3 itens vencidos</p>",
+      idempotencyKey: "work-digest:w1:u1:2026-01-01",
+    });
+    assert.deepEqual(result, { provider: "resend", id: "resend-456" });
+    assert.equal(seenHeaders?.["Idempotency-Key"], "work-digest:w1:u1:2026-01-01");
+  } finally {
+    restoreEnv();
+  }
+});
 
 test("sendSignupConfirmationEmail continua recusando em produção sem provedor configurado", async () => {
   clearEmailConfig();

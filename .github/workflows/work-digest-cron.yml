@@ -1,0 +1,43 @@
+# Resumo diário por e-mail dos itens vencidos na Central de Trabalho.
+#
+# Mesmo motivo do executor de integrações (work-digest-cron.yml não pode virar
+# um cron da Vercel: o plano Hobby recusa mais de um disparo diário por rota).
+# Aqui basta um disparo por dia, então o agendador do GitHub cobre sem custo.
+name: Resumo diário da Central de Trabalho
+
+on:
+  schedule:
+    # 11h UTC = 8h em Brasília (sem horário de verão desde 2019), início do
+    # expediente para quem vai agir no que o resumo lista.
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Disparar o resumo diário
+        env:
+          SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SECRET}" ]; then
+            echo "Defina o segredo CRON_SECRET no repositório." >&2
+            exit 1
+          fi
+          executor_url="https://vinculato.vercel.app/api/cron/work-digest"
+          codigo=$(curl -sS -o resposta.json -w "%{http_code}" \
+            --max-time 120 \
+            -H "Authorization: Bearer ${SECRET}" \
+            "${executor_url}")
+          echo "HTTP ${codigo}"
+          cat resposta.json
+          echo
+          if [ "${codigo}" != "200" ]; then
+            echo "O executor respondeu ${codigo}." >&2
+            exit 1
+          fi
