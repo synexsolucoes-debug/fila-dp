@@ -598,9 +598,14 @@ de um exame/treinamento vencendo na mesma janela, cada um vira um item
 separado — não existe "só o mais recente conta". Corrigir isso pediria um
 segundo parâmetro de `workspace_id` numa subconsulta que `buildWorkItemQuery`
 não suporta hoje, e o caso é raro (um exame novo normalmente substitui o
-anterior antes de ele vencer de novo). Também não há aviso por e-mail quando
-um item destes nasce — a Central mostra, mas ninguém é notificado ainda (isso
-é a Notificação externa, §4.4, ainda não estendida a estes dois itens).
+anterior antes de ele vencer de novo).
+
+*Atualização (§4.15):* na época em que este passo nasceu, nenhum item da
+Central de Trabalho tinha aviso por e-mail — o resumo diário ainda não
+existia. Ele chegou depois lendo `workItemSources` inteiro (todas as fontes
+que um administrador enxergaria em `/api/work`), então `occupational_exam_due`
+e `training_due` entraram de graça, sem precisar estender nada aqui: um
+administrador já recebe os dois no resumo diário desde que §4.15 nasceu.
 
 | Verificação | Onde |
 | --- | --- |

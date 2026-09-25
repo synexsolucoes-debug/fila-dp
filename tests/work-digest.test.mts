@@ -5,6 +5,8 @@ import test from "node:test";
 import {
   buildWorkDigestQueries, workDigestEmailHtml, workDigestFromRows,
 } from "../lib/work-digest.ts";
+import { hasCapability } from "../lib/authorization.ts";
+import { workItemSources } from "../lib/work-items.ts";
 
 /* ── `workDigestFromRows` ─────────────────────────────────────────────────── */
 
@@ -58,6 +60,20 @@ test("buildWorkDigestQueries filtra por vencidos e não usa o escopo 'somente me
   // Escopo "team": nenhuma condição de dono/atribuído entra na união.
   assert.doesNotMatch(queries!.page.sql, /assignee_id = \?|created_by = \?/u);
   assert.match(queries!.counts.sql, /count\(\*\) FILTER \(WHERE due_at IS NOT NULL AND due_at::date < CURRENT_DATE\)::int AS overdue/u);
+});
+
+/* ── o resumo cobre toda fonte que um admin veria em /api/work (§4.12) ────── */
+
+test("o resumo diário já inclui ASO e treinamento vencidos, sem precisar de extensão (§4.12 atualizado pelo §4.15)", () => {
+  // §4.12 registrou occupational_exam_due/training_due como fontes comuns da
+  // Central de Trabalho antes do resumo diário existir. O resumo (§4.15) lê
+  // `workItemSources` inteiro — não uma lista própria — então as duas fontes
+  // já entram automaticamente para quem tem `exams.view`/`trainings.view`,
+  // que é o caso do papel admin.
+  const adminSources = workItemSources.filter((source) => hasCapability({ role: "admin" }, source.capability));
+  const keys = adminSources.map((source) => source.key);
+  assert.ok(keys.includes("occupational_exam_due"), "ASO vencido deve estar entre as fontes do admin");
+  assert.ok(keys.includes("training_due"), "treinamento vencido deve estar entre as fontes do admin");
 });
 
 /* ── a rota agendada: autenticação, endereço público e idempotência ───────── */
