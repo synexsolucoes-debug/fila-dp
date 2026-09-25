@@ -29,10 +29,12 @@ test("cada contagem é feita em SQL (count), não trazendo a tabela para filtrar
   assert.equal(acidentesMatches.length, 2, "acidentes no período e CAT pendente são duas consultas separadas");
 });
 
-test("o escopo por empresa é o mesmo em admin (sem filtro), empresa única e restrito (IN), e nega tudo sem acesso", () => {
-  assert.match(routeSource, /company_id = \?/u);
-  assert.match(routeSource, /company_id IN \(\$\{\[\.\.\.companyAccess\.companyIds\]\.map/u);
-  assert.match(routeSource, /AND false/u);
+test("o escopo por empresa é feito com ANY(?::text[]) genuinamente parametrizado, não com fragmento de SQL montado em string", () => {
+  const ocorrencias = routeSource.match(/\(\?::boolean OR company_id = ANY\(\?::text\[\]\)\)/gu) ?? [];
+  assert.equal(ocorrencias.length, 4, "as quatro contagens usam o mesmo primitivo de escopo");
+  assert.doesNotMatch(routeSource, /\$\{companyScope/u, "nenhuma das quatro monta a cláusula por interpolação de string");
+  assert.match(routeSource, /const companyIds = companyId \? \[companyId\] : \[\.\.\.companyAccess\.companyIds\]/u);
+  assert.match(routeSource, /const companyUnrestricted = !companyId && companyAccess\.unrestricted/u);
 });
 
 test("CAT pendente é estado atual — não usa o recorte de período (from/to)", () => {
@@ -43,7 +45,7 @@ test("CAT pendente é estado atual — não usa o recorte de período (from/to)"
 });
 
 test("acidentes no período usa a mesma janela from/to do resto do relatório", () => {
-  assert.match(routeSource, /occurred_on BETWEEN \? AND \? \$\{companyScope\.sql\}`\)\s*\n\s*\.bind\(workspace\.id, from, to/u);
+  assert.match(routeSource, /occurred_on BETWEEN \? AND \?\s*\n\s*AND \(\?::boolean OR company_id = ANY\(\?::text\[\]\)\)`\)\s*\n\s*\.bind\(workspace\.id, from, to/u);
 });
 
 /* ── a tela: a seção existe, com os quatro números, sem inventar dado ─────── */
