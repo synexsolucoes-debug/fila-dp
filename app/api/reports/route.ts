@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     const companyIds = companyId ? [companyId] : [...companyAccess.companyIds];
     const companyUnrestricted = !companyId && companyAccess.unrestricted;
 
-    const [cards, hrMetrics, overdueExams, overdueTrainings, accidentsInPeriod, catPending] = await Promise.all([
+    const [cards, hrMetrics, overdueExams, overdueTrainings, accidentsInPeriod, catPending, overdueObligations] = await Promise.all([
       d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.archived, c.company_id,
       COALESCE(c.assignee_name, '') AS assignee_name
       FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id
@@ -56,6 +56,13 @@ export async function GET(request: Request) {
       // de `cat_pending` na Central de Trabalho (lib/work-items.ts, §4.13).
       d1.prepare(`SELECT count(*)::int AS total FROM fdp_work_accidents
         WHERE workspace_id = ? AND cat_issued = 0 AND leave_days > 0
+          AND (?::boolean OR company_id = ANY(?::text[]))`)
+        .bind(workspace.id, companyUnrestricted, companyIds).first<{ total: number }>(),
+      // Mesmo vocabulário de status que a fonte "compliance_obligation" da
+      // Central de Trabalho usa (lib/work-items.ts) — vencida é a mesma coisa
+      // aqui e lá: aberta/em andamento/bloqueada com prazo já passado.
+      d1.prepare(`SELECT count(*)::int AS total FROM fdp_compliance_obligations
+        WHERE workspace_id = ? AND status IN ('open', 'in_progress', 'blocked') AND due_date < CURRENT_DATE
           AND (?::boolean OR company_id = ANY(?::text[]))`)
         .bind(workspace.id, companyUnrestricted, companyIds).first<{ total: number }>(),
     ]);
@@ -120,6 +127,7 @@ export async function GET(request: Request) {
         overdueTrainings: overdueTrainings?.total ?? 0,
         accidentsInPeriod: accidentsInPeriod?.total ?? 0,
         catPending: catPending?.total ?? 0,
+        overdueObligations: overdueObligations?.total ?? 0,
       },
     });
   } catch (error) { return apiError(error); }

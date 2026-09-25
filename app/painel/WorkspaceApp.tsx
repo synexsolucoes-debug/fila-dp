@@ -5111,7 +5111,7 @@ function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRu
   };
   /** Command Center, passo 1 (§4.19): saúde e conformidade, para quem não abre EPI/ASO/acidentes todo dia. */
   type ReportSafetyMetrics = {
-    overdueExams: number; overdueTrainings: number; accidentsInPeriod: number; catPending: number;
+    overdueExams: number; overdueTrainings: number; accidentsInPeriod: number; catPending: number; overdueObligations: number;
   };
   type ReportSummary = {
     from: string; to: string; total: number; completed: number; completionRate: number;
@@ -5153,7 +5153,7 @@ function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRu
           em nenhum dos três. Não substitui os módulos: cada número aqui já
           existe em algum deles, apenas juntos num lugar que não exige saber
           onde procurar. */}
-      <section className="safety-indicators-panel"><header><div><strong>Saúde e conformidade</strong><span>SST e ASO no grupo · {scopeLabel}</span></div><HardHat aria-hidden="true" /></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueExams ?? 0}</strong><span>Exames (ASO) vencidos</span></article><article><ClipboardList aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueTrainings ?? 0}</strong><span>Treinamentos vencidos</span></article><article><AlertTriangle aria-hidden="true" /><strong>{report?.safetyMetrics?.accidentsInPeriod ?? 0}</strong><span>Acidentes no período</span></article><article><HardHat aria-hidden="true" /><strong>{report?.safetyMetrics?.catPending ?? 0}</strong><span>CAT pendente</span></article></div></section>
+      <section className="safety-indicators-panel"><header><div><strong>Saúde e conformidade</strong><span>SST, ASO e obrigações legais no grupo · {scopeLabel}</span></div><HardHat aria-hidden="true" /></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueExams ?? 0}</strong><span>Exames (ASO) vencidos</span></article><article><ClipboardList aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueTrainings ?? 0}</strong><span>Treinamentos vencidos</span></article><article><AlertTriangle aria-hidden="true" /><strong>{report?.safetyMetrics?.accidentsInPeriod ?? 0}</strong><span>Acidentes no período</span></article><article><HardHat aria-hidden="true" /><strong>{report?.safetyMetrics?.catPending ?? 0}</strong><span>CAT pendente</span></article><article><CalendarClock aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueObligations ?? 0}</strong><span>Obrigações legais vencidas</span></article></div></section>
       <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s) · {scopeLabel}</span></div><div className="export-actions">
         <button className="export-button" onClick={onExport}><Download aria-hidden="true" /> Exportar CSV</button>
         {/* A exportação completa do grupo (§50) mora aqui porque esta é a tela

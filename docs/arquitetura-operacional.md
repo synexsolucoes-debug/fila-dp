@@ -845,35 +845,44 @@ de folha (`hrMetrics`) — mas quem dirige o grupo não abre EPI, ASO ou o
 painel de acidentes todo dia, e nenhum desses três aparecia em lugar
 nenhum fora do próprio módulo.
 
-Os quatro números que a nova seção soma já existem: exame vencido
+Os cinco números que a nova seção soma já existem: exame vencido
 (`fdp_occupational_exams.next_due_date`, §4.8), treinamento vencido
 (`fdp_trainings.valid_until`, §4.11), acidente no período
-(`fdp_work_accidents.occurred_on`, §83) e CAT pendente — a mesma condição
+(`fdp_work_accidents.occurred_on`, §83), CAT pendente — a mesma condição
 (`cat_issued = 0 AND leave_days > 0`) que já decide o item `cat_pending` da
-Central de Trabalho (§4.13). Nada de tabela nova: `GET /api/reports` ganhou
-quatro `SELECT count(*)` a mais, escopados por empresa do mesmo jeito que
-`hrMetrics` já era — sem filtro para admin, `company_id = ?` para uma
-empresa selecionada, `IN (...)` para acesso restrito a um conjunto, e `AND
-false` para quem não tem nenhuma empresa liberada (a contagem sai zero, não
-o total do grupo).
+Central de Trabalho (§4.13) — e obrigação legal vencida, com o mesmo
+vocabulário de status (`open`/`in_progress`/`blocked` com prazo já passado)
+que a fonte `compliance_obligation` da Central de Trabalho usa. Nada de
+tabela nova: `GET /api/reports` ganhou cinco `SELECT count(*)` a mais,
+escopados por empresa do mesmo jeito que `hrMetrics` já era.
 
-CAT pendente é estado atual, não recorte de período: um caso pendente não
-deveria sumir do painel simplesmente porque a diretoria mudou o filtro de
-data para "últimos 7 dias". Acidentes, ao contrário, usam a mesma janela
-`from`/`to` do resto do relatório — é "quantos aconteceram nesse recorte",
-uma pergunta diferente.
+O escopo por empresa usa `(?::boolean OR company_id = ANY(?::text[]))` —
+genuinamente parametrizado, não um fragmento de SQL montado em string. A
+primeira versão interpolava a cláusula (`${...}`), e isso quebrou o CI: uma
+consulta com `${...}` sai da faixa que `npm run verify:sql` consegue
+preparar contra o schema real e cai na contagem de "não verificada", que
+tem teto — quatro consultas novas nesse formato empurraram o total acima do
+limite. O primitivo `ANY(?::text[])` já era usado em
+`app/api/payments/contractors/invoices/portal-links/route.ts`; reaproveitá-lo
+manteve as cinco consultas verificáveis de verdade.
+
+CAT pendente e obrigação vencida são estado atual, não recorte de período:
+um caso pendente não deveria sumir do painel simplesmente porque a
+diretoria mudou o filtro de data para "últimos 7 dias". Acidentes, ao
+contrário, usam a mesma janela `from`/`to` do resto do relatório — é
+"quantos aconteceram nesse recorte", uma pergunta diferente.
 
 **O que isto ainda não faz** — e é deliberado: não inclui taxa de
 conformidade de EPI (`lib/epi-compliance.ts#buildEpiCompliance` calcula por
 colaborador, e agregar isso num número único de grupo pede decidir o que
-"conformidade do grupo" significa — deixado para um passo 2); os quatro
+"conformidade do grupo" significa — deixado para um passo futuro); os cinco
 números não têm link para a tela que os resolve, diferente da Central de
 Trabalho (§9) — é leitura de painel, não uma fila acionável; e não entra na
 exportação CSV existente desta tela.
 
 | Verificação | Onde |
 | --- | --- |
-| As quatro contagens são SQL agregado (não a tabela inteira filtrada em memória), o escopo por empresa cobre os quatro casos, CAT pendente ignora o período e acidentes o usa, e a tela não inventa número antes do relatório chegar | `tests/command-center-safety.test.mts` |
+| As cinco contagens são SQL agregado (não a tabela inteira filtrada em memória) e genuinamente parametrizado com ANY(?::text[]), CAT pendente e obrigação vencida ignoram o período e acidentes o usa, e a tela não inventa número antes do relatório chegar | `tests/command-center-safety.test.mts` |
 
 ---
 
