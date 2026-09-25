@@ -20,8 +20,8 @@ export async function POST(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "safety.manage", "abrir o plano de ação de um acidente de trabalho");
-    const accident = await d1.prepare("SELECT company_id, company, sector, occurred_on, investigation_card_id FROM fdp_work_accidents WHERE workspace_id = ? AND id = ?")
-      .bind(workspace.id, id).first<{ company_id: string; company: string; sector: string; occurred_on: string; investigation_card_id: string | null }>();
+    const accident = await d1.prepare("SELECT company_id, sector, occurred_on, investigation_card_id FROM fdp_work_accidents WHERE workspace_id = ? AND id = ?")
+      .bind(workspace.id, id).first<{ company_id: string; sector: string; occurred_on: string; investigation_card_id: string | null }>();
     if (!accident) throw ApiError.notFound("Acidente não encontrado.", "SAFETY_ACCIDENT_NOT_FOUND");
     if (accident.investigation_card_id) {
       throw new ApiError(409, "SAFETY_INVESTIGATION_ALREADY_OPEN", "Este acidente já tem um plano de ação aberto.");
