@@ -77,10 +77,23 @@ const VIEW_PATHS: Record<PanelView, string> = {
  * Visões que abrem um registro pelo endereço.
  *
  * A demanda é o link que se manda para o colega; o item de triagem é o link que
- * se manda para quem sabe de quem ele é. As demais visões não abrem registro, e
- * um identificador pendurado nelas seria um endereço que promete e não entrega.
+ * se manda para quem sabe de quem ele é; o cadastro é o colaborador que o
+ * Motor de Prazos aponta quando um exame ou treinamento vence (§4.12) — sem
+ * isso o link do card de "o que vence esta semana" abriria a lista inteira de
+ * colaboradores, não a pessoa certa. As demais visões não abrem registro, e um
+ * identificador pendurado nelas seria um endereço que promete e não entrega.
  */
-const VIEWS_WITH_RECORD = new Set<PanelView>(["board", "triage"]);
+const VIEWS_WITH_RECORD = new Set<PanelView>(["board", "triage", "registrations"]);
+
+/**
+ * Abas do colaborador que têm endereço próprio.
+ *
+ * Só as que o Motor de Prazos precisa apontar diretamente — hoje ASO e
+ * treinamento, as duas fontes que vencem. As demais abas continuam existindo,
+ * só não têm parâmetro de URL porque nada aponta para elas de fora ainda.
+ */
+export const employeeRecordTabs = ["exams", "trainings"] as const;
+export type EmployeeRecordTab = typeof employeeRecordTabs[number];
 
 /* Do endereço para a visão. Ordenado do caminho mais longo para o mais curto:
    sem isso `pj/fechamentos` casaria com `pj` e a pessoa cairia na tela errada. */
@@ -112,8 +125,10 @@ const SETTINGS_BY_PATH = new Map(
 
 export type PanelLocation = {
   view: PanelView;
-  /** Registro aberto dentro da visão — hoje, a demanda. */
+  /** Registro aberto dentro da visão — demanda, item de triagem ou colaborador. */
   recordId: string;
+  /** Aba do registro, quando a visão e a aba têm endereço (hoje, só o colaborador). */
+  recordTab: EmployeeRecordTab | "";
   /** Configurações abertas, e em qual seção (§46). */
   settings: PanelSettingsSection | null;
   /** Filtro de empresa; vazio significa "todas as que a pessoa enxerga". */
@@ -121,7 +136,7 @@ export type PanelLocation = {
 };
 
 export const defaultPanelLocation: PanelLocation = {
-  view: "overview", recordId: "", settings: null, companyId: "",
+  view: "overview", recordId: "", recordTab: "", settings: null, companyId: "",
 };
 
 const clean = (value: unknown, max = 120) =>
@@ -137,6 +152,7 @@ const clean = (value: unknown, max = 120) =>
 export function panelPath(location: Partial<PanelLocation>): string {
   const view = location.view && panelViews.includes(location.view) ? location.view : "overview";
   const recordId = clean(location.recordId);
+  const hasRecord = Boolean(recordId) && VIEWS_WITH_RECORD.has(view);
   const settings = location.settings && settingsSections.includes(location.settings) ? location.settings : null;
 
   const segments: string[] = ["painel"];
@@ -146,12 +162,19 @@ export function panelPath(location: Partial<PanelLocation>): string {
     const path = VIEW_PATHS[view];
     if (path) segments.push(...path.split("/"));
     // O registro só faz sentido dentro da visão que sabe abri-lo.
-    if (recordId && VIEWS_WITH_RECORD.has(view)) segments.push(encodeURIComponent(recordId));
+    if (hasRecord) segments.push(encodeURIComponent(recordId));
   }
 
   const companyId = clean(location.companyId);
-  const query = companyId ? `?empresa=${encodeURIComponent(companyId)}` : "";
-  return `/${segments.join("/")}${query}`;
+  const parameters = new URLSearchParams();
+  if (companyId) parameters.set("empresa", companyId);
+  // A aba só faz sentido pendurada num registro que a tem — sem o colaborador
+  // aberto, "aba=exams" não aponta para lugar nenhum.
+  if (hasRecord && location.recordTab && (employeeRecordTabs as readonly string[]).includes(location.recordTab)) {
+    parameters.set("aba", location.recordTab);
+  }
+  const query = parameters.toString();
+  return `/${segments.join("/")}${query ? `?${query}` : ""}`;
 }
 
 /**
@@ -164,6 +187,8 @@ export function panelPath(location: Partial<PanelLocation>): string {
 export function parsePanelPath(pathname: string, search = ""): PanelLocation {
   const parameters = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const companyId = clean(parameters.get("empresa"));
+  const rawTab = clean(parameters.get("aba"));
+  const recordTab = (employeeRecordTabs as readonly string[]).includes(rawTab) ? rawTab as EmployeeRecordTab : "";
 
   const raw = clean(pathname, 400).replace(/^\/+|\/+$/gu, "");
   const parts = raw.split("/").filter(Boolean);
@@ -173,7 +198,7 @@ export function parsePanelPath(pathname: string, search = ""): PanelLocation {
 
   if (rest[0] === "configuracoes") {
     const section = SETTINGS_BY_PATH.get(rest[1] ?? "") ?? "general";
-    return { view: "overview", recordId: "", settings: section, companyId };
+    return { view: "overview", recordId: "", recordTab: "", settings: section, companyId };
   }
 
   for (const [view, path] of PATH_VIEWS) {
@@ -181,7 +206,7 @@ export function parsePanelPath(pathname: string, search = ""): PanelLocation {
     if (expected.every((segment, index) => rest[index] === segment)) {
       const extra = rest.slice(expected.length);
       const recordId = VIEWS_WITH_RECORD.has(view) ? clean(extra[0]) : "";
-      return { view, recordId, settings: null, companyId };
+      return { view, recordId, recordTab: recordId ? recordTab : "", settings: null, companyId };
     }
   }
   return { ...defaultPanelLocation, companyId };
@@ -195,6 +220,11 @@ export function demandPath(cardId: string, companyId = "") {
 /** Endereço de um item de triagem — o link que se manda para quem sabe resolvê-lo. */
 export function triagePath(itemId: string) {
   return panelPath({ view: "triage", recordId: itemId });
+}
+
+/** Endereço do colaborador, opcionalmente já na aba de ASO ou treinamento (§4.12). */
+export function employeePath(employeeId: string, recordTab: EmployeeRecordTab | "" = "") {
+  return panelPath({ view: "registrations", recordId: employeeId, recordTab });
 }
 
 /** Os endereços que o produto promete; usado pela verificação de navegador. */

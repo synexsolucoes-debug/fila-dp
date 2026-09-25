@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  defaultPanelLocation, demandPath, panelPath, panelRoutes, panelViews,
+  defaultPanelLocation, demandPath, employeePath, panelPath, panelRoutes, panelViews,
   parsePanelPath, settingsSections,
 } from "../lib/panel-routes.ts";
 
@@ -52,6 +52,27 @@ test("o registro só aparece na visão que sabe abri-lo", () => {
   // endereço que promete algo e não entrega.
   assert.equal(panelPath({ view: "timeTracking", recordId: "x" }), "/painel/ponto");
   assert.equal(parsePanelPath("/painel/ponto/x").recordId, "");
+});
+
+test("o colaborador tem endereço próprio, opcionalmente já na aba certa (§4.12)", () => {
+  // Sem ele, o link de "ASO vence" do Motor de Prazos abriria a lista inteira
+  // de Cadastros, não a pessoa certa.
+  assert.equal(employeePath("emp-1"), "/painel/cadastros/emp-1");
+  assert.equal(employeePath("emp-1", "exams"), "/painel/cadastros/emp-1?aba=exams");
+  assert.equal(employeePath("emp-1", "trainings"), "/painel/cadastros/emp-1?aba=trainings");
+
+  const parsed = parsePanelPath("/painel/cadastros/emp-1", "?aba=exams");
+  assert.equal(parsed.view, "registrations");
+  assert.equal(parsed.recordId, "emp-1");
+  assert.equal(parsed.recordTab, "exams");
+});
+
+test("a aba do colaborador não sobrevive sem o colaborador — e uma aba desconhecida é ignorada", () => {
+  // "aba=exams" pendurado na lista, sem id de colaborador, não aponta para
+  // lugar nenhum — a mesma regra que já vale para o próprio registro.
+  assert.equal(parsePanelPath("/painel/cadastros", "?aba=exams").recordTab, "");
+  assert.equal(parsePanelPath("/painel/cadastros/emp-1", "?aba=invalida").recordTab, "");
+  assert.equal(panelPath({ view: "registrations", recordTab: "exams" }), "/painel/cadastros");
 });
 
 test("o filtro de empresa vai na URL e volta dela", () => {
@@ -119,6 +140,20 @@ test("a lista de rotas prometidas cobre visões e configurações", () => {
   assert.equal(routes.length, panelViews.length + settingsSections.length);
   assert.ok(routes.includes("/painel/demandas"));
   assert.ok(routes.includes("/painel/configuracoes/seguranca"));
+});
+
+test("o colaborador do endereço chega até a ficha, e a aba junto (§4.12)", async () => {
+  const [app, view] = await Promise.all([
+    readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(app, /initialEmployeeId=\{initialLocation\.view === "registrations" \? initialLocation\.recordId : ""\}/u);
+  assert.match(app, /initialEmployeeTab=\{initialLocation\.view === "registrations" \? initialLocation\.recordTab : ""\}/u);
+  assert.match(view, /initialEmployeeId/u);
+  assert.match(view, /initialEmployeeTab/u);
+  // Um colaborador que a pessoa não alcança não é erro do link: a rota de
+  // dados já recusa, e a tela mostra o erro de sempre — não uma exceção nova.
+  assert.match(view, /catch \(cause\) \{\s*setError\(cause instanceof Error \? cause\.message : "Não foi possível abrir o colaborador do link\."\);/u);
 });
 
 test("a lista de telas do painel tem uma fonte só, e as duas cópias não podem divergir", async () => {

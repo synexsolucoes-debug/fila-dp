@@ -567,6 +567,45 @@ tela própria fora da ficha do colaborador.
 | --- | --- |
 | Isolamento por tenant, FK real para o colaborador, nome livre mas não vazio, validade não anterior à conclusão, e a régua de situação | `tests/mandatory-trainings.test.mts` |
 
+### 4.12 O colaborador ganha endereço — Motor de Prazos, passo 2
+
+ASO (§4.8) e treinamento (§4.11) ficaram de fora da Central de Trabalho
+quando nasceram porque faltava para onde apontar: as duas telas vivem dentro
+da ficha do colaborador, e `lib/panel-routes.ts` (§43, §44) não sabia abrir um
+colaborador específico por endereço — só demanda e item de triagem tinham essa
+porta. Um item de "ASO vence" sem link para a pessoa certa seria o que o
+próprio módulo de rotas já nomeia como o erro a evitar: "um endereço que
+promete e não entrega".
+
+A extensão é a mesma receita que já existia para demanda e triagem:
+`registrations` entra em `VIEWS_WITH_RECORD`, o id do colaborador vira o
+segmento final do caminho (`/painel/cadastros/<id>`), e uma aba opcional
+(`?aba=exams` ou `?aba=trainings`) manda a ficha abrir direto na aba certa —
+sem a aba, abre na aba pessoal, como sempre abriu. `RegistrationsView` lê o
+id uma vez só, ao montar, no mesmo padrão de `initialItemId` da Central de
+Triagem: busca o colaborador por `GET /api/employees/[id]` e abre a ficha; se
+a pessoa não alcança aquele colaborador, a rota de dados recusa e a tela
+mostra o erro de sempre, não uma exceção nova.
+
+Com o endereço existindo, as duas fontes que já tinham o dado
+(`next_due_date` do ASO, `valid_until` do treinamento) entram na Central como
+`occupational_exam_due` e `training_due`, no mesmo desenho de `epi_ca_expiry`
+(§4.3): janela de 60 dias, vocabulário `safe`/`warning`/`overdue`, sem
+responsável individual — o vencimento é do grupo, não de quem cadastrou.
+
+**O que isto ainda não faz** — e é deliberado: se um colaborador tiver mais
+de um exame/treinamento vencendo na mesma janela, cada um vira um item
+separado — não existe "só o mais recente conta". Corrigir isso pediria um
+segundo parâmetro de `workspace_id` numa subconsulta que `buildWorkItemQuery`
+não suporta hoje, e o caso é raro (um exame novo normalmente substitui o
+anterior antes de ele vencer de novo). Também não há aviso por e-mail quando
+um item destes nasce — a Central mostra, mas ninguém é notificado ainda (isso
+é a Notificação externa, §4.4, ainda não estendida a estes dois itens).
+
+| Verificação | Onde |
+| --- | --- |
+| O colaborador tem endereço próprio, a aba não sobrevive sem o registro, e o link do Motor de Prazos aponta para a pessoa | `tests/panel-routes.test.mts`, `tests/work-items.test.mts` |
+
 ---
 
 ## 5. Agentes

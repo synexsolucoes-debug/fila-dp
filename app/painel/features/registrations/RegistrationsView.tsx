@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { hasCapability } from "@/lib/authorization";
+import type { EmployeeRecordTab } from "@/lib/panel-routes";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
 import { EmptyState, ErrorBanner, LoadingState, PageSkeleton, StatusPill } from "../shared";
 import { ContractorsPanel } from "./ContractorsPanel";
@@ -157,8 +158,11 @@ function initials(value: string) { return value.split(/\s+/).filter(Boolean).sli
 function statusLabel(status: Employee["employmentStatus"]) { return status === "on_leave" ? "Afastado" : status === "terminated" ? "Desligado" : "Ativo"; }
 function historyLabel(action: string) { return action.endsWith(".created") ? "Cadastro criado" : action.endsWith(".updated") ? "Dados atualizados" : action.endsWith(".inactivated") ? "Cadastro inativado" : action.replaceAll(".", " · "); }
 
-export function RegistrationsView({ role, onOpenContractorPayment }: {
+export function RegistrationsView({ role, initialEmployeeId = "", initialEmployeeTab = "", onOpenContractorPayment }: {
   role: WorkspaceRole;
+  /** Colaborador que o endereço pediu — o link do Motor de Prazos (§4.12). */
+  initialEmployeeId?: string;
+  initialEmployeeTab?: EmployeeRecordTab | "";
   onOpenContractorPayment: (target: { companyId: string; competence: string; closingId: string }) => void;
 }) {
   const canManageCompanies = false;
@@ -266,6 +270,29 @@ export function RegistrationsView({ role, onOpenContractorPayment }: {
   async function loadEmployeeCatalogs(companyId: string) {
     await Promise.all((Object.keys(catalogMeta) as CatalogResource[]).map((resource) => loadCatalog(resource, companyId)));
   }
+
+  /**
+   * Abre o colaborador que o endereço pediu, uma vez só — o mesmo raciocínio
+   * de `deepLinkedCardOpened` em `WorkspaceApp` para a demanda. Colaborador que
+   * o link aponta e a pessoa não alcança não é erro do link: a rota de dados
+   * já recusa, e a tela mostra o erro de sempre.
+   */
+  const deepLinkedEmployeeOpened = useRef(false);
+  useEffect(() => {
+    if (deepLinkedEmployeeOpened.current || !initialEmployeeId) return;
+    deepLinkedEmployeeOpened.current = true;
+    (async () => {
+      try {
+        const payload = await requestJson<{ employee: JsonRecord }>(`/api/employees/${encodeURIComponent(initialEmployeeId)}`);
+        setTab("employees");
+        openEmployee(normalizeEmployee(payload.employee));
+        if (initialEmployeeTab) setEmployeeDetailTab(initialEmployeeTab);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Não foi possível abrir o colaborador do link.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEmployeeId]);
 
   function openEmployee(employee: Employee | "new") {
     setEmployeeEditor(employee);

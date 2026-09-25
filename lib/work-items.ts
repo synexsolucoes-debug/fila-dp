@@ -40,6 +40,7 @@
  * fonte aqui** em vez de criar o quinto objeto paralelo com a quinta tela.
  */
 import type { Capability } from "./authorization.ts";
+import { employeePath } from "./panel-routes.ts";
 
 /** Contrato de leitura. Um item, venha de onde vier, se descreve assim. */
 export type WorkItem = {
@@ -85,7 +86,9 @@ export type WorkItemSource =
   | "triage"
   | "integration_failure"
   | "compliance_obligation"
-  | "epi_ca_expiry";
+  | "epi_ca_expiry"
+  | "occupational_exam_due"
+  | "training_due";
 
 export type WorkItemScope = "mine" | "team";
 
@@ -327,6 +330,67 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
       WHERE p.workspace_id = ? AND p.status = 'active'
         AND p.ca_expires_on IS NOT NULL AND p.ca_expires_on <= CURRENT_DATE + 60 {{company}} {{mine}}`,
   },
+  /* ---------------------------------------------------------------------- *
+   * Motor de Prazos — segundo passo
+   *
+   * ASO e treinamento têm FK real para o colaborador (§4.8, §4.11), então
+   * podem apontar direto para a pessoa — o link assinado genérico (§4.10)
+   * provou o padrão de abrir um registro fora do módulo que o criou, e
+   * `employeePath` (lib/panel-routes.ts, §4.12) faz o mesmo pela ficha do
+   * colaborador: sem ele, este item abriria a lista inteira de Cadastros, não
+   * a pessoa certa.
+   *
+   * Como o EPI CA (§4.3), sem responsável individual: o vencimento pertence
+   * ao grupo, não a quem cadastrou o exame.
+   *
+   * Limitação conhecida: se um colaborador tiver mais de um exame/treinamento
+   * com vencimento na janela, cada um aparece como item — não há "o mais
+   * recente vence, os anteriores somem". Raro na prática (um exame novo
+   * normalmente substitui o anterior antes de ele vencer de novo), e resolver
+   * isso exigiria um segundo parâmetro de workspace numa subconsulta que
+   * `buildWorkItemQuery` não suporta hoje — adiado até acontecer de verdade. */
+  {
+    key: "occupational_exam_due",
+    label: "ASO vencendo",
+    capability: "exams.view",
+    companyColumn: "e.company_id",
+    mineCondition: "",
+    mineParameters: 0,
+    sql: `SELECT 'occupational_exam_due' AS source_type, e.id AS source_id,
+        'ASO vence — ' || COALESCE(NULLIF(emp.social_name, ''), emp.full_name) AS title,
+        'Exame ocupacional' AS description, 'normal' AS priority, e.company_id,
+        COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        e.employee_id, e.next_due_date::timestamptz AS due_at, e.created_at, e.updated_at,
+        CASE WHEN e.next_due_date < CURRENT_DATE THEN 'overdue'
+             WHEN e.next_due_date = CURRENT_DATE THEN 'warning' ELSE 'safe' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_occupational_exams e
+      LEFT JOIN fdp_companies co ON co.workspace_id = e.workspace_id AND co.id = e.company_id
+      LEFT JOIN fdp_employees emp ON emp.workspace_id = e.workspace_id AND emp.id = e.employee_id
+      WHERE e.workspace_id = ? AND e.next_due_date IS NOT NULL AND e.next_due_date <= CURRENT_DATE + 60 {{company}} {{mine}}`,
+  },
+  {
+    key: "training_due",
+    label: "Treinamento vencendo",
+    capability: "trainings.view",
+    companyColumn: "t.company_id",
+    mineCondition: "",
+    mineParameters: 0,
+    sql: `SELECT 'training_due' AS source_type, t.id AS source_id,
+        t.training_name || ' vence — ' || COALESCE(NULLIF(emp.social_name, ''), emp.full_name) AS title,
+        'Treinamento obrigatório' AS description, 'normal' AS priority, t.company_id,
+        COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        t.employee_id, t.valid_until::timestamptz AS due_at, t.created_at, t.updated_at,
+        CASE WHEN t.valid_until < CURRENT_DATE THEN 'overdue'
+             WHEN t.valid_until = CURRENT_DATE THEN 'warning' ELSE 'safe' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_trainings t
+      LEFT JOIN fdp_companies co ON co.workspace_id = t.workspace_id AND co.id = t.company_id
+      LEFT JOIN fdp_employees emp ON emp.workspace_id = t.workspace_id AND emp.id = t.employee_id
+      WHERE t.workspace_id = ? AND t.valid_until IS NOT NULL AND t.valid_until <= CURRENT_DATE + 60 {{company}} {{mine}}`,
+  },
 ];
 
 /* -------------------------------------------------------------------------- *
@@ -402,6 +466,8 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
   integration_failure: "Verificar o agente e reprocessar",
   compliance_obligation: "Cumprir e registrar a obrigação",
   epi_ca_expiry: "Substituir o produto ou renovar o CA",
+  occupational_exam_due: "Agendar o exame com o colaborador",
+  training_due: "Agendar a reciclagem do treinamento",
 };
 
 /**
@@ -417,7 +483,7 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
  * Agentes**, que é onde se reprocessa. O identificador vai na querystring para
  * a tela poder destacar o item.
  */
-export function workItemHref(source: WorkItemSource, id: string): string {
+export function workItemHref(source: WorkItemSource, id: string, employeeId?: string): string {
   const item = encodeURIComponent(id);
   switch (source) {
     case "card": return `/painel/demandas/${item}`;
@@ -429,6 +495,10 @@ export function workItemHref(source: WorkItemSource, id: string): string {
     case "integration_failure": return `/painel/agentes?execucao=${item}`;
     case "compliance_obligation": return `/painel/operacao?obrigacao=${item}`;
     case "epi_ca_expiry": return `/painel/epi?ca=${item}`;
+    // Aponta para o colaborador, não para o exame/treinamento (§4.12) — é a
+    // pessoa que a tela precisa mostrar, e o registro não tem tela própria.
+    case "occupational_exam_due": return employeeId ? employeePath(employeeId, "exams") : "/painel/cadastros";
+    case "training_due": return employeeId ? employeePath(employeeId, "trainings") : "/painel/cadastros";
     default: return "/painel";
   }
 }
@@ -501,7 +571,7 @@ export function toWorkItem(row: Record<string, unknown>, today = new Date().toIS
     originLabel: originLabel(origin),
     blockedReason: blockedReasonOf(sourceType, status, dueAt || null, today) || undefined,
     nextAction: NEXT_ACTIONS[sourceType] ?? "Abrir o item",
-    href: workItemHref(sourceType, sourceId),
+    href: workItemHref(sourceType, sourceId, text(row.employee_id) || undefined),
     tone: toneOf(status, dueAt || null, priority, today),
   };
 }
