@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { movementEmploymentEffect } from "../lib/operations.ts";
+import { movementEmploymentEffect, movementTransferEffect } from "../lib/operations.ts";
 
 /**
  * Motor de Jornadas, passo 1 (§4.16): `fdp_employee_movements` já cobria
@@ -20,6 +20,27 @@ test("afastamento e desligamento têm efeito sobre a situação do colaborador; 
   for (const type of ["salary_change", "vacation", "transfer", "benefit_change", "registration_sync", "epi_discount", "other"]) {
     assert.equal(movementEmploymentEffect(type), null);
   }
+});
+
+/* ── `movementTransferEffect` (passo 2 — §4.17) ──────────────────────────── */
+
+test("sem empresa de destino, movementTransferEffect não aplica nada em silêncio", () => {
+  assert.deepEqual(movementTransferEffect({}, "empresa-1"), { kind: "missing_target" });
+  assert.deepEqual(movementTransferEffect({ targetCompanyId: "" }, "empresa-1"), { kind: "missing_target" });
+});
+
+test("empresa de destino diferente da atual é recusada, não aplicada parcialmente", () => {
+  assert.deepEqual(
+    movementTransferEffect({ targetCompanyId: "empresa-2", departmentId: "dep-1" }, "empresa-1"),
+    { kind: "cross_company" },
+  );
+});
+
+test("mesma empresa move só os campos informados, e ignora os que vieram vazios", () => {
+  assert.deepEqual(
+    movementTransferEffect({ targetCompanyId: "empresa-1", departmentId: "dep-1", positionId: "", costCenterId: "cc-1" }, "empresa-1"),
+    { kind: "same_company", departmentId: "dep-1", positionId: null, costCenterId: "cc-1" },
+  );
 });
 
 /* ── a rota de aplicação ──────────────────────────────────────────────────── */
@@ -54,6 +75,21 @@ test("aplicar grava a movimentação e o cadastro na mesma transação, com audi
   assert.match(source, /movement\.applied/u);
   assert.match(source, /requireCapability\(workspace, "movements\.manage"\)/u);
   assert.match(source, /requireCompanyAccess/u);
+});
+
+test("transferência para outra empresa recusa antes do batch — a movimentação continua aprovada", async () => {
+  const source = await readFile(new URL("../app/api/operations/movements/[id]/apply/route.ts", import.meta.url), "utf8");
+  assert.match(source, /TRANSFER_CROSS_COMPANY_NOT_SUPPORTED/u);
+  assert.match(source, /TRANSFER_TARGET_REQUIRED/u);
+  assert.match(source, /TRANSFER_NO_TARGET/u);
+  // As recusas de transferência precisam vir antes de `d1.batch`, e não dentro dele.
+  const batchIndex = source.indexOf("d1.batch(statements)");
+  assert.ok(source.indexOf("TRANSFER_CROSS_COMPANY_NOT_SUPPORTED") < batchIndex);
+});
+
+test("transferência na mesma empresa move departamento, cargo e centro de custo com COALESCE", async () => {
+  const source = await readFile(new URL("../app/api/operations/movements/[id]/apply/route.ts", import.meta.url), "utf8");
+  assert.match(source, /department_id = COALESCE\(\?, department_id\), position_id = COALESCE\(\?, position_id\), cost_center_id = COALESCE\(\?, cost_center_id\)/u);
 });
 
 /* ── a tela: botão "Aplicar" só para quem gerencia, só quando aprovada ─────── */
