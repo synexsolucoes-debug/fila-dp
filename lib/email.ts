@@ -161,3 +161,21 @@ export async function sendAccessRecoveryEmail(input: RecoveryEmail): Promise<Tra
     idempotencyKey: input.idempotencyKey,
   });
 }
+
+type WorkDigestEmail = {
+  to: string;
+  subject: string;
+  html: string;
+  idempotencyKey: string;
+};
+
+/**
+ * Resumo diário da Central de Trabalho (`lib/work-digest.ts`). Mesma postura
+ * de convite e recuperação: nunca lança, e sem provedor configurado devolve
+ * `null` em vez de impedir a varredura agendada de seguir para o próximo
+ * workspace.
+ */
+export async function sendWorkDigestEmail(input: WorkDigestEmail): Promise<TransactionalEmailResult | null> {
+  if (!transactionalEmailConfigured()) return null;
+  return dispatchTransactionalEmail(input);
+}
