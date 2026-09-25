@@ -990,6 +990,50 @@ níveis) — só a própria, direta.
 | --- | --- |
 | O vínculo é opcional, único por colaborador e `SET NULL` ao apagar o colaborador; a rota de vínculo recusa colaborador de outro grupo ou já vinculado a outra conta; `GET /api/gestor/team` nunca aceita parâmetro de entrada e distingue sem-vínculo de equipe-vazia; e nem o vínculo nem o nome do colaborador entram na consulta do snapshot | `tests/gestor-portal.test.mts` |
 
+### 4.21 Cargo de risco sem exame — Motor de Prazos, passo 4
+
+`fdp_positions.risk_level` existe desde a migration 0098 justamente para isso
+— decidir que tipos de exame um cargo exige — mas nunca teve consumidor.
+Fora do próprio formulário de cadastro do cargo (`RegistrationsView`), nenhuma
+rota, relatório ou fila jamais lia essa coluna. Era exatamente o padrão que já
+rendeu outros passos deste roadmap: um valor legal, aceito e guardado, sem
+ninguém do outro lado perguntando por ele.
+
+`occupational_exam_due` (§4.8, §4.12) já cobre "ASO vencendo" — mas só para
+quem **já tem** um exame registrado com `next_due_date`. Ele é cego para o
+colaborador que está num cargo de risco e nunca teve exame nenhum: sem
+registro, não há `next_due_date` para vencer, e a pessoa simplesmente não
+aparece em lugar algum do Motor de Prazos. É exatamente o caso que a NR-7
+mais cobra — o exame admissional — e o mais fácil de esquecer numa admissão
+corrida.
+
+A nova fonte (`position_risk_exam_missing`) fecha essa lacuna: colaborador
+ativo, cargo com `risk_level IN ('medium', 'high')`, sem nenhuma linha em
+`fdp_occupational_exams`. Sem tabela nova — é leitura cruzada de duas tabelas
+que já existem, no mesmo desenho de todas as fontes do Motor de Prazos (§9).
+
+Diferente do CA de EPI (janela de 60 dias) e igual à CAT pendente (§4.13), o
+item não tem prazo futuro para vencer — a obrigação nasce com a admissão, não
+com uma data que ainda vai chegar. Por isso a "data de referência" é
+`admission_date` (sempre no passado, para quem já está ativo) e o item já
+nasce `overdue`. Cargo de risco `high` entra com prioridade `urgent`; `medium`
+com `high` — a mesma lógica de graduar urgência por gravidade que a Central
+já usa em pendência bloqueante (§9).
+
+**O que isto ainda não faz** — e é deliberado: não decide quais tipos de
+exame um cargo específico exige (isso seria a Matriz de Requisitos genérica,
+ainda não construída, a mesma lacuna que §4.8 e §4.11 já nomeavam); não
+reavalia se um exame antigo demais (ex.: um admissional de anos atrás, sem
+periódico desde então) ainda "conta" — a régua é só "existe alguma linha",
+não "existe uma linha válida"; e não entra nas contagens do Command Center
+(§4.19) nem no resumo diário por e-mail (§4.15, embora `position_risk_exam_missing`
+já entre automaticamente nele — o mesmo motivo do §4.12 atualizado: o resumo
+lê `workItemSources` inteiro).
+
+| Verificação | Onde |
+| --- | --- |
+| A fonte cobre quem nunca teve exame (não duplica ASO vencendo), recorta a cargos de risco médio/alto e colaborador ativo, não tem janela de 60 dias, gradua prioridade por gravidade, e o link abre o colaborador | `tests/work-items.test.mts` |
+
 ---
 
 ## 5. Agentes
