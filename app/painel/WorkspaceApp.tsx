@@ -573,6 +573,8 @@ function normalizeWorkspaceSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnaps
       companyIds: Array.isArray(member.companyIds) ? member.companyIds : [],
       departmentId: member.departmentId ?? null,
       departmentName: member.departmentName ?? "",
+      employeeId: member.employeeId ?? null,
+      employeeName: member.employeeName ?? "",
     })) : [],
     boards: Array.isArray(snapshot.boards) ? snapshot.boards.map((board) => ({ ...board, stages: Array.isArray(board.stages) ? board.stages : [] })) : [],
     availableWorkspaces: Array.isArray(snapshot.availableWorkspaces) ? snapshot.availableWorkspaces : [],
@@ -2424,6 +2426,11 @@ export function WorkspaceApp({
     await mutate(`/api/members/${userId}`, { method: "PATCH", body: JSON.stringify({ companyIds }) }, "Empresas liberadas para a pessoa.");
   }
 
+  async function updateMemberEmployeeLink(userId: string, employeeId: string) {
+    await mutate(`/api/members/${userId}`, { method: "PATCH", body: JSON.stringify({ employeeId }) },
+      employeeId ? "Conta vinculada ao colaborador." : "Vínculo com colaborador removido.");
+  }
+
   function selectableDepartmentModuleKeys(departmentId: string) {
     if (!snapshot) return [];
     const department = snapshot.areas.find((area) => area.id === departmentId && area.status === "active");
@@ -2821,6 +2828,7 @@ export function WorkspaceApp({
                       </select>
                     )}
                     {isAdmin && !member.isOwner && <MemberCompanyAccess key={`${member.userId}:${member.companyIds.join(",")}`} member={member} companies={snapshot.companies} busy={busy} onSave={updateMemberCompanies} />}
+                    {isAdmin && !member.isOwner && <MemberEmployeeLink key={`${member.userId}:${member.employeeId ?? "none"}`} member={member} busy={busy} onSave={updateMemberEmployeeLink} />}
                     {isAdmin && !member.isOwner && <button className="member-recovery-button" disabled={busy} onClick={() => void generateRecoveryLink(member.userId, member.name)}>{member.isActivated ? "Gerar novo link" : "Gerar link de ativação"}</button>}
                     {isAdmin && !member.isOwner && <button aria-label={`Remover ${member.name}`} disabled={busy} onClick={() => void removeMember(member.userId, member.name)}>×</button>}
                     {isAdmin && !member.isOwner && <details className="member-modules-details"><summary>Módulos deste usuário</summary><MemberModules memberId={member.userId} key={`${member.userId}:${member.departmentId ?? "none"}`} memberName={member.name} canManage={isAdmin} /></details>}
@@ -4510,6 +4518,64 @@ function MemberCompanyAccess({ member, companies, busy, onSave }: { member: Work
   const [selectedIds, setSelectedIds] = useState<string[]>(member.companyIds);
   if (member.role === "admin") return <span className="member-company-summary">Todas as empresas</span>;
   return <details className="member-company-access"><summary>{selectedIds.length ? `${selectedIds.length} empresa(s) liberada(s)` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
+}
+
+/**
+ * Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta representa —
+ * a ponte entre login e "de quem sou gestor" (`fdp_employees.manager_employee_id`,
+ * já existente, mas sem ligação com nenhuma conta até este vínculo existir).
+ * Busca por nome/matrícula em vez de uma lista só, porque o cadastro de
+ * colaboradores pode ter milhares de linhas — o mesmo motivo por que a
+ * própria ficha de colaboradores (RegistrationsView) pagina e busca, nunca
+ * lista tudo de uma vez.
+ */
+function MemberEmployeeLink({ member, busy, onSave }: { member: WorkspaceSnapshot["members"][number]; busy: boolean; onSave: (userId: string, employeeId: string) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Array<{ id: string; fullName: string; companyName: string; registrationNumber: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [linkedName, setLinkedName] = useState("");
+  // O snapshot não junta `fdp_employees` (mantém essa consulta livre da
+  // tabela de colaboradores — tests/registrations-phase3.test.mts); o nome
+  // de quem já está vinculado é buscado à parte, só quando existe vínculo.
+  useEffect(() => {
+    let active = true;
+    const frame = window.requestAnimationFrame(() => {
+      if (!member.employeeId) { setLinkedName(""); return; }
+      void fetch(`/api/employees/${member.employeeId}`)
+        .then((response) => response.ok ? response.json() as Promise<{ employee?: Record<string, unknown> }> : null)
+        .then((payload) => { if (active && payload?.employee) setLinkedName(String(payload.employee.fullName ?? payload.employee.full_name ?? "")); })
+        .catch(() => { if (active) setLinkedName(""); });
+    });
+    return () => { active = false; window.cancelAnimationFrame(frame); };
+  }, [member.employeeId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const trimmed = query.trim();
+      if (!open || trimmed.length < 2) { setResults([]); return; }
+      setSearching(true);
+      void fetch(`/api/employees?search=${encodeURIComponent(trimmed)}&status=active&limit=8`, { signal: controller.signal })
+        .then((response) => response.ok ? response.json() as Promise<{ employees?: Array<Record<string, unknown>> }> : { employees: [] })
+        .then((payload) => setResults((payload.employees ?? []).map((row) => ({
+          id: String(row.id), fullName: String(row.full_name ?? ""),
+          companyName: String(row.company_name ?? ""), registrationNumber: String(row.registration_number ?? ""),
+        }))))
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [open, query]);
+  return <details className="member-employee-link" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>{member.employeeId ? `Colaborador: ${linkedName || "vinculado"}` : "Sem colaborador vinculado"}</summary>
+    <div>
+      <input type="search" placeholder="Buscar por nome ou matrícula" value={query} disabled={busy} onChange={(event) => setQuery(event.target.value)} />
+      {searching && <small>Buscando…</small>}
+      {!searching && query.trim().length >= 2 && results.length === 0 && <small>Nenhum colaborador encontrado.</small>}
+      <ul>{results.map((result) => <li key={result.id}><button type="button" disabled={busy} onClick={() => { void onSave(member.userId, result.id); setQuery(""); setResults([]); }}>{result.fullName} · {result.registrationNumber || "sem matrícula"} · {result.companyName}</button></li>)}</ul>
+      {member.employeeId && <button type="button" className="member-employee-unlink" disabled={busy} onClick={() => void onSave(member.userId, "")}>Remover vínculo</button>}
+    </div>
+  </details>;
 }
 
 function ProcessTablesView({ cards, lists, areas, onOpen }: { cards: Card[]; lists: WorkspaceSnapshot["lists"]; areas: WorkspaceSnapshot["areas"]; onOpen: (card: Card) => void }) {

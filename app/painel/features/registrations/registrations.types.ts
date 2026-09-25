@@ -96,6 +96,7 @@ export type EmployeeDraft = {
   costCenterId: string;
   workScheduleId: string;
   establishmentId: string;
+  managerEmployeeId: string;
   admissionDate: string;
   birthDate: string;
   terminationDate: string;

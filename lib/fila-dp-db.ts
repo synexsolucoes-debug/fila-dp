@@ -437,7 +437,7 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       LEFT JOIN fdp_users u ON u.email = ae.actor_email
       WHERE ae.workspace_id = ?
       ORDER BY ae.created_at DESC LIMIT ?`).bind(workspace.id, SNAPSHOT_ACTIVITY_LIMIT).all(),
-    d1.prepare(`SELECT u.id AS user_id, u.email, u.name, wm.role, wm.joined_at,
+    d1.prepare(`SELECT u.id AS user_id, u.email, u.name, wm.role, wm.joined_at, wm.employee_id,
         CASE WHEN w.owner_user_id = u.id THEN 1 ELSE 0 END AS is_owner,
         CASE WHEN u.password_hash IS NULL THEN 0 ELSE 1 END AS is_activated,
         primary_area.area_id AS department_id, primary_area.area_name AS department_name
@@ -901,6 +901,15 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
       companyIds: canManageMembers ? (memberCompanyIds.get(String(row.user_id)) ?? []) : [],
       departmentId: row.department_id ? String(row.department_id) : null,
       departmentName: row.department_name ? String(row.department_name) : "",
+      // Portal do Gestor, passo 1 (§4.20): qual colaborador esta conta
+      // representa — a ponte que falta entre login e "de quem sou gestor".
+      // Não junta `fdp_employees` aqui: o snapshot é carregado a cada troca
+      // de tela e de workspace, e essa consulta continua deliberadamente
+      // livre da tabela de colaboradores (tests/registrations-phase3.test.mts).
+      // O nome, quando precisa aparecer, é buscado à parte
+      // (`GET /api/employees/[id]`, sob demanda).
+      employeeId: canManageMembers && row.employee_id ? String(row.employee_id) : null,
+      employeeName: "",
     })),
     // A lista vem do serviço central, não de uma consulta paralela: inclui o
     // status para o seletor poder dizer por que um grupo não está disponível.
