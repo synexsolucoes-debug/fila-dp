@@ -8,6 +8,14 @@ import test from "node:test";
  * SST/ASO/obrigações). Cinco contagens que já existiam em algum módulo (ASO,
  * NR, acidentes, CAT, obrigações legais) somadas num só lugar, sem tabela
  * nova.
+ *
+ * Passo 2 acrescenta a taxa de conformidade de EPI, deixada de fora do passo
+ * 1 porque exigia decidir o que "conformidade do grupo" significa. A decisão:
+ * reaproveitar o mesmo motor puro do dashboard de EPI por empresa
+ * (`lib/epi-compliance.ts#buildEpiCompliance`), alimentado com o recorte
+ * inteiro numa única passada (sem laço por empresa), e definir a taxa como
+ * "dos colaboradores com alguma regra aplicável, quantos estão em dia" —
+ * quem não tem regra nenhuma cadastrada fica fora da conta.
  */
 
 const routeSource = await readFile(new URL("../app/api/reports/route.ts", import.meta.url), "utf8");
@@ -22,6 +30,21 @@ test("as cinco contagens de segurança/conformidade entram na resposta de /api/r
   assert.match(routeSource, /accidentsInPeriod: accidentsInPeriod\?\.total \?\? 0/u);
   assert.match(routeSource, /catPending: catPending\?\.total \?\? 0/u);
   assert.match(routeSource, /overdueObligations: overdueObligations\?\.total \?\? 0/u);
+  assert.match(routeSource, /epiComplianceRate,/u);
+});
+
+test("a taxa de conformidade de EPI reaproveita buildEpiCompliance numa única passada, sem laço por empresa", () => {
+  assert.match(routeSource, /import \{ buildEpiCompliance, type EpiComplianceEmployeeInput, type EpiHoldingInput, type EpiRequirementInput \} from "@\/lib\/epi-compliance"/u);
+  assert.match(routeSource, /const epiCompliance = buildEpiCompliance\(epiEmployees, epiRequirements, epiHoldings, today\)/u);
+  assert.doesNotMatch(routeSource, /for \(const company/u, "não deve iterar empresa por empresa (N+1)");
+  const epiQueries = routeSource.match(/FROM fdp_employees e\s*\n\s*WHERE e\.workspace_id = \?/gu) ?? [];
+  assert.equal(epiQueries.length, 1, "uma única consulta de colaboradores para todo o recorte");
+});
+
+test("conformidade de EPI exclui quem não tem regra cadastrada (unconfigured) do denominador", () => {
+  assert.match(routeSource, /epiWithRequirement = epiCompliance\.filter\(\(item\) => item\.status !== "unconfigured"\)/u);
+  assert.match(routeSource, /epiCompliant = epiWithRequirement\.filter\(\(item\) => item\.status === "compliant"\)\.length/u);
+  assert.match(routeSource, /epiWithRequirement\.length\s*\n\s*\? Math\.round\(\(epiCompliant \/ epiWithRequirement\.length\) \* 1000\) \/ 10\s*\n\s*: null/u);
 });
 
 test("cada contagem é feita em SQL (count), não trazendo a tabela para filtrar em memória", () => {
@@ -65,4 +88,6 @@ test("a tela mostra a seção de saúde e conformidade com os cinco números, se
   assert.match(panelSource, /report\?\.safetyMetrics\?\.accidentsInPeriod \?\? 0/u);
   assert.match(panelSource, /report\?\.safetyMetrics\?\.catPending \?\? 0/u);
   assert.match(panelSource, /report\?\.safetyMetrics\?\.overdueObligations \?\? 0/u);
+  assert.match(panelSource, /Conformidade de EPI/u);
+  assert.match(panelSource, /report\?\.safetyMetrics\?\.epiComplianceRate == null \? "—" : `\$\{report\.safetyMetrics\.epiComplianceRate\}%`/u);
 });

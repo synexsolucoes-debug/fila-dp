@@ -1,6 +1,10 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
+import { buildEpiCompliance, type EpiComplianceEmployeeInput, type EpiHoldingInput, type EpiRequirementInput } from "@/lib/epi-compliance";
+
+const asText = (value: unknown) => value == null ? "" : String(value);
+const asNumber = (value: unknown) => Number(value) || 0;
 
 export async function GET(request: Request) {
   const auth = await getApiUser();
@@ -32,7 +36,8 @@ export async function GET(request: Request) {
     const companyIds = companyId ? [companyId] : [...companyAccess.companyIds];
     const companyUnrestricted = !companyId && companyAccess.unrestricted;
 
-    const [cards, hrMetrics, overdueExams, overdueTrainings, accidentsInPeriod, catPending, overdueObligations] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10);
+    const [cards, hrMetrics, overdueExams, overdueTrainings, accidentsInPeriod, catPending, overdueObligations, epiEmployeeRows, epiRequirementRows, epiHoldingRows] = await Promise.all([
       d1.prepare(`SELECT c.id, c.title, c.process_type, c.priority, c.created_at, c.updated_at, c.sla_status, c.archived, c.company_id,
       COALESCE(c.assignee_name, '') AS assignee_name
       FROM fdp_cards c JOIN fdp_boards b ON b.id = c.board_id
@@ -65,7 +70,59 @@ export async function GET(request: Request) {
         WHERE workspace_id = ? AND status IN ('open', 'in_progress', 'blocked') AND due_date < CURRENT_DATE
           AND (?::boolean OR company_id = ANY(?::text[]))`)
         .bind(workspace.id, companyUnrestricted, companyIds).first<{ total: number }>(),
+      // Taxa de conformidade de EPI (§4.19, passo 2): reaproveita o mesmo motor
+      // puro que o dashboard de EPI usa por empresa (lib/epi-compliance.ts),
+      // só que alimentado com colaborador/regra/saldo do recorte inteiro numa
+      // única passada — `buildEpiCompliance` já casa cada regra pela empresa
+      // do colaborador (`applies()`), então uma consulta por tabela basta;
+      // não é preciso um laço de uma consulta por empresa (N+1).
+      d1.prepare(`SELECT e.id, e.company_id, e.department_id, e.position_id, e.establishment_id
+        FROM fdp_employees e
+        WHERE e.workspace_id = ? AND e.employment_status = 'active'
+          AND (?::boolean OR e.company_id = ANY(?::text[]))`)
+        .bind(workspace.id, companyUnrestricted, companyIds).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT r.id, r.company_id, r.department_id, r.position_id, r.product_id, r.quantity,
+          r.replacement_days, r.warning_days, p.ca_number, p.ca_expires_on, p.product_expires_on
+        FROM fdp_epi_requirements r
+        JOIN fdp_epi_products p ON p.workspace_id = r.workspace_id AND p.id = r.product_id
+        WHERE r.workspace_id = ? AND r.active = 1 AND p.status <> 'inactive'
+          AND (?::boolean OR r.company_id = ANY(?::text[]))`)
+        .bind(workspace.id, companyUnrestricted, companyIds).all<Record<string, unknown>>(),
+      d1.prepare(`SELECT d.employee_id, d.product_id,
+          SUM(d.quantity - d.settled_quantity) AS quantity, MAX(d.delivered_on) AS last_delivered_on
+        FROM fdp_epi_deliveries d
+        WHERE d.workspace_id = ? AND d.status <> 'canceled' AND d.quantity > d.settled_quantity
+          AND (?::boolean OR d.company_id = ANY(?::text[]))
+        GROUP BY d.employee_id, d.product_id`)
+        .bind(workspace.id, companyUnrestricted, companyIds).all<Record<string, unknown>>(),
     ]);
+    const epiEmployees: EpiComplianceEmployeeInput[] = epiEmployeeRows.results.map((row) => ({
+      id: asText(row.id), companyId: asText(row.company_id), name: "", registrationNumber: "",
+      departmentId: asText(row.department_id), departmentName: "", positionId: asText(row.position_id),
+      positionName: "", establishmentId: asText(row.establishment_id),
+    }));
+    const epiRequirements: EpiRequirementInput[] = epiRequirementRows.results.map((row) => ({
+      id: asText(row.id), companyId: asText(row.company_id), departmentId: asText(row.department_id),
+      departmentName: "", positionId: asText(row.position_id), positionName: "",
+      establishmentId: "", productId: asText(row.product_id), productName: "", caNumber: asText(row.ca_number),
+      caExpiresOn: asText(row.ca_expires_on).slice(0, 10), productExpiresOn: asText(row.product_expires_on).slice(0, 10),
+      quantity: asNumber(row.quantity), replacementDays: asNumber(row.replacement_days), warningDays: asNumber(row.warning_days),
+    }));
+    const epiHoldings: EpiHoldingInput[] = epiHoldingRows.results.map((row) => ({
+      employeeId: asText(row.employee_id), productId: asText(row.product_id),
+      quantity: asNumber(row.quantity), lastDeliveredOn: asText(row.last_delivered_on).slice(0, 10),
+    }));
+    const epiCompliance = buildEpiCompliance(epiEmployees, epiRequirements, epiHoldings, today);
+    // "Conformidade do grupo" = dos colaboradores com pelo menos uma regra de
+    // EPI aplicável, quantos estão em dia — quem não tem regra nenhuma
+    // (`unconfigured`) fica fora da conta, porque não é "descumprindo", é
+    // "sem regra cadastrada ainda", uma situação diferente que inflaria ou
+    // esvaziaria a taxa sem dizer nada sobre conformidade real.
+    const epiWithRequirement = epiCompliance.filter((item) => item.status !== "unconfigured");
+    const epiCompliant = epiWithRequirement.filter((item) => item.status === "compliant").length;
+    const epiComplianceRate = epiWithRequirement.length
+      ? Math.round((epiCompliant / epiWithRequirement.length) * 1000) / 10
+      : null;
     const noEscopo = (row: Record<string, unknown>) => {
       const empresa = String(row.company_id ?? "");
       if (companyId && empresa !== companyId) return false;
@@ -128,6 +185,7 @@ export async function GET(request: Request) {
         accidentsInPeriod: accidentsInPeriod?.total ?? 0,
         catPending: catPending?.total ?? 0,
         overdueObligations: overdueObligations?.total ?? 0,
+        epiComplianceRate,
       },
     });
   } catch (error) { return apiError(error); }
