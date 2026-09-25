@@ -805,6 +805,38 @@ como erro de banco.
 | --- | --- |
 | `missing_target`, `cross_company` e `same_company` cobrem os três casos, a recusa de empresa diferente vem antes do batch, e o UPDATE preserva com COALESCE o que não foi informado | `tests/movement-apply.test.mts` |
 
+### 4.18 Dossiê do colaborador, passo 1 — EPI, ASO e treinamento num PDF só
+
+O problema que o roteiro de produto nomeou: montar os subsídios de uma defesa
+trabalhista hoje é abrir três telas diferentes (EPI, ASO, treinamento) e
+copiar à mão. As três já são dados estruturados e reais desde §4.3, §4.8 e
+§4.11 — nada de tabela nova, é leitura, como a Central de Trabalho (§93).
+`GET /api/employees/[id]/dossier` junta os três num PDF, no mesmo gerador
+(`pdf-lib`) já usado pelo recibo de pagamento PJ
+(`lib/contractor-batch-statement-pdf.ts`).
+
+Acidente de trabalho fica de fora de propósito: `fdp_work_accidents` é
+anonimizado, sem FK de colaborador (§83) — não há o que juntar.
+
+Cada seção é consultada só quando quem pede tem a capacidade dela
+(`epi.view`, `exams.view`, `trainings.view`), no mesmo desenho de
+`lib/work-items.ts` para a Central de Trabalho (§9: "uma fonte a que o
+usuário não tem acesso simplesmente não é consultada"). A diferença que
+importa aqui: uma seção sem capacidade imprime "sem permissão para
+consultar", nunca "0 registros" — as duas frases significam coisas
+diferentes num documento que vai para uma defesa, e confundi-las seria pior
+que não gerar a seção.
+
+**O que isto ainda não faz** — e é deliberado: não inclui acidente de
+trabalho (não há FK para incluir, ver acima); o botão vive só na ficha do
+colaborador (`RegistrationsView`), sem geração em lote para vários
+colaboradores de uma vez; e o layout é uma tabela simples por seção — sem
+gráfico, sem resumo executivo, sem assinatura digital do documento.
+
+| Verificação | Onde |
+| --- | --- |
+| Uma seção sem permissão nunca aparece como "0 registros", o PDF nasce válido com listas vazias e com seções nulas, e a tela baixa pelo mesmo padrão de blob do recibo PJ | `tests/employee-dossier-pdf.test.mts` |
+
 ---
 
 ## 5. Agentes
