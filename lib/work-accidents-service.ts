@@ -1,11 +1,15 @@
+import { getD1 } from "../db";
 import { ApiError } from "./api-errors.ts";
+import { resolveAreaModule } from "./areas.ts";
 import { cleanText } from "./clean-text.ts";
 import { dateFromDatabase, optionalDate } from "./registrations.ts";
 import {
-  accidentBodyParts, accidentGenders, accidentShifts, accidentTypes,
+  accidentBodyParts, accidentGenders, accidentShifts, accidentTypes, investigationDemandTitle,
   type AccidentBodyPart, type AccidentGender, type AccidentShift, type AccidentType,
   type WorkAccidentRecord,
 } from "./work-accidents.ts";
+
+type Database = ReturnType<typeof getD1>;
 
 /**
  * A porta de entrada do lançamento de acidente.
@@ -130,5 +134,57 @@ export function workAccidentFromRow(row: Record<string, unknown>): WorkAccidentR
     catNumber: asText(row.cat_number),
     catIssued: Number(row.cat_issued) === 1,
     description: asText(row.description),
+    investigationCardId: row.investigation_card_id ? asText(row.investigation_card_id) : null,
   };
+}
+
+export type AccidentInvestigationDemandInput = {
+  workspaceId: string;
+  boardId: string;
+  companyId: string;
+  companyName: string;
+  sector: string;
+  occurredOn: string;
+  actorEmail: string;
+};
+
+/**
+ * Abre a demanda de investigação do acidente — plano de ação, passo 1 (§4.14).
+ *
+ * Mesmo raciocínio de `prepareDiscountDemand` (lib/epi-service.ts): é um
+ * cartão comum do quadro, não um objeto novo. Checklist, comentário e anexo
+ * já existem em Demandas; uma fila paralela só para investigação de acidente
+ * seria uma segunda caixa de entrada que ninguém abriria.
+ *
+ * Diferente do desconto de EPI — que separa quem pede (SESMT) de quem decide
+ * (DP) —, aqui as duas pontas são a mesma área: quem apura o acidente é quem
+ * investiga. Por isso `safety.investigation` resolve as duas.
+ *
+ * Quem chama decide quando: não há gatilho automático por gravidade. É o
+ * SESMT, no momento em que apura, que decide se este acidente precisa de
+ * investigação — uma regra automática estaria adivinhando o que só uma pessoa
+ * sabe.
+ */
+export async function prepareAccidentInvestigationDemand(d1: Database, input: AccidentInvestigationDemandInput) {
+  const area = await resolveAreaModule(d1, input.workspaceId, "safety.investigation");
+  const list = await d1.prepare(`SELECT id FROM fdp_lists WHERE board_id = ?
+    ORDER BY (kind = 'new') DESC, position, id LIMIT 1`).bind(input.boardId).first<{ id: string }>();
+  if (!list) {
+    throw ApiError.badRequest(
+      "O quadro deste grupo não tem nenhuma coluna, então o plano de ação não pode ser aberto. Crie uma coluna em Demandas e repita a operação.",
+      "SAFETY_INVESTIGATION_LIST_MISSING",
+    );
+  }
+  const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS max_position FROM fdp_cards WHERE list_id = ? AND archived = 0")
+    .bind(list.id).first<{ max_position: number }>();
+  const cardId = crypto.randomUUID();
+  const title = investigationDemandTitle(input.sector, input.occurredOn);
+  const statement = d1.prepare(`INSERT INTO fdp_cards
+    (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority,
+     assignee_name, sla_status, position, source_type, created_by, sla_started_at, requester_area_id, responsible_area_id)
+    VALUES (?, ?, ?, ?, ?, '', ?, ?, 'OUTROS', 'high', '', 'safe', ?, 'automation', ?, CURRENT_TIMESTAMP, ?, ?)`)
+    .bind(cardId, input.workspaceId, input.boardId, list.id, title,
+      input.companyId, input.companyName, Number(position?.max_position ?? 0) + 1000, input.actorEmail,
+      area.id, area.id);
+  return { cardId, title, listId: list.id, statement, area };
 }

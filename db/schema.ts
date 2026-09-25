@@ -3697,6 +3697,8 @@ export const workAccidents = pgTable("fdp_work_accidents", {
   catIssued: integer("cat_issued").notNull().default(0),
   catNumber: text("cat_number").notNull().default(""),
   description: text("description").notNull().default(""),
+  /** Nula até o SESMT abrir o plano de ação (§4.14) — o cartão que carrega a investigação. */
+  investigationCardId: text("investigation_card_id"),
   createdBy: text("created_by").notNull(),
   updatedBy: text("updated_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -3705,7 +3707,9 @@ export const workAccidents = pgTable("fdp_work_accidents", {
   uniqueIndex("fdp_work_accidents_workspace_id_uq").on(table.workspaceId, table.id),
   index("fdp_work_accidents_workspace_company_date_idx").on(table.workspaceId, table.companyId, table.occurredOn),
   index("fdp_work_accidents_workspace_date_idx").on(table.workspaceId, table.occurredOn),
+  index("fdp_work_accidents_workspace_investigation_idx").on(table.workspaceId, table.investigationCardId).where(sql`${table.investigationCardId} IS NOT NULL`),
   foreignKey({ name: "fdp_work_accidents_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_work_accidents_investigation_card_fk", columns: [table.workspaceId, table.investigationCardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("set null"),
   check("fdp_work_accidents_type_check", sql`${table.accidentType} IN ('incident', 'typical', 'commute', 'occupational_disease')`),
   check("fdp_work_accidents_body_part_check", sql`${table.bodyPart} IN ('skull', 'face', 'eyes', 'neck', 'shoulder', 'arm', 'elbow', 'hand', 'fingers', 'chest', 'abdomen', 'lumbar', 'hip', 'leg', 'knee', 'foot', 'toes', 'multiple', 'other')`),
   check("fdp_work_accidents_shift_check", sql`${table.workShift} IN ('morning', 'afternoon', 'night')`),

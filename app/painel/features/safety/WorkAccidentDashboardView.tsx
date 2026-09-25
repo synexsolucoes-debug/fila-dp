@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity, CalendarClock, CalendarDays, Download, HardHat, LayoutDashboard, ListPlus,
+  Activity, CalendarClock, CalendarDays, ClipboardList, Download, HardHat, LayoutDashboard, ListPlus,
   Moon, Pencil, Plus, RefreshCw, Sun, SunMedium, Trash2, TriangleAlert, Users, Wallet,
 } from "lucide-react";
 import {
@@ -185,6 +185,23 @@ export function WorkAccidentDashboardView() {
     }
   }
 
+  /**
+   * Abre o plano de ação (§4.14) — a demanda de investigação do acidente.
+   * Decisão manual: não há gatilho automático por gravidade, porque só o
+   * SESMT sabe, no momento em que apura, se o caso precisa de investigação.
+   */
+  async function openInvestigation(record: WorkAccidentRecord) {
+    try {
+      setBusy(true);
+      await requestJson(`/api/safety/accidents/${record.id}/investigation`, { method: "POST" });
+      await reload(companyId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível abrir o plano de ação.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmRemoval() {
     if (!removing) return;
     try {
@@ -359,6 +376,7 @@ export function WorkAccidentDashboardView() {
               <th scope="col" className={styles.numeric}>Dias</th>
               <th scope="col" className={styles.numeric}>Despesa</th>
               <th scope="col">CAT</th>
+              <th scope="col">Plano de ação</th>
               {(canManage || permissions?.remove) && <th scope="col"><span className={styles.srOnly}>Ações</span></th>}
             </tr>
           </thead>
@@ -374,6 +392,14 @@ export function WorkAccidentDashboardView() {
               <td className={styles.numeric}>{record.leaveDays}</td>
               <td className={styles.numeric}>{currency(record.expenseAmount)}</td>
               <td>{record.catIssued ? record.catNumber || "Emitida" : "—"}</td>
+              <td>{record.investigationCardId
+                ? "Aberto em Demandas"
+                : canManage
+                  ? <button type="button" className={styles.secondaryButton} disabled={busy}
+                      onClick={() => void openInvestigation(record)}>
+                      <ClipboardList aria-hidden="true" /> Abrir plano de ação
+                    </button>
+                  : "—"}</td>
               {(canManage || permissions?.remove) && <td className={styles.rowActions}>
                 {canManage && <button type="button" className={styles.iconButton} aria-label="Corrigir lançamento"
                   onClick={() => { setDialogError(""); setDraft(draftFromRecord(record)); }}>

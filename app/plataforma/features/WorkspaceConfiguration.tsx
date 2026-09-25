@@ -13,7 +13,7 @@ type Configuration = Row & {
 
 const field = (data: FormData, name: string) => text(data.get(name)).trim();
 const values = (data: FormData, name: string) => data.getAll(name).map(text).filter(Boolean);
-const routingModuleKeys = new Set(["epi.owner", "epi.discount_analysis"]);
+const routingModuleKeys = new Set(["epi.owner", "epi.discount_analysis", "safety.investigation"]);
 const categoryLabels: Record<string, string> = { operacao: "Operação", folha: "Folha", pessoas: "Pessoas", gestao: "Gestão", plataforma: "Plataforma" };
 const moduleAvailable = (moduleRow: Row) => text(moduleRow.status) === "active" && (moduleRow.granted == null ? bool(moduleRow.in_plan) : bool(moduleRow.granted));
 
@@ -113,7 +113,7 @@ function AreaModuleFields({ areaId, selectedKeys, areas, modules }: { areaId: st
   return <><fieldset className={styles.areaModuleFieldset}><legend><Blocks aria-hidden="true" /> Módulos do departamento</legend><p>Uma área ativa precisa de pelo menos um módulo disponível. Cada módulo pertence a uma única área.</p><div className={styles.areaModuleOptions}>{modules.map((moduleRow) => {
     const checked = selectedKeys.includes(text(moduleRow.key)); const owner = areas.find((area) => text(area.id) !== areaId && (Array.isArray(area.module_keys) ? area.module_keys.map(text) : []).includes(text(moduleRow.key))); const disabled = !moduleAvailable(moduleRow) && !checked;
     return <label key={text(moduleRow.key)} data-unavailable={disabled || undefined}><input type="checkbox" name="departmentModules" value={text(moduleRow.key)} defaultChecked={checked} disabled={disabled} /><span><strong>{text(moduleRow.name)}</strong><small>{text(moduleRow.description)}</small><em>{owner ? `Hoje em ${text(owner.name)}; será movido ao salvar.` : disabled ? "Libere este módulo no Workspace antes de vinculá-lo." : categoryLabels[text(moduleRow.category)] ?? text(moduleRow.category)}</em></span></label>;
-  })}</div></fieldset><fieldset className={styles.areaRoutingFieldset}><legend><Route aria-hidden="true" /> Roteamento SESMT → DP</legend><label><input type="checkbox" name="routingModules" value="epi.owner" defaultChecked={selectedKeys.includes("epi.owner")} />Área solicitante / SESMT</label><label><input type="checkbox" name="routingModules" value="epi.discount_analysis" defaultChecked={selectedKeys.includes("epi.discount_analysis")} />Área responsável pela análise / DP</label></fieldset></>;
+  })}</div></fieldset><fieldset className={styles.areaRoutingFieldset}><legend><Route aria-hidden="true" /> Roteamento SESMT → DP</legend><label><input type="checkbox" name="routingModules" value="epi.owner" defaultChecked={selectedKeys.includes("epi.owner")} />Área solicitante / SESMT</label><label><input type="checkbox" name="routingModules" value="epi.discount_analysis" defaultChecked={selectedKeys.includes("epi.discount_analysis")} />Área responsável pela análise / DP</label><label><input type="checkbox" name="routingModules" value="safety.investigation" defaultChecked={selectedKeys.includes("safety.investigation")} />Área responsável pela investigação de acidentes</label></fieldset></>;
 }
 
 function MemberAccessForm({ row, companies, areas, modules, grants, ask }: { row: Row; companies: Row[]; areas: Row[]; modules: Row[]; grants: Row[]; ask: Ask }) {

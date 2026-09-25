@@ -112,6 +112,17 @@ export const monthLabels = [
 /** Setor em branco tem nome, e não vira uma barra sem rótulo no gráfico. */
 export const UNASSIGNED_SECTOR = "Sem setor informado";
 
+/**
+ * Título da demanda de investigação, aberta pelo SESMT no plano de ação
+ * (§4.14). O formato segue o mesmo contrato de `discountTitle` — a data do
+ * fato entra porque um setor tem mais de um acidente no ano, e "Investigar
+ * acidente — Operacional" sozinho não distingue qual.
+ */
+export function investigationDemandTitle(sector: string, occurredOn: string) {
+  const local = sector.trim() || UNASSIGNED_SECTOR;
+  return `Investigar acidente de trabalho — ${local} (${occurredOn})`;
+}
+
 export type WorkAccidentRecord = {
   id: string;
   companyId: string;
@@ -129,6 +140,8 @@ export type WorkAccidentRecord = {
   catNumber: string;
   catIssued: boolean;
   description: string;
+  /** Nula até o SESMT abrir o plano de ação (§4.14). */
+  investigationCardId: string | null;
 };
 
 /**

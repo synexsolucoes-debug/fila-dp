@@ -642,6 +642,42 @@ só o prazo da CAT ganhou fila.
 | --- | --- |
 | O prazo pula fim de semana e mais nada, o item não some sozinho da fila, e o recorte é o mesmo do dashboard | `tests/work-accidents.test.mts`, `tests/work-items.test.mts` |
 
+### 4.14 Plano de ação do acidente, passo 1 — a demanda de investigação
+
+A outra metade do problema que §4.13 não fechou: "investigação solta". A
+solução não é um objeto novo — cartão, checklist, comentário e anexo já
+existem em Demandas, e a análise de desconto de EPI (`lib/epi-service.ts
+#prepareDiscountDemand`) já resolve exatamente essa pergunta ("preciso que
+alguém investigue isto") do mesmo jeito. `prepareAccidentInvestigationDemand`
+segue o desenho ponto a ponto: mesma busca de coluna de entrada, mesma
+tolerância a quadro sem coluna, mesmo cartão comum.
+
+A diferença está em quem pede e quem executa. No desconto de EPI, SESMT pede
+e DP decide — duas áreas, dois papéis. Na investigação de acidente, apurar e
+investigar são o mesmo ato, da mesma área; por isso a nova chave de
+roteamento `safety.investigation` resolve as duas pontas (`requesterAreaId`
+e `responsibleAreaId` do cartão apontam para a mesma área), em vez de exigir
+duas áreas configuradas para uma decisão que é uma só.
+
+`fdp_work_accidents.investigation_card_id` é a única coluna nova: nula até
+alguém abrir o plano de ação, e a FK para `fdp_cards` exige que o cartão já
+exista — por isso a rota insere o cartão **antes** de atualizar o acidente,
+os dois no mesmo lote. Não há gatilho automático por gravidade: é o SESMT,
+no momento em que apura, que decide se o caso precisa de investigação, e uma
+regra automática estaria adivinhando o que só uma pessoa sabe.
+
+**O que isto ainda não faz** — e é deliberado: não sugere quando abrir um
+plano de ação (nenhuma regra por gravidade, dias de afastamento ou tipo);
+não fecha o cartão automaticamente quando a investigação termina — isso
+continua sendo mover o cartão no quadro, como qualquer demanda; e continua
+exigindo que o workspace configure a área `safety.investigation` em
+Plataforma → Operações antes do primeiro uso, o mesmo custo de configuração
+que a análise de desconto de EPI já cobra.
+
+| Verificação | Onde |
+| --- | --- |
+| O cartão nasce antes do vínculo, a guarda contra duplo clique está na condição do UPDATE, e a mesma área resolve as duas pontas | `tests/work-accidents.test.mts` |
+
 ---
 
 ## 5. Agentes
