@@ -58,7 +58,7 @@ const names = {
 
 const version: PublishedProcessVersion = {
   definitionId: "def-1", definitionName: "Admissão", definitionCode: "ADM",
-  isCorporate: true, defaultPriority: "normal",
+  isCorporate: true, allowManualStart: true, defaultPriority: "normal",
   versionId: "ver-1", versionNumber: "3.0", bpmnXml: XML, graph: parseBpmnGraph(XML),
   steps: new Map<string, ProcessStepConfig>([
     ["Documentacao", step({

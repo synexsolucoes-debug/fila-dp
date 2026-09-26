@@ -98,7 +98,7 @@ const actor = (overrides: Partial<TransitionActor> = {}): TransitionActor => ({
 
 const version = (steps: Record<string, ProcessStepConfig> = {}): PublishedProcessVersion => ({
   definitionId: "def-1", definitionName: "Admissão", definitionCode: "ADM",
-  isCorporate: true, defaultPriority: "normal",
+  isCorporate: true, allowManualStart: true, defaultPriority: "normal",
   versionId: "ver-4", versionNumber: "4.0", bpmnXml: ADMISSION_BPMN, graph,
   steps: new Map(Object.entries(steps)),
 });
@@ -647,4 +647,36 @@ test("o contrato de transição entrega o destino que o painel envia", async () 
     new URL("../app/painel/features/work/CardProcessPanel.tsx", import.meta.url), "utf8");
   assert.match(painel, /flowName: text\(item\.flowName\)/u);
   assert.match(painel, /rejects \? "Reprovar" : "Aprovar e avançar"/u);
+});
+
+/* "Permitir abertura manual" desligado só escondia o botão na tela — um POST
+   direto à rota de instanciar sempre passava. `permissions.start` (usage
+   route) e a filtragem do catálogo (WorkspaceApp.tsx) prometiam uma recusa
+   que o servidor não cumpria. */
+
+test("loadVersionRow lê allow_manual_start do processo, junto com is_corporate", async () => {
+  const motor = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
+  assert.match(motor, /p\.is_corporate, p\.allow_manual_start,/u);
+  assert.match(motor, /allowManualStart: flag\(row\.allow_manual_start\)/u);
+});
+
+test("a rota de instanciar recusa quando o processo não aceita abertura manual", async () => {
+  const rota = await readFile(
+    new URL("../app/api/processes/versions/[id]/instantiate/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /if \(!version\.allowManualStart\)/u);
+  assert.match(rota, /PROCESS_MANUAL_START_DISABLED/u);
+  // A recusa precisa vir antes de qualquer escrita — não é limpeza depois do fato.
+  const guardIndex = rota.indexOf("PROCESS_MANUAL_START_DISABLED");
+  const batchIndex = rota.indexOf("prepareProcessInstance(d1, {");
+  assert.ok(guardIndex > 0 && batchIndex > guardIndex, "a recusa precisa vir antes de montar a instância");
+});
+
+test("a recusa de abertura manual não vaza para quem instancia por catálogo ou proposta de agente", async () => {
+  // loadPublishedVersion é compartilhada; só a rota de instanciar manual pode
+  // recusar por allowManualStart, porque só ela representa início manual.
+  const catalogo = await readFile(new URL("../app/api/catalog/route.ts", import.meta.url), "utf8");
+  const propostas = await readFile(
+    new URL("../app/api/agents/proposals/[id]/resolve/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(catalogo, /PROCESS_MANUAL_START_DISABLED/u);
+  assert.doesNotMatch(propostas, /PROCESS_MANUAL_START_DISABLED/u);
 });
