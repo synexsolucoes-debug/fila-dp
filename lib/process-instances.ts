@@ -143,6 +143,8 @@ export type PublishedProcessVersion = {
   definitionName: string;
   definitionCode: string;
   isCorporate: boolean;
+  /** Se "Permitir abertura manual" está ligado no processo (§12, apply=instantiate). */
+  allowManualStart: boolean;
   defaultPriority: string;
   versionId: string;
   versionNumber: string;
@@ -239,7 +241,8 @@ async function loadVersionRow(
   options: { requirePublished: boolean },
 ): Promise<PublishedProcessVersion & { published: boolean }> {
   const row = await d1.prepare(`SELECT v.id, v.definition_id, v.status, v.version_major, v.version_minor, v.bpmn_xml,
-      p.name AS definition_name, p.code AS definition_code, p.is_corporate, p.default_priority, p.lifecycle_status
+      p.name AS definition_name, p.code AS definition_code, p.is_corporate, p.allow_manual_start,
+      p.default_priority, p.lifecycle_status
     FROM fdp_process_versions v
     JOIN fdp_process_definitions p ON p.workspace_id = v.workspace_id AND p.id = v.definition_id
     WHERE v.workspace_id = ? AND v.id = ?`).bind(workspaceId, versionId).first<Row>();
@@ -268,6 +271,7 @@ async function loadVersionRow(
     definitionName: text(row.definition_name),
     definitionCode: text(row.definition_code),
     isCorporate: flag(row.is_corporate),
+    allowManualStart: flag(row.allow_manual_start),
     defaultPriority: text(row.default_priority) || "normal",
     versionId: text(row.id),
     versionNumber: `${Number(row.version_major ?? 1)}.${Number(row.version_minor ?? 0)}`,

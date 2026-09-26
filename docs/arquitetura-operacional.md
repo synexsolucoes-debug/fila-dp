@@ -207,6 +207,40 @@ fan-out para outras áreas via `create_task` nas automações de etapa
 `termination.requested`, `role.change_requested` e os demais do catálogo a um
 ponto real de emissão é o próximo passo, não este.
 
+### 3.6 "Permitir abertura manual" desligado só escondia o botão
+
+`fdp_process_definitions.allow_manual_start` sempre existiu (default ligado) e
+sempre foi de verdade respeitado **na tela**: `GET /api/processes/[id]/usage`
+já calculava `permissions.start` considerando essa flag, e o catálogo de
+"+ Nova demanda" (`WorkspaceApp.tsx`) já filtrava por ela antes de listar um
+processo como opção. O que faltava era o outro lado — a rota que de fato
+instancia (`POST /api/processes/versions/[id]/instantiate`) nunca lia a
+coluna. Desligar "Permitir abertura manual" escondia o botão, mas um POST
+direto à rota (ou uma integração que a chamasse) continuava abrindo demanda
+normalmente: exatamente o "botão que promete e a rota que não cumpre" que
+`tests/demand-from-process.test.mts` já nomeava como o defeito a evitar, só
+que do lado que faltava fechar.
+
+A recusa (`PROCESS_MANUAL_START_DISABLED`) entrou só na rota de instanciação
+manual, não em `loadPublishedVersion` — a função é compartilhada com o
+catálogo por evento de domínio (§3.5, `app/api/catalog/route.ts`) e a
+resolução de proposta de agente (`app/api/agents/proposals/[id]/resolve`), e
+nenhum dos dois é "abertura manual": um processo com abertura manual desligada
+e automática ligada precisa continuar nascendo pelo evento, só não pelo
+clique ou pelo POST direto.
+
+**O que isto ainda não faz**: o mesmo buraco existe em espelho para
+`allow_automatic_start` — a coluna é salva e mostrada, mas nada valida que uma
+regra `domain_event`/`instantiateProcessVersionId` (§3.5) só aponte para
+processos com automática ligada. Como toda automação hoje passa por quem já
+tem `processes.manage` para cadastrá-la, o risco é bem menor (é um erro de
+configuração de quem já administra o processo, não um contorno de quem não
+deveria poder iniciar nada) — por isso ficou de fora deste passo.
+
+| Verificação | Onde |
+| --- | --- |
+| A rota de instanciar recusa antes de montar a instância quando `allowManualStart` é falso, e a recusa não aparece nas rotas de catálogo por evento nem de proposta de agente | `tests/process-instances.test.mts` |
+
 ---
 
 ## 4. Unidade de trabalho e a Central de Trabalho
