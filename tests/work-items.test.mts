@@ -150,6 +150,40 @@ test("o item de CAT pendente abre a tela do módulo — o acidente não tem FK d
   assert.equal(workItemHref("cat_pending", "acc-1"), "/painel/acidentes");
 });
 
+test("cargo de risco sem exame entra na Central sem tabela nova (Motor de Prazos, passo 4)", () => {
+  const source = workItemSources.find((item) => item.key === "position_risk_exam_missing")!;
+  assert.ok(source, "cargo de risco sem exame ausente");
+  assert.equal(source.companyColumn, "emp.company_id");
+  assert.equal(source.mineCondition, "", "não tem responsável individual, é fato do colaborador");
+});
+
+test("cargo de risco sem exame cobre quem nunca teve exame nenhum — diferente de ASO vencendo", () => {
+  const source = workItemSources.find((item) => item.key === "position_risk_exam_missing")!;
+  // occupational_exam_due só existe quando já há uma linha em
+  // fdp_occupational_exams com next_due_date; este item é o complemento:
+  // ninguém nunca cadastrou exame nenhum para o colaborador.
+  assert.match(source.sql, /NOT EXISTS \(\s*SELECT 1 FROM fdp_occupational_exams ex/u);
+  assert.match(source.sql, /pos\.risk_level IN \('medium', 'high'\)/u);
+  assert.match(source.sql, /emp\.employment_status = 'active'/u);
+});
+
+test("cargo de risco sem exame não tem janela de 60 dias — a obrigação nasce com a admissão, não com um prazo futuro", () => {
+  const source = workItemSources.find((item) => item.key === "position_risk_exam_missing")!;
+  assert.doesNotMatch(source.sql, /CURRENT_DATE \+ 60/u);
+  assert.match(source.sql, /emp\.admission_date::timestamptz AS due_at/u);
+  assert.match(source.sql, /'overdue' AS status/u);
+});
+
+test("cargo de alto risco é mais urgente que médio risco na fila", () => {
+  const source = workItemSources.find((item) => item.key === "position_risk_exam_missing")!;
+  assert.match(source.sql, /CASE pos\.risk_level WHEN 'high' THEN 'urgent' ELSE 'high' END AS priority/u);
+});
+
+test("o item de cargo de risco sem exame abre o colaborador, não tem registro próprio para abrir", () => {
+  assert.equal(workItemHref("position_risk_exam_missing", "emp-1", "emp-1"), "/painel/cadastros/emp-1?aba=exams");
+  assert.equal(workItemHref("position_risk_exam_missing", "emp-1"), "/painel/cadastros");
+});
+
 test("a nova ambiguidade de `blocked` não reaproveita a frase do fechamento", () => {
   // pending_item e compliance_obligation agora dividem o status 'blocked', e a
   // razão de estar bloqueada não é a mesma nos dois. Reaproveitar a frase do
@@ -414,6 +448,7 @@ test("o item traz um destino real no painel, e não um link para lugar nenhum", 
   for (const source of [
     "card", "approval", "movement", "auxiliary", "pending_item", "triage", "integration_failure",
     "compliance_obligation", "epi_ca_expiry", "occupational_exam_due", "training_due", "cat_pending",
+    "position_risk_exam_missing",
   ] as const) {
     const href = workItemHref(source, "x");
     const [path] = href.split("?");

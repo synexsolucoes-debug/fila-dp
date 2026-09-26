@@ -89,7 +89,8 @@ export type WorkItemSource =
   | "epi_ca_expiry"
   | "occupational_exam_due"
   | "training_due"
-  | "cat_pending";
+  | "cat_pending"
+  | "position_risk_exam_missing";
 
 export type WorkItemScope = "mine" | "team";
 
@@ -435,6 +436,50 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
       LEFT JOIN fdp_companies co ON co.workspace_id = a.workspace_id AND co.id = a.company_id
       WHERE a.workspace_id = ? AND a.cat_issued = 0 AND a.leave_days > 0 {{company}} {{mine}}`,
   },
+  /* ---------------------------------------------------------------------- *
+   * Motor de Prazos — quarto passo
+   *
+   * `fdp_positions.risk_level` existe desde 0098 para alimentar exatamente
+   * este tipo de regra ("cargo de risco exige exame"), mas nunca teve
+   * consumidor: nenhuma rota, relatório ou fila jamais leu essa coluna fora
+   * do próprio formulário de cadastro do cargo.
+   *
+   * `occupational_exam_due` (acima) só cobre quem *já tem* um exame com
+   * `next_due_date` — o vencimento de uma renovação. Ele é cego para quem
+   * está num cargo de risco e nunca teve exame nenhum, porque sem exame não
+   * há `next_due_date` para vencer. É exatamente o colaborador que a NR-7
+   * mais cobra o admissional, e que hoje não aparece em lugar nenhum.
+   *
+   * Sem janela de 60 dias como o CA de EPI: a obrigação nasce com a
+   * admissão, não com um prazo futuro — por isso a data de referência é
+   * `admission_date`, e o item já nasce `overdue` (do mesmo jeito que CAT
+   * pendente não prescreve com o tempo). */
+  {
+    key: "position_risk_exam_missing",
+    label: "Cargo de risco sem exame",
+    capability: "exams.view",
+    companyColumn: "emp.company_id",
+    mineCondition: "",
+    mineParameters: 0,
+    sql: `SELECT 'position_risk_exam_missing' AS source_type, emp.id AS source_id,
+        'Sem ASO — ' || COALESCE(NULLIF(emp.social_name, ''), emp.full_name)
+          || ' (cargo de risco ' || pos.risk_level || ')' AS title,
+        'Cargo de risco sem nenhum exame ocupacional registrado' AS description,
+        CASE pos.risk_level WHEN 'high' THEN 'urgent' ELSE 'high' END AS priority, emp.company_id,
+        COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        emp.id AS employee_id, emp.admission_date::timestamptz AS due_at, emp.created_at, emp.updated_at,
+        'overdue' AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_employees emp
+      JOIN fdp_positions pos ON pos.workspace_id = emp.workspace_id AND pos.id = emp.position_id
+      LEFT JOIN fdp_companies co ON co.workspace_id = emp.workspace_id AND co.id = emp.company_id
+      WHERE emp.workspace_id = ? AND emp.employment_status = 'active' AND pos.risk_level IN ('medium', 'high')
+        AND NOT EXISTS (
+          SELECT 1 FROM fdp_occupational_exams ex
+          WHERE ex.workspace_id = emp.workspace_id AND ex.employee_id = emp.id
+        ) {{company}} {{mine}}`,
+  },
 ];
 
 /* -------------------------------------------------------------------------- *
@@ -513,6 +558,7 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
   occupational_exam_due: "Agendar o exame com o colaborador",
   training_due: "Agendar a reciclagem do treinamento",
   cat_pending: "Emitir a CAT",
+  position_risk_exam_missing: "Agendar o exame admissional com o colaborador",
 };
 
 /**
@@ -546,6 +592,7 @@ export function workItemHref(source: WorkItemSource, id: string, employeeId?: st
     case "training_due": return employeeId ? employeePath(employeeId, "trainings") : "/painel/cadastros";
     // Sem FK de colaborador (§83) — o link vai para a tela do módulo.
     case "cat_pending": return "/painel/acidentes";
+    case "position_risk_exam_missing": return employeeId ? employeePath(employeeId, "exams") : "/painel/cadastros";
     default: return "/painel";
   }
 }
