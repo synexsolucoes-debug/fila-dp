@@ -325,9 +325,66 @@ etapa é do gestor da área", "do dono do processo" — já vale a pena registra
 mesmo antes de o motor saber cumpri-la; remover a opção do seletor
 esconderia a intenção, não a resolveria.
 
+*Atualização (§3.10):* três dos quatro modos deixados de fora aqui —
+`DEPARTMENT_MANAGER`, `EMPLOYEE_MANAGER` e `PROCESS_OWNER` — foram fechados
+depois, porque o dado que faltava já existia em outro lugar do produto.
+
 | Verificação | Onde |
 | --- | --- |
 | Etapa com `responsibilityMode: "REQUESTER"` só é concluída por quem abriu a demanda (ou por admin); os demais modos continuam sem bloqueio | `tests/process-instances.test.mts` |
+
+### 3.10 Gestor do departamento, gestor do colaborador e dono do processo — os três modos que só precisavam de um lookup
+
+O §3.9 deixou `DEPARTMENT_MANAGER`, `EMPLOYEE_MANAGER` e `PROCESS_OWNER` de
+fora dizendo que faltava dado. Não faltava — faltava ligar o fio até dado
+que já existia:
+
+- `DEPARTMENT_MANAGER`: `fdp_areas.manager_user_id` sempre existiu e sempre
+  era validado na criação da área (`app/api/areas/route.ts`), mas só era
+  lido de volta para exibição no snapshot do workspace
+  (`lib/fila-dp-db.ts:964`) — nunca para decidir nada.
+- `EMPLOYEE_MANAGER`: `fdp_employees.manager_employee_id` já tinha um
+  consumidor real desde o Portal do Gestor (§4.20) — só faltava percorrer o
+  mesmo caminho (colaborador da demanda → `manager_employee_id` → o usuário
+  que o Portal do Gestor liga a esse gestor via
+  `fdp_workspace_members.employee_id`) a partir de uma demanda, não de um
+  gestor logado.
+- `PROCESS_OWNER`: `fdp_process_definitions.owner_user_id` sempre existiu,
+  sempre era validado (`PROCESS_OWNER_INVALID` se a pessoa não é membro do
+  workspace) e sempre era salvo — só nunca tinha sido carregado em
+  `PublishedProcessVersion`, que é o que o motor de transição enxerga.
+
+`DYNAMIC` continua de fora: os três acima resolvem contra um cadastro que já
+existe; `DYNAMIC` pede uma regra configurável que ninguém desenhou ainda —
+isso é motor novo, não fio para ligar.
+
+O desenho segue o mesmo já usado para os outros modos: `evaluateStepRequirements`
+recebe os três ids **já resolvidos** por quem chama
+(`departmentManagerUserId`, `employeeManagerUserId`, `processOwnerUserId`) —
+a função continua pura, sem consulta própria, e sem valor resolvido a etapa
+não trava (área sem gestor cadastrado, demanda sem colaborador vinculado e
+processo sem dono são respostas válidas, não erro). `PROCESS_OWNER` é o único
+resolvido dentro do próprio motor (`version.ownerUserId`, já carregado);
+os outros dois exigem uma consulta que depende da etapa/demanda específica, e
+por isso são resolvidos pela rota (`app/api/cards/[id]/process/route.ts`) antes
+de chamar `evaluateTransition`/`availableTransitions`.
+
+O mesmo fechamento entrou também nas tarefas (`app/api/tasks/[id]/route.ts`,
+§4.22), com a mesma forma: `fdp_demand_tasks.responsibility_mode` já
+comparava `USER`/`DEPARTMENT`/`REQUESTER` — os três novos modos usam o
+departamento e o colaborador da própria tarefa/demanda, e o processo ligado
+ao card, pelos mesmos dois lookups.
+
+**O que isto ainda não faz**: `DYNAMIC` continua sem bloqueio, pelo motivo
+acima. Também não avisa na tela, no momento de configurar a etapa, quando o
+departamento escolhido não tem gestor cadastrado ou o colaborador da
+demanda não tem gestor vinculado — a etapa simplesmente não trava ninguém
+nesse caso, sem aviso prévio de que a configuração está "sem efeito" até
+alguém preencher o cadastro que falta.
+
+| Verificação | Onde |
+| --- | --- |
+| `DEPARTMENT_MANAGER`, `EMPLOYEE_MANAGER` e `PROCESS_OWNER` travam contra o id resolvido, não travam sem valor resolvido, e a rota de etapa da demanda resolve os dois primeiros antes dos dois call sites do motor; o mesmo vale para a conclusão de tarefa | `tests/process-instances.test.mts`, `tests/process-tasks.test.mts` |
 
 ---
 

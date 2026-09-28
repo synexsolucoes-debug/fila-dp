@@ -371,3 +371,20 @@ test("concluir tarefa trava quem não é o responsável, e o admin não fica pre
     "a checagem só entra quando a tarefa está de fato virando concluída, não em qualquer PATCH");
   assert.match(rota, /throw new ApiError\(403, "TASK_NOT_RESPONSIBLE", blocked\)/u);
 });
+
+test("gestor de departamento, gestor do colaborador e dono do processo também travam a conclusão da tarefa (§3.10)", async () => {
+  /* Espelha o mesmo fechamento feito em evaluateStepRequirements para a etapa
+     (§3.10): os três modos comparam contra um id já resolvido antes da
+     checagem, e sem valor resolvido a tarefa não trava — mesma disciplina do
+     resto do arquivo. */
+  const rota = await readFile(new URL("../app/api/tasks/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /mode === "DEPARTMENT_MANAGER" && input\.departmentManagerUserId && input\.departmentManagerUserId !== input\.actorUserId/u);
+  assert.match(rota, /mode === "EMPLOYEE_MANAGER" && input\.employeeManagerUserId && input\.employeeManagerUserId !== input\.actorUserId/u);
+  assert.match(rota, /mode === "PROCESS_OWNER" && input\.processOwnerUserId && input\.processOwnerUserId !== input\.actorUserId/u);
+  assert.match(rota, /FROM fdp_areas WHERE workspace_id = \? AND id = \?/u,
+    "gestor do departamento vem de fdp_areas.manager_user_id");
+  assert.match(rota, /JOIN fdp_workspace_members wm ON wm\.workspace_id = e\.workspace_id AND wm\.employee_id = e\.manager_employee_id/u,
+    "gestor do colaborador precisa do mesmo salto do Portal do Gestor (§4.20)");
+  assert.match(rota, /FROM fdp_process_definitions WHERE workspace_id = \? AND id = \?/u,
+    "dono do processo vem de fdp_process_definitions.owner_user_id");
+});

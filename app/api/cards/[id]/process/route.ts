@@ -43,8 +43,9 @@ async function loadContext(request: Request, cardId: string) {
   const instance = await loadProcessInstance(d1, workspace.id, cardId);
   await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, instance.companyId);
   const version = await loadPublishedVersion(d1, workspace.id, instance.processVersionId);
+  const currentConfig = version.steps.get(instance.currentStepId) ?? null;
 
-  const [areas, blocking, attachments, stages] = await Promise.all([
+  const [areas, blocking, attachments, stages, departmentManager, employeeManager] = await Promise.all([
     d1.prepare("SELECT area_id FROM fdp_area_members WHERE workspace_id = ? AND user_id = ?")
       .bind(workspace.id, user.id).all<{ area_id: string }>(),
     /* As tarefas que travam a saída da etapa (§42).
@@ -70,6 +71,23 @@ async function loadContext(request: Request, cardId: string) {
       WHERE workspace_id = ? AND card_id = ?
       ORDER BY position, bpmn_element_id`)
       .bind(workspace.id, cardId).all<Record<string, unknown>>(),
+    /* Gestor do departamento responsável pela etapa atual (§3.10, DEPARTMENT_MANAGER).
+       Só faz sentido buscar quando a etapa tem departamento — e "sem gestor
+       cadastrado" (linha ausente ou coluna vazia) é resposta válida, não erro. */
+    currentConfig?.departmentId
+      ? d1.prepare("SELECT manager_user_id FROM fdp_areas WHERE workspace_id = ? AND id = ?")
+        .bind(workspace.id, currentConfig.departmentId).first<{ manager_user_id: string | null }>()
+      : Promise.resolve(null),
+    /* Gestor do colaborador da demanda (§3.10, EMPLOYEE_MANAGER). Dois saltos:
+       do colaborador da demanda para o colaborador que o gerencia, e desse
+       colaborador para o usuário que o Portal do Gestor já liga a ele
+       (§4.20) — sem esse vínculo, ninguém é "o gestor" de verdade. */
+    instance.employeeId
+      ? d1.prepare(`SELECT wm.user_id FROM fdp_employees e
+          JOIN fdp_workspace_members wm ON wm.workspace_id = e.workspace_id AND wm.employee_id = e.manager_employee_id
+          WHERE e.workspace_id = ? AND e.id = ?`)
+        .bind(workspace.id, instance.employeeId).first<{ user_id: string }>()
+      : Promise.resolve(null),
   ]);
   const blockingTasks = blocking.results.map((row) => ({ title: String(row.title ?? "") }));
 
@@ -87,6 +105,8 @@ async function loadContext(request: Request, cardId: string) {
     blockingTasks,
     attachmentCount: Number(attachments?.total ?? 0),
     stages: stages.results,
+    departmentManagerUserId: departmentManager?.manager_user_id ?? null,
+    employeeManagerUserId: employeeManager?.user_id ?? null,
     requestId: request.headers.get("x-fila-dp-request-id"),
   } as const;
 }
@@ -129,6 +149,8 @@ function payload(context: Extract<Loaded, { instance: unknown }>) {
       pendingChecklist: context.pendingChecklist,
       blockingTasks: context.blockingTasks,
       attachmentCount: context.attachmentCount,
+      departmentManagerUserId: context.departmentManagerUserId,
+      employeeManagerUserId: context.employeeManagerUserId,
     }),
   };
 }
@@ -178,6 +200,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       pendingChecklist: context.pendingChecklist,
       blockingTasks: context.blockingTasks,
       attachmentCount: context.attachmentCount,
+      departmentManagerUserId: context.departmentManagerUserId,
+      employeeManagerUserId: context.employeeManagerUserId,
     });
     if (!evaluation.allowed) {
       const [first] = evaluation.blockers;
