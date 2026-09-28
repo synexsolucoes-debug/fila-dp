@@ -65,23 +65,26 @@ test("employee resource APIs apply company scope, capability checks and structur
   assert.doesNotMatch(snapshotBody, /fdp_employees/);
 });
 
-test("departamento, cargo, centro de custo e unidade desativados não aceitam novo vínculo de colaborador (§4.23)", async () => {
-  /* `status` sempre existiu nesses quatro cadastros e sempre podia ser
+test("departamento, cargo, centro de custo, unidade e jornada desativados não aceitam novo vínculo de colaborador (§4.23)", async () => {
+  /* `status` sempre existiu nesses cinco cadastros e sempre podia ser
      desligado pela própria tela — mas só a EPI olhava para ele
      (`p.status <> 'inactive'` em app/api/epi/dashboard/route.ts). O cadastro
-     do colaborador aceitava vínculo com qualquer um deles, ativo ou não. */
+     do colaborador aceitava vínculo com qualquer um deles, ativo ou não.
+     A jornada entrou depois dos outros quatro (§4.23 original ficou 4/5),
+     mas tem exatamente a mesma forma e o mesmo motivo de existir. */
   const [lib, collection, detail] = await Promise.all([
     readFile(new URL("../lib/registrations.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/employees/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/employees/[id]/route.ts", import.meta.url), "utf8"),
   ]);
   assert.match(lib, /export async function assertActiveScope/u);
-  for (const table of ["fdp_departments", "fdp_positions", "fdp_cost_centers", "fdp_establishments"]) {
+  for (const table of ["fdp_departments", "fdp_positions", "fdp_cost_centers", "fdp_establishments", "fdp_work_schedules"]) {
     assert.match(lib, new RegExp(`SELECT status FROM ${table} WHERE workspace_id = \\? AND id = \\?`));
   }
   assert.match(lib, /row\?\.status === "inactive"/u);
   assert.match(collection, /await assertActiveScope\(d1, workspace\.id, \{/u,
     "criar colaborador precisa checar o vínculo antes de gravar, não depois");
+  assert.match(collection, /workScheduleId: row\.workScheduleId/u);
   assert.match(detail, /await assertActiveScope\(d1, workspace\.id, \{/u);
   // A edição só valida o que está de fato mudando — reenviar o vínculo
   // antigo de um colaborador que já ficou preso a um cadastro desativado
@@ -90,6 +93,7 @@ test("departamento, cargo, centro de custo e unidade desativados não aceitam no
   assert.match(detail, /next\.positionId !== current\.position_id/u);
   assert.match(detail, /next\.costCenterId !== current\.cost_center_id/u);
   assert.match(detail, /next\.establishmentId !== current\.establishment_id/u);
+  assert.match(detail, /next\.workScheduleId !== current\.work_schedule_id/u);
 });
 
 test("company deletion is implemented as audited inactivation", async () => {

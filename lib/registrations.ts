@@ -78,14 +78,19 @@ export function publicEmployee<T extends Record<string, unknown>>(employee: T) {
 }
 
 /**
- * Recusa vincular o colaborador a um departamento, cargo, centro de custo ou
- * unidade desativado.
+ * Recusa vincular o colaborador a um departamento, cargo, centro de custo,
+ * unidade ou jornada desativada.
  *
- * `status` sempre existiu nesses quatro cadastros e sempre podia ser desligado
+ * `status` sempre existiu nesses cinco cadastros e sempre podia ser desligado
  * pela própria tela de cadastros auxiliares, mas nada no cadastro do
  * colaborador olhava para ele — só a EPI já excluía posição inativa da sua
  * própria checagem (`app/api/epi/dashboard/route.ts`). Um cargo desativado
  * continuava aceitando gente nova.
+ *
+ * A jornada entrou depois dos outros quatro (§4.23 original) por engano de
+ * escopo, não por ter efeito diferente: ela tem exatamente a mesma forma
+ * (`status` com o mesmo `CHECK`, ligada ao colaborador do mesmo jeito) e não
+ * havia razão para tratá-la diferente.
  *
  * Cada tabela tem sua própria consulta, de propósito: um nome de tabela
  * interpolado no SQL sairia da verificação estática de `verify:sql` (não há
@@ -99,6 +104,7 @@ export function publicEmployee<T extends Record<string, unknown>>(employee: T) {
 export async function assertActiveScope(d1: D1Database, workspaceId: string, scope: {
   departmentId?: string | null; positionId?: string | null;
   costCenterId?: string | null; establishmentId?: string | null;
+  workScheduleId?: string | null;
 }): Promise<void> {
   if (scope.departmentId) {
     const row = await d1.prepare("SELECT status FROM fdp_departments WHERE workspace_id = ? AND id = ?")
@@ -126,6 +132,13 @@ export async function assertActiveScope(d1: D1Database, workspaceId: string, sco
       .bind(workspaceId, scope.establishmentId).first<{ status: string }>();
     if (row?.status === "inactive") {
       throw new ApiError(422, "EMPLOYEE_ESTABLISHMENT_INACTIVE", "Esta unidade está desativada e não aceita novo vínculo.");
+    }
+  }
+  if (scope.workScheduleId) {
+    const row = await d1.prepare("SELECT status FROM fdp_work_schedules WHERE workspace_id = ? AND id = ?")
+      .bind(workspaceId, scope.workScheduleId).first<{ status: string }>();
+    if (row?.status === "inactive") {
+      throw new ApiError(422, "EMPLOYEE_WORK_SCHEDULE_INACTIVE", "Esta jornada está desativada e não aceita novo vínculo.");
     }
   }
 }

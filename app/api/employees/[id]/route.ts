@@ -84,6 +84,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       positionId: next.positionId !== current.position_id ? (next.positionId as string | null) : null,
       costCenterId: next.costCenterId !== current.cost_center_id ? (next.costCenterId as string | null) : null,
       establishmentId: next.establishmentId !== current.establishment_id ? (next.establishmentId as string | null) : null,
+      workScheduleId: next.workScheduleId !== current.work_schedule_id ? (next.workScheduleId as string | null) : null,
     });
     /* Retorno ao trabalho não passa por cima do exame ocupacional, passo 1
        (docs/arquitetura-operacional.md §4.9): só bloqueia quando já existe um
