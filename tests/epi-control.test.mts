@@ -440,6 +440,25 @@ test("devolução higienizada pode voltar ao saldo e ser entregue por outro CNPJ
   assert.deepEqual(history.map((event) => event.companyId), ["empresa-a", "empresa-a", "empresa-b"]);
 });
 
+test("o resultado da higienização é exigido no envio e volta pra tela — não fica preso no banco (§4.25)", async () => {
+  /* `sanitization_result` sempre foi exigido pela rota ao concluir ou recusar
+     uma higienização (§26 — a mesma exigência de motivo por extenso que já
+     vale para recusa de nota fiscal), e sempre era gravado. Mas
+     `SELECT r.*` trazia a coluna de volta e ninguém a pegava: o normalizador
+     do front não a mapeava, o tipo `EpiReturn` não a declarava, e a tabela de
+     devoluções não a mostrava. O texto que alguém digitou ao concluir ou
+     recusar uma higienização ficava invisível para todo mundo depois. */
+  const rota = await readFile(new URL("../app/api/epi/returns/[id]/sanitization/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /epiText\(body\.result, "o resultado", 1000, action !== "start"\)/u);
+  assert.match(rota, /sanitization_result = \?/u);
+
+  const api = await readFile(new URL("../app/painel/features/epi/epi.api.ts", import.meta.url), "utf8");
+  assert.match(api, /sanitizationResult: text\(value\(row, "sanitizationResult", "sanitization_result"\)\)/u);
+
+  const tela = await readFile(new URL("../app/painel/features/epi/EpiControlView.tsx", import.meta.url), "utf8");
+  assert.match(tela, /item\.sanitizationResult/u, "a lista de devoluções precisa mostrar o resultado registrado");
+});
+
 test("transferir entre locais conserva o total consolidado do workspace", async () => {
   const transfer = await readFile(new URL("../app/api/epi/stock/transfers/route.ts", import.meta.url), "utf8");
   assert.match(transfer, /delta: -quantity/u);
