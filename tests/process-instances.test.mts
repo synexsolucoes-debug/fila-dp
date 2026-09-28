@@ -221,6 +221,31 @@ test("o administrador não fica preso à atribuição da etapa", () => {
   assert.deepEqual(blockers, []);
 });
 
+test("etapa do solicitante não é avançada por quem não abriu a demanda", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "REQUESTER" }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+  });
+  assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_NOT_REQUESTER"]);
+});
+
+test("quem abriu a demanda avança a própria etapa de solicitante", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "REQUESTER" }),
+    actor: actor(), createdByEmail: "analista@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+  });
+  assert.deepEqual(blockers, []);
+});
+
+test("o administrador não fica preso à etapa de solicitante alheia", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "REQUESTER" }),
+    actor: actor({ role: "admin" }), createdByEmail: "outro@empresa.com",
+    pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+  });
+  assert.deepEqual(blockers, []);
+});
+
 test("aprovação: quem não é aprovador não avança", () => {
   const blockers = evaluateStepRequirements({
     config: stepConfig({ requiresApproval: true, approverUserId: "gestor-1" }),

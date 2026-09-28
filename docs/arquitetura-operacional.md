@@ -296,6 +296,39 @@ isso é interface, não a leitura do dado que este passo fecha.
 | --- | --- |
 | `stepConfigOf` só aceita `cutoff_time` no formato `HH:MM`, e `resolveStepDeadline` usa esse horário antes do "fim do dia" do workspace em etapas de dia útil | `tests/process-instances.test.mts` |
 
+### 3.9 Modo de responsabilidade "Solicitante" era mostrado e salvo, mas não travava nada
+
+`processResponsibilityModes` sempre teve sete valores — `USER`, `DEPARTMENT`,
+`DEPARTMENT_MANAGER`, `REQUESTER`, `EMPLOYEE_MANAGER`, `PROCESS_OWNER`,
+`DYNAMIC` — e o editor de processo (`ProcessModeler.tsx`) sempre ofereceu
+todos os sete no seletor de responsável da etapa. Mas `evaluateStepRequirements`
+(`lib/process-instances.ts`), a função que decide se alguém pode concluir a
+etapa atual, só tinha bloqueio para dois: `USER` e `DEPARTMENT`. Uma etapa
+marcada como "Solicitante" — só quem abriu a demanda pode concluir — não
+travava ninguém: qualquer pessoa com acesso ao quadro avançava normalmente,
+exatamente o "seletor que promete e o motor que não cumpre" já visto em §3.6.
+
+Este passo fecha só o `REQUESTER`, porque é o único dos cinco que faltavam
+cujo dado já existe onde a verificação roda: `evaluateStepRequirements` já
+recebe `createdByEmail` (usado na recusa de autoaprovação) e compará-lo ao
+e-mail de quem está agindo é a mesma forma dos dois bloqueios que já
+existiam, só trocando o campo comparado.
+
+**O que isto ainda não faz**: `DEPARTMENT_MANAGER`, `EMPLOYEE_MANAGER`,
+`PROCESS_OWNER` e `DYNAMIC` continuam sem bloqueio — cada um precisa de um
+dado que a função hoje não recebe (quem gerencia qual área, quem é o gestor
+do colaborador da demanda, quem é o dono declarado do processo, ou o
+resultado de uma regra dinâmica), e inventar esse dado sem um consumidor
+imediato seria a "tabela para o futuro" que este projeto evita. Continuam
+selecionáveis no editor porque a intenção de quem desenha o processo — "esta
+etapa é do gestor da área", "do dono do processo" — já vale a pena registrar
+mesmo antes de o motor saber cumpri-la; remover a opção do seletor
+esconderia a intenção, não a resolveria.
+
+| Verificação | Onde |
+| --- | --- |
+| Etapa com `responsibilityMode: "REQUESTER"` só é concluída por quem abriu a demanda (ou por admin); os demais modos continuam sem bloqueio | `tests/process-instances.test.mts` |
+
 ---
 
 ## 4. Unidade de trabalho e a Central de Trabalho
