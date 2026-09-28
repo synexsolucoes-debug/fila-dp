@@ -96,6 +96,19 @@ test("sem quadro com coluna de entrada, a regra é ignorada com motivo — não 
   assert.match(source, /outcome: "skipped", ruleId, ruleName, reason: "nenhum quadro com coluna de entrada disponível"/u);
 });
 
+test("processo com abertura automática desligada é ignorado com motivo — desligar depois de a regra existir não trava a resposta ao evento", async () => {
+  const source = await readFile(new URL("../lib/domain-event-automations.ts", import.meta.url), "utf8");
+  assert.match(source, /if \(!version\.allowAutomaticStart\)/u);
+  assert.match(source, /outcome: "skipped", ruleId, ruleName, reason: "processo não aceita abertura automática"/u);
+  // A checagem precisa vir depois de carregar a versão (senão não haveria o
+  // que checar) e antes de procurar quadro — não gasta trabalho à toa.
+  const afterLoad = source.slice(source.indexOf("version = await loadPublishedVersion"));
+  const flagCheckIndex = afterLoad.indexOf("!version.allowAutomaticStart");
+  const targetIndex = afterLoad.indexOf("resolveAutomationTarget(");
+  assert.ok(flagCheckIndex > 0 && targetIndex > flagCheckIndex,
+    "a recusa por automática desligada precisa vir antes de procurar o quadro de destino");
+});
+
 test("regra sem `instantiateProcessVersionId` na ação não tenta instanciar nada", async () => {
   const source = await readFile(new URL("../lib/domain-event-automations.ts", import.meta.url), "utf8");
   assert.match(source, /if \(!processVersionId\) \{/u);

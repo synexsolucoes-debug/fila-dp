@@ -164,6 +164,15 @@ export async function runDomainEventAutomations(
       });
       continue;
     }
+    // "Permitir abertura automática" desligado (§3.7): a regra em si ainda é
+    // válida (o processo podia aceitar automática quando ela foi salva), mas
+    // um admin pode desligar a flag depois sem editar cada automação que
+    // aponta para o processo. Ignorar com o motivo, nunca lançar — o mesmo
+    // padrão de versão despublicada acima.
+    if (!version.allowAutomaticStart) {
+      results.push({ outcome: "skipped", ruleId, ruleName, reason: "processo não aceita abertura automática" });
+      continue;
+    }
 
     const target = await resolveAutomationTarget(d1, workspaceId, typeof action.boardId === "string" ? action.boardId : "");
     if (!target) {

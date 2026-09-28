@@ -229,17 +229,41 @@ nenhum dos dois é "abertura manual": um processo com abertura manual desligada
 e automática ligada precisa continuar nascendo pelo evento, só não pelo
 clique ou pelo POST direto.
 
-**O que isto ainda não faz**: o mesmo buraco existe em espelho para
-`allow_automatic_start` — a coluna é salva e mostrada, mas nada valida que uma
-regra `domain_event`/`instantiateProcessVersionId` (§3.5) só aponte para
-processos com automática ligada. Como toda automação hoje passa por quem já
-tem `processes.manage` para cadastrá-la, o risco é bem menor (é um erro de
-configuração de quem já administra o processo, não um contorno de quem não
-deveria poder iniciar nada) — por isso ficou de fora deste passo.
+**Atualização (§3.7):** o buraco em espelho para `allow_automatic_start`,
+descrito abaixo como deixado de fora deste passo, foi fechado depois.
 
 | Verificação | Onde |
 | --- | --- |
 | A rota de instanciar recusa antes de montar a instância quando `allowManualStart` é falso, e a recusa não aparece nas rotas de catálogo por evento nem de proposta de agente | `tests/process-instances.test.mts` |
+
+### 3.7 "Permitir abertura automática" desligado depois de a regra existir
+
+Espelho do §3.6, com um dono diferente. `allow_automatic_start` sempre foi
+salvo e mostrado na tela de processos, mas nada validava que uma regra
+`domain_event`/`instantiateProcessVersionId` (§3.5) só apontasse para um
+processo com automática ligada. Diferente do §3.6, aqui a regra em si não é
+"contornada por quem não deveria poder iniciar nada": quem cadastra a
+automação já precisa de `processes.manage`. O risco real é outro — um admin
+desliga "Permitir abertura automática" num processo *depois* que uma
+automação já aponta para ele, esperando que isso baste, e a automação
+continua rodando porque `runDomainEventAutomations`
+(`lib/domain-event-automations.ts`) nunca olhava a flag.
+
+A recusa segue o mesmo padrão que toda falha de regra já seguia nessa função
+— nunca lança, sempre vira `{ outcome: "skipped", reason }` e deixa as demais
+regras rodarem. Não é um erro do evento nem do colaborador que o disparou; é
+a automação que não deveria ter agido, silenciosamente ignorada com o motivo
+certo, do mesmo jeito que "sem quadro com coluna de entrada" já era.
+
+**O que isto ainda não faz**: a tela de automações não avisa, no momento de
+cadastrar a regra, que o processo escolhido pode ter a automática desligada
+mais tarde e a regra ficar "presa" sem rodar — quem administra só descobre
+olhando o histórico de execuções. Um aviso ali é interface, não a garantia de
+dado que este passo fecha.
+
+| Verificação | Onde |
+| --- | --- |
+| `loadVersionRow` também lê `allow_automatic_start`, e `runDomainEventAutomations` ignora com motivo (não lança) quando a flag está desligada, verificando isso antes de procurar o quadro de destino | `tests/process-instances.test.mts`, `tests/domain-event-automations.test.mts` |
 
 ---
 
