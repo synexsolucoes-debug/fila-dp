@@ -6,7 +6,7 @@ import { runDomainEventAutomations } from "@/lib/domain-event-automations";
 import { buildDomainEvent } from "@/lib/domain-events";
 import { log } from "@/lib/observability";
 import { prepareDomainEventFromEnvelope } from "@/lib/outbox";
-import { cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
+import { assertActiveScope, cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
 
 const employeeSelect = `SELECT e.id, e.company_id, c.legal_name AS company_name, e.department_id, d.name AS department_name,
   e.position_id, p.name AS position_name, e.cost_center_id, cc.name AS cost_center_name,
@@ -90,6 +90,10 @@ export async function POST(request: Request) {
       workModel: enumValue(body.workModel, ["onsite", "hybrid", "remote"] as const, "onsite"),
       notes: cleanText(body.notes, 2000),
     };
+    await assertActiveScope(d1, workspace.id, {
+      departmentId: row.departmentId, positionId: row.positionId,
+      costCenterId: row.costCenterId, establishmentId: row.establishmentId,
+    });
     const requestId = request.headers.get("x-fila-dp-request-id");
     /* Todo colaborador criado por aqui é, por definição, uma admissão para o
        produto: é o único ponto de criação manual, e a rota só insere, nunca

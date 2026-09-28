@@ -1205,6 +1205,45 @@ carregado até esta rota.
 | --- | --- |
 | `PATCH /api/tasks/[id]` recusa concluir tarefa em `USER`/`DEPARTMENT`/`REQUESTER` quando quem chama não é o responsável, e o admin não fica preso | `tests/process-tasks.test.mts` |
 
+### 4.23 Departamento, cargo, centro de custo ou unidade desativado aceitava novo vínculo
+
+As quatro tabelas de cadastro auxiliar (`fdp_departments`, `fdp_positions`,
+`fdp_cost_centers`, `fdp_establishments`) sempre tiveram `status`
+(`active`/`inactive`), e a própria tela de cadastros sempre deixava desligar
+qualquer uma delas. Só a EPI olhava para isso — `p.status <> 'inactive'` já
+excluía cargo desativado da checagem de exigência de equipamento
+(`app/api/epi/dashboard/route.ts`, `app/api/epi/employees/[id]/route.ts`).
+O cadastro do colaborador, que é quem de fato cria o vínculo, nunca
+verificava: um departamento desativado continuava aceitando gente nova, e
+nada avisava.
+
+`assertActiveScope` (`lib/registrations.ts`) fecha essa lacuna nos dois
+pontos que gravam o vínculo — `POST /api/employees` e
+`PATCH /api/employees/[id]`. Cada tabela tem sua própria consulta em vez de
+uma só com o nome da tabela interpolado: um identificador de tabela não dá
+para parametrizar, e escrever as quatro por extenso é o que mantém
+`verify:sql` capaz de conferir cada uma.
+
+Na edição, só entra o vínculo que a chamada está de fato mudando — comparado
+contra o valor atual antes da checagem, não contra o que o corpo reenviou.
+Um colaborador já preso a um departamento desativado antes desta checagem
+existir continua editável em qualquer outro campo; só travaria se alguém
+tentasse mover **para** um cadastro inativo, ou confirmasse esse mesmo vínculo
+de novo depois de desativado.
+
+**O que isto ainda não faz**: não recusa desativar um cadastro que já tem
+colaborador vinculado (a tela de cadastros auxiliares continua permitindo);
+a régua aqui é só "não aceita vínculo novo", não "avisa quem já está
+vinculado". Também não cobre `fdp_work_schedules` nem `fdp_unions`, que
+existem com o mesmo `status`, mas cujo vínculo com o colaborador não tem,
+hoje, nenhum efeito de negócio que dependa de estarem ativos — estender a
+regra a eles sem um consumidor real seria a mesma "tabela para o futuro"
+que este projeto evita.
+
+| Verificação | Onde |
+| --- | --- |
+| `assertActiveScope` recusa vínculo com os quatro cadastros quando `status = 'inactive'`, e as duas rotas de colaborador chamam antes de gravar; a edição só valida o campo que mudou | `tests/registrations-phase3.test.mts` |
+
 ---
 
 ## 5. Agentes
