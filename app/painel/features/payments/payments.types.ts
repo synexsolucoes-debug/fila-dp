@@ -170,6 +170,8 @@ export type InvoiceRow = {
   hasInvoice: boolean;
   /** Vazio quando o pagamento pode sair; o motivo por extenso quando não pode. */
   paymentBlock: string;
+  /** A nota foi enviada mesmo o sistema tendo avisado de um possível duplicado. */
+  duplicateAck: boolean;
 };
 
 export type InvoiceSummary = {
@@ -217,6 +219,7 @@ export type InvoiceVersion = {
   uploadedAt: string; uploadedByName: string; uploadedVia: string;
   reviewedAt: string; reviewedByName: string;
   supersededAt: string;
+  duplicateAck: boolean;
 };
 
 export type InvoiceEvent = {
@@ -233,6 +236,7 @@ export type InvoiceDetail = {
     uploadedAt: string; uploadedVia: string; uploadedByName: string;
     reviewedAt: string; reviewNote: string;
     rejectionReason: string; rejectionDetail: string; supersededAt: string;
+    duplicateAck: boolean;
   };
   comparison: { expectedAmount: number; informedAmount: number; difference: number; matches: boolean };
   closing: {

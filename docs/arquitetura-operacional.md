@@ -1248,6 +1248,42 @@ para o futuro" que este projeto evita.
 | --- | --- |
 | `assertActiveScope` recusa vínculo com os cinco cadastros quando `status = 'inactive'`, e as duas rotas de colaborador chamam antes de gravar; a edição só valida o campo que mudou | `tests/registrations-phase3.test.mts` |
 
+### 4.24 `duplicate_ack` era gravado no envio e nunca aparecia de novo
+
+`fdp_contractor_invoices.duplicate_ack` sempre existia e sempre era gravado:
+quando alguém envia uma nota fiscal que bate com o número/série/emissor de
+outra já registrada, o sistema avisa, e se a pessoa confirma o envio mesmo
+assim, `duplicateAck: true` vai para o banco junto com a nota
+(`app/api/payments/contractors/invoices/route.ts`,
+`app/api/payments/contractors/closings/[id]/invoice/route.ts`, via
+`registerInvoice` em `lib/contractor-invoice-service.ts`). É o único sinal que
+existe para dizer "isto pode ser a mesma nota de novo, alguém mandou enviar
+assim mesmo" — e nenhuma consulta de leitura trazia essa coluna de volta.
+Quem revisa o pagamento na tela de Notas Fiscais, ou abre a gaveta de
+conferência de uma nota específica, não tinha como saber que o próprio
+sistema já tinha desconfiado dela.
+
+A lacuna era só de leitura: `listInvoicePanel` (lista da competência) e
+`listClosingInvoices` (histórico de versões de um pagamento) não selecionavam
+`duplicate_ack`, e o normalizador do front (`payments.api.ts`) não tinha
+onde pegar o campo mesmo quando ele chegava (a gaveta de conferência recebe
+a linha crua da nota por inteiro, então `duplicate_ack` já estava ali,
+ignorado). Com as três consultas trazendo a coluna e o normalizador lendo
+`duplicateAck`/`duplicate_ack` do mesmo jeito que já lê todo o resto, a lista
+ganha um selo "Duplicidade aceita" ao lado do nome do prestador, e a gaveta
+de conferência mostra o aviso por extenso na nota aberta.
+
+**O que isto ainda não faz**: não bloqueia a aprovação de uma nota com
+duplicidade aceita, nem exige uma segunda confirmação de quem revisa — a
+régua aqui é só "mostrar o que o sistema já sabia", não criar uma trava
+nova. Também não aparece na linha do histórico de versões (só na nota
+aberta no topo da gaveta), porque uma nota substituída raramente volta a
+ser olhada isoladamente.
+
+| Verificação | Onde |
+| --- | --- |
+| `listInvoicePanel` e `listClosingInvoices` trazem `duplicate_ack`, o normalizador do front lê `duplicateAck`, e a lista e a gaveta de conferência mostram o aviso | `tests/contractor-invoices.test.mts` |
+
 ---
 
 ## 5. Agentes

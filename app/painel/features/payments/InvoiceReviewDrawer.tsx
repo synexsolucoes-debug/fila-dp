@@ -209,6 +209,11 @@ function InvoiceReviewContent(
             <div><dt>Conferida em</dt><dd>{dateTime(invoice.reviewedAt)}</dd></div>
           </dl>
           {invoice.notes && <p className={styles.hint}>Observação do envio: {invoice.notes}</p>}
+          {invoice.duplicateAck && (
+            <p className={styles.invoiceBlockNote}>
+              Esta nota foi enviada mesmo o sistema tendo avisado que já existia outra com o mesmo número.
+            </p>
+          )}
           {invoice.rejectionReason && (
             <p className={styles.invoiceRejectionNote}>
               Motivo registrado: {invoiceRejectionReasonLabels[invoice.rejectionReason as keyof typeof invoiceRejectionReasonLabels] ?? invoice.rejectionReason}
