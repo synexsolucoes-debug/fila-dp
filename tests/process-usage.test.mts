@@ -28,7 +28,7 @@ const XML = `<?xml version="1.0"?>
 const step = (overrides: Partial<ProcessStepConfig>): ProcessStepConfig => ({
   id: "", bpmnElementId: "", stepType: "TASK", name: "", instructions: "",
   departmentId: "", responsibleUserId: "", responsibilityMode: "ANY",
-  slaValue: 0, slaUnit: "hours", slaBusinessDays: false,
+  slaValue: 0, slaUnit: "hours", slaBusinessDays: false, cutoffTime: "",
   requesterDepartmentId: "", responsibleDepartmentId: "",
   checklist: [], requiredDocuments: [], evidenceRequired: false,
   requiresApproval: false, approverUserId: "", approverDepartmentId: "",

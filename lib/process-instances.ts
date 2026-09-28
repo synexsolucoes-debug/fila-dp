@@ -73,6 +73,8 @@ export type ProcessStepConfig = {
   slaValue: number;
   slaUnit: string;
   slaBusinessDays: boolean;
+  /** Horário-limite do dia útil de vencimento (§3.8); vazio usa o "fim do dia" do workspace. */
+  cutoffTime: string;
   requesterDepartmentId: string;
   responsibleDepartmentId: string;
   checklist: string[];
@@ -187,6 +189,7 @@ export function stepConfigOf(row: Row): ProcessStepConfig {
     slaValue: Number(row.sla_value ?? 0),
     slaUnit: text(row.sla_unit) || "hours",
     slaBusinessDays: flag(row.sla_business_days),
+    cutoffTime: /^\d{2}:\d{2}$/.test(text(row.cutoff_time)) ? text(row.cutoff_time) : "",
     requesterDepartmentId: text(row.requester_department_id),
     responsibleDepartmentId: text(row.responsible_department_id),
     checklist: list(row.checklist_json),
@@ -946,7 +949,11 @@ export async function resolveStepDeadline(
       : (() => { try { return JSON.parse(text(settings?.business_days_json) || "[1,2,3,4,5]") as number[]; } catch { return [1, 2, 3, 4, 5]; } })();
     const holidaySet = new Set(holidays.results.map((row) => text(row.holiday_date)));
     const day = addBusinessDays(new Date().toISOString().slice(0, 10), config.slaValue, businessDays, holidaySet);
-    return `${day}T${settings?.day_end || "18:00"}`;
+    // Horário-limite da etapa (§3.8) vence antes do "fim do dia" padrão do
+    // workspace quando a etapa pede — ex.: fechamento de folha que precisa
+    // estar pronto às 14h, não às 18h. Sem valor próprio, usa o do workspace,
+    // do mesmo jeito que sempre usou.
+    return `${day}T${config.cutoffTime || settings?.day_end || "18:00"}`;
   }
   return new Date(Date.now() + minutes * 60_000).toISOString();
 }

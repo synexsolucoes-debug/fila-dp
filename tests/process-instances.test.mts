@@ -7,6 +7,7 @@ import {
 } from "../lib/bpmn-graph.ts";
 import {
   demandStageSnapshots, evaluateStepRequirements, evaluateTransition, loadProcessInstance, stepChecklist,
+  stepConfigOf,
   type ProcessInstanceRow, type ProcessStepConfig, type PublishedProcessVersion, type TransitionActor,
 } from "../lib/process-instances.ts";
 
@@ -81,7 +82,7 @@ test("diagrama vazio não vira grafo silenciosamente", () => {
 const stepConfig = (overrides: Partial<ProcessStepConfig> = {}): ProcessStepConfig => ({
   id: "cfg", bpmnElementId: "Task_documentos", stepType: "USER_TASK", name: "Conferir documentos",
   instructions: "", departmentId: "", responsibleUserId: "", responsibilityMode: "DEPARTMENT",
-  slaValue: 0, slaUnit: "hours", slaBusinessDays: false,
+  slaValue: 0, slaUnit: "hours", slaBusinessDays: false, cutoffTime: "",
   requesterDepartmentId: "", responsibleDepartmentId: "",
   checklist: [], requiredDocuments: [], evidenceRequired: false,
   requiresApproval: false, approverUserId: "", approverDepartmentId: "", demandPriority: "normal",
@@ -681,4 +682,22 @@ test("a recusa de abertura manual não vaza para quem instancia por catálogo ou
     new URL("../app/api/agents/proposals/[id]/resolve/route.ts", import.meta.url), "utf8");
   assert.doesNotMatch(catalogo, /PROCESS_MANUAL_START_DISABLED/u);
   assert.doesNotMatch(propostas, /PROCESS_MANUAL_START_DISABLED/u);
+});
+
+/* "Horário limite" (§3.8): a etapa salvava cutoff_time desde sempre, mas o
+   prazo real sempre usava o "fim do dia" do workspace inteiro — um
+   fechamento de folha marcado para vencer às 14h continuava valendo até as
+   18h do dia útil, porque nada lia a coluna da própria etapa. */
+
+test("stepConfigOf lê cutoff_time e só aceita o formato HH:MM — o resto vira vazio (usa o padrão do workspace)", () => {
+  assert.equal(stepConfigOf({ cutoff_time: "14:00" }).cutoffTime, "14:00");
+  assert.equal(stepConfigOf({ cutoff_time: "" }).cutoffTime, "");
+  assert.equal(stepConfigOf({ cutoff_time: "lixo" }).cutoffTime, "");
+  assert.equal(stepConfigOf({ cutoff_time: null }).cutoffTime, "");
+});
+
+test("resolveStepDeadline usa o horário-limite da etapa antes do fim do dia do workspace, só em dias úteis", async () => {
+  const motor = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
+  const funcao = motor.slice(motor.indexOf("export async function resolveStepDeadline"));
+  assert.match(funcao, /\$\{day\}T\$\{config\.cutoffTime \|\| settings\?\.day_end \|\| "18:00"\}/u);
 });
