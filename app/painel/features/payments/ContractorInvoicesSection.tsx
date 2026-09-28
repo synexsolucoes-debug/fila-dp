@@ -506,6 +506,11 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
                       {row.hasInvoice && invoiceOriginLabel({ origin: row.uploadedVia }).fromPortal && (
                         <span className={styles.originBadge}>{invoiceOriginLabel({ origin: row.uploadedVia }).badge}</span>
                       )}
+                      {row.hasInvoice && row.duplicateAck && (
+                        <span className={styles.duplicateBadge} title="Enviada mesmo com aviso de possível duplicidade">
+                          Duplicidade aceita
+                        </span>
+                      )}
                     </th>
                     <td>{row.companyName}<small>{row.companyDocument}</small></td>
                     <td><strong>{money(row.expectedAmount)}</strong></td>

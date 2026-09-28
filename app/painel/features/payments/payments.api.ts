@@ -348,6 +348,7 @@ export function normalizeInvoiceRow(row: Row): InvoiceRow {
     attempt: number(row.attempt),
     hasInvoice: row.hasInvoice === true || Boolean(pick(row, "invoiceId", "invoice_id")),
     paymentBlock: text(pick(row, "paymentBlock", "payment_block")),
+    duplicateAck: pick(row, "duplicateAck", "duplicate_ack") === true,
   };
 }
 
@@ -415,6 +416,7 @@ function normalizeInvoiceVersion(row: Row): InvoiceVersion {
     reviewedAt: text(pick(row, "reviewedAt", "reviewed_at")),
     reviewedByName: text(pick(row, "reviewedByName", "reviewed_by_name")),
     supersededAt: text(pick(row, "supersededAt", "superseded_at")),
+    duplicateAck: pick(row, "duplicateAck", "duplicate_ack") === true,
   };
 }
 
@@ -448,6 +450,7 @@ export function normalizeInvoiceDetail(payload: Row): InvoiceDetail {
       rejectionReason: text(pick(invoice, "rejectionReason", "rejection_reason")),
       rejectionDetail: text(pick(invoice, "rejectionDetail", "rejection_detail")),
       supersededAt: text(pick(invoice, "supersededAt", "superseded_at")),
+      duplicateAck: pick(invoice, "duplicateAck", "duplicate_ack") === true,
     },
     comparison: {
       expectedAmount: number(comparison.expectedAmount), informedAmount: number(comparison.informedAmount),

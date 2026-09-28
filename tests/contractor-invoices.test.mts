@@ -197,6 +197,32 @@ test("o banco também impede duas notas iguais valendo ao mesmo tempo", async ()
   assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS "fdp_contractor_invoices_current_uq"/u);
 });
 
+test("duplicate_ack é salvo no envio e volta pronto pra tela — não fica preso no banco (§4.24)", async () => {
+  /* `duplicate_ack` sempre foi gravado no envio ("enviou mesmo com o aviso de
+     duplicidade"), mas nenhuma consulta de leitura o trazia de volta: a lista
+     de notas e o histórico de versões simplesmente não o selecionavam, e a
+     gaveta de conferência não tinha onde mostrá-lo. O único sinal que existe
+     para avisar "isto pode ser a mesma nota de novo" ficava invisível para
+     quem aprova o pagamento. */
+  const servico = await source("lib/contractor-invoice-service.ts");
+  assert.match(servico, /i\.duplicate_ack,\s*\n\s*document\.filename AS document_filename/u,
+    "o histórico de versões (listClosingInvoices) precisa trazer duplicate_ack");
+  const painelSelect = servico.slice(servico.indexOf("export async function listInvoicePanel"), servico.indexOf("function toPanelRow"));
+  assert.match(painelSelect, /i\.duplicate_ack/u, "a lista da competência (listInvoicePanel) precisa trazer duplicate_ack");
+  assert.match(servico, /duplicateAck: Boolean\(row\.duplicate_ack\)/u);
+
+  const api = await source("app/painel/features/payments/payments.api.ts");
+  assert.match(api, /duplicateAck: pick\(row, "duplicateAck", "duplicate_ack"\) === true/u);
+  assert.match(api, /duplicateAck: pick\(invoice, "duplicateAck", "duplicate_ack"\) === true/u,
+    "a gaveta de conferência (normalizeInvoiceDetail) precisa normalizar duplicateAck");
+
+  const lista = await source("app/painel/features/payments/ContractorInvoicesSection.tsx");
+  assert.match(lista, /row\.duplicateAck/u, "a lista precisa avisar visualmente quando a duplicidade foi aceita");
+
+  const gaveta = await source("app/painel/features/payments/InvoiceReviewDrawer.tsx");
+  assert.match(gaveta, /invoice\.duplicateAck/u, "a gaveta de conferência precisa mostrar o aviso na nota aberta");
+});
+
 /* -------------------------------------------------------------------------- */
 /* Recusa, checklist e histórico (§6, §7, §24)                                 */
 /* -------------------------------------------------------------------------- */

@@ -128,6 +128,8 @@ export type InvoicePanelRow = {
   attempt: number;
   hasInvoice: boolean;
   paymentBlock: string;
+  /** A nota foi enviada mesmo o sistema tendo avisado de um possível duplicado (§4.24). */
+  duplicateAck: boolean;
 };
 
 /**
@@ -156,6 +158,7 @@ export async function listInvoicePanel(d1: Database, input: {
       i.id AS invoice_id, i.invoice_number, i.series, i.issue_date, i.issuer_document, i.issuer_name,
       i.amount AS informed_amount, i.difference_amount, i.status AS invoice_status, i.attempt,
       i.document_id, i.uploaded_at, i.uploaded_via, i.reviewed_at, i.reviewed_by, i.rejection_reason,
+      i.duplicate_ack,
       document.content_type AS document_content_type, document.filename AS document_filename,
       uploader.name AS uploaded_by_name, reviewer.name AS reviewed_by_name
     FROM fdp_contractor_closings c
@@ -223,6 +226,7 @@ function toPanelRow(row: Record<string, unknown>, policy: InvoicePolicy): Invoic
     // A regra de liberação vem do módulo puro, mesmo aqui: a tela, a rota de
     // transição e o relatório precisam responder a mesma coisa.
     paymentBlock: invoicePaymentBlock({ expectedAmount, reviewStatus, policy: policy.reviewPolicy }),
+    duplicateAck: Boolean(row.duplicate_ack),
   };
 }
 
@@ -256,6 +260,7 @@ export async function listClosingInvoices(d1: Database, workspaceId: string, clo
   const rows = await d1.prepare(`SELECT i.id, i.attempt, i.invoice_number, i.series, i.issue_date, i.amount,
       i.expected_amount, i.difference_amount, i.status, i.document_id, i.rejection_reason, i.rejection_detail,
       i.uploaded_at, i.uploaded_via, i.reviewed_at, i.superseded_at, i.replaces_invoice_id, i.replaced_by_invoice_id,
+      i.duplicate_ack,
       document.filename AS document_filename, document.content_type AS document_content_type,
       uploader.name AS uploaded_by_name, reviewer.name AS reviewed_by_name
     FROM fdp_contractor_invoices i

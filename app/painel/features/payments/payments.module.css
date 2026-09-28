@@ -876,3 +876,23 @@
   letter-spacing: .02em;
   white-space: nowrap;
 }
+
+/* Selo de duplicidade aceita (§4.24): a nota foi enviada mesmo o sistema
+   avisando que já existia outra com o mesmo número — quem confere precisa
+   ver isso sem abrir a nota. */
+.duplicateBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--pay-warning) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pay-warning) 10%, transparent);
+  color: var(--pay-warning);
+  font-size: .62rem;
+  font-weight: 760;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
