@@ -2,7 +2,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
-import { cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
+import { assertActiveScope, cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
 import { blocksReturnToWork, type ExamResult } from "@/lib/occupational-exams";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -75,6 +75,16 @@ export async function PATCH(request: Request, context: RouteContext) {
       workModel: enumValue(body.workModel, ["onsite", "hybrid", "remote"] as const, current.work_model as "onsite" | "hybrid" | "remote"),
       notes: Object.hasOwn(body, "notes") ? cleanText(body.notes, 2000) : String(current.notes),
     };
+    /* Só valida o vínculo que esta chamada está de fato trocando (§4.23): um
+       colaborador já preso a um departamento desativado antes desta checagem
+       existir não pode travar a edição de um campo qualquer que não mexeu
+       nesse vínculo. */
+    await assertActiveScope(d1, workspace.id, {
+      departmentId: next.departmentId !== current.department_id ? (next.departmentId as string | null) : null,
+      positionId: next.positionId !== current.position_id ? (next.positionId as string | null) : null,
+      costCenterId: next.costCenterId !== current.cost_center_id ? (next.costCenterId as string | null) : null,
+      establishmentId: next.establishmentId !== current.establishment_id ? (next.establishmentId as string | null) : null,
+    });
     /* Retorno ao trabalho não passa por cima do exame ocupacional, passo 1
        (docs/arquitetura-operacional.md §4.9): só bloqueia quando já existe um
        exame dizendo inapto — não exige que o exame exista, para não travar

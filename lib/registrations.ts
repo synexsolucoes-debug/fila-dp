@@ -76,3 +76,56 @@ export function publicEmployee<T extends Record<string, unknown>>(employee: T) {
   delete safe.cpf_hash;
   return safe;
 }
+
+/**
+ * Recusa vincular o colaborador a um departamento, cargo, centro de custo ou
+ * unidade desativado.
+ *
+ * `status` sempre existiu nesses quatro cadastros e sempre podia ser desligado
+ * pela própria tela de cadastros auxiliares, mas nada no cadastro do
+ * colaborador olhava para ele — só a EPI já excluía posição inativa da sua
+ * própria checagem (`app/api/epi/dashboard/route.ts`). Um cargo desativado
+ * continuava aceitando gente nova.
+ *
+ * Cada tabela tem sua própria consulta, de propósito: um nome de tabela
+ * interpolado no SQL sairia da verificação estática de `verify:sql` (não há
+ * como parametrizar identificador), e essa checagem é justamente o que
+ * mantém o produto livre de injeção por essa porta.
+ *
+ * Só valida os campos presentes em `scope`: quem chama decide o que mudou
+ * (§4.23) — reenviar o valor antigo de um vínculo já inativo antes desta
+ * checagem existir não pode travar uma edição que não mexeu nele.
+ */
+export async function assertActiveScope(d1: D1Database, workspaceId: string, scope: {
+  departmentId?: string | null; positionId?: string | null;
+  costCenterId?: string | null; establishmentId?: string | null;
+}): Promise<void> {
+  if (scope.departmentId) {
+    const row = await d1.prepare("SELECT status FROM fdp_departments WHERE workspace_id = ? AND id = ?")
+      .bind(workspaceId, scope.departmentId).first<{ status: string }>();
+    if (row?.status === "inactive") {
+      throw new ApiError(422, "EMPLOYEE_DEPARTMENT_INACTIVE", "Este departamento está desativado e não aceita novo vínculo.");
+    }
+  }
+  if (scope.positionId) {
+    const row = await d1.prepare("SELECT status FROM fdp_positions WHERE workspace_id = ? AND id = ?")
+      .bind(workspaceId, scope.positionId).first<{ status: string }>();
+    if (row?.status === "inactive") {
+      throw new ApiError(422, "EMPLOYEE_POSITION_INACTIVE", "Este cargo está desativado e não aceita novo vínculo.");
+    }
+  }
+  if (scope.costCenterId) {
+    const row = await d1.prepare("SELECT status FROM fdp_cost_centers WHERE workspace_id = ? AND id = ?")
+      .bind(workspaceId, scope.costCenterId).first<{ status: string }>();
+    if (row?.status === "inactive") {
+      throw new ApiError(422, "EMPLOYEE_COST_CENTER_INACTIVE", "Este centro de custo está desativado e não aceita novo vínculo.");
+    }
+  }
+  if (scope.establishmentId) {
+    const row = await d1.prepare("SELECT status FROM fdp_establishments WHERE workspace_id = ? AND id = ?")
+      .bind(workspaceId, scope.establishmentId).first<{ status: string }>();
+    if (row?.status === "inactive") {
+      throw new ApiError(422, "EMPLOYEE_ESTABLISHMENT_INACTIVE", "Esta unidade está desativada e não aceita novo vínculo.");
+    }
+  }
+}
