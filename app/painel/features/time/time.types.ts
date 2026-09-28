@@ -16,6 +16,7 @@ export type TimeSheet = {
   warningIssues: number;
   approvedAt: string;
   exportedAt: string;
+  rejectedReason: string;
 };
 
 export type TimeEventTotal = { eventCode: string; minutes: number; sheets: number };

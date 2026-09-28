@@ -304,7 +304,7 @@ export function TimeTrackingView({ role }: { role: WorkspaceRole }) {
                       <td>{duration(sheet.workedMinutes)}</td>
                       <td className={sheet.balanceMinutes < 0 ? styles.negative : styles.positive}>{duration(sheet.balanceMinutes)}</td>
                       <td>{sheet.blockingIssues > 0 ? <span className={styles.badge} data-tone="blocking">{sheet.blockingIssues}</span> : "—"}</td>
-                      <td><span className={styles.badge} data-tone={sheet.status}>{statusLabels[sheet.status] ?? sheet.status}</span></td>
+                      <td className={sheet.status === "rejected" && sheet.rejectedReason ? styles.wrapCell : undefined}><span className={styles.badge} data-tone={sheet.status}>{statusLabels[sheet.status] ?? sheet.status}</span>{sheet.status === "rejected" && sheet.rejectedReason && <small>{sheet.rejectedReason}</small>}</td>
                       <td>
                         <div className={styles.rowActions}>
                           {canManage && sheet.status !== "exported" && sheet.status !== "closed" && (

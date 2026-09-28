@@ -1313,6 +1313,34 @@ sem uso fora do próprio banco) — a régua aqui é só o texto do resultado, q
 | --- | --- |
 | A rota exige e grava `sanitization_result`; o normalizador do front lê `sanitizationResult`, e a tabela de devoluções mostra o resultado quando a higienização foi concluída ou recusada | `tests/epi-control.test.mts` |
 
+### 4.26 Motivo da devolução do ponto era exigido e nunca aparecia de novo
+
+`fdp_time_sheets.rejected_reason` sempre foi exigido pela rota de transição
+(`POST /api/time/sheets/[id]/transition`, `TIME_REJECT_REASON_REQUIRED`) ao
+devolver um espelho de ponto, e sempre era gravado. A leitura já trazia a
+coluna — `GET /api/time/overview` seleciona `s.rejected_reason` — mas a
+tela só mostrava o selo "Devolvido": o normalizador do front
+(`time.api.ts`) não mapeava o campo, o tipo `TimeSheet` não o declarava, e
+a tabela de espelhos nunca exibia o texto. Quem precisa corrigir o ponto
+via que foi recusado, mas não por quê — o mesmo padrão já visto em §4.24 e
+§4.25, agora do lado do controle de jornada.
+
+Com `rejectedReason` no tipo, no normalizador e na tabela, o espelho
+devolvido mostra o motivo logo abaixo do selo de status.
+
+**O que isto ainda não faz**: `fdp_time_sheets.reopen_reason` — o mesmo
+padrão de "motivo exigido, gravado, nunca lido de volta", só que para a
+reabertura de um espelho já fechado — continua fora do `SELECT` de
+`GET /api/time/overview` e fora da tela. Não entrou aqui porque reabrir não
+muda o `status` de um jeito que a tabela distinga hoje (o espelho reaberto
+volta a um status já existente, sem um selo próprio que peça um motivo ao
+lado) — mostrar esse motivo pede primeiro decidir onde ele aparece, o que
+é maior que a leitura que este passo fecha.
+
+| Verificação | Onde |
+| --- | --- |
+| `GET /api/time/overview` já trazia `rejected_reason`; o normalizador do front lê `rejectedReason`, e a tabela de espelhos mostra o motivo quando o espelho foi devolvido | `tests/time-tracking.test.mts` |
+
 ---
 
 ## 5. Agentes
