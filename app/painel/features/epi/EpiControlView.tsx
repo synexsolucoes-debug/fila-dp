@@ -765,7 +765,10 @@ function ReturnsPanel({ returns, filters, onFilters, permissions, busy, onSaniti
             item.needsSanitizing ? "Higienização" : "",
             item.sendToDisposal ? "Descarte" : "",
             item.generateDpDemand ? "Demanda de desconto no DP" : "",
-          ].filter(Boolean).join(" · ") || "Sem desdobramento"}</small></td>
+          ].filter(Boolean).join(" · ") || "Sem desdobramento"}</small>
+            {["sanitized", "rejected"].includes(item.sanitizationStatus) && item.sanitizationResult && (
+              <small>{item.sanitizationStatus === "rejected" ? "Recusa: " : "Higienização: "}{item.sanitizationResult}</small>
+            )}</td>
           <td><div className={styles.rowActions}>
             {permissions?.receiveReturn && item.sanitizationStatus === "awaiting" && <button disabled={busy} onClick={() => onSanitize(item, "start")}>Iniciar higienização</button>}
             {permissions?.receiveReturn && ["awaiting", "in_progress"].includes(item.sanitizationStatus) && <button disabled={busy} onClick={() => onSanitize(item, "complete")}>Concluir e repor</button>}

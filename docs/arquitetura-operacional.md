@@ -1284,6 +1284,35 @@ ser olhada isoladamente.
 | --- | --- |
 | `listInvoicePanel` e `listClosingInvoices` trazem `duplicate_ack`, o normalizador do front lê `duplicateAck`, e a lista e a gaveta de conferência mostram o aviso | `tests/contractor-invoices.test.mts` |
 
+### 4.25 Resultado da higienização de EPI era exigido e nunca aparecia de novo
+
+`fdp_epi_returns.sanitization_result` sempre foi exigido pela rota
+(`POST /api/epi/returns/[id]/sanitization`) ao concluir ou recusar uma
+higienização — a mesma exigência de motivo por extenso que já vale para
+recusa de nota fiscal (§6) — e sempre era gravado junto com o novo status.
+Mas nenhuma leitura o trazia de volta de um jeito que a tela usasse: a lista
+de devoluções já fazia `SELECT r.*` (a coluna vinha na resposta), só que o
+normalizador do front (`epi.api.ts`) não a mapeava, o tipo `EpiReturn` não a
+declarava, e a tabela de devoluções nunca a mostrava. O texto que alguém
+digitou ao concluir ("veio suja, mas recuperável") ou recusar ("CA vencido,
+não dá pra reaproveitar") ficava invisível para todo mundo depois —
+inclusive para quem está decidindo se aquele mesmo tipo de devolução deve
+seguir o mesmo caminho.
+
+Com `sanitizationResult` no tipo, no normalizador e na tabela, a devolução
+já concluída ou recusada mostra o resultado registrado logo abaixo do que
+ela desdobrou ("Voltou ao estoque", "Descarte" etc.), prefixado por "Recusa:"
+ou "Higienização:" conforme o desfecho.
+
+**O que isto ainda não faz**: não mostra quem registrou o resultado nem
+quando (`sanitization_responsible_id`/`sanitization_completed_at` continuam
+sem uso fora do próprio banco) — a régua aqui é só o texto do resultado, que
+é o que faltava para a decisão do dia a dia.
+
+| Verificação | Onde |
+| --- | --- |
+| A rota exige e grava `sanitization_result`; o normalizador do front lê `sanitizationResult`, e a tabela de devoluções mostra o resultado quando a higienização foi concluída ou recusada | `tests/epi-control.test.mts` |
+
 ---
 
 ## 5. Agentes

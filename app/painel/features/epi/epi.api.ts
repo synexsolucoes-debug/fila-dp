@@ -222,6 +222,7 @@ export function normalizeReturn(row: Row): EpiReturn {
     condition: text(value(row, "condition", "epi_condition")) as EpiReturn["condition"],
     needsSanitizing: bool(value(row, "needsSanitizing", "needs_sanitizing")),
     sanitizationStatus: text(value(row, "sanitizationStatus", "sanitization_status")),
+    sanitizationResult: text(value(row, "sanitizationResult", "sanitization_result")),
     backToStock: bool(value(row, "backToStock", "back_to_stock")),
     sendToDisposal: bool(value(row, "sendToDisposal", "send_to_disposal")),
     generateDpDemand: bool(value(row, "generateDpDemand", "generate_dp_demand")),

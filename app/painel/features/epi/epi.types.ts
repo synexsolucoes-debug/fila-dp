@@ -159,6 +159,8 @@ export type EpiReturn = {
   condition: EpiReturnCondition;
   needsSanitizing: boolean;
   sanitizationStatus: string;
+  /** O que quem tratou a higienização registrou — só existe depois de concluída ou recusada. */
+  sanitizationResult: string;
   backToStock: boolean;
   sendToDisposal: boolean;
   generateDpDemand: boolean;
