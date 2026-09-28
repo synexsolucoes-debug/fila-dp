@@ -98,7 +98,7 @@ const actor = (overrides: Partial<TransitionActor> = {}): TransitionActor => ({
 
 const version = (steps: Record<string, ProcessStepConfig> = {}): PublishedProcessVersion => ({
   definitionId: "def-1", definitionName: "Admissão", definitionCode: "ADM",
-  isCorporate: true, allowManualStart: true, defaultPriority: "normal",
+  isCorporate: true, allowManualStart: true, allowAutomaticStart: true, defaultPriority: "normal",
   versionId: "ver-4", versionNumber: "4.0", bpmnXml: ADMISSION_BPMN, graph,
   steps: new Map(Object.entries(steps)),
 });
@@ -654,10 +654,12 @@ test("o contrato de transição entrega o destino que o painel envia", async () 
    route) e a filtragem do catálogo (WorkspaceApp.tsx) prometiam uma recusa
    que o servidor não cumpria. */
 
-test("loadVersionRow lê allow_manual_start do processo, junto com is_corporate", async () => {
+test("loadVersionRow lê allow_manual_start e allow_automatic_start do processo, junto com is_corporate", async () => {
   const motor = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
   assert.match(motor, /p\.is_corporate, p\.allow_manual_start,/u);
+  assert.match(motor, /p\.allow_automatic_start, p\.default_priority/u);
   assert.match(motor, /allowManualStart: flag\(row\.allow_manual_start\)/u);
+  assert.match(motor, /allowAutomaticStart: flag\(row\.allow_automatic_start\)/u);
 });
 
 test("a rota de instanciar recusa quando o processo não aceita abertura manual", async () => {
