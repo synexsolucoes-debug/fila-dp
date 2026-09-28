@@ -729,6 +729,13 @@ export function evaluateStepRequirements(input: {
       message: "Esta etapa pertence a outro departamento.",
     });
   }
+  if (config.responsibilityMode === "REQUESTER" && input.createdByEmail
+    && input.createdByEmail !== actor.email && actor.role !== "admin") {
+    blockers.push({
+      code: "PROCESS_STEP_NOT_REQUESTER",
+      message: "Esta etapa só pode ser concluída por quem abriu a demanda.",
+    });
+  }
 
   if (config.requiresApproval) {
     const namedApprover = Boolean(config.approverUserId);
