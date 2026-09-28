@@ -5,14 +5,16 @@ import {
 } from "@/lib/fila-dp-db";
 
 /**
- * Trava a conclusão da tarefa para quem não é o responsável dela (§4).
+ * Trava a conclusão da tarefa para quem não é o responsável dela (§4, §3.10).
  *
  * Espelha o bloqueio equivalente da etapa (`evaluateStepRequirements`,
  * `lib/process-instances.ts`): `responsibility_mode` sempre foi salvo aqui,
- * mas nada comparava o autor da conclusão contra ele. `INHERIT`,
- * `EMPLOYEE_MANAGER` e `PROCESS_OWNER` continuam sem checagem própria —
- * o primeiro porque delega para quem chamou não travar nada, os outros dois
- * porque exigem dado que esta rota ainda não tem.
+ * mas nada comparava o autor da conclusão contra ele. `INHERIT` continua sem
+ * checagem própria — delega para a etapa, que já tem a sua.
+ *
+ * `DEPARTMENT_MANAGER`, `EMPLOYEE_MANAGER` e `PROCESS_OWNER` comparam contra
+ * um id já resolvido por quem chama (mesmo padrão de `evaluateStepRequirements`):
+ * sem valor resolvido, a tarefa não trava.
  */
 function taskResponsibilityBlocker(input: {
   mode: string;
@@ -23,6 +25,9 @@ function taskResponsibilityBlocker(input: {
   actorEmail: string;
   actorAreaIds: ReadonlySet<string>;
   isAdmin: boolean;
+  departmentManagerUserId: string | null;
+  employeeManagerUserId: string | null;
+  processOwnerUserId: string | null;
 }): string | null {
   if (input.isAdmin) return null;
   if (input.mode === "USER" && input.responsibleUserId && input.responsibleUserId !== input.actorUserId) {
@@ -33,6 +38,15 @@ function taskResponsibilityBlocker(input: {
   }
   if (input.mode === "REQUESTER" && input.cardCreatedBy && input.cardCreatedBy !== input.actorEmail) {
     return "Esta tarefa só pode ser concluída por quem abriu a demanda.";
+  }
+  if (input.mode === "DEPARTMENT_MANAGER" && input.departmentManagerUserId && input.departmentManagerUserId !== input.actorUserId) {
+    return "Esta tarefa só pode ser concluída pelo gestor do departamento responsável.";
+  }
+  if (input.mode === "EMPLOYEE_MANAGER" && input.employeeManagerUserId && input.employeeManagerUserId !== input.actorUserId) {
+    return "Esta tarefa só pode ser concluída pelo gestor do colaborador da demanda.";
+  }
+  if (input.mode === "PROCESS_OWNER" && input.processOwnerUserId && input.processOwnerUserId !== input.actorUserId) {
+    return "Esta tarefa só pode ser concluída pelo responsável designado do processo.";
   }
   return null;
 }
@@ -48,7 +62,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
     const { d1, workspace, board, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "cards.write");
-    const current = await d1.prepare(`SELECT task.*, card.board_id, card.created_by AS card_created_by
+    const current = await d1.prepare(`SELECT task.*, card.board_id, card.created_by AS card_created_by,
+      card.employee_id AS card_employee_id, card.process_definition_id AS card_process_definition_id
       FROM fdp_demand_tasks task
       JOIN fdp_cards card ON card.workspace_id = task.workspace_id AND card.id = task.card_id
       WHERE task.workspace_id = ? AND task.id = ? AND card.board_id = ? AND card.archived = 0`)
@@ -63,17 +78,39 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const status = text(body.status, 30) || String(current.status);
     if (!taskStatuses.has(status)) throw ApiError.badRequest("Status de tarefa inválido.", "TASK_STATUS_INVALID");
     if (status === "completed" && String(current.status) !== "completed") {
-      const areas = await d1.prepare("SELECT area_id FROM fdp_area_members WHERE workspace_id = ? AND user_id = ?")
-        .bind(workspace.id, user.id).all<{ area_id: string }>();
+      const responsibleAreaId = current.responsible_area_id ? String(current.responsible_area_id) : null;
+      const employeeId = current.card_employee_id ? String(current.card_employee_id) : null;
+      const processDefinitionId = current.card_process_definition_id ? String(current.card_process_definition_id) : null;
+      const [areas, departmentManager, employeeManager, processOwner] = await Promise.all([
+        d1.prepare("SELECT area_id FROM fdp_area_members WHERE workspace_id = ? AND user_id = ?")
+          .bind(workspace.id, user.id).all<{ area_id: string }>(),
+        responsibleAreaId
+          ? d1.prepare("SELECT manager_user_id FROM fdp_areas WHERE workspace_id = ? AND id = ?")
+            .bind(workspace.id, responsibleAreaId).first<{ manager_user_id: string | null }>()
+          : Promise.resolve(null),
+        employeeId
+          ? d1.prepare(`SELECT wm.user_id FROM fdp_employees e
+              JOIN fdp_workspace_members wm ON wm.workspace_id = e.workspace_id AND wm.employee_id = e.manager_employee_id
+              WHERE e.workspace_id = ? AND e.id = ?`)
+            .bind(workspace.id, employeeId).first<{ user_id: string }>()
+          : Promise.resolve(null),
+        processDefinitionId
+          ? d1.prepare("SELECT owner_user_id FROM fdp_process_definitions WHERE workspace_id = ? AND id = ?")
+            .bind(workspace.id, processDefinitionId).first<{ owner_user_id: string | null }>()
+          : Promise.resolve(null),
+      ]);
       const blocked = taskResponsibilityBlocker({
         mode: String(current.responsibility_mode || "INHERIT"),
         responsibleUserId: current.responsible_user_id ? String(current.responsible_user_id) : null,
-        responsibleAreaId: current.responsible_area_id ? String(current.responsible_area_id) : null,
+        responsibleAreaId,
         cardCreatedBy: String(current.card_created_by || ""),
         actorUserId: user.id,
         actorEmail: auth.user.email,
         actorAreaIds: new Set(areas.results.map((row) => String(row.area_id))),
         isAdmin: workspace.role === "admin",
+        departmentManagerUserId: departmentManager?.manager_user_id ?? null,
+        employeeManagerUserId: employeeManager?.user_id ?? null,
+        processOwnerUserId: processOwner?.owner_user_id ?? null,
       });
       if (blocked) throw new ApiError(403, "TASK_NOT_RESPONSIBLE", blocked);
     }

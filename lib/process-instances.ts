@@ -149,6 +149,8 @@ export type PublishedProcessVersion = {
   allowManualStart: boolean;
   /** Se "Permitir abertura automática" está ligado no processo (§3.7). */
   allowAutomaticStart: boolean;
+  /** Quem é o dono declarado do processo, para o modo de responsabilidade PROCESS_OWNER (§3.10). */
+  ownerUserId: string;
   defaultPriority: string;
   versionId: string;
   versionNumber: string;
@@ -247,7 +249,7 @@ async function loadVersionRow(
 ): Promise<PublishedProcessVersion & { published: boolean }> {
   const row = await d1.prepare(`SELECT v.id, v.definition_id, v.status, v.version_major, v.version_minor, v.bpmn_xml,
       p.name AS definition_name, p.code AS definition_code, p.is_corporate, p.allow_manual_start,
-      p.allow_automatic_start, p.default_priority, p.lifecycle_status
+      p.allow_automatic_start, p.default_priority, p.lifecycle_status, p.owner_user_id
     FROM fdp_process_versions v
     JOIN fdp_process_definitions p ON p.workspace_id = v.workspace_id AND p.id = v.definition_id
     WHERE v.workspace_id = ? AND v.id = ?`).bind(workspaceId, versionId).first<Row>();
@@ -278,6 +280,7 @@ async function loadVersionRow(
     isCorporate: flag(row.is_corporate),
     allowManualStart: flag(row.allow_manual_start),
     allowAutomaticStart: flag(row.allow_automatic_start),
+    ownerUserId: text(row.owner_user_id),
     defaultPriority: text(row.default_priority) || "normal",
     versionId: text(row.id),
     versionNumber: `${Number(row.version_major ?? 1)}.${Number(row.version_minor ?? 0)}`,
@@ -510,6 +513,8 @@ export type ProcessInstanceRow = {
   workspaceId: string;
   boardId: string;
   companyId: string | null;
+  /** Colaborador a que a demanda se refere, se houver (§3.10: base do modo EMPLOYEE_MANAGER). */
+  employeeId: string | null;
   archived: boolean;
   createdBy: string;
   processDefinitionId: string;
@@ -545,7 +550,7 @@ export type ProcessInstanceRow = {
 };
 
 export async function loadProcessInstance(d1: Database, workspaceId: string, cardId: string): Promise<ProcessInstanceRow> {
-  const row = await d1.prepare(`SELECT id, workspace_id, board_id, company_id, archived, created_by,
+  const row = await d1.prepare(`SELECT id, workspace_id, board_id, company_id, employee_id, archived, created_by,
       process_definition_id, process_version_id, process_version_number, current_step_id, version,
       priority, company, competence, process_type, requester_area_id, responsible_area_id, sla_status
     FROM fdp_cards WHERE workspace_id = ? AND id = ?`).bind(workspaceId, cardId).first<Row>();
@@ -596,6 +601,7 @@ export async function loadProcessInstance(d1: Database, workspaceId: string, car
     workspaceId: text(row.workspace_id),
     boardId: text(row.board_id),
     companyId: text(row.company_id) || null,
+    employeeId: text(row.employee_id) || null,
     archived: flag(row.archived),
     createdBy: text(row.created_by),
     processDefinitionId: text(row.process_definition_id),
@@ -673,6 +679,12 @@ export function evaluateStepRequirements(input: {
    * a pessoa a ir procurar quais.
    */
   blockingTasks?: readonly { title: string }[];
+  /** Quem gerencia o departamento responsável pela etapa, já resolvido por quem chama (§3.10). */
+  departmentManagerUserId?: string | null;
+  /** Quem gerencia o colaborador da demanda, já resolvido por quem chama (§3.10). */
+  employeeManagerUserId?: string | null;
+  /** Quem é o dono declarado do processo (§3.10). */
+  processOwnerUserId?: string | null;
 }): TransitionRequirement[] {
   const blockers: TransitionRequirement[] = [];
   const { config, actor } = input;
@@ -736,6 +748,33 @@ export function evaluateStepRequirements(input: {
       message: "Esta etapa só pode ser concluída por quem abriu a demanda.",
     });
   }
+  /* Os três modos abaixo comparam contra um id já resolvido por quem chama —
+     "quem gerencia este departamento", "quem gerencia este colaborador", "quem
+     é o dono deste processo" (§3.10). Sem valor resolvido (área sem gestor
+     cadastrado, demanda sem colaborador vinculado, processo sem dono), a
+     etapa não trava: um vínculo que não existe não pode virar uma exigência
+     que ninguém consegue cumprir. */
+  if (config.responsibilityMode === "DEPARTMENT_MANAGER" && input.departmentManagerUserId
+    && input.departmentManagerUserId !== actor.userId && actor.role !== "admin") {
+    blockers.push({
+      code: "PROCESS_STEP_NOT_DEPARTMENT_MANAGER",
+      message: "Esta etapa só pode ser concluída pelo gestor do departamento responsável.",
+    });
+  }
+  if (config.responsibilityMode === "EMPLOYEE_MANAGER" && input.employeeManagerUserId
+    && input.employeeManagerUserId !== actor.userId && actor.role !== "admin") {
+    blockers.push({
+      code: "PROCESS_STEP_NOT_EMPLOYEE_MANAGER",
+      message: "Esta etapa só pode ser concluída pelo gestor do colaborador da demanda.",
+    });
+  }
+  if (config.responsibilityMode === "PROCESS_OWNER" && input.processOwnerUserId
+    && input.processOwnerUserId !== actor.userId && actor.role !== "admin") {
+    blockers.push({
+      code: "PROCESS_STEP_NOT_PROCESS_OWNER",
+      message: "Esta etapa só pode ser concluída pelo responsável designado do processo.",
+    });
+  }
 
   if (config.requiresApproval) {
     const namedApprover = Boolean(config.approverUserId);
@@ -785,6 +824,10 @@ export function evaluateTransition(input: {
   attachmentNames?: readonly string[];
   /** Tarefas obrigatórias e bloqueantes ainda em aberto nesta etapa (§42). */
   blockingTasks?: readonly { title: string }[];
+  /** Quem gerencia o departamento responsável pela etapa atual, já resolvido por quem chama (§3.10). */
+  departmentManagerUserId?: string | null;
+  /** Quem gerencia o colaborador da demanda, já resolvido por quem chama (§3.10). */
+  employeeManagerUserId?: string | null;
 }): TransitionEvaluation {
   const { version, instance, actor } = input;
   const targetStepId = cleanText(input.targetStepId, 160);
@@ -860,6 +903,9 @@ export function evaluateTransition(input: {
     attachmentCount: input.attachmentCount,
     attachmentNames: input.attachmentNames ?? instance.attachmentNames,
     blockingTasks: input.blockingTasks,
+    departmentManagerUserId: input.departmentManagerUserId,
+    employeeManagerUserId: input.employeeManagerUserId,
+    processOwnerUserId: version.ownerUserId,
   }));
 
   /* Condição da seta (§25).
@@ -905,6 +951,8 @@ export function availableTransitions(input: {
   failingIntegrations?: ReadonlySet<string>;
   attachmentNames?: readonly string[];
   blockingTasks?: readonly { title: string }[];
+  departmentManagerUserId?: string | null;
+  employeeManagerUserId?: string | null;
 }) {
   return outgoingFlows(input.version.graph, input.instance.currentStepId).map((flow) => {
     const evaluation = evaluateTransition({ ...input, targetStepId: flow.target });

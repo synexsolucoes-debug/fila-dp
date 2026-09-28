@@ -97,11 +97,11 @@ const actor = (overrides: Partial<TransitionActor> = {}): TransitionActor => ({
   canDecideApprovals: false, areaIds: new Set<string>(), ...overrides,
 });
 
-const version = (steps: Record<string, ProcessStepConfig> = {}): PublishedProcessVersion => ({
+const version = (steps: Record<string, ProcessStepConfig> = {}, overrides: Partial<PublishedProcessVersion> = {}): PublishedProcessVersion => ({
   definitionId: "def-1", definitionName: "Admissão", definitionCode: "ADM",
-  isCorporate: true, allowManualStart: true, allowAutomaticStart: true, defaultPriority: "normal",
+  isCorporate: true, allowManualStart: true, allowAutomaticStart: true, ownerUserId: "", defaultPriority: "normal",
   versionId: "ver-4", versionNumber: "4.0", bpmnXml: ADMISSION_BPMN, graph,
-  steps: new Map(Object.entries(steps)),
+  steps: new Map(Object.entries(steps)), ...overrides,
 });
 
 test("a demanda materializa todas as etapas da versão na ordem do BPMN", () => {
@@ -146,7 +146,7 @@ test("timeline persistida é isolada por workspace e aparece no detalhe", async 
 });
 
 const instance = (overrides: Partial<ProcessInstanceRow> = {}): ProcessInstanceRow => ({
-  id: "card-1", workspaceId: "w1", boardId: "b1", companyId: "c1", archived: false,
+  id: "card-1", workspaceId: "w1", boardId: "b1", companyId: "c1", employeeId: null, archived: false,
   createdBy: "solicitante@empresa.com",
   processDefinitionId: "def-1", processVersionId: "ver-4", processVersionNumber: "4.0",
   currentStepId: "Task_documentos", version: 3, facts: {},
@@ -244,6 +244,89 @@ test("o administrador não fica preso à etapa de solicitante alheia", () => {
     pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers, []);
+});
+
+test("etapa do gestor do departamento não é avançada por quem não é o gestor resolvido (§3.10)", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "DEPARTMENT_MANAGER" }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    departmentManagerUserId: "gestor-area-1",
+  });
+  assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_NOT_DEPARTMENT_MANAGER"]);
+});
+
+test("o gestor do departamento resolvido avança a própria etapa", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "DEPARTMENT_MANAGER" }),
+    actor: actor({ userId: "gestor-area-1" }), createdByEmail: "outro@empresa.com",
+    pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    departmentManagerUserId: "gestor-area-1",
+  });
+  assert.deepEqual(blockers, []);
+});
+
+test("sem gestor de departamento cadastrado, a etapa não trava ninguém", () => {
+  // Área sem gestor é resposta válida, não erro — e um vínculo que não existe
+  // não pode virar exigência que ninguém consegue cumprir.
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "DEPARTMENT_MANAGER" }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    departmentManagerUserId: null,
+  });
+  assert.deepEqual(blockers, []);
+});
+
+test("etapa do gestor do colaborador não é avançada por quem não é o gestor resolvido (§3.10)", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "EMPLOYEE_MANAGER" }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    employeeManagerUserId: "gestor-colaborador-1",
+  });
+  assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_NOT_EMPLOYEE_MANAGER"]);
+});
+
+test("o gestor do colaborador resolvido avança a própria etapa", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "EMPLOYEE_MANAGER" }),
+    actor: actor({ userId: "gestor-colaborador-1" }), createdByEmail: "outro@empresa.com",
+    pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    employeeManagerUserId: "gestor-colaborador-1",
+  });
+  assert.deepEqual(blockers, []);
+});
+
+test("etapa do dono do processo não é avançada por quem não é o dono declarado (§3.10)", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "PROCESS_OWNER" }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    processOwnerUserId: "dono-processo-1",
+  });
+  assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_NOT_PROCESS_OWNER"]);
+});
+
+test("o dono declarado do processo avança a própria etapa", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ responsibilityMode: "PROCESS_OWNER" }),
+    actor: actor({ userId: "dono-processo-1" }), createdByEmail: "outro@empresa.com",
+    pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    processOwnerUserId: "dono-processo-1",
+  });
+  assert.deepEqual(blockers, []);
+});
+
+test("evaluateTransition tira o dono do processo direto da versão, sem pedir a quem chama", () => {
+  const dono = version({
+    Task_documentos: stepConfig({ id: "cfg-doc", responsibilityMode: "PROCESS_OWNER" }),
+  }, { ownerUserId: "dono-processo-1" });
+  const bloqueado = evaluateTransition({
+    version: dono, instance: instance(), targetStepId: "Gateway_1", actor: actor(), ...clean,
+  });
+  assert.ok(bloqueado.blockers.some((blocker) => blocker.code === "PROCESS_STEP_NOT_PROCESS_OWNER"));
+
+  const liberado = evaluateTransition({
+    version: dono, instance: instance(), targetStepId: "Gateway_1", actor: actor({ userId: "dono-processo-1" }), ...clean,
+  });
+  assert.ok(!liberado.blockers.some((blocker) => blocker.code === "PROCESS_STEP_NOT_PROCESS_OWNER"));
 });
 
 test("aprovação: quem não é aprovador não avança", () => {
@@ -707,6 +790,24 @@ test("a recusa de abertura manual não vaza para quem instancia por catálogo ou
     new URL("../app/api/agents/proposals/[id]/resolve/route.ts", import.meta.url), "utf8");
   assert.doesNotMatch(catalogo, /PROCESS_MANUAL_START_DISABLED/u);
   assert.doesNotMatch(propostas, /PROCESS_MANUAL_START_DISABLED/u);
+});
+
+test("a rota de etapa da demanda resolve gestor do departamento e do colaborador antes de avaliar a transição (§3.10)", async () => {
+  /* `DEPARTMENT_MANAGER` e `EMPLOYEE_MANAGER` precisam de um id já resolvido
+     — o motor não faz a consulta sozinho, de propósito (mantém a função pura
+     e testável sem banco). Esta rota é quem resolve, e este teste prende que
+     ela resolve antes de chamar o motor, não depois. */
+  const rota = await readFile(new URL("../app/api/cards/[id]/process/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /SELECT manager_user_id FROM fdp_areas WHERE workspace_id = \? AND id = \?/u);
+  assert.match(rota, /JOIN fdp_workspace_members wm ON wm\.workspace_id = e\.workspace_id AND wm\.employee_id = e\.manager_employee_id/u,
+    "o gestor do colaborador usa o mesmo vínculo do Portal do Gestor (§4.20), não um novo");
+  assert.match(rota, /departmentManagerUserId: departmentManager\?\.manager_user_id \?\? null/u);
+  assert.match(rota, /employeeManagerUserId: employeeManager\?\.user_id \?\? null/u);
+  // Os dois call sites do motor (consultar destinos e de fato avançar) precisam
+  // receber os mesmos ids resolvidos — senão a tela mostra um botão liberado
+  // que o POST recusa, ou o contrário.
+  assert.match(rota, /availableTransitions\(\{[\s\S]{0,300}departmentManagerUserId: context\.departmentManagerUserId/u);
+  assert.match(rota, /evaluateTransition\(\{[\s\S]{0,300}departmentManagerUserId: context\.departmentManagerUserId/u);
 });
 
 /* "Horário limite" (§3.8): a etapa salvava cutoff_time desde sempre, mas o
