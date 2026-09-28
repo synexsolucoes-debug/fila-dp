@@ -378,6 +378,25 @@ test("a rota de exportação exige capability própria e não aceita exportar pe
   assert.match(transitionRoute, /recalculateTimeSheet\(d1, workspace\.id, id\)/);
 });
 
+test("o motivo da devolução do ponto aparece pra quem precisa corrigir (§4.26)", async () => {
+  /* `rejected_reason` sempre foi exigido pela rota de transição ao devolver
+     um espelho (`TIME_REJECT_REASON_REQUIRED`) e sempre era gravado — mas a
+     tela só mostrava o selo "Devolvido", sem dizer por quê. Quem precisa
+     corrigir o ponto via só que foi recusado, não o motivo digitado por quem
+     recusou. */
+  const rota = await readFile(new URL("../app/api/time/sheets/[id]/transition/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /requiredReason\(body\.reason, "TIME_REJECT_REASON_REQUIRED"\)/u);
+  const overview = await readFile(new URL("../app/api/time/overview/route.ts", import.meta.url), "utf8");
+  assert.match(overview, /s\.rejected_reason/u, "a listagem precisa trazer o motivo, não só o status");
+
+  const api = await readFile(new URL("../app/painel/features/time/time.api.ts", import.meta.url), "utf8");
+  assert.match(api, /rejectedReason: text\(pick\(row, "rejectedReason", "rejected_reason"\)\)/u);
+
+  const tela = await readFile(new URL("../app/painel/features/time/TimeTrackingView.tsx", import.meta.url), "utf8");
+  assert.match(tela, /sheet\.status === "rejected" && sheet\.rejectedReason/u,
+    "a tela precisa mostrar o motivo quando o espelho está devolvido");
+});
+
 test("a tela do ponto não oferece campo de valor no mapeamento", async () => {
   const dialogs = await readFile(new URL("../app/painel/features/time/TimeDialogs.tsx", import.meta.url), "utf8");
   const options = [...dialogs.matchAll(/<option value="(quantity|reference|index|value|amount)"/gu)].map((match) => match[1]);

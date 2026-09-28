@@ -88,6 +88,7 @@
 .table tbody th[scope="row"] { text-align: left; font-weight: 720; }
 .table thead th:first-child, .table tbody th { text-align: left; }
 .table small { display: block; margin-top: 2px; color: var(--time-soft); font-size: .64rem; font-weight: 600; }
+.wrapCell { white-space: normal; max-width: 220px; }
 .negative { color: var(--time-danger); }
 .positive { color: var(--time-success); }
 

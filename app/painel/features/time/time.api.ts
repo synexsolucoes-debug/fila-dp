@@ -49,6 +49,7 @@ function normalizeSheet(row: Row): TimeSheet {
     warningIssues: number(pick(row, "warningIssues", "warning_issues")),
     approvedAt: text(pick(row, "approvedAt", "approved_at")),
     exportedAt: text(pick(row, "exportedAt", "exported_at")),
+    rejectedReason: text(pick(row, "rejectedReason", "rejected_reason")),
   };
 }
 
