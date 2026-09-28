@@ -41,7 +41,7 @@ const graph = parseBpmnGraph(XML);
 
 const version: PublishedProcessVersion = {
   definitionId: "def-1", definitionName: "Admissão", definitionCode: "ADM",
-  isCorporate: true, defaultPriority: "normal",
+  isCorporate: true, allowManualStart: true, defaultPriority: "normal",
   versionId: "ver-1", versionNumber: "2.0", bpmnXml: XML, graph,
   steps: new Map<string, ProcessStepConfig>([
     ["Conferencia", step({

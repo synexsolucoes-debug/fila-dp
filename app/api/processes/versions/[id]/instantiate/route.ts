@@ -42,6 +42,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     requireNamedCapability(workspace, "cards.write", "abrir uma demanda");
 
     const version = await loadPublishedVersion(d1, workspace.id, id);
+    // "Permitir abertura manual" desligado (§12) só escondia o botão na tela
+    // (app/api/processes/[id]/usage/route.ts calcula `permissions.start` com
+    // a mesma regra) — um POST direto a esta rota, a única que abre demanda
+    // por iniciativa manual, sempre passava. `loadPublishedVersion` é
+    // compartilhada com o catálogo de automações e a resolução de propostas
+    // de agente (que não são "manual"), então a recusa mora aqui, não lá.
+    if (!version.allowManualStart) {
+      throw ApiError.badRequest(
+        "Este processo não aceita abertura manual. Ele só é iniciado automaticamente.",
+        "PROCESS_MANUAL_START_DISABLED",
+      );
+    }
     await requireProcessCompanyAccess(d1, workspace.id, user.id, workspace.role, version.definitionId, version.isCorporate);
 
     const companyId = text(body.companyId, 120) || null;
