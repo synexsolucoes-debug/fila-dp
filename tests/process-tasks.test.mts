@@ -19,7 +19,7 @@ import {
 const step = (overrides: Partial<ProcessStepConfig> = {}): ProcessStepConfig => ({
   id: "cfg", bpmnElementId: "Task_1", stepType: "USER_TASK", name: "Documentação",
   instructions: "", departmentId: "", responsibleUserId: "", responsibilityMode: "ANY",
-  slaValue: 0, slaUnit: "hours", slaBusinessDays: false,
+  slaValue: 0, slaUnit: "hours", slaBusinessDays: false, cutoffTime: "",
   requesterDepartmentId: "", responsibleDepartmentId: "",
   checklist: [], requiredDocuments: [], evidenceRequired: false,
   requiresApproval: false, approverUserId: "", approverDepartmentId: "",

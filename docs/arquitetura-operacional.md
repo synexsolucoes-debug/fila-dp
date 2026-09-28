@@ -265,6 +265,37 @@ dado que este passo fecha.
 | --- | --- |
 | `loadVersionRow` também lê `allow_automatic_start`, e `runDomainEventAutomations` ignora com motivo (não lança) quando a flag está desligada, verificando isso antes de procurar o quadro de destino | `tests/process-instances.test.mts`, `tests/domain-event-automations.test.mts` |
 
+### 3.8 `cutoff_time` da etapa era salvo, validado e nunca lido
+
+`fdp_process_step_configs.cutoff_time` sempre existiu, sempre validava o
+formato `HH:MM` na tela de edição de processo, e sempre era gravado no banco
+— mas `resolveStepDeadline` (`lib/process-instances.ts`), a função que
+realmente calcula o vencimento de uma etapa em dia útil, nunca olhava a
+coluna. O prazo de qualquer etapa marcada como dia útil sempre caía no
+"fim do dia" do workspace (`settings.day_end`, padrão `18:00`),
+independente do que a pessoa tivesse configurado naquela etapa — um horário
+que ela escolheu e viu salvo, mas que nunca teve efeito nenhum.
+
+O caso real é fechamento de folha: uma etapa que precisa estar pronta às
+14h, não às 18h, para dar tempo do próximo passo do processo rodar ainda no
+mesmo dia útil. `stepConfigOf` agora lê `cutoff_time` e só aceita o formato
+`HH:MM` — qualquer outra coisa (vazio, texto solto, `null`) vira string
+vazia, e `resolveStepDeadline` usa o horário-limite da etapa quando ele
+existe, caindo para o padrão do workspace do mesmo jeito que sempre caiu
+quando a etapa não define um.
+
+**O que isto ainda não faz**: o horário-limite só se aplica ao cálculo de
+prazo em dias úteis (`slaBusinessDays: true`); uma etapa medida em horas
+corridas continua vencendo pelo relógio, sem "fim de expediente" nenhum —
+comportamento que já era esse antes e que este passo não muda. Também não
+há aviso na tela quando o horário-limite da etapa é mais tarde que o fim do
+dia do workspace (uma configuração sem efeito prático, mas não inválida);
+isso é interface, não a leitura do dado que este passo fecha.
+
+| Verificação | Onde |
+| --- | --- |
+| `stepConfigOf` só aceita `cutoff_time` no formato `HH:MM`, e `resolveStepDeadline` usa esse horário antes do "fim do dia" do workspace em etapas de dia útil | `tests/process-instances.test.mts` |
+
 ---
 
 ## 4. Unidade de trabalho e a Central de Trabalho
