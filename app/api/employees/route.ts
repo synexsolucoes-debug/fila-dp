@@ -93,6 +93,7 @@ export async function POST(request: Request) {
     await assertActiveScope(d1, workspace.id, {
       departmentId: row.departmentId, positionId: row.positionId,
       costCenterId: row.costCenterId, establishmentId: row.establishmentId,
+      workScheduleId: row.workScheduleId,
     });
     const requestId = request.headers.get("x-fila-dp-request-id");
     /* Todo colaborador criado por aqui é, por definição, uma admissão para o
