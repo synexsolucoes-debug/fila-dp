@@ -455,6 +455,13 @@ exatamente como `cbo_code` já era antes deles. Controle de exames
 ocupacionais (ASO) e a Matriz de Requisitos genérica continuam sendo os
 próximos passos.
 
+*Atualização (§4.21):* a primeira regra que usa `risk_level` chegou —
+"cargo de risco sem exame" entra na Central de Trabalho quando um colaborador
+ativo está num cargo `medium`/`high` e nunca teve nenhum exame ocupacional
+registrado. `special_activities` continua sem consumidor, e a Matriz de
+Requisitos genérica (decidir automaticamente *quais* exames um cargo exige)
+segue sendo o próximo passo maior.
+
 | Verificação | Onde |
 | --- | --- |
 | Colunas novas com default seguro, vocabulário fechado no risco, e a importação do Sankhya não sobrescreve o que foi cadastrado manualmente | `tests/position-risk-profile.test.mts` |
@@ -525,6 +532,12 @@ Central de Trabalho ainda (nenhuma unidade de trabalho nasce quando um exame
 vence); `risk_level` do cargo não determina automaticamente que tipos de
 exame um colaborador precisa (isso seria a Matriz de Requisitos genérica,
 ainda não construída); e não há tela própria fora da ficha do colaborador.
+
+*Atualização (§4.12, §4.21):* `next_due_date` já alimenta a Central de
+Trabalho (`occupational_exam_due`) e o cargo de risco já tem uma regra própria
+(§4.21, "cargo de risco sem exame") para quem nunca teve exame nenhum — a
+Matriz de Requisitos genérica (decidir *quais* exames um cargo exige)
+continua sendo o próximo passo.
 
 | Verificação | Onde |
 | --- | --- |
@@ -620,6 +633,10 @@ Central de Trabalho ainda (mesmo estado do ASO); nenhuma regra deriva quais
 treinamentos um cargo exige a partir do `risk_level` ou das
 `special_activities` (isso seria a Matriz de Requisitos genérica); e não há
 tela própria fora da ficha do colaborador.
+
+*Atualização (§4.12):* `valid_until` já alimenta a Central de Trabalho
+(`training_due`). O que continua faltando é só a derivação automática por
+`risk_level`/`special_activities` — a Matriz de Requisitos genérica.
 
 | Verificação | Onde |
 | --- | --- |
