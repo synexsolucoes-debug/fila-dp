@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -346,4 +347,27 @@ test("configuração de etapa sem o campo de tarefas não derruba quem a lê", (
   assert.equal(stepChecklist(parcial).length, 2);
   // Ausência total de configuração continua devolvendo lista vazia, não erro.
   assert.deepEqual(stepTasks(null), []);
+});
+
+/* -------------------------------------------------------------------------- *
+ * §4: responsabilidade da tarefa era salva e nunca travava a conclusão
+ * -------------------------------------------------------------------------- */
+
+test("concluir tarefa trava quem não é o responsável, e o admin não fica preso", async () => {
+  /* `fdp_demand_tasks.responsibility_mode`/`responsible_user_id`/
+     `responsible_area_id` sempre foram salvos pelo PATCH, mas nada os
+     comparava contra quem estava concluindo — a tarefa completava para
+     qualquer pessoa com acesso ao quadro. Este teste prende a checagem no
+     texto da rota, no mesmo estilo já usado para `allow_manual_start` (§3.6):
+     ler o arquivo de novo garante que a regra não foi removida numa
+     reescrita, sem depender de banco. */
+  const rota = await readFile(new URL("../app/api/tasks/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /mode === "USER" && input\.responsibleUserId && input\.responsibleUserId !== input\.actorUserId/u);
+  assert.match(rota, /mode === "DEPARTMENT" && input\.responsibleAreaId && !input\.actorAreaIds\.has/u);
+  assert.match(rota, /mode === "REQUESTER" && input\.cardCreatedBy && input\.cardCreatedBy !== input\.actorEmail/u);
+  assert.match(rota, /if \(input\.isAdmin\) return null;/u,
+    "admin precisa continuar concluindo tarefa de qualquer responsável, como já valia para a etapa");
+  assert.match(rota, /status === "completed" && String\(current\.status\) !== "completed"/u,
+    "a checagem só entra quando a tarefa está de fato virando concluída, não em qualquer PATCH");
+  assert.match(rota, /throw new ApiError\(403, "TASK_NOT_RESPONSIBLE", blocked\)/u);
 });

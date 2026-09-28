@@ -1173,6 +1173,38 @@ lê `workItemSources` inteiro).
 | --- | --- |
 | A fonte cobre quem nunca teve exame (não duplica ASO vencendo), recorta a cargos de risco médio/alto e colaborador ativo, não tem janela de 60 dias, gradua prioridade por gravidade, e o link abre o colaborador | `tests/work-items.test.mts` |
 
+### 4.22 Responsável da tarefa era salvo e nunca travava a conclusão
+
+`fdp_demand_tasks.responsibility_mode`, `responsible_user_id` e
+`responsible_area_id` sempre existiram e sempre eram gravados a cada `PATCH`
+em `/api/tasks/[id]` — inclusive quando o próprio PATCH movia a tarefa para
+`completed`. Mas nada ali comparava quem estava concluindo contra o
+responsável configurado: qualquer pessoa com `cards.write` no quadro
+concluía qualquer tarefa, atribuída a quem fosse. É o mesmo padrão do
+§3.9 (responsabilidade da etapa), só que do lado da tarefa — que é uma
+entidade separada (`fdp_demand_tasks`), com sua própria coluna de
+responsabilidade, e que nunca tinha sido tocada por esse tipo de bloqueio.
+
+A checagem entra só na transição para `completed` — igual à exigência de
+evidência que já existia ali — e cobre os três modos cujo dado a rota já
+tinha à mão: `USER` (contra o `user.id` de quem chama), `DEPARTMENT`
+(contra as áreas do chamador, buscadas em `fdp_area_members` do mesmo jeito
+que `evaluateStepRequirements` já fazia) e `REQUESTER` (contra
+`fdp_cards.created_by`, que a consulta já trazia via `JOIN` para achar o
+`board_id`). Admin continua sem travar, do mesmo jeito que a etapa.
+
+**O que isto ainda não faz**: `INHERIT`, `EMPLOYEE_MANAGER` e
+`PROCESS_OWNER` continuam sem checagem própria. `INHERIT` é deliberado —
+delega a responsabilidade para a etapa, que já tem seu próprio bloqueio.
+`EMPLOYEE_MANAGER` e `PROCESS_OWNER` precisariam do mesmo dado que falta
+para os modos equivalentes da etapa (§3.9): quem gerencia o colaborador da
+demanda e quem é o dono declarado do processo, nenhum dos dois hoje
+carregado até esta rota.
+
+| Verificação | Onde |
+| --- | --- |
+| `PATCH /api/tasks/[id]` recusa concluir tarefa em `USER`/`DEPARTMENT`/`REQUESTER` quando quem chama não é o responsável, e o admin não fica preso | `tests/process-tasks.test.mts` |
+
 ---
 
 ## 5. Agentes
