@@ -456,6 +456,40 @@ export const demandStages = pgTable("fdp_demand_stages", {
 ]);
 
 /**
+ * Aprovação individual de uma etapa que exige mais de um aprovador (§3.11).
+ *
+ * `fdp_process_step_configs.approval_count`/`approval_mode` sempre existiram
+ * e sempre eram configuráveis no editor, mas quem avançava a etapa já contava
+ * como aprovador único — não havia onde registrar a segunda aprovação, a
+ * terceira, e assim por diante. Cada linha aqui é "esta pessoa aprovou esta
+ * etapa desta demanda"; a contagem de linhas é o que `evaluateStepRequirements`
+ * compara contra `approvalCount` antes de liberar o avanço de verdade.
+ *
+ * Uma linha por aprovador por etapa-demanda (índice único): aprovar de novo
+ * não conta duas vezes, e não há como "desaprovar" — quem errou pede que
+ * outro aprovador decida, do mesmo jeito que o resto do produto trata decisão
+ * feita.
+ */
+export const processStepApprovals = pgTable("fdp_process_step_approvals", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault),
+  cardId: text("card_id").notNull(),
+  processVersionId: text("process_version_id").notNull(),
+  bpmnElementId: text("bpmn_element_id").notNull(),
+  approverUserId: text("approver_user_id").notNull(),
+  decidedAt: timestamp("decided_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_process_step_approvals_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_process_step_approvals_step_approver_uq")
+    .on(table.workspaceId, table.cardId, table.bpmnElementId, table.approverUserId),
+  index("fdp_process_step_approvals_card_step_idx").on(table.workspaceId, table.cardId, table.bpmnElementId),
+  foreignKey({ name: "fdp_process_step_approvals_workspace_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_process_step_approvals_workspace_version_fk", columns: [table.workspaceId, table.processVersionId], foreignColumns: [processVersions.workspaceId, processVersions.id] }),
+  foreignKey({ name: "fdp_process_step_approvals_workspace_approver_fk", columns: [table.workspaceId, table.approverUserId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+]);
+
+/**
  * Tarefa da demanda (§24, §41).
  *
  * Continua sendo a tabela do checklist — é o que o quadro, a Inbox, os

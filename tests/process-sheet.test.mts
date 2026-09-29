@@ -39,7 +39,7 @@ const step = (overrides: Partial<ProcessStepConfig>): ProcessStepConfig => ({
   slaValue: 0, slaUnit: "hours", slaBusinessDays: false, cutoffTime: "",
   requesterDepartmentId: "", responsibleDepartmentId: "",
   checklist: [], requiredDocuments: [], evidenceRequired: false,
-  requiresApproval: false, approverUserId: "", approverDepartmentId: "",
+  requiresApproval: false, approverUserId: "", approverDepartmentId: "", approvalCount: 1, approvalMode: "sequential",
   demandPriority: "normal", transitions: {}, entryRules: [], exitRules: [],
   blockingIntegrations: [], documentProof: "declared",
   tasks: [], automations: [], ...overrides,

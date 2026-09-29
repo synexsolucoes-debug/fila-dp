@@ -83,6 +83,16 @@ export type ProcessStepConfig = {
   requiresApproval: boolean;
   approverUserId: string;
   approverDepartmentId: string;
+  /** Quantas aprovações distintas a etapa exige antes de liberar o avanço (§3.11). */
+  approvalCount: number;
+  /**
+   * `sequential`/`parallel` continuam sem diferença de comportamento (§3.11):
+   * os dois só contam aprovações distintas contra `approvalCount`, porque não
+   * existe hoje uma lista ordenada de aprovadores nomeados da qual derivar uma
+   * ordem real — só um `approverUserId` (um nome) ou um `approverDepartmentId`
+   * (um grupo, sem ordem entre seus membros).
+   */
+  approvalMode: "sequential" | "parallel";
   demandPriority: string;
   /** Condições por seta que sai desta etapa (§25). Vazio = seta incondicional. */
   transitions: TransitionConditionMap;
@@ -200,6 +210,8 @@ export function stepConfigOf(row: Row): ProcessStepConfig {
     requiresApproval: flag(row.requires_approval),
     approverUserId: text(row.approver_user_id),
     approverDepartmentId: text(row.approver_department_id),
+    approvalCount: Math.max(1, Number(row.approval_count) || 1),
+    approvalMode: text(row.approval_mode) === "parallel" ? "parallel" : "sequential",
     demandPriority: text(row.demand_priority) || "normal",
     transitions: parseTransitionConditions(settings.transitions),
     entryRules: parseConditionList(settings.entryRules),
@@ -685,6 +697,8 @@ export function evaluateStepRequirements(input: {
   employeeManagerUserId?: string | null;
   /** Quem é o dono declarado do processo (§3.10). */
   processOwnerUserId?: string | null;
+  /** Aprovações distintas já registradas para esta etapa desta demanda (§3.11). */
+  approvalsCount?: number;
 }): TransitionRequirement[] {
   const blockers: TransitionRequirement[] = [];
   const { config, actor } = input;
@@ -777,24 +791,49 @@ export function evaluateStepRequirements(input: {
   }
 
   if (config.requiresApproval) {
-    const namedApprover = Boolean(config.approverUserId);
-    const isNamedApprover = namedApprover && config.approverUserId === actor.userId;
-    const inApproverDepartment = Boolean(config.approverDepartmentId) && actor.areaIds.has(config.approverDepartmentId);
-    if (!isNamedApprover && !inApproverDepartment && !actor.canDecideApprovals) {
+    const { eligible, selfApproval } = approverEligibility(config, actor, input.createdByEmail);
+    if (!eligible) {
       blockers.push({
         code: "PROCESS_STEP_APPROVAL_REQUIRED",
         message: "Esta etapa exige aprovação e você não é aprovador dela.",
       });
-    } else if (!isNamedApprover && input.createdByEmail && input.createdByEmail === actor.email) {
+    } else if (selfApproval) {
       // Autoaprovação: o produto já bloqueia nas movimentações e o processo não
       // pode ser a porta dos fundos disso.
       blockers.push({
         code: "PROCESS_STEP_SELF_APPROVAL",
         message: "Quem abriu a demanda não pode aprovar a própria etapa.",
       });
+    } else if (config.approvalCount > 1 && (input.approvalsCount ?? 0) < config.approvalCount) {
+      /* Aprovação múltipla (§3.11): a pessoa é elegível, mas a etapa pede mais
+         de um aprovador e as aprovações registradas em `fdp_process_step_approvals`
+         ainda não chegam no total configurado. Quem está tentando avançar não
+         "aprova pelo avanço" quando `approvalCount > 1` — precisa primeiro
+         registrar a própria aprovação em `POST .../approvals` (§3.11), do mesmo
+         jeito que os outros aprovadores. */
+      blockers.push({
+        code: "PROCESS_STEP_APPROVAL_COUNT_PENDING",
+        message: `Esta etapa exige ${config.approvalCount} aprovações; ${input.approvalsCount ?? 0} já registrada(s).`,
+      });
     }
   }
   return blockers;
+}
+
+/**
+ * Quem pode decidir a aprovação de uma etapa, e se decidir agora seria
+ * autoaprovação (§3.11 — extraído do bloqueio acima para ser reutilizado
+ * pela rota que registra uma aprovação individual, sem duplicar a regra).
+ */
+export function approverEligibility(
+  config: ProcessStepConfig, actor: TransitionActor, createdByEmail: string,
+): { eligible: boolean; isNamedApprover: boolean; selfApproval: boolean } {
+  const namedApprover = Boolean(config.approverUserId);
+  const isNamedApprover = namedApprover && config.approverUserId === actor.userId;
+  const inApproverDepartment = Boolean(config.approverDepartmentId) && actor.areaIds.has(config.approverDepartmentId);
+  const eligible = isNamedApprover || inApproverDepartment || actor.canDecideApprovals;
+  const selfApproval = !isNamedApprover && Boolean(createdByEmail) && createdByEmail === actor.email;
+  return { eligible, isNamedApprover, selfApproval };
 }
 
 /**
@@ -828,6 +867,8 @@ export function evaluateTransition(input: {
   departmentManagerUserId?: string | null;
   /** Quem gerencia o colaborador da demanda, já resolvido por quem chama (§3.10). */
   employeeManagerUserId?: string | null;
+  /** Aprovações distintas já registradas para a etapa atual desta demanda (§3.11). */
+  approvalsCount?: number;
 }): TransitionEvaluation {
   const { version, instance, actor } = input;
   const targetStepId = cleanText(input.targetStepId, 160);
@@ -906,6 +947,7 @@ export function evaluateTransition(input: {
     departmentManagerUserId: input.departmentManagerUserId,
     employeeManagerUserId: input.employeeManagerUserId,
     processOwnerUserId: version.ownerUserId,
+    approvalsCount: input.approvalsCount,
   }));
 
   /* Condição da seta (§25).
@@ -953,6 +995,7 @@ export function availableTransitions(input: {
   blockingTasks?: readonly { title: string }[];
   departmentManagerUserId?: string | null;
   employeeManagerUserId?: string | null;
+  approvalsCount?: number;
 }) {
   return outgoingFlows(input.version.graph, input.instance.currentStepId).map((flow) => {
     const evaluation = evaluateTransition({ ...input, targetStepId: flow.target });
@@ -1162,5 +1205,40 @@ export function prepareTransitionStatement(d1: Database, input: {
     .bind(
       input.toStepId, input.dueAt, input.terminal,
       input.workspaceId, input.cardId, input.fromStepId, input.expectedVersion,
+    );
+}
+
+/**
+ * Quantas pessoas distintas já aprovaram esta etapa desta demanda (§3.11).
+ *
+ * `evaluateStepRequirements` compara isso contra `config.approvalCount` —
+ * a função continua pura, então quem chama resolve a contagem antes.
+ */
+export async function countStepApprovals(
+  d1: Database, workspaceId: string, cardId: string, bpmnElementId: string,
+): Promise<number> {
+  const row = await d1.prepare(`SELECT COUNT(*)::int AS total FROM fdp_process_step_approvals
+      WHERE workspace_id = ? AND card_id = ? AND bpmn_element_id = ?`)
+    .bind(workspaceId, cardId, bpmnElementId).first<{ total: number }>();
+  return Number(row?.total ?? 0);
+}
+
+/**
+ * Registra a aprovação de uma pessoa para a etapa atual de uma demanda (§3.11).
+ *
+ * Idempotente pelo índice único (workspace, card, etapa, aprovador): aprovar
+ * de novo não soma duas vezes, e a rota que chama isso não precisa checar
+ * "já aprovei?" antes — o `ON CONFLICT DO NOTHING` já responde por ela.
+ */
+export function prepareStepApproval(d1: Database, input: {
+  workspaceId: string; cardId: string; processVersionId: string; bpmnElementId: string; approverUserId: string;
+}) {
+  return d1.prepare(`INSERT INTO fdp_process_step_approvals
+      (id, workspace_id, card_id, process_version_id, bpmn_element_id, approver_user_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT (workspace_id, card_id, bpmn_element_id, approver_user_id) DO NOTHING`)
+    .bind(
+      crypto.randomUUID(), input.workspaceId, input.cardId,
+      input.processVersionId, input.bpmnElementId, input.approverUserId,
     );
 }

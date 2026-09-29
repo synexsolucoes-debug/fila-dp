@@ -750,6 +750,13 @@
       "when": 1790092800000,
       "tag": "0104_manager_portal_link",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1790700000000,
+      "tag": "0105_process_step_approvals",
+      "breakpoints": true
     }
   ]
 }
