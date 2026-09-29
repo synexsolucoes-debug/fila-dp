@@ -402,7 +402,7 @@ const CPF_PATTERN = /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/u;
  * valor **apenas** quando é numérica: em vários blocos da planilha real ela
  * contém CPF, e tratar isso como dinheiro criaria um vale de R$ 704.052.071,07.
  */
-export function readSheet(sheet: ExcelJS.Worksheet, hashOf: (parts: string) => string): ImportRow[] {
+export function readSheet(sheet: ExcelJS.Worksheet, hashOf: (parts: string) => string = (parts) => parts): ImportRow[] {
   const blocks = detectBlocks(sheet);
   if (!blocks.length) return [];
 
@@ -554,7 +554,7 @@ export type ImportPreview = {
  */
 export async function previewLedgerImport(
   buffer: ArrayBuffer,
-  options: { sheetNames?: string[]; hashOf: (parts: string) => string },
+  options: { sheetNames?: string[]; hashOf: (parts: string) => string | Promise<string> },
 ): Promise<ImportPreview> {
   if (buffer.byteLength > MAX_IMPORT_FILE_BYTES) {
     throw new Error("A planilha deve ter no máximo 12 MB.");
@@ -567,7 +567,16 @@ export async function previewLedgerImport(
     ? workbook.worksheets.filter((sheet) => options.sheetNames!.includes(sheet.name))
     : [];
 
-  const rows = escolhidas.flatMap((sheet) => readSheet(sheet, options.hashOf));
+  /* A semente de cada linha é montada durante a leitura, que é síncrona; o
+     hash vem depois, porque no navegador o SHA-256 só existe em forma
+     assíncrona (`crypto.subtle`) e não há equivalente síncrono. A fórmula
+     continua exatamente a mesma nos dois lados — mudá-la faria uma linha já
+     importada deixar de ser reconhecida como repetida, e virar dívida em
+     dobro. */
+  const rows = escolhidas.flatMap((sheet) => readSheet(sheet));
+  for (const row of rows) {
+    row.rowHash = await options.hashOf(row.rowHash);
+  }
   const nomes = new Set(rows.map((row) => normalize(row.employeeName)));
 
   return {
@@ -581,5 +590,132 @@ export async function previewLedgerImport(
         row.ambiguities.length > 0 || row.candidates.some((candidate) => candidate.ambiguities.length > 0)).length,
       distinctNames: nomes.size,
     },
+  };
+}
+
+/* ==========================================================================
+ * Validação do que chega do navegador.
+ *
+ * A leitura da planilha passou a acontecer no cliente, porque o arquivo real
+ * (8,8 MB) é recusado pela plataforma antes de chegar ao servidor. O que sobe
+ * agora são as linhas já interpretadas — e linhas que vêm do navegador são
+ * entrada de rede como qualquer outra, por mais que quem as enviou esteja
+ * autenticado e tenha a permissão de importar.
+ *
+ * Nada disto vira lançamento direto: cada linha ainda passa pela revisão humana
+ * e pela gravação, que valida tudo de novo. O papel destas funções é outro —
+ * impedir que um volume absurdo ou um campo gigante entre no banco e estrague a
+ * prévia que alguém precisa conseguir revisar.
+ * ========================================================================== */
+
+/** Abas por importação. Acima disto ninguém revisa o que entrou. */
+export const MAX_IMPORT_SHEETS = 24;
+
+/** Linhas por importação, pelo mesmo motivo. */
+export const MAX_IMPORT_ROWS = 4000;
+
+/** Propostas por linha: a planilha real gera de uma a três. */
+const MAX_CANDIDATES_PER_ROW = 12;
+
+function texto(valor: unknown, max: number): string {
+  if (typeof valor === "number" && Number.isFinite(valor)) return String(valor);
+  if (typeof valor !== "string") return "";
+  /* `replace` de controles antes de cortar: um \u0000 no meio de um texto que
+     vai para `jsonb` derruba a inserção inteira no PostgreSQL. */
+  return valor.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/gu, "").slice(0, max);
+}
+
+function numeroOuNulo(valor: unknown): number | null {
+  if (typeof valor !== "number" || !Number.isFinite(valor)) return null;
+  return valor;
+}
+
+function ambiguidades(valor: unknown): ImportAmbiguity[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.slice(0, 20).map((item) => {
+    const linha = (item ?? {}) as Record<string, unknown>;
+    return { code: texto(linha.code, 60), message: texto(linha.message, 400) };
+  }).filter((item) => item.code);
+}
+
+function propostas(valor: unknown): ImportCandidate[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.slice(0, MAX_CANDIDATES_PER_ROW).map((item) => {
+    const linha = (item ?? {}) as Record<string, unknown>;
+    return {
+      category: texto(linha.category, 40) as ImportCandidate["category"],
+      modality: texto(linha.modality, 20) as ImportCandidate["modality"],
+      totalAmount: numeroOuNulo(linha.totalAmount),
+      installmentCount: numeroOuNulo(linha.installmentCount),
+      currentInstallment: numeroOuNulo(linha.currentInstallment),
+      installmentAmount: numeroOuNulo(linha.installmentAmount),
+      firstCompetence: texto(linha.firstCompetence, 7),
+      title: texto(linha.title, 180),
+      sourceText: texto(linha.sourceText, 1000),
+      ambiguities: ambiguidades(linha.ambiguities),
+    };
+  });
+}
+
+/**
+ * As linhas da prévia, vindas do navegador.
+ *
+ * Só entra linha com pessoa e com `rowHash` — o hash é o que impede a mesma
+ * linha de virar dois lançamentos numa reimportação, então uma linha sem ele
+ * não teria essa proteção e é descartada aqui em vez de virar duplicata depois.
+ */
+export function parseImportRows(valor: unknown): ImportRow[] {
+  if (!Array.isArray(valor)) return [];
+  const linhas: ImportRow[] = [];
+  for (const item of valor.slice(0, MAX_IMPORT_ROWS)) {
+    const bruta = (item ?? {}) as Record<string, unknown>;
+    const employeeName = texto(bruta.employeeName, 200);
+    const rowHash = texto(bruta.rowHash, 64);
+    if (!employeeName || !/^[0-9a-f]{8,64}$/u.test(rowHash)) continue;
+
+    const raw: Record<string, string> = {};
+    const origem = (bruta.raw ?? {}) as Record<string, unknown>;
+    if (origem && typeof origem === "object") {
+      for (const [chave, conteudo] of Object.entries(origem).slice(0, 40)) {
+        const limpo = texto(conteudo, 500);
+        if (limpo) raw[texto(chave, 80)] = limpo;
+      }
+    }
+
+    linhas.push({
+      sheetName: texto(bruta.sheetName, 200),
+      rowNumber: Math.max(1, Math.trunc(numeroOuNulo(bruta.rowNumber) ?? 1)),
+      blockLabel: texto(bruta.blockLabel, 200),
+      blockTaxId: texto(bruta.blockTaxId, 20),
+      employeeName,
+      taxId: texto(bruta.taxId, 20),
+      unit: texto(bruta.unit, 120),
+      department: texto(bruta.department, 120),
+      operation: texto(bruta.operation, 120),
+      advanceAmount: numeroOuNulo(bruta.advanceAmount),
+      raw,
+      candidates: propostas(bruta.candidates),
+      ambiguities: ambiguidades(bruta.ambiguities),
+      rowHash,
+    });
+  }
+  return linhas;
+}
+
+/**
+ * Os totais, recontados no servidor.
+ *
+ * Não vêm do cliente de propósito: eles aparecem na tela como "o que esta
+ * importação tem", e um número que não corresponde às linhas gravadas seria
+ * pior que número nenhum.
+ */
+export function totalsOf(rows: readonly ImportRow[]): ImportPreview["totals"] {
+  return {
+    sheets: new Set(rows.map((row) => row.sheetName)).size,
+    rows: rows.length,
+    candidates: rows.reduce((soma, row) => soma + row.candidates.length, 0),
+    ambiguous: rows.filter((row) =>
+      row.ambiguities.length > 0 || row.candidates.some((c) => c.ambiguities.length > 0)).length,
+    distinctNames: new Set(rows.map((row) => normalize(row.employeeName))).size,
   };
 }
