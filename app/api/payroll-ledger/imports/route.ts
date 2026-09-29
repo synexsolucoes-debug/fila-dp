@@ -1,9 +1,9 @@
-import { createHash } from "node:crypto";
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireNamedCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
-import { MAX_IMPORT_FILE_BYTES, previewLedgerImport } from "@/lib/ledger-import";
+import { cleanText } from "@/lib/clean-text";
+import { MAX_IMPORT_SHEETS, parseImportRows, totalsOf } from "@/lib/ledger-import";
 import { isCompetence } from "@/lib/payroll-ledger";
 import { protectCpf } from "@/lib/registrations";
 
@@ -35,36 +35,34 @@ export async function POST(request: Request) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireNamedCapability(workspace, "ledger.import", "importar a planilha de vales e descontos");
 
-    const form = await request.formData();
-    const file = form.get("file");
-    if (!(file instanceof File)) {
-      throw ApiError.badRequest("Envie a planilha a importar.", "LEDGER_IMPORT_FILE_REQUIRED");
-    }
-    if (file.size > MAX_IMPORT_FILE_BYTES) {
-      throw ApiError.badRequest("A planilha deve ter no máximo 12 MB.", "LEDGER_IMPORT_FILE_TOO_LARGE");
-    }
+    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body) throw ApiError.badRequest("Envie a leitura da planilha.", "LEDGER_IMPORT_PAYLOAD_REQUIRED");
 
-    const companyId = String(form.get("companyId") ?? "").trim().slice(0, 120);
-    const entryCompetence = String(form.get("entryCompetence") ?? "").trim().slice(0, 7);
-    const sheetNames = form.getAll("sheetNames").map((value) => String(value)).filter(Boolean);
-    const buffer = await file.arrayBuffer();
-    const fileHash = createHash("sha256").update(Buffer.from(buffer)).digest("hex");
-    const hashOf = (parts: string) => createHash("sha256").update(`${fileHash}${parts}`).digest("hex").slice(0, 48);
-
-    let preview;
-    try {
-      preview = await previewLedgerImport(buffer, { sheetNames, hashOf });
-    } catch (issue) {
-      throw ApiError.badRequest(
-        issue instanceof Error ? issue.message : "Não foi possível ler a planilha.",
-        "LEDGER_IMPORT_UNREADABLE",
-      );
+    const filename = cleanText(body.filename, 200) || "planilha.xlsx";
+    const fileHash = cleanText(body.fileHash, 64);
+    if (!/^[0-9a-f]{64}$/u.test(fileHash)) {
+      throw ApiError.badRequest("A leitura da planilha veio sem identificação de arquivo.", "LEDGER_IMPORT_HASH_REQUIRED");
     }
 
-    /* Sem abas escolhidas a resposta é só a lista: é o passo em que a pessoa
-       decide o que entra, e nada é gravado. */
+    const companyId = cleanText(body.companyId, 120);
+    const entryCompetence = cleanText(body.entryCompetence, 7);
+    const sheetNames = Array.isArray(body.sheetNames)
+      ? body.sheetNames.map((value) => cleanText(value, 200)).filter(Boolean).slice(0, MAX_IMPORT_SHEETS)
+      : [];
     if (!sheetNames.length) {
-      return Response.json({ sheets: preview.sheets, rows: [], totals: preview.totals, saved: false });
+      throw ApiError.badRequest("Escolha ao menos uma aba para importar.", "LEDGER_IMPORT_SHEETS_REQUIRED");
+    }
+
+    /* O teto continua existindo mesmo com a leitura vindo do cliente: confiar
+       no conteúdo não é aceitar qualquer volume. Acima disto a importação vira
+       um lote que ninguém revisa de verdade — e revisar é o passo que dá valor
+       a ela. */
+    const rows = parseImportRows(body.rows);
+    if (!rows.length) {
+      throw ApiError.badRequest(
+        "Nenhuma linha com pessoa foi encontrada nas abas escolhidas.",
+        "LEDGER_IMPORT_NO_ROWS",
+      );
     }
 
     if (!companyId) throw ApiError.badRequest("Selecione a empresa de destino.", "LEDGER_COMPANY_REQUIRED");
@@ -80,7 +78,7 @@ export async function POST(request: Request) {
        cadastro. Um CPF inválido na planilha não derruba a importação: a linha
        fica sem identificação e exige escolha humana, como as sem CPF. */
     const porHash = new Map<string, string>();
-    for (const row of preview.rows) {
+    for (const row of rows) {
       if (!row.taxId) continue;
       try {
         const { cpfHash } = protectCpf(row.taxId);
@@ -106,12 +104,12 @@ export async function POST(request: Request) {
       d1.prepare(`INSERT INTO fdp_ledger_imports
         (id, workspace_id, filename, file_hash, entry_competence, mapping_json, totals_json, status, created_by)
         VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, 'previewed', ?)`)
-        .bind(importId, workspace.id, file.name.slice(0, 200), fileHash, entryCompetence,
-          JSON.stringify({ companyId, sheetNames }), JSON.stringify(preview.totals), user.id),
+        .bind(importId, workspace.id, filename, fileHash, entryCompetence,
+          JSON.stringify({ companyId, sheetNames }), JSON.stringify(totalsOf(rows)), user.id),
     ];
 
     let identificadas = 0;
-    for (const row of preview.rows) {
+    for (const row of rows) {
       let employeeId: string | null = null;
       if (row.taxId) {
         try {
@@ -152,8 +150,8 @@ export async function POST(request: Request) {
     statements.push(prepareAuditEvent({
       workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
       action: "ledger_import.previewed", entityType: "ledger_import", entityId: importId,
-      after: { entryCompetence, sheets: sheetNames.length, rows: preview.rows.length },
-      metadata: { companyId, identified: identificadas, filename: file.name.slice(0, 200) },
+      after: { entryCompetence, sheets: sheetNames.length, rows: rows.length },
+      metadata: { companyId, identified: identificadas, filename },
       requestId: request.headers.get("x-fila-dp-request-id"),
     }));
 
@@ -161,8 +159,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       importId,
-      sheets: preview.sheets,
-      totals: { ...preview.totals, identified: identificadas, unidentified: preview.rows.length - identificadas },
+      totals: { ...totalsOf(rows), identified: identificadas, unidentified: rows.length - identificadas },
       saved: true,
     }, { status: 201 });
   } catch (error) { return apiError(error); }

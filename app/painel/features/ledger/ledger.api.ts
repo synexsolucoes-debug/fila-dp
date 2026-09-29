@@ -568,31 +568,81 @@ export type LedgerImport = {
 };
 
 /**
- * Passo 1 — ler o arquivo e listar as abas, sem escolher nenhuma.
+ * A leitura da planilha acontece **no navegador**.
  *
- * Sem `sheetNames` nada é gravado: a resposta é só a lista de abas, para a
- * pessoa decidir o que entra. A planilha real tem 87 abas cobrindo sete anos, e
- * importá-la inteira recriaria sete anos de pagamentos já feitos.
+ * O arquivo do cliente tem 8,8 MB e a plataforma recusa corpos de requisição
+ * bem menores: subindo o arquivo, a requisição morria na borda com 413 e a
+ * pessoa via um erro sem explicação — a checagem de tamanho do servidor nunca
+ * chegava a rodar. O teto não é nosso, então não adianta levantá-lo.
+ *
+ * Lendo aqui, sobe só o que foi interpretado: alguns milhares de campos curtos
+ * em JSON no lugar de megabytes de XML compactado. E a planilha inteira — com
+ * os CPFs e os nomes de todo mundo que **não** entra nesta importação — deixa
+ * de sair da máquina de quem importa.
+ *
+ * O `exceljs` entra por `import()` dinâmico: ele é grande, e quem nunca abre a
+ * aba de importação não deve pagar o download dele.
  */
-export async function listImportSheets(file: File): Promise<{ sheets: string[] }> {
-  const form = new FormData();
-  form.set("file", file);
-  const response = await fetch("/api/payroll-ledger/imports", { method: "POST", body: form, cache: "no-store" });
-  const payload = await response.json().catch(() => ({})) as { sheets?: string[]; error?: string; message?: string };
-  if (!response.ok) throw new Error(payload.error || payload.message || "Não foi possível ler a planilha.");
-  return { sheets: payload.sheets ?? [] };
+async function lerPlanilha(file: File, sheetNames: string[]) {
+  if (file.size > 64 * 1024 * 1024) {
+    throw new Error("A planilha é grande demais para ser lida no navegador (limite de 64 MB).");
+  }
+  const { previewLedgerImport } = await import("@/lib/ledger-import");
+  const buffer = await file.arrayBuffer();
+
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  const fileHash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+  /* Mesma fórmula do servidor, byte a byte, inclusive o separador \u0001: é o
+     `row_hash` que impede uma linha já importada de virar um segundo
+     lançamento, e um hash diferente significaria dívida em dobro. */
+  const codificador = new TextEncoder();
+  const hashOf = async (parts: string) => {
+    const bytes = codificador.encode(`${fileHash}\u0001${parts}`);
+    const saida = await crypto.subtle.digest("SHA-256", bytes);
+    return [...new Uint8Array(saida)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 48);
+  };
+
+  try {
+    const preview = await previewLedgerImport(buffer, { sheetNames, hashOf });
+    return { ...preview, fileHash };
+  } catch (issue) {
+    throw new Error(issue instanceof Error ? issue.message : "Não foi possível ler a planilha.");
+  }
 }
 
-/** Passo 2 — a prévia das abas escolhidas. Grava a interpretação, nenhum lançamento. */
+/** Passo 1 — as abas do arquivo. Nada sai da máquina: é leitura local. */
+export async function listImportSheets(file: File): Promise<{ sheets: string[] }> {
+  const { sheets } = await lerPlanilha(file, []);
+  return { sheets };
+}
+
+/**
+ * Passo 2 — a prévia das abas escolhidas.
+ *
+ * Lê aqui e envia as linhas. Grava a interpretação, nenhum lançamento.
+ */
 export async function previewImport(input: {
   file: File; companyId: string; entryCompetence: string; sheetNames: string[];
 }): Promise<{ importId: string; totals: Record<string, number> }> {
-  const form = new FormData();
-  form.set("file", input.file);
-  form.set("companyId", input.companyId);
-  form.set("entryCompetence", input.entryCompetence);
-  for (const name of input.sheetNames) form.append("sheetNames", name);
-  const response = await fetch("/api/payroll-ledger/imports", { method: "POST", body: form, cache: "no-store" });
+  const preview = await lerPlanilha(input.file, input.sheetNames);
+  if (!preview.rows.length) {
+    throw new Error("Nenhuma linha com pessoa foi encontrada nas abas escolhidas.");
+  }
+
+  const response = await fetch("/api/payroll-ledger/imports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify({
+      filename: input.file.name,
+      fileHash: preview.fileHash,
+      companyId: input.companyId,
+      entryCompetence: input.entryCompetence,
+      sheetNames: input.sheetNames,
+      rows: preview.rows,
+    }),
+  });
   const payload = await response.json().catch(() => ({})) as {
     importId?: string; totals?: Record<string, number>; error?: string; message?: string;
   };

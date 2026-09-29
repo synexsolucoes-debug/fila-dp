@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ExcelJS from "exceljs";
 import {
-  detectBlocks, interpretCell, previewLedgerImport, readSheet,
+  MAX_IMPORT_ROWS, detectBlocks, interpretCell, parseImportRows, previewLedgerImport, readSheet,
 } from "../lib/ledger-import.ts";
 
 /**
@@ -313,4 +313,80 @@ test("a tela diz que o arquivo não é guardado", () => {
   /* A planilha traz CPF e nome de gente real. Guardar o arquivo criaria uma
      cópia de dado pessoal que ninguém pediu e que nada no produto lê. */
   assert.match(painelImportacao, /não é guardado/u);
+});
+
+// ---------------------------------------------------------------------------
+// A leitura mudou de lado
+//
+// A planilha real tem 8,8 MB e a plataforma recusa corpos de requisição bem
+// menores: subindo o arquivo, a importação morria com 413 na borda, antes de
+// qualquer código do produto rodar — e a pessoa via um erro sem explicação. A
+// leitura passou para o navegador, e o servidor recebe as linhas já lidas.
+// ---------------------------------------------------------------------------
+
+const rotaDePrevia = await readFile(
+  new URL("../app/api/payroll-ledger/imports/route.ts", import.meta.url), "utf8");
+const clienteDaTela = await readFile(
+  new URL("../app/painel/features/ledger/ledger.api.ts", import.meta.url), "utf8");
+
+test("o servidor não recebe mais o arquivo, e sim as linhas lidas", () => {
+  assert.doesNotMatch(rotaDePrevia, /request\.formData\(\)/u);
+  assert.match(rotaDePrevia, /parseImportRows\(body\.rows\)/u);
+});
+
+test("o hash da linha é idêntico dos dois lados, inclusive o separador", async () => {
+  /* É o `row_hash` que impede uma linha já importada de virar um segundo
+     lançamento. Se a fórmula do navegador divergisse da que o servidor usava,
+     uma reimportação criaria dívida em dobro — silenciosamente. O separador
+     \u0001 é invisível no código e foi justamente o que quase passou batido. */
+  const { webcrypto } = await import("node:crypto");
+  const fileHash = "b".repeat(64);
+  const parts = "20.09.26|7|Pessoa Ensaio|500|VALE FIXO";
+
+  const noServidor = createHash("sha256").update(`${fileHash}\u0001${parts}`).digest("hex").slice(0, 48);
+  const bytes = new TextEncoder().encode(`${fileHash}\u0001${parts}`);
+  const saida = await webcrypto.subtle.digest("SHA-256", bytes);
+  const noNavegador = [...new Uint8Array(saida)]
+    .map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 48);
+
+  assert.equal(noNavegador, noServidor);
+  // E o cliente usa mesmo essa fórmula, com o separador escrito.
+  assert.match(clienteDaTela, /\$\{fileHash\}\\u0001\$\{parts\}/u);
+});
+
+test("linha sem pessoa ou sem hash é descartada antes de chegar ao banco", () => {
+  /* Sem `rowHash` a linha não teria a proteção contra reimportação duplicada.
+     Descartar aqui é melhor que gravar e descobrir depois. */
+  const aceitas = parseImportRows([
+    { employeeName: "Pessoa Ensaio", rowHash: "a".repeat(48), sheetName: "20.09.26", rowNumber: 4 },
+    { employeeName: "", rowHash: "b".repeat(48) },
+    { employeeName: "Sem hash", rowHash: "" },
+    { employeeName: "Hash invalido", rowHash: "NAO-E-HEX" },
+  ]);
+  assert.equal(aceitas.length, 1);
+  assert.equal(aceitas[0].employeeName, "Pessoa Ensaio");
+});
+
+test("o volume é limitado mesmo vindo de quem tem permissão de importar", () => {
+  const demais = Array.from({ length: MAX_IMPORT_ROWS + 500 }, (_, i) => ({
+    employeeName: `Pessoa ${i}`, rowHash: String(i).padStart(48, "0"),
+  }));
+  assert.equal(parseImportRows(demais).length, MAX_IMPORT_ROWS);
+});
+
+test("caractere de controle não derruba a gravação do jsonb", () => {
+  /* Um \u0000 no meio de um texto faz o PostgreSQL recusar o jsonb inteiro, e
+     derrubaria a importação toda por causa de uma célula. */
+  const [linha] = parseImportRows([
+    { employeeName: "Pessoa\u0000 Ensaio", rowHash: "c".repeat(48), raw: { obs: "vale\u0000 fixo" } },
+  ]);
+  assert.equal(linha.employeeName.includes("\u0000"), false);
+  assert.equal(linha.raw.obs.includes("\u0000"), false);
+});
+
+test("os totais são recontados no servidor, não aceitos do cliente", () => {
+  /* Eles aparecem na tela como "o que esta importação tem". Um número que não
+     corresponde às linhas gravadas é pior que número nenhum. */
+  assert.match(rotaDePrevia, /totalsOf\(rows\)/u);
+  assert.doesNotMatch(rotaDePrevia, /body\.totals/u);
 });
