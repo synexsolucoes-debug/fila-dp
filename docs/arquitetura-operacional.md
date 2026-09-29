@@ -386,6 +386,52 @@ alguém preencher o cadastro que falta.
 | --- | --- |
 | `DEPARTMENT_MANAGER`, `EMPLOYEE_MANAGER` e `PROCESS_OWNER` travam contra o id resolvido, não travam sem valor resolvido, e a rota de etapa da demanda resolve os dois primeiros antes dos dois call sites do motor; o mesmo vale para a conclusão de tarefa | `tests/process-instances.test.mts`, `tests/process-tasks.test.mts` |
 
+### 3.11 `approval_count`/`approval_mode` eram configuráveis e nunca contavam nada
+
+`fdp_process_step_configs.approval_count`/`approval_mode` sempre existiam
+(desde a fundação da tabela, 0013) e sempre eram configuráveis no editor de
+processo — "Quantidade" e "Modo" apareciam assim que "Exige aprovação" era
+marcado. Mas quem avançava a etapa já contava como o único aprovador
+necessário, qualquer que fosse `approval_count`: uma etapa configurada para
+exigir três aprovações travava exatamente como uma configurada para exigir
+uma. Era o mesmo "seletor que promete e o motor que não cumpre" já visto em
+§3.6, §3.9 e §3.10 — desta vez do lado da aprovação, não da responsabilidade.
+
+Fechar isso de verdade exigia um dado que não existia em lugar nenhum:
+"quem, especificamente, já aprovou esta etapa desta demanda". Não tem como
+contar aprovações sem registrar cada uma — daí a tabela nova,
+`fdp_process_step_approvals` (0105), uma linha por aprovador por
+etapa-demanda (índice único: aprovar de novo não soma duas vezes). Não é
+"tabela para o futuro": o consumidor é imediato e é o próprio bloqueio que
+`evaluateStepRequirements` já tinha para aprovação.
+
+O desenho segue o padrão do §3.10 — a contagem é resolvida por quem chama
+(`countStepApprovals`) e passada pronta (`approvalsCount`); a função
+continua pura. O caso de sempre (`approvalCount` igual a 1, que é o
+`default` da coluna) não muda em nada: nenhuma consulta nova roda, e quem
+avança continua sendo o próprio aprovador, exatamente como antes. Só quando
+`approvalCount > 1` é que a etapa passa a exigir aprovações **registradas**
+antes de liberar o avanço — e para isso existe a rota nova,
+`POST /api/cards/[id]/process/approvals`: cada aprovador elegível chama essa
+rota para registrar a própria decisão sem mexer na etapa; só depois que a
+contagem bate com `approvalCount` é que `POST /api/cards/[id]/process`
+(a rota que sempre existiu) deixa de recusar.
+
+**O que isto ainda não faz**: `sequential` e `parallel` continuam sem
+diferença de comportamento — os dois só contam aprovações distintas contra
+`approvalCount`, porque não existe hoje uma lista ordenada de aprovadores
+nomeados da qual derivar uma ordem real (só um `approverUserId`, uma pessoa,
+ou um `approverDepartmentId`, um grupo sem ordem entre seus membros).
+Diferenciar os dois modos de verdade pede desenhar antes quem é "o segundo
+aprovador" e "o terceiro" — isso é produto novo, não leitura de dado que já
+existe. Também não há como "desaprovar": quem discorda de uma aprovação já
+registrada pede que a demanda seja tratada por outro caminho, do mesmo jeito
+que o resto do produto trata decisão já tomada.
+
+| Verificação | Onde |
+| --- | --- |
+| `approvalCount`/`approvalMode` chegam ao `ProcessStepConfig` com defaults seguros; a etapa elegível trava com `PROCESS_STEP_APPROVAL_COUNT_PENDING` até a contagem bater, e `approvalCount = 1` não muda em nada; a rota de registrar aprovação é idempotente e recusa quem não é elegível ou é o solicitante | `tests/process-instances.test.mts` |
+
 ---
 
 ## 4. Unidade de trabalho e a Central de Trabalho

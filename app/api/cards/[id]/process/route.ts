@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api-errors";
 import { prepareAdoptionIncrement } from "@/lib/adoption-metrics";
 import { prepareDomainEventEnvelope } from "@/lib/outbox";
 import {
-  availableTransitions, evaluateTransition, loadProcessInstance, loadPublishedVersion,
+  availableTransitions, countStepApprovals, evaluateTransition, loadProcessInstance, loadPublishedVersion,
   prepareStageTransitionStatements, prepareTaskActivationStatements,
   prepareTransitionStatement, resolveStepDeadline, stepTasks,
   type TransitionActor,
@@ -90,6 +90,12 @@ async function loadContext(request: Request, cardId: string) {
       : Promise.resolve(null),
   ]);
   const blockingTasks = blocking.results.map((row) => ({ title: String(row.title ?? "") }));
+  /* Aprovações já registradas para a etapa atual (§3.11). Só interessa quando
+     a etapa exige aprovação e pede mais de uma — o caso de sempre (uma só)
+     continua sem essa consulta extra. */
+  const approvalsCount = currentConfig?.requiresApproval && currentConfig.approvalCount > 1
+    ? await countStepApprovals(d1, workspace.id, cardId, instance.currentStepId)
+    : 0;
 
   const actor: TransitionActor = {
     userId: user.id,
@@ -107,6 +113,7 @@ async function loadContext(request: Request, cardId: string) {
     stages: stages.results,
     departmentManagerUserId: departmentManager?.manager_user_id ?? null,
     employeeManagerUserId: employeeManager?.user_id ?? null,
+    approvalsCount,
     requestId: request.headers.get("x-fila-dp-request-id"),
   } as const;
 }
@@ -151,6 +158,7 @@ function payload(context: Extract<Loaded, { instance: unknown }>) {
       attachmentCount: context.attachmentCount,
       departmentManagerUserId: context.departmentManagerUserId,
       employeeManagerUserId: context.employeeManagerUserId,
+      approvalsCount: context.approvalsCount,
     }),
   };
 }
@@ -202,6 +210,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       attachmentCount: context.attachmentCount,
       departmentManagerUserId: context.departmentManagerUserId,
       employeeManagerUserId: context.employeeManagerUserId,
+      approvalsCount: context.approvalsCount,
     });
     if (!evaluation.allowed) {
       const [first] = evaluation.blockers;

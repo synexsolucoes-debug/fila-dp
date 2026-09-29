@@ -85,7 +85,7 @@ const stepConfig = (overrides: Partial<ProcessStepConfig> = {}): ProcessStepConf
   slaValue: 0, slaUnit: "hours", slaBusinessDays: false, cutoffTime: "",
   requesterDepartmentId: "", responsibleDepartmentId: "",
   checklist: [], requiredDocuments: [], evidenceRequired: false,
-  requiresApproval: false, approverUserId: "", approverDepartmentId: "", demandPriority: "normal",
+  requiresApproval: false, approverUserId: "", approverDepartmentId: "", approvalCount: 1, approvalMode: "sequential", demandPriority: "normal",
   transitions: {}, entryRules: [], exitRules: [], blockingIntegrations: [],
   documentProof: "declared",
   tasks: [], automations: [],
@@ -354,6 +354,55 @@ test("aprovador nomeado aprova mesmo tendo aberto a demanda", () => {
     actor: actor(), createdByEmail: "analista@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
   });
   assert.deepEqual(blockers, []);
+});
+
+test("aprovação múltipla: elegível travado até a contagem bater com approvalCount (§3.11)", () => {
+  // Elegível (aprovador nomeado), mas a etapa pede 3 e só 1 foi registrada —
+  // a contagem trava mesmo quem pode aprovar.
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ requiresApproval: true, approverUserId: "user-1", approvalCount: 3 }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    approvalsCount: 1,
+  });
+  assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_APPROVAL_COUNT_PENDING"]);
+});
+
+test("aprovação múltipla libera quando a contagem bate com approvalCount", () => {
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ requiresApproval: true, approverUserId: "user-1", approvalCount: 3 }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    approvalsCount: 3,
+  });
+  assert.deepEqual(blockers, []);
+});
+
+test("approvalCount igual a 1 continua exatamente como antes — sem checagem de contagem", () => {
+  // O caso de sempre: quem avança já é o aprovador, sem depender de
+  // `approvalsCount` (nem precisa ser resolvido por quem chama).
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ requiresApproval: true, approverUserId: "user-1" }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+  });
+  assert.deepEqual(blockers, []);
+});
+
+test("quem não é elegível continua barrado mesmo com aprovações suficientes de outros (§3.11)", () => {
+  // A contagem não substitui a elegibilidade — só entra depois dela.
+  const blockers = evaluateStepRequirements({
+    config: stepConfig({ requiresApproval: true, approverUserId: "gestor-1", approvalCount: 2 }),
+    actor: actor(), createdByEmail: "outro@empresa.com", pendingChecklist: 0, attachmentCount: 0, attachmentNames: [],
+    approvalsCount: 2,
+  });
+  assert.deepEqual(blockers.map((blocker) => blocker.code), ["PROCESS_STEP_APPROVAL_REQUIRED"]);
+});
+
+test("stepConfigOf lê approval_count e approval_mode, com defaults seguros (§3.11)", () => {
+  assert.equal(stepConfigOf({ approval_count: 3, approval_mode: "parallel" }).approvalCount, 3);
+  assert.equal(stepConfigOf({ approval_count: 3, approval_mode: "parallel" }).approvalMode, "parallel");
+  assert.equal(stepConfigOf({}).approvalCount, 1, "sem valor no banco, o padrão é um aprovador só");
+  assert.equal(stepConfigOf({}).approvalMode, "sequential");
+  assert.equal(stepConfigOf({ approval_count: 0 }).approvalCount, 1, "zero ou negativo não pode travar tudo para sempre");
+  assert.equal(stepConfigOf({ approval_mode: "algo_invalido" }).approvalMode, "sequential");
 });
 
 test("o checklist da etapa inclui um item por documento obrigatório", () => {
@@ -808,6 +857,34 @@ test("a rota de etapa da demanda resolve gestor do departamento e do colaborador
   // que o POST recusa, ou o contrário.
   assert.match(rota, /availableTransitions\(\{[\s\S]{0,300}departmentManagerUserId: context\.departmentManagerUserId/u);
   assert.match(rota, /evaluateTransition\(\{[\s\S]{0,300}departmentManagerUserId: context\.departmentManagerUserId/u);
+});
+
+test("a rota de etapa da demanda só conta aprovações quando a etapa pede mais de uma (§3.11)", async () => {
+  /* A consulta em fdp_process_step_approvals só roda quando approvalCount > 1
+     — o caso de sempre (um aprovador só) não ganha uma consulta extra à toa. */
+  const rota = await readFile(new URL("../app/api/cards/[id]/process/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /currentConfig\?\.requiresApproval && currentConfig\.approvalCount > 1/u);
+  assert.match(rota, /await countStepApprovals\(d1, workspace\.id, cardId, instance\.currentStepId\)/u);
+  assert.match(rota, /availableTransitions\(\{[\s\S]{0,400}approvalsCount: context\.approvalsCount/u);
+  assert.match(rota, /evaluateTransition\(\{[\s\S]{0,400}approvalsCount: context\.approvalsCount/u);
+});
+
+test("registrar aprovação individual é idempotente e recusa quem não é elegível ou é o solicitante (§3.11)", async () => {
+  const rota = await readFile(
+    new URL("../app/api/cards/[id]/process/approvals/route.ts", import.meta.url), "utf8");
+  assert.match(rota, /PROCESS_STEP_APPROVAL_NOT_REQUIRED/u,
+    "etapa sem exigir aprovação não pode ganhar aprovação registrada");
+  assert.match(rota, /config\.approvalCount <= 1/u,
+    "aprovador único continua aprovando pelo avanço, não por esta rota");
+  assert.match(rota, /approverEligibility\(config, actor, instance\.createdBy\)/u);
+  assert.match(rota, /PROCESS_STEP_APPROVAL_REQUIRED/u);
+  assert.match(rota, /PROCESS_STEP_SELF_APPROVAL/u);
+  assert.match(rota, /prepareStepApproval\(d1, \{/u);
+});
+
+test("prepareStepApproval é idempotente por aprovador — aprovar de novo não conta duas vezes", async () => {
+  const motor = await readFile(new URL("../lib/process-instances.ts", import.meta.url), "utf8");
+  assert.match(motor, /ON CONFLICT \(workspace_id, card_id, bpmn_element_id, approver_user_id\) DO NOTHING/u);
 });
 
 /* "Horário limite" (§3.8): a etapa salvava cutoff_time desde sempre, mas o
