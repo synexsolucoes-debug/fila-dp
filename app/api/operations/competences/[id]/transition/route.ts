@@ -3,10 +3,12 @@ import { getWorkspaceContext, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
+import { forceCloseContractorClosings } from "@/lib/contractor-force-close";
 
 // Abrir e fechar a competência é um controle simples: sem etapas e sem gates.
 // Ciclos antigos em pré-fechamento/processamento/pós-fechamento também podem ser
-// fechados direto; fechar nunca altera lançamentos.
+// fechados direto; fechar nunca altera lançamentos. Os fechamentos PJ da
+// competência são fechados junto (quem não pode fechar PJ não fecha por aqui).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
@@ -21,6 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const isClosed = cycle.status === "closed";
     if ((target === "closed") === isClosed) throw ApiError.badRequest(isClosed ? "A competência já está fechada." : "A competência já está aberta.", "INVALID_COMPETENCE_TRANSITION");
     const reason = cleanText(body.reason, 500);
+    if (target === "closed") requireCapability(workspace, "contractors.payments.close");
     const result = await d1.prepare(`WITH updated AS (
         UPDATE fdp_payroll_cycles c SET status = ?, closed_at = CASE WHEN ? = 'closed' THEN CURRENT_TIMESTAMP ELSE NULL END, updated_at = CURRENT_TIMESTAMP
         WHERE c.workspace_id = ? AND c.id = ? AND c.status = ? RETURNING c.*
@@ -32,6 +35,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         target === "closed" ? "competence.closed" : "competence.reopened",
         JSON.stringify({ status: cycle.status }), JSON.stringify({ reason: reason || null }), request.headers.get("x-fila-dp-request-id")).first<Record<string, unknown>>();
     if (!result) throw new ApiError(409, "COMPETENCE_CHANGED", "A competência mudou enquanto você agia. Atualize a tela e tente de novo.");
-    return Response.json({ competence: result });
+    const contractorsClosed = target === "closed"
+      ? await forceCloseContractorClosings(d1, { workspaceId: workspace.id, cycleId: id, actorUserId: user.id, actorEmail: auth.user.email, requestId: request.headers.get("x-fila-dp-request-id") })
+      : 0;
+    return Response.json({ competence: result, contractorsClosed });
   } catch (error) { return apiError(error); }
 }
