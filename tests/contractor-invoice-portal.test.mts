@@ -8,6 +8,9 @@ import {
   hashPortalToken,
   parsePortalToken,
   portalExpiryFromDays,
+  portalExpiry,
+  portalHasDeadline,
+  stablePortalToken,
   portalLinkStatus,
   portalLinkUrl,
   PORTAL_DEFAULT_DAYS,
@@ -139,6 +142,26 @@ test("o prazo tem padrão, teto e piso", () => {
     assert.equal(portalExpiryFromDays(invalido, agora).getTime(), agora.getTime() + PORTAL_DEFAULT_DAYS * dia,
       `${String(invalido)} deveria cair no padrão`);
   }
+});
+
+test("o token do fechamento é sempre o mesmo e é aceito pelo portal", () => {
+  const a = stablePortalToken("ws-1", "closing-1");
+  const b = stablePortalToken("ws-1", "closing-1");
+  assert.equal(a.token, b.token);
+  assert.equal(a.hash, b.hash);
+  assert.notEqual(a.token, stablePortalToken("ws-1", "closing-2").token);
+  assert.notEqual(a.token, stablePortalToken("ws-2", "closing-1").token);
+  const lido = parsePortalToken(a.token);
+  assert.deepEqual(lido, { workspaceId: "ws-1", secret: a.secret });
+  assert.equal(hashPortalToken("ws-1", a.secret), a.hash);
+});
+
+test("sem prazo informado o link não vence por tempo; com prazo, vale o pedido", () => {
+  const agora = new Date("2026-09-16T12:00:00Z");
+  assert.ok(portalExpiry(undefined, agora).getTime() > agora.getTime() + 4 * 365 * 86_400_000);
+  assert.equal(portalHasDeadline(portalExpiry(undefined, agora), agora), false);
+  assert.equal(portalExpiry(5, agora).getTime(), agora.getTime() + 5 * 86_400_000);
+  assert.equal(portalHasDeadline(portalExpiry(5, agora), agora), true);
 });
 
 test("o endereço recusa em vez de devolver um link que não abre", () => {
@@ -275,9 +298,13 @@ test("a migration entrou no journal do Drizzle", async () => {
 /* O painel                                                                    */
 /* -------------------------------------------------------------------------- */
 
-test("gerar link de novo revoga o anterior em vez de esbarrar no índice", async () => {
+test("gerar link de novo mantém o mesmo endereço, sem revogar o anterior", async () => {
   const painelRota = await readFile(new URL("../app/api/payments/contractors/invoices/portal-links/route.ts", import.meta.url), "utf8");
-  assert.match(painelRota, /SET revoked_at = now\(\), revoked_by = \?, revoke_reason = 'Substituído por um link novo'/u);
+  assert.match(painelRota, /stablePortalToken\(workspace\.id, closing\.id\)/u);
+  assert.doesNotMatch(painelRota, /Substituído por um link novo/u, "gerar de novo voltou a revogar o link anterior");
+  // O link do fechamento é reaproveitado (reaberto se revogado) ou criado uma vez.
+  assert.match(painelRota, /revoked_at = NULL, revoked_by = NULL/u);
+  assert.match(painelRota, /WHERE NOT EXISTS \(SELECT 1 FROM fdp_contractor_invoice_portal_links/u);
   // Quem já mandou a nota fica de fora: gerar link para quem cumpriu é convidar
   // a uma segunda via que ninguém pediu.
   assert.match(painelRota, /AND closing\.invoice_current_id IS NULL/u);
@@ -341,7 +368,7 @@ test("gerar o arquivo é escrita, e escrita não acontece por download", async (
   assert.match(tela, /"\/api\/payments\/contractors\/invoices\/portal-links",\s*\n\s*\{ method: "POST"/u);
   assert.doesNotMatch(tela, /href=\{[^}]*portal-links/u, "o arquivo com link voltou a sair por <a href>");
   // E a consequência precisa ser lida antes do clique, não depois.
-  assert.match(tela, /invalida os que foram enviados antes nesta competência/u);
+  assert.match(tela, /gerar o arquivo de novo mantém o mesmo link/u);
 });
 
 test("a mensagem do aviso leva o link, e o link é casado por id e não por nome", async () => {

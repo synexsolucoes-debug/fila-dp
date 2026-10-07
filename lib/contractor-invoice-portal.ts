@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { ApiError } from "./api-errors.ts";
 import { cleanText } from "./clean-text.ts";
 
@@ -61,6 +61,28 @@ export function createPortalToken(workspaceId: string): PortalToken {
   if (!tenant) throw new Error("O link do portal exige o workspace.");
   if (tenant.includes(SEPARATOR)) throw new Error("O identificador do workspace não pode conter ponto.");
   const secret = randomBytes(32).toString("base64url");
+  return { token: `${tenant}${SEPARATOR}${secret}`, workspaceId: tenant, secret, hash: hashPortalToken(tenant, secret) };
+}
+
+/**
+ * O token fixo do fechamento.
+ *
+ * Gerar o arquivo de avisos mais de uma vez não pode mudar o endereço que o
+ * prestador já recebeu: link novo a cada geração revogava o anterior e quem
+ * abria a mensagem antiga caía em "link cancelado". O segredo passa a ser
+ * derivado (HMAC com `FDP_AUTH_SECRET`) do workspace e do fechamento, então o
+ * mesmo fechamento sempre produz o mesmo endereço — sem guardá-lo em lugar
+ * nenhum, e sem que ele possa ser calculado por quem não tem o segredo do
+ * servidor. 32 bytes em base64url cumprem o formato que `parsePortalToken` exige.
+ */
+export function stablePortalToken(workspaceId: string, closingId: string): PortalToken {
+  const tenant = cleanText(workspaceId, 120);
+  const closing = cleanText(closingId, 120);
+  if (!tenant || !closing) throw new Error("O link do portal exige o workspace e o fechamento.");
+  if (tenant.includes(SEPARATOR)) throw new Error("O identificador do workspace não pode conter ponto.");
+  const chave = portalSecret();
+  if (!chave) throw new Error("O portal do prestador exige FDP_AUTH_SECRET configurado.");
+  const secret = createHmac("sha256", chave).update(`portal-stable:${tenant}:${closing}`).digest("base64url");
   return { token: `${tenant}${SEPARATOR}${secret}`, workspaceId: tenant, secret, hash: hashPortalToken(tenant, secret) };
 }
 
@@ -173,6 +195,29 @@ export function portalExpiryFromDays(days: unknown, now = new Date()) {
   const bruto = Number(days);
   const dias = Number.isFinite(bruto) && bruto > 0 ? Math.min(Math.floor(bruto), MAX_DAYS) : PORTAL_DEFAULT_DAYS;
   return new Date(now.getTime() + dias * 24 * 60 * 60 * 1000);
+}
+
+/** Sem prazo escolhido, o link vale até receber a nota ou ser revogado. */
+const NO_EXPIRY_YEARS = 5;
+
+/**
+ * O vencimento gravado no link.
+ *
+ * Com `days` informado vale o prazo pedido (com o teto de sempre). Sem ele, o
+ * link não vence por tempo: ele fecha quando a nota chega ou quando alguém o
+ * revoga. O banco exige uma data, então "sem prazo" é uma data distante.
+ */
+export function portalExpiry(days: unknown, now = new Date()) {
+  const informado = days !== undefined && days !== null && days !== "" && Number(days) > 0;
+  if (informado) return portalExpiryFromDays(days, now);
+  const fim = new Date(now.getTime());
+  fim.setUTCFullYear(fim.getUTCFullYear() + NO_EXPIRY_YEARS);
+  return fim;
+}
+
+/** Vencimento a mais de um ano é "sem prazo": a tela não deve anunciar uma data assim. */
+export function portalHasDeadline(expiresAt: string | Date, now = new Date()) {
+  return new Date(expiresAt).getTime() - now.getTime() < 366 * 24 * 60 * 60 * 1000;
 }
 
 /* -------------------------------------------------------------------------- */

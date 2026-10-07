@@ -234,7 +234,7 @@ export function PortalInvoiceForm({ token }: { token: string }) {
             <button type="submit" className={styles.submit} disabled={sending}>
               {sending ? <><LoaderCircle aria-hidden="true" className={styles.spin} /> Enviando…</> : <><FileUp aria-hidden="true" /> Enviar nota fiscal</>}
             </button>
-            {portal.expiresAt && <p className={styles.deadline}>Este link vale até {dayLabel(portal.expiresAt)}.</p>}
+            {portal.expiresAt && new Date(portal.expiresAt).getTime() - Date.now() < 366 * 86_400_000 && <p className={styles.deadline}>Este link vale até {dayLabel(portal.expiresAt)}.</p>}
           </form>
         )}
 

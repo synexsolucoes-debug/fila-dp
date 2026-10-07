@@ -5,8 +5,8 @@ import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
 import { validCompetence } from "@/lib/operations";
 import {
-  createPortalToken,
-  portalExpiryFromDays,
+  stablePortalToken,
+  portalExpiry,
   portalLinkStatus,
   portalLinkUrl,
 } from "@/lib/contractor-invoice-portal";
@@ -20,10 +20,10 @@ import { buildInvoiceNoticeFile, invoiceNoticeFilename } from "@/lib/contractor-
  * ainda precisa emitir — em lote, porque pedir nota é trabalho de lote: ninguém
  * abre trinta telas para mandar trinta mensagens.
  *
- * O token completo só existe na resposta do `POST`. O `GET` devolve situação e
- * data, nunca o link: quem perdeu a mensagem gera outro, e gerar outro revoga o
- * anterior. Guardar o token para poder relê-lo depois seria transformar o banco
- * num chaveiro de credenciais válidas, que é exatamente o que o hash evita.
+ * O endereço de cada fechamento é fixo: o token é derivado do workspace e do
+ * fechamento (ver `stablePortalToken`), então gerar de novo devolve o mesmo
+ * link, que segue valendo para quem já o recebeu. O banco guarda só o hash, e o
+ * `GET` devolve situação e data, nunca o link.
  */
 
 type LinkRow = {
@@ -98,11 +98,8 @@ export async function GET(request: Request) {
  * de um link já criado é irrecuperável — de propósito: é o que faz um vazamento
  * do banco não devolver nenhum link utilizável. A consequência é que o arquivo
  * de avisos não pode *ler* links; ele os cria no momento em que é produzido, e
- * os anteriores daquele fechamento são revogados na mesma transação.
- *
- * Isso é a semântica certa e não um efeito colateral: quem gera o arquivo de
- * avisos vai mandá-lo para todo mundo, e o link que valia na mensagem anterior
- * não deve continuar valendo depois de um reenvio geral.
+ * o link do fechamento é reaproveitado (reaberto, se estava revogado) em vez
+ * de substituído — a mensagem anterior continua funcionando.
  *
  * ## Recorte
  *
@@ -138,7 +135,7 @@ export async function POST(request: Request) {
     const escolhidos = Array.isArray(body.contractorIds)
       ? body.contractorIds.map((item) => cleanText(item, 120)).filter(Boolean)
       : [];
-    const expiresAt = portalExpiryFromDays(body.days);
+    const expiresAt = portalExpiry(body.days);
 
     /* O recorte é o mesmo do aviso de NF: quem tem valor de nota a emitir nesta
        competência. Os dois falam das mesmas pessoas de propósito — é isso que
@@ -173,23 +170,36 @@ export async function POST(request: Request) {
     const gerados: Array<{ providerId: string; contractorName: string; closingId: string; expectedAmount: number; url: string }> = [];
     const statements = [];
     for (const closing of candidatos.results) {
-      const token = createPortalToken(workspace.id);
+      const token = stablePortalToken(workspace.id, closing.id);
       const id = crypto.randomUUID();
-      /* Gerar o segundo link revoga o primeiro no mesmo lote. O índice parcial
-         só admite um aberto por fechamento, e deixar o banco recusar daria ao
-         operador um erro em vez do link que ele pediu — sendo que a intenção de
-         quem gera de novo é sempre "vale este agora". */
+      /* O endereço é fixo por fechamento: gerar de novo devolve a mesma URL.
+         Em vez de revogar o link anterior e criar outro, o link do fechamento
+         é reaproveitado — reaberto se estava revogado, com prazo, emitente e
+         valor atualizados. Só um fechamento com nota já recebida fica de fora
+         (`submitted_at`), e isso já é filtrado nos candidatos. */
+      const escolhido = `(SELECT id FROM fdp_contractor_invoice_portal_links
+          WHERE workspace_id = ? AND closing_id = ? AND submitted_at IS NULL
+          ORDER BY (revoked_at IS NULL) DESC, created_at DESC LIMIT 1)`;
+      // O hash é único no banco: se outra linha (de um envio antigo) o tem, ela o devolve.
       statements.push(d1.prepare(`UPDATE fdp_contractor_invoice_portal_links
-          SET revoked_at = now(), revoked_by = ?, revoke_reason = 'Substituído por um link novo', updated_at = now()
-        WHERE workspace_id = ? AND closing_id = ? AND revoked_at IS NULL AND submitted_at IS NULL`)
-        .bind(user.id, workspace.id, closing.id));
+          SET token_hash = 'retired:' || id, updated_at = now()
+        WHERE workspace_id = ? AND token_hash = ? AND id IS DISTINCT FROM ${escolhido}`)
+        .bind(workspace.id, token.hash, workspace.id, closing.id));
+      statements.push(d1.prepare(`UPDATE fdp_contractor_invoice_portal_links
+          SET token_hash = ?, issuer_company_id = ?, expires_at = ?::timestamptz, expected_amount = ?::numeric,
+            revoked_at = NULL, revoked_by = NULL, revoke_reason = '', updated_at = now()
+        WHERE workspace_id = ? AND id = ${escolhido}`)
+        .bind(token.hash, issuerCompanyId, expiresAt.toISOString(), Number(closing.invoice_expected_amount ?? 0),
+          workspace.id, workspace.id, closing.id));
       statements.push(d1.prepare(`INSERT INTO fdp_contractor_invoice_portal_links
           (id, workspace_id, company_id, issuer_company_id, provider_id, payroll_cycle_id, closing_id, competence,
            token_hash, expires_at, expected_amount, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::timestamptz, ?::numeric, ?
+        WHERE NOT EXISTS (SELECT 1 FROM fdp_contractor_invoice_portal_links
+          WHERE workspace_id = ? AND closing_id = ? AND submitted_at IS NULL)`)
         .bind(id, workspace.id, closing.company_id, issuerCompanyId, closing.provider_id, closing.payroll_cycle_id, closing.id,
           closing.competence, token.hash, expiresAt.toISOString(),
-          Number(closing.invoice_expected_amount ?? 0), user.id));
+          Number(closing.invoice_expected_amount ?? 0), user.id, workspace.id, closing.id));
       gerados.push({
         providerId: closing.provider_id,
         contractorName: closing.contractor_name,

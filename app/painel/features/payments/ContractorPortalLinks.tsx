@@ -59,7 +59,7 @@ export function ContractorPortalLinks({ companyId, competence, competenceLabel, 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [days, setDays] = useState("10");
+  const [days, setDays] = useState("");
   const [messages, setMessages] = useState("");
   /* O recorte a que as mensagens pertencem. Um bloco pronto para colar carrega
      valores e links de uma competência específica, e é exatamente o tipo de
@@ -167,6 +167,7 @@ export function ContractorPortalLinks({ companyId, competence, competenceLabel, 
               <label className={styles.portalDays}>
                 <span>Prazo</span>
                 <select value={days} onChange={(event) => setDays(event.target.value)} aria-label="Dias de validade do link">
+                  <option value="">Sem prazo</option>
                   <option value="5">5 dias</option>
                   <option value="10">10 dias</option>
                   <option value="15">15 dias</option>
