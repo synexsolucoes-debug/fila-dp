@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertOctagon, ArrowDown, Download, FileUp, LoaderCircle, RefreshCw } from "lucide-react";
+import { AlertOctagon, ArrowDown, Download, FileSpreadsheet, FileUp, LoaderCircle, RefreshCw } from "lucide-react";
+import { cajuNetCents, formatFeePercent } from "@/lib/caju-fee";
 import { requestJson } from "./payments.api";
 import { ErrorBanner } from "../shared";
 import styles from "./payments.module.css";
@@ -58,6 +59,7 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [applyFee, setApplyFee] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -138,6 +140,32 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
     }
   }
 
+  async function downloadNetSheet() {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/payments/caju/net-sheet?competenceId=${encodeURIComponent(competenceId)}${applyFee ? "&fee=1" : ""}`,
+        { cache: "no-store" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({})) as { message?: string; error?: string };
+        throw new Error(payload.message || payload.error || "Não foi possível gerar a planilha.");
+      }
+      const suggested = /filename="([^"]+)"/u.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "complemento_caju.xlsx";
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = suggested;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice(`Planilha gerada: ${response.headers.get("X-Caju-Rows") ?? "?"} linha(s), total ${money(Number(response.headers.get("X-Caju-Total-Cents") ?? 0))}${applyFee ? " líquido" : ""}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível gerar a planilha.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <section className={`${styles.cajuPanel} ${styles.cajuLoading}`} aria-busy="true">
@@ -166,6 +194,12 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
         <div className={styles.summaryGrid}>
           <article><span>Vão para o arquivo</span><strong>{preview.eligible.length}</strong></article>
           <article><span>Total a creditar</span><strong>{money(preview.totalCents)}</strong></article>
+          {applyFee && (
+            <article>
+              <span>Líquido após taxa de {formatFeePercent()}</span>
+              <strong>{money(preview.eligible.reduce((sum, row) => sum + cajuNetCents(row.amountCents), 0))}</strong>
+            </article>
+          )}
           <article data-alert={preview.blocked.length > 0 ? "true" : "false"}>
             <span>Bloqueados</span><strong>{preview.blocked.length}</strong>
           </article>
@@ -212,7 +246,16 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
       {error && <ErrorBanner message={error} />}
       {notice && <p className={styles.hint} role="status">{notice}</p>}
 
+      <label className={styles.hint} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input type="checkbox" checked={applyFee} onChange={(event) => setApplyFee(event.target.checked)} />
+        Descontar taxa de {formatFeePercent()} (calcula o valor líquido automaticamente)
+      </label>
+
       <div className={styles.cajuActions}>
+        <button type="button" className={styles.secondaryButton} onClick={() => void downloadNetSheet()} disabled={busy}
+          title="Planilha com nome, documento e valor do complemento">
+          <FileSpreadsheet aria-hidden="true" /> Exportar planilha de líquidos
+        </button>
         <button type="button" className={styles.secondaryButton} onClick={() => void load()} disabled={busy}>
           <RefreshCw aria-hidden="true" /> Reconferir
         </button>
