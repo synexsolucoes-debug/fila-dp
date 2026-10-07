@@ -27,7 +27,7 @@ function titleFor(editor: NonNullable<EditorState>) {
   if (editor.kind === "obligation") return "Nova obrigação";
   if (editor.kind === "pending") return "Registrar pendência";
   if (editor.kind === "pending-resolution") return editor.status === "resolved" ? "Resolver pendência" : "Dispensar pendência";
-  if (editor.kind === "transition") return "Confirmar avanço do ciclo";
+  if (editor.kind === "transition") return editor.target === "closed" ? "Fechar competência" : "Reabrir competência";
   if (editor.kind === "process") return "Novo processo";
   if (editor.kind === "process-version") return "Criar versão em rascunho";
   return "Publicar versão";
@@ -187,8 +187,8 @@ function ResolutionFields({ editor }: { editor: Extract<NonNullable<EditorState>
   return <><div className={styles.decisionHero}><AlertTriangle aria-hidden="true" /><div><strong>{editor.item.title}</strong><span>{editor.item.blocking ? "Bloqueador do ciclo" : "Pendência não bloqueante"}</span></div></div><label className={styles.field}><span>{editor.status === "waived" ? "Motivo da dispensa" : "Resolução aplicada"}</span><textarea name="resolution" required autoFocus maxLength={1000} /></label></>;
 }
 function TransitionFields({ target }: { target: Cycle["status"] }) {
-  const labels: Record<Cycle["status"], string> = { open: "Aberta", pre_closing: "Pré-fechamento", processing: "Processamento", post_closing: "Pós-fechamento", closed: "Concluída" };
-  return <><div className={styles.decisionHero}><ArrowRight aria-hidden="true" /><div><strong>Avançar para {labels[target]}</strong><span>Os gates serão verificados no servidor antes da transição.</span></div></div>{target === "closed" && <div className={styles.inlineAlert}><ShieldCheck aria-hidden="true" />Todos os checklists e obrigações precisam estar concluídos.</div>}</>;
+  const closing = target === "closed";
+  return <div className={styles.decisionHero}><ArrowRight aria-hidden="true" /><div><strong>{closing ? "Fechar a competência?" : "Reabrir a competência?"}</strong><span>{closing ? "Os lançamentos continuam como estão. Você pode reabrir quando quiser." : "A reabertura fica registrada com quem fez e quando."}</span></div></div>;
 }
 function ProcessFields() { return <div className={styles.formGrid}><label><span>Código</span><input name="code" required maxLength={60} placeholder="FERIAS_MENSAL" /></label><label><span>Categoria</span><input name="category" defaultValue="rotina" /></label><label className={styles.spanTwo}><span>Nome do processo</span><input name="name" required maxLength={160} /></label><label className={styles.spanTwo}><span>Primeira etapa</span><input name="firstStep" required placeholder="Ex.: Receber informações" /></label></div>; }
 function VersionFields({ processName }: { processName: string }) { return <><div className={styles.decisionHero}><FilePlus2 aria-hidden="true" /><div><strong>{processName}</strong><span>A versão publicada continuará ativa até a publicação deste rascunho.</span></div></div><label className={styles.field}><span>Nome da nova etapa</span><input name="firstStep" required placeholder="Ex.: Conferência do analista" /></label></>; }
@@ -201,7 +201,7 @@ function submitLabel(editor: NonNullable<EditorState>) {
   if (editor.kind === "obligation") return "Criar obrigação";
   if (editor.kind === "pending") return "Registrar pendência";
   if (editor.kind === "pending-resolution") return editor.status === "resolved" ? "Marcar resolvida" : "Dispensar";
-  if (editor.kind === "transition") return "Confirmar transição";
+  if (editor.kind === "transition") return editor.target === "closed" ? "Fechar competência" : "Reabrir competência";
   if (editor.kind === "process") return "Criar processo";
   if (editor.kind === "process-version") return "Criar rascunho";
   return "Publicar versão";

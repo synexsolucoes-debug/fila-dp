@@ -77,8 +77,8 @@ test("o botão de abrir competência segue a permissão, não o estado do ciclo"
   const barra = operacao.slice(operacao.indexOf("<div className={styles.commandActions}>"), operacao.indexOf("</div>", operacao.indexOf("<div className={styles.commandActions}>")));
   assert.match(barra, /permissions\.manageCompetences && <button[^>]*onClick=\{\(\) => setEditor\(\{ kind: "competence" \}\)\}/u,
     "a abertura precisa aparecer mesmo com ciclo em tela");
-  assert.match(barra, /cycle && next && data\?\.permissions\.transitionCompetences/u,
-    "o avanço continua dependendo de haver ciclo e próxima etapa");
+  assert.match(barra, /cycle && data\?\.permissions\.transitionCompetences/u,
+    "fechar e reabrir dependem só de haver ciclo e permissão");
 });
 
 test("o estado vazio do ciclo oferece a ação que ele descreve", () => {
