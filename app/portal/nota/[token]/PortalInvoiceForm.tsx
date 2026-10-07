@@ -95,6 +95,8 @@ export function PortalInvoiceForm({ token }: { token: string }) {
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [fileName, setFileName] = useState("");
+  // Calculado ao carregar (não no render): vencimento a mais de um ano é "sem prazo".
+  const [hasDeadline, setHasDeadline] = useState(false);
   const [done, setDone] = useState<{ invoiceNumber: string; amount: number } | null>(null);
 
   const endpoint = `/api/portal/nota/${encodeURIComponent(token)}`;
@@ -110,6 +112,8 @@ export function PortalInvoiceForm({ token }: { token: string }) {
         return;
       }
       setPortal(payload.portal ?? null);
+      const expiresAt = payload.portal?.expiresAt;
+      setHasDeadline(Boolean(expiresAt) && new Date(expiresAt as string).getTime() - Date.now() < 366 * 86_400_000);
       setStatus(payload.status ?? "active");
       setLoadError("");
     } catch {
@@ -234,7 +238,7 @@ export function PortalInvoiceForm({ token }: { token: string }) {
             <button type="submit" className={styles.submit} disabled={sending}>
               {sending ? <><LoaderCircle aria-hidden="true" className={styles.spin} /> Enviando…</> : <><FileUp aria-hidden="true" /> Enviar nota fiscal</>}
             </button>
-            {portal.expiresAt && new Date(portal.expiresAt).getTime() - Date.now() < 366 * 86_400_000 && <p className={styles.deadline}>Este link vale até {dayLabel(portal.expiresAt)}.</p>}
+            {portal.expiresAt && hasDeadline && <p className={styles.deadline}>Este link vale até {dayLabel(portal.expiresAt)}.</p>}
           </form>
         )}
 
