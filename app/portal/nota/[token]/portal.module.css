@@ -1,164 +1,332 @@
 /**
  * A folha da página do prestador.
  *
- * Ela não herda a casca do painel de propósito: quem abre esta página não é
- * usuário do produto, abre no celular, no meio do dia, a partir de um link no
- * WhatsApp. O que vale aqui é corpo grande, um caminho só e alvo de toque
- * confortável — não densidade operacional.
+ * Quem abre esta página não é usuário do produto: chega pelo celular, a partir
+ * de um link no WhatsApp, e precisa reconhecer em segundos quem está pedindo a
+ * nota e quanto. Por isso a hierarquia é: marca + empresa contratante, valor,
+ * dados para emitir, formulário. Corpo grande, um caminho só, alvo de toque
+ * confortável.
  *
- * Os tokens vêm do `globals.css`, com valor de reserva ao lado: esta página
- * pode ser servida antes de qualquer casca ter redefinido a paleta, e um
- * `var()` sem reserva deixaria texto sem cor sobre fundo sem cor.
+ * Paleta própria (marca Vinculato) com modo claro e escuro pelo sistema, sem
+ * depender da casca do painel.
  */
 
 .page {
+  --p-bg: #EEF2F9;
+  --p-glow: rgb(54 92 245 / 14%);
+  --p-card: #FFFFFF;
+  --p-card-edge: #DDE4F0;
+  --p-text: #172033;
+  --p-soft: #55627A;
+  --p-field: #F6F8FC;
+  --p-field-edge: #D5DDEB;
+  --p-panel: linear-gradient(160deg, #18223A 0%, #22304F 100%);
+  --p-panel-text: #FFFFFF;
+  --p-panel-soft: #B4C0DA;
+  --p-accent: #365CF5;
+  --p-accent-strong: #2A49C9;
+  --p-teal: #16A394;
+  --p-teal-soft: #E3F5F2;
+  --p-shadow: 0 1px 2px rgb(24 34 58 / 6%), 0 24px 60px -24px rgb(24 34 58 / 28%);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
   min-height: 100dvh;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 32px 16px 64px;
-  background: var(--ui-bg, #F5F7FB);
-  color: var(--ui-text, #1B2233);
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 40px 16px 56px;
+  background:
+    radial-gradient(900px 420px at 50% -120px, var(--p-glow), transparent 70%),
+    var(--p-bg);
+  color: var(--p-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  .page {
+    --p-bg: #0B1220;
+    --p-glow: rgb(92 125 247 / 18%);
+    --p-card: #111A2D;
+    --p-card-edge: #22304A;
+    --p-text: #EAF0FB;
+    --p-soft: #9DABC6;
+    --p-field: #0D1526;
+    --p-field-edge: #2A3957;
+    --p-panel: linear-gradient(160deg, #16213A 0%, #1B2B4D 100%);
+    --p-accent: #5C7DF7;
+    --p-accent-strong: #7B97FA;
+    --p-teal: #2FC9B6;
+    --p-teal-soft: rgb(47 201 182 / 14%);
+    --p-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 24px 60px -24px rgb(0 0 0 / 70%);
+  }
 }
 
 .card {
   width: 100%;
-  max-width: 560px;
+  max-width: 540px;
   display: grid;
-  gap: 22px;
-  padding: 28px 24px 26px;
-  border: 1px solid var(--ui-border, #D9E1EC);
-  border-radius: 14px;
-  background: var(--ui-surface, #FFFFFF);
-  box-shadow: 0 12px 34px rgb(24 34 58 / 8%);
+  gap: 24px;
+  padding: 26px 26px 24px;
+  border: 1px solid var(--p-card-edge);
+  border-radius: 20px;
+  background: var(--p-card);
+  box-shadow: var(--p-shadow);
+  animation: portal-in 360ms var(--ease-out) both;
 }
 
-.header { display: grid; gap: 8px; }
+/* Marca: Vinculato à esquerda, empresa contratante à direita. */
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--p-card-edge);
+}
+.logoColor, .logoLight { display: block; height: 26px; width: auto; }
+.logoLight { display: none; }
+@media (prefers-color-scheme: dark) {
+  .logoColor { display: none; }
+  .logoLight { display: block; }
+}
+.service {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--p-teal-soft);
+  color: var(--p-soft);
+  font-size: .72rem;
+  line-height: 1.3;
+}
+.service strong { color: var(--p-text); font-weight: 700; letter-spacing: .01em; overflow-wrap: anywhere; }
+
+.header { display: grid; gap: 10px; }
 .eyebrow {
-  color: var(--ui-text-soft, #55607A);
-  font-size: .64rem;
-  font-weight: 780;
-  letter-spacing: .1em;
+  color: var(--p-accent-strong);
+  font-size: .7rem;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
-.header h1 { margin: 0; font-size: 1.35rem; line-height: 1.25; }
-.header p { margin: 0; color: var(--ui-text-soft, #55607A); font-size: .95rem; line-height: 1.55; }
-.amount { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.header h1 {
+  margin: 0;
+  font-family: var(--font-titles), var(--font-interface), system-ui, sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.015em;
+  text-wrap: balance;
+}
+.header > p { margin: 0; color: var(--p-soft); font-size: .95rem; line-height: 1.55; }
 
-/* Os dados de emissão são os mesmos da mensagem de aviso, e ficam à vista
-   enquanto o formulário é preenchido: quem emite a nota em outra aba precisa
-   copiar CNPJ e razão social sem voltar ao WhatsApp. */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 10%);
+  color: var(--p-panel-text);
+  border: 1px solid transparent;
+  background-image: var(--p-panel);
+}
+.summary > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  align-content: center;
+}
+.summary > div + div { border-left: 1px solid rgb(255 255 255 / 12%); }
+.summary span { color: var(--p-panel-soft); font-size: .7rem; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.summary strong { font-size: 1.05rem; font-weight: 700; text-transform: capitalize; }
+.summary .amount { font-size: 1.3rem; text-transform: none; }
+.amount { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+
+/* Dados de emissão: ficam à vista enquanto o formulário é preenchido, com cópia
+   em um toque — quem emite a nota em outra aba não digita o CNPJ de novo. */
 .issuer {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   margin: 0;
-  padding: 16px;
-  border: 1px solid var(--ui-border, #D9E1EC);
-  border-radius: 10px;
-  background: var(--ui-surface-muted, #EEF2F8);
+  padding: 16px 18px;
+  border: 1px solid var(--p-field-edge);
+  border-left: 4px solid var(--p-teal);
+  border-radius: 12px;
+  background: var(--p-field);
 }
-.issuer > div { display: grid; gap: 3px; }
-.issuer dt { color: var(--ui-text-soft, #55607A); font-size: .7rem; font-weight: 700; letter-spacing: .04em; }
-.issuer dd { margin: 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
-.mono { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.issuer dt { color: var(--p-soft); font-size: .68rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.issuer dd { margin: 3px 0 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.issuerHead dd { font-size: 1.02rem; font-weight: 700; line-height: 1.35; }
+.issuerRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.mono { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 1rem; }
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--p-field-edge);
+  border-radius: 9px;
+  background: var(--p-card);
+  color: var(--p-text);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out), border-color 160ms ease;
+}
+.copy svg { width: 14px; height: 14px; }
+.copy:active { transform: scale(.97); }
+@media (hover: hover) and (pointer: fine) { .copy:hover { border-color: var(--p-accent); } }
 
 .form { display: grid; gap: 18px; }
-.grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid { display: grid; gap: 16px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .spanTwo { grid-column: 1 / -1; }
 
-.grid label { display: grid; gap: 6px; min-width: 0; }
-.grid label > span { font-size: .78rem; font-weight: 650; }
-.grid label > small { color: var(--ui-text-soft, #55607A); font-size: .72rem; }
-.grid input {
-  /* 44px é o alvo de toque confortável, e 16px no campo é o que impede o iOS de
-     dar zoom ao focar — um zoom que desalinha a página inteira no meio do
-     preenchimento. */
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--ui-border, #D9E1EC);
-  border-radius: 9px;
-  background: var(--ui-surface, #FFFFFF);
+.grid label { display: grid; gap: 7px; min-width: 0; align-content: start; }
+.grid label > span:first-child { font-size: .8rem; font-weight: 700; }
+.grid label em { margin-left: 4px; color: var(--p-soft); font-size: .7rem; font-style: normal; font-weight: 500; }
+
+.grid input:not([type="file"]) {
+  /* 44px de alto e 16px de fonte: alvo de toque e sem zoom do iOS ao focar. */
+  width: 100%;
+  min-height: 46px;
+  padding: 0 13px;
+  border: 1px solid var(--p-field-edge);
+  border-radius: 11px;
+  background: var(--p-field);
   color: inherit;
   font: inherit;
   font-size: 16px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
-.grid input[type="file"] { padding: 10px 12px; font-size: .85rem; }
-.grid input:focus-visible, .submit:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--brand-accent, #1F6FEB) 32%, transparent);
-  outline-offset: 2px;
+.grid input::placeholder { color: color-mix(in srgb, var(--p-soft) 70%, transparent); }
+.grid input:not([type="file"]):focus {
+  outline: none;
+  border-color: var(--p-accent);
+  background: var(--p-card);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--p-accent) 20%, transparent);
 }
 
-.deadline { margin: 0; color: var(--ui-text-soft, #55607A); font-size: .8rem; }
+.dateWrap, .moneyWrap { position: relative; display: block; }
+.dateWrap svg { position: absolute; right: 13px; top: 50%; width: 17px; height: 17px; translate: 0 -50%; color: var(--p-soft); pointer-events: none; }
+.dateWrap input { padding-right: 40px; }
+.dateWrap input::-webkit-calendar-picker-indicator { opacity: 0; position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.moneyWrap b { position: absolute; left: 13px; top: 50%; translate: 0 -50%; color: var(--p-soft); font-size: .85rem; font-weight: 650; pointer-events: none; }
+.moneyWrap input { padding-left: 38px; font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+/* Arquivo: o input nativo fica invisível por cima da área, que é o alvo de toque. */
+.drop { position: relative; }
+.fileInput { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 1; }
+.dropArea {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1.5px dashed color-mix(in srgb, var(--p-accent) 45%, var(--p-field-edge));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--p-accent) 5%, var(--p-field));
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.dropArea > svg { flex: 0 0 auto; width: 30px; height: 30px; padding: 6px; box-sizing: content-box; border-radius: 10px; background: color-mix(in srgb, var(--p-accent) 14%, transparent); color: var(--p-accent-strong); }
+.dropText { display: grid; gap: 2px; min-width: 0; }
+.dropText strong { font-size: .92rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dropText small { color: var(--p-soft); font-size: .74rem; }
+.dropArea[data-filled="true"] { border-style: solid; border-color: var(--p-teal); background: var(--p-teal-soft); }
+.dropArea[data-filled="true"] > svg { background: color-mix(in srgb, var(--p-teal) 22%, transparent); color: var(--p-teal); }
+.fileInput:focus-visible + .dropArea { outline: 3px solid color-mix(in srgb, var(--p-accent) 35%, transparent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .drop:hover .dropArea { border-color: var(--p-accent); } }
 
 .submit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 0 20px;
-  border: 1px solid var(--brand-accent, #1F6FEB);
-  border-radius: 10px;
-  background: var(--brand-accent, #1F6FEB);
+  gap: 9px;
+  min-height: 52px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #4A6FF7 0%, #365CF5 100%);
+  box-shadow: 0 8px 20px -8px rgb(54 92 245 / 70%), inset 0 1px 0 rgb(255 255 255 / 22%);
   color: #FFFFFF;
   font: inherit;
-  font-weight: 680;
+  font-size: 1rem;
+  font-weight: 700;
   cursor: pointer;
+  transition: transform 160ms var(--ease-out), filter 160ms ease, box-shadow 160ms ease;
 }
-.submit:hover { filter: brightness(.94); }
-.submit:disabled { cursor: not-allowed; opacity: .55; filter: none; }
+.submit svg { width: 19px; height: 19px; }
+.submit:active:not(:disabled) { transform: scale(.98); }
+@media (hover: hover) and (pointer: fine) { .submit:hover:not(:disabled) { filter: brightness(1.07); } }
+.submit:focus-visible { outline: 3px solid color-mix(in srgb, var(--p-accent) 40%, transparent); outline-offset: 3px; }
+.submit:disabled { cursor: progress; opacity: .7; }
+
+.deadline { margin: -4px 0 0; color: var(--p-soft); font-size: .8rem; text-align: center; }
 
 .alert, .success {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   padding: 14px 15px;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: .88rem;
   line-height: 1.5;
 }
 .alert {
-  border: 1px solid color-mix(in srgb, var(--vin-warning, #a15c07) 34%, transparent);
-  background: color-mix(in srgb, var(--vin-warning, #a15c07) 8%, transparent);
-  color: var(--vin-warning-strong, #7d4705);
+  border: 1px solid color-mix(in srgb, #D97706 40%, transparent);
+  background: color-mix(in srgb, #D97706 10%, transparent);
+  color: #B45309;
 }
+@media (prefers-color-scheme: dark) { .alert { color: #FBBF77; } }
 .success {
-  border: 1px solid color-mix(in srgb, var(--vin-success, #137a4f) 34%, transparent);
-  background: color-mix(in srgb, var(--vin-success, #137a4f) 8%, transparent);
-  color: var(--vin-success, #137a4f);
+  border: 1px solid color-mix(in srgb, var(--p-teal) 40%, transparent);
+  background: var(--p-teal-soft);
+  color: var(--p-text);
 }
+.success svg { color: var(--p-teal); }
 .alert p, .success p { margin: 0; }
-.alert svg, .success svg { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px; }
-.success h1 { margin: 0 0 6px; font-size: 1.15rem; }
+.alert svg, .success svg { flex: 0 0 auto; width: 22px; height: 22px; margin-top: 1px; }
+.success h1 { margin: 0 0 6px; font-size: 1.2rem; font-weight: 800; }
 .success > div { display: grid; }
 
-.loading { display: flex; align-items: center; gap: 9px; margin: 0; color: var(--ui-text-soft, #55607A); }
-.footnote { margin: 0; color: var(--ui-text-soft, #55607A); font-size: .82rem; }
+.loading { display: flex; align-items: center; gap: 9px; margin: 0; color: var(--p-soft); }
+.footnote { margin: 0; color: var(--p-soft); font-size: .82rem; }
 
 .privacy {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 9px;
   margin: 0;
   padding-top: 16px;
-  border-top: 1px solid var(--ui-border, #D9E1EC);
-  color: var(--ui-text-soft, #55607A);
+  border-top: 1px solid var(--p-card-edge);
+  color: var(--p-soft);
   font-size: .78rem;
   line-height: 1.5;
 }
-.privacy svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; }
+.privacy svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; color: var(--p-teal); }
+
+.powered { margin: 0; color: var(--p-soft); font-size: .72rem; letter-spacing: .02em; }
 
 .spin { animation: portal-spin 1s linear infinite; }
-
 @keyframes portal-spin { to { transform: rotate(360deg); } }
+@keyframes portal-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-/* Movimento é decoração aqui; o estado já é dito em texto. */
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; }
+  .card { animation: none; }
+  .copy, .submit, .grid input { transition: none; }
 }
 
 @media (max-width: 520px) {
-  .page { padding: 16px 16px 48px; }
-  .card { padding: 22px 18px 20px; border-radius: 12px; }
+  .page { padding: 16px 12px 40px; }
+  .card { padding: 20px 16px 18px; border-radius: 16px; gap: 20px; }
   .grid { grid-template-columns: minmax(0, 1fr); }
   .spanTwo { grid-column: auto; }
+  .header h1 { font-size: 1.4rem; }
 }
