@@ -87,7 +87,7 @@ async function resolveLink(rawToken: string, request: Request) {
       closing.invoice_current_id
     FROM fdp_contractor_invoice_portal_links link
     JOIN fdp_auxiliary_providers provider ON provider.workspace_id = link.workspace_id AND provider.id = link.provider_id
-    JOIN fdp_companies company ON company.workspace_id = link.workspace_id AND company.id = link.company_id
+    JOIN fdp_companies company ON company.workspace_id = link.workspace_id AND company.id = COALESCE(link.issuer_company_id, link.company_id)
     JOIN fdp_contractor_closings closing ON closing.workspace_id = link.workspace_id AND closing.id = link.closing_id
     WHERE link.workspace_id = ? AND link.token_hash = ?`)
     .bind(parsed.workspaceId, hash)

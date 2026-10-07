@@ -2627,6 +2627,8 @@ export const contractorInvoicePortalLinks = pgTable("fdp_contractor_invoice_port
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
   companyId: text("company_id").notNull(),
+  /** Empresa emitente escolhida ao gerar o link; nula nos antigos (valia `companyId`). */
+  issuerCompanyId: text("issuer_company_id"),
   providerId: text("provider_id").notNull(),
   payrollCycleId: text("payroll_cycle_id").notNull(),
   closingId: text("closing_id").notNull(),
@@ -2655,6 +2657,7 @@ export const contractorInvoicePortalLinks = pgTable("fdp_contractor_invoice_port
   index("fdp_contractor_invoice_portal_links_revoker_idx").on(table.workspaceId, table.revokedBy),
   index("fdp_contractor_invoice_portal_links_invoice_idx").on(table.workspaceId, table.submittedInvoiceId),
   foreignKey({ name: "fdp_contractor_invoice_portal_links_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_contractor_invoice_portal_links_issuer_company_fk", columns: [table.workspaceId, table.issuerCompanyId], foreignColumns: [companies.workspaceId, companies.id] }),
   foreignKey({ name: "fdp_contractor_invoice_portal_links_provider_fk", columns: [table.workspaceId, table.providerId], foreignColumns: [auxiliaryProviders.workspaceId, auxiliaryProviders.id] }),
   foreignKey({ name: "fdp_contractor_invoice_portal_links_cycle_fk", columns: [table.workspaceId, table.companyId, table.payrollCycleId], foreignColumns: [payrollCycles.workspaceId, payrollCycles.companyId, payrollCycles.id] }),
   foreignKey({ name: "fdp_contractor_invoice_portal_links_closing_fk", columns: [table.workspaceId, table.closingId], foreignColumns: [contractorClosings.workspaceId, contractorClosings.id] }).onDelete("cascade"),

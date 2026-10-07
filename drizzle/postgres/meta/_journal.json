@@ -757,6 +757,13 @@
       "when": 1790700000000,
       "tag": "0105_process_step_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1790786400000,
+      "tag": "0106_portal_link_issuer_company",
+      "breakpoints": true
     }
   ]
 }

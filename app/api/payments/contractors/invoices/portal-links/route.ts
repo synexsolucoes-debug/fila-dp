@@ -184,10 +184,10 @@ export async function POST(request: Request) {
         WHERE workspace_id = ? AND closing_id = ? AND revoked_at IS NULL AND submitted_at IS NULL`)
         .bind(user.id, workspace.id, closing.id));
       statements.push(d1.prepare(`INSERT INTO fdp_contractor_invoice_portal_links
-          (id, workspace_id, company_id, provider_id, payroll_cycle_id, closing_id, competence,
+          (id, workspace_id, company_id, issuer_company_id, provider_id, payroll_cycle_id, closing_id, competence,
            token_hash, expires_at, expected_amount, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .bind(id, workspace.id, closing.company_id, closing.provider_id, closing.payroll_cycle_id, closing.id,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(id, workspace.id, closing.company_id, issuerCompanyId, closing.provider_id, closing.payroll_cycle_id, closing.id,
           closing.competence, token.hash, expiresAt.toISOString(),
           Number(closing.invoice_expected_amount ?? 0), user.id));
       gerados.push({
