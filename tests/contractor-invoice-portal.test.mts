@@ -324,9 +324,13 @@ test("o arquivo com link cobre o grupo, e a emitente não recorta ninguém", asy
   // que vai no documento.
   assert.match(rota, /requireCompanyAccess\(d1, workspace\.id, user\.id, workspace\.role, issuerCompanyId\)/u);
   assert.match(rota, /\.bind\(workspace\.id, issuerCompanyId\)/u);
-  // O link, porém, pertence à empresa do fechamento — usar a emitente furaria
-  // a chave estrangeira do ciclo para quem atende outra empresa do grupo.
-  assert.match(rota, /\.bind\(id, workspace\.id, closing\.company_id, closing\.provider_id/u);
+  // O link, porém, pertence à empresa do fechamento — usar a emitente em
+  // `company_id` furaria a chave estrangeira do ciclo para quem atende outra
+  // empresa do grupo. A emitente vai na coluna própria, que é a que a página do
+  // prestador exibe.
+  assert.match(rota, /\.bind\(id, workspace\.id, closing\.company_id, issuerCompanyId, closing\.provider_id/u);
+  const portal = await readFile(new URL("../app/api/portal/nota/[token]/route.ts", import.meta.url), "utf8");
+  assert.match(portal, /company\.id = COALESCE\(link\.issuer_company_id, link\.company_id\)/u);
 });
 
 test("gerar o arquivo é escrita, e escrita não acontece por download", async () => {
