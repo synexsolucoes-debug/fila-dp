@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, BookOpenCheck, Building2, CalendarClock, Check, CheckCircle2, ChevronRight,
-  CircleDashed, CircleDot, ClipboardCheck, FilePlus2, Gauge, Inbox, ListChecks, LockKeyhole, Plus, RefreshCw,
-  Search, ShieldAlert, ShieldCheck, TimerReset, UserCheck, UsersRound,
+  CircleDashed, CircleDot, ClipboardCheck, FilePlus2, Gauge, Inbox, ListChecks, LockKeyhole, LockOpen, Plus, RefreshCw,
+  Search, ShieldAlert, TimerReset, UserCheck, UsersRound,
 } from "lucide-react";
 import type { WorkspaceRole } from "@/lib/fila-dp-types";
-import { competenceWindow, cycleStages, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
+import { competenceWindow, EmptyState, ErrorBanner, PageSkeleton, PanelHeader, StatusPill } from "../shared";
 import { OperationDialog } from "./OperationDialogs";
 import {
   normalizeCompany, normalizeEmployee, normalizeMovement, normalizeOverview, normalizeProcess, normalizeVersion, requestJson,
@@ -30,7 +30,6 @@ const tabs: Array<{ id: OperationTab; label: string; icon: typeof Gauge }> = [
   { id: "library", label: "Biblioteca", icon: BookOpenCheck },
 ];
 
-const nextStatus: Partial<Record<Cycle["status"], Cycle["status"]>> = { open: "pre_closing", pre_closing: "processing", processing: "post_closing", post_closing: "closed" };
 const statusLabels: Record<string, string> = {
   open: "Aberta", pre_closing: "Pré-fechamento", processing: "Processamento", post_closing: "Pós-fechamento", closed: "Concluída",
   draft: "Rascunho", pending_approval: "Em aprovação", approved: "Aprovada", rejected: "Rejeitada", applied: "Aplicada", canceled: "Cancelada",
@@ -120,21 +119,6 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
   const pendingMovements = data?.movements.filter((item) => ["draft", "pending_approval", "rejected"].includes(item.status)).length ?? 0;
   const pendingApprovals = data?.approvals.filter((item) => item.status === "pending" && item.canDecide).length ?? 0;
   const obligationExceptions = data?.obligations.filter((item) => item.status !== "completed" && (daysUntil(item.dueDate) ?? 99) <= 7).length ?? 0;
-  const gateIssues = useMemo(() => {
-    if (!data?.cycle) return [];
-    const target = nextStatus[data.cycle.status];
-    if (target !== "processing" && target !== "closed") return [];
-    const issues = blockers.map((item) => item.title);
-    const pendingMovementCount = data.movements.filter((item) => ["draft", "pending_approval", "rejected"].includes(item.status)).length;
-    if (pendingMovementCount) issues.push(`${pendingMovementCount} movimentação${pendingMovementCount > 1 ? "ões" : ""} sem decisão final`);
-    if (target === "closed") {
-      const incompleteChecklist = data.closingItems.filter((item) => item.status !== "completed").length;
-      const incompleteObligations = data.obligations.filter((item) => item.status !== "completed").length;
-      if (incompleteChecklist) issues.push(`${incompleteChecklist} item(ns) de fechamento incompleto(s)`);
-      if (incompleteObligations) issues.push(`${incompleteObligations} obrigação(ões) incompleta(s)`);
-    }
-    return issues;
-  }, [blockers, data]);
   // As competências que o seletor oferece incluem meses ainda sem ciclo: é por
   // eles que se chega à abertura, que antes só era alcançável no mês corrente.
   const competenceChoices = useMemo(
@@ -196,7 +180,7 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
         await mutate(`/api/operations/pending-items/${state.item.id}`, { method: "PATCH", body: JSON.stringify({ status: state.status, resolution: field(form, "resolution") }) }, state.status === "resolved" ? "Pendência resolvida." : "Pendência dispensada com motivo.");
       } else if (state.kind === "transition") {
         if (!cycle) return;
-        await mutate(`/api/operations/competences/${cycle.id}/transition`, { method: "POST", body: JSON.stringify({ status: state.target }) }, "Ciclo avançado com sucesso.");
+        await mutate(`/api/operations/competences/${cycle.id}/transition`, { method: "POST", body: JSON.stringify({ status: state.target }) }, state.target === "closed" ? "Competência fechada." : "Competência reaberta.");
       } else if (state.kind === "process") {
         const step = field(form, "firstStep");
         await mutate("/api/operations/processes", { method: "POST", body: JSON.stringify({ code: field(form, "code"), name: field(form, "name"), category: field(form, "category"), configuration: { steps: [{ key: "etapa-1", name: step, gate: true, slaDays: 2 }], transitions: [], approvalRequired: false, checklist: [] } }) }, "Processo criado com versão inicial em rascunho.");
@@ -230,7 +214,8 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
   if (loading && !data) return <CockpitLoading />;
   if (!companies.length && !loading) return <EmptyCompanyState error={error} onRetry={loadCompanies} />;
 
-  const next = cycle ? nextStatus[cycle.status] : undefined;
+  const isClosed = cycle?.status === "closed";
+  const toggleTarget = isClosed ? "open" : "closed";
   return (
     <section className={styles.workspace} aria-label="Operação do Departamento Pessoal">
       <div className={styles.commandBar}>
@@ -244,19 +229,19 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
             corrente tinha ciclo — e nunca mais voltava. */}
         <div className={styles.commandActions}>
           {data?.permissions.manageCompetences && <button className={cycle ? styles.secondaryButton : styles.primaryButton} type="button" onClick={() => setEditor({ kind: "competence" })}><Plus aria-hidden="true" /> Abrir competência</button>}
-          {cycle && next && data?.permissions.transitionCompetences && <button className={styles.primaryButton} type="button" onClick={() => setEditor({ kind: "transition", target: next })}>Avançar ciclo <ArrowRight aria-hidden="true" /></button>}
+          {cycle && data?.permissions.transitionCompetences && <button className={styles.primaryButton} type="button" onClick={() => setEditor({ kind: "transition", target: toggleTarget })}>{isClosed ? <><LockOpen aria-hidden="true" /> Reabrir competência</> : <><LockKeyhole aria-hidden="true" /> Fechar competência</>}</button>}
         </div>
       </div>
 
       {error && <ErrorBanner title="Algo exige atenção" message={error} onDismiss={() => setError("")} />}
 
-      <CycleRail cycle={cycle} gateIssues={gateIssues} next={next} competenceName={competenceLabel(competence)} onOpen={data?.permissions.manageCompetences ? () => setEditor({ kind: "competence" }) : undefined} onAdvance={data?.permissions.transitionCompetences && next ? () => setEditor({ kind: "transition", target: next }) : undefined} />
+      <CycleRail cycle={cycle} competenceName={competenceLabel(competence)} onOpen={data?.permissions.manageCompetences ? () => setEditor({ kind: "competence" }) : undefined} />
 
       <div className={styles.exceptionStrip}>
         <ExceptionMetric icon={TimerReset} label="Movimentações pendentes" value={pendingMovements} tone={pendingMovements ? "warning" : "safe"} note={pendingMovements ? "Exigem avanço" : "Sem exceções"} />
         <ExceptionMetric icon={UserCheck} label="Aprovações na fila" value={pendingApprovals} tone={pendingApprovals ? "warning" : "safe"} note={pendingApprovals ? "Aguardam decisão" : "Fila limpa"} />
         <ExceptionMetric icon={CalendarClock} label="Prazos em até 7 dias" value={obligationExceptions} tone={obligationExceptions ? "danger" : "safe"} note={obligationExceptions ? "Próximos ou atrasados" : "Agenda segura"} />
-        <ExceptionMetric icon={LockKeyhole} label="Bloqueadores" value={blockers.length} tone={blockers.length ? "danger" : "safe"} note={blockers.length ? "Impedem avanço" : "Gates livres"} />
+        <ExceptionMetric icon={LockKeyhole} label="Bloqueadores" value={blockers.length} tone={blockers.length ? "danger" : "safe"} note={blockers.length ? "Pendências bloqueadoras" : "Sem bloqueios"} />
       </div>
 
       <nav className={styles.localTabs} aria-label="Áreas da operação">{tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={tab === id ? styles.activeTab : ""} onClick={() => setTab(id)} aria-current={tab === id ? "page" : undefined}><Icon aria-hidden="true" />{label}{id === "approvals" && pendingApprovals > 0 && <b>{pendingApprovals}</b>}{id === "pending" && blockers.length > 0 && <b>{blockers.length}</b>}</button>)}</nav>
@@ -277,13 +262,11 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
   );
 }
 
-function CycleRail({ cycle, gateIssues, next, competenceName, onOpen, onAdvance }: { cycle: Cycle | null; gateIssues: string[]; next?: Cycle["status"]; competenceName: string; onOpen?: () => void; onAdvance?: () => void }) {
-  if (!cycle) return <section className={styles.cycleEmpty}><div><CircleDashed aria-hidden="true" /><span><strong>{competenceName} ainda não foi aberta</strong><small>Abra o ciclo para ativar gates, checklists e prazos desta empresa.</small></span>{onOpen && <button className={styles.primaryButton} type="button" onClick={onOpen}><Plus aria-hidden="true" /> Abrir competência</button>}</div></section>;
-  const current = cycleStages.findIndex((stage) => stage.status === cycle.status);
-  return <section className={styles.cycleRail} aria-label={`Ciclo da competência ${cycle.competence}`}>
-    <header><div><span className={styles.eyebrow}>CICLO DE FECHAMENTO</span><strong>{competenceLabel(cycle.competence)}</strong></div><span className={`${styles.cycleHealth} ${gateIssues.length ? styles.healthBlocked : styles.healthSafe}`}>{gateIssues.length ? <LockKeyhole aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}{gateIssues.length ? `${gateIssues.length} gate${gateIssues.length > 1 ? "s" : ""} bloqueado${gateIssues.length > 1 ? "s" : ""}` : "Gates livres"}</span></header>
-    <ol>{cycleStages.map((stage, index) => { const done = index < current; const active = index === current; return <li key={stage.status} className={done ? styles.stageDone : active ? styles.stageActive : styles.stageFuture}><span className={styles.stageIndex}>{done ? <Check aria-hidden="true" /> : index + 1}</span><div><small>{active ? "ETAPA ATUAL" : done ? "CONCLUÍDA" : "PRÓXIMA ETAPA"}</small><strong>{stage.label}</strong><span>{stage.note}</span></div>{index < cycleStages.length - 1 && <ChevronRight aria-hidden="true" />}</li>; })}</ol>
-    <footer><div>{gateIssues.length ? <><AlertTriangle aria-hidden="true" /><span><strong>Avanço bloqueado</strong><small>{gateIssues[0]}{gateIssues.length > 1 ? ` e mais ${gateIssues.length - 1}` : ""}</small></span></> : <><CheckCircle2 aria-hidden="true" /><span><strong>{next ? `Próximo avanço: ${statusLabels[next]}` : "Competência concluída"}</strong><small>{next ? "O servidor validará pendências, movimentações e obrigações." : "Reabertura exige permissão e motivo auditável."}</small></span></>}</div>{onAdvance && <button type="button" onClick={onAdvance} disabled={gateIssues.length > 0}>{gateIssues.length ? "Resolver bloqueadores" : "Avançar com segurança"}<ArrowRight aria-hidden="true" /></button>}</footer>
+function CycleRail({ cycle, competenceName, onOpen }: { cycle: Cycle | null; competenceName: string; onOpen?: () => void }) {
+  if (!cycle) return <section className={styles.cycleEmpty}><div><CircleDashed aria-hidden="true" /><span><strong>{competenceName} ainda não foi aberta</strong><small>Abra a competência para registrar movimentações, obrigações e prazos desta empresa.</small></span>{onOpen && <button className={styles.primaryButton} type="button" onClick={onOpen}><Plus aria-hidden="true" /> Abrir competência</button>}</div></section>;
+  const closed = cycle.status === "closed";
+  return <section className={styles.cycleRail} aria-label={`Competência ${cycle.competence}`}>
+    <header><div><span className={styles.eyebrow}>COMPETÊNCIA</span><strong>{competenceLabel(cycle.competence)}</strong></div><span className={`${styles.cycleHealth} ${closed ? styles.healthBlocked : styles.healthSafe}`}>{closed ? <LockKeyhole aria-hidden="true" /> : <LockOpen aria-hidden="true" />}{closed ? "Fechada" : "Aberta"}</span></header>
   </section>;
 }
 

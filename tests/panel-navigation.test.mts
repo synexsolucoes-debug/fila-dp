@@ -320,7 +320,8 @@ test("as etapas do ciclo têm uma definição só", async () => {
      passa a ser sobre quem a usa: a definição continua uma só, no módulo
      compartilhado, e Operação DP a lê de lá em vez de manter cópia. */
   const operacao = await readFile(new URL("../app/painel/features/operations/OperationsView.tsx", import.meta.url), "utf8");
-  assert.match(operacao, /import \{[^}]*\bcycleStages\b[^}]*\} from "\.\.\/shared"/u);
+  // A Operação DP não tem mais etapas: só abre e fecha a competência.
+  assert.doesNotMatch(operacao, /\bcycleStages\b/u);
   assert.doesNotMatch(operacao, /status: "pre_closing", label:/u,
     "Operação DP passou a ter cópia própria das etapas");
 });

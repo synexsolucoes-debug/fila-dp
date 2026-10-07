@@ -44,14 +44,13 @@ test("movement and process payloads use allowlists and preserve the Sólides bou
   assert.doesNotThrow(() => assertNoAdmissionWorkflow("Conciliação cadastral Sólides"));
 });
 
-test("competence transition enforces gates atomically and writes audit in the same statement", async () => {
+test("competence is opened and closed at will, with audit and no gates", async () => {
   const source = await readFile(new URL("../app/api/operations/competences/[id]/transition/route.ts", import.meta.url), "utf8");
   assert.match(source, /WITH updated AS/);
-  assert.match(source, /NOT EXISTS \(SELECT 1 FROM fdp_operational_pending_items/);
-  assert.match(source, /NOT EXISTS \(SELECT 1 FROM fdp_employee_movements/);
   assert.match(source, /INSERT INTO fdp_audit_events/);
-  assert.match(source, /competences\.reopen/);
-  assert.match(source, /REOPEN_REASON_REQUIRED/);
+  assert.match(source, /competence\.reopened/);
+  assert.doesNotMatch(source, /NOT EXISTS/);
+  assert.doesNotMatch(source, /REOPEN_REASON_REQUIRED/);
 });
 
 test("approvals require assignment, company scope and reject sensitive self-approval", async () => {

@@ -92,14 +92,10 @@ test("bloqueio sem diagnóstico admite a corrida, em vez de listar zero motivos"
   assert.match(message, /Recarregue/u);
 });
 
-test("a rota devolve os bloqueadores estruturados junto da mensagem", async () => {
+test("a rota de abrir/fechar não aplica gates nem exige etapas", async () => {
   const route = await readFile(new URL("../app/api/operations/competences/[id]/transition/route.ts", import.meta.url), "utf8");
-  assert.match(route, /describeClosingBlockers\(d1, workspace\.id, id, target\)/u);
-  assert.match(route, /closingBlockerMessage\(blockers\)/u);
-  // A tela precisa do detalhe estruturado para poder levar ao item de origem.
-  assert.match(route, /\{ blockers \}/u);
-  // Os portões continuam no UPDATE: o diagnóstico não pode virar pré-checagem.
-  assert.match(route, /NOT EXISTS \(SELECT 1 FROM fdp_operational_pending_items/u);
+  assert.doesNotMatch(route, /describeClosingBlockers|NOT EXISTS/u);
+  assert.match(route, /body\.status === "open" \|\| body\.status === "closed"/u);
 });
 
 test("o diagnóstico não decide nada: ele só explica", async () => {

@@ -57,7 +57,7 @@ test("auxiliary submission and decisions are assigned, atomic and audit-safe", a
   assert.match(close, /revision\.status = 'approved'/);
 });
 
-test("phase 5 uses resource APIs and blocks competence closing until auxiliary delivery", async () => {
+test("phase 5 uses resource APIs; closing a competence no longer waits on auxiliary delivery", async () => {
   const [overview, executions, transition] = await Promise.all([
     readFile(new URL("../app/api/auxiliary/overview/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auxiliary/executions/route.ts", import.meta.url), "utf8"),
@@ -69,8 +69,7 @@ test("phase 5 uses resource APIs and blocks competence closing until auxiliary d
   assert.match(overview, /AS can_decide/);
   assert.match(executions, /inputKeys/);
   assert.match(executions, /outputKeys/);
-  assert.match(transition, /fdp_auxiliary_executions/);
-  assert.match(transition, /status NOT IN \('closed', 'canceled'\)/);
+  assert.doesNotMatch(transition, /fdp_auxiliary_executions/);
 });
 
 test("phase 5 UI is modular, assigned, privacy-aware and keyboard accessible", async () => {
