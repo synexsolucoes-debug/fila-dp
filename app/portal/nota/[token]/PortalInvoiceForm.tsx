@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileUp, LoaderCircle, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, Copy, FileText, FileUp, LoaderCircle, ShieldCheck, UploadCloud } from "lucide-react";
+import { VinculatoLogo } from "../../../components/VinculatoLogo";
 import styles from "./portal.module.css";
 
 /**
@@ -52,6 +53,40 @@ const resolvedNote: Record<Exclude<Status, "active">, string> = {
   expired: "O prazo deste link terminou. Peça um novo a quem cuida do pagamento.",
 };
 
+/** Marca do Vinculato com a empresa contratante: quem recebe o link reconhece
+ *  primeiro quem está pedindo a nota, depois o produto que intermedia. */
+function Brand({ company }: { company?: string }) {
+  return (
+    <div className={styles.brand}>
+      <VinculatoLogo size={26} title="Vinculato" className={styles.logoColor} priority />
+      <VinculatoLogo size={26} title="Vinculato" tone="light" className={styles.logoLight} priority />
+      {company && <span className={styles.service}>a serviço de <strong>{company}</strong></span>}
+    </div>
+  );
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className={styles.copy}
+      aria-label={copied ? `${label} copiado` : `Copiar ${label}`}
+      onClick={() => {
+        void navigator.clipboard?.writeText(value).then(() => {
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1600);
+        }).catch(() => undefined);
+      }}
+    >
+      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+      <span>{copied ? "Copiado" : "Copiar"}</span>
+    </button>
+  );
+}
+
+const shortName = (value: string) => value.replace(/\s+(LTDA|S\.?\/?A\.?|EIRELI|ME|EPP)\.?$/iu, "").trim();
+
 export function PortalInvoiceForm({ token }: { token: string }) {
   const [portal, setPortal] = useState<Portal | null>(null);
   const [status, setStatus] = useState<Status>("active");
@@ -59,6 +94,7 @@ export function PortalInvoiceForm({ token }: { token: string }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [fileName, setFileName] = useState("");
   const [done, setDone] = useState<{ invoiceNumber: string; amount: number } | null>(null);
 
   const endpoint = `/api/portal/nota/${encodeURIComponent(token)}`;
@@ -111,18 +147,21 @@ export function PortalInvoiceForm({ token }: { token: string }) {
 
   if (loading) {
     return <main className={styles.page}><section className={styles.card}>
+      <Brand />
       <p className={styles.loading} role="status"><LoaderCircle aria-hidden="true" className={styles.spin} /> Carregando o pedido…</p>
     </section></main>;
   }
 
   if (loadError || !portal) {
     return <main className={styles.page}><section className={styles.card}>
+      <Brand />
       <div className={styles.alert} role="alert"><AlertTriangle aria-hidden="true" /><p>{loadError || "Este link não é válido."}</p></div>
     </section></main>;
   }
 
   if (done) {
     return <main className={styles.page}><section className={styles.card}>
+      <Brand company={shortName(portal.issuer.legalName)} />
       <div className={styles.success} role="status">
         <CheckCircle2 aria-hidden="true" />
         <div>
@@ -137,21 +176,34 @@ export function PortalInvoiceForm({ token }: { token: string }) {
     </section></main>;
   }
 
+  const company = shortName(portal.issuer.legalName);
+
   return (
     <main className={styles.page}>
       <section className={styles.card}>
+        <Brand company={company} />
+
         <header className={styles.header}>
-          <span className={styles.eyebrow}>ENVIO DE NOTA FISCAL</span>
+          <span className={styles.eyebrow}>Envio de nota fiscal</span>
           <h1>Olá, {portal.contractorName}</h1>
-          <p>
-            Competência <strong>{competenceLabel(portal.competence)}</strong>, no valor de{" "}
-            <strong className={styles.amount}>{money(portal.expectedAmount)}</strong>.
-          </p>
+          <p>Envie a nota da competência abaixo. Leva menos de um minuto.</p>
+          <div className={styles.summary}>
+            <div><span>Competência</span><strong>{competenceLabel(portal.competence)}</strong></div>
+            <div><span>Valor a faturar</span><strong className={styles.amount}>{money(portal.expectedAmount)}</strong></div>
+          </div>
         </header>
 
         <dl className={styles.issuer}>
-          <div><dt>Emitir a nota para</dt><dd>{portal.issuer.legalName}</dd></div>
-          {portal.issuer.taxId && <div><dt>CNPJ</dt><dd className={styles.mono}>{formatTaxId(portal.issuer.taxId)}</dd></div>}
+          <div className={styles.issuerHead}>
+            <dt>Emitir a nota para</dt>
+            <dd>{portal.issuer.legalName}</dd>
+          </div>
+          {portal.issuer.taxId && (
+            <div className={styles.issuerRow}>
+              <div><dt>CNPJ</dt><dd className={styles.mono}>{formatTaxId(portal.issuer.taxId)}</dd></div>
+              <CopyButton value={formatTaxId(portal.issuer.taxId)} label="CNPJ" />
+            </div>
+          )}
           {portal.issuer.city && <div><dt>Cidade da prestação do serviço</dt><dd>{portal.issuer.city}</dd></div>}
         </dl>
 
@@ -161,31 +213,37 @@ export function PortalInvoiceForm({ token }: { token: string }) {
           <form onSubmit={submit} className={styles.form}>
             {error && <div className={styles.alert} role="alert"><AlertTriangle aria-hidden="true" /><p>{error}</p></div>}
             <div className={styles.grid}>
-              <label><span>Número da nota</span><input name="invoiceNumber" required maxLength={80} inputMode="numeric" autoComplete="off" /></label>
-              <label><span>Série</span><input name="series" maxLength={20} autoComplete="off" placeholder="Opcional" /></label>
-              <label><span>Data de emissão</span><input name="issueDate" type="date" required /></label>
-              <label><span>Valor da nota</span><input name="receivedAmount" type="number" min="0" step="0.01" required inputMode="decimal" /></label>
-              <label className={styles.spanTwo}><span>CNPJ do emitente</span><input name="issuerDocument" maxLength={20} inputMode="numeric" autoComplete="off" placeholder="Opcional — o CNPJ da sua empresa" /></label>
-              <label className={styles.spanTwo}>
+              <label><span>Número da nota</span><input name="invoiceNumber" required maxLength={80} inputMode="numeric" autoComplete="off" placeholder="Ex.: 1234" /></label>
+              <label><span>Série <em>opcional</em></span><input name="series" maxLength={20} autoComplete="off" /></label>
+              <label><span>Data de emissão</span><span className={styles.dateWrap}><input name="issueDate" type="date" required /><CalendarDays aria-hidden="true" /></span></label>
+              <label><span>Valor da nota</span><span className={styles.moneyWrap}><b aria-hidden="true">R$</b><input name="receivedAmount" type="number" min="0" step="0.01" required inputMode="decimal" placeholder="0,00" /></span></label>
+              <label className={`${styles.spanTwo} ${styles.drop}`}>
                 <span>Arquivo da nota</span>
-                <input name="invoiceFile" type="file" required accept=".pdf,.xml,.jpg,.jpeg,.png,.webp,application/pdf,text/xml,application/xml,image/jpeg,image/png,image/webp" />
-                <small>PDF, XML ou imagem, até 20 MB.</small>
+                <input name="invoiceFile" type="file" required className={styles.fileInput}
+                  onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")}
+                  accept=".pdf,.xml,.jpg,.jpeg,.png,.webp,application/pdf,text/xml,application/xml,image/jpeg,image/png,image/webp" />
+                <span className={styles.dropArea} data-filled={fileName ? "true" : "false"}>
+                  {fileName ? <FileText aria-hidden="true" /> : <UploadCloud aria-hidden="true" />}
+                  <span className={styles.dropText}>
+                    <strong>{fileName || "Toque para escolher o arquivo"}</strong>
+                    <small>{fileName ? "Toque para trocar" : "PDF, XML ou imagem, até 20 MB"}</small>
+                  </span>
+                </span>
               </label>
             </div>
-            <p className={styles.deadline}>
-              {portal.expiresAt && `Este link vale até ${dayLabel(portal.expiresAt)}.`}
-            </p>
             <button type="submit" className={styles.submit} disabled={sending}>
               {sending ? <><LoaderCircle aria-hidden="true" className={styles.spin} /> Enviando…</> : <><FileUp aria-hidden="true" /> Enviar nota fiscal</>}
             </button>
+            {portal.expiresAt && <p className={styles.deadline}>Este link vale até {dayLabel(portal.expiresAt)}.</p>}
           </form>
         )}
 
         <p className={styles.privacy}>
           <ShieldCheck aria-hidden="true" />
-          Este endereço é pessoal e vale só para esta competência. Não repasse o link.
+          <span>Este endereço é pessoal e vale só para esta competência. Não repasse o link.</span>
         </p>
       </section>
+      <p className={styles.powered}>Enviado com segurança pelo Vinculato</p>
     </main>
   );
 }
