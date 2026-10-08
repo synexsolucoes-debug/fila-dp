@@ -613,7 +613,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
    *
    * Sai do POST que gera os links, e não de um `<a href>`: gerar é uma escrita,
    * e uma escrita não pode acontecer por download — o navegador repete GET em
-   * retentativa e em pré-carregamento, e cada repetição revogaria os links que
+   * retentativa e em pré-carregamento, e cada repetição mexeria nos links que
    * acabaram de ser enviados.
    */
   async function baixarAvisosComLink(company: string) {
@@ -927,9 +927,9 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
                   <span>
                     <strong>Incluir o link de envio da nota</strong>
                     <small>
-                      Cada mensagem ganha um endereço em que o próprio prestador anexa a nota, válido por 10 dias.
-                      Gerar o arquivo cria links novos e invalida os que foram enviados antes nesta competência —
-                      o endereço não é guardado em lugar nenhum, então não há como reimprimir o anterior.
+                      Cada mensagem ganha um endereço em que o próprio prestador anexa a nota. O endereço é fixo
+                      por prestador e competência: gerar o arquivo de novo mantém o mesmo link, que vale até a nota
+                      chegar ou até você revogá-lo.
                     </small>
                   </span>
                 </label>
