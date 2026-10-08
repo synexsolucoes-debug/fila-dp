@@ -1015,7 +1015,12 @@ function ClosingsTable({
                 <small>{row.contractReference || row.contractorCode}</small>
               </th>
               <td>{money(row.baseAmount)}</td>
-              <td>{money(row.creditsAmount)}</td>
+              <td>
+                {money(row.creditsAmount)}
+                {/* O fixo do Caju entra no líquido sem passar pela nota; sem esta
+                    linha, base + créditos - descontos não fecha com o líquido. */}
+                {row.fixedCajuAmount > 0 && <small>+ {money(row.fixedCajuAmount)} fixo no Caju</small>}
+              </td>
               <td className={styles.negative}>{money(row.debitsAmount)}</td>
               <td><strong>{money(row.netAmount)}</strong></td>
               <td>

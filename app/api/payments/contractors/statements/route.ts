@@ -16,6 +16,7 @@ type ClosingRow = {
   invoice_expected_amount: string | number;
   complement_amount: string | number;
   caju_amount: string | number;
+  fixed_caju_amount: string | number;
   invoice_number: string;
   invoice_received_amount: string | number;
   invoice_status: string;
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
     if (!company) throw ApiError.notFound("Empresa não encontrada.", "COMPANY_NOT_FOUND");
 
     const closings = await d1.prepare(`SELECT c.id, c.provider_id, c.competence, c.base_amount, c.credits_amount,
-        c.debits_amount, c.net_amount, c.invoice_expected_amount, c.complement_amount, c.caju_amount,
+        c.debits_amount, c.net_amount, c.invoice_expected_amount, c.complement_amount, c.caju_amount, c.fixed_caju_amount,
         c.invoice_number, c.invoice_received_amount, c.invoice_status, a.code, a.legal_name, a.trade_name,
         a.tax_id, p.contract_reference, p.role_title
       FROM fdp_contractor_closings c
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
         invoiceExpectedAmount: Number(closing.invoice_expected_amount),
         complementAmount: Number(closing.complement_amount),
         cajuAmount: Number(closing.caju_amount),
+        fixedCajuAmount: Number(closing.fixed_caju_amount ?? 0),
         invoiceNumber: closing.invoice_number,
         invoiceReceivedAmount: Number(closing.invoice_received_amount),
         invoiceStatus: closing.invoice_status,

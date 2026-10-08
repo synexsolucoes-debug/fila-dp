@@ -160,6 +160,7 @@ export function normalizeContractorClosing(row: Row): ContractorClosing {
     complementAmount: number(pick(row, "complementAmount", "complement_amount")),
     complementMethod: text(pick(row, "complementMethod", "complement_method")) || "none",
     cajuAmount: number(pick(row, "cajuAmount", "caju_amount")),
+    fixedCajuAmount: number(pick(row, "fixedCajuAmount", "fixed_caju_amount")),
     status: text(row.status),
     invoiceNumber: text(pick(row, "invoiceNumber", "invoice_number")),
     invoiceReceivedAmount: number(pick(row, "invoiceReceivedAmount", "invoice_received_amount")),

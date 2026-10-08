@@ -54,6 +54,8 @@ export type ContractorClosing = {
   prorationEndDate: string; creditsAmount: number; debitsAmount: number; netAmount: number;
   invoiceLimitAmount: number | null; invoiceLimitSource: string; invoiceExpectedAmount: number;
   complementAmount: number; complementMethod: string; cajuAmount: number;
+  /** Valor fixo pago no Caju (vale alimentação, por exemplo), fora da nota. */
+  fixedCajuAmount: number;
   status: string; invoiceNumber: string; invoiceReceivedAmount: number; invoiceStatus: string;
   /** Situação da conferência da nota e o motivo do travamento, quando há um. */
   invoiceReviewStatus: string; invoicePaymentBlock: string;

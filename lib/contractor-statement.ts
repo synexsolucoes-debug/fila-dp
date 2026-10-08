@@ -48,6 +48,7 @@ const originLabels: Record<string, string> = {
   import: "IMPORTADO",
   integration: "INTEGRAÇÃO",
   contrato: "CONTRATO",
+  caju_fixo: "CAJU",
 };
 
 const number = (value: unknown) => Number(value ?? 0) || 0;

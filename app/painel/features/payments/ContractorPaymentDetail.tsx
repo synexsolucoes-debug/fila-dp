@@ -107,7 +107,7 @@ export function ContractorPaymentDetail({
 
   const credits = useMemo(() => detail.components.filter((item) => item.direction === "credit"), [detail.components]);
   const debits = useMemo(() => detail.components.filter((item) => item.direction === "debit"), [detail.components]);
-  const earnings = detail.closing.baseAmount + detail.closing.creditsAmount;
+  const earnings = detail.closing.baseAmount + detail.closing.creditsAmount + detail.closing.fixedCajuAmount;
   const prorated = detail.closing.prorationDays !== null && detail.closing.prorationTotalDays !== null;
   const locked = detail.closing.status === "closed" || detail.closing.status === "paid";
   const canEdit = detail.permissions.manage && !locked;
@@ -338,6 +338,15 @@ export function ContractorPaymentDetail({
                     </td>
                   </tr>
                   {rows(credits)}
+                  {detail.closing.fixedCajuAmount > 0 ? (
+                    <tr>
+                      <td>Valor fixo no Caju<small className={styles.detailRowMeta}>Pago no cartão, fora da nota fiscal</small></td>
+                      <td>Cadastro</td><td>Ativo</td><td>{money(detail.closing.fixedCajuAmount)}</td>
+                      <td className={styles.detailActions}>
+                        <span className={styles.detailActionHint}>Altere no cadastro do PJ</span>
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
