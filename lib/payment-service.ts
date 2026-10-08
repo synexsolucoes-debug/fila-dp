@@ -512,6 +512,40 @@ export async function upsertContractorClosing(d1: Database, input: {
 }
 
 /**
+ * Reapura os fechamentos abertos do prestador depois de mexer num valor fixo.
+ *
+ * O valor fixo só vira componente quando a competência é apurada. Sem isto,
+ * cadastrar o plano de saúde em agosto deixava setembro — já apurado — sem a
+ * linha: a vigência dizia que o desconto valia, e o fechamento seguia com o
+ * número antigo até alguém lembrar de reapurar. Fechamento concluído (fechado
+ * ou pago) e excluído continuam intocados, como no resto do módulo.
+ *
+ * Uma competência que não reapura não desfaz o cadastro já gravado: a recusa
+ * volta como linha explicada, e as demais competências seguem.
+ */
+export async function recalculateOpenContractorClosings(d1: Database, input: {
+  workspaceId: string; providerId: string; userId: string;
+}) {
+  const profile = await requireContractorProfile(d1, input.workspaceId, input.providerId);
+  const abertas = await d1.prepare(`SELECT payroll_cycle_id, company_id FROM fdp_contractor_closings
+    WHERE workspace_id = ? AND provider_id = ? AND status NOT IN ('closed', 'paid') AND excluded_at IS NULL`)
+    .bind(input.workspaceId, input.providerId)
+    .all<{ payroll_cycle_id: string; company_id: string }>();
+  const recalculated: { id: string; competence: string; netAmount: number }[] = [];
+  const failed: { competence: string; reason: string }[] = [];
+  for (const closing of abertas.results) {
+    const cycle = await requireCycle(d1, input.workspaceId, closing.company_id, closing.payroll_cycle_id);
+    try {
+      const result = await upsertContractorClosing(d1, { workspaceId: input.workspaceId, profile, cycle, userId: input.userId });
+      recalculated.push({ id: result.closingId, competence: cycle.competence, netAmount: result.calculation.netAmount });
+    } catch (error) {
+      failed.push({ competence: cycle.competence, reason: error instanceof Error ? error.message : "não foi possível reapurar" });
+    }
+  }
+  return { recalculated, failed };
+}
+
+/**
  * Cria um crédito ou desconto na competência do prestador.
  *
  * Compartilhado entre a interface interna e a API pública: a regra de

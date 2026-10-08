@@ -4,7 +4,7 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { readBatchEntries, readFixedItemInput } from "@/lib/contractor-input";
 import { fromCents } from "@/lib/payments";
-import { requireContractorProfile } from "@/lib/payment-service";
+import { recalculateOpenContractorClosings, requireContractorProfile } from "@/lib/payment-service";
 import { cleanText } from "@/lib/registrations";
 
 /**
@@ -12,7 +12,9 @@ import { cleanText } from "@/lib/registrations";
  *
  * A vigência pertence ao lançamento, não à competência atualmente aberta. Um
  * término informado torna a recorrência determinada; em branco, ela segue sem
- * prazo. A materialização continua idempotente no fechamento de cada mês.
+ * prazo. A materialização continua idempotente no fechamento de cada mês, e as
+ * competências do prestador já apuradas e ainda abertas são reapuradas na hora
+ * — senão o mês seguinte, apurado antes do cadastro, ficava sem o lançamento.
  */
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -60,7 +62,14 @@ export async function POST(request: Request) {
         requestId: request.headers.get("x-fila-dp-request-id"),
       }));
       await d1.batch(statements);
-      return Response.json({ created: created.length }, { status: 201 });
+      const recalculated = [];
+      const failed = [];
+      for (const providerId of new Set(entries.map((entry) => entry.providerId))) {
+        const result = await recalculateOpenContractorClosings(d1, { workspaceId: workspace.id, providerId, userId: user.id });
+        recalculated.push(...result.recalculated);
+        failed.push(...result.failed.map((item) => ({ ...item, providerId })));
+      }
+      return Response.json({ created: created.length, recalculated, failed }, { status: 201 });
     }
 
     const providerId = cleanText(body.providerId ?? body.contractorId, 120);
@@ -96,7 +105,8 @@ export async function POST(request: Request) {
       }),
     ]);
 
-    return Response.json({ fixedItem: { id: itemId, providerId } }, { status: 201 });
+    const { recalculated, failed } = await recalculateOpenContractorClosings(d1, { workspaceId: workspace.id, providerId, userId: user.id });
+    return Response.json({ fixedItem: { id: itemId, providerId }, recalculated, failed }, { status: 201 });
   } catch (error) {
     return apiError(error);
   }

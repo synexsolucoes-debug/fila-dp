@@ -2,7 +2,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { hasCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
-import { requireContractorProfile, requireCycle, upsertContractorClosing } from "@/lib/payment-service";
+import { recalculateOpenContractorClosings, requireContractorProfile } from "@/lib/payment-service";
 import { assertCompetence } from "@/lib/contractor-registry";
 import { readFixedItemEdit } from "@/lib/contractor-input";
 import { fromCents } from "@/lib/payments";
@@ -123,19 +123,9 @@ export async function PATCH(request: Request, { params }: Params) {
        correção só apareceria na próxima vez que alguém apurasse — e até lá a
        tela mostraria um número que ninguém mais reconhece. Competência fechada
        ou paga permanece imutável, como no resto do módulo. */
-    const profile = await requireContractorProfile(d1, workspace.id, id);
-    const abertas = await d1.prepare(`SELECT payroll_cycle_id, company_id FROM fdp_contractor_closings
-      WHERE workspace_id = ? AND provider_id = ? AND status NOT IN ('closed', 'paid') AND excluded_at IS NULL`)
-      .bind(workspace.id, id)
-      .all<{ payroll_cycle_id: string; company_id: string }>();
-    const recalculated = [];
-    for (const closing of abertas.results) {
-      const cycle = await requireCycle(d1, workspace.id, closing.company_id, closing.payroll_cycle_id);
-      const result = await upsertContractorClosing(d1, { workspaceId: workspace.id, profile, cycle, userId: user.id });
-      recalculated.push({ id: result.closingId, competence: cycle.competence, netAmount: result.calculation.netAmount });
-    }
+    const { recalculated, failed } = await recalculateOpenContractorClosings(d1, { workspaceId: workspace.id, providerId: id, userId: user.id });
 
-    return Response.json({ ok: true, recalculated });
+    return Response.json({ ok: true, recalculated, failed });
   } catch (error) {
     return apiError(error);
   }

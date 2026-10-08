@@ -833,8 +833,7 @@ test("lançamento recorrente e lançamento mensal podem ser corrigidos onde são
   // Encerrar continua sendo datar o fim, no mesmo verbo.
   assert.match(rota, /status = CASE WHEN \?::text IS NULL THEN status ELSE 'ended' END/u);
   // E a correção chega à folha sem esperar alguém apurar de novo.
-  assert.match(rota, /upsertContractorClosing/u);
-  assert.match(rota, /status NOT IN \('closed', 'paid'\)/u);
+  assert.match(rota, /recalculateOpenContractorClosings/u);
   /* Quem cria o recorrente pela tela de Pagamentos precisa poder corrigi-lo
      por lá: exigir a permissão do cadastro seria recusar o que o próprio
      usuário lançou. */
@@ -972,4 +971,20 @@ test("pagamento excluído volta pela reapuração daquele prestador, e não pela
   assert.match(api, /payload\.excludedClosings/u);
   assert.match(sections, /Pagamentos excluídos desta competência/u);
   assert.match(sections, /Restaurar e reapurar/u);
+});
+
+test("cadastrar fixo ou determinado reapura as competências abertas já apuradas", async () => {
+  const [servico, pagamentos, cadastro] = await Promise.all([
+    readFile(new URL("../lib/payment-service.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/payments/contractors/fixed-items/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/registrations/contractors/[id]/fixed-items/route.ts", import.meta.url), "utf8"),
+  ]);
+  /* Setembro apurado antes do plano de saúde ser cadastrado em agosto ficava
+     sem o desconto: o item só virava componente na próxima apuração. */
+  const helper = servico.slice(servico.indexOf("export async function recalculateOpenContractorClosings"));
+  assert.match(helper, /upsertContractorClosing/u);
+  assert.match(helper, /status NOT IN \('closed', 'paid'\) AND excluded_at IS NULL/u);
+  // Lote e lançamento único, pelas duas portas de cadastro.
+  assert.equal(pagamentos.match(/recalculateOpenContractorClosings\(/gu)?.length, 2);
+  assert.match(cadastro, /recalculateOpenContractorClosings\(/u);
 });
