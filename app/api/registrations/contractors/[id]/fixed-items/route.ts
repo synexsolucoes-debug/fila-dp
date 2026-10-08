@@ -2,7 +2,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { fromCents } from "@/lib/payments";
-import { requireContractorProfile } from "@/lib/payment-service";
+import { recalculateOpenContractorClosings, requireContractorProfile } from "@/lib/payment-service";
 import { readFixedItemInput } from "@/lib/contractor-input";
 
 type Params = { params: Promise<{ id: string }> };
@@ -53,7 +53,10 @@ export async function POST(request: Request, { params }: Params) {
       }),
     ]);
 
-    return Response.json({ fixedItem: { id: itemId } }, { status: 201 });
+    // Competência já apurada e ainda aberta recebe o item agora, e não só na
+    // próxima vez que alguém lembrar de reapurar.
+    const { recalculated, failed } = await recalculateOpenContractorClosings(d1, { workspaceId: workspace.id, providerId: id, userId: user.id });
+    return Response.json({ fixedItem: { id: itemId }, recalculated, failed }, { status: 201 });
   } catch (error) {
     return apiError(error);
   }
