@@ -35,6 +35,8 @@ export type ContractorStatement = {
     invoiceExpectedAmount: number;
     complementAmount: number;
     cajuAmount: number;
+    /** Valor fixo pago no Caju, fora da nota. Entra nos proventos do recibo. */
+    fixedCajuAmount?: number;
     invoiceNumber: string;
     invoiceReceivedAmount: number;
     invoiceStatus: string;
@@ -129,7 +131,15 @@ const activeComponents = (statement: ContractorStatement) =>
 
 export function contractorStatementTotals(statement: ContractorStatement) {
   const components = activeComponents(statement);
-  const credits = components.filter((component) => component.direction === "credit");
+  const fixedCaju = Number(statement.closing.fixedCajuAmount || 0);
+  /* O valor fixo do Caju não é componente da competência, mas é provento: sem
+     esta linha o recibo mostra proventos - descontos menor que o líquido. */
+  const credits = [
+    ...components.filter((component) => component.direction === "credit"),
+    ...(fixedCaju > 0
+      ? [{ direction: "credit", description: "Valor fixo no Caju", componentType: "fixed_caju", amount: fixedCaju, status: "active" }]
+      : []),
+  ];
   const debits = components.filter((component) => component.direction === "debit");
   return {
     credits,

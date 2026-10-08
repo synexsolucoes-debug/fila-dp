@@ -17,6 +17,7 @@ type ReceiptClosingRow = {
   invoice_expected_amount: string | number;
   complement_amount: string | number;
   caju_amount: string | number;
+  fixed_caju_amount: string | number;
   invoice_number: string;
   invoice_received_amount: string | number;
   invoice_status: string;
@@ -77,7 +78,7 @@ export async function POST(request: Request, { params }: Params) {
         .bind(workspace.id, payerCompanyId)
         .first<CompanyRow>(),
       d1.prepare(`SELECT c.id, c.competence, c.base_amount, c.credits_amount, c.debits_amount, c.net_amount,
-          c.invoice_expected_amount, c.complement_amount, c.caju_amount, c.invoice_number,
+          c.invoice_expected_amount, c.complement_amount, c.caju_amount, c.fixed_caju_amount, c.invoice_number,
           c.invoice_received_amount, c.invoice_status, a.code, a.legal_name, a.trade_name, a.tax_id,
           p.contract_reference, p.role_title
         FROM fdp_contractor_closings c
@@ -121,6 +122,7 @@ export async function POST(request: Request, { params }: Params) {
         invoiceExpectedAmount: Number(receiptClosing.invoice_expected_amount),
         complementAmount: Number(receiptClosing.complement_amount),
         cajuAmount: Number(receiptClosing.caju_amount),
+        fixedCajuAmount: Number(receiptClosing.fixed_caju_amount ?? 0),
         invoiceNumber: receiptClosing.invoice_number,
         invoiceReceivedAmount: Number(receiptClosing.invoice_received_amount),
         invoiceStatus: receiptClosing.invoice_status,

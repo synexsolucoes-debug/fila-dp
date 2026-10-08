@@ -117,7 +117,7 @@ test("o extrato liga contrato e prestador sem passar pela empresa", async () => 
      duas colunas em branco, sem erro nenhum. */
   assert.doesNotMatch(relatorios, /fdp_contractor_profiles p ON[^\n]*p\.company_id/u);
   assert.equal(
-    relatorios.split("LEFT JOIN fdp_contractor_profiles p ON").length - 1, 2,
-    "o extrato analítico precisa dos dois lados da união ligados ao contrato",
+    relatorios.split("LEFT JOIN fdp_contractor_profiles p ON").length - 1, 3,
+    "o extrato analítico precisa das três partes da união (base, lançamentos e fixo no Caju) ligadas ao contrato",
   );
 });

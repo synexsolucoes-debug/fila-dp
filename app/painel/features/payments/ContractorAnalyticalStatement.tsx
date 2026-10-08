@@ -54,7 +54,7 @@ export function ContractorAnalyticalStatement({
   );
 
   const totalEarnings =
-    detail.closing.baseAmount + detail.closing.creditsAmount;
+    detail.closing.baseAmount + detail.closing.creditsAmount + detail.closing.fixedCajuAmount;
 
   /* Quanto do desconto foi abatido de cada lado do pagamento.
      Sem isto, o resumo mostra "- R$ 59,93" e não diz de onde saiu — que é
@@ -128,6 +128,9 @@ export function ContractorAnalyticalStatement({
         decimal(item.amount),
         "",
       ]),
+      ...(detail.closing.fixedCajuAmount > 0
+        ? [["PROVENTO", "Valor fixo no Caju", decimal(detail.closing.fixedCajuAmount), "Caju"]]
+        : []),
       ["", "TOTAL DE PROVENTOS", decimal(totalEarnings)],
       [],
       ...debits.map((item) => [
@@ -217,6 +220,9 @@ export function ContractorAnalyticalStatement({
         <article>
           <span>Total de proventos</span>
           <strong>{money(totalEarnings)}</strong>
+          {detail.closing.fixedCajuAmount > 0 ? (
+            <small>inclui {money(detail.closing.fixedCajuAmount)} fixo no Caju</small>
+          ) : null}
         </article>
 
         <article data-tone="debit">

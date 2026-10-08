@@ -133,6 +133,69 @@ test("diferença fixa do PJ vai para Caju sem aumentar a nota fiscal", () => {
   assert.equal(caju.cajuAmount, 1250, "diferença fixa e excedente regular seguem juntos para o Caju");
 });
 
+test("vale fixo no Caju junto com a diferença do limite: desconto no complemento sai do Caju, não da nota", () => {
+  // Líquido dentro do limite: a única coisa no complemento é o vale fixo.
+  const dentroDoLimite = calculateContractorClosing({
+    baseAmount: 3000,
+    components: [{ direction: "debit", amount: 200, settlementTarget: "complement" }],
+    invoiceLimit: limit(3000),
+    complementMethod: "caju_saldo_livre",
+    fixedCajuAmount: 800,
+  });
+  assert.equal(dentroDoLimite.invoiceExpectedAmount, 3000, "o desconto no complemento não pode reduzir a nota");
+  assert.equal(dentroDoLimite.complementAmount, 600);
+  assert.equal(dentroDoLimite.cajuAmount, 600);
+  assert.equal(dentroDoLimite.netAmount, 3600);
+  assert.equal(dentroDoLimite.fixedCajuAmount, 800);
+
+  // Vale fixo e diferença do limite juntos: o desconto consome primeiro a
+  // diferença do limite e depois o vale.
+  const acimaDoLimite = calculateContractorClosing({
+    baseAmount: 3100,
+    components: [{ direction: "debit", amount: 250, settlementTarget: "complement" }],
+    invoiceLimit: limit(3000),
+    complementMethod: "manual_transfer",
+    fixedCajuAmount: 800,
+  });
+  assert.equal(acimaDoLimite.invoiceExpectedAmount, 3000);
+  assert.equal(acimaDoLimite.complementAmount, 650);
+  assert.equal(acimaDoLimite.cajuAmount, 650, "a diferença do limite foi consumida; o que resta no Caju é o vale");
+  assert.equal(acimaDoLimite.netAmount, 3650);
+
+  // Desconto maior que o complemento inteiro: só o que sobra cai na nota.
+  const maiorQueOComplemento = calculateContractorClosing({
+    baseAmount: 3000,
+    components: [{ direction: "debit", amount: 1000, settlementTarget: "complement" }],
+    invoiceLimit: limit(3000),
+    complementMethod: "caju_saldo_livre",
+    fixedCajuAmount: 800,
+  });
+  assert.equal(maiorQueOComplemento.cajuAmount, 0);
+  assert.equal(maiorQueOComplemento.invoiceExpectedAmount, 2800);
+  assert.equal(maiorQueOComplemento.netAmount, 2800);
+
+  // Sem incidência escolhida, o vale fica intacto e o desconto reduz a nota.
+  const automatico = calculateContractorClosing({
+    baseAmount: 3000,
+    components: [{ direction: "debit", amount: 200 }],
+    invoiceLimit: limit(3000),
+    complementMethod: "caju_saldo_livre",
+    fixedCajuAmount: 800,
+  });
+  assert.equal(automatico.invoiceExpectedAmount, 2800);
+  assert.equal(automatico.cajuAmount, 800);
+
+  // Em todos os casos a nota mais o complemento fecham o líquido, e o líquido
+  // é base + créditos - descontos + vale fixo.
+  for (const result of [dentroDoLimite, acimaDoLimite, maiorQueOComplemento, automatico]) {
+    assert.equal(Math.round((result.invoiceExpectedAmount + result.complementAmount) * 100), Math.round(result.netAmount * 100));
+    assert.equal(
+      Math.round((result.baseAmount + result.creditsAmount - result.debitsAmount + result.fixedCajuAmount) * 100),
+      Math.round(result.netAmount * 100),
+    );
+  }
+});
+
 test("exemplo 2 da especificação: líquido abaixo do limite não gera complemento", () => {
   const result = calculateContractorClosing({
     baseAmount: 5000,

@@ -121,9 +121,26 @@ export const reports = {
         -- PDF contem a mesma história: divergir entre formatos do mesmo
         -- relatório é pior do que o próprio excesso de linhas.
         WHERE k.workspace_id = ? AND k.competence = ? AND c.excluded_at IS NULL AND k.status <> 'canceled'
+        UNION ALL
+        -- O valor fixo pago no Caju (vale alimentação, por exemplo) não é
+        -- lançamento da competência, mas entra no total apurado. Sem esta
+        -- linha, proventos - descontos não fecha com o líquido.
+        SELECT a.code AS codigo, a.legal_name AS prestador, a.tax_id AS cnpj, coalesce(p.contract_reference, '') AS contrato,
+          coalesce(p.role_title, '') AS funcao, c.competence AS competencia,
+          'PROVENTO' AS tipo, 'Valor fixo no Caju' AS rubrica, 1::numeric(18, 4) AS quantidade, c.fixed_caju_amount AS valor,
+          'caju_fixo' AS origem, '' AS documento, 'active' AS situacao,
+          c.base_amount AS valor_contrato, c.net_amount AS total_apurado, c.invoice_expected_amount AS nf_esperada,
+          c.invoice_limit_amount AS limite_nf, c.invoice_limit_source AS origem_limite,
+          c.complement_amount AS complemento, c.complement_method AS forma_complemento,
+          c.invoice_status AS status_nf, c.status AS status_fechamento,
+          c.company_id, 1 AS ordem
+        FROM fdp_contractor_closings c
+        JOIN fdp_auxiliary_providers a ON a.workspace_id = c.workspace_id AND a.id = c.provider_id
+        LEFT JOIN fdp_contractor_profiles p ON p.workspace_id = c.workspace_id AND p.provider_id = c.provider_id
+        WHERE c.workspace_id = ? AND c.competence = ? AND c.excluded_at IS NULL AND c.fixed_caju_amount > 0
       ) t WHERE true`,
-    /* A união menciona grupo e competência uma vez de cada lado. */
-    paramPairs: 2,
+    /* A união menciona grupo e competência uma vez em cada parte. */
+    paramPairs: 3,
     companyColumn: "t.company_id",
     order: "ORDER BY t.prestador, t.ordem, t.rubrica",
   },

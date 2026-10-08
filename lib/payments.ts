@@ -11,7 +11,7 @@ import { cleanText } from "./registrations.ts";
  * isoladamente, e os fechamentos guardam a versão usada no cálculo.
  */
 export const PSYCHOLOGY_CALC_VERSION = "psychology-payment-1.0.0";
-export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.3.0";
+export const CONTRACTOR_CALC_VERSION = "contractor-payment-1.4.0";
 
 const MAX_MONEY = 1_000_000_000;
 
@@ -458,8 +458,12 @@ export function calculateContractorBaseProration(input: {
  *   1. líquido regular = base + créditos - descontos
  *   2. nota fiscal     = mínimo(líquido regular sem os descontos direcionados,
  *                       limite configurado) - descontos direcionados à nota
- *   3. complemento     = líquido regular - nota + diferença fixa do Caju
- *   4. Caju            = diferença fixa + complemento regular quando o meio for Caju
+ *   3. complemento     = diferença do limite + diferença fixa do Caju
+ *                       - descontos direcionados ao complemento
+ *   4. Caju            = diferença fixa + diferença do limite quando o meio for Caju
+ *
+ * O desconto direcionado ao complemento consome, nesta ordem, a diferença do
+ * limite, a diferença fixa do Caju e, só então, a nota.
  *
  * Inverter os passos 1 e 2 produz nota e complemento errados; os testes
  * cobrem explicitamente os exemplos da especificação do produto.
@@ -498,7 +502,6 @@ export function calculateContractorClosing(input: {
   // 1. líquido regular — créditos e descontos SEMPRE antes do limite da nota.
   // A diferença fixa do Caju é uma obrigação adicional e não participa da nota.
   const regularNetCents = baseCents + creditsCents - debitsCents;
-  const regularPayableCents = Math.max(regularNetCents, 0);
 
   // 2. nota fiscal esperada, calculada apenas sobre o líquido regular.
   //
@@ -510,17 +513,29 @@ export function calculateContractorClosing(input: {
   const limitCents = input.invoiceLimit.amount === null ? null : toCents(input.invoiceLimit.amount, "Limite da nota");
   const beforeTargetedCents = Math.max(baseCents + creditsCents - autoDebitsCents, 0);
   const cappedInvoiceCents = limitCents === null ? beforeTargetedCents : Math.min(beforeTargetedCents, limitCents);
-  // A nota nunca passa do líquido devido nem fica negativa: um desconto maior
-  // que a própria nota zera a nota e o que sobrar dele vem do complemento, que
-  // é o único lugar que resta.
-  const invoiceCents = Math.min(Math.max(cappedInvoiceCents - invoiceDebitsCents, 0), regularPayableCents);
+  // A nota nunca fica negativa: o que sobrar de um desconto maior que a
+  // própria nota é cobrado do lado do complemento, junto com os descontos
+  // direcionados a ele.
+  const invoiceAfterDebitsCents = Math.max(cappedInvoiceCents - invoiceDebitsCents, 0);
+  const complementSideDebitsCents = complementDebitsCents + Math.max(invoiceDebitsCents - cappedInvoiceCents, 0);
 
-  // 3. complemento total e 4. Caju. A diferença fixa sempre vai para o Caju;
-  // o excedente regular só vai para lá quando essa for a forma configurada.
-  const regularComplementCents = Math.max(regularPayableCents - invoiceCents, 0);
-  const payableCents = regularPayableCents + fixedCajuCents;
-  const complementCents = regularComplementCents + fixedCajuCents;
-  const cajuCents = fixedCajuCents
+  // 3. complemento. O desconto que vai para o complemento sai primeiro da
+  // diferença do limite, depois da diferença fixa do Caju e, só se ainda
+  // sobrar, da nota. Antes a diferença fixa ficava fora dessa conta: quem
+  // tinha vale fixo no Caju e líquido dentro do limite via o desconto
+  // "no complemento (Caju)" sair da nota fiscal, com o Caju intacto.
+  const limitDifferenceCents = beforeTargetedCents - cappedInvoiceCents;
+  const regularComplementCents = Math.max(limitDifferenceCents - complementSideDebitsCents, 0);
+  const afterLimitDifferenceCents = Math.max(complementSideDebitsCents - limitDifferenceCents, 0);
+  const fixedCajuPaidCents = Math.max(fixedCajuCents - afterLimitDifferenceCents, 0);
+  const afterFixedCajuCents = Math.max(afterLimitDifferenceCents - fixedCajuCents, 0);
+  const invoiceCents = Math.max(invoiceAfterDebitsCents - afterFixedCajuCents, 0);
+
+  // 4. Caju. A diferença fixa sempre vai para o Caju; a diferença do limite só
+  // vai para lá quando essa for a forma configurada.
+  const complementCents = regularComplementCents + fixedCajuPaidCents;
+  const payableCents = invoiceCents + complementCents;
+  const cajuCents = fixedCajuPaidCents
     + (input.complementMethod === "caju_saldo_livre" ? regularComplementCents : 0);
 
   return {
