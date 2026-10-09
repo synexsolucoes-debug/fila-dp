@@ -23,7 +23,14 @@ export async function GET(request: Request) {
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
     const where = ["p.workspace_id = ?"]; const values: unknown[] = [workspace.id];
     const search = cleanText(url.searchParams.get("search"), 120);
-    if (search) { where.push("p.name ILIKE ?"); values.push(`%${search}%`); }
+    // O nome não basta para quem está em campo: o código lido de uma etiqueta ou
+    // de um QR é o código interno ou o CA, e procurar por ele no nome não acha
+    // nada. Um campo de busca que cobre os três deixa a leitura de código ser um
+    // atalho da mesma caixa, em vez de exigir que a pessoa saiba qual é qual.
+    if (search) {
+      where.push("(p.name ILIKE ? OR p.internal_code ILIKE ? OR p.ca_number ILIKE ?)");
+      values.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
     for (const [param, column] of [["ca", "p.ca_number"], ["size", "p.size"], ["status", "p.status"], ["type", "p.epi_type"], ["reason", "p.registration_reason"]] as const) {
       const value = cleanText(url.searchParams.get(param), 60);
       if (value) { where.push(`${column} = ?`); values.push(value); }

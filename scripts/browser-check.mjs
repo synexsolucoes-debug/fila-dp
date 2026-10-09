@@ -50,7 +50,32 @@ const formatConsole = (message) => {
   const texto = message.text().slice(0, 160);
   return url && !texto.includes(url) ? `${texto} [${url.replace(base, "")}]` : texto;
 };
-page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(formatConsole(message)); });
+
+/**
+ * Falha de recurso que a própria verificação provoca e já cobra por conta.
+ *
+ * O ambiente de verificação não tem armazenamento de anexos conectado, então o
+ * envio do termo de entrega responde 503 — e o navegador registra a linha de
+ * recurso no console. Isso não é erro de JavaScript, e o bloco do aplicativo de
+ * campo cobra explicitamente o comportamento do produto nesse caso: a entrega
+ * vale, o termo fica na fila, e a tela diz o motivo. A exceção é estreita de
+ * propósito — esse status, nessa rota. Qualquer outra falha de recurso continua
+ * reprovando, que é onde está o valor da verificação.
+ */
+const falhaProvocada = (message) => {
+  const texto = message.text();
+  if (!/Failed to load resource/u.test(texto) || !/\b503\b/u.test(texto)) return false;
+  const url = message.location()?.url ?? "";
+  // Sem URL no registro, o texto é a única pista; o 503 só nasce dessa rota
+  // neste ensaio, e qualquer outro passaria a aparecer aqui para ser olhado.
+  return url ? url.includes("/api/epi/attachments") : true;
+};
+
+page.on("console", (message) => {
+  if (message.type() !== "error") return;
+  if (falhaProvocada(message)) return;
+  consoleErrors.push(formatConsole(message));
+});
 page.on("pageerror", (error) => consoleErrors.push(`pageerror: ${String(error).slice(0, 160)}`));
 
 // Respostas de erro que o navegador recebeu, na ordem: é o rastro que
@@ -934,6 +959,334 @@ for (const width of widths) {
   await page.waitForTimeout(2500);
   const naListagem = await page.getByText(ca, { exact: false }).count();
   record("o EPI cadastrado aparece no estoque", naListagem > 0, `${naListagem} ocorrência(s)`);
+}
+
+// Aplicativo de campo (/campo) — entrega com assinatura, em 390px.
+//
+// É a mesma razão do bloco acima, levada ao fluxo que acontece longe da mesa.
+// A tela de campo debita estoque, colhe assinatura e anexa o termo; nada disso
+// se prova sem passar pelos passos como quem está no galpão passa. E há uma
+// armadilha específica aqui: o saldo exibido tem de ser o do local escolhido,
+// porque a entrega debita um local só — mostrar o total do grupo ofereceria
+// unidades que não estão ali, e a recusa chegaria depois da assinatura.
+{
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  // O preparo usa as rotas reais do produto: um colaborador e um EPI próprios,
+  // com selo no nome, para o ensaio não depender de dado de outra execução.
+  const stamp = Date.now().toString().slice(-6);
+  const employeeName = `Joana de Campo ${stamp}`;
+  const setup = await page.evaluate(async ({ stamp, employeeName }) => {
+    const post = async (url, body) => {
+      const response = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      return { status: response.status, data: await response.json().catch(() => ({})) };
+    };
+    const companies = await (await fetch("/api/companies")).json();
+    const company = (companies.companies ?? []).find((item) => item.status === "active") ?? companies.companies?.[0];
+    const places = await (await fetch("/api/epi/stock/locations")).json();
+    const location = (places.locations ?? [])[0];
+    const employee = await post("/api/employees", {
+      companyId: company?.id, registrationNumber: `MC-${stamp}`, fullName: employeeName,
+      admissionDate: "2026-01-15", employmentStatus: "active",
+    });
+    const product = await post("/api/epi/products", {
+      name: "Luva de proteção mecânica", epiType: "upper_limbs", caNumber: `CA-CAMPO-${stamp}`,
+      size: "G", brand: "Marca do ensaio", model: "Modelo do ensaio", unitValue: 23.5,
+      stockQuantity: 10, stockLocationId: location?.id, internalCode: `INT-CAMPO-${stamp}`,
+      // Catálogo é "ativo/inativo": `in_stock` é estado de peça, não de modelo,
+      // e o CHECK da 0062 recusa o vocabulário trocado.
+      registeredOn: new Date().toISOString().slice(0, 10), status: "active",
+      registrationReason: "initial_purchase", notes: "Criado pela verificação de navegador.",
+    });
+    // Roteamento SESMT → DP. A análise de desconto abre demanda, e o produto
+    // exige uma área ativa responsável antes de abrir — com razão: demanda sem
+    // dono fica sem quem responda. Sem configurar isto, o passo do dano reprova
+    // por falta de preparo e não por defeito.
+    const areasPayload = await (await fetch("/api/areas")).json();
+    const areas = areasPayload.areas ?? [];
+    const comRoteamento = areas.find((item) =>
+      (item.module_keys ?? []).includes("epi.discount_analysis"));
+    let roteamento = comRoteamento ? 200 : 0;
+    if (!comRoteamento) {
+      const alvo = areas.find((item) => item.status === "active") ?? areas[0];
+      const chaves = ["epi.owner", "epi.discount_analysis"];
+      if (alvo) {
+        const response = await fetch(`/api/areas/${alvo.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: alvo.name, code: alvo.code, description: alvo.description ?? "",
+            managerUserId: alvo.manager_user_id ?? "", color: alvo.color ?? "#475569",
+            icon: alvo.icon ?? "building-2", defaultSlaDays: alvo.default_sla_days ?? 3,
+            status: "active",
+            moduleKeys: [...new Set([...(alvo.module_keys ?? []), ...chaves])],
+          }),
+        });
+        roteamento = response.status;
+      } else {
+        const response = await fetch("/api/areas", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "SESMT do ensaio", code: `SESMT${stamp}`, moduleKeys: chaves }),
+        });
+        roteamento = response.status;
+      }
+    }
+
+    return { company: company?.id, location: location?.id, employee, product, roteamento };
+  }, { stamp, employeeName });
+  record("o preparo do ensaio de campo cria colaborador e EPI pelas rotas do produto",
+    setup.employee.status === 201 && setup.product.status === 201,
+    `colaborador ${setup.employee.status} · EPI ${setup.product.status}`);
+  record("o roteamento SESMT → DP está configurado para a análise de desconto",
+    setup.roteamento === 200 || setup.roteamento === 201, `HTTP ${setup.roteamento}`);
+
+  await page.goto(`${base}/campo`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2500);
+  record("o aplicativo de campo abre com as ações do turno",
+    await page.getByRole("button", { name: /Entregar EPI/u }).count() > 0);
+  const campoOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  record("o aplicativo de campo não rola na horizontal em 390px", campoOverflow <= 1, `sobra ${campoOverflow}px`);
+  record("o aplicativo de campo é instalável (manifesto servido)",
+    await page.evaluate(async () => (await fetch("/manifest.webmanifest")).ok));
+
+  // Empresa e local são escolhidos de propósito: o padrão da tela vem da ordem
+  // do painel geral, que não é a ordem usada no preparo.
+  await page.getByLabel("EMPRESA").selectOption(setup.company).catch(() => undefined);
+  await page.getByLabel("LOCAL DE ESTOQUE").selectOption(setup.location).catch(() => undefined);
+  await page.getByRole("button", { name: /Entregar EPI/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(800);
+
+  await page.getByLabel("Buscar colaborador").fill(employeeName).catch(() => undefined);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2000);
+  const naLista = page.getByRole("button", { name: new RegExp(employeeName, "u") });
+  if (await naLista.count()) await naLista.first().click();
+  await page.waitForTimeout(1500);
+  record("a busca de colaborador em campo acha quem acabou de ser admitido",
+    await page.getByRole("heading", { name: /Qual EPI\?/u }).count() > 0);
+
+  // A lista inicial mostra o saldo do local. Confere-se antes de buscar: busca
+  // com um só resultado avança sozinha e a lista sai da tela.
+  record("o saldo exibido em campo é o do local escolhido, não o total do grupo",
+    await page.getByText(/neste local/u).count() > 0);
+
+  const internalCode = setup.product.data?.product?.internalCode ?? "";
+  await page.getByLabel("Buscar EPI").fill(internalCode).catch(() => undefined);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2000);
+  record("o EPI é encontrado pelo código interno, como no crachá da etiqueta",
+    await page.getByText("Luva de proteção mecânica").count() > 0, internalCode);
+
+  const canvas = page.locator('canvas[aria-label="Área de assinatura do colaborador"]');
+  if (await canvas.count()) {
+    const box = await canvas.boundingBox();
+    await page.mouse.move(box.x + 40, box.y + 90);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 120, box.y + 50, { steps: 8 });
+    await page.mouse.move(box.x + 200, box.y + 120, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(600);
+    record("a assinatura no dedo registra traço no campo de assinatura",
+      await page.getByText("Assinatura capturada").count() > 0);
+  } else record("a assinatura no dedo registra traço no campo de assinatura", false, "canvas ausente");
+
+  await page.getByRole("button", { name: /Confirmar entrega/u }).first().click().catch(() => undefined);
+  // O recado da tela vive pouco mais de quatro segundos: espera-se o elemento,
+  // não o relógio, para não ler a tela depois que o aviso saiu.
+  const aviso = page.locator('[role="status"]').filter({ hasText: /registrada|guardada|não subiu/u }).first();
+  const recado = await aviso.innerText({ timeout: 20000 })
+    .then((text) => text.replace(/\s+/gu, " ").trim()).catch(() => "");
+  record("a tela de campo confirma o que aconteceu com a entrega", recado.length > 0, recado.slice(0, 140));
+
+  const proof = await page.evaluate(async ({ employeeId, productId, code }) => {
+    const deliveries = await (await fetch(`/api/epi/deliveries?employeeId=${employeeId}&limit=10`)).json();
+    const delivery = (deliveries.deliveries ?? []).find((row) => row.product_id === productId);
+    const attachments = delivery
+      ? await (await fetch(`/api/epi/attachments?entityType=delivery&entityId=${delivery.id}`)).json()
+      : null;
+    const products = await (await fetch(`/api/epi/products?search=${encodeURIComponent(code)}&limit=5`)).json();
+    return {
+      status: delivery?.status,
+      signature: delivery?.signature_name,
+      kinds: (attachments?.attachments ?? []).map((item) => item.attachment_kind),
+      balance: (products.products ?? [])[0]?.available_quantity,
+    };
+  }, {
+    employeeId: setup.employee.data?.employee?.id,
+    productId: setup.product.data?.product?.id,
+    code: internalCode,
+  });
+  record("a entrega feita em campo chega ao banco como termo assinado",
+    proof.status === "signed" && proof.signature === employeeName,
+    `status ${proof.status} · assinatura ${proof.signature}`);
+  record("a entrega em campo debita o estoque do local de 10 para 9",
+    Number(proof.balance) === 9, `saldo ${proof.balance}`);
+
+  // O anexo depende de armazenamento de Blob conectado ao projeto. Onde ele
+  // existe, o termo tem de estar lá. Onde não existe — o ambiente de CI é um —,
+  // o que se cobra é o comportamento que o produto promete nessa situação: a
+  // entrega vale, o termo fica na fila, e a tela diz isso em vez de mandar
+  // colher a assinatura de novo. Pular a verificação em silêncio deixaria o
+  // caminho mais delicado do aplicativo sem nenhuma prova.
+  if (proof.kinds.includes("delivery_term")) {
+    record("o termo assinado fica anexado à entrega", true);
+  } else {
+    record("sem armazenamento de anexos, a tela diz que só o termo ficou pendente",
+      /não subiu/u.test(recado), recado.slice(0, 140));
+    await page.getByRole("button", { name: /aguardando envio/u }).first().click().catch(() => undefined);
+    await page.waitForTimeout(800);
+    const queueText = (await page.locator("body").innerText()).replace(/\s+/gu, " ");
+    record("a fila de campo separa registro pendente de evidência pendente",
+      /Registro já gravado no servidor/u.test(queueText), queueText.slice(0, 160));
+    record("o motivo da falha do anexo chega à tela, e não só ao log",
+      /armazenamento de anexos não está configurado/u.test(queueText), queueText.slice(0, 160));
+  }
+
+  // Consulta: o que está em poder de quem. É a tela que o técnico abre antes de
+  // entregar, para não entregar o que a pessoa já tem.
+  await page.goto(`${base}/campo`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  await page.getByLabel("EMPRESA").selectOption(setup.company).catch(() => undefined);
+  await page.getByLabel("LOCAL DE ESTOQUE").selectOption(setup.location).catch(() => undefined);
+  await page.getByRole("button", { name: /Consultar colaborador/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(800);
+  await page.getByLabel("Buscar colaborador").fill(employeeName).catch(() => undefined);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2500);
+  const consulta = (await page.locator("body").innerText()).replace(/\s+/gu, " ");
+  record("a consulta em campo mostra o EPI que está em poder do colaborador",
+    consulta.includes("Luva de proteção mecânica"), consulta.slice(0, 160));
+
+  // Devolução: a condição escolhida é o que decide o destino do equipamento.
+  // "Devolvido higienizado" devolve ao estoque do local, e é isso que se mede —
+  // o saldo voltar a 10 prova que a condição foi aplicada, não só gravada.
+  await page.goto(`${base}/campo`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  await page.getByLabel("EMPRESA").selectOption(setup.company).catch(() => undefined);
+  await page.getByLabel("LOCAL DE ESTOQUE").selectOption(setup.location).catch(() => undefined);
+  await page.getByRole("button", { name: /Receber devolução/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(800);
+  await page.getByLabel("Buscar colaborador").fill(employeeName).catch(() => undefined);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2500);
+  await page.getByRole("button", { name: /Luva de proteção mecânica/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(1000);
+  await page.getByRole("radio", { name: /^Devolvido higienizado$/u }).first().click().catch(() => undefined);
+  await page.getByRole("button", { name: /Confirmar devolução/u }).first().click().catch(() => undefined);
+  const avisoDevolucao = await page.locator('[role="status"]').filter({ hasText: /registrada|guardada/u })
+    .first().innerText({ timeout: 20000 }).then((t) => t.replace(/\s+/gu, " ").trim()).catch(() => "");
+  record("a devolução feita em campo é confirmada na tela", avisoDevolucao.length > 0, avisoDevolucao.slice(0, 140));
+
+  const aposDevolucao = await page.evaluate(async ({ code, employeeId }) => {
+    const products = await (await fetch(`/api/epi/products?search=${encodeURIComponent(code)}&limit=5`)).json();
+    const returns = await (await fetch(`/api/epi/returns?employeeId=${employeeId}&limit=5`)).json();
+    return {
+      balance: (products.products ?? [])[0]?.available_quantity,
+      condition: (returns.returns ?? [])[0]?.epi_condition,
+    };
+  }, { code: internalCode, employeeId: setup.employee.data?.employee?.id });
+  record("a devolução higienizada devolve a unidade ao estoque do local",
+    Number(aposDevolucao.balance) === 10, `saldo ${aposDevolucao.balance}`);
+  record("a condição escolhida na tela é a que fica gravada",
+    aposDevolucao.condition === "returned_sanitized", `condição ${aposDevolucao.condition}`);
+
+  // Dano com foto. Precisa de algo em poder do colaborador, e a devolução acima
+  // devolveu tudo — então a entrega de apoio vem pela API, como o preparo.
+  const apoio = await page.evaluate(async ({ companyId, locationId, productId, employeeId }) => {
+    const response = await fetch("/api/epi/deliveries", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId, productId, employeeId, stockLocationId: locationId,
+        deliveredOn: new Date().toISOString().slice(0, 10), quantity: 1,
+        deliveryReason: "first_delivery", status: "pending_signature",
+      }),
+    });
+    return response.status;
+  }, {
+    companyId: setup.company, locationId: setup.location,
+    productId: setup.product.data?.product?.id,
+    employeeId: setup.employee.data?.employee?.id,
+  });
+  record("a entrega de apoio ao ensaio de dano é aceita", apoio === 201, `HTTP ${apoio}`);
+
+  // A evidência entra por `<input type="file">`, que é o mesmo caminho da câmera
+  // do aparelho — `setInputFiles` entrega o arquivo que a câmera entregaria.
+  await page.goto(`${base}/campo`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  await page.getByLabel("EMPRESA").selectOption(setup.company).catch(() => undefined);
+  await page.getByLabel("LOCAL DE ESTOQUE").selectOption(setup.location).catch(() => undefined);
+  await page.getByRole("button", { name: /Registrar dano/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(800);
+  await page.getByLabel("Buscar colaborador").fill(employeeName).catch(() => undefined);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2500);
+  await page.getByRole("button", { name: /Luva de proteção mecânica/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(1000);
+
+  // PNG mínimo válido, montado aqui: o ensaio não depende de arquivo no disco.
+  const pixel = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+    "base64");
+  await page.locator('input[type="file"]').first()
+    .setInputFiles({ name: "dano.png", mimeType: "image/png", buffer: pixel }).catch(() => undefined);
+  await page.waitForTimeout(500);
+  record("a foto da evidência é aceita e anunciada na tela",
+    await page.getByText(/Foto anexada à ocorrência/u).count() > 0);
+
+  // A descrição é obrigatória no servidor. A tela precisa cobrar antes de
+  // mandar — é a classe de defeito que já chegou ao cliente neste módulo.
+  // O botão de gravar se chama "Registrar dano", como a ação da tela inicial —
+  // daí a busca pelo último, que é o da barra de ação deste passo.
+  const gravarDano = page.getByRole("button", { name: /^Registrar dano$/u }).last();
+  await gravarDano.click().catch(() => undefined);
+  await page.waitForTimeout(1200);
+  const semDescricao = await page.locator('[role="alert"]').filter({ hasText: /Descreva/u }).count();
+  record("a tela cobra a descrição do dano antes de mandar ao servidor", semDescricao > 0);
+
+  await page.locator("textarea").first().fill("Luva rasgada no manuseio de chapa durante o turno.").catch(() => undefined);
+  // Motivo e decisão são listas com papel de rádio, não botões: a tela diz o que
+  // cada controle é, e a verificação precisa pedir pelo papel certo.
+  await page.getByRole("radio", { name: /^Uso inadequado$/u }).first().click().catch(() => undefined);
+  await page.getByRole("radio", { name: /^Enviar para análise de desconto$/u }).first().click().catch(() => undefined);
+  await page.waitForTimeout(400);
+  // A consequência precisa estar escrita antes de confirmar, e precisa dizer
+  // que nada é descontado ali — é a regra que governa o módulo.
+  const consequencia = (await page.locator("body").innerText()).replace(/\s+/gu, " ");
+  record("a tela avisa que a análise de desconto é demanda do DP, e não desconto",
+    /Nenhum valor é descontado aqui/u.test(consequencia));
+
+  await gravarDano.click().catch(() => undefined);
+  const avisoDano = await page.locator('[role="status"]').filter({ hasText: /registrado|guardada|não subiu/u })
+    .first().innerText({ timeout: 20000 }).then((t) => t.replace(/\s+/gu, " ").trim()).catch(() => "");
+  // Quando falha, o que interessa é o motivo: a recusa do servidor aparece no
+  // banner do fluxo, e sem ela a reprovação manda alguém procurar no escuro.
+  const recusaDano = await page.locator('[role="alert"]').filter({ hasText: /\S/u }).first()
+    .innerText().then((t) => t.replace(/\s+/gu, " ").trim()).catch(() => "");
+  record("o dano registrado em campo é confirmado na tela", avisoDano.length > 0,
+    avisoDano.slice(0, 140) || recusaDano.slice(0, 180));
+
+  const danoNoBanco = await page.evaluate(async ({ employeeId }) => {
+    const payload = await (await fetch(`/api/epi/damages?employeeId=${employeeId}&limit=5`)).json();
+    const row = (payload.damages ?? [])[0];
+    const discounts = await (await fetch("/api/epi/discounts?limit=5")).json();
+    return {
+      motivo: row?.damage_reason,
+      decisao: row?.decision,
+      // `demand_title` é o título do cartão de demanda que a análise abriu — é
+      // ali que a regra do módulo se verifica, não num campo da própria
+      // solicitação.
+      titulos: (discounts.discounts ?? []).map((item) => String(item.demand_title ?? "")),
+    };
+  }, { employeeId: setup.employee.data?.employee?.id });
+  record("o dano chega ao banco com o motivo e a decisão escolhidos",
+    danoNoBanco.motivo === "misuse" && danoNoBanco.decisao === "send_to_discount_analysis",
+    `motivo ${danoNoBanco.motivo} · decisão ${danoNoBanco.decisao}`);
+  record("a decisão de análise abre a demanda de desconto com o título da regra",
+    danoNoBanco.titulos.some((titulo) => titulo.startsWith("Analisar possível desconto de EPI")),
+    danoNoBanco.titulos.join(" | ").slice(0, 160));
+
+  await page.setViewportSize({ width: 1440, height: 900 });
 }
 
 // A marca precisa aparecer como arquivo oficial, e em branco sobre fundo escuro.
