@@ -1,0 +1,333 @@
+/* Vinculato Campo.
+ *
+ * Dimensionado para uma mão, de luva: alvo mínimo de 48px, contraste alto,
+ * nenhuma cor inventada aqui — os valores são os mesmos do produto, escritos
+ * como reserva dos tokens semânticos.
+ *
+ * A paleta acompanha a central de comando, e a reserva precisa estar do mesmo
+ * lado dela. Isso não é detalhe de estilo: os tokens de superfície e de texto
+ * chegam aqui porque moram em `:root`, mas **o quarteto de acento mora em
+ * `.dashboard-shell`** — e esta rota não é o painel. Com reserva clara, a tela
+ * montava fundo escuro com acento de tema claro: a varredura WCAG mediu 2.28:1
+ * no "Trocar" e 2.72:1 no "Limpar". Paleta meio resolvida é pior que paleta
+ * trocada, porque cada metade parece certa sozinha.
+ *
+ * Os valores de reserva são exatamente os de `.dashboard-shell.theme-dark`.
+ * Repetidos, sim — mas repetidos de propósito e com a origem nomeada, até que
+ * o acento suba para `:root` como o resto já subiu.
+ */
+.app {
+  --f-accent: var(--ui-accent, #365cf5);
+  --f-accent-text: var(--ui-accent-text, #b9c8ff);
+  --f-on-accent: var(--ui-on-accent, #fff);
+  --f-accent-soft: var(--ui-accent-soft, #1b3265);
+  --f-bg: var(--ui-bg, #07111f);
+  --f-surface: var(--ui-surface, #0d1b2d);
+  --f-muted: var(--ui-surface-muted, #102238);
+  --f-border: var(--ui-border, #233852);
+  --f-text: var(--ui-text, #f4f7fb);
+  --f-soft: var(--ui-text-soft, #bdcad9);
+  --f-success: var(--ui-success, #79dfb9);
+  --f-warning: var(--ui-warning, #f3c87d);
+  --f-danger: var(--ui-danger, #ffaaa8);
+  /* Alvo mínimo e espaço entre alvos: o padrão WCAG 2.2 pede 24px; em campo,
+     com luva, 48px é o que de fato acerta. */
+  --f-target: 48px;
+  min-height: 100dvh;
+  background: var(--f-bg);
+  color: var(--f-text);
+  display: flex;
+  flex-direction: column;
+  /* Barra de status e indicador de gesto do aparelho. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.app button, .app input, .app select, .app textarea { font: inherit; }
+.app svg { width: 20px; height: 20px; stroke-width: 1.9; }
+.app button:focus-visible, .app a:focus-visible, .app input:focus-visible,
+.app select:focus-visible, .app textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--f-accent) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.header {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--f-surface);
+  border-bottom: 1px solid var(--f-border);
+}
+.headerTitle { display: grid; min-width: 0; flex: 1; }
+.headerTitle strong { font-size: .95rem; line-height: 1.2; }
+.headerTitle small { color: var(--f-soft); font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.headerIcon {
+  display: grid; place-items: center; width: 36px; height: 36px; flex: none;
+  border-radius: 10px; background: var(--f-accent-soft); color: var(--f-accent-text);
+}
+.iconButton {
+  display: grid; place-items: center; width: var(--f-target); height: var(--f-target); flex: none;
+  border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface);
+  color: inherit; cursor: pointer; text-decoration: none;
+}
+.iconButton:hover { border-color: var(--f-accent); }
+.pendingBadge {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 11px; flex: none;
+  border: 1px solid color-mix(in srgb, var(--f-warning) 55%, transparent); border-radius: 999px;
+  background: color-mix(in srgb, var(--f-warning) 12%, transparent);
+  color: var(--f-warning); font-size: .78rem; font-weight: 760; cursor: pointer;
+}
+.networkDot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--f-danger); }
+.networkDot[data-online="true"] { background: var(--f-success); }
+
+.screen { display: grid; gap: 14px; padding: 14px 12px 28px; align-content: start; }
+
+.contextPickers { display: grid; gap: 10px; }
+.contextPickers label { display: grid; gap: 5px; }
+.contextPickers span { color: var(--f-soft); font-size: .64rem; font-weight: 820; letter-spacing: .08em; }
+.contextPickers select {
+  min-height: var(--f-target); padding: 0 12px;
+  border: 1px solid var(--f-border); border-radius: 12px;
+  background: var(--f-surface); color: inherit;
+}
+
+.actionGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.actionCard {
+  display: grid; gap: 4px; justify-items: start; text-align: left;
+  min-height: 118px; padding: 14px;
+  border: 1px solid var(--f-border); border-radius: 16px;
+  background: var(--f-surface); cursor: pointer;
+}
+.actionCard:disabled { opacity: .5; cursor: not-allowed; }
+.actionCard strong { font-size: .9rem; }
+.actionCard small { color: var(--f-soft); font-size: .72rem; line-height: 1.3; }
+.actionIcon {
+  display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px;
+  border-radius: 12px; background: var(--f-accent-soft); color: var(--f-accent-text);
+}
+
+.queueCallout {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+  min-height: var(--f-target); padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--f-warning) 50%, transparent); border-radius: 14px;
+  background: color-mix(in srgb, var(--f-warning) 10%, transparent); cursor: pointer;
+}
+.queueCallout strong { display: block; font-size: .82rem; }
+.queueCallout small { color: var(--f-soft); font-size: .72rem; }
+
+.step { display: grid; gap: 10px; }
+.step h2 { margin: 0; font-size: .86rem; }
+.hint { margin: 0; color: var(--f-soft); font-size: .76rem; line-height: 1.4; }
+
+.searchRow { display: flex; gap: 8px; }
+.searchRow input {
+  flex: 1; min-width: 0; min-height: var(--f-target); padding: 0 12px;
+  border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface); color: inherit;
+}
+
+.pickList, .plainList { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pickList button {
+  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+  min-height: 62px; padding: 10px 12px;
+  border: 1px solid var(--f-border); border-radius: 14px; background: var(--f-surface);
+  color: inherit; cursor: pointer;
+}
+.pickList button:disabled { opacity: .5; cursor: not-allowed; }
+.pickList button:hover:not(:disabled) { border-color: var(--f-accent); }
+.pickList strong, .plainList strong { display: block; font-size: .86rem; }
+.pickList small, .plainList small { display: block; color: var(--f-soft); font-size: .73rem; }
+.plainList li {
+  display: grid; gap: 3px; padding: 11px 13px;
+  border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-surface);
+}
+.queueError { color: var(--f-danger) !important; }
+.queuePartial { color: var(--f-warning) !important; font-weight: 700; }
+
+.chosen {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 13px; border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-muted);
+}
+.chosen small { display: block; color: var(--f-soft); font-size: .64rem; font-weight: 800; letter-spacing: .07em; }
+.chosen strong { font-size: .85rem; }
+
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button {
+  width: 56px; height: 56px; flex: none;
+  border: 1px solid var(--f-border); border-radius: 14px; background: var(--f-surface);
+  color: inherit; font-size: 1.5rem; font-weight: 700; cursor: pointer;
+}
+.stepper button:hover { border-color: var(--f-accent); }
+.stepper output { font-size: 1.6rem; font-weight: 780; font-variant-numeric: tabular-nums; min-width: 2.4ch; text-align: center; }
+
+.choiceList { display: grid; gap: 8px; }
+.choiceList button {
+  min-height: var(--f-target); padding: 10px 13px; text-align: left;
+  border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-surface);
+  color: inherit; font-size: .83rem; cursor: pointer;
+}
+.choiceActive {
+  border-color: var(--f-accent) !important;
+  background: var(--f-accent-soft) !important;
+  color: var(--f-accent-text) !important;
+  font-weight: 740;
+}
+
+.field { display: grid; gap: 5px; }
+.field > span { color: var(--f-soft); font-size: .64rem; font-weight: 820; letter-spacing: .08em; }
+.field input, .field textarea {
+  min-height: var(--f-target); padding: 11px 12px;
+  border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface); color: inherit;
+  width: 100%; resize: vertical;
+}
+
+.consequence {
+  display: grid; gap: 7px; padding: 12px 14px; border-radius: 13px;
+  border: 1px solid color-mix(in srgb, var(--f-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--f-accent) 8%, transparent);
+  font-size: .79rem;
+}
+.consequence > strong { font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; color: var(--f-accent-text); }
+.consequence ul { margin: 0; padding-left: 17px; display: grid; gap: 4px; }
+.consequence li[data-alert="true"] { color: var(--f-warning); font-weight: 700; }
+
+.signatureBlock { display: grid; gap: 8px; }
+.signatureCanvas {
+  width: 100%; height: 190px;
+  border: 2px dashed var(--f-border); border-radius: 14px;
+  background: var(--f-surface);
+  /* Sem isto, assinar arrasta a página e sai um risco torto. */
+  touch-action: none;
+}
+.signatureFooter { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.signatureFooter span { color: var(--f-soft); font-size: .74rem; }
+
+.photoPicker {
+  display: flex; align-items: center; gap: 11px; min-height: 64px; padding: 12px 14px;
+  border: 2px dashed var(--f-border); border-radius: 14px; background: var(--f-surface); cursor: pointer;
+}
+.photoPicker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.photoPicker span { font-size: .82rem; overflow: hidden; text-overflow: ellipsis; }
+.photoPicker:hover { border-color: var(--f-accent); }
+
+.summaryRow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.summaryRow article {
+  display: grid; gap: 2px; padding: 11px 12px;
+  border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-surface);
+}
+.summaryRow small { color: var(--f-soft); font-size: .68rem; }
+.summaryRow strong { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+
+.actionBar {
+  position: sticky; bottom: 0;
+  display: flex; gap: 9px; padding: 11px 0 0;
+  background: linear-gradient(to top, var(--f-bg) 72%, transparent);
+}
+.primaryButton, .secondaryButton, .ghostButton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: var(--f-target); padding: 0 16px;
+  border-radius: 13px; font-size: .86rem; font-weight: 740; cursor: pointer; text-decoration: none;
+}
+.primaryButton {
+  flex: 1;
+  border: 1px solid var(--f-accent); background: var(--f-accent);
+  /* `!important` pelo mesmo motivo do módulo de EPI no painel: um seletor de
+     elemento mais específico herdaria o texto escuro da página sobre o
+     preenchimento de destaque. */
+  color: var(--f-on-accent, #fff) !important;
+}
+.primaryButton:hover:not(:disabled) { background: color-mix(in srgb, var(--f-accent) 88%, black); }
+.secondaryButton { border: 1px solid var(--f-border); background: var(--f-surface); color: inherit; }
+.secondaryButton:hover:not(:disabled) { border-color: var(--f-accent); }
+.ghostButton {
+  min-height: 40px; padding: 0 12px; font-size: .78rem;
+  border: 1px solid transparent; background: transparent; color: var(--f-accent-text) !important;
+}
+.ghostButton:hover:not(:disabled) { border-color: var(--f-border); }
+.primaryButton:disabled, .secondaryButton:disabled, .ghostButton:disabled { opacity: .5; cursor: not-allowed; }
+
+.errorBanner, .offlineBanner {
+  display: flex; align-items: flex-start; gap: 9px; margin: 0 12px;
+  padding: 11px 13px; border-radius: 12px; font-size: .79rem; line-height: 1.4;
+}
+.errorBanner {
+  border: 1px solid color-mix(in srgb, var(--f-danger) 48%, transparent);
+  background: color-mix(in srgb, var(--f-danger) 9%, transparent);
+  color: var(--f-danger);
+}
+.offlineBanner {
+  border: 1px solid color-mix(in srgb, var(--f-warning) 48%, transparent);
+  background: color-mix(in srgb, var(--f-warning) 10%, transparent);
+  color: var(--f-warning);
+}
+.errorBanner svg, .offlineBanner svg { flex: none; margin-top: 1px; }
+
+.emptyState {
+  display: grid; justify-items: center; gap: 10px; text-align: center;
+  margin: 28px 16px; padding: 26px 20px;
+  border: 1px solid var(--f-border); border-radius: 16px; background: var(--f-surface);
+}
+.emptyState svg { width: 32px; height: 32px; color: var(--f-soft); }
+.emptyState strong { font-size: .95rem; }
+.emptyState p { margin: 0; color: var(--f-soft); font-size: .8rem; line-height: 1.5; }
+.emptyState code {
+  padding: 1px 5px; border-radius: 5px; background: var(--f-muted); font-size: .76rem;
+}
+
+.loading {
+  display: grid; justify-items: center; gap: 9px; margin: auto; padding: 36px 20px; text-align: center;
+}
+.loading svg { width: 28px; height: 28px; color: var(--f-accent-text); }
+.loading strong { font-size: .94rem; }
+.loading span { color: var(--f-soft); font-size: .8rem; }
+.spin { animation: fieldSpin 1s linear infinite; }
+@keyframes fieldSpin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.toast {
+  position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 30;
+  display: flex; align-items: center; gap: 9px; padding: 13px 15px;
+  border: 1px solid color-mix(in srgb, var(--f-success) 48%, transparent); border-radius: 13px;
+  background: var(--f-surface); color: var(--f-success);
+  font-size: .83rem; font-weight: 720; box-shadow: var(--ui-shadow-card, none);
+}
+
+/* Leitor de código: tela cheia, porque apontar a câmera exige as duas mãos e
+   nenhuma distração em volta. */
+.scannerOverlay {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; flex-direction: column;
+  background: var(--f-surface);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.scannerHeader {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 12px; border-bottom: 1px solid var(--f-border);
+}
+.scannerHeader strong { font-size: .9rem; }
+.closeButton {
+  display: grid; place-items: center; width: var(--f-target); height: var(--f-target); flex: none;
+  border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface); color: inherit; cursor: pointer;
+}
+.scannerStage { position: relative; flex: 1; min-height: 220px; display: grid; place-items: center; background: var(--f-muted); overflow: hidden; }
+.scannerVideo { width: 100%; height: 100%; object-fit: cover; }
+.scannerIdle { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 11px; padding: 22px; text-align: center; }
+.scannerIdle svg { width: 34px; height: 34px; color: var(--f-soft); }
+.scannerIdle p { margin: 0; color: var(--f-soft); font-size: .82rem; line-height: 1.45; max-width: 30ch; }
+.scannerFrame {
+  position: absolute; left: 12%; right: 12%; top: 28%; bottom: 28%;
+  border: 3px solid var(--f-accent); border-radius: 14px;
+}
+.scannerProblem { margin: 10px 12px 0; color: var(--f-danger); font-size: .79rem; }
+.scannerManual { display: grid; gap: 9px; padding: 13px 12px; border-top: 1px solid var(--f-border); }
+.scannerManual label { display: grid; gap: 5px; }
+.scannerManual span { display: inline-flex; align-items: center; gap: 6px; color: var(--f-soft); font-size: .64rem; font-weight: 820; letter-spacing: .08em; }
+.scannerManual svg { width: 14px; height: 14px; }
+.scannerManual input {
+  min-height: var(--f-target); padding: 0 12px;
+  border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface); color: inherit;
+}
+
+/* Em telas largas o aplicativo não esparrama: a coluna estreita é a forma, não
+   uma limitação do celular. */
+@media (min-width: 620px) {
+  .header, .screen, .errorBanner, .offlineBanner { max-width: 560px; margin-inline: auto; width: 100%; }
+  .toast { max-width: 536px; margin-inline: auto; }
+}

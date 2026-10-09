@@ -19,6 +19,18 @@ import test from "node:test";
 
 const FEATURES = new URL("../app/painel/features/", import.meta.url);
 
+/**
+ * CSS de módulo que não mora em `features/`.
+ *
+ * A catraca só olhava `app/painel/features/`, e por isso o aplicativo de campo
+ * nasceu fora dela: uma rota própria, com `field.module.css` inteiro, e nenhuma
+ * medição de cor crua. Um arquivo novo fora da pasta vigiada é exatamente como a
+ * dívida volta — então a lista é explícita e cresce junto com o produto.
+ */
+const EXTERNOS: Record<string, URL> = {
+  campo: new URL("../app/campo/", import.meta.url),
+};
+
 /** Teto de cor crua por módulo. Descer é livre; subir exige justificativa no diff. */
 const TETO: Record<string, number> = {
   saas: 36,
@@ -36,6 +48,10 @@ const TETO: Record<string, number> = {
   time: 1,
   "action-center": 0,
   shared: 0,
+  /* A tela de campo nasceu depois da catraca e já nasceu sem cor crua: toda
+     cor dela é token, com reserva espelhando `.dashboard-shell.theme-dark`.
+     Zero é o estado real, não uma meta. */
+  campo: 0,
 };
 
 /** Cor crua = literal que não é o valor de reserva de um token. */
@@ -57,6 +73,13 @@ for (const module_ of modules) {
   let total = 0;
   for (const name of files) total += rawColors(await readFile(new URL(name, dir), "utf8")).length;
   contagem.set(module_, total);
+}
+
+for (const [nome, dir] of Object.entries(EXTERNOS)) {
+  const files = (await readdir(dir)).filter((name) => name.endsWith(".module.css"));
+  let total = 0;
+  for (const name of files) total += rawColors(await readFile(new URL(name, dir), "utf8")).length;
+  contagem.set(nome, total);
 }
 
 test("nenhum módulo escreve mais cor crua do que o teto medido", () => {

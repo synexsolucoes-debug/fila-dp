@@ -115,7 +115,20 @@ export async function POST(request: Request) {
 
     const attachmentId = crypto.randomUUID();
     const objectKey = `workspaces/${workspace.id}/epi/${entityType}/${entityId}/${attachmentId}`;
-    const bucket = getAttachmentsBucket();
+    // Armazenamento não conectado é configuração, não defeito desta requisição.
+    // Sem este desvio a falha chega como 500 genérico — foi exatamente o que
+    // aconteceu no ensaio de campo: a entrega gravou, o termo não subiu, e a
+    // única pista do motivo ficou no log do servidor. 503 com código próprio
+    // mantém o reenvio da fila (conectar o Blob faz a repetição funcionar) e
+    // diz à pessoa o que precisa ser resolvido.
+    let bucket;
+    try {
+      bucket = getAttachmentsBucket();
+    } catch {
+      throw new ApiError(503, "ATTACHMENT_STORAGE_UNAVAILABLE",
+        "O armazenamento de anexos não está configurado neste ambiente, então o arquivo não pôde ser guardado. "
+        + "O registro de destino não foi alterado; fale com o administrador da plataforma para conectar o armazenamento.");
+    }
     await bucket.put(objectKey, file.stream(), {
       httpMetadata: { contentType: file.type, contentDisposition: "attachment" },
       customMetadata: { attachmentId, entityType, entityId, workspaceId: workspace.id },

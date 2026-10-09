@@ -1003,7 +1003,11 @@
   margin: -2px 0 2px; padding: 10px 11px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
   background: var(--ui-primary-soft); color: var(--ui-text-soft); font-size: 10px; line-height: 1.45;
 }
-.card-sla-target strong { color: var(--ui-primary); }
+/* Mesma troca de papel do `.demand-area-flow`: o destaque é TEXTO, e aqui ele
+   fica sobre `--ui-primary-soft` — no escuro, preenchimento sobre preenchimento
+   dava 2.37:1. Só aparece quando a área tem SLA padrão configurado, o que
+   explica a violação ter ficado fora da varredura até agora. */
+.card-sla-target strong { color: var(--ui-accent-text, var(--ui-primary)); }
 .card-process-helper { margin-top: -1px; color: var(--ui-text-soft); font-size: 9px; font-weight: 600; line-height: 1.4; }
 
 /* Este bloco mora dentro de `.planner-focus`, que é um cartão navy. Ele foi
@@ -3412,9 +3416,16 @@
   white-space: nowrap;
 }
 .dashboard-card-step svg { width: 10px; height: 10px; flex-shrink: 0; }
+/* `--ui-accent-text`, não `--ui-primary`: o primeiro é a família legível como
+   TEXTO, o segundo é o preenchimento de botão. No escuro eles se separam de
+   propósito (§ bloco de tokens acima), e usar o preenchimento aqui dava 3.05:1
+   no nome da área — abaixo do mínimo. A violação só aparece em grupo com
+   roteamento entre áreas configurado, que é o que faz o elemento ter texto:
+   ficou invisível na varredura até o ensaio do aplicativo de campo passar a
+   configurar o roteamento SESMT → DP. */
 .demand-area-flow {
   min-width: 0; margin-top: 6px; display: inline-flex; align-items: center; gap: 5px;
-  color: var(--ui-primary); font-size: 8px; font-weight: 750; line-height: 1.3;
+  color: var(--ui-accent-text, var(--ui-primary)); font-size: 8px; font-weight: 750; line-height: 1.3;
 }
 .demand-area-flow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .demand-area-flow > svg { width: 11px; height: 11px; flex: 0 0 auto; color: var(--ui-text-soft); }

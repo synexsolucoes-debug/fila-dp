@@ -196,6 +196,146 @@ devolução, depois a baixa.
   trocas, descartes, análises de desconto, anexos e a linha do tempo completa.
   A aba é de consulta — registrar acontece no módulo, onde estão as validações
   de estoque e a evidência.
+- **Aplicativo de campo** (`/campo`): entrega com assinatura, devolução, dano com
+  foto e consulta, pelo celular. Detalhado adiante.
+
+## Aplicativo de campo (`/campo`)
+
+O painel é feito para a mesa: tabela larga, filtro, relatório. A entrega de EPI
+não acontece na mesa — acontece no pátio, no galpão, na porta do almoxarifado,
+com o colaborador de pé esperando. `/campo` é a tela desse momento.
+
+Não é um produto separado, e não é o painel responsivo. É uma rota do mesmo
+aplicativo, com a mesma sessão, as mesmas permissões e as mesmas rotas de API.
+Instala-se na tela inicial do celular como aplicativo (PWA): `app/manifest.ts`
+declara `start_url: "/campo"`, modo `standalone` e três atalhos — entrega,
+devolução e dano — que abrem direto no fluxo.
+
+### O que se faz por ela
+
+| Ação | Permissão | O que a tela acrescenta |
+| --- | --- | --- |
+| Entregar EPI | `epi.deliver` | Assinatura no dedo, anexada como termo de entrega |
+| Receber devolução | `epi.return` | Condição do EPI, que decide o destino |
+| Registrar dano | `epi.damage` | Foto da evidência pela câmera do aparelho |
+| Consultar colaborador | `epi.view` | O que está em poder de quem, com saldo pendente |
+
+Sem a permissão, a ação aparece desabilitada e diz por quê — não desaparece.
+Esconder a ação faria a pessoa procurar o que não existe para ela.
+
+### Quatro decisões que moldam a tela
+
+**O saldo exibido é o do local escolhido.** A entrega debita um local de
+estoque, não o grupo. Mostrar o total disponível ofereceria doze unidades onde
+há zero, e a recusa chegaria depois — na frente do colaborador que já assinou.
+O local escolhido também vai explícito no dano: sem ele o servidor usa o local
+padrão do grupo, e as consequências da decisão — descarte, higienização,
+reposição — lançariam no estoque de outro almoxarifado.
+
+**A assinatura é imagem, colhida em `canvas` com eventos de ponteiro**, escalada
+por `devicePixelRatio` para não sair serrilhada, e enviada como PNG com o tipo
+`delivery_term`. É ela que torna o termo assinado: sem assinatura a entrega
+nasce `pending_signature`, e o relatório de entregas sem termo é justamente o
+que cobra isso depois.
+
+**A leitura de código usa `BarcodeDetector`, que é API do navegador** — nenhuma
+biblioteca embarcada. A consequência é honesta e está na tela: existe no Chrome
+do Android, **não** existe no Safari do iPhone. Onde não existe, o campo de
+digitação é o caminho principal, não uma mensagem de erro. A busca aceita nome,
+código interno ou CA, o que faz a etiqueta impressa valer tanto quanto a câmera.
+
+**O que foi feito sem rede não se perde.** A operação inteira — inclusive a
+assinatura e a foto, que são Blobs — fica no IndexedDB e é reenviada quando a
+conexão volta. O reenvio é seguro porque cada operação nasce com uma chave de
+idempotência estável, gravada na própria linha do registro: repetir devolve a
+entrega existente em vez de criar uma segunda, e entrega duplicada no estoque
+significa unidade a menos sem motivo.
+
+A tela diz qual dos três resultados aconteceu, porque eles são diferentes:
+registrado; guardado para enviar; **ou registrado com a evidência pendente** —
+quando o servidor aceitou a entrega e só o anexo falhou. Nesse último caso a
+fila mostra "registro já gravado no servidor · falta só a evidência", e a
+pessoa não precisa colher a assinatura de novo. Se o armazenamento de anexos
+não estiver conectado ao projeto, a resposta é `503
+ATTACHMENT_STORAGE_UNAVAILABLE` com o motivo legível — a falha vai para a tela,
+não só para o log.
+
+### Aparelho compartilhado
+
+O celular do almoxarifado troca de mão a cada turno, e duas coisas acontecem na
+saída por causa disso. A casca guardada pelo service worker é apagada — ela é o
+HTML já renderizado, com o nome de quem estava logado, e sem isso o próximo a
+abrir no modo avião veria o nome de quem saiu. E se houver pendência na fila, a
+saída avisa: operação enviada depois da troca de login subiria no nome de quem
+entrou, não de quem registrou.
+
+A **fila não é apagada** na saída, de propósito: ela guarda entrega assinada e
+foto de dano que ainda não subiram, e perder isso é perder a evidência de algo
+que aconteceu.
+
+### Service worker
+
+`public/sw.js` guarda a casca do aplicativo (a rota `/campo`, os ícones, o
+manifesto) e **nunca** guarda `/api/`. É deliberado: saldo velho em cache é
+pior do que saldo nenhum, porque a pessoa entrega contra um número que não
+existe mais. Navegação é rede primeiro, com a casca em cache como reserva; o
+estático é servido do cache e revalidado em seguida.
+
+O registro usa **escopo `/campo`**, não a raiz. No escopo raiz o service worker
+controlaria o painel e o site público, e a reserva sem rede devolveria a casca
+do aplicativo de campo a quem pediu o painel. As páginas de `/campo` continuam
+levando consigo os arquivos estáticos do Next: o escopo decide quais páginas o
+service worker controla, não quais endereços ele pode guardar. O escopo do
+*manifesto* segue `/`, porque sair e entrar de novo atravessa `/login` — com
+escopo estreito ali, isso abriria uma aba do navegador no meio do turno.
+
+### Paleta
+
+A mesma da central de comando: `/campo` consome os tokens `--ui-*` do produto,
+sem tema paralelo. Há um detalhe que custou duas violações de contraste e vale
+registrar: superfície e texto chegam à rota porque moram em `:root`, mas o
+quarteto de acento mora em `.dashboard-shell` — e `/campo` não é o painel. Com
+reserva de tema claro, a tela montava fundo escuro com acento claro, e o
+"Trocar" media 2.28:1. As reservas do acento agora são as de
+`.dashboard-shell.theme-dark`, repetidas de propósito e com a origem nomeada,
+até que o acento suba para `:root` como o resto já subiu.
+
+O campo de assinatura é a exceção: papel branco e traço grafite escritos à mão.
+Eles pertencem ao documento, não à interface — se seguissem o tema, o termo
+guardado deixaria de ser o que a pessoa viu ao assinar.
+
+### Duas formas de assinar, e quando usar cada uma
+
+O módulo tem dois caminhos para a ciência do colaborador, e eles não competem:
+
+- **Assinatura em campo** (`/campo`): o colaborador assina no aparelho de quem
+  entrega, na hora. Serve quando as duas pessoas estão frente a frente — o caso
+  comum do almoxarifado e do pátio.
+- **Link de ciência** (`/portal/epi/<token>`): a entrega é registrada sem
+  assinatura e o colaborador confirma depois, no próprio celular, por um link
+  assinado com prazo. Serve para quem está em obra, em viagem ou em turno que
+  não cruza com o do almoxarifado.
+
+A entrega sem nenhum dos dois nasce `pending_signature`, e o relatório de
+entregas sem termo assinado é o que cobra a pendência.
+
+### Como isso é verificado
+
+`scripts/browser-check.mjs` percorre o turno inteiro em 390px, pelas rotas reais
+do produto e conferindo **no banco**, não na tela:
+
+1. **Entrega**: acha o EPI pelo código interno, assina no canvas, confirma — e o
+   banco mostra `signed`, a assinatura com o nome certo e o estoque de 10 para 9.
+2. **Consulta**: o EPI entregue aparece em poder do colaborador.
+3. **Devolução**: condição "devolvido higienizado" devolve a unidade ao local, o
+   saldo volta a 10 e a condição gravada é a que foi escolhida na tela.
+4. **Dano**: a foto entra pelo mesmo `<input type="file">` da câmera, a tela
+   cobra a descrição antes de mandar, e a decisão "enviar para análise de
+   desconto" abre a demanda com o título exato da regra do módulo.
+
+`scripts/a11y-check.mjs` audita a tela inicial, os quatro fluxos e o passo da
+assinatura em todas as larguras da varredura — um passo inalcançável conta como
+falha de cobertura, não como ausência de problema.
 
 ## Relatórios
 
@@ -217,6 +357,7 @@ planilha viraria fórmula executável.
 | --- | --- | --- |
 | `/api/epi/overview` | GET | `epi.view` |
 | `/api/epi/products` | GET, POST | `epi.view`, `epi.create` |
+| `/api/epi/products?search=` | GET | busca por nome, código interno ou CA |
 | `/api/epi/products/[id]` | GET, PATCH, DELETE | `epi.view`, `epi.edit`, `epi.delete` |
 | `/api/epi/stock/locations` | GET, POST, PATCH | `epi.view`, `epi.stock.adjust` |
 | `/api/epi/stock/entries` | POST | `epi.stock.adjust` |

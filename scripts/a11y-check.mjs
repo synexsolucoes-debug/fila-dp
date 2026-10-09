@@ -512,6 +512,90 @@ async function surfaceSignature() {
 }
 
 /**
+ * Aplicativo de campo (`/campo`).
+ *
+ * Tela de celular usada de luva, no galpão, e com controles que não existem em
+ * nenhuma outra parte do produto: campo de assinatura em canvas, contador de
+ * quantidade, listas de escolha com papel de rádio. Auditar só a tela inicial
+ * deixaria tudo isso de fora — então a varredura entra no fluxo de entrega até
+ * o passo da assinatura, que é onde estão os controles próprios.
+ *
+ * O preparo cria colaborador e EPI pelas rotas do produto. Sem isso o passo da
+ * assinatura é inalcançável, e medir só o que é fácil de alcançar é como a
+ * varredura já declarou "zero violações" tendo visitado uma tela de onze.
+ *
+ * Roda uma vez, fora da varredura por tema: a tela de campo tem uma paleta só
+ * — clara e de contraste alto, para sol direto — e não acompanha o tema escuro
+ * do painel. Medi-la duas vezes com rótulo de tema diria que existe um tema
+ * escuro de campo que não existe.
+ */
+async function auditFieldApp() {
+  const marca = `A11Y${Date.now().toString().slice(-6)}`;
+  const nome = `Colaborador ${marca}`;
+  const preparo = await page.evaluate(async ({ marca, nome }) => {
+    const post = async (url, body) => {
+      const response = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      return response.status;
+    };
+    const empresas = await (await fetch("/api/companies")).json();
+    const empresa = (empresas.companies ?? []).find((item) => item.status === "active") ?? empresas.companies?.[0];
+    const locais = await (await fetch("/api/epi/stock/locations")).json();
+    const local = (locais.locations ?? [])[0];
+    const colaborador = await post("/api/employees", {
+      companyId: empresa?.id, registrationNumber: `A-${marca}`, fullName: nome,
+      admissionDate: "2026-01-15", employmentStatus: "active",
+    });
+    const produto = await post("/api/epi/products", {
+      name: `Protetor auricular ${marca}`, epiType: "hearing", caNumber: `CA-${marca}`, size: "Único",
+      brand: "Marca", model: "Modelo", unitValue: 12.4, stockQuantity: 5, stockLocationId: local?.id,
+      registeredOn: new Date().toISOString().slice(0, 10), status: "active",
+      registrationReason: "initial_purchase", internalCode: `A11Y-${marca}`,
+    });
+    return { empresa: empresa?.id, local: local?.id, colaborador, produto };
+  }, { marca, nome });
+
+  await audit(`Campo › início`, "/campo");
+  if (preparo.empresa) await page.getByLabel("EMPRESA").selectOption(preparo.empresa).catch(() => undefined);
+  if (preparo.local) await page.getByLabel("LOCAL DE ESTOQUE").selectOption(preparo.local).catch(() => undefined);
+
+  for (const acao of ["Entregar EPI", "Receber devolução", "Registrar dano", "Consultar colaborador"]) {
+    await page.getByRole("button", { name: new RegExp(acao, "u") }).first().click().catch(() => undefined);
+    await page.waitForTimeout(1200);
+    await audit(`Campo › ${acao}`, null);
+    await page.getByRole("button", { name: "Voltar" }).first().click().catch(() => undefined);
+    await page.waitForTimeout(700);
+  }
+
+  // Passo da assinatura: canvas, contador e botões de confirmação.
+  if (preparo.colaborador === 201 && preparo.produto === 201) {
+    await page.getByRole("button", { name: /Entregar EPI/u }).first().click().catch(() => undefined);
+    await page.waitForTimeout(900);
+    await page.getByLabel("Buscar colaborador").fill(nome).catch(() => undefined);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(1800);
+    const naLista = page.getByRole("button", { name: new RegExp(marca, "u") });
+    if (await naLista.count()) await naLista.first().click();
+    await page.waitForTimeout(1500);
+    await page.getByLabel("Buscar EPI").fill(`A11Y-${marca}`).catch(() => undefined);
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(1800);
+    const temAssinatura = await page.locator('canvas[aria-label="Área de assinatura do colaborador"]').count();
+    if (temAssinatura) {
+      await audit(`Campo › assinatura da entrega`, null);
+    } else {
+      // Não alcançar o passo é falha de cobertura, não ausência de problema.
+      console.log("\n### Campo › assinatura da entrega — passo inalcançável; a varredura não rodou");
+      failures += 1;
+    }
+  } else {
+    console.log("\n### Campo › assinatura da entrega — preparo recusado; a varredura não rodou");
+    failures += 1;
+  }
+}
+
+/**
  * Os dois temas, inteiros.
  *
  * Esta função já foi três coisas, e o histórico importa para não repetir
@@ -681,6 +765,7 @@ try {
     await page.goto(`${BASE}/painel`, { waitUntil: "domcontentloaded" });
   });
   await auditEverything();
+  await auditFieldApp();
 } finally {
   await browser.close();
 }
