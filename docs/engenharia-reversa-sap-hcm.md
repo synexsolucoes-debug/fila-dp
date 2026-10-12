@@ -687,18 +687,23 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ## 16. Roadmap priorizado
 
+Estado: os itens 1, 2, 4 e 5 já estão no produto, no **modo ERP DP** (§4.28
+de `docs/arquitetura-operacional.md`), e o 7 está pela metade: a lista de
+eventos esperados existe; a comparação com o que o sistema de folha
+transmitiu, não.
+
 | # | Item | Conceito SAP | Valor para o DP | Esforço | Depende de |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Alerta de retroatividade | 0003 / retro | Movimentação com data dentro de competência fechada abre pendência "lançar diferença na folha" | Pequeno | Histórico funcional ✅ |
-| 2 | Quadro em data-base | PNP / data-chave | Headcount e turnover corretos; relatório "quem estava onde em DD/MM" para auditoria e defesa | Médio | 1 opcional |
+| 1 | ✅ Alerta de retroatividade | 0003 / retro | Movimentação com data dentro de competência fechada abre pendência "lançar diferença na folha" | Pequeno | Histórico funcional ✅ |
+| 2 | ✅ Quadro em data-base | PNP / data-chave | Headcount e turnover corretos; relatório "quem estava onde em DD/MM" para auditoria e defesa | Médio | 1 opcional |
 | 3 | Importadores pelo histórico | `HR_INFOTYPE_OPERATION` | Fim da divergência entre cadastro e histórico quando o Sankhya sincroniza | Médio | — |
-| 4 | Retorno de afastamento como movimentação | Medida + fim do 2001 | Data retroativa, aprovação e trava de ASO num fluxo só | Pequeno | — |
-| 5 | Mudança × correção na edição do cadastro | Copiar × modificar | Corrigir erro de digitação sem criar período falso | Pequeno | — |
+| 4 | ✅ Retorno de afastamento como movimentação | Medida + fim do 2001 | Data retroativa, aprovação e trava de ASO num fluxo só | Pequeno | — |
+| 5 | ✅ Mudança × correção na edição do cadastro | Copiar × modificar | Corrigir erro de digitação sem criar período falso | Pequeno | — |
 | 6 | Elementos contratuais | 0016 / 0019 | Fim de experiência e aviso prévio como prazos | Médio | Motor de Prazos ✅ |
-| 7 | Conferência eSocial × histórico | Mapa da §8.2 | Comparar S-2206/S-2230/S-2299 transmitidos com o histórico | Grande | 2, 3, integração com o sistema de folha |
+| 7 | 🟡 Conferência eSocial × histórico | Mapa da §8.2 | Comparar S-2206/S-2230/S-2299 transmitidos com o histórico | Grande | 2, 3, integração com o sistema de folha |
 | 8 | Saldo de férias (conferência) | 2006 | Mostrar período aquisitivo vencendo, sem calcular valor | Médio | 4 |
 
-Os itens 1, 4 e 5 cabem cada um num PR pequeno sobre o que já existe.
+Os próximos são o 3 (importadores pelo histórico), o 6 (elementos contratuais) e a metade que falta do 7.
 
 ---
 

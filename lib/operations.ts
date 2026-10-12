@@ -1,7 +1,7 @@
 import { ApiError } from "./api-errors.ts";
 import { cleanText, optionalDate } from "./registrations.ts";
 
-export const movementTypes = ["salary_change", "vacation", "leave", "termination", "transfer", "benefit_change", "registration_sync", "epi_discount", "other"] as const;
+export const movementTypes = ["salary_change", "vacation", "leave", "return_to_work", "termination", "transfer", "benefit_change", "registration_sync", "epi_discount", "other"] as const;
 export const cycleStatuses = ["open", "pre_closing", "processing", "post_closing", "closed"] as const;
 export const workItemStatuses = ["pending", "in_progress", "blocked", "completed"] as const;
 export const obligationTypes = ["payroll", "social_security", "tax", "reporting", "union", "other"] as const;
@@ -36,6 +36,7 @@ export function sanitizeMovementDetails(type: typeof movementTypes[number], valu
   };
   if (type === "vacation") return { startDate: date("startDate"), endDate: date("endDate"), days: Math.max(1, Math.min(90, Number(input.days) || 30)) };
   if (type === "leave") return { startDate: date("startDate"), endDate: date("endDate"), reasonCode: cleanText(input.reasonCode, 40) };
+  if (type === "return_to_work") return { returnDate: date("returnDate"), examReference: cleanText(input.examReference, 120) };
   if (type === "termination") return { terminationType: cleanText(input.terminationType, 60), lastWorkingDate: date("lastWorkingDate") };
   if (type === "transfer") return { targetCompanyId: cleanText(input.targetCompanyId, 120), departmentId: cleanText(input.departmentId, 120), positionId: cleanText(input.positionId, 120), costCenterId: cleanText(input.costCenterId, 120) };
   if (type === "benefit_change") return { benefit: cleanText(input.benefit, 100), action: cleanText(input.action, 40), reference: cleanText(input.reference, 160) };
@@ -61,10 +62,15 @@ export function sanitizeMovementDetails(type: typeof movementTypes[number], valu
  * emprego não é o que elas mudam. Transferência tem o próprio efeito, em
  * `movementTransferEffect` (passo 2 — §4.17).
  */
-export type MovementEmploymentEffect = { employmentStatus: "on_leave" | "terminated"; requiredCurrentStatus: "active" };
+export type MovementEmploymentEffect =
+  | { employmentStatus: "on_leave" | "terminated"; requiredCurrentStatus: "active" }
+  /* Retorno de afastamento (ERP DP, passo 2): o caminho de volta, que antes
+     só existia editando o cadastro com a data de hoje. */
+  | { employmentStatus: "active"; requiredCurrentStatus: "on_leave" };
 
 export function movementEmploymentEffect(movementType: string): MovementEmploymentEffect | null {
   if (movementType === "leave") return { employmentStatus: "on_leave", requiredCurrentStatus: "active" };
+  if (movementType === "return_to_work") return { employmentStatus: "active", requiredCurrentStatus: "on_leave" };
   if (movementType === "termination") return { employmentStatus: "terminated", requiredCurrentStatus: "active" };
   return null;
 }

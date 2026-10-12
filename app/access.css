@@ -400,6 +400,8 @@
   .sidebar-account .user-avatar { width: 32px; height: 32px; }
   .dashboard-header { height: 58px; padding: 0 16px; }
   .dashboard-header-actions button:not(.new-demand) { display: none; }
+  /* A troca Vinculato ⇄ ERP DP precisa existir no celular também. */
+  .dashboard-header-actions button.erp-mode-toggle { display: inline-flex; }
   .dashboard-content { padding: 24px 16px 32px; }
   .dashboard-date { display: none; }
   .dashboard-heading h1 { font-size: 28px; }

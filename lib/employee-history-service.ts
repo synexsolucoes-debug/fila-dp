@@ -1,5 +1,5 @@
 import {
-  currentValuesFromEmployee, historyRecordFromRow, historyRecordTypes, planHistoryChange,
+  currentValuesFromEmployee, historyRecordFromRow, historyRecordTypes, planHistoryChange, recordAt,
   type HistoryReason, type HistoryRecordType, type HistoryValues,
 } from "./employee-history.ts";
 
@@ -23,6 +23,14 @@ export type HistoryChangeInput = {
   reason: HistoryReason;
   movementId?: string | null;
   changes: Partial<Record<HistoryRecordType, Partial<HistoryValues>>>;
+  /**
+   * `change` (padrão) abre período novo a partir de `effectiveDate` — o
+   * "copiar" do PA30. `correction` conserta o registro vigente naquela data
+   * sem abrir período — o "modificar": serve para erro de digitação, que não
+   * é uma mudança na vida funcional de ninguém. Sem registro vigente, a
+   * correção não grava histórico: a linha de base futura já nasce corrigida.
+   */
+  mode?: "change" | "correction";
 };
 
 function valueBindings(values: HistoryValues) {
@@ -48,7 +56,13 @@ export async function prepareHistoryChange(d1: SqlDatabase, input: HistoryChange
   for (const type of historyRecordTypes) {
     const changes = input.changes[type];
     if (!changes) continue;
-    const plan = planHistoryChange({ records, type, effectiveDate: input.effectiveDate, changes, current, admissionDate });
+    let effectiveDate = input.effectiveDate;
+    if (input.mode === "correction") {
+      const covering = recordAt(records, type, input.effectiveDate);
+      if (!covering) continue;
+      effectiveDate = covering.validFrom;
+    }
+    const plan = planHistoryChange({ records, type, effectiveDate, changes, current, admissionDate });
     if (plan.kind === "noop") continue;
 
     if (plan.baseline) {

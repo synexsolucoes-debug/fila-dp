@@ -40,6 +40,7 @@ const typeLabels: Record<RecordType, string> = { situation: "Situação do vínc
 const reasonLabels: Record<string, string> = {
   baseline: "Situação na implantação do histórico",
   leave: "Afastamento",
+  return_to_work: "Retorno de afastamento",
   termination: "Desligamento",
   transfer: "Transferência",
   registration_edit: "Alteração no cadastro",

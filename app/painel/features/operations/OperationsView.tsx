@@ -35,7 +35,7 @@ const statusLabels: Record<string, string> = {
   draft: "Rascunho", pending_approval: "Em aprovação", approved: "Aprovada", rejected: "Rejeitada", applied: "Aplicada", canceled: "Cancelada",
   pending: "Pendente", in_progress: "Em andamento", blocked: "Bloqueado", completed: "Concluído", resolved: "Resolvida", waived: "Dispensada",
 };
-const movementLabels: Record<string, string> = { salary_change: "Alteração salarial", vacation: "Férias", leave: "Afastamento", termination: "Desligamento", transfer: "Transferência", benefit_change: "Benefício", registration_sync: "Conciliação cadastral", other: "Outra" };
+const movementLabels: Record<string, string> = { salary_change: "Alteração salarial", vacation: "Férias", leave: "Afastamento", return_to_work: "Retorno de afastamento", termination: "Desligamento", transfer: "Transferência", benefit_change: "Benefício", registration_sync: "Conciliação cadastral", other: "Outra" };
 const obligationLabels: Record<string, string> = { payroll: "Folha", social_security: "Previdenciária", tax: "Tributária", reporting: "Declaração", union: "Sindical", other: "Outra" };
 
 const currentCompetence = () => new Date().toISOString().slice(0, 7);
@@ -160,6 +160,7 @@ export function OperationsView({ role }: { role: WorkspaceRole }) {
         const details = movementType === "salary_change" ? { newSalary: Number(field(form, "newSalary")), percentage: Number(field(form, "percentage")), reason: field(form, "reason") }
           : movementType === "vacation" ? { startDate: field(form, "startDate"), endDate: field(form, "endDate"), days: Number(field(form, "days")) }
           : movementType === "leave" ? { startDate: field(form, "startDate"), endDate: field(form, "endDate"), reasonCode: field(form, "reasonCode") }
+          : movementType === "return_to_work" ? { returnDate: field(form, "returnDate"), examReference: field(form, "examReference") }
           : movementType === "termination" ? { terminationType: field(form, "terminationType"), lastWorkingDate: field(form, "lastWorkingDate") }
           : movementType === "transfer" ? { targetCompanyId: field(form, "targetCompanyId"), departmentId: field(form, "departmentId"), positionId: field(form, "positionId"), costCenterId: field(form, "costCenterId") }
           : movementType === "benefit_change" ? { benefit: field(form, "benefit"), action: field(form, "benefitAction"), reference: field(form, "reference") }

@@ -1500,6 +1500,49 @@ quem reativa pelo cadastro grava `registration_edit` com a data de hoje.
 | --- | --- |
 | Delimitação, mudança retroativa, mesmo início, linha de base, data anterior ao histórico, divergência; RLS e costura com as três rotas | `tests/employee-functional-history.test.mts` |
 
+### 4.28 Modo ERP DP — o Vinculato lido com a gramática do SAP HCM
+
+Um botão no canto superior direito do painel (`erp-mode-toggle`, a última
+porta da faixa, visível também no celular) troca o Vinculato pelo **ERP DP**:
+as mesmas tabelas, permissões e rotas, organizadas pelas perguntas de quem
+vem de um ERP de DP (`docs/engenharia-reversa-sap-hcm.md`). A escolha é
+preferência local (`localStorage`, protegida por `try/catch`): se o
+armazenamento falhar, o painel abre no modo Vinculato. Só aparece para quem
+tem `employees.read`; no modo ERP o menu do Vinculato sai, inclusive a barra
+inferior do celular.
+
+| Tela | Equivalente SAP | Fonte |
+| --- | --- | --- |
+| Painel do DP | Início | `GET /api/erp-dp/overview` |
+| Ficha funcional | PA20/PA30 | busca de colaborador + `functional-history` (§4.27) |
+| Medidas | PA40 | movimentações aprovadas; "Executar" chama `.../apply` |
+| Quadro em data-base | Dia-chave (PNP) | `GET /api/erp-dp/headcount?at=` |
+| Retroativos | IT0003 | `GET /api/erp-dp/retroactivity` |
+| Competências | PA03 | `fdp_payroll_cycles` |
+| eSocial esperado | S-2206, S-2230, S-2299 | `GET /api/erp-dp/esocial?competence=` |
+
+Três mudanças de comportamento vieram junto:
+
+- **Retorno de afastamento é medida** (`return_to_work`, migration 0108):
+  `on_leave → active` com data de vigência, aprovação e a mesma trava de ASO
+  inapto da edição do cadastro (§4.9). Grava `return_to_work` no histórico.
+- **Retroatividade**: aplicar uma movimentação cuja vigência cai numa
+  competência `processing`, `post_closing` ou `closed` abre, no mesmo lote,
+  uma pendência operacional (`idempotency_key = retro:<movimentação>`) para o
+  DP lançar a diferença na próxima folha. O Vinculato não recalcula.
+- **Mudança × correção** na edição do cadastro: "Correção de cadastro"
+  conserta o registro vigente do histórico em vez de abrir período novo — o
+  "modificar" do PA30, para erro de digitação.
+
+O quadro em data-base usa o histórico vigente na data e, para quem ainda não
+tem histórico, o cadastro de hoje — marcado como aproximação na tela. O
+eSocial esperado é lista de conferência: o Vinculato não gera nem transmite
+eventos (§28).
+
+| Verificação | Onde |
+| --- | --- |
+| Quadro, resumo, eventos esperados, retorno, retroativo, correção, rotas só de leitura com escopo, posição do botão e celular | `tests/erp-dp.test.mts` |
+
 ---
 
 ## 5. Agentes

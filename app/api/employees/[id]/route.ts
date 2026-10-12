@@ -108,16 +108,18 @@ export async function PATCH(request: Request, context: RouteContext) {
        que começa no dia seguinte à data informada. Quem precisa de data
        retroativa usa a movimentação, que tem `effective_date`. */
     const today = todayInBrazil();
+    // Mudança abre período novo; correção conserta o vigente (o "modificar" do PA30).
+    const historyMode = body.historyMode === "correction" ? "correction" as const : "change" as const;
     const changed = (value: unknown, before: unknown) => (value ?? null) === (before ?? null) ? undefined : (value as string | null) ?? null;
     const nextTermination = next.terminationDate ? String(next.terminationDate).slice(0, 10) : "";
     const history = [
       ...await prepareHistoryChange(d1, {
-        workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "registration_edit",
-        effectiveDate: next.employmentStatus === "terminated" && nextTermination ? terminatedFrom(nextTermination) : today,
+        workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "registration_edit", mode: historyMode,
+        effectiveDate: next.employmentStatus === "terminated" && nextTermination && historyMode === "change" ? terminatedFrom(nextTermination) : today,
         changes: { situation: { employmentStatus: changed(next.employmentStatus, current.employment_status) as typeof next.employmentStatus | undefined } },
       }),
       ...await prepareHistoryChange(d1, {
-        workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "registration_edit", effectiveDate: today,
+        workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "registration_edit", mode: historyMode, effectiveDate: today,
         // Só o campo que esta edição trocou: o resto o registro novo herda do
         // vigente, que pode já ter mudança com data futura à frente.
         changes: {
