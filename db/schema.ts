@@ -3872,13 +3872,75 @@ export const employeeHistoryRecords = pgTable("fdp_employee_history_records", {
   foreignKey({ name: "fdp_employee_history_records_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   foreignKey({ name: "fdp_employee_history_records_movement_fk", columns: [table.workspaceId, table.movementId], foreignColumns: [employeeMovements.workspaceId, employeeMovements.id] }),
   check("fdp_employee_history_records_type_check", sql`${table.recordType} IN ('situation', 'assignment', 'schedule')`),
-  check("fdp_employee_history_records_reason_check", sql`${table.reason} IN ('baseline', 'leave', 'return_to_work', 'termination', 'transfer', 'registration_edit')`),
+  check("fdp_employee_history_records_reason_check", sql`${table.reason} IN ('baseline', 'leave', 'return_to_work', 'termination', 'transfer', 'registration_edit', 'integration_sync')`),
   check("fdp_employee_history_records_validity_check", sql`${table.validTo} >= ${table.validFrom}`),
   check("fdp_employee_history_records_status_check", sql`${table.employmentStatus} IS NULL OR ${table.employmentStatus} IN ('active', 'on_leave', 'terminated')`),
   check("fdp_employee_history_records_situation_check", sql`${table.recordType} <> 'situation' OR (${table.employmentStatus} IS NOT NULL AND ${table.companyId} IS NULL AND ${table.establishmentId} IS NULL AND ${table.departmentId} IS NULL AND ${table.positionId} IS NULL AND ${table.costCenterId} IS NULL AND ${table.workScheduleId} IS NULL)`),
   check("fdp_employee_history_records_assignment_check", sql`${table.recordType} <> 'assignment' OR (${table.companyId} IS NOT NULL AND ${table.employmentStatus} IS NULL AND ${table.workScheduleId} IS NULL)`),
   check("fdp_employee_history_records_schedule_check", sql`${table.recordType} <> 'schedule' OR (${table.employmentStatus} IS NULL AND ${table.companyId} IS NULL AND ${table.establishmentId} IS NULL AND ${table.departmentId} IS NULL AND ${table.positionId} IS NULL AND ${table.costCenterId} IS NULL)`),
 ]);
+
+/**
+ * Elementos contratuais (migration 0109) — IT0016 + IT0019 do SAP: tipo de
+ * contrato, fim da experiência ou do prazo determinado e aviso prévio. Só
+ * prazos; regras em `lib/contract-terms.ts`.
+ */
+export const employeeContractTerms = pgTable("fdp_employee_contract_terms", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull(),
+  contractKind: text("contract_kind").notNull().default("indefinite"),
+  experienceFirstEnd: date("experience_first_end", { mode: "string" }),
+  contractEnd: date("contract_end", { mode: "string" }),
+  noticeKind: text("notice_kind"),
+  noticeStart: date("notice_start", { mode: "string" }),
+  noticeDays: integer("notice_days"),
+  noticeEnd: date("notice_end", { mode: "string" }),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_contract_terms_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_contract_terms_employee_uq").on(table.workspaceId, table.employeeId),
+  index("fdp_employee_contract_terms_contract_end_idx").on(table.workspaceId, table.contractEnd).where(sql`${table.contractEnd} IS NOT NULL`),
+  index("fdp_employee_contract_terms_notice_end_idx").on(table.workspaceId, table.noticeEnd).where(sql`${table.noticeEnd} IS NOT NULL`),
+  foreignKey({ name: "fdp_employee_contract_terms_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  check("fdp_employee_contract_terms_kind_check", sql`${table.contractKind} IN ('indefinite', 'experience', 'fixed_term')`),
+  check("fdp_employee_contract_terms_end_check", sql`(${table.contractKind} = 'indefinite') = (${table.contractEnd} IS NULL)`),
+  check("fdp_employee_contract_terms_first_end_check", sql`${table.experienceFirstEnd} IS NULL OR (${table.contractKind} = 'experience' AND ${table.experienceFirstEnd} < ${table.contractEnd})`),
+  check("fdp_employee_contract_terms_notice_kind_check", sql`${table.noticeKind} IS NULL OR ${table.noticeKind} IN ('worked', 'indemnified')`),
+  check("fdp_employee_contract_terms_notice_check", sql`(${table.noticeKind} IS NULL AND ${table.noticeStart} IS NULL AND ${table.noticeDays} IS NULL AND ${table.noticeEnd} IS NULL) OR (${table.noticeKind} IS NOT NULL AND ${table.noticeStart} IS NOT NULL AND ${table.noticeDays} BETWEEN 30 AND 90 AND ${table.noticeEnd} >= ${table.noticeStart})`),
+]);
+
+/**
+ * Conferência do eSocial (migration 0109): o que alguém confirmou sobre cada
+ * evento que o histórico funcional exige. O Vinculato não transmite.
+ */
+export const esocialEventChecks = pgTable("fdp_esocial_event_checks", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull(),
+  historyRecordId: text("history_record_id").notNull(),
+  eventCode: text("event_code").notNull(),
+  eventDate: date("event_date", { mode: "string" }).notNull(),
+  status: text("status").notNull(),
+  receipt: text("receipt").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  checkedBy: text("checked_by").notNull(),
+  checkedAt: timestamp("checked_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_esocial_event_checks_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_esocial_event_checks_event_uq").on(table.workspaceId, table.historyRecordId, table.eventCode, table.eventDate),
+  foreignKey({ name: "fdp_esocial_event_checks_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_esocial_event_checks_record_fk", columns: [table.workspaceId, table.historyRecordId], foreignColumns: [employeeHistoryRecords.workspaceId, employeeHistoryRecords.id] }).onDelete("cascade"),
+  check("fdp_esocial_event_checks_event_check", sql`${table.eventCode} IN ('S-2206', 'S-2230', 'S-2299')`),
+  check("fdp_esocial_event_checks_status_check", sql`${table.status} IN ('transmitted', 'not_applicable')`),
+  check("fdp_esocial_event_checks_receipt_check", sql`${table.status} <> 'transmitted' OR length(trim(${table.receipt})) > 0`),
+  check("fdp_esocial_event_checks_not_applicable_check", sql`${table.status} <> 'not_applicable' OR length(trim(${table.notes})) > 0`),
+]);
+
 
 /**
  * Adiantamentos e Descontos (§ migration 0085).

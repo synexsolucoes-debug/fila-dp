@@ -47,7 +47,7 @@ export const historyRecordTypeLabels: Record<HistoryRecordType, string> = {
  * cadastro no dia em que o histórico começou a existir para a pessoa: o que
  * houve antes disso não foi registrado, e a tela diz isso por escrito.
  */
-export const historyReasons = ["baseline", "leave", "return_to_work", "termination", "transfer", "registration_edit"] as const;
+export const historyReasons = ["baseline", "leave", "return_to_work", "termination", "transfer", "registration_edit", "integration_sync"] as const;
 export type HistoryReason = typeof historyReasons[number];
 
 export const historyReasonLabels: Record<HistoryReason, string> = {
@@ -57,6 +57,7 @@ export const historyReasonLabels: Record<HistoryReason, string> = {
   termination: "Desligamento",
   transfer: "Transferência",
   registration_edit: "Alteração no cadastro",
+  integration_sync: "Sincronização com a origem (Sankhya)",
 };
 
 export type EmploymentStatus = "active" | "on_leave" | "terminated";

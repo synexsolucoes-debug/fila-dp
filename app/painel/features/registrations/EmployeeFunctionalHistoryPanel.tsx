@@ -44,6 +44,7 @@ const reasonLabels: Record<string, string> = {
   termination: "Desligamento",
   transfer: "Transferência",
   registration_edit: "Alteração no cadastro",
+  integration_sync: "Sincronização com a origem (Sankhya)",
 };
 const statusLabels: Record<string, string> = { active: "Ativo", on_leave: "Afastado", terminated: "Desligado" };
 const fieldLabels: Record<string, string> = {

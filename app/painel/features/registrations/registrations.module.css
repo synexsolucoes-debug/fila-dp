@@ -458,6 +458,7 @@
 .sectionTitle h3 { margin: 0; font-size: .84rem; }
 .sectionTitle span { color: var(--reg-soft); font-size: .7rem; }
 /* Vida funcional (§4.27): a ficha lida numa data-base, no desenho do PA20 do SAP. */
+.fieldHint { color: var(--reg-soft); font-size: .72rem; font-weight: 700; }
 .historyModeField { display: grid; gap: 4px; margin-right: auto; min-width: 0; }
 .historyModeField > span { color: var(--reg-soft); font-size: .68rem; font-weight: 700; }
 .historyModeField select { min-height: 36px; max-width: 100%; border: 1px solid var(--reg-border); border-radius: 8px; background: var(--reg-surface); color: var(--reg-text); padding: 0 8px; font: inherit; font-size: .76rem; }

@@ -92,7 +92,7 @@ const VIEWS_WITH_RECORD = new Set<PanelView>(["board", "triage", "registrations"
  * treinamento, as duas fontes que vencem. As demais abas continuam existindo,
  * só não têm parâmetro de URL porque nada aponta para elas de fora ainda.
  */
-export const employeeRecordTabs = ["exams", "trainings"] as const;
+export const employeeRecordTabs = ["exams", "trainings", "contract"] as const;
 export type EmployeeRecordTab = typeof employeeRecordTabs[number];
 
 /* Do endereço para a visão. Ordenado do caminho mais longo para o mais curto:

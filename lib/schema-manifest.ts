@@ -116,6 +116,7 @@ export const expectedMigrations = [
   "0106_portal_link_issuer_company.sql",
   "0107_employee_functional_history.sql",
   "0108_erp_dp_return_to_work.sql",
+  "0109_erp_dp_contract_terms_esocial_checks.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

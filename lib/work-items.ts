@@ -90,7 +90,9 @@ export type WorkItemSource =
   | "occupational_exam_due"
   | "training_due"
   | "cat_pending"
-  | "position_risk_exam_missing";
+  | "position_risk_exam_missing"
+  | "contract_term_due"
+  | "notice_period_due";
 
 export type WorkItemScope = "mine" | "team";
 
@@ -394,6 +396,67 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
       WHERE t.workspace_id = ? AND t.valid_until IS NOT NULL AND t.valid_until <= CURRENT_DATE + 60 {{company}} {{mine}}`,
   },
   /* ---------------------------------------------------------------------- *
+   * ERP DP, passo 3 — elementos contratuais (IT0016 + IT0019 do SAP)
+   *
+   * O fim da experiência e do prazo determinado é decisão com data: efetivar,
+   * prorrogar ou encerrar. Passou da data sem decisão, o contrato vira
+   * indeterminado por força de lei (CLT, art. 451) — por isso a janela é curta
+   * (15 dias) e o vencido continua aparecendo. O próximo prazo é o fim do 1º
+   * período, se ainda não passou; senão, o fim do contrato.
+   * ---------------------------------------------------------------------- */
+  {
+    key: "contract_term_due",
+    label: "Contrato a termo vencendo",
+    capability: "employees.read",
+    companyColumn: "emp.company_id",
+    mineCondition: "",
+    mineParameters: 0,
+    sql: `SELECT 'contract_term_due' AS source_type, ct.employee_id AS source_id,
+        CASE WHEN ct.contract_kind = 'experience' THEN 'Experiência vence — ' ELSE 'Prazo determinado vence — ' END
+          || COALESCE(NULLIF(emp.social_name, ''), emp.full_name) AS title,
+        CASE WHEN ct.experience_first_end >= CURRENT_DATE THEN 'Fim do 1º período de experiência' ELSE 'Fim do contrato a termo' END AS description,
+        'high' AS priority, emp.company_id,
+        COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        ct.employee_id,
+        (CASE WHEN ct.experience_first_end >= CURRENT_DATE THEN ct.experience_first_end ELSE ct.contract_end END)::timestamptz AS due_at,
+        ct.created_at, ct.updated_at,
+        CASE WHEN ct.contract_end < CURRENT_DATE THEN 'overdue'
+             WHEN (CASE WHEN ct.experience_first_end >= CURRENT_DATE THEN ct.experience_first_end ELSE ct.contract_end END) <= CURRENT_DATE + 3 THEN 'warning'
+             ELSE 'safe' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_employee_contract_terms ct
+      JOIN fdp_employees emp ON emp.workspace_id = ct.workspace_id AND emp.id = ct.employee_id
+      LEFT JOIN fdp_companies co ON co.workspace_id = emp.workspace_id AND co.id = emp.company_id
+      WHERE ct.workspace_id = ? AND ct.contract_end IS NOT NULL AND emp.employment_status <> 'terminated'
+        AND (CASE WHEN ct.experience_first_end >= CURRENT_DATE THEN ct.experience_first_end ELSE ct.contract_end END) <= CURRENT_DATE + 15
+        {{company}} {{mine}}`,
+  },
+  {
+    key: "notice_period_due",
+    label: "Aviso prévio terminando",
+    capability: "employees.read",
+    companyColumn: "emp.company_id",
+    mineCondition: "",
+    mineParameters: 0,
+    sql: `SELECT 'notice_period_due' AS source_type, ct.employee_id AS source_id,
+        'Aviso prévio termina — ' || COALESCE(NULLIF(emp.social_name, ''), emp.full_name) AS title,
+        CASE WHEN ct.notice_kind = 'worked' THEN 'Aviso trabalhado' ELSE 'Aviso indenizado' END
+          || ' de ' || ct.notice_days || ' dias' AS description,
+        'high' AS priority, emp.company_id,
+        COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        ct.employee_id, ct.notice_end::timestamptz AS due_at, ct.created_at, ct.updated_at,
+        CASE WHEN ct.notice_end < CURRENT_DATE THEN 'overdue'
+             WHEN ct.notice_end <= CURRENT_DATE + 3 THEN 'warning' ELSE 'safe' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_employee_contract_terms ct
+      JOIN fdp_employees emp ON emp.workspace_id = ct.workspace_id AND emp.id = ct.employee_id
+      LEFT JOIN fdp_companies co ON co.workspace_id = emp.workspace_id AND co.id = emp.company_id
+      WHERE ct.workspace_id = ? AND ct.notice_end IS NOT NULL AND emp.employment_status <> 'terminated'
+        AND ct.notice_end <= CURRENT_DATE + 15 {{company}} {{mine}}`,
+  },
+  /* ---------------------------------------------------------------------- *
    * Motor de Prazos — terceiro passo
    *
    * A CAT tem um prazo que os outros itens não têm: um dia útil (Lei 8.213/91,
@@ -559,6 +622,8 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
   training_due: "Agendar a reciclagem do treinamento",
   cat_pending: "Emitir a CAT",
   position_risk_exam_missing: "Agendar o exame admissional com o colaborador",
+  contract_term_due: "Decidir: efetivar, prorrogar ou encerrar o contrato",
+  notice_period_due: "Preparar o desligamento na data do fim do aviso",
 };
 
 /**
@@ -593,6 +658,9 @@ export function workItemHref(source: WorkItemSource, id: string, employeeId?: st
     // Sem FK de colaborador (§83) — o link vai para a tela do módulo.
     case "cat_pending": return "/painel/acidentes";
     case "position_risk_exam_missing": return employeeId ? employeePath(employeeId, "exams") : "/painel/cadastros";
+    // A aba Contrato mora na ficha do colaborador (ERP DP, passo 3).
+    case "contract_term_due":
+    case "notice_period_due": return employeeId ? employeePath(employeeId, "contract") : "/painel/cadastros";
     default: return "/painel";
   }
 }

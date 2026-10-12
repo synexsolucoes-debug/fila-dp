@@ -108,6 +108,15 @@ test("cada mudança do mês vira o evento que o sistema de folha precisa transmi
     // Desligado a partir de 01/04 = último dia 31/03: o S-2299 é de março.
     ["S-2299", "bia", "2026-03-31"],
   ]);
+  // O término informa o último dia de afastamento e pertence ao mês dele:
+  // volta em 01/04 → término em 31/03, na competência de março.
+  const virada = [
+    record("davi", "situation", "2024-01-01", "2026-03-19", { employmentStatus: "active" }, "baseline"),
+    record("davi", "situation", "2026-03-20", "2026-03-31", { employmentStatus: "on_leave" }, "leave"),
+    record("davi", "situation", "2026-04-01", HIGH_DATE, { employmentStatus: "active" }, "return_to_work"),
+  ];
+  assert.deepEqual(expectedEsocialEvents(virada, "2026-03").map((event) => [event.event, event.date]), [["S-2230", "2026-03-20"], ["S-2230", "2026-03-31"]]);
+  assert.deepEqual(expectedEsocialEvents(virada, "2026-04"), []);
   // A linha de base não é mudança e não gera evento.
   assert.equal(expectedEsocialEvents(records, "2024-01").length, 0);
 });

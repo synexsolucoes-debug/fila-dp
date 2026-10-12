@@ -2,12 +2,13 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, BookOpen, CalendarClock, CalendarRange, ClipboardCheck, Download, FileClock, History,
+  AlertTriangle, BookOpen, CalendarClock, CalendarRange, Check, ClipboardCheck, Download, FileClock, FileSignature, History, Upload, Undo2,
   LayoutDashboard, LoaderCircle, Play, RefreshCw, Search, ShieldCheck, UserRound, Users,
 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { EmployeeFunctionalHistoryPanel } from "../registrations/EmployeeFunctionalHistoryPanel";
 import { employeePath } from "@/lib/panel-routes";
+import { parseReceiptSheet } from "@/lib/esocial-receipts";
 import styles from "./erp-dp.module.css";
 
 /**
@@ -21,13 +22,14 @@ import styles from "./erp-dp.module.css";
  * mudanças do mês exigem. Nada aqui calcula folha nem transmite eSocial.
  */
 
-type Section = "overview" | "record" | "actions" | "headcount" | "retro" | "cycles" | "esocial" | "about";
+type Section = "overview" | "record" | "actions" | "contracts" | "headcount" | "retro" | "cycles" | "esocial" | "about";
 type Row = Record<string, unknown>;
 
 const sections: Array<{ id: Section; label: string; sap: string; icon: typeof LayoutDashboard }> = [
   { id: "overview", label: "Painel do DP", sap: "Início", icon: LayoutDashboard },
   { id: "record", label: "Ficha funcional", sap: "PA20 / PA30", icon: UserRound },
   { id: "actions", label: "Medidas", sap: "PA40", icon: Play },
+  { id: "contracts", label: "Prazos contratuais", sap: "IT0016 / IT0019", icon: FileSignature },
   { id: "headcount", label: "Quadro em data-base", sap: "Dia-chave", icon: Users },
   { id: "retro", label: "Retroativos", sap: "IT0003", icon: FileClock },
   { id: "cycles", label: "Competências", sap: "PA03", icon: CalendarRange },
@@ -101,10 +103,12 @@ function SectionState({ loading, error, reload, title }: { loading: boolean; err
   return null;
 }
 
-export function ErpDpView({ companyId, scopeLabel, canManageMovements, canReadPending, canReadCycles, onExit }: {
+export function ErpDpView({ companyId, scopeLabel, canManageMovements, canReadPending, canReadCycles, canCheckEsocial, onExit }: {
   companyId: string;
   scopeLabel: string;
   canManageMovements: boolean;
+  /** Gravar a conferência do eSocial — `obligations.manage`. */
+  canCheckEsocial: boolean;
   canReadPending: boolean;
   canReadCycles: boolean;
   onExit: () => void;
@@ -132,10 +136,11 @@ export function ErpDpView({ companyId, scopeLabel, canManageMovements, canReadPe
       {section === "overview" && <OverviewSection companyId={companyId} onGo={setSection} />}
       {section === "record" && <RecordSection companyId={companyId} onExit={onExit} />}
       {section === "actions" && <ActionsSection companyId={companyId} canManage={canManageMovements} />}
+      {section === "contracts" && <ContractsSection companyId={companyId} onExit={onExit} />}
       {section === "headcount" && <HeadcountSection companyId={companyId} />}
       {section === "retro" && <RetroSection companyId={companyId} />}
       {section === "cycles" && <CyclesSection companyId={companyId} />}
-      {section === "esocial" && <EsocialSection companyId={companyId} />}
+      {section === "esocial" && <EsocialSection companyId={companyId} canCheck={canCheckEsocial} />}
       {section === "about" && <AboutSection />}
     </section>
   </div>;
@@ -387,25 +392,150 @@ function CyclesSection({ companyId }: { companyId: string }) {
 
 /* -------------------------------------------------------------------------- */
 
-function EsocialSection({ companyId }: { companyId: string }) {
+type EsocialEvent = {
+  event: string; label: string; employeeId: string; recordId: string; date: string; detail: string;
+  employeeName: string; registrationNumber: string;
+  check: { status: string; receipt: string; notes: string; checkedAt: string } | null;
+};
+type EsocialPayload = { competence: string; events: EsocialEvent[]; summary: { total: number; transmitted: number; notApplicable: number; pending: number } };
+
+function EsocialSection({ companyId, canCheck }: { companyId: string; canCheck: boolean }) {
   const [competence, setCompetence] = useState(() => todayLocal().slice(0, 7));
-  const { data, loading, error, reload } = useResource<{ competence: string; events: Row[] }>(`/api/erp-dp/esocial${scopeQuery(companyId, { competence })}`);
+  const { data, loading, error, reload } = useResource<EsocialPayload>(`/api/erp-dp/esocial${scopeQuery(companyId, { competence })}`);
+  const [editing, setEditing] = useState<{ key: string; status: "transmitted" | "not_applicable"; value: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const keyOf = (event: EsocialEvent) => `${event.recordId}|${event.event}|${event.date}`;
+
+  async function send(items: Array<Record<string, unknown>>, message: string) {
+    setBusy(true);
+    try {
+      await requestJson("/api/erp-dp/esocial/checks", { method: "POST", body: JSON.stringify({ items }) });
+      setFeedback({ tone: "ok", text: message }); setEditing(null);
+      await reload();
+    } catch (cause) {
+      setFeedback({ tone: "error", text: cause instanceof Error ? cause.message : "Não foi possível gravar a conferência." });
+    } finally { setBusy(false); }
+  }
+
+  async function undo(event: EsocialEvent) {
+    setBusy(true);
+    try {
+      const query = new URLSearchParams({ historyRecordId: event.recordId, eventCode: event.event, eventDate: event.date });
+      await requestJson(`/api/erp-dp/esocial/checks?${query}`, { method: "DELETE" });
+      setFeedback({ tone: "ok", text: "Conferência desfeita." });
+      await reload();
+    } catch (cause) {
+      setFeedback({ tone: "error", text: cause instanceof Error ? cause.message : "Não foi possível desfazer." });
+    } finally { setBusy(false); }
+  }
+
+  async function importSheet(file: File) {
+    if (!data) return;
+    const lines = parseReceiptSheet(await file.text());
+    const matched: Array<Record<string, unknown>> = [];
+    let unmatched = 0;
+    for (const line of lines) {
+      const event = data.events.find((item) => item.registrationNumber === line.registration && item.event === line.event && item.date === line.date);
+      if (event) matched.push({ historyRecordId: event.recordId, eventCode: event.event, eventDate: event.date, status: "transmitted", receipt: line.receipt });
+      else unmatched += 1;
+    }
+    if (!matched.length) {
+      setFeedback({ tone: "error", text: `Nenhuma das ${lines.length} linha(s) válidas corresponde a um evento esperado desta competência. Formato: matrícula;evento;data;recibo.` });
+      return;
+    }
+    await send(matched, `${matched.length} recibo(s) conferido(s)${unmatched ? `; ${unmatched} linha(s) sem evento correspondente nesta competência` : ""}.`);
+  }
+
   return <div className={styles.stack}>
-    <p className={styles.lead}>Os eventos não periódicos que as mudanças registradas no mês exigem. É uma lista de conferência:
-      confira no seu sistema de folha se cada um foi transmitido. O Vinculato não gera nem envia eventos ao eSocial.</p>
-    <div className={styles.toolbar}><label><span>Competência</span>
-      <input type="month" value={competence} onChange={(event) => setCompetence(event.target.value || todayLocal().slice(0, 7))} /></label></div>
-    {loading || error || !data ? <SectionState loading={loading} error={error} reload={() => void reload()} title="Derivando eventos do histórico" />
-      : data.events.length ? <div className={styles.tableWrap}><table className={styles.table}>
-        <thead><tr><th>Evento</th><th>Data</th><th>Colaborador</th><th>O que aconteceu</th></tr></thead>
-        <tbody>{data.events.map((row) => <tr key={`${text(row.recordId)}-${text(row.event)}`}>
-          <td data-label="Evento"><strong>{text(row.event)}</strong> · {text(row.label)}</td>
-          <td data-label="Data">{dateLabel(row.date)}</td>
-          <td data-label="Colaborador">{text(row.registrationNumber)} · {text(row.employeeName)}</td>
-          <td data-label="O que aconteceu">{text(row.detail)}</td>
-        </tr>)}</tbody>
+    <p className={styles.lead}>Os eventos não periódicos que as mudanças registradas no mês exigem. Confira no seu sistema de folha e registre aqui:
+      transmitido, com o número do recibo, ou não se aplica, com o motivo. O Vinculato não gera nem envia eventos ao eSocial.</p>
+    <div className={styles.toolbar}>
+      <label><span>Competência</span>
+        <input type="month" value={competence} onChange={(event) => setCompetence(event.target.value || todayLocal().slice(0, 7))} /></label>
+      {canCheck && <label className={styles.secondary}><Upload aria-hidden="true" /> Importar recibos (CSV)
+        <input type="file" accept=".csv,.txt" className={styles.hiddenInput} disabled={busy || !data}
+          onChange={(event) => { const file = event.target.files?.[0]; if (file) void importSheet(file); event.target.value = ""; }} /></label>}
+    </div>
+    {feedback && (feedback.tone === "ok"
+      ? <div className={styles.note}><Check aria-hidden="true" /><p>{feedback.text}</p></div>
+      : <ErrorBanner title="A conferência não foi gravada" message={feedback.text} />)}
+    {loading || error || !data ? <SectionState loading={loading} error={error} reload={() => void reload()} title="Derivando eventos do histórico" /> : <>
+      {data.summary.total > 0 && <div className={styles.tiles}>
+        <div className={styles.tile}><small>Eventos esperados</small><strong>{data.summary.total}</strong><span>em {data.competence}</span></div>
+        <div className={styles.tile}><small>Transmitidos</small><strong>{data.summary.transmitted}</strong><span>com recibo</span></div>
+        <div className={styles.tile}><small>Não se aplica</small><strong>{data.summary.notApplicable}</strong><span>com motivo</span></div>
+        <div className={data.summary.pending ? styles.tileWarn : styles.tile}><small>A conferir</small><strong>{data.summary.pending}</strong><span>sem confirmação</span></div>
+      </div>}
+      {data.events.length ? <div className={styles.tableWrap}><table className={styles.table}>
+        <thead><tr><th>Evento</th><th>Data</th><th>Colaborador</th><th>O que aconteceu</th><th>Conferência</th></tr></thead>
+        <tbody>{data.events.map((row) => {
+          const key = keyOf(row);
+          return <tr key={key}>
+            <td data-label="Evento"><strong>{row.event}</strong> · {row.label}</td>
+            <td data-label="Data">{dateLabel(row.date)}</td>
+            <td data-label="Colaborador">{row.registrationNumber} · {row.employeeName}</td>
+            <td data-label="O que aconteceu">{row.detail}</td>
+            <td data-label="Conferência">
+              {editing?.key === key ? <form className={styles.inlineForm} onSubmit={(event) => {
+                event.preventDefault();
+                void send([{ historyRecordId: row.recordId, eventCode: row.event, eventDate: row.date, status: editing.status,
+                  receipt: editing.status === "transmitted" ? editing.value : "", notes: editing.status === "not_applicable" ? editing.value : "" }],
+                editing.status === "transmitted" ? "Evento conferido como transmitido." : "Evento marcado como não se aplica.");
+              }}>
+                <input autoFocus required value={editing.value} maxLength={editing.status === "transmitted" ? 80 : 500}
+                  aria-label={editing.status === "transmitted" ? "Número do recibo" : "Motivo"}
+                  placeholder={editing.status === "transmitted" ? "Nº do recibo" : "Por que não se aplica"}
+                  onChange={(event) => setEditing({ ...editing, value: event.target.value })} />
+                <button className={styles.primary} disabled={busy}>Salvar</button>
+                <button type="button" className={styles.secondary} onClick={() => setEditing(null)}>Cancelar</button>
+              </form>
+              : row.check ? <div className={styles.inlineForm}>
+                <StatusPill status={row.check.status === "transmitted" ? "applied" : "neutral"}
+                  label={row.check.status === "transmitted" ? `Transmitido · ${row.check.receipt}` : `Não se aplica · ${row.check.notes}`} />
+                {canCheck && <button type="button" className={styles.secondary} disabled={busy} onClick={() => void undo(row)} aria-label="Desfazer conferência"><Undo2 aria-hidden="true" /></button>}
+              </div>
+              : canCheck ? <div className={styles.inlineForm}>
+                <button type="button" className={styles.secondary} disabled={busy} onClick={() => setEditing({ key, status: "transmitted", value: "" })}>Transmitido</button>
+                <button type="button" className={styles.secondary} disabled={busy} onClick={() => setEditing({ key, status: "not_applicable", value: "" })}>Não se aplica</button>
+              </div>
+              : <StatusPill status="pending" label="A conferir" />}
+            </td>
+          </tr>;
+        })}</tbody>
       </table></div> : <EmptyState icon={History} size="compact" title="Nenhuma mudança registrada nesta competência"
         text="Afastamentos, retornos, desligamentos e mudanças de lotação ou jornada do mês aparecem aqui." />}
+    </>}
+  </div>;
+}
+
+/* -------------------------------------------------------------------------- */
+
+type ContractDeadlineRow = { kind: string; date: string; label: string; action: string; employeeId: string; employeeName: string; registrationNumber: string; companyName: string; overdue: boolean };
+
+function ContractsSection({ companyId, onExit }: { companyId: string; onExit: () => void }) {
+  const [days, setDays] = useState("45");
+  const { data, loading, error, reload } = useResource<{ today: string; items: ContractDeadlineRow[] }>(`/api/erp-dp/contract-deadlines${scopeQuery(companyId, { days })}`);
+  return <div className={styles.stack}>
+    <p className={styles.lead}>Fim da experiência, do prazo determinado e do aviso prévio de quem ainda tem vínculo. Passar do fim da experiência
+      sem decidir transforma o contrato em indeterminado (CLT, art. 451). Os mesmos prazos aparecem na Central de Trabalho.</p>
+    <div className={styles.toolbar}><label><span>Mostrar até</span>
+      <select value={days} onChange={(event) => setDays(event.target.value)}>
+        <option value="15">15 dias à frente</option><option value="45">45 dias à frente</option><option value="90">90 dias à frente</option><option value="365">1 ano à frente</option>
+      </select></label></div>
+    {loading || error || !data ? <SectionState loading={loading} error={error} reload={() => void reload()} title="Carregando prazos contratuais" />
+      : data.items.length ? <div className={styles.tableWrap}><table className={styles.table}>
+        <thead><tr><th>Data</th><th>Prazo</th><th>Colaborador</th><th>Empresa</th><th>Decisão</th><th /></tr></thead>
+        <tbody>{data.items.map((row) => <tr key={`${row.employeeId}-${row.kind}`}>
+          <td data-label="Data"><StatusPill status={row.overdue ? "critical" : "warning"} label={dateLabel(row.date)} /></td>
+          <td data-label="Prazo">{row.label}</td>
+          <td data-label="Colaborador">{row.registrationNumber} · {row.employeeName}</td>
+          <td data-label="Empresa">{row.companyName}</td>
+          <td data-label="Decisão">{row.action}</td>
+          <td><a className={styles.secondary} href={employeePath(row.employeeId, "contract")} onClick={onExit}>Abrir contrato</a></td>
+        </tr>)}</tbody>
+      </table></div> : <EmptyState icon={FileSignature} size="compact" title="Nenhum prazo contratual nesta janela"
+        text="Registre o tipo de contrato e o aviso prévio na aba Contrato da ficha do colaborador." />}
   </div>;
 }
 
@@ -419,7 +549,8 @@ function AboutSection() {
     ["Dia-chave (base lógica PNP)", "Quadro de pessoal em qualquer data", "Quadro em data-base"],
     ["Status da folha e retroatividade (0003)", "Pendência para lançar a diferença; sem recálculo", "Retroativos"],
     ["Registro de controle (PA03)", "Competência com gates de fechamento", "Competências"],
-    ["eSocial S-2206, S-2230, S-2299", "Lista de conferência derivada do histórico; sem transmissão", "eSocial esperado"],
+    ["Elementos do contrato e tarefas monitoradas (0016, 0019)", "Experiência, prazo determinado e aviso prévio, com prazos na Central", "Prazos contratuais"],
+    ["eSocial S-2206, S-2230, S-2299", "Conferência do que o histórico exige: transmitido com recibo ou não se aplica", "eSocial esperado"],
   ];
   return <div className={styles.stack}>
     <p className={styles.lead}>O modo ERP foi desenhado a partir da engenharia reversa funcional do SAP HCM
