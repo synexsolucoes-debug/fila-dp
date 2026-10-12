@@ -36,7 +36,7 @@ export function normalizeDemand(row: Row): Demand {
 }
 export function normalizeMovement(row: Row): Movement {
   const rawType = text(value(row, "movementType", "movement_type"));
-  const movementType = (["salary_change", "vacation", "leave", "termination", "transfer", "benefit_change", "registration_sync", "other"].includes(rawType) ? rawType : "other") as MovementType;
+  const movementType = (["salary_change", "vacation", "leave", "return_to_work", "termination", "transfer", "benefit_change", "registration_sync", "other"].includes(rawType) ? rawType : "other") as MovementType;
   const rawStatus = text(row.status);
   const status = (["draft", "pending_approval", "approved", "rejected", "applied", "canceled"].includes(rawStatus) ? rawStatus : "draft") as Movement["status"];
   const rawDetails = value(row, "details", "details_json");

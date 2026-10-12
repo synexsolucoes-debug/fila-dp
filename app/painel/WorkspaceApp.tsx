@@ -6,7 +6,7 @@ import {
   defaultPanelLocation, panelPath, parsePanelPath,
   type PanelLocation, type PanelSettingsSection, type PanelView,
 } from "@/lib/panel-routes";
-import {
+import { ArrowLeftRight,
   ArrowRight,
   BarChart3,
   Bell,
@@ -80,7 +80,7 @@ import {
 } from "@/lib/theme";
 import { RegistrationSheetPanel } from "./features/admission";
 import { chooseRegistrationFormAttachment } from "@/lib/registration-form-file";
-import { capabilitiesForRole, workspaceRoles } from "@/lib/authorization";
+import { capabilitiesForRole, hasCapability, workspaceRoles } from "@/lib/authorization";
 import { capabilityAreas, capabilitiesOfArea, capabilityCatalog, type CapabilityArea } from "@/lib/capability-catalog";
 import { formatWorkingMinutes } from "@/lib/fila-dp-sla";
 import { overviewPeriodLabel, overviewPeriods, periodWindowEnd, periodWindowStart, withinPeriod, type OverviewPeriod } from "@/lib/overview-period";
@@ -96,6 +96,7 @@ import { PaymentsView, contractorSections, isContractorSection, type ContractorS
 import { TimeTrackingView } from "./features/time";
 import { EpiControlView } from "./features/epi";
 import { LedgerView } from "./features/ledger";
+import { ErpDpView } from "./features/erp-dp";
 import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
@@ -142,6 +143,9 @@ type SettingsSection = "general" | "companies" | "columns" | "team" | "security"
  * acessos" no título. Com o mapa, acrescentar uma seção sem lhe dar um nome
  * passa a ser um erro de tipo, e não uma tela mal rotulada em produção.
  */
+/** Preferência local do modo ERP DP — ver `appMode`. */
+const APP_MODE_KEY = "vinculato.app-mode";
+
 const settingsSectionMeta: Record<SettingsSection, { group: string; title: string; description: string }> = {
   security: { group: "CONTA", title: "Perfil e segurança", description: "Revise apenas as sessões da identidade atual." },
   general: { group: "WORKSPACE", title: "Geral", description: "Nome do workspace, quadros disponíveis e a conta com que você está entrando." },
@@ -1148,6 +1152,23 @@ export function WorkspaceApp({
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(initialTheme);
   const theme: ResolvedTheme = themePreference === "system" ? systemTheme : themePreference;
 
+  /* Modo ERP DP (docs/engenharia-reversa-sap-hcm.md): o mesmo Vinculato lido
+     com a gramática do SAP HCM. A escolha é de cada pessoa neste navegador —
+     conveniência, não dado: se o armazenamento falhar, o painel abre no modo
+     Vinculato, que é o padrão. Lido depois da montagem para o HTML do
+     servidor e o do navegador coincidirem. */
+  const [appMode, setAppMode] = useState<"vinculato" | "erp">("vinculato");
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try { if (window.localStorage.getItem(APP_MODE_KEY) === "erp") setAppMode("erp"); } catch { /* sem armazenamento: fica o padrão */ }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+  const changeAppMode = useCallback((next: "vinculato" | "erp") => {
+    setAppMode(next);
+    try { window.localStorage.setItem(APP_MODE_KEY, next); } catch { /* conveniência; o modo vale para esta sessão */ }
+  }, []);
+
   /* Quem está olhando, pelo nome com que as demandas o registram. Fica aqui em
      cima porque o recorte do quadro já depende dele: "minha fila" é um filtro
      por esse nome. */
@@ -1794,6 +1815,8 @@ export function WorkspaceApp({
     : false;
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
+  const canUseErp = snapshot ? hasCapability(snapshot.workspace.role, "employees.read") : false;
+  const erpMode = appMode === "erp" && canUseErp;
   const activeDepartments = useMemo(
     () => (snapshot?.areas ?? []).filter((area) => area.status === "active"),
     [snapshot?.areas],
@@ -2671,6 +2694,8 @@ export function WorkspaceApp({
     ?? new Date().toISOString().slice(0, 7);
   const principalCompany = snapshot.companies.find((company) => company.isPrincipal) ?? null;
   const companyScopeLabel = snapshot.workspace.companyScope === "restricted" ? "Empresas autorizadas" : "Todas do grupo";
+  const erpScopeLabel = companyFilter === "all" ? companyScopeLabel
+    : (snapshot.companies.find((item) => item.id === companyFilter)?.tradeName || snapshot.companies.find((item) => item.id === companyFilter)?.legalName || "Empresa selecionada");
 
   /* A Administração, desenhada como página.
    *
@@ -3044,7 +3069,7 @@ export function WorkspaceApp({
     /* `data-focus` no invólucro, e não no quadro: o que o modo foco esconde —
        barra lateral, contexto do topo — está fora do quadro, e é justamente
        isso que devolve a largura para as colunas. */
-    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`} data-view={view} data-theme={theme} data-focus={focusMode && view === "board" ? "on" : undefined}>
+    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}`} data-view={view} data-theme={theme} data-focus={focusMode && view === "board" ? "on" : undefined}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -3262,13 +3287,13 @@ export function WorkspaceApp({
 
       <section className="dashboard-main">
         <header className="dashboard-header">
-          <div className="dashboard-location"><span>{snapshot.workspace.name} /</span><strong> {header.title}</strong></div>
+          <div className="dashboard-location"><span>{snapshot.workspace.name} /</span><strong> {erpMode ? "ERP DP" : header.title}</strong></div>
           <div className="dashboard-header-actions">
             <label className="header-company-select"><Building2 aria-hidden="true" /><select aria-label="Selecionar empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">{companyScopeLabel}</option>{snapshot.companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</option>)}</select></label>
             {/* Período (§13). Só aparece na Visão geral porque é só lá que ele
                 manda: exibi-lo no quadro sugeriria um recorte que o quadro não
                 aplica, e filtro que não filtra é pior que filtro nenhum. */}
-            {view === "overview" && <label className="header-period-select"><CalendarClock aria-hidden="true" /><select aria-label="Selecionar período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as OverviewPeriod)}>{overviewPeriods.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}
+            {view === "overview" && !erpMode && <label className="header-period-select"><CalendarClock aria-hidden="true" /><select aria-label="Selecionar período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as OverviewPeriod)}>{overviewPeriods.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}
             {activeGroup && <button type="button" className="process-context-pin"
               onClick={() => shortcuts.toggleFavorite(view)} aria-pressed={shortcuts.isFavorite(view)}
               title={shortcuts.isFavorite(view) ? "Remover dos atalhos" : "Fixar nos atalhos"}>
@@ -3292,14 +3317,28 @@ export function WorkspaceApp({
                 `dashboard-heading`. Ficar na faixa superior a punha entre a
                 busca e o avatar, longe da tela a que ela pertence e a mesma
                 distância de todas as telas ao mesmo tempo. */}
-            {canEdit && primaryAction && header.ownHeader && <button className="new-demand"
+            {!erpMode && canEdit && primaryAction && header.ownHeader && <button className="new-demand"
               onClick={primaryAction.kind === "inbox" ? () => setInboxModalOpen(true) : openNewCard}>
               <Plus aria-hidden="true" /><span>{primaryAction.label}</span>
+            </button>}
+            {/* A troca de modo fica no canto superior direito, a última porta
+                da faixa: é a mesma em todas as telas e nunca some no celular.
+                Só aparece para quem lê cadastro — o ERP DP inteiro é sobre ele. */}
+            {canUseErp && <button type="button" className="erp-mode-toggle" aria-pressed={erpMode}
+              onClick={() => changeAppMode(erpMode ? "vinculato" : "erp")}
+              aria-label={erpMode ? "Modo ERP DP ativo. Voltar ao Vinculato" : "Trocar para o ERP DP"}
+              title={erpMode ? "Voltar ao Vinculato" : "Trocar para o ERP DP"}>
+              <ArrowLeftRight aria-hidden="true" /><span>{erpMode ? "Vinculato" : "ERP DP"}</span>
             </button>}
           </div>
         </header>
 
         <div className="dashboard-content">
+          {erpMode ? <ErpDpView companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={erpScopeLabel}
+            canManageMovements={hasCapability(snapshot.workspace.role, "movements.manage")}
+            canReadPending={hasCapability(snapshot.workspace.role, "pending_items.read")}
+            canReadCycles={hasCapability(snapshot.workspace.role, "competences.read")}
+            onExit={() => changeAppMode("vinculato")} /> :
           <ProcessTabsProvider>{(tabsTarget) => <>
           {/* O contexto pode ter mudado sozinho porque o grupo anterior saiu do
               ar. Trocar em silêncio faria a pessoa achar que perdeu dados. */}
@@ -3566,7 +3605,7 @@ export function WorkspaceApp({
             if (card) openCard(card);
           }} />}
           </PageTransition>}
-          </>}</ProcessTabsProvider>
+          </>}</ProcessTabsProvider>}
         </div>
       </section>
 

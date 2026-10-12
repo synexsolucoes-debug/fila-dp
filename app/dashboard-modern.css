@@ -463,6 +463,57 @@
   color: #fff;
 }
 
+/* Troca de modo Vinculato ⇄ ERP DP: a última porta do canto superior
+   direito. Contorno no modo Vinculato; preenchida quando o ERP está ativo,
+   para a pessoa saber em que modo está sem ler o rótulo. O seletor leva
+   `.operational-ui` e `button` porque a faixa já tem regras desse peso
+   (interface-refresh.css) que, de outro modo, apagariam a cor de destaque. */
+.operational-ui .dashboard-header-actions button.erp-mode-toggle {
+  display: inline-flex;
+  gap: 7px;
+  width: auto;
+  min-width: max-content;
+  padding: 0 13px;
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+  color: var(--ui-accent-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.operational-ui .dashboard-header-actions button.erp-mode-toggle:hover {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.operational-ui .dashboard-header-actions button.erp-mode-toggle[aria-pressed="true"],
+.operational-ui .dashboard-header-actions button.erp-mode-toggle[aria-pressed="true"]:hover {
+  background: var(--ui-accent);
+  color: var(--ui-on-accent);
+}
+
+/* No celular a faixa já está cheia: fica só o ícone, no mesmo tamanho das
+   outras portas, e o rótulo continua no aria-label. */
+@media (max-width: 640px) {
+  .operational-ui .dashboard-header-actions button.erp-mode-toggle {
+    width: 34px;
+    min-width: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .operational-ui .dashboard-header-actions button.erp-mode-toggle span {
+    display: none;
+  }
+}
+
+/* No modo ERP o menu do Vinculato sai — inclusive a barra inferior do
+   celular, que é o mesmo `nav` com outra roupa e regras mais pesadas: quem
+   navega é o menu do ERP DP. */
+.operational-ui.erp-mode .dashboard-sidebar nav {
+  display: none !important;
+}
+
 .theme-dark .dashboard-header-actions .new-demand {
   border-color: var(--ui-primary);
   background: var(--ui-primary);

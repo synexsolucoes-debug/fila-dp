@@ -1176,7 +1176,7 @@ export const employeeMovements = pgTable("fdp_employee_movements", {
   foreignKey({ name: "fdp_employee_movements_workspace_card_fk", columns: [table.workspaceId, table.cardId], foreignColumns: [cards.workspaceId, cards.id] }),
   foreignKey({ name: "fdp_employee_movements_workspace_requester_fk", columns: [table.workspaceId, table.requestedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
   foreignKey({ name: "fdp_employee_movements_workspace_decider_fk", columns: [table.workspaceId, table.decidedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
-  check("fdp_employee_movements_type_check", sql`${table.movementType} IN ('salary_change', 'vacation', 'leave', 'termination', 'transfer', 'benefit_change', 'registration_sync', 'epi_discount', 'other')`),
+  check("fdp_employee_movements_type_check", sql`${table.movementType} IN ('salary_change', 'vacation', 'leave', 'return_to_work', 'termination', 'transfer', 'benefit_change', 'registration_sync', 'epi_discount', 'other')`),
   check("fdp_employee_movements_status_check", sql`${table.status} IN ('draft', 'pending_approval', 'approved', 'rejected', 'applied', 'canceled')`),
 ]);
 
@@ -3872,7 +3872,7 @@ export const employeeHistoryRecords = pgTable("fdp_employee_history_records", {
   foreignKey({ name: "fdp_employee_history_records_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
   foreignKey({ name: "fdp_employee_history_records_movement_fk", columns: [table.workspaceId, table.movementId], foreignColumns: [employeeMovements.workspaceId, employeeMovements.id] }),
   check("fdp_employee_history_records_type_check", sql`${table.recordType} IN ('situation', 'assignment', 'schedule')`),
-  check("fdp_employee_history_records_reason_check", sql`${table.reason} IN ('baseline', 'leave', 'termination', 'transfer', 'registration_edit')`),
+  check("fdp_employee_history_records_reason_check", sql`${table.reason} IN ('baseline', 'leave', 'return_to_work', 'termination', 'transfer', 'registration_edit')`),
   check("fdp_employee_history_records_validity_check", sql`${table.validTo} >= ${table.validFrom}`),
   check("fdp_employee_history_records_status_check", sql`${table.employmentStatus} IS NULL OR ${table.employmentStatus} IN ('active', 'on_leave', 'terminated')`),
   check("fdp_employee_history_records_situation_check", sql`${table.recordType} <> 'situation' OR (${table.employmentStatus} IS NOT NULL AND ${table.companyId} IS NULL AND ${table.establishmentId} IS NULL AND ${table.departmentId} IS NULL AND ${table.positionId} IS NULL AND ${table.costCenterId} IS NULL AND ${table.workScheduleId} IS NULL)`),

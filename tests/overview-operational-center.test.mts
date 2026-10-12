@@ -132,7 +132,8 @@ test("o período recorta todos os blocos da Visão geral, não só um", () => {
 test("o seletor de período só aparece onde ele manda", () => {
   // Exibi-lo no quadro sugeriria um recorte que o quadro não aplica, e filtro
   // que não filtra é pior que filtro nenhum.
-  assert.match(source, /view === "overview" && <label className="header-period-select"/u);
+  // No modo ERP DP (§4.28) a Visão geral não está na tela, então o seletor sai também.
+  assert.match(source, /view === "overview" && !erpMode && <label className="header-period-select"/u);
   assert.match(source, /aria-label="Selecionar período"/u);
 });
 

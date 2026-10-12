@@ -4,6 +4,8 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { movementEmploymentEffect, movementTransferEffect } from "@/lib/operations";
 import { terminatedFrom } from "@/lib/employee-history";
+import { competenceOf, processedCycleStatuses, retroactivityKey, retroactivityTitle } from "@/lib/erp-dp";
+import { blocksReturnToWork, type ExamResult } from "@/lib/occupational-exams";
 import { prepareHistoryChange } from "@/lib/employee-history-service";
 
 type Context = { params: Promise<{ id: string }> };
@@ -39,7 +41,7 @@ export async function POST(request: Request, context: Context) {
     requireCapability(workspace, "movements.manage");
 
     const movement = await d1.prepare(`SELECT m.company_id, m.employee_id, m.movement_type, m.status, m.details_json,
-        m.effective_date, e.employment_status AS employee_status
+        m.effective_date, m.title, e.employment_status AS employee_status
       FROM fdp_employee_movements m
       JOIN fdp_employees e ON e.workspace_id = m.workspace_id AND e.id = m.employee_id
       WHERE m.workspace_id = ? AND m.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
@@ -53,6 +55,21 @@ export async function POST(request: Request, context: Context) {
     if (effect && movement.employee_status !== effect.requiredCurrentStatus) {
       throw new ApiError(409, "EMPLOYEE_STATUS_CONFLICT",
         "A situação do colaborador mudou desde a aprovação e não corresponde mais ao que esta movimentação espera.");
+    }
+
+    /* Retorno de afastamento (ERP DP, passo 2): a mesma trava da edição do
+       cadastro (§4.9) — o último exame dizendo inapto impede a volta. Sem
+       ela, a medida viraria o atalho para contornar o exame. */
+    if (movement.movement_type === "return_to_work") {
+      const latestExam = await d1.prepare(`SELECT result FROM fdp_occupational_exams
+        WHERE workspace_id = ? AND employee_id = ? ORDER BY exam_date DESC, created_at DESC LIMIT 1`)
+        .bind(workspace.id, movement.employee_id).first<{ result: string }>();
+      if (latestExam && blocksReturnToWork(latestExam.result as ExamResult)) {
+        throw ApiError.badRequest(
+          "O último exame ocupacional registra este colaborador como inapto. Registre um novo exame de retorno antes de aplicar o retorno.",
+          "EMPLOYEE_RETURN_BLOCKED_BY_EXAM",
+        );
+      }
     }
 
     const details = detailsOf(movement.details_json);
@@ -111,7 +128,8 @@ export async function POST(request: Request, context: Context) {
     if (effect || transfer) {
       statements.push(...await prepareHistoryChange(d1, {
         workspaceId: workspace.id, employeeId: String(movement.employee_id), userId: user.id, movementId: id,
-        reason: effect?.employmentStatus === "terminated" ? "termination" : effect ? "leave" : "transfer",
+        reason: effect?.employmentStatus === "terminated" ? "termination"
+          : effect?.employmentStatus === "active" ? "return_to_work" : effect ? "leave" : "transfer",
         effectiveDate: effect?.employmentStatus === "terminated" ? terminatedFrom(terminationDate ?? effectiveDate) : effectiveDate,
         changes: effect
           ? { situation: { employmentStatus: effect.employmentStatus } }
@@ -121,6 +139,24 @@ export async function POST(request: Request, context: Context) {
               costCenterId: transfer?.costCenterId ?? undefined,
             } },
       }));
+    }
+    /* Retroatividade (ERP DP, passo 2 — o infotipo 0003 do SAP, sem
+       recálculo): a movimentação vale a partir de um mês cuja folha já foi
+       processada. O Vinculato não recalcula, mas não deixa a diferença cair
+       no esquecimento: abre pendência para o DP lançar na próxima folha.
+       Vale para todo tipo de movimentação — alteração salarial retroativa é
+       o caso mais comum. Idempotente pela chave: reaplicar não duplica. */
+    const retroCompetence = competenceOf(effectiveDate);
+    const processedCycle = await d1.prepare(`SELECT id, status FROM fdp_payroll_cycles
+      WHERE workspace_id = ? AND company_id = ? AND competence = ? AND status IN (${processedCycleStatuses.map(() => "?").join(", ")})`)
+      .bind(workspace.id, movement.company_id, retroCompetence, ...processedCycleStatuses).first<{ id: string; status: string }>();
+    if (processedCycle) {
+      statements.push(d1.prepare(`INSERT INTO fdp_operational_pending_items
+          (id, workspace_id, company_id, payroll_cycle_id, source_type, source_id, severity, blocking, title, status, idempotency_key)
+        VALUES (?, ?, ?, NULL, 'movement', ?, 'warning', 0, ?, 'open', ?)
+        ON CONFLICT (workspace_id, idempotency_key) DO NOTHING`)
+        .bind(crypto.randomUUID(), workspace.id, movement.company_id, id,
+          retroactivityTitle(String(movement.title ?? ""), retroCompetence), retroactivityKey(id)));
     }
     statements.push(prepareAuditEvent({
       workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
@@ -132,6 +168,9 @@ export async function POST(request: Request, context: Context) {
     }));
 
     await d1.batch(statements);
-    return Response.json({ movement: { id, status: "applied" }, employmentStatus: effect?.employmentStatus ?? null, transfer });
+    return Response.json({
+      movement: { id, status: "applied" }, employmentStatus: effect?.employmentStatus ?? null, transfer,
+      retroactive: processedCycle ? { competence: retroCompetence, cycleStatus: processedCycle.status } : null,
+    });
   } catch (error) { return apiError(error); }
 }
