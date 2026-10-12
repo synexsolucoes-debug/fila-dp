@@ -1,0 +1,78 @@
+/* Ficha funcional do ERP DP: Vida funcional, Contrato e Correção de registro.
+   Só tokens de app/dashboard-modern.css — zero cor crua. */
+.employeePanel {
+  --rec-accent: var(--ui-accent, #0857B2);
+  --rec-accent-text: var(--ui-accent-text, #0857B2);
+  --rec-on-accent: var(--ui-on-accent, #fff);
+  --rec-accent-soft: var(--ui-accent-soft, #E7F0FE);
+  --rec-surface: var(--ui-surface, #fff);
+  --rec-muted: var(--ui-surface-muted, #f0f4f6);
+  --rec-border: var(--ui-border, #d8e0e7);
+  --rec-text: var(--ui-text, #172235);
+  --rec-soft: var(--ui-text-soft, #5e6d7f);
+  display: grid; gap: 14px; min-width: 0; color: var(--rec-text);
+}
+.sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sectionTitle h3 { margin: 0; font-size: .84rem; }
+.sectionTitle span { color: var(--rec-soft); font-size: .7rem; }
+
+.primaryButton, .secondaryButton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 13px;
+  border-radius: 8px; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.primaryButton { border: 1px solid var(--rec-accent); background: var(--rec-accent); color: var(--rec-on-accent); }
+.secondaryButton { border: 1px solid var(--rec-border); background: var(--rec-surface); color: var(--rec-text); }
+.secondaryButton:hover { background: var(--rec-accent-soft); color: var(--rec-accent-text); }
+.primaryButton:disabled, .secondaryButton:disabled { opacity: .55; cursor: not-allowed; }
+.primaryButton svg, .secondaryButton svg { width: 15px; height: 15px; }
+.spin { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.formGrid label { display: grid; gap: 6px; min-width: 0; }
+.formGrid label > span { color: var(--rec-soft); font-size: .75rem; font-weight: 700; }
+.formGrid input, .formGrid select, .formGrid textarea {
+  width: 100%; min-height: 40px; padding: 0 11px; border: 1px solid var(--rec-border); border-radius: 8px;
+  background: var(--rec-surface); color: var(--rec-text); font: inherit; font-size: .84rem;
+}
+.formGrid textarea { min-height: 80px; padding: 9px 11px; resize: vertical; }
+.spanTwo { grid-column: 1 / -1; }
+.fieldHint { color: var(--rec-soft); font-size: .72rem; font-weight: 700; }
+
+.requirementEditor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--rec-border); border-radius: 12px; background: var(--rec-muted); }
+.requirementEditor > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.requirementEditor > header > div { display: grid; gap: 2px; }
+.requirementEditor > header span { color: var(--rec-soft); font-size: .58rem; font-weight: 800; letter-spacing: .09em; }
+.requirementEditor > header h3 { margin: 0; font-size: .86rem; }
+.requirementEditor > footer { display: flex; align-items: center; gap: 9px; }
+.requirementEditor > footer > span { flex: 1; }
+
+.infoNote { display: flex; align-items: flex-start; gap: 11px; margin: 0; padding: 13px; border: 1px solid var(--rec-border); border-radius: 8px; background: var(--rec-accent-soft); color: var(--rec-accent-text); }
+.infoNote > svg { flex: 0 0 auto; width: 17px; height: 17px; }
+.infoNote span { display: grid; gap: 3px; }
+.infoNote strong { font-size: .74rem; }
+.infoNote small { color: var(--rec-text); font-size: .75rem; line-height: 1.45; }
+
+.historyDate { display: grid; gap: 6px; max-width: 220px; }
+.historyDate > span { color: var(--rec-soft); font-size: .75rem; font-weight: 700; }
+.historyDate input { min-height: 38px; border: 1px solid var(--rec-border); border-radius: 8px; background: var(--rec-surface); color: var(--rec-text); padding: 0 10px; font: inherit; }
+.historySnapshot { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.historySnapshot article { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px; border: 1px solid var(--rec-border); border-radius: 10px; background: var(--rec-surface); }
+.historySnapshot small { color: var(--rec-soft); font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.historySnapshot strong { font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.historySnapshot span { color: var(--rec-soft); font-size: .7rem; }
+
+.tableWrap { overflow-x: auto; border: 1px solid var(--rec-border); border-radius: 12px; background: var(--rec-surface); }
+.table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.table th { padding: 10px 12px; border-bottom: 1px solid var(--rec-border); background: var(--rec-muted); color: var(--rec-soft); font-size: .7rem; text-align: left; white-space: nowrap; }
+.table td { padding: 10px 12px; border-bottom: 1px solid var(--rec-border); vertical-align: middle; }
+.table tr:last-child td { border-bottom: 0; }
+
+@media (max-width: 640px) {
+  .formGrid { grid-template-columns: 1fr; }
+  .table thead { display: none; }
+  .table tr { display: grid; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--rec-border); }
+  .table td { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 0; border: 0; }
+  .table td[data-label]::before { content: attr(data-label); color: var(--rec-soft); font-size: .7rem; font-weight: 700; }
+}

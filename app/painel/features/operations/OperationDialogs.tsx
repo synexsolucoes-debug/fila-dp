@@ -15,7 +15,7 @@ type DialogProps = {
 };
 
 const movementTypes = [
-  ["vacation", "Férias"], ["leave", "Afastamento"], ["return_to_work", "Retorno de afastamento"], ["salary_change", "Alteração salarial"],
+  ["vacation", "Férias"], ["leave", "Afastamento"], ["salary_change", "Alteração salarial"],
   ["termination", "Desligamento"], ["transfer", "Transferência"], ["benefit_change", "Alteração de benefício"],
   ["registration_sync", "Conciliação cadastral"], ["other", "Outra movimentação"],
 ] as const;
@@ -132,7 +132,6 @@ function MovementFields({ editor, employees, approvers, cycle }: { editor: Extra
       <label className={styles.spanTwo}><span>Título operacional</span><input name="title" defaultValue={movement?.title} maxLength={180} placeholder="Ex.: Programação de férias — julho" required /></label>
       {movementType === "salary_change" && <><label><span>Novo salário</span><input name="newSalary" type="number" min="0" step="0.01" defaultValue={detail("newSalary")} required /></label><label><span>Percentual</span><input name="percentage" type="number" step="0.01" defaultValue={detail("percentage")} /></label><label className={styles.spanTwo}><span>Motivo</span><textarea name="reason" maxLength={300} defaultValue={detail("reason")} /></label></>}
       {movementType === "vacation" && <><label><span>Início das férias</span><input name="startDate" type="date" defaultValue={detail("startDate")} required /></label><label><span>Fim das férias</span><input name="endDate" type="date" defaultValue={detail("endDate")} required /></label><label><span>Dias</span><input name="days" type="number" min="1" max="90" defaultValue={detail("days") || "30"} /></label></>}
-      {movementType === "return_to_work" && <><label><span>Data do retorno</span><input name="returnDate" type="date" defaultValue={detail("returnDate")} /></label><label><span>Exame de retorno (referência)</span><input name="examReference" maxLength={120} defaultValue={detail("examReference")} placeholder="Nº do ASO ou clínica" /></label></>}
       {movementType === "leave" && <><label><span>Início do afastamento</span><input name="startDate" type="date" defaultValue={detail("startDate")} required /></label><label><span>Fim previsto</span><input name="endDate" type="date" defaultValue={detail("endDate")} /></label><label className={styles.spanTwo}><span>Código/motivo</span><input name="reasonCode" defaultValue={detail("reasonCode")} /></label></>}
       {movementType === "termination" && <><label><span>Tipo de desligamento</span><input name="terminationType" defaultValue={detail("terminationType")} required /></label><label><span>Último dia trabalhado</span><input name="lastWorkingDate" type="date" defaultValue={detail("lastWorkingDate")} required /></label></>}
       {movementType === "transfer" && <><label><span>ID da empresa de destino</span><input name="targetCompanyId" defaultValue={detail("targetCompanyId")} required /></label><label><span>ID do departamento</span><input name="departmentId" defaultValue={detail("departmentId")} /></label><label><span>ID do cargo</span><input name="positionId" defaultValue={detail("positionId")} /></label><label><span>ID do centro de custo</span><input name="costCenterId" defaultValue={detail("costCenterId")} /></label></>}

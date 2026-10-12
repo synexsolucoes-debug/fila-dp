@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, Info, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
-import styles from "./registrations.module.css";
+import styles from "./erp-record.module.css";
 
 type RecordType = "situation" | "assignment" | "schedule";
 
@@ -73,13 +73,13 @@ function describe(record: HistoryRecord) {
 }
 
 /**
- * A aba "Vida funcional" dentro do cadastro do colaborador (§4.27).
+ * A aba "Vida funcional" da Ficha funcional do ERP DP (§4.27).
  *
  * Desenho tirado do PA20 do SAP HCM: a ficha lida numa data-base, e abaixo a
  * linha do tempo de cada tipo de registro com início e fim de validade. Só
  * leitura — o histórico é escrito pelas mudanças de vínculo, nunca à mão.
  */
-export function EmployeeFunctionalHistoryPanel({ employeeId }: { employeeId: string }) {
+export function ErpFunctionalHistoryPanel({ employeeId }: { employeeId: string }) {
   const [at, setAt] = useState("");
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);

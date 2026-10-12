@@ -225,10 +225,6 @@ export function competenceOf(date: string) {
   return date.slice(0, 7);
 }
 
-export function retroactivityKey(movementId: string) {
-  return `retro:${movementId}`;
-}
-
 export function retroactivityTitle(movementTitle: string, competence: string) {
   return `Retroativo em competência já processada (${competence}): lançar a diferença na folha — ${movementTitle}`.slice(0, 180);
 }

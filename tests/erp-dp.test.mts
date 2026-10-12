@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { HIGH_DATE, type HistoryRecord, type HistoryRecordType, type HistoryValues } from "../lib/employee-history.ts";
 import {
-  competenceOf, expectedEsocialEvents, headcountAt, lastDayOfCompetence, processedCycleStatuses, retroactivityKey,
+  competenceOf, expectedEsocialEvents, headcountAt, lastDayOfCompetence, processedCycleStatuses,
   summarizeHeadcount, type EmployeeHistoryRecord, type HeadcountEmployee,
 } from "../lib/erp-dp.ts";
 import { movementEmploymentEffect, movementTypes, sanitizeMovementDetails } from "../lib/operations.ts";
@@ -23,6 +23,9 @@ const edit = await read("app/api/employees/[id]/route.ts");
 const app = await read("app/painel/WorkspaceApp.tsx");
 const view = await read("app/painel/features/erp-dp/ErpDpView.tsx");
 const drawer = await read("app/painel/features/registrations/RegistrationsView.tsx");
+const correction = await read("app/painel/features/erp-dp/ErpCorrectionPanel.tsx");
+const erpService = await read("lib/erp-dp-service.ts");
+const returnAction = await read("app/api/erp-dp/actions/return-to-work/route.ts");
 const shellCss = await read("app/dashboard-modern.css");
 const accessCss = await read("app/access.css");
 const routes = {
@@ -150,26 +153,44 @@ test("aplicar o retorno respeita a trava do exame inapto e grava o histórico co
 /* Retroatividade                                                             */
 /* -------------------------------------------------------------------------- */
 
-test("medida com vigência em competência já processada abre pendência idempotente", () => {
+test("medida com vigência em competência já processada abre retroativo do ERP, idempotente", () => {
   assert.deepEqual([...processedCycleStatuses], ["processing", "post_closing", "closed"]);
-  assert.equal(retroactivityKey("m1"), "retro:m1");
-  assert.match(apply, /INSERT INTO fdp_operational_pending_items[\s\S]+ON CONFLICT \(workspace_id, idempotency_key\) DO NOTHING/u);
+  assert.match(erpService, /INSERT INTO fdp_erp_retroactive_items[\s\S]+ON CONFLICT \(workspace_id, source_type, source_id\) DO NOTHING/u);
   // No mesmo lote da aplicação: ou aplica e abre, ou nenhum dos dois.
-  const insert = apply.indexOf("INSERT INTO fdp_operational_pending_items");
+  const retro = apply.indexOf("prepareRetroactiveItem(d1");
   const batch = apply.indexOf("await d1.batch(statements)");
-  assert.ok(insert > 0 && insert < batch);
-  assert.match(apply, /retroactive: processedCycle \?/u);
+  assert.ok(retro > 0 && retro < batch);
+  assert.match(apply, /retroactive: retro \?/u);
+  // O retroativo é do ERP: nada vai para as Pendências da Operação DP (§4.30).
+  assert.doesNotMatch(apply, /fdp_operational_pending_items/u);
+  assert.doesNotMatch(erpService, /fdp_operational_pending_items/u);
 });
 
 /* -------------------------------------------------------------------------- */
 /* Mudança × correção                                                         */
 /* -------------------------------------------------------------------------- */
 
-test("correção conserta o registro vigente em vez de abrir período", () => {
+test("correção conserta o registro vigente em vez de abrir período — e é feita no ERP", () => {
   assert.match(service, /input\.mode === "correction"[\s\S]{0,200}effectiveDate = covering\.validFrom/u);
   assert.match(edit, /body\.historyMode === "correction"/u);
-  assert.match(drawer, /Correção de cadastro \(sem período novo\)/u);
-  assert.match(drawer, /if \(employee\) body\.historyMode = historyMode/u);
+  assert.match(correction, /historyMode: "correction"/u);
+  // A correção manda só o que mudou: o PATCH precisa reaproveitar as datas
+  // guardadas normalizadas — `String(Date)` virava "Fri Mar 01 2024 …".
+  assert.match(edit, /dateFromDatabase\(current\.admission_date, "Admissão"\)/u);
+  assert.doesNotMatch(edit, /String\(current\.admission_date\)/u);
+  // A ficha do Vinculato não pergunta mudança × correção: isso é do ERP.
+  assert.doesNotMatch(drawer, /historyMode|Correção de cadastro/u);
+});
+
+test("o retorno de afastamento é medida executada no ERP, sem movimentação na Operação DP", () => {
+  assert.match(returnAction, /requireCapability\(workspace, "movements\.manage"\)/u);
+  assert.match(returnAction, /EMPLOYEE_RETURN_BLOCKED_BY_EXAM/u);
+  assert.match(returnAction, /reason: "return_to_work"/u);
+  assert.match(returnAction, /sourceType: "erp_action"/u);
+  assert.doesNotMatch(returnAction, /INSERT INTO fdp_employee_movements/u);
+  const history = returnAction.indexOf("prepareHistoryChange(d1");
+  const batch = returnAction.indexOf("await d1.batch(statements)");
+  assert.ok(history > 0 && history < batch);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -178,7 +199,7 @@ test("correção conserta o registro vigente em vez de abrir período", () => {
 
 test("as rotas do ERP DP só leem, e todas aplicam permissão e escopo de empresa", () => {
   for (const [name, source] of Object.entries(routes)) {
-    assert.match(source, /requireCapability\(workspace, "(employees|pending_items)\.read"\)/u, name);
+    assert.match(source, /requireCapability\(workspace, "(employees|movements)\.read"\)/u, name);
     assert.match(source, /companyScopeClause\(/u, name);
     assert.doesNotMatch(source, /export async function (POST|PATCH|PUT|DELETE)/u, name);
   }
