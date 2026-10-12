@@ -16,7 +16,7 @@ import { employeeRecordTabs } from "../lib/panel-routes.ts";
  */
 
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = await read("drizzle/postgres/0109_erp_dp_step3.sql");
+const migration = await read("drizzle/postgres/0109_erp_dp_contract_terms_esocial_checks.sql");
 const importer = await read("lib/sankhya/importer.ts");
 const sheetImport = await read("app/api/employees/import/sankhya/route.ts");
 const termsRoute = await read("app/api/employees/[id]/contract-terms/route.ts");

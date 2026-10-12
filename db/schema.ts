@@ -3915,7 +3915,7 @@ export const employeeContractTerms = pgTable("fdp_employee_contract_terms", {
 ]);
 
 /**
- * Retroativos do ERP DP (migration 0109) — o infotipo 0003 do SAP sem
+ * Retroativos do ERP DP (migration 0110) — o infotipo 0003 do SAP sem
  * recálculo. Tabela do ERP, fora das Pendências da Operação DP: o que é ERP
  * fica no ERP.
  */

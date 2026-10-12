@@ -1623,7 +1623,7 @@ O que estava no lugar errado e foi movido para o ERP DP:
 | Retorno de afastamento | Tipo de movimentação na Operação DP | ERP › Medidas (executada no ERP, sem movimentação) |
 | Retroativos | Pendências da Operação DP | ERP › Retroativos (`fdp_erp_retroactive_items`), com "lançado na folha" e "dispensar" |
 
-A migration 0109 copia os retroativos que já tinham sido gravados como
+A migration 0110 copia os retroativos que já tinham sido gravados como
 pendência e os dispensa nas Pendências ("Movido para Retroativos do ERP DP")
 — nada é apagado.
 

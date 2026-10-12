@@ -62,7 +62,7 @@ test("a Central de Trabalho do Vinculato não recebe prazos do ERP", () => {
 });
 
 test("retroativo é do ERP: tabela própria, fora das Pendências da Operação DP", async () => {
-  const migration = await read("drizzle/postgres/0109_erp_dp_step3.sql");
+  const migration = await read("drizzle/postgres/0110_erp_dp_separation.sql");
   assert.match(migration, /CREATE TABLE "fdp_erp_retroactive_items"/u);
   // Os que a versão anterior gravou como pendência são copiados e dispensados lá — nada apagado.
   assert.match(migration, /INSERT INTO "fdp_erp_retroactive_items"[\s\S]+WHERE p\."idempotency_key" LIKE 'retro:%'/u);
