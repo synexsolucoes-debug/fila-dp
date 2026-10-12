@@ -3840,6 +3840,47 @@ export const trainings = pgTable("fdp_trainings", {
 ]);
 
 /**
+ * Histórico funcional (migration 0107) — a ficha do colaborador com data de
+ * validade, no desenho dos infotipos do SAP HCM: `situation` ↔ IT0000,
+ * `assignment` ↔ IT0001, `schedule` ↔ IT0007. Um registro novo delimita o
+ * vigente na véspera; nunca o apaga. Regras em `lib/employee-history.ts`.
+ */
+export const employeeHistoryRecords = pgTable("fdp_employee_history_records", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull(),
+  recordType: text("record_type").notNull(),
+  validFrom: date("valid_from", { mode: "string" }).notNull(),
+  validTo: date("valid_to", { mode: "string" }).notNull().default("9999-12-31"),
+  reason: text("reason").notNull(),
+  movementId: text("movement_id"),
+  employmentStatus: text("employment_status"),
+  companyId: text("company_id"),
+  establishmentId: text("establishment_id"),
+  departmentId: text("department_id"),
+  positionId: text("position_id"),
+  costCenterId: text("cost_center_id"),
+  workScheduleId: text("work_schedule_id"),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_history_records_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_history_records_employee_type_start_uq").on(table.workspaceId, table.employeeId, table.recordType, table.validFrom),
+  foreignKey({ name: "fdp_employee_history_records_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_employee_history_records_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_employee_history_records_movement_fk", columns: [table.workspaceId, table.movementId], foreignColumns: [employeeMovements.workspaceId, employeeMovements.id] }),
+  check("fdp_employee_history_records_type_check", sql`${table.recordType} IN ('situation', 'assignment', 'schedule')`),
+  check("fdp_employee_history_records_reason_check", sql`${table.reason} IN ('baseline', 'leave', 'termination', 'transfer', 'registration_edit')`),
+  check("fdp_employee_history_records_validity_check", sql`${table.validTo} >= ${table.validFrom}`),
+  check("fdp_employee_history_records_status_check", sql`${table.employmentStatus} IS NULL OR ${table.employmentStatus} IN ('active', 'on_leave', 'terminated')`),
+  check("fdp_employee_history_records_situation_check", sql`${table.recordType} <> 'situation' OR (${table.employmentStatus} IS NOT NULL AND ${table.companyId} IS NULL AND ${table.establishmentId} IS NULL AND ${table.departmentId} IS NULL AND ${table.positionId} IS NULL AND ${table.costCenterId} IS NULL AND ${table.workScheduleId} IS NULL)`),
+  check("fdp_employee_history_records_assignment_check", sql`${table.recordType} <> 'assignment' OR (${table.companyId} IS NOT NULL AND ${table.employmentStatus} IS NULL AND ${table.workScheduleId} IS NULL)`),
+  check("fdp_employee_history_records_schedule_check", sql`${table.recordType} <> 'schedule' OR (${table.employmentStatus} IS NULL AND ${table.companyId} IS NULL AND ${table.establishmentId} IS NULL AND ${table.departmentId} IS NULL AND ${table.positionId} IS NULL AND ${table.costCenterId} IS NULL)`),
+]);
+
+/**
  * Adiantamentos e Descontos (§ migration 0085).
  *
  * O lote de conferência da competência. Não é um segundo fechamento: é a

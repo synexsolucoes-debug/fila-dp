@@ -457,6 +457,15 @@
 .sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sectionTitle h3 { margin: 0; font-size: .84rem; }
 .sectionTitle span { color: var(--reg-soft); font-size: .7rem; }
+/* Vida funcional (§4.27): a ficha lida numa data-base, no desenho do PA20 do SAP. */
+.historyDate { display: grid; gap: 6px; max-width: 220px; }
+.historyDate > span { color: var(--reg-soft); font-size: .75rem; font-weight: 700; }
+.historyDate input { min-height: 38px; border: 1px solid var(--reg-border); border-radius: 8px; background: var(--reg-surface); color: var(--reg-text); padding: 0 10px; font: inherit; }
+.historySnapshot { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.historySnapshot article { display: grid; gap: 4px; align-content: start; min-width: 0; border: 1px solid var(--reg-border); border-radius: 10px; background: var(--reg-surface); padding: 12px; }
+.historySnapshot small { color: var(--reg-soft); font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.historySnapshot strong { font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.historySnapshot span { color: var(--reg-soft); font-size: .7rem; }
 .requirementEditor {
   display: grid; gap: 12px; border: 1px solid var(--reg-border); border-radius: 12px;
   background: color-mix(in srgb, var(--reg-muted) 48%, var(--reg-surface)); padding: 14px;

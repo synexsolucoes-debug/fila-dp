@@ -4,6 +4,8 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { assertActiveScope, cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
 import { blocksReturnToWork, type ExamResult } from "@/lib/occupational-exams";
+import { terminatedFrom, todayInBrazil } from "@/lib/employee-history";
+import { prepareHistoryChange } from "@/lib/employee-history-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -101,7 +103,37 @@ export async function PATCH(request: Request, context: RouteContext) {
         );
       }
     }
+    /* Histórico funcional (§4.27): a edição do cadastro não tem data de
+       validade própria, então vale a partir de hoje — exceto o desligamento,
+       que começa no dia seguinte à data informada. Quem precisa de data
+       retroativa usa a movimentação, que tem `effective_date`. */
+    const today = todayInBrazil();
+    const changed = (value: unknown, before: unknown) => (value ?? null) === (before ?? null) ? undefined : (value as string | null) ?? null;
+    const nextTermination = next.terminationDate ? String(next.terminationDate).slice(0, 10) : "";
+    const history = [
+      ...await prepareHistoryChange(d1, {
+        workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "registration_edit",
+        effectiveDate: next.employmentStatus === "terminated" && nextTermination ? terminatedFrom(nextTermination) : today,
+        changes: { situation: { employmentStatus: changed(next.employmentStatus, current.employment_status) as typeof next.employmentStatus | undefined } },
+      }),
+      ...await prepareHistoryChange(d1, {
+        workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "registration_edit", effectiveDate: today,
+        // Só o campo que esta edição trocou: o resto o registro novo herda do
+        // vigente, que pode já ter mudança com data futura à frente.
+        changes: {
+          assignment: {
+            companyId: changed(next.companyId, current.company_id),
+            establishmentId: changed(next.establishmentId, current.establishment_id),
+            departmentId: changed(next.departmentId, current.department_id),
+            positionId: changed(next.positionId, current.position_id),
+            costCenterId: changed(next.costCenterId, current.cost_center_id),
+          },
+          schedule: { workScheduleId: changed(next.workScheduleId, current.work_schedule_id) },
+        },
+      }),
+    ];
     await d1.batch([
+      ...history,
       d1.prepare(`UPDATE fdp_employees SET company_id = ?, department_id = ?, position_id = ?, cost_center_id = ?, work_schedule_id = ?,
         establishment_id = ?, manager_employee_id = ?, registration_number = ?, full_name = ?, social_name = ?, cpf_hash = ?, cpf_last4 = ?, email = ?, phone = ?,
         birth_date = ?, admission_date = ?, termination_date = ?, employment_status = ?, employment_type = ?, work_model = ?, notes = ?,

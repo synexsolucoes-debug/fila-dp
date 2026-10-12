@@ -3,6 +3,8 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { optionalDate } from "@/lib/registrations";
+import { terminatedFrom } from "@/lib/employee-history";
+import { prepareHistoryChange } from "@/lib/employee-history-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -19,7 +21,13 @@ export async function POST(request: Request, context: RouteContext) {
       .bind(workspace.id, id).first<Record<string, unknown>>();
     if (!employee) throw ApiError.notFound("Colaborador não encontrado.", "EMPLOYEE_NOT_FOUND");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, String(employee.company_id));
+    // Histórico funcional (§4.27): lido antes do lote, com o cadastro ainda ativo.
+    const history = await prepareHistoryChange(d1, {
+      workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "termination",
+      effectiveDate: terminatedFrom(terminationDate as string), changes: { situation: { employmentStatus: "terminated" } },
+    });
     await d1.batch([
+      ...history,
       d1.prepare("UPDATE fdp_employees SET employment_status = 'terminated', termination_date = ?::date, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE workspace_id = ? AND id = ?")
         .bind(terminationDate, user.id, workspace.id, id),
       prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email, action: "employee.terminated",
