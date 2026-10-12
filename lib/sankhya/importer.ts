@@ -2,6 +2,8 @@ import type { getD1 } from "../../db/index.ts";
 import { prepareAuditEvent } from "../fila-dp-db.ts";
 import { prepareDomainEvent } from "../outbox.ts";
 import { protectCpf } from "../registrations.ts";
+import { terminatedFrom, todayInBrazil } from "../employee-history.ts";
+import { prepareHistoryChange } from "../employee-history-service.ts";
 import { CHANGE_PROPOSAL_CONFIDENCE, decideSankhyaChange, proposedActionFor, type EmployeeChangeProposal } from "./change-policy.ts";
 import { normalizeSankhyaEmployee, normalizedEmployeeHash, persistedSankhyaEmployee } from "./normalization.ts";
 import type { SankhyaRawData, VinculatoNormalizedEmployee } from "./types.ts";
@@ -145,14 +147,34 @@ export async function importSankhyaEmployees(d1: Database, input: {
       totals.created += 1;
       totals.imported += 1;
     } else if (policy.outcome === "direct") {
-      await d1.prepare(`UPDATE fdp_employees SET department_id = ?, position_id = ?, cost_center_id = ?, work_schedule_id = ?,
+      /* Histórico funcional (ERP DP, passo 3): a sincronização também é
+         mudança de vínculo, e escrevia por fora do histórico — o aviso de
+         divergência da Vida funcional era o único sinal. A origem não informa
+         a data da alteração, então ela vale de hoje; desligamento começa no
+         dia seguinte à data de desligamento que a origem trouxe. */
+      const today = todayInBrazil();
+      const history = [
+        ...await prepareHistoryChange(d1, {
+          workspaceId: input.workspaceId, employeeId, userId: "SYSTEM", reason: "integration_sync",
+          effectiveDate: normalized.employmentStatus === "terminated" && normalized.terminationDate ? terminatedFrom(normalized.terminationDate) : today,
+          changes: { situation: { employmentStatus: normalized.employmentStatus } },
+        }),
+        ...await prepareHistoryChange(d1, {
+          workspaceId: input.workspaceId, employeeId, userId: "SYSTEM", reason: "integration_sync", effectiveDate: today,
+          changes: {
+            assignment: { departmentId: org.departmentId, positionId: org.positionId, costCenterId: org.costCenterId },
+            schedule: { workScheduleId: org.workScheduleId },
+          },
+        }),
+      ];
+      await d1.batch([...history, d1.prepare(`UPDATE fdp_employees SET department_id = ?, position_id = ?, cost_center_id = ?, work_schedule_id = ?,
         registration_number = ?, full_name = ?, cpf_hash = CASE WHEN ? = '' THEN cpf_hash ELSE ? END,
         cpf_last4 = CASE WHEN ? = '' THEN cpf_last4 ELSE ? END, email = ?, phone = ?, admission_date = ?::date,
         termination_date = ?::date, employment_status = ?, source_system = 'sankhya', external_id = ?, updated_by = 'SYSTEM', updated_at = CURRENT_TIMESTAMP
         WHERE workspace_id = ? AND id = ?`)
         .bind(org.departmentId, org.positionId, org.costCenterId, org.workScheduleId, normalized.registrationNumber, normalized.fullName,
           cpf.cpfHash, cpf.cpfHash, cpf.cpfLast4, cpf.cpfLast4, normalized.email, normalized.phone, normalized.admissionDate,
-          normalized.terminationDate || null, normalized.employmentStatus, normalized.externalEmployeeId, input.workspaceId, employeeId).run();
+          normalized.terminationDate || null, normalized.employmentStatus, normalized.externalEmployeeId, input.workspaceId, employeeId)]);
       totals.updated += 1;
       totals.imported += 1;
     } else {

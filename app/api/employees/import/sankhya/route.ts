@@ -1,6 +1,8 @@
 import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
+import { terminatedFrom, todayInBrazil } from "@/lib/employee-history";
+import { prepareHistoryChange } from "@/lib/employee-history-service";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText, protectCpf } from "@/lib/registrations";
 import { readSankhyaEmployeeWorkbook } from "@/lib/sankhya-xlsx";
@@ -71,6 +73,13 @@ export async function POST(request: Request) {
             status, item.record.externalId, user.id, user.id));
       } else {
         updated += 1;
+        /* Histórico funcional (ERP DP, passo 3): a planilha só traz a
+           situação; desligamento começa no dia seguinte à data informada. */
+        statements.push(...await prepareHistoryChange(d1, {
+          workspaceId: workspace.id, employeeId: String(item.match.id), userId: user.id, reason: "integration_sync",
+          effectiveDate: status === "terminated" && item.record.terminationDate ? terminatedFrom(item.record.terminationDate) : todayInBrazil(),
+          changes: { situation: { employmentStatus: status } },
+        }));
         statements.push(d1.prepare(`UPDATE fdp_employees SET registration_number = ?, full_name = ?, cpf_hash = CASE WHEN ? = '' THEN cpf_hash ELSE ? END,
           cpf_last4 = CASE WHEN ? = '' THEN cpf_last4 ELSE ? END, email = ?, phone = ?, birth_date = COALESCE(?::date, birth_date),
           admission_date = ?::date, termination_date = ?::date, employment_status = ?, source_system = 'sankhya', external_id = ?,

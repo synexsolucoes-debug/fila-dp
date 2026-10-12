@@ -147,10 +147,13 @@ export type ExpectedEsocialEvent = {
  * mas sabe o que deveria ter sido transmitido.
  *
  * - lotação ou jornada nova → S-2206 (alteração contratual);
- * - situação afastado → S-2230 (início); afastado → ativo → S-2230 (término);
+ * - situação afastado → S-2230 (início); afastado → ativo → S-2230 (término,
+ *   com o último dia de afastamento);
  * - situação desligado → S-2299, com a véspera como data de desligamento
  *   (o registro "desligado" começa no dia seguinte ao último dia).
  *
+ * Todo evento pertence ao mês da data que ele informa — é por essa data que
+ * a conferência (`POST /api/erp-dp/esocial/checks`) o encontra de novo.
  * A linha de base não gera evento: ela é o que já existia, não uma mudança.
  */
 export function expectedEsocialEvents(records: readonly EmployeeHistoryRecord[], competence: string): ExpectedEsocialEvent[] {
@@ -173,8 +176,11 @@ export function expectedEsocialEvents(records: readonly EmployeeHistoryRecord[],
             events.push({ event: "S-2230", label: "Afastamento temporário — início", employeeId, recordId: record.id, date: record.validFrom, detail: "Afastamento a partir desta data" });
           }
         } else if (record.employmentStatus === "active" && before?.employmentStatus === "on_leave") {
-          if (inMonth(record.validFrom, start, end)) {
-            events.push({ event: "S-2230", label: "Afastamento temporário — término", employeeId, recordId: record.id, date: previousDay(record.validFrom), detail: "Último dia de afastamento" });
+          // O evento informa o último dia de afastamento, e é o mês dessa data
+          // que ele pertence — a mesma regra do desligamento logo abaixo.
+          const lastDay = previousDay(record.validFrom);
+          if (inMonth(lastDay, start, end)) {
+            events.push({ event: "S-2230", label: "Afastamento temporário — término", employeeId, recordId: record.id, date: lastDay, detail: "Último dia de afastamento" });
           }
         } else if (record.employmentStatus === "terminated") {
           const lastDay = previousDay(record.validFrom);
@@ -226,3 +232,4 @@ export function retroactivityKey(movementId: string) {
 export function retroactivityTitle(movementTitle: string, competence: string) {
   return `Retroativo em competência já processada (${competence}): lançar a diferença na folha — ${movementTitle}`.slice(0, 180);
 }
+

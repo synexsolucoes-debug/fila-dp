@@ -1543,6 +1543,63 @@ eventos (§28).
 | --- | --- |
 | Quadro, resumo, eventos esperados, retorno, retroativo, correção, rotas só de leitura com escopo, posição do botão e celular | `tests/erp-dp.test.mts` |
 
+### 4.29 ERP DP, passo 3 — importadores pelo histórico, contrato e conferência do eSocial
+
+Os três itens do roadmap da engenharia reversa (`docs/engenharia-reversa-sap-hcm.md`
+§16) que faltavam:
+
+**Importadores pelo histórico (item 3).** A sincronização com o Sankhya
+(`lib/sankhya/importer.ts`, caminho direto) e a importação por planilha
+(`POST /api/employees/import/sankhya`) passam por `prepareHistoryChange`, no
+mesmo lote da atualização, com o motivo `integration_sync` (migration 0109).
+A origem não informa a data da alteração, então ela vale de hoje; desligamento
+começa no dia seguinte à data de desligamento que veio da origem. A proposta
+(mudança sensível que vai para a triagem) continua sem tocar no colaborador.
+
+**Elementos contratuais (item 6 — IT0016 + IT0019).** `fdp_employee_contract_terms`
+guarda o contrato vigente de cada pessoa: indeterminado, experiência (até 90
+dias, com o fim do 1º período quando há prorrogação — CLT art. 445, parágrafo
+único, e art. 451) ou prazo determinado (até 2 anos), e o aviso prévio
+trabalhado ou indenizado. Os dias do aviso são da Lei 12.506/2011 — 30, mais 3
+por ano completo, até 90 — calculados no servidor (`lib/contract-terms.ts`);
+a tela mostra a prévia com a mesma função (`lib/contract-terms-rules.ts`, sem
+dependência de servidor). Só datas: nenhum valor de verba. A aba **Contrato**
+mora na ficha do colaborador (`?aba=contract`); os prazos entram na Central de
+Trabalho como `contract_term_due` e `notice_period_due` (janela de 15 dias,
+vencido continua) e no ERP DP em **Prazos contratuais**.
+
+**Conferência do eSocial (item 7).** O eSocial esperado (§4.28) ganhou a
+conferência: para cada evento, "transmitido" com o número do recibo ou "não se
+aplica" com o motivo (`fdp_esocial_event_checks`, `POST/DELETE
+/api/erp-dp/esocial/checks`, capacidade `obligations.manage`). A rota só
+aceita evento que o histórico de fato exige, naquela data; o lote aceita até
+500 itens e serve à importação da planilha de recibos do sistema de folha
+(`matrícula;evento;data;recibo`, `lib/esocial-receipts.ts`). Os CHECKs do banco
+recusam "transmitido" sem recibo e "não se aplica" sem motivo. O Vinculato
+continua sem transmitir nada.
+
+**Três defeitos que o ensaio de navegador achou, e que este passo corrige:**
+
+1. **A aba do link nunca chegava à ficha.** `app/painel/[[...secao]]/page.tsx`
+   repassava só `empresa` para `parsePanelPath` e descartava `aba`: todo link
+   do Motor de Prazos para "ASO" ou "Treinamento" (§4.12) abria a ficha em
+   "Dados pessoais". Agora `aba` também é repassada.
+2. **Registrar ASO ou treinamento pela ficha não gravava.** Os editores dessas
+   abas têm o próprio `<form>`, e eles moravam dentro do `<form>` da ficha: o
+   navegador enviava o formulário de fora, a página recarregava e nada era
+   gravado (medido: 0 linhas em `fdp_trainings` depois de "Salvar
+   treinamento"). Só os dados do cadastro ficam dentro do formulário da ficha;
+   o botão "Salvar colaborador" aponta para ele pelo atributo `form`.
+3. **O término do afastamento caía na competência errada.** O S-2230 de
+   término informa o último dia de afastamento, mas era listado no mês do
+   retorno — e a conferência, que procura o evento pelo mês da data, recusava.
+   Todo evento agora pertence ao mês da data que ele informa.
+
+| Verificação | Onde |
+| --- | --- |
+| Sankhya pelo histórico, aviso prévio da Lei 12.506, limites de experiência e prazo determinado, prazos na Central, planilha de recibos, provas exigidas na conferência, `aba` no endereço, editores fora do formulário da ficha | `tests/erp-dp-step3.test.mts` |
+| Término do afastamento na competência do último dia | `tests/erp-dp.test.mts` |
+
 ---
 
 ## 5. Agentes

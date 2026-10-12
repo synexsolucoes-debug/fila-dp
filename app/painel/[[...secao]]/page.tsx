@@ -43,7 +43,14 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
 
   const query = await searchParams;
   const empresa = typeof query.empresa === "string" ? query.empresa : "";
-  const location = parsePanelPath(pathname, empresa ? `empresa=${encodeURIComponent(empresa)}` : "");
+  /* A aba do colaborador também é endereço (§4.12): sem ela, o link do Motor
+     de Prazos para "ASO", "Treinamento" ou "Contrato" abria a ficha na
+     primeira aba, e a pessoa precisava achar sozinha o que o link prometia. */
+  const aba = typeof query.aba === "string" ? query.aba : "";
+  const consulta = new URLSearchParams();
+  if (empresa) consulta.set("empresa", empresa);
+  if (aba) consulta.set("aba", aba);
+  const location = parsePanelPath(pathname, consulta.toString());
 
   const user = await requireChatGPTUser(panelPath(location));
 

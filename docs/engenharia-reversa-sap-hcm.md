@@ -157,7 +157,7 @@ registro existente sem gerar histórico — é a diferença entre *mudança* e
 | 0009 | Dados bancários | Conta principal e secundárias | 2 | — |
 | 0014 | Pagamentos/descontos recorrentes | Rubrica, valor, período | 3 | Adiantamentos e Descontos (parcelas) |
 | 0015 | Pagamentos adicionais | Rubrica, valor, data | 3 | Adiantamentos e Descontos (avulsos) |
-| 0016 | Elementos contratuais | Tipo de contrato, experiência, aviso prévio | 1 | — |
+| 0016 | Elementos contratuais | Tipo de contrato, experiência, aviso prévio | 1 | Aba **Contrato** (`fdp_employee_contract_terms`) |
 | 0019 | Tarefas monitoradas | Prazos: fim de experiência, exame, renovação | 3 | Motor de Prazos (ASO, treinamento, CAT) |
 | 0021 | Família / dependentes | Dependentes para IR, salário-família, plano de saúde | 3 | — |
 | 0041 | Datas especiais | Data de admissão para férias, antiguidade, etc. | 1 | — |
@@ -619,7 +619,7 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 | Cadastro | Dados bancários (0009) | — | ⬜ |
 | Cadastro | Dependentes (0021) | — | ⬜ |
 | Cadastro | Documentos (0185/0465) | Ficha cadastral, CPF em HMAC | 🟡 |
-| Cadastro | Elementos contratuais (0016): experiência, aviso | — | ⬜ |
+| Cadastro | Elementos contratuais (0016): experiência, aviso | Aba Contrato, prazos na Central | 🆕 |
 | Cadastro | Bloqueio e liberação (SPRPS) | Aprovação atribuída da movimentação | ✅ |
 | Medidas | Tipos e motivos de medida | Tipos de movimentação; motivo em texto | 🟡 |
 | Medidas | Grupos de infotipos por medida | Detalhes por tipo de movimentação | 🟡 |
@@ -636,18 +636,18 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 | Tempo | Avaliação de tempos | Conferência de ponto (sem cálculo) | ⛔ cálculo / ✅ conferência |
 | Folha | Rubricas e esquemas | — | ⛔ |
 | Folha | Registro de controle | Fechamento de competência com gates | ✅ |
-| Folha | Retroatividade | Alerta de competência fechada | ⬜ (roadmap 1) |
+| Folha | Retroatividade | Pendência de retroativo em competência processada | 🆕 |
 | Folha | Lançamentos 0014/0015 | Adiantamentos e Descontos | ✅ |
 | Folha | Conferência de resultado | Conferência de pós-fechamento, PDF de folha | ✅ |
 | Legal | eSocial: geração e transmissão | — | ⛔ |
 | Legal | eSocial: SST (S-2210/2220/2240) | CAT, ASO, cargo de risco, EPI | 🟡 controle, sem transmissão |
-| Legal | Conferência eSocial × cadastro | — | ⬜ |
+| Legal | Conferência eSocial × cadastro | eSocial esperado com recibo ou motivo | 🆕 |
 | Benefícios | Planos e elegibilidade | Benefícios auxiliares por competência | 🟡 |
 | Acesso | P_ORGIN por infotipo | Capacidades por papel + empresa | 🟡 |
 | Acesso | Perfil estrutural | Escopo por empresa e departamento | 🟡 |
 | Acesso | Pessoa própria (P_PERNR) | Segregação contra autoaprovação | 🟡 |
-| Relatórios | Data-chave em todo relatório | Aba Vida funcional (por pessoa) | 🆕 / ⬜ empresa inteira |
-| Integração | Escrita externa pela mesma validação | Importadores escrevem por fora | ⬜ (roadmap 3) |
+| Relatórios | Data-chave em todo relatório | Vida funcional e Quadro em data-base | 🆕 |
+| Integração | Escrita externa pela mesma validação | Importadores do Sankhya pelo histórico | 🆕 |
 | Self-service | ESS | Links assinados pontuais | 🟡 |
 | Self-service | MSS | Portal do Gestor | ✅ |
 
@@ -687,23 +687,21 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ## 16. Roadmap priorizado
 
-Estado: os itens 1, 2, 4 e 5 já estão no produto, no **modo ERP DP** (§4.28
-de `docs/arquitetura-operacional.md`), e o 7 está pela metade: a lista de
-eventos esperados existe; a comparação com o que o sistema de folha
-transmitiu, não.
+Estado: os itens 1 a 7 estão no produto, no **modo ERP DP** (§4.28 e §4.29 de
+`docs/arquitetura-operacional.md`). Falta o 8.
 
 | # | Item | Conceito SAP | Valor para o DP | Esforço | Depende de |
 | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ Alerta de retroatividade | 0003 / retro | Movimentação com data dentro de competência fechada abre pendência "lançar diferença na folha" | Pequeno | Histórico funcional ✅ |
 | 2 | ✅ Quadro em data-base | PNP / data-chave | Headcount e turnover corretos; relatório "quem estava onde em DD/MM" para auditoria e defesa | Médio | 1 opcional |
-| 3 | Importadores pelo histórico | `HR_INFOTYPE_OPERATION` | Fim da divergência entre cadastro e histórico quando o Sankhya sincroniza | Médio | — |
+| 3 | ✅ Importadores pelo histórico | `HR_INFOTYPE_OPERATION` | Fim da divergência entre cadastro e histórico quando o Sankhya sincroniza | Médio | — |
 | 4 | ✅ Retorno de afastamento como movimentação | Medida + fim do 2001 | Data retroativa, aprovação e trava de ASO num fluxo só | Pequeno | — |
 | 5 | ✅ Mudança × correção na edição do cadastro | Copiar × modificar | Corrigir erro de digitação sem criar período falso | Pequeno | — |
-| 6 | Elementos contratuais | 0016 / 0019 | Fim de experiência e aviso prévio como prazos | Médio | Motor de Prazos ✅ |
-| 7 | 🟡 Conferência eSocial × histórico | Mapa da §8.2 | Comparar S-2206/S-2230/S-2299 transmitidos com o histórico | Grande | 2, 3, integração com o sistema de folha |
-| 8 | Saldo de férias (conferência) | 2006 | Mostrar período aquisitivo vencendo, sem calcular valor | Médio | 4 |
+| 6 | ✅ Elementos contratuais | 0016 / 0019 | Fim de experiência e aviso prévio como prazos | Médio | Motor de Prazos ✅ |
+| 7 | ✅ Conferência eSocial × histórico | Mapa da §8.2 | Comparar S-2206/S-2230/S-2299 transmitidos com o histórico | Grande | 2, 3, integração com o sistema de folha |
+| 8 | ⬜ Saldo de férias (conferência) | 2006 | Mostrar período aquisitivo vencendo, sem calcular valor | Médio | 4 |
 
-Os próximos são o 3 (importadores pelo histórico), o 6 (elementos contratuais) e a metade que falta do 7.
+O próximo é o 8 (saldo de férias como conferência, sem cálculo de valor).
 
 ---
 

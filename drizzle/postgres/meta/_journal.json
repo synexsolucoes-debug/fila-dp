@@ -778,6 +778,13 @@
       "when": 1790959200000,
       "tag": "0108_erp_dp_return_to_work",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1791045600000,
+      "tag": "0109_erp_dp_contract_terms_esocial_checks",
+      "breakpoints": true
     }
   ]
 }
