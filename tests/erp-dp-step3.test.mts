@@ -6,7 +6,7 @@ import {
 } from "../lib/contract-terms.ts";
 import { parseReceiptSheet } from "../lib/esocial-receipts.ts";
 import { historyReasons } from "../lib/employee-history.ts";
-import { workItemHref, workItemSources } from "../lib/work-items.ts";
+import { workItemSources } from "../lib/work-items.ts";
 import { employeeRecordTabs } from "../lib/panel-routes.ts";
 
 /**
@@ -23,7 +23,7 @@ const termsRoute = await read("app/api/employees/[id]/contract-terms/route.ts");
 const checksRoute = await read("app/api/erp-dp/esocial/checks/route.ts");
 const esocialRoute = await read("app/api/erp-dp/esocial/route.ts");
 const view = await read("app/painel/features/erp-dp/ErpDpView.tsx");
-const contractPanel = await read("app/painel/features/registrations/EmployeeContractPanel.tsx");
+const contractPanel = await read("app/painel/features/erp-dp/ErpContractPanel.tsx");
 const drawer = await read("app/painel/features/registrations/RegistrationsView.tsx");
 const panelPage = await read("app/painel/[[...secao]]/page.tsx");
 
@@ -104,33 +104,30 @@ test("a tabela nasce isolada por tenant e com as guardas da lei", () => {
   assert.doesNotMatch(migration, /"(amount|value|salary)/u);
 });
 
-test("os prazos entram na Central de Trabalho e apontam para a aba Contrato", () => {
-  const keys = workItemSources.map((source) => source.key);
-  assert.ok(keys.includes("contract_term_due") && keys.includes("notice_period_due"));
-  assert.ok((employeeRecordTabs as readonly string[]).includes("contract"));
-  assert.equal(workItemHref("contract_term_due", "e1", "e1"), "/painel/cadastros/e1?aba=contract");
-  assert.equal(workItemHref("notice_period_due", "e1", "e1"), "/painel/cadastros/e1?aba=contract");
+test("os prazos contratuais são do ERP: ficam fora da Central de Trabalho do Vinculato", () => {
+  const keys = workItemSources.map((source) => source.key as string);
+  assert.ok(!keys.includes("contract_term_due") && !keys.includes("notice_period_due"));
+  assert.deepEqual([...employeeRecordTabs], ["exams", "trainings"]);
+  assert.match(view, /function ContractsSection\(/u);
+  assert.match(view, /onOpen=\{\(employeeId\) => openRecord\(employeeId, "contract"\)\}/u);
   // O servidor descartava `aba` e todo link do Motor de Prazos abria a ficha na primeira aba.
   assert.match(panelPage, /if \(aba\) consulta\.set\("aba", aba\);/u);
-  for (const key of ["contract_term_due", "notice_period_due"] as const) {
-    const source = workItemSources.find((item) => item.key === key)!;
-    assert.equal(source.capability, "employees.read");
-    assert.match(source.sql, /emp\.employment_status <> 'terminated'/u);
-  }
 });
 
 test("a rota do contrato exige permissão de escrita e audita", () => {
   assert.match(termsRoute, /requireCapability\(workspace, "employees\.read"\)/u);
   assert.match(termsRoute, /requireCapability\(workspace, "employees\.manage"\)/u);
   assert.match(termsRoute, /action: "employee\.contract_terms\.updated"/u);
-  assert.match(drawer, /<EmployeeContractPanel employeeId=\{employee\.id\} canManage=\{canManage\} \/>/u);
+  // A aba Contrato mora na Ficha funcional do ERP, não na ficha do Vinculato.
+  assert.match(view, /<ErpContractPanel employeeId=\{text\(selected\.id\)\} canManage=\{canManage\} \/>/u);
+  assert.doesNotMatch(drawer, /ContractPanel|"Contrato"/u);
   // Os editores das abas não podem morar dentro do formulário da ficha: o
   // navegador enviava o de fora, recarregava a página e nada era gravado.
   const formStart = drawer.indexOf("<form id={employeeFormId} onSubmit={submit}>");
   const formEnd = drawer.indexOf("</form>", formStart);
   assert.ok(formStart > 0 && formEnd > formStart);
   const inside = drawer.slice(formStart, formEnd);
-  for (const panel of ["EmployeeContractPanel", "EmployeeTrainingsPanel", "EmployeeExamsPanel"]) {
+  for (const panel of ["EmployeeTrainingsPanel", "EmployeeExamsPanel"]) {
     assert.doesNotMatch(inside, new RegExp(`<${panel}`, "u"), `${panel} dentro do formulário da ficha`);
   }
   assert.match(drawer, /type="submit" form=\{employeeFormId\}/u);

@@ -157,7 +157,7 @@ registro existente sem gerar histórico — é a diferença entre *mudança* e
 | 0009 | Dados bancários | Conta principal e secundárias | 2 | — |
 | 0014 | Pagamentos/descontos recorrentes | Rubrica, valor, período | 3 | Adiantamentos e Descontos (parcelas) |
 | 0015 | Pagamentos adicionais | Rubrica, valor, data | 3 | Adiantamentos e Descontos (avulsos) |
-| 0016 | Elementos contratuais | Tipo de contrato, experiência, aviso prévio | 1 | Aba **Contrato** (`fdp_employee_contract_terms`) |
+| 0016 | Elementos contratuais | Tipo de contrato, experiência, aviso prévio | 1 | ERP DP › Contrato (`fdp_employee_contract_terms`) |
 | 0019 | Tarefas monitoradas | Prazos: fim de experiência, exame, renovação | 3 | Motor de Prazos (ASO, treinamento, CAT) |
 | 0021 | Família / dependentes | Dependentes para IR, salário-família, plano de saúde | 3 | — |
 | 0041 | Datas especiais | Data de admissão para férias, antiguidade, etc. | 1 | — |
@@ -619,12 +619,12 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 | Cadastro | Dados bancários (0009) | — | ⬜ |
 | Cadastro | Dependentes (0021) | — | ⬜ |
 | Cadastro | Documentos (0185/0465) | Ficha cadastral, CPF em HMAC | 🟡 |
-| Cadastro | Elementos contratuais (0016): experiência, aviso | Aba Contrato, prazos na Central | 🆕 |
+| Cadastro | Elementos contratuais (0016): experiência, aviso | ERP › Ficha funcional › Contrato; Prazos contratuais | 🆕 |
 | Cadastro | Bloqueio e liberação (SPRPS) | Aprovação atribuída da movimentação | ✅ |
 | Medidas | Tipos e motivos de medida | Tipos de movimentação; motivo em texto | 🟡 |
 | Medidas | Grupos de infotipos por medida | Detalhes por tipo de movimentação | 🟡 |
 | Medidas | Ações dinâmicas | Automações por evento de domínio | ✅ |
-| Medidas | Tarefas monitoradas (0019) | Motor de Prazos | ✅ |
+| Medidas | Tarefas monitoradas (0019) | Motor de Prazos; prazos contratuais no ERP DP | ✅ |
 | OM | Unidade organizacional | Departamento / área | ✅ |
 | OM | Posição e quadro de vagas | — | ⬜ |
 | OM | Cargo com descrição e requisitos | Cargo com grau de risco e atividades | 🟡 |
@@ -687,8 +687,8 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ## 16. Roadmap priorizado
 
-Estado: os itens 1 a 7 estão no produto, no **modo ERP DP** (§4.28 e §4.29 de
-`docs/arquitetura-operacional.md`). Falta o 8.
+Estado: os itens 1 a 7 estão no produto, no **modo ERP DP** (§4.28 a §4.30 de
+`docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP. Falta o 8.
 
 | # | Item | Conceito SAP | Valor para o DP | Esforço | Depende de |
 | --- | --- | --- | --- | --- | --- |

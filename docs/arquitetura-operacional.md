@@ -1478,7 +1478,8 @@ A primeira mudança de cada tipo grava antes uma linha de base (`baseline`) com
 o cadastro como estava, da admissão até a véspera. A tela diz por escrito que
 o que aconteceu antes dela não foi registrado — não há como reconstruir.
 
-A aba **Vida funcional** da ficha do colaborador lê
+A aba **Vida funcional** da Ficha funcional do ERP DP (§4.30; até o passo 3
+ela ficava na ficha do Vinculato) lê
 `GET /api/employees/[id]/functional-history?at=AAAA-MM-DD`: a fotografia da
 pessoa na data-base (o "dia-chave" do SAP) e a linha do tempo. Ela também
 avisa quando o cadastro de hoje difere do registro vigente hoje — por desenho,
@@ -1524,15 +1525,19 @@ inferior do celular.
 Três mudanças de comportamento vieram junto:
 
 - **Retorno de afastamento é medida** (`return_to_work`, migration 0108):
-  `on_leave → active` com data de vigência, aprovação e a mesma trava de ASO
-  inapto da edição do cadastro (§4.9). Grava `return_to_work` no histórico.
+  `on_leave → active` com data de vigência e a mesma trava de ASO inapto da
+  edição do cadastro (§4.9). Grava `return_to_work` no histórico. Desde §4.30
+  ela é executada só no ERP DP (`POST /api/erp-dp/actions/return-to-work`),
+  sem movimentação na Operação DP.
 - **Retroatividade**: aplicar uma movimentação cuja vigência cai numa
   competência `processing`, `post_closing` ou `closed` abre, no mesmo lote,
-  uma pendência operacional (`idempotency_key = retro:<movimentação>`) para o
-  DP lançar a diferença na próxima folha. O Vinculato não recalcula.
-- **Mudança × correção** na edição do cadastro: "Correção de cadastro"
-  conserta o registro vigente do histórico em vez de abrir período novo — o
-  "modificar" do PA30, para erro de digitação.
+  um retroativo para o DP lançar a diferença na próxima folha. O Vinculato não
+  recalcula. Desde §4.30 o retroativo mora em `fdp_erp_retroactive_items`, e
+  não nas Pendências da Operação DP.
+- **Mudança × correção**: "Corrigir registro" conserta o registro vigente do
+  histórico em vez de abrir período novo — o "modificar" do PA30, para erro de
+  digitação. Desde §4.30 fica na Ficha funcional do ERP DP; a edição do
+  cadastro no Vinculato registra sempre mudança a partir de hoje.
 
 O quadro em data-base usa o histórico vigente na data e, para quem ainda não
 tem histórico, o cadastro de hoje — marcado como aproximação na tela. O
@@ -1564,9 +1569,9 @@ trabalhado ou indenizado. Os dias do aviso são da Lei 12.506/2011 — 30, mais 
 por ano completo, até 90 — calculados no servidor (`lib/contract-terms.ts`);
 a tela mostra a prévia com a mesma função (`lib/contract-terms-rules.ts`, sem
 dependência de servidor). Só datas: nenhum valor de verba. A aba **Contrato**
-mora na ficha do colaborador (`?aba=contract`); os prazos entram na Central de
-Trabalho como `contract_term_due` e `notice_period_due` (janela de 15 dias,
-vencido continua) e no ERP DP em **Prazos contratuais**.
+mora na Ficha funcional do ERP DP, e os prazos aparecem em **Prazos
+contratuais** e no painel do ERP — não na Central de Trabalho do Vinculato
+(§4.30).
 
 **Conferência do eSocial (item 7).** O eSocial esperado (§4.28) ganhou a
 conferência: para cada evento, "transmitido" com o número do recibo ou "não se
@@ -1599,6 +1604,39 @@ continua sem transmitir nada.
 | --- | --- |
 | Sankhya pelo histórico, aviso prévio da Lei 12.506, limites de experiência e prazo determinado, prazos na Central, planilha de recibos, provas exigidas na conferência, `aba` no endereço, editores fora do formulário da ficha | `tests/erp-dp-step3.test.mts` |
 | Término do afastamento na competência do último dia | `tests/erp-dp.test.mts` |
+
+### 4.30 O que é ERP fica no ERP; o que é Vinculato fica no Vinculato
+
+Regra do produto, dita pelo dono do produto: o modo ERP DP e o Vinculato
+compartilham o banco e as permissões, mas **as telas não se misturam**. A
+única porta entre os dois é o botão de troca no canto superior direito
+(§4.28).
+
+O que estava no lugar errado e foi movido para o ERP DP:
+
+| Item | Onde estava | Onde fica |
+| --- | --- | --- |
+| Vida funcional | Ficha do colaborador (Cadastros) | ERP › Ficha funcional › Vida funcional |
+| Contrato e aviso prévio | Ficha do colaborador (Cadastros) | ERP › Ficha funcional › Contrato |
+| Mudança × correção | Ao salvar o cadastro | ERP › Ficha funcional › Corrigir registro |
+| Prazos de experiência e aviso | Central de Trabalho | ERP › Prazos contratuais e painel do ERP |
+| Retorno de afastamento | Tipo de movimentação na Operação DP | ERP › Medidas (executada no ERP, sem movimentação) |
+| Retroativos | Pendências da Operação DP | ERP › Retroativos (`fdp_erp_retroactive_items`), com "lançado na folha" e "dispensar" |
+
+A migration 0110 copia os retroativos que já tinham sido gravados como
+pendência e os dispensa nas Pendências ("Movido para Retroativos do ERP DP")
+— nada é apagado.
+
+O que continua no Vinculato porque é dele: as duas correções de defeito da
+ficha (§4.29 — a `aba` do endereço e os editores de ASO e treinamento fora do
+formulário da ficha). E o que continua compartilhado porque é dado, não tela:
+o histórico funcional é gravado pelas rotas do Vinculato que mudam o vínculo
+(aplicar movimentação, demitir, editar o cadastro, sincronizar o Sankhya), e o
+ERP lê.
+
+| Verificação | Onde |
+| --- | --- |
+| Nenhuma tela do Vinculato importa ou mostra o que é do ERP; telas do ERP na pasta do ERP; Central sem prazos do ERP; retroativo fora das Pendências; Operação DP sem retorno de afastamento | `tests/erp-separation.test.mts` |
 
 ---
 

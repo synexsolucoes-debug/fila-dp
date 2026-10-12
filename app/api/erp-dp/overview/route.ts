@@ -9,8 +9,9 @@ import { companyScopeClause } from "@/lib/erp-dp-service";
  *
  * Quatro números que o DP olha antes de qualquer outra coisa, no vocabulário
  * da engenharia reversa do SAP: o quadro de hoje, as medidas aprovadas
- * esperando execução (PA40), os retroativos abertos (0003) e as competências
- * em andamento (PA03). Cada contagem respeita o escopo de empresa.
+ * esperando execução (PA40), os retroativos abertos (0003), os prazos
+ * contratuais (0019) e as competências em andamento (PA03). Cada contagem
+ * respeita o escopo de empresa.
  */
 export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
     requireCapability(workspace, "employees.read");
     const companyId = cleanText(new URL(request.url).searchParams.get("companyId"), 120);
-    const empty = { active: 0, onLeave: 0, terminated: 0, approvedMovements: 0, openRetroactive: 0, cycles: [] };
+    const empty = { active: 0, onLeave: 0, terminated: 0, approvedMovements: 0, openRetroactive: 0, contractDeadlines: 0, cycles: [] };
     const scope = await companyScopeClause(d1, workspace.id, user.id, workspace.role, companyId, "company_id");
     if (!scope) return Response.json(empty);
 
@@ -32,11 +33,20 @@ export async function GET(request: Request) {
       ? await d1.prepare(`SELECT count(*)::int AS total FROM fdp_employee_movements WHERE workspace_id = ? AND status = 'approved' AND ${scope.clause}`)
         .bind(workspace.id, ...scope.values).first<{ total: number }>()
       : null;
-    const retro = hasCapability(workspace, "pending_items.read")
-      ? await d1.prepare(`SELECT count(*)::int AS total FROM fdp_operational_pending_items
-          WHERE workspace_id = ? AND status IN ('open', 'in_progress') AND idempotency_key LIKE 'retro:%' AND ${scope.clause}`)
+    const retro = hasCapability(workspace, "movements.read")
+      ? await d1.prepare(`SELECT count(*)::int AS total FROM fdp_erp_retroactive_items
+          WHERE workspace_id = ? AND status = 'open' AND ${scope.clause}`)
         .bind(workspace.id, ...scope.values).first<{ total: number }>()
       : null;
+    // Prazos contratuais vencidos ou nos próximos 15 dias — a mesma janela que
+    // a tela de Prazos contratuais usa para "precisa de decisão agora".
+    const contracts = await d1.prepare(`SELECT count(*)::int AS total FROM fdp_employee_contract_terms ct
+        JOIN fdp_employees e ON e.workspace_id = ct.workspace_id AND e.id = ct.employee_id
+        WHERE ct.workspace_id = ? AND e.employment_status <> 'terminated' AND ${scope.clause.replaceAll("company_id", "e.company_id")}
+          AND ((ct.experience_first_end IS NOT NULL AND ct.experience_first_end >= CURRENT_DATE AND ct.experience_first_end <= CURRENT_DATE + 15)
+            OR (ct.contract_end IS NOT NULL AND ct.contract_end <= CURRENT_DATE + 15)
+            OR (ct.notice_end IS NOT NULL AND ct.notice_end <= CURRENT_DATE + 15))`)
+      .bind(workspace.id, ...scope.values).first<{ total: number }>();
     const cycles = hasCapability(workspace, "competences.read")
       ? (await d1.prepare(`SELECT c.id, c.company_id, COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name, c.competence, c.status, c.payment_date
           FROM fdp_payroll_cycles c JOIN fdp_companies co ON co.workspace_id = c.workspace_id AND co.id = c.company_id
@@ -46,7 +56,7 @@ export async function GET(request: Request) {
 
     return Response.json({
       active: staff?.active ?? 0, onLeave: staff?.on_leave ?? 0, terminated: staff?.terminated ?? 0,
-      approvedMovements: approved?.total ?? 0, openRetroactive: retro?.total ?? 0, cycles,
+      approvedMovements: approved?.total ?? 0, openRetroactive: retro?.total ?? 0, contractDeadlines: contracts?.total ?? 0, cycles,
     });
   } catch (error) { return apiError(error); }
 }

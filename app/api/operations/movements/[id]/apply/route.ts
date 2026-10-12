@@ -4,7 +4,7 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { movementEmploymentEffect, movementTransferEffect } from "@/lib/operations";
 import { terminatedFrom } from "@/lib/employee-history";
-import { competenceOf, processedCycleStatuses, retroactivityKey, retroactivityTitle } from "@/lib/erp-dp";
+import { prepareRetroactiveItem } from "@/lib/erp-dp-service";
 import { blocksReturnToWork, type ExamResult } from "@/lib/occupational-exams";
 import { prepareHistoryChange } from "@/lib/employee-history-service";
 
@@ -140,24 +140,16 @@ export async function POST(request: Request, context: Context) {
             } },
       }));
     }
-    /* Retroatividade (ERP DP, passo 2 — o infotipo 0003 do SAP, sem
-       recálculo): a movimentação vale a partir de um mês cuja folha já foi
-       processada. O Vinculato não recalcula, mas não deixa a diferença cair
-       no esquecimento: abre pendência para o DP lançar na próxima folha.
-       Vale para todo tipo de movimentação — alteração salarial retroativa é
-       o caso mais comum. Idempotente pela chave: reaplicar não duplica. */
-    const retroCompetence = competenceOf(effectiveDate);
-    const processedCycle = await d1.prepare(`SELECT id, status FROM fdp_payroll_cycles
-      WHERE workspace_id = ? AND company_id = ? AND competence = ? AND status IN (${processedCycleStatuses.map(() => "?").join(", ")})`)
-      .bind(workspace.id, movement.company_id, retroCompetence, ...processedCycleStatuses).first<{ id: string; status: string }>();
-    if (processedCycle) {
-      statements.push(d1.prepare(`INSERT INTO fdp_operational_pending_items
-          (id, workspace_id, company_id, payroll_cycle_id, source_type, source_id, severity, blocking, title, status, idempotency_key)
-        VALUES (?, ?, ?, NULL, 'movement', ?, 'warning', 0, ?, 'open', ?)
-        ON CONFLICT (workspace_id, idempotency_key) DO NOTHING`)
-        .bind(crypto.randomUUID(), workspace.id, movement.company_id, id,
-          retroactivityTitle(String(movement.title ?? ""), retroCompetence), retroactivityKey(id)));
-    }
+    /* Retroatividade (ERP DP): a movimentação vale a partir de um mês cuja
+       folha já foi processada. O Vinculato não recalcula; o ERP DP abre um
+       retroativo para o DP lançar a diferença na próxima folha. Vale para
+       todo tipo de movimentação — alteração salarial retroativa é o caso mais
+       comum. O retroativo mora no ERP (§4.30), não nas Pendências. */
+    const retro = await prepareRetroactiveItem(d1, {
+      workspaceId: workspace.id, companyId: String(movement.company_id), employeeId: String(movement.employee_id),
+      sourceType: "movement", sourceId: id, effectiveDate, title: String(movement.title ?? ""),
+    });
+    if (retro) statements.push(retro.statement);
     statements.push(prepareAuditEvent({
       workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
       action: "movement.applied", entityType: "employee_movement", entityId: id,
@@ -170,7 +162,7 @@ export async function POST(request: Request, context: Context) {
     await d1.batch(statements);
     return Response.json({
       movement: { id, status: "applied" }, employmentStatus: effect?.employmentStatus ?? null, transfer,
-      retroactive: processedCycle ? { competence: retroCompetence, cycleStatus: processedCycle.status } : null,
+      retroactive: retro ? { competence: retro.competence, cycleStatus: retro.cycleStatus } : null,
     });
   } catch (error) { return apiError(error); }
 }

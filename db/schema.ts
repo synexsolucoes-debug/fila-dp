@@ -3915,6 +3915,40 @@ export const employeeContractTerms = pgTable("fdp_employee_contract_terms", {
 ]);
 
 /**
+ * Retroativos do ERP DP (migration 0110) — o infotipo 0003 do SAP sem
+ * recálculo. Tabela do ERP, fora das Pendências da Operação DP: o que é ERP
+ * fica no ERP.
+ */
+export const erpRetroactiveItems = pgTable("fdp_erp_retroactive_items", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id"),
+  sourceType: text("source_type").notNull(),
+  sourceId: text("source_id").notNull(),
+  effectiveDate: date("effective_date", { mode: "string" }).notNull(),
+  competence: text("competence").notNull(),
+  cycleStatus: text("cycle_status").notNull(),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("open"),
+  resolution: text("resolution").notNull().default(""),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_erp_retroactive_items_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_erp_retroactive_items_source_uq").on(table.workspaceId, table.sourceType, table.sourceId),
+  index("fdp_erp_retroactive_items_status_idx").on(table.workspaceId, table.status, table.createdAt),
+  foreignKey({ name: "fdp_erp_retroactive_items_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_erp_retroactive_items_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  check("fdp_erp_retroactive_items_source_check", sql`${table.sourceType} IN ('movement', 'erp_action')`),
+  check("fdp_erp_retroactive_items_status_check", sql`${table.status} IN ('open', 'posted', 'waived')`),
+  check("fdp_erp_retroactive_items_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_erp_retroactive_items_resolution_check", sql`${table.status} = 'open' OR length(trim(${table.resolution})) > 0`),
+]);
+
+/**
  * Conferência do eSocial (migration 0109): o que alguém confirmou sobre cada
  * evento que o histórico funcional exige. O Vinculato não transmite.
  */

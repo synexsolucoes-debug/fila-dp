@@ -785,6 +785,13 @@
       "when": 1791045600000,
       "tag": "0109_erp_dp_contract_terms_esocial_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1791132000000,
+      "tag": "0110_erp_dp_separation",
+      "breakpoints": true
     }
   ]
 }
