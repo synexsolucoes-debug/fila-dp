@@ -3,6 +3,8 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { movementEmploymentEffect, movementTransferEffect } from "@/lib/operations";
+import { terminatedFrom } from "@/lib/employee-history";
+import { prepareHistoryChange } from "@/lib/employee-history-service";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -37,7 +39,7 @@ export async function POST(request: Request, context: Context) {
     requireCapability(workspace, "movements.manage");
 
     const movement = await d1.prepare(`SELECT m.company_id, m.employee_id, m.movement_type, m.status, m.details_json,
-        e.employment_status AS employee_status
+        m.effective_date, e.employment_status AS employee_status
       FROM fdp_employee_movements m
       JOIN fdp_employees e ON e.workspace_id = m.workspace_id AND e.id = m.employee_id
       WHERE m.workspace_id = ? AND m.id = ?`).bind(workspace.id, id).first<Record<string, unknown>>();
@@ -100,6 +102,25 @@ export async function POST(request: Request, context: Context) {
           updated_by = ?, updated_at = CURRENT_TIMESTAMP
         WHERE workspace_id = ? AND id = ?`)
         .bind(transfer.departmentId, transfer.positionId, transfer.costCenterId, user.id, workspace.id, movement.employee_id));
+    }
+    /* Histórico funcional (§4.27): a mudança ganha data de validade no mesmo
+       lote. Sem isto, aplicar uma transferência apagava o departamento
+       anterior — o cadastro só sabe o agora. */
+    const effectiveDate = String(movement.effective_date instanceof Date
+      ? movement.effective_date.toISOString() : movement.effective_date).slice(0, 10);
+    if (effect || transfer) {
+      statements.push(...await prepareHistoryChange(d1, {
+        workspaceId: workspace.id, employeeId: String(movement.employee_id), userId: user.id, movementId: id,
+        reason: effect?.employmentStatus === "terminated" ? "termination" : effect ? "leave" : "transfer",
+        effectiveDate: effect?.employmentStatus === "terminated" ? terminatedFrom(terminationDate ?? effectiveDate) : effectiveDate,
+        changes: effect
+          ? { situation: { employmentStatus: effect.employmentStatus } }
+          : { assignment: {
+              departmentId: transfer?.departmentId ?? undefined,
+              positionId: transfer?.positionId ?? undefined,
+              costCenterId: transfer?.costCenterId ?? undefined,
+            } },
+      }));
     }
     statements.push(prepareAuditEvent({
       workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,

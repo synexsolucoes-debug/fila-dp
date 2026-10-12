@@ -114,6 +114,7 @@ export const expectedMigrations = [
   "0104_manager_portal_link.sql",
   "0105_process_step_approvals.sql",
   "0106_portal_link_issuer_company.sql",
+  "0107_employee_functional_history.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

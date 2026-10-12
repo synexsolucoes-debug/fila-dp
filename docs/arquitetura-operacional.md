@@ -1444,6 +1444,62 @@ lado) — mostrar esse motivo pede primeiro decidir onde ele aparece, o que
 | --- | --- |
 | `GET /api/time/overview` já trazia `rejected_reason`; o normalizador do front lê `rejectedReason`, e a tabela de espelhos mostra o motivo quando o espelho foi devolvido | `tests/time-tracking.test.mts` |
 
+### 4.27 Histórico funcional — a ficha do colaborador com data de validade
+
+Engenharia reversa do Personnel Administration do SAP HCM; a análise completa
+está em `docs/engenharia-reversa-sap-hcm.md`. `fdp_employees` guarda só o
+agora: aplicar uma transferência (§4.17) sobrescrevia o departamento, e a
+pergunta "onde ela estava lotada em março?" — que todo DP responde em
+rescisão, auditoria, eSocial retificador e defesa trabalhista — não tinha
+resposta no produto.
+
+`fdp_employee_history_records` (migration 0107) guarda registros com
+`valid_from`/`valid_to`, em três tipos espelhados dos infotipos do SAP:
+`situation` (IT0000), `assignment` (IT0001: empresa, unidade, departamento,
+cargo, centro de custo) e `schedule` (IT0007). Vale a restrição temporal 1:
+por tipo, exatamente um registro vigente em cada dia, sem buraco nem
+sobreposição. Uma mudança **delimita** o vigente na véspera e abre o novo
+(`planHistoryChange`, em `lib/employee-history.ts`, puro); nada é apagado.
+
+O histórico não tem rota de escrita própria. As três rotas que mudam o vínculo
+chamam `prepareHistoryChange` antes do próprio lote e juntam as instruções a
+ele — a mudança e o histórico entram na mesma transação:
+
+- `POST /api/operations/movements/[id]/apply` — afastamento, desligamento e
+  transferência, com a `effective_date` da movimentação;
+- `POST /api/employees/[id]/terminate`;
+- `PATCH /api/employees/[id]` — a edição não tem data própria, então vale de
+  hoje (fuso de São Paulo). Quem precisa de data retroativa usa a movimentação.
+
+"Desligado" começa no dia seguinte à data de desligamento: o DP registra o
+último dia do vínculo, e a pessoa ainda está ativa nele.
+
+A primeira mudança de cada tipo grava antes uma linha de base (`baseline`) com
+o cadastro como estava, da admissão até a véspera. A tela diz por escrito que
+o que aconteceu antes dela não foi registrado — não há como reconstruir.
+
+A aba **Vida funcional** da ficha do colaborador lê
+`GET /api/employees/[id]/functional-history?at=AAAA-MM-DD`: a fotografia da
+pessoa na data-base (o "dia-chave" do SAP) e a linha do tempo. Ela também
+avisa quando o cadastro de hoje difere do registro vigente hoje — por desenho,
+isso acontece com movimentação aplicada com data futura (o cadastro muda na
+aplicação; a validade, só na data).
+
+Salário (IT0008) ficou de fora de propósito (§28 do benchmark): o Vinculato
+não calcula folha.
+
+**O que isto ainda não faz**: os importadores (Sankhya, `lib/sankhya/importer.ts`
+e `app/api/employees/import/sankhya/route.ts`) ainda escrevem em
+`fdp_employees` sem passar pelo histórico — o aviso de divergência da aba é o
+que mostra quando isso acontece. Não existe ainda o relatório de quadro numa
+data-base para a empresa inteira (o equivalente ao "headcount em dia-chave"
+do SAP), e a rota de retorno de afastamento não existe como movimentação —
+quem reativa pelo cadastro grava `registration_edit` com a data de hoje.
+
+| Verificação | Onde |
+| --- | --- |
+| Delimitação, mudança retroativa, mesmo início, linha de base, data anterior ao histórico, divergência; RLS e costura com as três rotas | `tests/employee-functional-history.test.mts` |
+
 ---
 
 ## 5. Agentes
