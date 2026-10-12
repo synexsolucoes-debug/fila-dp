@@ -105,6 +105,16 @@ button.tile:hover { border-color: var(--erp-accent); }
 .hiddenInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 label.secondary { position: relative; }
 .toolbar select { min-height: 40px; padding: 0 10px; border: 1px solid var(--erp-border); border-radius: 8px; background: var(--erp-surface); color: var(--erp-text); font: inherit; }
+.recordTabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--erp-border); }
+.recordTabs button { display: grid; gap: 1px; padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--erp-text); font: inherit; text-align: left; cursor: pointer; }
+.recordTabs button strong { font-size: .8rem; }
+.recordTabs button small { color: var(--erp-soft); font-size: .64rem; }
+.recordTabs button.recordTabActive { border-bottom-color: var(--erp-accent); }
+.recordTabs button.recordTabActive strong { color: var(--erp-accent-text); }
+.actionCard { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--erp-border); border-radius: 12px; background: var(--erp-surface); }
+.actionCard > header { display: grid; gap: 2px; }
+.actionCard > header span { color: var(--erp-accent-text); font-size: .62rem; font-weight: 800; letter-spacing: .1em; }
+.actionCard > header strong { font-size: .9rem; }
 .recordHead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid var(--erp-border); border-radius: 12px; background: var(--erp-surface); }
 .recordHead small { color: var(--erp-soft); font-size: .66rem; font-weight: 800; letter-spacing: .06em; }
 .recordHead h2 { margin: 2px 0; font-size: 1.1rem; }

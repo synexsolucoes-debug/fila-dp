@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, FileSignature, LoaderCircle, RefreshCw } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { contractKindLabels, noticeDays, noticeEnd, noticeKindLabels, type ContractKind, type NoticeKind } from "@/lib/contract-terms-rules";
-import styles from "./registrations.module.css";
+import styles from "./erp-record.module.css";
 
 type Terms = {
   contractKind: ContractKind;
@@ -45,13 +45,13 @@ function deadlineTone(date: string) {
 }
 
 /**
- * A aba "Contrato" da ficha do colaborador (ERP DP, passo 3 — IT0016 e
+ * A aba "Contrato" da Ficha funcional do ERP DP (passo 3 — IT0016 e
  * IT0019 do SAP HCM): tipo de contrato, fim da experiência ou do prazo
  * determinado e aviso prévio. Os dias do aviso são calculados pela Lei
  * 12.506/2011 enquanto a pessoa digita — e o servidor recalcula ao salvar,
  * para a tela nunca ser a fonte da regra.
  */
-export function EmployeeContractPanel({ employeeId, canManage }: { employeeId: string; canManage: boolean }) {
+export function ErpContractPanel({ employeeId, canManage }: { employeeId: string; canManage: boolean }) {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -139,7 +139,7 @@ function ContractEditor({ employeeId, admissionDate, terms, onSaved }: { employe
   return <form className={styles.requirementEditor} onSubmit={(event) => void submit(event)}>
     <header><div><span>ELEMENTOS DO CONTRATO</span><h3>Tipo de contrato e aviso prévio</h3></div></header>
     {error && <ErrorBanner title="O contrato não foi salvo" message={error} />}
-    {saved && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>Contrato salvo</strong><small>Os prazos já entram na Central de Trabalho.</small></span></p>}
+    {saved && <p className={styles.infoNote}><Check aria-hidden="true" /><span><strong>Contrato salvo</strong><small>Os prazos aparecem em Prazos contratuais, no menu do ERP.</small></span></p>}
     <div className={styles.formGrid}>
       <label><span>Tipo de contrato</span>
         <select value={contractKind} onChange={(event) => setContractKind(event.target.value as ContractKind)}>

@@ -3336,7 +3336,8 @@ export function WorkspaceApp({
         <div className="dashboard-content">
           {erpMode ? <ErpDpView companyId={companyFilter === "all" ? "" : companyFilter} scopeLabel={erpScopeLabel}
             canManageMovements={hasCapability(snapshot.workspace.role, "movements.manage")}
-            canReadPending={hasCapability(snapshot.workspace.role, "pending_items.read")}
+            canManageEmployees={hasCapability(snapshot.workspace.role, "employees.manage")}
+            canReadMovements={hasCapability(snapshot.workspace.role, "movements.read")}
             canReadCycles={hasCapability(snapshot.workspace.role, "competences.read")}
             canCheckEsocial={hasCapability(snapshot.workspace.role, "obligations.manage")}
             onExit={() => changeAppMode("vinculato")} /> :

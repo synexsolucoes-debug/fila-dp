@@ -22,6 +22,7 @@ const apply = await readFile(new URL("../app/api/operations/movements/[id]/apply
 const terminate = await readFile(new URL("../app/api/employees/[id]/terminate/route.ts", import.meta.url), "utf8");
 const edit = await readFile(new URL("../app/api/employees/[id]/route.ts", import.meta.url), "utf8");
 const read = await readFile(new URL("../app/api/employees/[id]/functional-history/route.ts", import.meta.url), "utf8");
+const erpView = await readFile(new URL("../app/painel/features/erp-dp/ErpDpView.tsx", import.meta.url), "utf8");
 const drawer = await readFile(new URL("../app/painel/features/registrations/RegistrationsView.tsx", import.meta.url), "utf8");
 
 const empty: HistoryValues = {
@@ -208,10 +209,11 @@ test("concorrência: o registro novo só nasce se a delimitação aconteceu", ()
   assert.match(service, /WHERE EXISTS \(SELECT 1 FROM fdp_employee_history_records WHERE workspace_id = \? AND id = \? AND valid_to = \?::date\)/u);
 });
 
-test("a leitura exige acesso à empresa e a aba aparece na ficha", () => {
+test("a leitura exige acesso à empresa, e a Vida funcional mora no ERP DP, não na ficha do Vinculato", () => {
   assert.match(read, /requireCapability\(workspace, "employees\.read"\)/u);
   assert.match(read, /requireCompanyAccess\(/u);
   assert.doesNotMatch(read, /export async function (POST|PATCH|DELETE)/u);
-  assert.match(drawer, /item === "functional" \? "Vida funcional"/u);
-  assert.match(drawer, /<EmployeeFunctionalHistoryPanel employeeId=\{employee\.id\} \/>/u);
+  // O que é ERP fica no ERP (§4.30).
+  assert.match(erpView, /<ErpFunctionalHistoryPanel key=\{version\} employeeId=/u);
+  assert.doesNotMatch(drawer, /Vida funcional|FunctionalHistoryPanel/u);
 });

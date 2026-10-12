@@ -6,8 +6,9 @@ import {
   LayoutDashboard, LoaderCircle, Play, RefreshCw, Search, ShieldCheck, UserRound, Users,
 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
-import { EmployeeFunctionalHistoryPanel } from "../registrations/EmployeeFunctionalHistoryPanel";
-import { employeePath } from "@/lib/panel-routes";
+import { ErpFunctionalHistoryPanel } from "./ErpFunctionalHistoryPanel";
+import { ErpContractPanel } from "./ErpContractPanel";
+import { ErpCorrectionPanel } from "./ErpCorrectionPanel";
 import { parseReceiptSheet } from "@/lib/esocial-receipts";
 import styles from "./erp-dp.module.css";
 
@@ -103,18 +104,25 @@ function SectionState({ loading, error, reload, title }: { loading: boolean; err
   return null;
 }
 
-export function ErpDpView({ companyId, scopeLabel, canManageMovements, canReadPending, canReadCycles, canCheckEsocial, onExit }: {
+export function ErpDpView({ companyId, scopeLabel, canManageMovements, canManageEmployees, canReadMovements, canReadCycles, canCheckEsocial, onExit }: {
   companyId: string;
   scopeLabel: string;
   canManageMovements: boolean;
+  /** Contrato e correção de registro — `employees.manage`. */
+  canManageEmployees: boolean;
+  /** Retroativos — `movements.read`. */
+  canReadMovements: boolean;
   /** Gravar a conferência do eSocial — `obligations.manage`. */
   canCheckEsocial: boolean;
-  canReadPending: boolean;
   canReadCycles: boolean;
   onExit: () => void;
 }) {
   const [section, setSection] = useState<Section>("overview");
-  const visible = sections.filter((item) => (item.id !== "retro" || canReadPending) && (item.id !== "cycles" || canReadCycles));
+  /* A ficha pode ser aberta de outra tela do ERP já na aba certa — Prazos
+     contratuais abre o contrato da pessoa, sem sair do ERP. */
+  const [recordTarget, setRecordTarget] = useState<{ employeeId: string; tab: RecordTab } | null>(null);
+  const openRecord = (employeeId: string, tab: RecordTab) => { setRecordTarget({ employeeId, tab }); setSection("record"); };
+  const visible = sections.filter((item) => (item.id !== "retro" || canReadMovements) && (item.id !== "cycles" || canReadCycles));
   const current = sections.find((item) => item.id === section) ?? sections[0];
 
   return <div className={styles.shell}>
@@ -134,11 +142,12 @@ export function ErpDpView({ companyId, scopeLabel, canManageMovements, canReadPe
         <div><span>{current.sap}</span><h1 id="erp-section-title">{current.label}</h1></div>
       </header>
       {section === "overview" && <OverviewSection companyId={companyId} onGo={setSection} />}
-      {section === "record" && <RecordSection companyId={companyId} onExit={onExit} />}
+      {section === "record" && <RecordSection key={recordTarget ? `${recordTarget.employeeId}-${recordTarget.tab}` : "search"}
+        companyId={companyId} target={recordTarget} canManage={canManageEmployees} />}
       {section === "actions" && <ActionsSection companyId={companyId} canManage={canManageMovements} />}
-      {section === "contracts" && <ContractsSection companyId={companyId} onExit={onExit} />}
+      {section === "contracts" && <ContractsSection companyId={companyId} onOpen={(employeeId) => openRecord(employeeId, "contract")} />}
       {section === "headcount" && <HeadcountSection companyId={companyId} />}
-      {section === "retro" && <RetroSection companyId={companyId} />}
+      {section === "retro" && <RetroSection companyId={companyId} canManage={canManageMovements} />}
       {section === "cycles" && <CyclesSection companyId={companyId} />}
       {section === "esocial" && <EsocialSection companyId={companyId} canCheck={canCheckEsocial} />}
       {section === "about" && <AboutSection />}
@@ -149,7 +158,7 @@ export function ErpDpView({ companyId, scopeLabel, canManageMovements, canReadPe
 /* -------------------------------------------------------------------------- */
 
 function OverviewSection({ companyId, onGo }: { companyId: string; onGo: (section: Section) => void }) {
-  const { data, loading, error, reload } = useResource<{ active: number; onLeave: number; terminated: number; approvedMovements: number; openRetroactive: number; cycles: Row[] }>(`/api/erp-dp/overview${scopeQuery(companyId)}`);
+  const { data, loading, error, reload } = useResource<{ active: number; onLeave: number; terminated: number; approvedMovements: number; openRetroactive: number; contractDeadlines: number; cycles: Row[] }>(`/api/erp-dp/overview${scopeQuery(companyId)}`);
   if (loading || error || !data) return <SectionState loading={loading} error={error} reload={() => void reload()} title="Montando o painel do DP" />;
   const openCycles = data.cycles.filter((cycle) => text(cycle.status) !== "closed");
   const tiles: Array<{ label: string; value: number; hint: string; go: Section; tone?: "warn" }> = [
@@ -157,6 +166,7 @@ function OverviewSection({ companyId, onGo }: { companyId: string; onGo: (sectio
     { label: "Afastados hoje", value: data.onLeave, hint: "Quadro em data-base", go: "headcount" },
     { label: "Medidas aguardando execução", value: data.approvedMovements, hint: "Aprovadas, ainda não aplicadas", go: "actions", tone: data.approvedMovements ? "warn" : undefined },
     { label: "Retroativos abertos", value: data.openRetroactive, hint: "Diferença a lançar na folha", go: "retro", tone: data.openRetroactive ? "warn" : undefined },
+    { label: "Prazos contratuais", value: data.contractDeadlines, hint: "Vencidos ou nos próximos 15 dias", go: "contracts", tone: data.contractDeadlines ? "warn" : undefined },
     { label: "Competências em andamento", value: openCycles.length, hint: "Calendário de folha", go: "cycles" },
   ];
   return <div className={styles.stack}>
@@ -173,12 +183,31 @@ function OverviewSection({ companyId, onGo }: { companyId: string; onGo: (sectio
 
 /* -------------------------------------------------------------------------- */
 
-function RecordSection({ companyId, onExit }: { companyId: string; onExit: () => void }) {
+type RecordTab = "functional" | "contract" | "correction";
+const recordTabs: Array<{ id: RecordTab; label: string; sap: string }> = [
+  { id: "functional", label: "Vida funcional", sap: "IT0000 · IT0001 · IT0007" },
+  { id: "contract", label: "Contrato", sap: "IT0016 · IT0019" },
+  { id: "correction", label: "Corrigir registro", sap: "PA30 · modificar" },
+];
+
+function RecordSection({ companyId, target, canManage }: { companyId: string; target: { employeeId: string; tab: RecordTab } | null; canManage: boolean }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Row[] | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
+  const [tab, setTab] = useState<RecordTab>(target?.tab ?? "functional");
+  const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Aberta por outra tela do ERP: carrega a pessoa direto, sem busca.
+  useEffect(() => {
+    if (!target) return;
+    let active = true;
+    void requestJson<{ employee: Row }>(`/api/employees/${encodeURIComponent(target.employeeId)}`)
+      .then((payload) => { if (active) setSelected(payload.employee); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Colaborador não encontrado."); });
+    return () => { active = false; };
+  }, [target]);
 
   async function search(event?: FormEvent) {
     event?.preventDefault();
@@ -192,13 +221,15 @@ function RecordSection({ companyId, onExit }: { companyId: string; onExit: () =>
     } finally { setBusy(false); }
   }
 
+  const visibleTabs = recordTabs.filter((item) => item.id !== "correction" || canManage);
+
   return <div className={styles.stack}>
-    <form className={styles.toolbar} onSubmit={(event) => void search(event)} role="search">
+    {!selected && <form className={styles.toolbar} onSubmit={(event) => void search(event)} role="search">
       <label className={styles.grow}><span>Colaborador (nome ou matrícula)</span>
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ex.: 000123 ou Maria" /></label>
       <button className={styles.primary} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Search aria-hidden="true" />} Exibir</button>
-    </form>
-    {error && <ErrorBanner title="A busca falhou" message={error} />}
+    </form>}
+    {error && <ErrorBanner title="Não foi possível abrir a ficha" message={error} />}
     {results && !selected && (results.length ? <div className={styles.tableWrap}><table className={styles.table}>
       <thead><tr><th>Matrícula</th><th>Nome</th><th>Empresa</th><th>Situação</th><th /></tr></thead>
       <tbody>{results.map((row) => <tr key={text(row.id)}>
@@ -209,19 +240,27 @@ function RecordSection({ companyId, onExit }: { companyId: string; onExit: () =>
         <td><button type="button" className={styles.secondary} onClick={() => setSelected(row)}>Abrir ficha</button></td>
       </tr>)}</tbody>
     </table></div> : <EmptyState icon={UserRound} size="compact" title="Ninguém encontrado" text="Confira a matrícula ou o nome, e a empresa selecionada no topo." />)}
-    {!results && !selected && <EmptyState icon={UserRound} size="compact" title="Informe um colaborador"
-      text="A ficha funcional mostra a pessoa numa data-base — situação, lotação e jornada vigentes naquele dia — e a linha do tempo completa." />}
+    {!results && !selected && !target && <EmptyState icon={UserRound} size="compact" title="Informe um colaborador"
+      text="A ficha funcional mostra a pessoa numa data-base, o contrato com os prazos e a correção do registro vigente." />}
     {selected && <div className={styles.stack}>
       <div className={styles.recordHead}>
         <div><small>MATRÍCULA {text(selected.registration_number)} · {text(selected.company_name)}</small>
           <h2>{text(selected.social_name) || text(selected.full_name)}</h2>
           <span>Admissão {dateLabel(selected.admission_date)} · {text(selected.position_name) || "Sem cargo"} · {text(selected.department_name) || "Sem departamento"}</span></div>
         <div className={styles.actionsRow}>
-          <button type="button" className={styles.secondary} onClick={() => setSelected(null)}>Outra pessoa</button>
-          <a className={styles.secondary} href={employeePath(text(selected.id))} onClick={onExit}>Editar no cadastro do Vinculato</a>
+          <button type="button" className={styles.secondary} onClick={() => { setSelected(null); setResults(null); }}>Outra pessoa</button>
         </div>
       </div>
-      <EmployeeFunctionalHistoryPanel employeeId={text(selected.id)} />
+      <div className={styles.recordTabs} role="tablist" aria-label="Ficha funcional">
+        {visibleTabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id}
+          className={tab === item.id ? styles.recordTabActive : ""} onClick={() => setTab(item.id)}>
+          <strong>{item.label}</strong><small>{item.sap}</small></button>)}
+      </div>
+      <div role="tabpanel">
+        {tab === "functional" && <ErpFunctionalHistoryPanel key={version} employeeId={text(selected.id)} />}
+        {tab === "contract" && <ErpContractPanel employeeId={text(selected.id)} canManage={canManage} />}
+        {tab === "correction" && canManage && <ErpCorrectionPanel employeeId={text(selected.id)} onSaved={() => setVersion((value) => value + 1)} />}
+      </div>
     </div>}
   </div>;
 }
@@ -231,6 +270,9 @@ function RecordSection({ companyId, onExit }: { companyId: string; onExit: () =>
 function ActionsSection({ companyId, canManage }: { companyId: string; canManage: boolean }) {
   const approved = useResource<{ movements: Row[] }>(`/api/operations/movements${scopeQuery(companyId, { status: "approved", limit: "100" })}`);
   const [running, setRunning] = useState("");
+  // Cada medida executada pode mudar quem está afastado: o formulário de
+  // retorno recarrega a lista a cada execução.
+  const [executions, setExecutions] = useState(0);
   const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   async function execute(row: Row) {
@@ -243,6 +285,7 @@ function ActionsSection({ companyId, canManage }: { companyId: string; canManage
           ? `Medida executada. Ela vale a partir de ${result.retroactive.competence}, competência já processada: abrimos um retroativo para o DP lançar a diferença na folha.`
           : "Medida executada. O cadastro e o histórico funcional foram atualizados na mesma transação.",
       });
+      setExecutions((value) => value + 1);
       await approved.reload();
     } catch (cause) {
       setFeedback({ tone: "error", text: cause instanceof Error ? cause.message : "Não foi possível executar a medida." });
@@ -250,6 +293,7 @@ function ActionsSection({ companyId, canManage }: { companyId: string; canManage
   }
 
   return <div className={styles.stack}>
+    {canManage && <ReturnToWorkAction key={executions} companyId={companyId} onDone={(message) => setFeedback({ tone: "ok", text: message })} />}
     <p className={styles.lead}>Medidas aprovadas que ainda não mudaram o cadastro. Executar grava a mudança com a data de vigência,
       delimita o histórico e, se a data cair numa competência já processada, abre o retroativo.</p>
     {feedback && (feedback.tone === "ok"
@@ -272,6 +316,53 @@ function ActionsSection({ companyId, canManage }: { companyId: string; canManage
       </table></div> : <EmptyState icon={Play} size="compact" title="Nenhuma medida aguardando execução"
         text="Movimentações aprovadas na Operação DP aparecem aqui até serem executadas." />}
   </div>;
+}
+
+/**
+ * Medida "Retorno de afastamento", executada no próprio ERP (PA40): situação
+ * ativa com a data do retorno, histórico e retroativo no mesmo lote, com a
+ * trava do ASO inapto. Não cria movimentação na Operação DP.
+ */
+function ReturnToWorkAction({ companyId, onDone }: { companyId: string; onDone: (message: string) => void }) {
+  const onLeave = useResource<{ employees: Row[] }>(`/api/employees${scopeQuery(companyId, { status: "on_leave", limit: "100" })}`);
+  const [employeeId, setEmployeeId] = useState("");
+  const [returnDate, setReturnDate] = useState(todayLocal);
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const result = await requestJson<{ retroactive: { competence: string } | null }>("/api/erp-dp/actions/return-to-work", {
+        method: "POST", body: JSON.stringify({ employeeId, returnDate, notes }),
+      });
+      setError(""); setEmployeeId(""); setNotes("");
+      onDone(result.retroactive
+        ? `Retorno registrado. A data cai em ${result.retroactive.competence}, competência já processada: abrimos um retroativo.`
+        : "Retorno registrado. O cadastro voltou a ativo e o histórico funcional ganhou o período novo.");
+      await onLeave.reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível registrar o retorno.");
+    } finally { setBusy(false); }
+  }
+
+  const people = onLeave.data?.employees ?? [];
+  return <form className={styles.actionCard} onSubmit={(event) => void submit(event)}>
+    <header><span>MEDIDA</span><strong>Retorno de afastamento</strong></header>
+    {error && <ErrorBanner title="O retorno não foi registrado" message={error} />}
+    {people.length ? <div className={styles.toolbar}>
+      <label className={styles.grow}><span>Colaborador afastado</span>
+        <select required value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
+          <option value="">Selecione</option>
+          {people.map((row) => <option key={text(row.id)} value={text(row.id)}>{text(row.registration_number)} · {text(row.social_name) || text(row.full_name)}</option>)}
+        </select></label>
+      <label><span>Data do retorno</span><input type="date" required value={returnDate} onChange={(event) => setReturnDate(event.target.value)} /></label>
+      <label className={styles.grow}><span>Observação</span><input value={notes} maxLength={500} onChange={(event) => setNotes(event.target.value)} placeholder="Ex.: ASO de retorno apto" /></label>
+      <button className={styles.primary} disabled={busy || !employeeId}>{busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Play aria-hidden="true" />} Executar retorno</button>
+    </div> : <span className={styles.muted}>{onLeave.loading ? "Carregando afastados…" : "Ninguém afastado no escopo selecionado."}</span>}
+  </form>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -349,22 +440,62 @@ function HeadcountSection({ companyId }: { companyId: string }) {
 
 /* -------------------------------------------------------------------------- */
 
-function RetroSection({ companyId }: { companyId: string }) {
+const retroStatusLabels: Record<string, string> = { open: "Aberto", posted: "Lançado na folha", waived: "Dispensado" };
+
+function RetroSection({ companyId, canManage }: { companyId: string; canManage: boolean }) {
   const { data, loading, error, reload } = useResource<{ items: Row[] }>(`/api/erp-dp/retroactivity${scopeQuery(companyId)}`);
+  const [editing, setEditing] = useState<{ id: string; status: "posted" | "waived"; value: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  async function resolve(id: string, status: "posted" | "waived" | "open", resolution: string) {
+    setBusy(true);
+    try {
+      await requestJson(`/api/erp-dp/retroactivity/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status, resolution }) });
+      setFeedback({ tone: "ok", text: status === "open" ? "Retroativo reaberto." : status === "posted" ? "Retroativo marcado como lançado na folha." : "Retroativo dispensado." });
+      setEditing(null);
+      await reload();
+    } catch (cause) {
+      setFeedback({ tone: "error", text: cause instanceof Error ? cause.message : "Não foi possível atualizar o retroativo." });
+    } finally { setBusy(false); }
+  }
+
   return <div className={styles.stack}>
-    <p className={styles.lead}>No SAP, uma mudança com data no passado marca o recálculo da folha. O Vinculato não recalcula — ele abre uma pendência
-      para o DP lançar a diferença na próxima folha. Resolva cada uma na Operação DP, em Pendências.</p>
+    <p className={styles.lead}>No SAP, uma mudança com data no passado marca o recálculo da folha. O Vinculato não recalcula: quando uma medida vale a partir
+      de uma competência já processada, o ERP abre um retroativo para o DP lançar a diferença na próxima folha — e registrar aqui em qual.</p>
+    {feedback && (feedback.tone === "ok"
+      ? <div className={styles.note}><Check aria-hidden="true" /><p>{feedback.text}</p></div>
+      : <ErrorBanner title="O retroativo não foi atualizado" message={feedback.text} />)}
     {loading || error || !data ? <SectionState loading={loading} error={error} reload={() => void reload()} title="Carregando retroativos" />
       : data.items.length ? <div className={styles.tableWrap}><table className={styles.table}>
-        <thead><tr><th>Situação</th><th>Empresa</th><th>Colaborador</th><th>Medida</th><th>Vigência</th><th>Aberto em</th></tr></thead>
-        <tbody>{data.items.map((row) => <tr key={text(row.id)}>
-          <td data-label="Situação"><StatusPill status={text(row.status) === "open" ? "pending" : text(row.status)} label={text(row.status) === "open" ? "Aberto" : text(row.status) === "in_progress" ? "Em andamento" : text(row.status) === "resolved" ? "Lançado" : "Dispensado"} /></td>
-          <td data-label="Empresa">{text(row.company_name)}</td>
-          <td data-label="Colaborador">{text(row.employee_name) || "—"}</td>
-          <td data-label="Medida">{movementLabels[text(row.movement_type)] ?? "—"}{row.movement_title ? ` · ${text(row.movement_title)}` : ""}</td>
-          <td data-label="Vigência">{dateLabel(row.effective_date)}</td>
-          <td data-label="Aberto em">{dateLabel(row.created_at)}</td>
-        </tr>)}</tbody>
+        <thead><tr><th>Situação</th><th>Empresa</th><th>Colaborador</th><th>Origem</th><th>Vigência</th><th>Competência</th><th>Resolução</th></tr></thead>
+        <tbody>{data.items.map((row) => {
+          const id = text(row.id);
+          const status = text(row.status);
+          return <tr key={id}>
+            <td data-label="Situação"><StatusPill status={status === "open" ? "pending" : status === "posted" ? "applied" : "neutral"} label={retroStatusLabels[status] ?? status} /></td>
+            <td data-label="Empresa">{text(row.company_name)}</td>
+            <td data-label="Colaborador">{text(row.employee_name) || "—"}</td>
+            <td data-label="Origem">{text(row.source_type) === "erp_action" ? "Medida do ERP" : `${movementLabels[text(row.movement_type)] ?? "Movimentação"}${row.movement_title ? ` · ${text(row.movement_title)}` : ""}`}</td>
+            <td data-label="Vigência">{dateLabel(row.effective_date)}</td>
+            <td data-label="Competência">{text(row.competence)}</td>
+            <td data-label="Resolução">
+              {editing?.id === id ? <form className={styles.inlineForm} onSubmit={(event) => { event.preventDefault(); void resolve(id, editing.status, editing.value); }}>
+                <input autoFocus required maxLength={500} value={editing.value} aria-label={editing.status === "posted" ? "Em qual folha" : "Motivo"}
+                  placeholder={editing.status === "posted" ? "Ex.: folha 11/2026, rubrica diferença" : "Por que não será lançado"}
+                  onChange={(event) => setEditing({ ...editing, value: event.target.value })} />
+                <button className={styles.primary} disabled={busy}>Salvar</button>
+                <button type="button" className={styles.secondary} onClick={() => setEditing(null)}>Cancelar</button>
+              </form>
+              : status === "open" ? (canManage ? <div className={styles.inlineForm}>
+                <button type="button" className={styles.secondary} disabled={busy} onClick={() => setEditing({ id, status: "posted", value: "" })}>Lançado na folha</button>
+                <button type="button" className={styles.secondary} disabled={busy} onClick={() => setEditing({ id, status: "waived", value: "" })}>Dispensar</button>
+              </div> : <span className={styles.muted}>Aguardando o DP</span>)
+              : <div className={styles.inlineForm}><span>{text(row.resolution)}</span>
+                {canManage && <button type="button" className={styles.secondary} disabled={busy} onClick={() => void resolve(id, "open", "")} aria-label="Reabrir retroativo"><Undo2 aria-hidden="true" /></button>}</div>}
+            </td>
+          </tr>;
+        })}</tbody>
       </table></div> : <EmptyState icon={FileClock} size="compact" title="Nenhum retroativo" text="Quando uma medida for executada com vigência numa competência já processada, ela aparece aqui." />}
   </div>;
 }
@@ -513,12 +644,12 @@ function EsocialSection({ companyId, canCheck }: { companyId: string; canCheck: 
 
 type ContractDeadlineRow = { kind: string; date: string; label: string; action: string; employeeId: string; employeeName: string; registrationNumber: string; companyName: string; overdue: boolean };
 
-function ContractsSection({ companyId, onExit }: { companyId: string; onExit: () => void }) {
+function ContractsSection({ companyId, onOpen }: { companyId: string; onOpen: (employeeId: string) => void }) {
   const [days, setDays] = useState("45");
   const { data, loading, error, reload } = useResource<{ today: string; items: ContractDeadlineRow[] }>(`/api/erp-dp/contract-deadlines${scopeQuery(companyId, { days })}`);
   return <div className={styles.stack}>
     <p className={styles.lead}>Fim da experiência, do prazo determinado e do aviso prévio de quem ainda tem vínculo. Passar do fim da experiência
-      sem decidir transforma o contrato em indeterminado (CLT, art. 451). Os mesmos prazos aparecem na Central de Trabalho.</p>
+      sem decidir transforma o contrato em indeterminado (CLT, art. 451).</p>
     <div className={styles.toolbar}><label><span>Mostrar até</span>
       <select value={days} onChange={(event) => setDays(event.target.value)}>
         <option value="15">15 dias à frente</option><option value="45">45 dias à frente</option><option value="90">90 dias à frente</option><option value="365">1 ano à frente</option>
@@ -532,10 +663,10 @@ function ContractsSection({ companyId, onExit }: { companyId: string; onExit: ()
           <td data-label="Colaborador">{row.registrationNumber} · {row.employeeName}</td>
           <td data-label="Empresa">{row.companyName}</td>
           <td data-label="Decisão">{row.action}</td>
-          <td><a className={styles.secondary} href={employeePath(row.employeeId, "contract")} onClick={onExit}>Abrir contrato</a></td>
+          <td><button type="button" className={styles.secondary} onClick={() => onOpen(row.employeeId)}>Abrir contrato</button></td>
         </tr>)}</tbody>
       </table></div> : <EmptyState icon={FileSignature} size="compact" title="Nenhum prazo contratual nesta janela"
-        text="Registre o tipo de contrato e o aviso prévio na aba Contrato da ficha do colaborador." />}
+        text="Registre o tipo de contrato e o aviso prévio na Ficha funcional do ERP, aba Contrato." />}
   </div>;
 }
 
@@ -543,19 +674,20 @@ function ContractsSection({ companyId, onExit }: { companyId: string; onExit: ()
 
 function AboutSection() {
   const rows: Array<[string, string, string]> = [
-    ["Infotipos com validade (0000, 0001, 0007)", "Histórico funcional: situação, lotação e jornada com início e fim", "Ficha funcional"],
-    ["Medidas (PA40)", "Movimentações aprovadas, executadas com data de vigência", "Medidas"],
-    ["Copiar × modificar (PA30)", "Mudança abre período novo; correção conserta o vigente", "Cadastro do colaborador"],
+    ["Infotipos com validade (0000, 0001, 0007)", "Histórico funcional: situação, lotação e jornada com início e fim", "Ficha funcional › Vida funcional"],
+    ["Medidas (PA40)", "Movimentações aprovadas executadas com data de vigência; retorno de afastamento executado no ERP", "Medidas"],
+    ["Copiar × modificar (PA30)", "Mudança abre período novo; correção conserta o vigente", "Ficha funcional › Corrigir registro"],
     ["Dia-chave (base lógica PNP)", "Quadro de pessoal em qualquer data", "Quadro em data-base"],
-    ["Status da folha e retroatividade (0003)", "Pendência para lançar a diferença; sem recálculo", "Retroativos"],
+    ["Status da folha e retroatividade (0003)", "Retroativo para lançar a diferença, com registro de em qual folha; sem recálculo", "Retroativos"],
     ["Registro de controle (PA03)", "Competência com gates de fechamento", "Competências"],
-    ["Elementos do contrato e tarefas monitoradas (0016, 0019)", "Experiência, prazo determinado e aviso prévio, com prazos na Central", "Prazos contratuais"],
+    ["Elementos do contrato e tarefas monitoradas (0016, 0019)", "Experiência, prazo determinado e aviso prévio, com os prazos a decidir", "Ficha funcional › Contrato e Prazos contratuais"],
     ["eSocial S-2206, S-2230, S-2299", "Conferência do que o histórico exige: transmitido com recibo ou não se aplica", "eSocial esperado"],
   ];
   return <div className={styles.stack}>
     <p className={styles.lead}>O modo ERP foi desenhado a partir da engenharia reversa funcional do SAP HCM
       (documento <code>docs/engenharia-reversa-sap-hcm.md</code> do repositório). Ele reorganiza o Vinculato com a lógica de um ERP de DP,
-      sem trazer o que o produto decidiu não fazer: cálculo de folha, rubricas e transmissão de eSocial.</p>
+      sem trazer o que o produto decidiu não fazer: cálculo de folha, rubricas e transmissão de eSocial. O que é ERP fica no ERP: nada
+      destas telas aparece nas telas do Vinculato, e o Vinculato continua como sempre foi.</p>
     <div className={styles.tableWrap}><table className={styles.table}>
       <thead><tr><th>Conceito do SAP HCM</th><th>Como o Vinculato faz</th><th>Onde ver</th></tr></thead>
       <tbody>{rows.map(([sap, how, where]) => <tr key={sap}><td data-label="SAP HCM">{sap}</td><td data-label="Vinculato">{how}</td><td data-label="Onde">{where}</td></tr>)}</tbody>

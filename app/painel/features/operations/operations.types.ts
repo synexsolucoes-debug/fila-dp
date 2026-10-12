@@ -2,7 +2,7 @@ export type OperationTab = "overview" | "movements" | "approvals" | "closing" | 
 export type CycleStatus = "open" | "pre_closing" | "processing" | "post_closing" | "closed";
 export type WorkStatus = "pending" | "in_progress" | "blocked" | "completed";
 export type MovementStatus = "draft" | "pending_approval" | "approved" | "rejected" | "applied" | "canceled";
-export type MovementType = "salary_change" | "vacation" | "leave" | "return_to_work" | "termination" | "transfer" | "benefit_change" | "registration_sync" | "other";
+export type MovementType = "salary_change" | "vacation" | "leave" | "termination" | "transfer" | "benefit_change" | "registration_sync" | "other";
 
 export type CompanyOption = { id: string; name: string; legalName: string; status: string };
 export type Cycle = {

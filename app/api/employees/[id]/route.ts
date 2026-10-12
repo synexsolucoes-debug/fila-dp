@@ -2,7 +2,7 @@ import { apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
-import { assertActiveScope, cleanText, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
+import { assertActiveScope, cleanText, dateFromDatabase, enumValue, optionalDate, protectCpf, publicEmployee } from "@/lib/registrations";
 import { blocksReturnToWork, type ExamResult } from "@/lib/occupational-exams";
 import { terminatedFrom, todayInBrazil } from "@/lib/employee-history";
 import { prepareHistoryChange } from "@/lib/employee-history-service";
@@ -69,9 +69,13 @@ export async function PATCH(request: Request, context: RouteContext) {
       socialName: Object.hasOwn(body, "socialName") ? cleanText(body.socialName, 160) : String(current.social_name),
       email: Object.hasOwn(body, "email") ? cleanText(body.email, 160) : String(current.email),
       phone: Object.hasOwn(body, "phone") ? cleanText(body.phone, 40) : String(current.phone),
-      birthDate: Object.hasOwn(body, "birthDate") ? optionalDate(body.birthDate) : current.birth_date,
-      admissionDate: Object.hasOwn(body, "admissionDate") ? optionalDate(body.admissionDate, true) : String(current.admission_date),
-      terminationDate: Object.hasOwn(body, "terminationDate") ? optionalDate(body.terminationDate) : current.termination_date,
+      /* O que a requisição não trouxe fica como está, mas normalizado: pelo
+         driver `pg` a coluna `date` chega como `Date`, e `String(Date)` vira
+         "Fri Mar 01 2024 …" — o banco recusava a edição parcial do cadastro
+         (a correção de registro do ERP DP manda só o que mudou). */
+      birthDate: Object.hasOwn(body, "birthDate") ? optionalDate(body.birthDate) : dateFromDatabase(current.birth_date, "Data de nascimento"),
+      admissionDate: Object.hasOwn(body, "admissionDate") ? optionalDate(body.admissionDate, true) : dateFromDatabase(current.admission_date, "Admissão"),
+      terminationDate: Object.hasOwn(body, "terminationDate") ? optionalDate(body.terminationDate) : dateFromDatabase(current.termination_date, "Desligamento"),
       employmentStatus: enumValue(body.employmentStatus, ["active", "on_leave", "terminated"] as const, current.employment_status as "active" | "on_leave" | "terminated"),
       employmentType: enumValue(body.employmentType, ["clt", "intern", "apprentice", "temporary"] as const, current.employment_type as "clt" | "intern" | "apprentice" | "temporary"),
       workModel: enumValue(body.workModel, ["onsite", "hybrid", "remote"] as const, current.work_model as "onsite" | "hybrid" | "remote"),
@@ -111,7 +115,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     // Mudança abre período novo; correção conserta o vigente (o "modificar" do PA30).
     const historyMode = body.historyMode === "correction" ? "correction" as const : "change" as const;
     const changed = (value: unknown, before: unknown) => (value ?? null) === (before ?? null) ? undefined : (value as string | null) ?? null;
-    const nextTermination = next.terminationDate ? String(next.terminationDate).slice(0, 10) : "";
+    const nextTermination = next.terminationDate ?? "";
     const history = [
       ...await prepareHistoryChange(d1, {
         workspaceId: workspace.id, employeeId: id, userId: user.id, reason: "registration_edit", mode: historyMode,

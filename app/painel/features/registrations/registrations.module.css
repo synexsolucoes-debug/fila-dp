@@ -264,7 +264,7 @@
 .drawerTabs .drawerTabActive { border-bottom-color: var(--reg-mint); color: var(--reg-mint); }
 .drawerForm { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .drawerBody { flex: 1; min-height: 0; padding: 24px; overflow-y: auto; }
-.drawerFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 9px; min-height: 70px; padding: 12px 22px; border-top: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 48%, var(--reg-surface)); }
+.drawerFooter { display: flex; align-items: center; justify-content: flex-end; gap: 9px; min-height: 70px; padding: 12px 22px; border-top: 1px solid var(--reg-border); background: color-mix(in srgb, var(--reg-muted) 48%, var(--reg-surface)); }
 .infoNote { display: flex; align-items: flex-start; gap: 11px; margin-top: 10px; padding: 13px; border: 1px solid color-mix(in srgb, var(--reg-mint) 25%, var(--reg-border)); border-radius: 8px; background: var(--reg-mint-soft); color: var(--reg-mint); }
 .infoNote span { display: grid; gap: 3px; }
 .infoNote strong { font-size: .74rem; }
@@ -457,19 +457,6 @@
 .sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sectionTitle h3 { margin: 0; font-size: .84rem; }
 .sectionTitle span { color: var(--reg-soft); font-size: .7rem; }
-/* Vida funcional (§4.27): a ficha lida numa data-base, no desenho do PA20 do SAP. */
-.fieldHint { color: var(--reg-soft); font-size: .72rem; font-weight: 700; }
-.historyModeField { display: grid; gap: 4px; margin-right: auto; min-width: 0; }
-.historyModeField > span { color: var(--reg-soft); font-size: .68rem; font-weight: 700; }
-.historyModeField select { min-height: 36px; max-width: 100%; border: 1px solid var(--reg-border); border-radius: 8px; background: var(--reg-surface); color: var(--reg-text); padding: 0 8px; font: inherit; font-size: .76rem; }
-.historyDate { display: grid; gap: 6px; max-width: 220px; }
-.historyDate > span { color: var(--reg-soft); font-size: .75rem; font-weight: 700; }
-.historyDate input { min-height: 38px; border: 1px solid var(--reg-border); border-radius: 8px; background: var(--reg-surface); color: var(--reg-text); padding: 0 10px; font: inherit; }
-.historySnapshot { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
-.historySnapshot article { display: grid; gap: 4px; align-content: start; min-width: 0; border: 1px solid var(--reg-border); border-radius: 10px; background: var(--reg-surface); padding: 12px; }
-.historySnapshot small { color: var(--reg-soft); font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.historySnapshot strong { font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
-.historySnapshot span { color: var(--reg-soft); font-size: .7rem; }
 .requirementEditor {
   display: grid; gap: 12px; border: 1px solid var(--reg-border); border-radius: 12px;
   background: color-mix(in srgb, var(--reg-muted) 48%, var(--reg-surface)); padding: 14px;
