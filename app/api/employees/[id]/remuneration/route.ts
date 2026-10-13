@@ -52,10 +52,11 @@ export async function PUT(request: Request, context: RouteContext) {
     const statements: D1PreparedStatement[] = [];
     if (plan.mode === "correct") {
       statements.push(d1.prepare(`UPDATE fdp_employee_remuneration SET salary_kind = ?, amount_cents = ?, monthly_hours = ?,
-          irrf_dependents = ?, unhealthy_percent = ?, hazardous = ?, reason = ?, notes = ?, updated_by = ?, updated_at = now()
+          irrf_dependents = ?, unhealthy_percent = ?, hazardous = ?, transport_voucher_cents = ?, meal_voucher_discount_cents = ?,
+          reason = ?, notes = ?, updated_by = ?, updated_at = now()
         WHERE workspace_id = ? AND id = ?`)
         .bind(input.salaryKind, input.amountCents, input.monthlyHours, input.irrfDependents, input.unhealthyPercent,
-          input.hazardous, input.reason, input.notes, user.id, workspace.id, plan.id));
+          input.hazardous, input.transportVoucherCents, input.mealVoucherDiscountCents, input.reason, input.notes, user.id, workspace.id, plan.id));
     } else {
       if (plan.delimit) {
         statements.push(d1.prepare("UPDATE fdp_employee_remuneration SET valid_to = ?::date, updated_by = ?, updated_at = now() WHERE workspace_id = ? AND id = ?")
@@ -63,10 +64,11 @@ export async function PUT(request: Request, context: RouteContext) {
       }
       statements.push(d1.prepare(`INSERT INTO fdp_employee_remuneration
           (id, workspace_id, employee_id, valid_from, valid_to, salary_kind, amount_cents, monthly_hours, irrf_dependents,
-           unhealthy_percent, hazardous, reason, notes, created_by, updated_by)
-        VALUES (?, ?, ?, ?::date, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+           unhealthy_percent, hazardous, transport_voucher_cents, meal_voucher_discount_cents, reason, notes, created_by, updated_by)
+        VALUES (?, ?, ?, ?::date, ?::date, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(crypto.randomUUID(), workspace.id, id, input.validFrom, plan.validTo, input.salaryKind, input.amountCents,
-          input.monthlyHours, input.irrfDependents, input.unhealthyPercent, input.hazardous, input.reason, input.notes, user.id, user.id));
+          input.monthlyHours, input.irrfDependents, input.unhealthyPercent, input.hazardous, input.transportVoucherCents,
+          input.mealVoucherDiscountCents, input.reason, input.notes, user.id, user.id));
     }
     statements.push(prepareAuditEvent({
       workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,

@@ -9,6 +9,7 @@ import {
   type TerminationKind,
 } from "@/lib/payroll-calc";
 import { lastDayOfCompetence } from "@/lib/erp-dp";
+import { autoVariableAverage } from "@/lib/payroll-run-service";
 
 /**
  * Cálculo de folha do ERP DP (docs/engenharia-reversa-sap-hcm.md §18): folha
@@ -63,7 +64,13 @@ export async function POST(request: Request) {
       throw ApiError.badRequest("Cadastre a remuneração do colaborador na aba Remuneração da Ficha funcional antes de calcular.", "REMUNERATION_MISSING");
     }
     const salary = monthlySalaryOf(remuneration);
-    const variableAverage = money(body.variableAverage);
+    // Média de variáveis: a informada vence; sem ela, sai das folhas fechadas
+    // dos 12 meses anteriores (férias, 13º e rescisão).
+    const informed = body.variableAverage !== undefined && body.variableAverage !== "";
+    const average = !informed && type !== "monthly"
+      ? { ...(await autoVariableAverage(d1, workspace.id, employee.id, referenceDate)), source: "payroll" as const }
+      : { amount: money(body.variableAverage), months: 0, source: "informed" as const };
+    const variableAverage = average.amount;
 
     const result = asBadRequest(() => {
       switch (type) {
@@ -88,7 +95,7 @@ export async function POST(request: Request) {
           return null;
       }
     });
-    if (type !== "termination") return Response.json({ employee, remuneration, salary, referenceDate, result });
+    if (type !== "termination") return Response.json({ employee, remuneration, salary, referenceDate, average, result });
 
     const kind = terminationKinds.find((item) => item === body.kind) as TerminationKind | undefined;
     if (!kind) throw ApiError.badRequest("Escolha o tipo de desligamento.", "TERMINATION_KIND_INVALID");
@@ -101,6 +108,6 @@ export async function POST(request: Request) {
       fgtsBalance: body.fgtsBalance === undefined || body.fgtsBalance === "" ? undefined : money(body.fgtsBalance),
       contractEnd: contractEnd ?? undefined, thirteenthAdvance: money(body.thirteenthAdvance),
     }));
-    return Response.json({ employee, remuneration, salary, referenceDate, result: termination });
+    return Response.json({ employee, remuneration, salary, referenceDate, average, result: termination });
   } catch (error) { return apiError(error); }
 }

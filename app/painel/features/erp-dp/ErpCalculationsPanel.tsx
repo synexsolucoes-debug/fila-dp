@@ -26,6 +26,7 @@ type Result = {
   employee: { fullName: string; registrationNumber: string; admissionDate: string };
   salary: number;
   referenceDate: string;
+  average?: { amount: number; months: number; source: "payroll" | "informed" };
   result: { lines: PayrollLine[]; earnings: number; deductions: number; net: number; fgts: number; notes: string[]; projectedEnd?: string };
 };
 
@@ -133,12 +134,12 @@ export function ErpCalculationsPanel({ companyId }: { companyId: string }) {
             <label><span>Início do gozo *</span><input type="date" required value={field("start")} onChange={(event) => set("start", event.target.value)} /></label>
             {number("absences", "Faltas injustificadas no período aquisitivo", "define os dias (art. 130)")}
             {number("soldDays", "Dias vendidos (abono)", "até 1/3")}
-            {money("variableAverage", "Média de variáveis (R$)")}
+            {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
           </>}
           {type === "thirteenth" && <>
             {number("year", "Ano *")}
             {money("firstInstallmentPaid", "1ª parcela já paga (R$)")}
-            {money("variableAverage", "Média de variáveis (R$)")}
+            {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
           </>}
           {type === "termination" && <>
             <label className={styles.spanTwo}><span>Tipo de desligamento *</span>
@@ -153,7 +154,7 @@ export function ErpCalculationsPanel({ companyId }: { companyId: string }) {
             {number("overdueVacationPeriods", "Períodos de férias vencidas")}
             {money("fgtsBalance", "Saldo do FGTS (R$)")}
             {money("thirteenthAdvance", "13º já adiantado no ano (R$)")}
-            {money("variableAverage", "Média de variáveis (R$)")}
+            {money("variableAverage", "Média de variáveis (R$) — vazio calcula das folhas fechadas")}
           </>}
         </div>
         <footer><span /><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Calculator aria-hidden="true" />} Calcular</button></footer>
@@ -193,6 +194,11 @@ function ResultView({ result }: { result: Result }) {
     {info.length > 0 && <div className={styles.historySnapshot} aria-label="Bases e informações">
       {info.map((line) => <article key={line.code}><small>{line.label}</small><strong>{brl(line.amount)}</strong><span>{line.reference ?? ""}</span></article>)}
     </div>}
+    {result.average?.source === "payroll" && <p className={styles.infoNote}><Calculator aria-hidden="true" /><span>
+      <strong>Média de variáveis automática: {brl(result.average.amount)}</strong>
+      <small>{result.average.months
+        ? `Horas extras, DSR e adicional noturno das ${result.average.months} folhas fechadas nos 12 meses anteriores. Informe a média no campo para substituir.`
+        : "Nenhuma folha fechada nos 12 meses anteriores: a média ficou zero. Informe no campo, se houver variáveis pagas fora do ERP."}</small></span></p>}
     {notes.length > 0 && <ul className={styles.notes}>{notes.map((note) => <li key={note}>{note}</li>)}</ul>}
     <div><button type="button" className={styles.secondaryButton} onClick={() => window.print()}><Printer aria-hidden="true" /> Imprimir</button></div>
   </section>;
