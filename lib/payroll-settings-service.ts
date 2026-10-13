@@ -12,6 +12,7 @@ export async function companySettings(d1: SqlDatabase, workspaceId: string, comp
   return {
     employerContribution: row.employer_contribution === "simples_exempt" ? "simples_exempt" : "standard",
     ratPercent: Number(row.rat_percent), fap: Number(row.fap), thirdPartiesPercent: Number(row.third_parties_percent),
+    salaryFloorCents: Number(row.salary_floor_cents ?? 0),
     bank: bankCode ? {
       code: bankCode, agency: String(row.bank_agency ?? ""), agencyDigit: String(row.bank_agency_digit ?? ""),
       account: String(row.bank_account ?? ""), accountDigit: String(row.bank_account_digit ?? ""), agreement: String(row.bank_agreement ?? ""),
@@ -43,7 +44,11 @@ export function parseSettings(body: Record<string, unknown>): CompanyPayrollSett
   } : null;
   const accountsBody = (body.accounts ?? {}) as Record<string, unknown>;
   const accounts = Object.fromEntries(Object.entries(defaultAccounts).map(([key, fallback]) => [key, String(accountsBody[key] ?? fallback).trim().slice(0, 80) || fallback])) as AccountingAccounts;
-  return { employerContribution, ratPercent, fap, thirdPartiesPercent, bank, accounts };
+  const floor = String(body.salaryFloor ?? "").trim();
+  const salaryFloorCents = typeof body.salaryFloorCents === "number" ? Math.round(body.salaryFloorCents)
+    : floor ? Math.round(Number(floor.replace(/\./gu, "").replace(",", ".")) * 100) : 0;
+  if (!Number.isFinite(salaryFloorCents) || salaryFloorCents < 0) throw ApiError.badRequest("Piso salarial inválido.", "SETTINGS_FLOOR_INVALID");
+  return { employerContribution, ratPercent, fap, thirdPartiesPercent, salaryFloorCents, bank, accounts };
 }
 
 export type BankAccount = { bankCode: string; agency: string; agencyDigit: string; account: string; accountDigit: string; accountType: "checking" | "savings" | "salary"; pixKey: string };

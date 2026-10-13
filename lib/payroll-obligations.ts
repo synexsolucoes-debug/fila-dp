@@ -25,6 +25,8 @@ export type CompanyPayrollSettings = {
   fap: number;
   /** Outras entidades (terceiros), em %. 5,8% é o caso mais comum (FPAS 515). */
   thirdPartiesPercent: number;
+  /** Piso salarial da convenção coletiva, em centavos (0 = sem piso cadastrado). */
+  salaryFloorCents: number;
   bank: { code: string; agency: string; agencyDigit: string; account: string; accountDigit: string; agreement: string } | null;
   accounts: AccountingAccounts;
 };
@@ -53,7 +55,7 @@ export const defaultAccounts: AccountingAccounts = {
 };
 
 export const defaultSettings: CompanyPayrollSettings = {
-  employerContribution: "standard", ratPercent: 2, fap: 1, thirdPartiesPercent: 5.8, bank: null, accounts: defaultAccounts,
+  employerContribution: "standard", ratPercent: 2, fap: 1, thirdPartiesPercent: 5.8, salaryFloorCents: 0, bank: null, accounts: defaultAccounts,
 };
 
 export type ResultForObligations = { employeeId: string; name: string; registrationNumber: string; netCents: number; earningsCents: number; deductionsCents: number; fgtsCents: number; lines: PayrollLine[] };
@@ -96,10 +98,12 @@ const reais = (cents: number) => (cents / 100).toLocaleString("pt-BR", { minimum
 export function employerCharges(results: readonly ResultForObligations[], settings: CompanyPayrollSettings) {
   // A base patronal é a soma das bases de INSS (rubrica 9000) dos empregados.
   const base = results.reduce((acc, result) => acc + sum(result.lines.filter((line) => line.kind === "info"), ["9000"]), 0);
+  // Pró-labore: 20% patronal, sem RAT nem terceiros (Lei 8.212/91, art. 22, III).
+  const partners = results.reduce((acc, result) => acc + sum(result.lines.filter((line) => line.kind === "info"), ["9002"]), 0);
   if (settings.employerContribution === "simples_exempt") {
     return { base, cpp: 0, rat: 0, thirdParties: 0, total: 0, note: "Simples Nacional: a contribuição patronal está no DAS. Anexo IV recolhe CPP à parte — confira o enquadramento." };
   }
-  const cpp = round(base * 0.2);
+  const cpp = round((base + partners) * 0.2);
   const rat = round(base * (settings.ratPercent / 100) * settings.fap);
   const thirdParties = round(base * (settings.thirdPartiesPercent / 100));
   return { base, cpp, rat, thirdParties, total: cpp + rat + thirdParties, note: "" };
@@ -113,18 +117,20 @@ export function obligationsSummary(competence: string, results: readonly ResultF
   const irrf = results.reduce((acc, result) => acc + sum(result.lines, IRRF_CODES), 0);
   const fgts = results.reduce((acc, result) => acc + result.fgtsCents, 0);
   const net = results.reduce((acc, result) => acc + result.netCents, 0);
+  // Salário-família é pago pela empresa e compensado na contribuição previdenciária.
+  const familyAllowance = results.reduce((acc, result) => acc + sum(result.lines, ["1060"]), 0);
   const charges = employerCharges(results, settings);
   const due = dueDay20(competence);
   const guides: Guide[] = [
     { code: "salaries", label: "Salários líquidos", system: "Pagamento (CNAB 240)", amountCents: net, dueDate: salaryDueDate(competence), detail: "Até o 5º dia útil (CLT art. 459, §1º)" },
     { code: "fgts", label: "FGTS mensal (8%)", system: "FGTS Digital", amountCents: fgts, dueDate: due, detail: "Guia GFD; vence no dia 20 (Lei 14.438/2022)" },
-    { code: "cp", label: "Contribuição previdenciária", system: "DCTFWeb (DARF)", amountCents: inssEmployees + charges.total,
-      dueDate: due, detail: `Segurados R$ ${reais(inssEmployees)} + patronal R$ ${reais(charges.total)}` },
+    { code: "cp", label: "Contribuição previdenciária", system: "DCTFWeb (DARF)", amountCents: Math.max(0, inssEmployees + charges.total - familyAllowance),
+      dueDate: due, detail: `Segurados R$ ${reais(inssEmployees)} + patronal R$ ${reais(charges.total)}${familyAllowance ? ` − salário-família R$ ${reais(familyAllowance)}` : ""}` },
     { code: "irrf", label: "IRRF sobre salários", system: "DCTFWeb (DARF)", amountCents: irrf, dueDate: due, detail: "Retido na fonte dos empregados" },
   ];
   const notes = ["Vencimentos antecipados para o dia útil anterior em fim de semana; feriados não estão no calendário — confira."];
   if (charges.note) notes.push(charges.note);
-  return { guides, charges, inssEmployees, irrf, fgts, net, notes };
+  return { guides, charges, inssEmployees, irrf, fgts, net, familyAllowance, notes };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -171,9 +177,12 @@ export function accountingEntries(competence: string, results: readonly ResultFo
   const others = deductions - inss - irrf;
   const fgts = results.reduce((acc, result) => acc + result.fgtsCents, 0);
   const charges = employerCharges(results, settings);
+  const familyAllowance = results.reduce((acc, result) => acc + sum(result.lines, ["1060"]), 0);
   const label = `Folha ${competence}`;
   const entries: AccountingEntry[] = [
-    { date, debit: accounts.salaryExpense, credit: accounts.salariesPayable, amountCents: earnings, history: `${label}: proventos` },
+    { date, debit: accounts.salaryExpense, credit: accounts.salariesPayable, amountCents: earnings - familyAllowance, history: `${label}: proventos` },
+    // Salário-família não é despesa: a empresa adianta e compensa no INSS.
+    { date, debit: accounts.inssPayable, credit: accounts.salariesPayable, amountCents: familyAllowance, history: `${label}: salário-família a compensar` },
     { date, debit: accounts.salariesPayable, credit: accounts.inssPayable, amountCents: inss, history: `${label}: INSS dos empregados` },
     { date, debit: accounts.salariesPayable, credit: accounts.irrfPayable, amountCents: irrf, history: `${label}: IRRF retido` },
     { date, debit: accounts.salariesPayable, credit: accounts.otherDeductions, amountCents: others, history: `${label}: outros descontos` },

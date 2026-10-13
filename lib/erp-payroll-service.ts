@@ -18,12 +18,13 @@ export type PayrollEmployee = {
   admissionDate: string;
   terminationDate: string | null;
   employmentStatus: string;
+  employmentType: string;
 };
 
 export async function payrollEmployee(
   d1: SqlDatabase, workspaceId: string, userId: string, role: WorkspaceRole, employeeId: string,
 ): Promise<PayrollEmployee> {
-  const row = await d1.prepare(`SELECT id, full_name, registration_number, company_id, admission_date, termination_date, employment_status
+  const row = await d1.prepare(`SELECT id, full_name, registration_number, company_id, admission_date, termination_date, employment_status, employment_type
       FROM fdp_employees WHERE workspace_id = ? AND id = ?`).bind(workspaceId, employeeId).first<Record<string, unknown>>();
   if (!row) throw ApiError.notFound("Colaborador não encontrado.", "EMPLOYEE_NOT_FOUND");
   await requireCompanyAccess(d1, workspaceId, userId, role, String(row.company_id));
@@ -35,6 +36,7 @@ export async function payrollEmployee(
     admissionDate: day(row.admission_date) ?? "",
     terminationDate: day(row.termination_date),
     employmentStatus: String(row.employment_status ?? "active"),
+    employmentType: String(row.employment_type ?? "clt"),
   };
 }
 

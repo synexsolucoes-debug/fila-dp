@@ -818,9 +818,11 @@ demonstrativo rescisório com termo de quitação, em PDF (§4.33).
 S-1200 em CSV e lançamentos contábeis (§4.35). O XML do eSocial não é gerado:
 o Vinculato não guarda o CPF inteiro.
 
+**Regras (§4.36).** Estagiário, aprendiz, pró-labore, salário-família,
+pensão por percentual, banco de horas e piso da convenção.
+
 **Limites honestos.**
 Não calcula ainda: férias em dobro
-(o cálculo avisa), salário-família, contribuição sindical, adicional noturno,
-banco de horas, pensão por percentual, CCT específica e aumento no meio do mês
-(usa o salário vigente no último dia da competência). Os próximos passos estão
-nos itens 10 a 13 do roadmap.
+(o cálculo avisa), contribuição sindical, regras de CCT além do piso (adicionais
+e reajustes próprios), feriados no calendário do DSR e dos vencimentos e
+aumento no meio do mês (usa o salário vigente no último dia da competência).

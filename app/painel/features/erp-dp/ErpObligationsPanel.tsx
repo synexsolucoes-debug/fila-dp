@@ -91,6 +91,7 @@ export function ErpPayrollSettingsForm({ companyId }: { companyId: string }) {
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<CompanyPayrollSettings | null>(null);
   const [bank, setBank] = useState({ code: "", agency: "", agencyDigit: "", account: "", accountDigit: "", agreement: "" });
+  const [floor, setFloor] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -103,6 +104,7 @@ export function ErpPayrollSettingsForm({ companyId }: { companyId: string }) {
         if (!active) return;
         setSettings(payload.settings);
         if (payload.settings.bank) setBank(payload.settings.bank);
+        if (payload.settings.salaryFloorCents) setFloor((payload.settings.salaryFloorCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
       })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Erro ao carregar."); });
     return () => { active = false; };
@@ -113,7 +115,7 @@ export function ErpPayrollSettingsForm({ companyId }: { companyId: string }) {
     if (!settings) return;
     setBusy(true); setSaved(false);
     try {
-      await requestJson("/api/erp-dp/payroll-settings", { method: "PUT", body: JSON.stringify({ companyId, ...settings, bank }) });
+      await requestJson("/api/erp-dp/payroll-settings", { method: "PUT", body: JSON.stringify({ companyId, ...settings, salaryFloorCents: undefined, salaryFloor: floor, bank }) });
       setSaved(true); setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar."); }
     finally { setBusy(false); }
@@ -137,6 +139,8 @@ export function ErpPayrollSettingsForm({ companyId }: { companyId: string }) {
         onChange={(event) => setSettings({ ...settings, fap: Number(event.target.value.replace(",", ".")) || 0 })} /></label>
       <label><span>Terceiros (%)</span><input inputMode="decimal" value={String(settings.thirdPartiesPercent).replace(".", ",")}
         onChange={(event) => setSettings({ ...settings, thirdPartiesPercent: Number(event.target.value.replace(",", ".")) || 0 })} /></label>
+      <label><span>Piso salarial da convenção (R$)</span><input inputMode="decimal" placeholder="0,00"
+        value={floor} onChange={(event) => setFloor(event.target.value)} /></label>
       <label><span>Banco pagador (código)</span><input inputMode="numeric" maxLength={3} value={bank.code} onChange={(event) => setBank({ ...bank, code: event.target.value })} /></label>
       <label><span>Agência</span><input inputMode="numeric" maxLength={5} value={bank.agency} onChange={(event) => setBank({ ...bank, agency: event.target.value })} /></label>
       <label><span>Dígito da agência</span><input maxLength={1} value={bank.agencyDigit} onChange={(event) => setBank({ ...bank, agencyDigit: event.target.value })} /></label>

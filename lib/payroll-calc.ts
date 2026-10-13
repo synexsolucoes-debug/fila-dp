@@ -1,5 +1,5 @@
 import {
-  inssTables, irrfTables, minimumWages, tableAt,
+  familyAllowances, inssTables, irrfTables, minimumWages, tableAt,
   type IrrfTable,
 } from "./payroll-tables.ts";
 
@@ -241,6 +241,22 @@ export function noticeDays(admissionDate: string, date: string) {
 /* Folha mensal                                                               */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Categoria do vínculo para a folha. Estagiário recebe bolsa sem INSS nem
+ * FGTS (Lei 11.788/2008); aprendiz tem FGTS de 2% (Lei 10.097/2000);
+ * pró-labore do sócio recolhe 11% de INSS como contribuinte individual e não
+ * tem FGTS (Lei 8.212/91, art. 21 e 30).
+ */
+export const payrollCategories = ["employee", "apprentice", "intern", "temporary", "pro_labore"] as const;
+export type PayrollCategory = typeof payrollCategories[number];
+export const payrollCategoryLabels: Record<PayrollCategory, string> = {
+  employee: "Empregado CLT", apprentice: "Aprendiz", intern: "Estagiário", temporary: "Temporário", pro_labore: "Pró-labore (sócio)",
+};
+export function fgtsRateOf(category: PayrollCategory = "employee") {
+  if (category === "intern" || category === "pro_labore") return 0;
+  return category === "apprentice" ? 0.02 : 0.08;
+}
+
 export type MonthlyInput = {
   competence: string;
   /** Salário contratual mensal (ou horário × horas, já convertido). */
@@ -272,6 +288,12 @@ export type MonthlyInput = {
   mealVoucherDiscount?: Cents;
   /** Rubricas vindas de outros módulos (diferença retroativa, parcelas de desconto). */
   extraLines?: PayrollLine[];
+  category?: PayrollCategory;
+  /** Filhos até 14 anos (ou inválidos), para o salário-família. */
+  familyChildren?: number;
+  /** Pensão alimentícia em percentual, sobre o bruto ou sobre o bruto menos INSS. */
+  alimonyPercent?: number;
+  alimonyBase?: "gross" | "gross_minus_inss";
 };
 
 export function monthlyPayroll(input: MonthlyInput): PayrollResult {
@@ -280,9 +302,11 @@ export function monthlyPayroll(input: MonthlyInput): PayrollResult {
   const hourly = input.salary / input.monthlyHours;
   const lines: PayrollLine[] = [];
   const all = { inss: true, irrf: true, fgts: true };
+  const category = input.category ?? "employee";
   const days = Math.max(0, Math.min(30, input.workedDays ?? 30));
   const baseSalary = days === 30 ? input.salary : round((input.salary / 30) * days);
-  lines.push({ code: "1000", label: "Salário", kind: "earning", amount: baseSalary, reference: `${days} dias`, incidence: all });
+  const firstLabel = category === "intern" ? "Bolsa-estágio" : category === "pro_labore" ? "Pró-labore" : "Salário";
+  lines.push({ code: "1000", label: firstLabel, kind: "earning", amount: baseSalary, reference: `${days} dias`, incidence: all });
 
   const he50 = round(hourly * 1.5 * (input.overtime50Hours ?? 0));
   const he100 = round(hourly * 2 * (input.overtime100Hours ?? 0));
@@ -320,18 +344,56 @@ export function monthlyPayroll(input: MonthlyInput): PayrollResult {
   // Desconto de falta reduz a base; as rubricas extras de desconto (VT, VR,
   // parcelas) não são salário e não mexem nas incidências.
   const taxable = total(lines.filter((line) => line.incidence?.inss), "earning") - absences - absenceHours;
-  const contribution = inss(taxable, date);
-  if (contribution.capped) notes.push(`Salário de contribuição acima do teto: INSS limitado a ${brl(contribution.ceiling)}.`);
-  lines.push({ code: "5000", label: "INSS", kind: "deduction", amount: contribution.amount, reference: percent(contribution.amount, taxable) });
-  const tax = irrf({ gross: taxable, inss: contribution.amount, dependents: input.dependents, alimony: input.alimony, date });
+  // INSS por categoria: progressivo do empregado; 11% do contribuinte
+  // individual até o teto no pró-labore; nenhum na bolsa de estágio.
+  let contributionAmount = 0;
+  let contributionReference = "";
+  if (category === "intern") {
+    notes.push("Bolsa-estágio: sem INSS e sem FGTS (Lei 11.788/2008, art. 12).");
+  } else if (category === "pro_labore") {
+    const ceiling = tableAt(inssTables, date, "INSS_TABLE_UNAVAILABLE").brackets.at(-1)!.upTo;
+    contributionAmount = round(Math.min(taxable, ceiling) * 0.11);
+    contributionReference = "11% (contribuinte individual)";
+    notes.push("Pró-labore: INSS de 11% até o teto, sem FGTS; a empresa recolhe 20% de patronal sobre ele.");
+  } else {
+    const contribution = inss(taxable, date);
+    if (contribution.capped) notes.push(`Salário de contribuição acima do teto: INSS limitado a ${brl(contribution.ceiling)}.`);
+    contributionAmount = contribution.amount;
+    contributionReference = percent(contribution.amount, taxable);
+  }
+  lines.push({ code: "5000", label: "INSS", kind: "deduction", amount: contributionAmount, reference: contributionReference });
+
+  // Salário-família: pago pela empresa e compensado na DCTFWeb; não é salário.
+  if (input.familyChildren && (category === "employee" || category === "apprentice" || category === "temporary")) {
+    const table = tableAt(familyAllowances, date, "FAMILY_ALLOWANCE_UNAVAILABLE");
+    // O limite olha a remuneração do mês inteiro, não os dias trabalhados.
+    const monthlyRemuneration = taxable - baseSalary + input.salary;
+    if (monthlyRemuneration <= table.limit) {
+      const amount = round((table.quota * input.familyChildren / 30) * days);
+      lines.push({ code: "1060", label: "Salário-família", kind: "earning", amount, reference: `${input.familyChildren} filho(s)` });
+    } else {
+      notes.push(`Salário-família não devido: remuneração acima de ${brl(table.limit)}.`);
+    }
+  }
+
+  // Pensão por percentual: sobre o bruto ou o bruto menos INSS, e deduz do IRRF.
+  const alimonyPercent = input.alimonyPercent
+    ? round((input.alimonyBase === "gross" ? taxable : taxable - contributionAmount) * input.alimonyPercent / 100) : 0;
+  const alimony = (input.alimony ?? 0) + alimonyPercent;
+  const tax = irrf({ gross: taxable, inss: contributionAmount, dependents: input.dependents, alimony, date });
   lines.push({ code: "5001", label: "IRRF", kind: "deduction", amount: tax.amount, reference: tax.method === "simplified" ? "desconto simplificado" : `${input.dependents} dep.` });
   if (tax.reduction > 0) notes.push(`Redução da Lei 15.270/2025 aplicada: ${brl(tax.reduction)}.`);
-  lines.push({ code: "5020", label: "Pensão alimentícia", kind: "deduction", amount: input.alimony ?? 0 });
+  lines.push({ code: "5020", label: "Pensão alimentícia", kind: "deduction", amount: alimony, reference: input.alimonyPercent ? `${input.alimonyPercent}%` : undefined });
   lines.push({ code: "5090", label: "Outros descontos", kind: "deduction", amount: input.otherDeductions ?? 0 });
-  lines.push({ code: "9000", label: "Base INSS", kind: "info", amount: taxable });
+  // Base patronal: empregado em 9000 (20% + RAT + terceiros); pró-labore em
+  // 9002 (só os 20%); estágio não tem.
+  lines.push({ code: "9000", label: "Base INSS", kind: "info", amount: category === "intern" || category === "pro_labore" ? 0 : taxable });
+  if (category === "pro_labore") lines.push({ code: "9002", label: "Base INSS pró-labore", kind: "info", amount: taxable });
   lines.push({ code: "9001", label: "Base IRRF", kind: "info", amount: tax.base });
   const fgtsBase = total(lines.filter((line) => line.incidence?.fgts), "earning") - absences - absenceHours;
-  return finish(lines, round(Math.max(0, fgtsBase) * 0.08), notes);
+  const fgtsRate = fgtsRateOf(category);
+  if (category === "apprentice") notes.push("Aprendiz: FGTS de 2% (Lei 10.097/2000).");
+  return finish(lines, round(Math.max(0, fgtsBase) * fgtsRate), notes);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -373,9 +435,17 @@ export type VacationInput = {
   /** Dias vendidos (abono pecuniário, art. 143): no máximo 1/3 do direito. */
   soldDays?: number;
   dependents: number;
+  category?: PayrollCategory;
 };
 
+/** Estagiário e pró-labore não têm férias da CLT, 13º nem rescisão: a conta não se aplica. */
+function requireClt(category: PayrollCategory | undefined, what: string) {
+  if (category === "intern") throw Object.assign(new Error(`Estagiário não tem ${what} da CLT: tem recesso remunerado de 30 dias por ano (Lei 11.788/2008, art. 13).`), { code: "CATEGORY_NOT_CLT" });
+  if (category === "pro_labore") throw Object.assign(new Error(`Pró-labore de sócio não tem ${what}: não há vínculo de emprego.`), { code: "CATEGORY_NOT_CLT" });
+}
+
 export function vacationPay(input: VacationInput): PayrollResult {
+  requireClt(input.category, "férias");
   const sold = input.soldDays ?? 0;
   if (sold > Math.floor(input.entitledDays / 3)) {
     throw Object.assign(new Error("O abono pecuniário é de no máximo 1/3 dos dias de férias (CLT art. 143)."), { code: "VACATION_SALE_TOO_LONG" });
@@ -402,7 +472,7 @@ export function vacationPay(input: VacationInput): PayrollResult {
     `Pagamento até 2 dias antes do início (CLT art. 145): ${brDate(addDays(input.start, -2))}.`,
     "O INSS das férias soma ao do salário do mês na competência; aqui ele aparece só sobre as férias.",
   ];
-  return finish(lines, round(taxable * 0.08), notes);
+  return finish(lines, round(taxable * fgtsRateOf(input.category)), notes);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -419,9 +489,11 @@ export type ThirteenthInput = {
   firstInstallmentPaid?: Cents;
   /** Data do pagamento da 2ª parcela, para as tabelas (padrão 20/12). */
   paymentDate?: string;
+  category?: PayrollCategory;
 };
 
 export function thirteenthSalary(input: ThirteenthInput): PayrollResult {
+  requireClt(input.category, "13º salário");
   const end = `${input.year}-12-31`;
   const avos = thirteenthAvos(input.admissionDate, end);
   const date = input.paymentDate ?? `${input.year}-12-20`;
@@ -439,7 +511,7 @@ export function thirteenthSalary(input: ThirteenthInput): PayrollResult {
     `1ª parcela (até 30/11, sem descontos): ${brl(round(gross / 2))}.`,
     "2ª parcela até 20/12, com INSS e IRRF sobre o valor integral.",
   ];
-  return finish(lines, round(gross * 0.08), notes);
+  return finish(lines, round(gross * fgtsRateOf(input.category)), notes);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -479,10 +551,12 @@ export type TerminationInput = {
   contractEnd?: string;
   /** 13º já adiantado no ano. */
   thirteenthAdvance?: Cents;
+  category?: PayrollCategory;
 };
 
 export function terminationPay(input: TerminationInput): PayrollResult & { projectedEnd: string; noticeDays: number } {
   const { kind } = input;
+  requireClt(input.category, "rescisão");
   const date = input.terminationDate;
   if (date < input.admissionDate) throw Object.assign(new Error("O desligamento é anterior à admissão."), { code: "TERMINATION_BEFORE_ADMISSION" });
   const base = input.salary + (input.variableAverage ?? 0);
@@ -565,12 +639,12 @@ export function terminationPay(input: TerminationInput): PayrollResult & { proje
   // rescisão antecipada pelo empregador; 20% no acordo. É depositada na conta
   // vinculada, não paga no termo — por isso entra como informação.
   const fgtsRate = kind === "without_cause" || kind === "fixed_term_early" ? 0.4 : kind === "agreement" ? 0.2 : 0;
-  const fgtsMonth = round(lines.filter((line) => line.incidence?.fgts).reduce((sum, line) => sum + line.amount, 0) * 0.08);
+  const fgtsMonth = round(lines.filter((line) => line.incidence?.fgts).reduce((sum, line) => sum + line.amount, 0) * fgtsRateOf(input.category));
   if (fgtsRate > 0) {
     if (input.fgtsBalance === undefined) notes.push("Informe o saldo do FGTS para calcular a multa rescisória.");
     else lines.push({ code: "9010", label: `Multa do FGTS ${fgtsRate * 100}%`, kind: "info", amount: round((input.fgtsBalance + fgtsMonth) * fgtsRate), reference: "depósito na conta vinculada" });
   }
-  lines.push({ code: "9011", label: "FGTS do mês da rescisão", kind: "info", amount: fgtsMonth, reference: "8%" });
+  lines.push({ code: "9011", label: "FGTS do mês da rescisão", kind: "info", amount: fgtsMonth, reference: input.category === "apprentice" ? "2%" : "8%" });
   notes.push(`Prazo de pagamento: 10 dias corridos do término do contrato (CLT art. 477, §6º) — até ${brDate(addDays(date, 10))}.`);
   if (kind === "agreement") notes.push("No acordo, o saque do FGTS é de até 80% e não há seguro-desemprego.");
 

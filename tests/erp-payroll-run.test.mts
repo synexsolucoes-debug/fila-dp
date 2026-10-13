@@ -19,7 +19,8 @@ const employee = (overrides: Partial<RunEmployee> = {}): RunEmployee => ({
 });
 const remuneration = (overrides: Partial<Remuneration> = {}): Remuneration => ({
   id: "r1", validFrom: "2020-01-10", validTo: "9999-12-31", salaryKind: "monthly", amountCents: 440_000, monthlyHours: 220,
-  irrfDependents: 0, unhealthyPercent: 0, hazardous: false, transportVoucherCents: 0, mealVoucherDiscountCents: 0,
+  irrfDependents: 0, unhealthyPercent: 0, hazardous: false, transportVoucherCents: 0, mealVoucherDiscountCents: 0, proLabore: false,
+  familyAllowanceChildren: 0, alimonyPercent: 0, alimonyBase: "gross_minus_inss",
   reason: "admission", notes: "", ...overrides,
 });
 
