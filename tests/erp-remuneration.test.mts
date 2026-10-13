@@ -94,14 +94,14 @@ test("a tabela nasce isolada por tenant, com vigência e as guardas da CLT", asy
 
 test("as rotas exigem a permissão de salário, escopo de empresa e auditam", async () => {
   const route = await read("app/api/employees/[id]/remuneration/route.ts");
-  const calc = await read("app/api/erp-dp/calculations/route.ts");
+  const calc = await read("lib/erp-calculation-service.ts");
   const service = await read("lib/erp-payroll-service.ts");
   assert.match(route, /requireCapability\(workspace, "payroll\.read"\)/u);
   assert.match(route, /requireCapability\(workspace, "payroll\.manage"\)/u);
   assert.match(route, /employee\.remuneration\.created/u);
   assert.match(route, /employee\.remuneration\.corrected/u);
   assert.match(route, /await d1\.batch\(statements\)/u);
-  assert.match(calc, /requireCapability\(workspace, "payroll\.read"\)/u);
+  assert.match(await read("app/api/erp-dp/calculations/route.ts"), /requireCapability\(workspace, "payroll\.read"\)/u);
   assert.match(service, /requireCompanyAccess\(/u);
   // O cálculo usa o salário da data, não o de hoje.
   assert.match(calc, /remunerationAt\(records, referenceDate\)/u);

@@ -695,7 +695,7 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ## 16. Roadmap priorizado
 
-Estado: os itens 1 a 7, 9, 10 e 12 estão no produto, no **modo ERP DP** (§4.28 a §4.31
+Estado: os itens 1 a 7 e 9 a 12 estão no produto, no **modo ERP DP** (§4.28 a §4.31
 de `docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP.
 
 | # | Item | Conceito SAP | Valor para o DP | Esforço | Depende de |
@@ -710,11 +710,11 @@ de `docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP.
 | 8 | ⬜ Saldo de férias | 2006 | Período aquisitivo vencendo e saldo por pessoa; o valor sai do item 9 | Médio | 4 |
 | 9 | ✅ Remuneração e cálculo (simulação) | 0008 + PY | Salário com vigência; folha do mês, férias, 13º e rescisão com INSS/IRRF da data | Grande | — |
 | 10 | ✅ Folha da competência | PC00 + PA03 | Calcular a empresa inteira, gravar o resultado e fechar com a competência; ponto, VT, VR e retroativos entram sozinhos | Grande | 9 |
-| 11 | ⬜ Holerite e recibo de férias / TRCT | Formulário | Documento para assinatura a partir do resultado gravado | Médio | 10 |
+| 11 | ✅ Holerite, aviso e recibo de férias, demonstrativo rescisório | Formulário | Documento para assinatura a partir do resultado calculado ou gravado | Médio | 10 |
 | 12 | ✅ Rubricas recorrentes no cálculo | 0014 / 0015 | Adiantamentos e Descontos entrando como rubrica | Médio | 10 |
 | 13 | ⬜ Arquivos de saída | S-1200, FGTS Digital, DCTFWeb | Gerar o arquivo; a transmissão segue com quem tem o certificado | Grande | 10 |
 
-Próximos: o 11 (documentos), o 8 (saldo de férias) e o 13 (arquivos de saída).
+Próximos: o 8 (saldo de férias) e o 13 (arquivos de saída).
 
 ---
 
@@ -811,7 +811,10 @@ vale-transporte (até 6%), vale-refeição e a diferença dos retroativos, grava
 resultado e fecha (§4.32 de `docs/arquitetura-operacional.md`). A média de
 variáveis de férias, 13º e rescisão passa a sair das folhas fechadas.
 
-**Limites honestos.** Não há holerite assinado nem arquivo de eSocial ainda.
+**Documentos (item 11).** Holerite em duas vias, aviso e recibo de férias e
+demonstrativo rescisório com termo de quitação, em PDF (§4.33).
+
+**Limites honestos.** Não há arquivo de eSocial ainda.
 Não calcula ainda: férias em dobro
 (o cálculo avisa), salário-família, contribuição sindical, adicional noturno,
 banco de horas, pensão por percentual, CCT específica e aumento no meio do mês
