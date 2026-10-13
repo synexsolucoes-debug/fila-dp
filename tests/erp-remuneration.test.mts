@@ -20,7 +20,7 @@ const code = (expected: string) => (error: unknown) => (error as { code?: string
 
 const record = (id: string, validFrom: string, validTo: string, amountCents = 300_000): Remuneration => ({
   id, validFrom, validTo, salaryKind: "monthly", amountCents, monthlyHours: 220, irrfDependents: 0,
-  unhealthyPercent: 0, hazardous: false, transportVoucherCents: 0, mealVoucherDiscountCents: 0, reason: "admission", notes: "",
+  unhealthyPercent: 0, hazardous: false, transportVoucherCents: 0, mealVoucherDiscountCents: 0, proLabore: false, familyAllowanceChildren: 0, alimonyPercent: 0, alimonyBase: "gross_minus_inss", reason: "admission", notes: "",
 });
 
 test("valor em reais vira centavos, no formato brasileiro ou não", () => {

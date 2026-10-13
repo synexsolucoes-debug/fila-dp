@@ -1819,6 +1819,26 @@ fechada) e Ficha funcional › Remuneração (conta de salário).
 | --- | --- |
 | Vencimentos, encargos (padrão e Simples), resumo das guias, CNAB 240 posição a posição, S-1200 em CSV, lançamentos, validação de configuração e conta, permissões | `tests/erp-obligations.test.mts` |
 
+### 4.36 Regras do cálculo — categorias, salário-família, pensão, banco de horas e piso
+
+O cálculo deixa de tratar todo mundo como empregado mensalista
+(`lib/payroll-calc.ts`, migration 0115).
+
+| Regra | Como entra |
+| --- | --- |
+| **Categoria** | Vem do tipo de vínculo do cadastro (`clt`, `intern`, `apprentice`, `temporary`) e, para sócio, da remuneração marcada como **pró-labore** — sem mexer no cadastro do Vinculato |
+| Estagiário | Bolsa-estágio sem INSS e sem FGTS, com IRRF (Lei 11.788/2008); não tem férias, 13º nem rescisão da CLT — o cálculo recusa (`CATEGORY_NOT_CLT`) e lembra do recesso |
+| Aprendiz | FGTS de 2% na folha, nas férias, no 13º e na rescisão (Lei 10.097/2000) |
+| Pró-labore | INSS de 11% até o teto (contribuinte individual), sem FGTS; patronal de 20% sem RAT nem terceiros (base em 9002) |
+| **Salário-família** | Cota por filho até o limite (2025 e 2026 em `lib/payroll-tables.ts`), proporcional aos dias na admissão, olhando a remuneração do mês inteiro; não entra em base nenhuma e é **abatido da guia de contribuição previdenciária** e contabilizado como compensação, não despesa |
+| **Pensão por percentual** | Sobre o bruto ou o bruto menos INSS, somada à pensão em valor; deduz da base do IRRF |
+| **Banco de horas** | Crédito e débito do ponto aprovado viram linha informativa do saldo do mês — ficam no banco, não são pagos |
+| **Piso da convenção** | Configuração da empresa; quem ganha abaixo recebe aviso na folha |
+
+| Verificação | Onde |
+| --- | --- |
+| Estagiário, aprendiz, pró-labore e patronal, salário-família (limite, proporcional, compensação), pensão nas duas bases, categorias fora da CLT, banco de horas, piso, migration | `tests/erp-payroll-rules.test.mts` |
+
 ---
 
 ## 5. Agentes

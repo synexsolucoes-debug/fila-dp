@@ -1,4 +1,4 @@
-import { monthlyPayroll, type PayrollLine, type PayrollResult } from "./payroll-calc.ts";
+import { brl, monthlyPayroll, type PayrollCategory, type PayrollLine, type PayrollResult } from "./payroll-calc.ts";
 import { monthlySalaryOf, type Remuneration } from "./remuneration.ts";
 
 /**
@@ -22,7 +22,18 @@ export type RunEmployee = {
   admissionDate: string;
   terminationDate: string | null;
   employmentStatus: string;
+  /** clt, intern, apprentice ou temporary, do cadastro do colaborador. */
+  employmentType?: string;
 };
+
+/** A categoria da folha: o tipo de vínculo do cadastro, ou pró-labore pela remuneração. */
+export function payrollCategoryOf(employmentType: string | undefined, remuneration: Pick<Remuneration, "proLabore">): PayrollCategory {
+  if (remuneration.proLabore) return "pro_labore";
+  if (employmentType === "intern") return "intern";
+  if (employmentType === "apprentice") return "apprentice";
+  if (employmentType === "temporary") return "temporary";
+  return "employee";
+}
 
 /** Minutos por evento da folha de ponto (os códigos de `fdp_time_sheet_events`). */
 export type TimeInput = {
@@ -85,6 +96,8 @@ export function employeePayroll(input: {
   time: TimeInput | null;
   installments: readonly InstallmentInput[];
   retroactive: readonly RetroInput[];
+  /** Piso salarial da convenção (0 = sem piso cadastrado). */
+  salaryFloorCents?: number;
 }): EmployeePayroll {
   const { competence, employee, remuneration } = input;
   const salary = monthlySalaryOf(remuneration);
@@ -105,6 +118,15 @@ export function employeePayroll(input: {
     if (installment.amountCents <= 0) continue;
     extraLines.push({ code: "5060", label: installment.label, kind: "deduction", amount: installment.amountCents, reference: "Adiantamentos e Descontos" });
   }
+  // Banco de horas: crédito e débito ficam no banco, não são pagos — a folha
+  // só registra o saldo do mês para quem confere.
+  const bankMinutes = minutes("time_bank_credit") - minutes("time_bank_debit");
+  if (useTime && bankMinutes !== 0) {
+    const sign = bankMinutes > 0 ? "+" : "−";
+    extraLines.push({ code: "9020", label: "Banco de horas no mês (não pago)", kind: "info", amount: 0,
+      reference: `${sign}${Math.floor(Math.abs(bankMinutes) / 60)}h${String(Math.abs(bankMinutes) % 60).padStart(2, "0")}` });
+  }
+  const category = payrollCategoryOf(employee.employmentType, remuneration);
 
   const result = monthlyPayroll({
     competence, salary, monthlyHours: remuneration.monthlyHours, dependents: remuneration.irrfDependents,
@@ -118,7 +140,14 @@ export function employeePayroll(input: {
     transportVoucherCost: remuneration.transportVoucherCents,
     mealVoucherDiscount: remuneration.mealVoucherDiscountCents,
     extraLines,
+    category,
+    familyChildren: remuneration.familyAllowanceChildren,
+    alimonyPercent: remuneration.alimonyPercent,
+    alimonyBase: remuneration.alimonyBase,
   });
+  if (input.salaryFloorCents && salary < input.salaryFloorCents && category !== "intern" && category !== "pro_labore") {
+    result.notes.push(`Salário abaixo do piso da convenção coletiva (${brl(input.salaryFloorCents)}): confira a remuneração.`);
+  }
   if (input.time && !useTime) result.notes.push("A folha de ponto ainda não foi aprovada: horas extras, adicional noturno e faltas não entraram.");
   if (!input.time) result.notes.push("Sem folha de ponto na competência: nenhuma hora variável entrou.");
   if (minutes("overtime_50") + minutes("overtime_100") > 0) result.notes.push("DSR calculado com os domingos do mês; feriados não estão no calendário da empresa.");

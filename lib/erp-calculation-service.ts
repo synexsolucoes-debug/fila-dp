@@ -8,6 +8,7 @@ import {
 } from "./payroll-calc.ts";
 import { lastDayOfCompetence } from "./erp-dp.ts";
 import { autoVariableAverage } from "./payroll-run-service.ts";
+import { payrollCategoryOf } from "./payroll-run.ts";
 
 /**
  * Cálculo de folha do ERP DP (docs/engenharia-reversa-sap-hcm.md §18): folha
@@ -55,6 +56,7 @@ export async function calculate(d1: SqlDatabase, workspace: { id: string; role: 
     throw ApiError.badRequest("Cadastre a remuneração do colaborador na aba Remuneração da Ficha funcional antes de calcular.", "REMUNERATION_MISSING");
   }
   const salary = monthlySalaryOf(remuneration);
+  const category = payrollCategoryOf(employee.employmentType, remuneration);
   // Média de variáveis: a informada vence; sem ela, sai das folhas fechadas
   // dos 12 meses anteriores (férias, 13º e rescisão).
   const informed = body.variableAverage !== undefined && body.variableAverage !== "";
@@ -74,13 +76,15 @@ export async function calculate(d1: SqlDatabase, workspace: { id: string; role: 
           workingDays: number(body.workingDays), restDays: number(body.restDays), absenceDays: number(body.absenceDays),
           unhealthyPercent: remuneration.unhealthyPercent, hazardous: remuneration.hazardous,
           otherEarnings: money(body.otherEarnings), otherDeductions: money(body.otherDeductions), alimony: money(body.alimony),
+          category, familyChildren: remuneration.familyAllowanceChildren, alimonyPercent: remuneration.alimonyPercent, alimonyBase: remuneration.alimonyBase,
+          transportVoucherCost: remuneration.transportVoucherCents, mealVoucherDiscount: remuneration.mealVoucherDiscountCents,
         });
       case "vacation":
-        return vacationPay({ start: referenceDate, salary, variableAverage, entitledDays, soldDays, dependents: remuneration.irrfDependents });
+        return vacationPay({ start: referenceDate, salary, variableAverage, entitledDays, soldDays, dependents: remuneration.irrfDependents, category });
       case "thirteenth":
         return thirteenthSalary({
           year: Number(body.year), admissionDate: employee.admissionDate, salary, variableAverage,
-          dependents: remuneration.irrfDependents, firstInstallmentPaid: money(body.firstInstallmentPaid),
+          dependents: remuneration.irrfDependents, firstInstallmentPaid: money(body.firstInstallmentPaid), category,
         });
       default:
         return null;
@@ -99,7 +103,7 @@ export async function calculate(d1: SqlDatabase, workspace: { id: string; role: 
     discountUnworkedNotice: body.discountUnworkedNotice === true,
     overdueVacationPeriods: number(body.overdueVacationPeriods),
     fgtsBalance: body.fgtsBalance === undefined || body.fgtsBalance === "" ? undefined : money(body.fgtsBalance),
-    contractEnd: contractEnd ?? undefined, thirteenthAdvance: money(body.thirteenthAdvance),
+    contractEnd: contractEnd ?? undefined, thirteenthAdvance: money(body.thirteenthAdvance), category,
   }));
   return { type, kind, employee, remuneration, salary, referenceDate, average, result: termination };
 }

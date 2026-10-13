@@ -4510,6 +4510,11 @@ export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
   /** Custo mensal do vale-transporte (migration 0112): a folha desconta até 6%. */
   transportVoucherCents: bigint("transport_voucher_cents", { mode: "number" }).notNull().default(0),
   mealVoucherDiscountCents: bigint("meal_voucher_discount_cents", { mode: "number" }).notNull().default(0),
+  /** Regras do cálculo (migration 0115): pró-labore, salário-família e pensão por percentual. */
+  proLabore: boolean("pro_labore").notNull().default(false),
+  familyAllowanceChildren: integer("family_allowance_children").notNull().default(0),
+  alimonyPercent: numeric("alimony_percent", { precision: 5, scale: 2, mode: "number" }).notNull().default(0),
+  alimonyBase: text("alimony_base").notNull().default("gross_minus_inss"),
   reason: text("reason").notNull(),
   notes: text("notes").notNull().default(""),
   createdBy: text("created_by").notNull(),
@@ -4527,6 +4532,7 @@ export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
   check("fdp_employee_remuneration_dependents_check", sql`${table.irrfDependents} BETWEEN 0 AND 30`),
   check("fdp_employee_remuneration_unhealthy_check", sql`${table.unhealthyPercent} IN (0, 10, 20, 40)`),
   check("fdp_employee_remuneration_additional_check", sql`NOT (${table.hazardous} AND ${table.unhealthyPercent} > 0)`),
+  check("fdp_employee_remuneration_rules_check", sql`${table.familyAllowanceChildren} BETWEEN 0 AND 20 AND ${table.alimonyPercent} BETWEEN 0 AND 100 AND ${table.alimonyBase} IN ('gross', 'gross_minus_inss')`),
   check("fdp_employee_remuneration_vouchers_check", sql`${table.transportVoucherCents} >= 0 AND ${table.mealVoucherDiscountCents} >= 0`),
   check("fdp_employee_remuneration_reason_check", sql`${table.reason} IN ('admission', 'raise', 'promotion', 'collective_agreement', 'merit', 'correction', 'other')`),
 ]);
@@ -4658,6 +4664,8 @@ export const companyPayrollSettings = pgTable("fdp_company_payroll_settings", {
   bankAccountDigit: text("bank_account_digit").notNull().default(""),
   bankAgreement: text("bank_agreement").notNull().default(""),
   accountsJson: jsonb("accounts_json").$type<Record<string, string>>().notNull().default({}),
+  /** Piso salarial da convenção coletiva (migration 0115): a folha avisa quem ganha abaixo. */
+  salaryFloorCents: bigint("salary_floor_cents", { mode: "number" }).notNull().default(0),
   updatedBy: text("updated_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -4669,6 +4677,7 @@ export const companyPayrollSettings = pgTable("fdp_company_payroll_settings", {
   check("fdp_company_payroll_settings_rat_check", sql`${table.ratPercent} IN (1, 2, 3)`),
   check("fdp_company_payroll_settings_fap_check", sql`${table.fap} BETWEEN 0.5 AND 2`),
   check("fdp_company_payroll_settings_third_check", sql`${table.thirdPartiesPercent} BETWEEN 0 AND 10`),
+  check("fdp_company_payroll_settings_floor_check", sql`${table.salaryFloorCents} >= 0`),
   check("fdp_company_payroll_settings_accounts_check", sql`jsonb_typeof(${table.accountsJson}) = 'object'`),
 ]);
 
