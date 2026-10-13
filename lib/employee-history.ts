@@ -23,9 +23,8 @@ import { dateFromDatabase } from "./registrations.ts";
  * buraco e sem sobreposição. Um registro novo **delimita** o que estava
  * vigente na véspera — nunca o apaga.
  *
- * O módulo não calcula nada de folha (§28 de
- * docs/evolucao-produto-2026-09/05-benchmark-lacunas-e-ideias.md): o infotipo
- * 0008 (salário) ficou de fora de propósito.
+ * O salário (infotipo 0008) não mora aqui: tem tabela própria, com
+ * vigência, em `fdp_employee_remuneration` (lib/remuneration.ts).
  *
  * Este arquivo é puro: não acessa banco nem sessão.
  */

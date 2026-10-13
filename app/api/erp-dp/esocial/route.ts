@@ -12,7 +12,7 @@ import { companyScopeClause } from "@/lib/erp-dp-service";
  *
  * Lista de conferência derivada do Histórico funcional: o que mudou no mês e
  * qual evento não periódico o sistema de folha precisa ter transmitido.
- * O Vinculato não gera nem transmite eSocial (§28) — confere. A conferência
+ * O Vinculato ainda não gera nem transmite eSocial — confere. A conferência
  * de cada evento é gravada por `POST /api/erp-dp/esocial/checks`.
  */
 export async function GET(request: Request) {

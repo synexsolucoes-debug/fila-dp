@@ -1486,8 +1486,8 @@ avisa quando o cadastro de hoje difere do registro vigente hoje — por desenho,
 isso acontece com movimentação aplicada com data futura (o cadastro muda na
 aplicação; a validade, só na data).
 
-Salário (IT0008) ficou de fora de propósito (§28 do benchmark): o Vinculato
-não calcula folha.
+Salário (IT0008) não mora no histórico funcional: tem tabela própria, com
+vigência, desde a migration 0111 (§4.31).
 
 **O que isto ainda não faz**: os importadores (Sankhya, `lib/sankhya/importer.ts`
 e `app/api/employees/import/sankhya/route.ts`) ainda escrevem em
@@ -1637,6 +1637,40 @@ ERP lê.
 | Verificação | Onde |
 | --- | --- |
 | Nenhuma tela do Vinculato importa ou mostra o que é do ERP; telas do ERP na pasta do ERP; Central sem prazos do ERP; retroativo fora das Pendências; Operação DP sem retorno de afastamento | `tests/erp-separation.test.mts` |
+
+### 4.31 ERP DP calcula folha — remuneração com vigência e cálculos
+
+**Decisão de produto (13/10/2026).** A regra do §28 do benchmark que proibia
+folha própria foi revogada: o Vinculato passa a ser também o ERP de DP. A
+separação do §4.30 continua — o cálculo mora só no modo ERP DP; o Vinculato
+continua igual. O detalhe das regras e das tabelas está na §18 de
+`docs/engenharia-reversa-sap-hcm.md`.
+
+**Remuneração (IT0008).** `fdp_employee_remuneration` (migration 0111): um
+registro por início de vigência, valores em centavos, mensalista ou horista,
+horas do contrato, dependentes do IRRF e adicional (insalubridade e
+periculosidade não se acumulam — CHECK no banco). Gravar com início novo
+delimita o registro que cobria a data na véspera; o mesmo início é correção.
+Tudo no mesmo lote da auditoria (`employee.remuneration.created` /
+`employee.remuneration.corrected`). Rota: `GET|PUT /api/employees/[id]/remuneration`.
+
+**Cálculo.** `lib/payroll-calc.ts` (puro, vai para o navegador) com as tabelas
+de `lib/payroll-tables.ts`, por vigência e com a norma de cada uma.
+`POST /api/erp-dp/calculations` calcula folha do mês, férias, 13º e rescisão
+com o salário vigente **na data do cálculo** e não grava nada. Sem tabela para
+a data, recusa — não usa a de outro ano.
+
+**Permissões.** `payroll.read` (ver salário e calcular) e `payroll.manage`
+(gravar remuneração), separadas de `employees.*`: quem lê o cadastro não vê
+quanto a pessoa ganha. Membro tem as duas; observador, nenhuma. Negar o módulo
+Folha fecha `payroll.manage`.
+
+**Telas.** ERP DP › Ficha funcional › Remuneração e ERP DP › Cálculos.
+
+| Verificação | Onde |
+| --- | --- |
+| Tabelas 2026, INSS progressivo, IRRF com simplificado e redução, avos, folha do mês, férias, 13º e rescisão (todas as modalidades) com valores feitos à mão | `tests/erp-payroll-calc.test.mts` |
+| Remuneração: vigência, delimitação, correção, adicionais exclusivos, permissões e separação do Vinculato | `tests/erp-remuneration.test.mts` |
 
 ---
 

@@ -189,7 +189,7 @@ test("a tabela nasce com isolamento por tenant e as guardas de cada tipo", () =>
   assert.match(schema, /export const employeeHistoryRecords = pgTable\("fdp_employee_history_records"/u);
 });
 
-test("salário fica fora: o Vinculato não calcula folha", () => {
+test("salário não mora no histórico funcional: tem tabela própria com vigência (0111)", () => {
   assert.doesNotMatch(migration, /"salary|"wage|"amount/u);
 });
 

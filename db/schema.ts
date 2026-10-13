@@ -4490,3 +4490,39 @@ export const tangerinoWorkerHeartbeats = pgTable("fdp_tangerino_worker_heartbeat
     sql`${table.pendingConsultations} >= 0 AND ${table.pendingAttachments} >= 0`),
   check("fdp_tangerino_worker_heartbeats_needs_auth_check", sql`${table.needsAuthentication} IN (0, 1)`),
 ]);
+
+/**
+ * Remuneração do colaborador (migration 0111) — o infotipo 0008 do SAP, com
+ * vigência. Base do cálculo de folha do ERP DP. Valores em centavos.
+ */
+export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull(),
+  validFrom: date("valid_from", { mode: "string" }).notNull(),
+  validTo: date("valid_to", { mode: "string" }).notNull().default("9999-12-31"),
+  salaryKind: text("salary_kind").notNull().default("monthly"),
+  amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+  monthlyHours: integer("monthly_hours").notNull().default(220),
+  irrfDependents: integer("irrf_dependents").notNull().default(0),
+  unhealthyPercent: integer("unhealthy_percent").notNull().default(0),
+  hazardous: boolean("hazardous").notNull().default(false),
+  reason: text("reason").notNull(),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_remuneration_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_remuneration_employee_start_uq").on(table.workspaceId, table.employeeId, table.validFrom),
+  foreignKey({ name: "fdp_employee_remuneration_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  check("fdp_employee_remuneration_period_check", sql`${table.validTo} >= ${table.validFrom}`),
+  check("fdp_employee_remuneration_kind_check", sql`${table.salaryKind} IN ('monthly', 'hourly')`),
+  check("fdp_employee_remuneration_amount_check", sql`${table.amountCents} > 0`),
+  check("fdp_employee_remuneration_hours_check", sql`${table.monthlyHours} BETWEEN 1 AND 744`),
+  check("fdp_employee_remuneration_dependents_check", sql`${table.irrfDependents} BETWEEN 0 AND 30`),
+  check("fdp_employee_remuneration_unhealthy_check", sql`${table.unhealthyPercent} IN (0, 10, 20, 40)`),
+  check("fdp_employee_remuneration_additional_check", sql`NOT (${table.hazardous} AND ${table.unhealthyPercent} > 0)`),
+  check("fdp_employee_remuneration_reason_check", sql`${table.reason} IN ('admission', 'raise', 'promotion', 'collective_agreement', 'merit', 'correction', 'other')`),
+]);

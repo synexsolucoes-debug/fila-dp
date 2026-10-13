@@ -113,7 +113,9 @@ export const moduleWriteCapabilities: Record<string, readonly Capability[]> = {
   ],
   integrations: ["integrations.manage", "integrations.run", "integrations.reconcile"],
   sankhya_browser: ["integrations.credentials.manage", "integrations.execute", "integrations.logs.view"],
-  payroll: ["hr.write"],
+  // A remuneração do ERP DP é a folha: negar o módulo Folha fecha também a
+  // escrita do salário.
+  payroll: ["hr.write", "payroll.manage"],
   access: ["members.manage"],
   saas: ["saas.manage"],
   // Relatórios são leitura; não há escrita a negar além da própria visão.

@@ -6,8 +6,8 @@ import { recordAt, previousDay, type EmploymentStatus, type HistoryRecord } from
  *
  * Tudo aqui é leitura derivada do Histórico funcional (§4.27): o quadro de
  * pessoal numa data-base, os eventos do eSocial que as mudanças do mês exigem
- * e o sinal de retroatividade. Nada calcula folha nem transmite eSocial — a
- * fronteira do §28 continua de pé.
+ * e o sinal de retroatividade. O cálculo de folha mora em
+ * lib/payroll-calc.ts; aqui só há leitura do histórico.
  *
  * Este arquivo é puro: não acessa banco nem sessão.
  */

@@ -177,7 +177,7 @@ Crítica direta, em ordem de gravidade.
 
 | Tentação | Por que prejudica | Onde colocar o limite |
 | --- | --- | --- |
-| **Folha de pagamento própria** | Custo regulatório infinito (tabelas, eSocial, CCT, retificações); concorre com o sistema que o cliente não vai trocar | Conferir e preparar input; **nunca** calcular verba nem transmitir eSocial. A regra já está no código (ponto não calcula dinheiro) — mantê-la |
+| ~~**Folha de pagamento própria**~~ — **revogado em 13/10/2026** | Decisão de produto: o Vinculato passa a ser também o ERP de DP, com cálculo de folha no modo ERP DP, separado das telas do Vinculato (§4.31 de `docs/arquitetura-operacional.md`; §18 de `docs/engenharia-reversa-sap-hcm.md`) | O custo regulatório continua real: toda tabela entra com vigência e fonte, e o cálculo só existe com teste feito à mão. A transmissão do eSocial continua fora até haver certificado e homologação |
 | **ERP/financeiro completo** | Contas a pagar, conciliação, fiscal são outro produto | Acompanhar o **processo** até o pagamento; confirmação vem por integração |
 | **Contabilidade** | Nenhuma relação com o núcleo | Exportar dados para o escritório contábil |
 | **ATS completo** | Mercado saturado (Gupy, Sólides, Kenoby); não ajuda a operação | Requisição de vaga + integração; a jornada começa no "aprovado" |
