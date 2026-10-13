@@ -4593,3 +4593,52 @@ export const payrollResults = pgTable("fdp_payroll_results", {
   check("fdp_payroll_results_totals_check", sql`${table.netCents} = ${table.earningsCents} - ${table.deductionsCents}`),
   check("fdp_payroll_results_lines_check", sql`jsonb_typeof(${table.linesJson}) = 'array'`),
 ]);
+
+/** Férias coletivas (migration 0113): uma decisão que gera a programação de um grupo inteiro. */
+export const collectiveVacations = pgTable("fdp_collective_vacations", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  departmentId: text("department_id"),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  restDays: integer("rest_days").notNull(),
+  employeesCount: integer("employees_count").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_collective_vacations_workspace_id_uq").on(table.workspaceId, table.id),
+  foreignKey({ name: "fdp_collective_vacations_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  check("fdp_collective_vacations_days_check", sql`${table.restDays} BETWEEN 10 AND 30`),
+]);
+
+/** Programação de férias por período aquisitivo (migration 0113) — a cota 2006 do SAP. */
+export const vacationSchedules = pgTable("fdp_vacation_schedules", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  acquisitiveStart: date("acquisitive_start", { mode: "string" }).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  restDays: integer("rest_days").notNull(),
+  soldDays: integer("sold_days").notNull().default(0),
+  entitledDays: integer("entitled_days").notNull().default(30),
+  status: text("status").notNull().default("planned"),
+  collectiveId: text("collective_id"),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_vacation_schedules_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_vacation_schedules_employee_idx").on(table.workspaceId, table.employeeId, table.acquisitiveStart),
+  index("fdp_vacation_schedules_start_idx").on(table.workspaceId, table.companyId, table.startDate).where(sql`${table.status} <> 'canceled'`),
+  foreignKey({ name: "fdp_vacation_schedules_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_vacation_schedules_collective_fk", columns: [table.workspaceId, table.collectiveId], foreignColumns: [collectiveVacations.workspaceId, collectiveVacations.id] }),
+  check("fdp_vacation_schedules_status_check", sql`${table.status} IN ('planned', 'approved', 'taken', 'canceled')`),
+  check("fdp_vacation_schedules_days_check", sql`${table.restDays} BETWEEN 1 AND 30 AND ${table.soldDays} BETWEEN 0 AND 10`),
+  check("fdp_vacation_schedules_entitled_check", sql`${table.entitledDays} IN (12, 18, 24, 30)`),
+  check("fdp_vacation_schedules_total_check", sql`${table.restDays} + ${table.soldDays} <= ${table.entitledDays}`),
+]);
+
