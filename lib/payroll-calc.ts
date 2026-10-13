@@ -158,7 +158,7 @@ export function addDays(date: string, days: number) {
   return new Date(at(date) + days * DAY).toISOString().slice(0, 10);
 }
 
-function addMonths(date: string, months: number) {
+export function addMonths(date: string, months: number) {
   const [y, m, d] = date.split("-").map(Number);
   const target = new Date(Date.UTC(y, m - 1 + months, 1, 12));
   const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0, 12)).getUTCDate();

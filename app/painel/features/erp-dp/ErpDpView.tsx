@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, BookOpen, Calculator, CalendarClock, CalendarRange, Check, ClipboardCheck, Download, FileClock, FileSignature, History, Upload, Undo2,
-  LayoutDashboard, LoaderCircle, Play, RefreshCw, Search, ShieldCheck, UserRound, Users, Wallet,
+  LayoutDashboard, LoaderCircle, Play, RefreshCw, Search, ShieldCheck, UserRound, Users, Wallet, Palmtree,
 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { ErpFunctionalHistoryPanel } from "./ErpFunctionalHistoryPanel";
@@ -12,6 +12,7 @@ import { ErpCorrectionPanel } from "./ErpCorrectionPanel";
 import { ErpRemunerationPanel } from "./ErpRemunerationPanel";
 import { ErpCalculationsPanel } from "./ErpCalculationsPanel";
 import { ErpPayrollRunPanel } from "./ErpPayrollRunPanel";
+import { ErpVacationsPanel } from "./ErpVacationsPanel";
 import { parseReceiptSheet } from "@/lib/esocial-receipts";
 import styles from "./erp-dp.module.css";
 
@@ -27,13 +28,14 @@ import styles from "./erp-dp.module.css";
  * folha, férias, 13º e rescisão (PY). Não transmite eSocial.
  */
 
-type Section = "overview" | "record" | "actions" | "payroll" | "calculations" | "contracts" | "headcount" | "retro" | "cycles" | "esocial" | "about";
+type Section = "overview" | "record" | "actions" | "vacations" | "payroll" | "calculations" | "contracts" | "headcount" | "retro" | "cycles" | "esocial" | "about";
 type Row = Record<string, unknown>;
 
 const sections: Array<{ id: Section; label: string; sap: string; icon: typeof LayoutDashboard }> = [
   { id: "overview", label: "Painel do DP", sap: "Início", icon: LayoutDashboard },
   { id: "record", label: "Ficha funcional", sap: "PA20 / PA30", icon: UserRound },
   { id: "actions", label: "Medidas", sap: "PA40", icon: Play },
+  { id: "vacations", label: "Férias", sap: "IT2006 · cotas", icon: Palmtree },
   { id: "payroll", label: "Folha", sap: "PC00 · folha mensal", icon: Wallet },
   { id: "calculations", label: "Cálculos", sap: "PY · simulação", icon: Calculator },
   { id: "contracts", label: "Prazos contratuais", sap: "IT0016 / IT0019", icon: FileSignature },
@@ -158,6 +160,7 @@ export function ErpDpView({
       {section === "record" && <RecordSection key={recordTarget ? `${recordTarget.employeeId}-${recordTarget.tab}` : "search"}
         companyId={companyId} target={recordTarget} canManage={canManageEmployees} canReadPayroll={canReadPayroll} canManagePayroll={canManagePayroll} />}
       {section === "actions" && <ActionsSection companyId={companyId} canManage={canManageMovements} />}
+      {section === "vacations" && <ErpVacationsPanel companyId={companyId} canManage={canManageEmployees} />}
       {section === "payroll" && canReadPayroll && <ErpPayrollRunPanel companyId={companyId} canManage={canManagePayroll} />}
       {section === "calculations" && canReadPayroll && <ErpCalculationsPanel companyId={companyId} />}
       {section === "contracts" && <ContractsSection companyId={companyId} onOpen={(employeeId) => openRecord(employeeId, "contract")} />}
@@ -703,6 +706,7 @@ function AboutSection() {
     ["eSocial S-2206, S-2230, S-2299", "Conferência do que o histórico exige: transmitido com recibo ou não se aplica", "eSocial esperado"],
     ["Remuneração básica (0008)", "Salário com vigência, tipo, horas, dependentes do IRRF e adicional", "Ficha funcional › Remuneração"],
     ["Folha (PY, PC00_M37_CALC)", "Folha da competência da empresa inteira, gravada e fechada, com ponto, parcelas, VT, VR e retroativos", "Folha"],
+    ["Cota de ausência (2006)", "Períodos aquisitivos com saldo, vencimento do concessivo, programação com as regras da CLT e férias coletivas", "Férias"],
     ["Simulação de folha", "Folha do mês, férias, 13º e rescisão de uma pessoa, com média de variáveis automática", "Cálculos"],
   ];
   return <div className={styles.stack}>

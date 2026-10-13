@@ -1735,6 +1735,47 @@ oficial.
 | --- | --- |
 | Duas vias, rubricas, valor protegido, declaração, CNPJ, aviso e recibo de férias, termo de quitação, permissões e auditoria | `tests/erp-payroll-documents.test.mts` |
 
+### 4.34 Férias — saldo por período, vencimento, programação e coletivas
+
+A cota de ausência (infotipo 2006) do SAP. Os **períodos aquisitivos** são
+derivados da admissão (`lib/vacation-balance.ts`): 12 meses dão 30 dias (ou 24,
+18, 12 pelas faltas — art. 130), a gozar nos 12 meses seguintes (concessivo,
+art. 134). O que é gravado (migration 0113) é a programação de cada período
+(`fdp_vacation_schedules`) e as férias coletivas que a geraram
+(`fdp_collective_vacations`).
+
+| Situação do período | Quando |
+| --- | --- |
+| Em aquisição | Os 12 meses ainda não terminaram |
+| Disponível | Completo, com saldo, longe do fim do concessivo |
+| Vence em breve | Saldo e até 60 dias para o fim do concessivo |
+| Vencida (em dobro) | Passou do concessivo com saldo (art. 137) |
+| Quitada | Sem saldo nem programação aberta |
+
+**Regras da programação**, conferidas na tela enquanto se digita e de novo no
+servidor: até três frações, uma com 14 dias ou mais e as outras com 5 ou mais
+(art. 134, §1º); abono de até 1/3 (art. 143); não começar na sexta nem no
+sábado (art. 134, §3º, com o domingo como repouso); não passar do saldo;
+período em aquisição só em coletivas (art. 140). Aviso com menos de 30 dias
+(art. 135) e início depois do concessivo geram aviso, não bloqueio.
+
+**Estados**: programada → aprovada → gozada; cancelar só antes de gozar. A
+transição é um `UPDATE … AND status = ?`, e tudo vai para a auditoria.
+
+**Férias coletivas** (arts. 139 a 141): mínimo de 10 dias; a decisão vira a
+programação de cada pessoa ativa da empresa (ou do departamento), no período
+mais urgente dela; quem não cabe nas regras fica de fora com o motivo.
+
+**Permissões**: ler com `employees.read`, programar com `employees.manage` —
+férias é cadastro de DP, não salário. O valor sai em Cálculos › Férias, com o
+documento do §4.33.
+
+**Tela**: ERP DP › Férias.
+
+| Verificação | Onde |
+| --- | --- |
+| Períodos, saldo, vencida, vencendo, mais urgente, regras de fração, abono, sexta e sábado, saldo, três frações, coletivas, estados, migration e permissões | `tests/erp-vacations.test.mts` |
+
 ---
 
 ## 5. Agentes
