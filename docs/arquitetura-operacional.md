@@ -1708,6 +1708,33 @@ folhas **fechadas** dos 12 meses anteriores.
 | --- | --- |
 | Entradas do ponto aprovado e em rascunho, parcelas, VT até 6%, VR, diferença retroativa, admissão no mês, quem fica de fora, média de variáveis, migration e permissões | `tests/erp-payroll-run.test.mts` |
 
+### 4.33 Documentos da folha — holerite, férias e rescisão em PDF
+
+Gerados pelo PDF mínimo de `lib/pdf-document.ts` (`lib/payroll-documents-pdf.ts`),
+sempre a partir do número calculado — nunca de um valor digitado à parte:
+
+| Documento | Rota | De onde vem |
+| --- | --- | --- |
+| Recibo de pagamento (holerite), duas vias por página | `GET /api/erp-dp/payroll-runs/[id]/payslips[?employeeId=]` | Resultado gravado da folha (§4.32) |
+| Aviso de férias (art. 135) e recibo de férias (art. 145) | `POST /api/erp-dp/calculations/document` com `type: "vacation"` | O mesmo cálculo da tela, refeito no servidor |
+| Demonstrativo de verbas rescisórias e termo de quitação (art. 477, §2º) | idem, `type: "termination"` | idem |
+
+O cálculo da tela e o do documento passam pelo mesmo serviço
+(`lib/erp-calculation-service.ts`), por isso não divergem. Valor de dinheiro sai
+com asteriscos à esquerda, como na folha impressa. O período aquisitivo do aviso
+é o último completo antes do início; sem 12 meses de vínculo, a rota recusa
+(`VACATION_NOT_ACQUIRED`). O CPF aparece só com os 4 últimos dígitos — é o que o
+Vinculato guarda. Baixar holerite ou documento fica na auditoria
+(`payroll.payslips.downloaded`, `payroll.document.*`).
+
+O demonstrativo rescisório não é o formulário oficial do TRCT: é o
+documento de conferência e quitação cujos valores alimentam o TRCT no sistema
+oficial.
+
+| Verificação | Onde |
+| --- | --- |
+| Duas vias, rubricas, valor protegido, declaração, CNPJ, aviso e recibo de férias, termo de quitação, permissões e auditoria | `tests/erp-payroll-documents.test.mts` |
+
 ---
 
 ## 5. Agentes

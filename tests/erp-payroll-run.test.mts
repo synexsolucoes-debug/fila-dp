@@ -142,6 +142,6 @@ test("as rotas da folha exigem a permissão de salário e o escopo de empresa", 
   assert.match(route, /requireCompanyAccess\(/u);
   assert.match(close, /requireCapability\(workspace, "payroll\.manage"\)/u);
   assert.match(close, /requireCompanyAccess\(/u);
-  const calc = await read("app/api/erp-dp/calculations/route.ts");
+  const calc = await read("lib/erp-calculation-service.ts");
   assert.match(calc, /autoVariableAverage\(/u);
 });

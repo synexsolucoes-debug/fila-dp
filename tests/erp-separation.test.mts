@@ -21,7 +21,7 @@ const FEATURES = new URL("../app/painel/features/", import.meta.url);
 const ERP_ONLY = [
   /Vida funcional/u, /FunctionalHistoryPanel/u, /ContractPanel/u, /CorrectionPanel/u, /historyMode/u,
   /return_to_work/u, /Retorno de afastamento/u, /Prazos contratuais/u, /erp-dp\//u, /fdp_erp_retroactive_items/u,
-  /RemunerationPanel/u, /CalculationsPanel/u, /PayrollRunPanel/u, /\/api\/erp-dp\/payroll-runs/u, /payroll-calc/u, /\/api\/erp-dp\/calculations/u, /\/remuneration/u,
+  /RemunerationPanel/u, /CalculationsPanel/u, /PayrollRunPanel/u, /payroll-documents/u, /\/api\/erp-dp\/payroll-runs/u, /payroll-calc/u, /\/api\/erp-dp\/calculations/u, /\/remuneration/u,
 ];
 
 test("nenhuma tela do Vinculato importa ou mostra o que é do ERP DP", async () => {
