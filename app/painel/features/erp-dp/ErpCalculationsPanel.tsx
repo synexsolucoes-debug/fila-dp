@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { Calculator, LoaderCircle, Printer, Search, UserRound } from "lucide-react";
+import { Calculator, FileDown, LoaderCircle, Printer, Search, UserRound } from "lucide-react";
 import { EmptyState, ErrorBanner } from "../shared";
 import { brl, terminationKindLabels, terminationKinds, type PayrollLine, type TerminationKind } from "@/lib/payroll-calc";
 import styles from "./erp-record.module.css";
@@ -160,12 +160,30 @@ export function ErpCalculationsPanel({ companyId }: { companyId: string }) {
         <footer><span /><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Calculator aria-hidden="true" />} Calcular</button></footer>
       </form>
       {error && <ErrorBanner title="Não foi possível calcular" message={error} />}
-      {result && <ResultView result={result} />}
+      {result && <ResultView result={result} document={type === "vacation" || type === "termination"
+        ? () => downloadDocument({ ...fields, type, employeeId: employee.id }) : null} />}
     </>}
   </div>;
 }
 
-function ResultView({ result }: { result: Result }) {
+/** O PDF refaz a conta no servidor com o mesmo corpo: o documento nunca diverge da tela. */
+async function downloadDocument(body: Record<string, unknown>) {
+  const response = await fetch("/api/erp-dp/calculations/document", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(payload.error || "Não foi possível gerar o documento.");
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = /filename="([^"]+)"/u.exec(disposition)?.[1] ?? "documento.pdf";
+  const url = URL.createObjectURL(await response.blob());
+  const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function ResultView({ result, document: makeDocument }: { result: Result; document: (() => Promise<void>) | null }) {
+  const [documentError, setDocumentError] = useState("");
+  const [documentBusy, setDocumentBusy] = useState(false);
   const { lines, earnings, deductions, net, fgts, notes, projectedEnd } = result.result;
   const payroll = lines.filter((line) => line.kind !== "info");
   const info = lines.filter((line) => line.kind === "info");
@@ -200,6 +218,13 @@ function ResultView({ result }: { result: Result }) {
         ? `Horas extras, DSR e adicional noturno das ${result.average.months} folhas fechadas nos 12 meses anteriores. Informe a média no campo para substituir.`
         : "Nenhuma folha fechada nos 12 meses anteriores: a média ficou zero. Informe no campo, se houver variáveis pagas fora do ERP."}</small></span></p>}
     {notes.length > 0 && <ul className={styles.notes}>{notes.map((note) => <li key={note}>{note}</li>)}</ul>}
-    <div><button type="button" className={styles.secondaryButton} onClick={() => window.print()}><Printer aria-hidden="true" /> Imprimir</button></div>
+    {documentError && <ErrorBanner title="Documento não gerado" message={documentError} />}
+    <div className={styles.chips}>
+      {makeDocument && <button type="button" className={styles.primaryButton} disabled={documentBusy} onClick={() => {
+        setDocumentBusy(true); setDocumentError("");
+        makeDocument().catch((cause) => setDocumentError(cause instanceof Error ? cause.message : "Erro ao gerar.")).finally(() => setDocumentBusy(false));
+      }}>{documentBusy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <FileDown aria-hidden="true" />} Gerar documento (PDF)</button>}
+      <button type="button" className={styles.secondaryButton} onClick={() => window.print()}><Printer aria-hidden="true" /> Imprimir</button>
+    </div>
   </section>;
 }

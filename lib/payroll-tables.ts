@@ -105,6 +105,14 @@ export const minimumWages: readonly MinimumWage[] = [
   { validFrom: "2026-01-01", source: "Decreto 12.797/2025", amount: 162_100 },
 ];
 
+export type FamilyAllowance = { validFrom: string; source: string; quota: number; limit: number };
+
+/** Salário-família (Lei 8.213/91, art. 65): cota por filho até 14 anos para quem ganha até o limite. */
+export const familyAllowances: readonly FamilyAllowance[] = [
+  { validFrom: "2025-01-01", source: "Portaria Interministerial MPS/MF nº 6/2025", quota: 6_500, limit: 190_604 },
+  { validFrom: "2026-01-01", source: "Portaria Interministerial MPS/MF nº 13/2026", quota: 6_754, limit: 198_038 },
+];
+
 /** A tabela vigente na data. Sem tabela para a data, o cálculo recusa — chutar a do ano seguinte daria um número errado com cara de certo. */
 export function tableAt<T extends { validFrom: string }>(tables: readonly T[], date: string, code: string): T {
   const candidates = tables.filter((table) => table.validFrom <= date).sort((a, b) => b.validFrom.localeCompare(a.validFrom));

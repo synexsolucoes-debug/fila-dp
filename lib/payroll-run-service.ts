@@ -89,14 +89,18 @@ export async function calculateRun(d1: SqlDatabase, input: {
   if (existing?.status === "closed") throw ApiError.badRequest("A folha desta competência já foi fechada. O que mudar agora entra como diferença na próxima.", "PAYROLL_RUN_CLOSED");
 
   const monthEnd = lastDayOfCompetence(competence);
-  const employeeRows = await d1.prepare(`SELECT id, full_name, registration_number, admission_date, termination_date, employment_status
+  const employeeRows = await d1.prepare(`SELECT id, full_name, registration_number, admission_date, termination_date, employment_status, employment_type
       FROM fdp_employees WHERE workspace_id = ? AND company_id = ? AND admission_date <= ?::date
         AND (termination_date IS NULL OR termination_date >= ?::date) ORDER BY full_name`)
     .bind(workspaceId, companyId, monthEnd, `${competence}-01`).all<Record<string, unknown>>();
   const employees: RunEmployee[] = (employeeRows.results ?? []).map((row) => ({
     id: String(row.id), fullName: String(row.full_name ?? ""), registrationNumber: String(row.registration_number ?? ""),
     admissionDate: day(row.admission_date) ?? "", terminationDate: day(row.termination_date), employmentStatus: String(row.employment_status ?? "active"),
+    employmentType: String(row.employment_type ?? "clt"),
   }));
+  const floor = await d1.prepare("SELECT salary_floor_cents FROM fdp_company_payroll_settings WHERE workspace_id = ? AND company_id = ?")
+    .bind(workspaceId, companyId).first<{ salary_floor_cents: number | string }>();
+  const salaryFloorCents = Number(floor?.salary_floor_cents ?? 0);
 
   const remunerationRows = await d1.prepare(`SELECT r.* FROM fdp_employee_remuneration r JOIN fdp_employees e ON e.workspace_id = r.workspace_id AND e.id = r.employee_id
       WHERE r.workspace_id = ? AND e.company_id = ?`).bind(workspaceId, companyId).all<Record<string, unknown>>();
@@ -161,7 +165,7 @@ export async function calculateRun(d1: SqlDatabase, input: {
     }
     computed.push({ employee, payroll: employeePayroll({
       competence, employee, remuneration, time: sheets.get(employee.id) ?? null,
-      installments: installments.get(employee.id) ?? [], retroactive: retro.get(employee.id) ?? [],
+      installments: installments.get(employee.id) ?? [], retroactive: retro.get(employee.id) ?? [], salaryFloorCents,
     }) });
   }
 

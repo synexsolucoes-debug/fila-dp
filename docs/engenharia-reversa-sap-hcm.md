@@ -695,7 +695,7 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ## 16. Roadmap priorizado
 
-Estado: os itens 1 a 7, 9, 10 e 12 estão no produto, no **modo ERP DP** (§4.28 a §4.31
+Estado: os itens 1 a 13 estão no produto, no **modo ERP DP** (§4.28 a §4.31
 de `docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP.
 
 | # | Item | Conceito SAP | Valor para o DP | Esforço | Depende de |
@@ -707,14 +707,14 @@ de `docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP.
 | 5 | ✅ Mudança × correção na edição do cadastro | Copiar × modificar | Corrigir erro de digitação sem criar período falso | Pequeno | — |
 | 6 | ✅ Elementos contratuais | 0016 / 0019 | Fim de experiência e aviso prévio como prazos | Médio | Motor de Prazos ✅ |
 | 7 | ✅ Conferência eSocial × histórico | Mapa da §8.2 | Comparar S-2206/S-2230/S-2299 transmitidos com o histórico | Grande | 2, 3, integração com o sistema de folha |
-| 8 | ⬜ Saldo de férias | 2006 | Período aquisitivo vencendo e saldo por pessoa; o valor sai do item 9 | Médio | 4 |
+| 8 | ✅ Saldo e controle de férias | 2006 | Saldo por período, vencimento do concessivo, programação com as regras da CLT e coletivas | Médio | 4 |
 | 9 | ✅ Remuneração e cálculo (simulação) | 0008 + PY | Salário com vigência; folha do mês, férias, 13º e rescisão com INSS/IRRF da data | Grande | — |
 | 10 | ✅ Folha da competência | PC00 + PA03 | Calcular a empresa inteira, gravar o resultado e fechar com a competência; ponto, VT, VR e retroativos entram sozinhos | Grande | 9 |
-| 11 | ⬜ Holerite e recibo de férias / TRCT | Formulário | Documento para assinatura a partir do resultado gravado | Médio | 10 |
+| 11 | ✅ Holerite, aviso e recibo de férias, demonstrativo rescisório | Formulário | Documento para assinatura a partir do resultado calculado ou gravado | Médio | 10 |
 | 12 | ✅ Rubricas recorrentes no cálculo | 0014 / 0015 | Adiantamentos e Descontos entrando como rubrica | Médio | 10 |
-| 13 | ⬜ Arquivos de saída | S-1200, FGTS Digital, DCTFWeb | Gerar o arquivo; a transmissão segue com quem tem o certificado | Grande | 10 |
+| 13 | ✅ Arquivos de saída | S-1200, FGTS Digital, DCTFWeb, CNAB | Guias com vencimento, CNAB 240, rubricas do S-1200 em CSV e contabilização; a transmissão segue com quem tem o certificado | Grande | 10 |
 
-Próximos: o 11 (documentos), o 8 (saldo de férias) e o 13 (arquivos de saída).
+Próximos: regras que faltam no cálculo (salário-família, pensão por percentual, banco de horas, pró-labore, estagiário, aprendiz) e gestão (provisões, custo, portal).
 
 ---
 
@@ -811,9 +811,23 @@ vale-transporte (até 6%), vale-refeição e a diferença dos retroativos, grava
 resultado e fecha (§4.32 de `docs/arquitetura-operacional.md`). A média de
 variáveis de férias, 13º e rescisão passa a sair das folhas fechadas.
 
-**Limites honestos.** Não há holerite assinado nem arquivo de eSocial ainda.
+**Documentos (item 11).** Holerite em duas vias, aviso e recibo de férias e
+demonstrativo rescisório com termo de quitação, em PDF (§4.33).
+
+**Obrigações (item 13).** Guias com vencimento, CNAB 240, rubricas do
+S-1200 em CSV e lançamentos contábeis (§4.35). O XML do eSocial não é gerado:
+o Vinculato não guarda o CPF inteiro.
+
+**Regras (§4.36).** Estagiário, aprendiz, pró-labore, salário-família,
+pensão por percentual, banco de horas e piso da convenção.
+
+**Gestão e autoatendimento (§4.37).** Custo de pessoal com encargos e
+provisões por centro de custo e departamento (o equivalente ao relatório de
+custos de pessoal do CO-PA/PCP) e portal do colaborador por link — holerite,
+saldo de férias e pedido de férias (o ESS do SAP, sem login).
+
+**Limites honestos.**
 Não calcula ainda: férias em dobro
-(o cálculo avisa), salário-família, contribuição sindical, adicional noturno,
-banco de horas, pensão por percentual, CCT específica e aumento no meio do mês
-(usa o salário vigente no último dia da competência). Os próximos passos estão
-nos itens 10 a 13 do roadmap.
+(o cálculo avisa), contribuição sindical, regras de CCT além do piso (adicionais
+e reajustes próprios), feriados no calendário do DSR e dos vencimentos e
+aumento no meio do mês (usa o salário vigente no último dia da competência).

@@ -4510,6 +4510,11 @@ export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
   /** Custo mensal do vale-transporte (migration 0112): a folha desconta até 6%. */
   transportVoucherCents: bigint("transport_voucher_cents", { mode: "number" }).notNull().default(0),
   mealVoucherDiscountCents: bigint("meal_voucher_discount_cents", { mode: "number" }).notNull().default(0),
+  /** Regras do cálculo (migration 0115): pró-labore, salário-família e pensão por percentual. */
+  proLabore: boolean("pro_labore").notNull().default(false),
+  familyAllowanceChildren: integer("family_allowance_children").notNull().default(0),
+  alimonyPercent: numeric("alimony_percent", { precision: 5, scale: 2, mode: "number" }).notNull().default(0),
+  alimonyBase: text("alimony_base").notNull().default("gross_minus_inss"),
   reason: text("reason").notNull(),
   notes: text("notes").notNull().default(""),
   createdBy: text("created_by").notNull(),
@@ -4527,6 +4532,7 @@ export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
   check("fdp_employee_remuneration_dependents_check", sql`${table.irrfDependents} BETWEEN 0 AND 30`),
   check("fdp_employee_remuneration_unhealthy_check", sql`${table.unhealthyPercent} IN (0, 10, 20, 40)`),
   check("fdp_employee_remuneration_additional_check", sql`NOT (${table.hazardous} AND ${table.unhealthyPercent} > 0)`),
+  check("fdp_employee_remuneration_rules_check", sql`${table.familyAllowanceChildren} BETWEEN 0 AND 20 AND ${table.alimonyPercent} BETWEEN 0 AND 100 AND ${table.alimonyBase} IN ('gross', 'gross_minus_inss')`),
   check("fdp_employee_remuneration_vouchers_check", sql`${table.transportVoucherCents} >= 0 AND ${table.mealVoucherDiscountCents} >= 0`),
   check("fdp_employee_remuneration_reason_check", sql`${table.reason} IN ('admission', 'raise', 'promotion', 'collective_agreement', 'merit', 'correction', 'other')`),
 ]);
@@ -4593,3 +4599,136 @@ export const payrollResults = pgTable("fdp_payroll_results", {
   check("fdp_payroll_results_totals_check", sql`${table.netCents} = ${table.earningsCents} - ${table.deductionsCents}`),
   check("fdp_payroll_results_lines_check", sql`jsonb_typeof(${table.linesJson}) = 'array'`),
 ]);
+
+/** Férias coletivas (migration 0113): uma decisão que gera a programação de um grupo inteiro. */
+export const collectiveVacations = pgTable("fdp_collective_vacations", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  departmentId: text("department_id"),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  restDays: integer("rest_days").notNull(),
+  employeesCount: integer("employees_count").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_collective_vacations_workspace_id_uq").on(table.workspaceId, table.id),
+  foreignKey({ name: "fdp_collective_vacations_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  check("fdp_collective_vacations_days_check", sql`${table.restDays} BETWEEN 10 AND 30`),
+]);
+
+/** Programação de férias por período aquisitivo (migration 0113) — a cota 2006 do SAP. */
+export const vacationSchedules = pgTable("fdp_vacation_schedules", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  acquisitiveStart: date("acquisitive_start", { mode: "string" }).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  restDays: integer("rest_days").notNull(),
+  soldDays: integer("sold_days").notNull().default(0),
+  entitledDays: integer("entitled_days").notNull().default(30),
+  status: text("status").notNull().default("planned"),
+  collectiveId: text("collective_id"),
+  notes: text("notes").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_vacation_schedules_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_vacation_schedules_employee_idx").on(table.workspaceId, table.employeeId, table.acquisitiveStart),
+  index("fdp_vacation_schedules_start_idx").on(table.workspaceId, table.companyId, table.startDate).where(sql`${table.status} <> 'canceled'`),
+  foreignKey({ name: "fdp_vacation_schedules_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_vacation_schedules_collective_fk", columns: [table.workspaceId, table.collectiveId], foreignColumns: [collectiveVacations.workspaceId, collectiveVacations.id] }),
+  check("fdp_vacation_schedules_status_check", sql`${table.status} IN ('planned', 'approved', 'taken', 'canceled')`),
+  check("fdp_vacation_schedules_days_check", sql`${table.restDays} BETWEEN 1 AND 30 AND ${table.soldDays} BETWEEN 0 AND 10`),
+  check("fdp_vacation_schedules_entitled_check", sql`${table.entitledDays} IN (12, 18, 24, 30)`),
+  check("fdp_vacation_schedules_total_check", sql`${table.restDays} + ${table.soldDays} <= ${table.entitledDays}`),
+]);
+
+/** Configuração de folha da empresa (migration 0114): encargos, banco do CNAB e contas contábeis. */
+export const companyPayrollSettings = pgTable("fdp_company_payroll_settings", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employerContribution: text("employer_contribution").notNull().default("standard"),
+  ratPercent: numeric("rat_percent", { precision: 4, scale: 2, mode: "number" }).notNull().default(2),
+  fap: numeric("fap", { precision: 5, scale: 4, mode: "number" }).notNull().default(1),
+  thirdPartiesPercent: numeric("third_parties_percent", { precision: 5, scale: 2, mode: "number" }).notNull().default(5.8),
+  bankCode: text("bank_code").notNull().default(""),
+  bankAgency: text("bank_agency").notNull().default(""),
+  bankAgencyDigit: text("bank_agency_digit").notNull().default(""),
+  bankAccount: text("bank_account").notNull().default(""),
+  bankAccountDigit: text("bank_account_digit").notNull().default(""),
+  bankAgreement: text("bank_agreement").notNull().default(""),
+  accountsJson: jsonb("accounts_json").$type<Record<string, string>>().notNull().default({}),
+  /** Piso salarial da convenção coletiva (migration 0115): a folha avisa quem ganha abaixo. */
+  salaryFloorCents: bigint("salary_floor_cents", { mode: "number" }).notNull().default(0),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_company_payroll_settings_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_company_payroll_settings_company_uq").on(table.workspaceId, table.companyId),
+  foreignKey({ name: "fdp_company_payroll_settings_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  check("fdp_company_payroll_settings_contribution_check", sql`${table.employerContribution} IN ('standard', 'simples_exempt')`),
+  check("fdp_company_payroll_settings_rat_check", sql`${table.ratPercent} IN (1, 2, 3)`),
+  check("fdp_company_payroll_settings_fap_check", sql`${table.fap} BETWEEN 0.5 AND 2`),
+  check("fdp_company_payroll_settings_third_check", sql`${table.thirdPartiesPercent} BETWEEN 0 AND 10`),
+  check("fdp_company_payroll_settings_floor_check", sql`${table.salaryFloorCents} >= 0`),
+  check("fdp_company_payroll_settings_accounts_check", sql`jsonb_typeof(${table.accountsJson}) = 'object'`),
+]);
+
+/** Dados bancários do colaborador (migration 0114) — o infotipo 0009 do SAP, para o CNAB. */
+export const employeeBankAccounts = pgTable("fdp_employee_bank_accounts", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull(),
+  bankCode: text("bank_code").notNull(),
+  agency: text("agency").notNull(),
+  agencyDigit: text("agency_digit").notNull().default(""),
+  account: text("account").notNull(),
+  accountDigit: text("account_digit").notNull().default(""),
+  accountType: text("account_type").notNull().default("checking"),
+  pixKey: text("pix_key").notNull().default(""),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_bank_accounts_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_bank_accounts_employee_uq").on(table.workspaceId, table.employeeId),
+  foreignKey({ name: "fdp_employee_bank_accounts_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  check("fdp_employee_bank_accounts_type_check", sql`${table.accountType} IN ('checking', 'savings', 'salary')`),
+  check("fdp_employee_bank_accounts_bank_check", sql`${table.bankCode} ~ '^[0-9]{3}$'`),
+  check("fdp_employee_bank_accounts_numbers_check", sql`${table.agency} ~ '^[0-9]{1,5}$' AND ${table.account} ~ '^[0-9]{1,12}$'`),
+]);
+
+/** Link do portal do colaborador (migration 0116): holerites, férias e pedido de férias, sem conta. */
+export const employeePortalLinks = pgTable("fdp_employee_portal_links", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+  firstOpenedAt: timestamp("first_opened_at", { withTimezone: true, mode: "string" }),
+  lastOpenedAt: timestamp("last_opened_at", { withTimezone: true, mode: "string" }),
+  openedCount: integer("opened_count").notNull().default(0),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
+  revokedBy: text("revoked_by"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_portal_links_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_portal_links_token_uq").on(table.tokenHash),
+  index("fdp_employee_portal_links_employee_idx").on(table.workspaceId, table.employeeId),
+  foreignKey({ name: "fdp_employee_portal_links_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_employee_portal_links_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_employee_portal_links_revoker_fk", columns: [table.workspaceId, table.revokedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_employee_portal_links_opened_check", sql`${table.openedCount} >= 0`),
+  check("fdp_employee_portal_links_revoke_check", sql`(${table.revokedAt} IS NULL AND ${table.revokedBy} IS NULL) OR (${table.revokedAt} IS NOT NULL AND ${table.revokedBy} IS NOT NULL)`),
+]);
+

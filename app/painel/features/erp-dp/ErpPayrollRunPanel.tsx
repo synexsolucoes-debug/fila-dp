@@ -1,9 +1,10 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Calculator, ChevronDown, ChevronRight, Lock, LoaderCircle, RefreshCw, Wallet } from "lucide-react";
+import { AlertTriangle, Calculator, ChevronDown, ChevronRight, FileDown, Lock, LoaderCircle, RefreshCw, Wallet } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { brl, type PayrollLine } from "@/lib/payroll-calc";
+import { ErpObligationsPanel, ErpPayrollSettingsForm } from "./ErpObligationsPanel";
 import styles from "./erp-record.module.css";
 
 /**
@@ -61,6 +62,7 @@ export function ErpPayrollRunPanel({ companyId, canManage }: { companyId: string
 
   return <div className={styles.employeePanel}>
     {error && <ErrorBanner title="Não foi possível carregar" message={error} />}
+    {canManage && companyId && <ErpPayrollSettingsForm companyId={companyId} />}
     {!cycles ? <LoadingState size="compact" title="Carregando competências" />
       : cycles.length ? <div className={styles.tableWrap}><table className={styles.table}>
         <caption className="sr-only">Competências e folhas</caption>
@@ -144,6 +146,8 @@ function RunDetail({ cycle, canManage, onBack }: { cycle: CycleRow; canManage: b
         {canCalculate && <button type="button" className={styles.primaryButton} disabled={busy} onClick={() => void calculate()}>
           {busy ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : run ? <RefreshCw aria-hidden="true" /> : <Calculator aria-hidden="true" />}
           {run ? "Recalcular folha" : "Calcular folha"}</button>}
+        {run && data.results.length > 0 && <a className={styles.secondaryButton} href={`/api/erp-dp/payroll-runs/${encodeURIComponent(run.id)}/payslips`} download>
+          <FileDown aria-hidden="true" /> Holerites (PDF)</a>}
         {canManage && run?.status === "calculated" && !confirmClose && <button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => setConfirmClose(true)}>
           <Lock aria-hidden="true" /> Fechar folha</button>}
       </div>
@@ -171,6 +175,8 @@ function RunDetail({ cycle, canManage, onBack }: { cycle: CycleRow; canManage: b
             <td data-label="Líquido" className={styles.num}><strong>{brl(result.netCents)}</strong></td>
           </tr>
           {open === result.id && <tr><td colSpan={6}>
+            {run && <a className={styles.secondaryButton} href={`/api/erp-dp/payroll-runs/${encodeURIComponent(run.id)}/payslips?employeeId=${encodeURIComponent(result.employeeId)}`} download>
+              <FileDown aria-hidden="true" /> Holerite de {result.name}</a>}
             <ul className={styles.notes}>
               {result.lines.filter((line) => line.kind !== "info").map((line) => <li key={line.code + line.label}>
                 {line.code} · {line.label}{line.reference ? ` (${line.reference})` : ""}: {line.kind === "deduction" ? "−" : ""}{brl(line.amount)}</li>)}
@@ -179,6 +185,7 @@ function RunDetail({ cycle, canManage, onBack }: { cycle: CycleRow; canManage: b
           </td></tr>}
         </Fragment>)}</tbody>
       </table></div>}
+      {run?.status === "closed" && <ErpObligationsPanel runId={run.id} canManage={canManage} />}
       {run && run.skipped.length > 0 && <div className={styles.tableWrap}><table className={styles.table}>
         <caption className="sr-only">Fora da folha</caption>
         <thead><tr><th>Matrícula</th><th>Fora da folha</th><th>Motivo</th></tr></thead>

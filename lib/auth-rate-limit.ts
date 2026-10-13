@@ -110,6 +110,9 @@ const publicPolicies = {
      um colaborador legítimo abre a página e confirma o recebimento, não
      trinta vezes. */
   epi_ack_portal: { identityLimit: 20, addressLimit: 60, windowMinutes: 60 },
+  /* Portal do colaborador: mais aberturas que a ciência de EPI (a pessoa volta
+     para baixar holerites), o mesmo teto por endereço contra varredura. */
+  employee_portal: { identityLimit: 60, addressLimit: 60, windowMinutes: 60 },
 } as const;
 
 async function consumePublicKey(hash: string, limit: number, windowMinutes: number) {

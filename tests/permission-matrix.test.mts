@@ -81,7 +81,8 @@ test("toda rota de escrita passa por alguma autorização", () => {
   const PESSOAIS = new Set(["shortcuts/route.ts"]);
   /* Rotas cuja autorização é um token portador, e não uma sessão: o portal em
      que o prestador envia a nota fiscal, e o portal em que o colaborador dá
-     ciência da entrega de EPI (§4.9). Quem chega ali não é membro do grupo e
+     ciência da entrega de EPI (§4.9), e o portal do colaborador do ERP DP
+     (§4.37). Quem chega ali não é membro do grupo e
      nunca vai ser — exigir capacidade seria exigir uma conta, que é exatamente
      o que o portal existe para não pedir.
      Elas também não ficam sem conferência: a regra delas é mais estreita que
@@ -91,6 +92,7 @@ test("toda rota de escrita passa por alguma autorização", () => {
   const POR_TOKEN = new Map([
     ["portal/nota/[token]/route.ts", { usableFn: "assertPortalLinkUsable", rateLimitAction: "contractor_portal" }],
     ["portal/epi/[token]/route.ts", { usableFn: "assertEpiAckLinkUsable", rateLimitAction: "epi_ack_portal" }],
+    ["portal/colaborador/[token]/route.ts", { usableFn: "assertEmployeePortalLinkUsable", rateLimitAction: "employee_portal" }],
   ]);
   for (const [caminho, fonte] of routes) {
     if (!/export async function (POST|PATCH|PUT|DELETE)/u.test(fonte)) continue;
