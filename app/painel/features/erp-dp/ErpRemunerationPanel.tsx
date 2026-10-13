@@ -8,6 +8,7 @@ import {
   type Remuneration, type RemunerationReason, type SalaryKind,
 } from "@/lib/remuneration";
 import { brl } from "@/lib/payroll-calc";
+import { ErpBankAccountForm } from "./ErpObligationsPanel";
 import styles from "./erp-record.module.css";
 
 type Payload = { admissionDate: string; records: Remuneration[]; current: Remuneration | null; currentMonthlySalary: number | null; gaps: string[] };
@@ -87,6 +88,7 @@ export function ErpRemunerationPanel({ employeeId, canManage }: { employeeId: st
       </tr>)}</tbody>
     </table></div>}
     {canManage && <RemunerationEditor employeeId={employeeId} admissionDate={data.admissionDate} current={current} first={data.records.length === 0} onSaved={load} />}
+    <ErpBankAccountForm employeeId={employeeId} canManage={canManage} />
   </div>;
 }
 

@@ -695,7 +695,7 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ## 16. Roadmap priorizado
 
-Estado: os itens 1 a 12 estão no produto, no **modo ERP DP** (§4.28 a §4.31
+Estado: os itens 1 a 13 estão no produto, no **modo ERP DP** (§4.28 a §4.31
 de `docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP.
 
 | # | Item | Conceito SAP | Valor para o DP | Esforço | Depende de |
@@ -712,9 +712,9 @@ de `docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP.
 | 10 | ✅ Folha da competência | PC00 + PA03 | Calcular a empresa inteira, gravar o resultado e fechar com a competência; ponto, VT, VR e retroativos entram sozinhos | Grande | 9 |
 | 11 | ✅ Holerite, aviso e recibo de férias, demonstrativo rescisório | Formulário | Documento para assinatura a partir do resultado calculado ou gravado | Médio | 10 |
 | 12 | ✅ Rubricas recorrentes no cálculo | 0014 / 0015 | Adiantamentos e Descontos entrando como rubrica | Médio | 10 |
-| 13 | ⬜ Arquivos de saída | S-1200, FGTS Digital, DCTFWeb | Gerar o arquivo; a transmissão segue com quem tem o certificado | Grande | 10 |
+| 13 | ✅ Arquivos de saída | S-1200, FGTS Digital, DCTFWeb, CNAB | Guias com vencimento, CNAB 240, rubricas do S-1200 em CSV e contabilização; a transmissão segue com quem tem o certificado | Grande | 10 |
 
-Próximo: o 13 (arquivos de saída).
+Próximos: regras que faltam no cálculo (salário-família, pensão por percentual, banco de horas, pró-labore, estagiário, aprendiz) e gestão (provisões, custo, portal).
 
 ---
 
@@ -814,7 +814,11 @@ variáveis de férias, 13º e rescisão passa a sair das folhas fechadas.
 **Documentos (item 11).** Holerite em duas vias, aviso e recibo de férias e
 demonstrativo rescisório com termo de quitação, em PDF (§4.33).
 
-**Limites honestos.** Não há arquivo de eSocial ainda.
+**Obrigações (item 13).** Guias com vencimento, CNAB 240, rubricas do
+S-1200 em CSV e lançamentos contábeis (§4.35). O XML do eSocial não é gerado:
+o Vinculato não guarda o CPF inteiro.
+
+**Limites honestos.**
 Não calcula ainda: férias em dobro
 (o cálculo avisa), salário-família, contribuição sindical, adicional noturno,
 banco de horas, pensão por percentual, CCT específica e aumento no meio do mês
