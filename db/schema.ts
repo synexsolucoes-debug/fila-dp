@@ -4507,6 +4507,9 @@ export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
   irrfDependents: integer("irrf_dependents").notNull().default(0),
   unhealthyPercent: integer("unhealthy_percent").notNull().default(0),
   hazardous: boolean("hazardous").notNull().default(false),
+  /** Custo mensal do vale-transporte (migration 0112): a folha desconta até 6%. */
+  transportVoucherCents: bigint("transport_voucher_cents", { mode: "number" }).notNull().default(0),
+  mealVoucherDiscountCents: bigint("meal_voucher_discount_cents", { mode: "number" }).notNull().default(0),
   reason: text("reason").notNull(),
   notes: text("notes").notNull().default(""),
   createdBy: text("created_by").notNull(),
@@ -4524,5 +4527,69 @@ export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
   check("fdp_employee_remuneration_dependents_check", sql`${table.irrfDependents} BETWEEN 0 AND 30`),
   check("fdp_employee_remuneration_unhealthy_check", sql`${table.unhealthyPercent} IN (0, 10, 20, 40)`),
   check("fdp_employee_remuneration_additional_check", sql`NOT (${table.hazardous} AND ${table.unhealthyPercent} > 0)`),
+  check("fdp_employee_remuneration_vouchers_check", sql`${table.transportVoucherCents} >= 0 AND ${table.mealVoucherDiscountCents} >= 0`),
   check("fdp_employee_remuneration_reason_check", sql`${table.reason} IN ('admission', 'raise', 'promotion', 'collective_agreement', 'merit', 'correction', 'other')`),
+]);
+
+/**
+ * Folha da competência (migration 0112): uma por ciclo de cada empresa. Aberta,
+ * recalcula; fechada, não muda — a mudança posterior vira diferença retroativa.
+ */
+export const payrollRuns = pgTable("fdp_payroll_runs", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  payrollCycleId: text("payroll_cycle_id").notNull(),
+  competence: text("competence").notNull(),
+  status: text("status").notNull().default("calculated"),
+  calculationCount: integer("calculation_count").notNull().default(1),
+  employeesCount: integer("employees_count").notNull().default(0),
+  earningsCents: bigint("earnings_cents", { mode: "number" }).notNull().default(0),
+  deductionsCents: bigint("deductions_cents", { mode: "number" }).notNull().default(0),
+  netCents: bigint("net_cents", { mode: "number" }).notNull().default(0),
+  fgtsCents: bigint("fgts_cents", { mode: "number" }).notNull().default(0),
+  skippedJson: jsonb("skipped_json").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  calculatedBy: text("calculated_by").notNull(),
+  calculatedAt: timestamp("calculated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  closedBy: text("closed_by"),
+  closedAt: timestamp("closed_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_payroll_runs_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_payroll_runs_cycle_uq").on(table.workspaceId, table.payrollCycleId),
+  index("fdp_payroll_runs_company_competence_idx").on(table.workspaceId, table.companyId, table.competence),
+  foreignKey({ name: "fdp_payroll_runs_cycle_fk", columns: [table.workspaceId, table.companyId, table.payrollCycleId], foreignColumns: [payrollCycles.workspaceId, payrollCycles.companyId, payrollCycles.id] }),
+  check("fdp_payroll_runs_status_check", sql`${table.status} IN ('calculated', 'closed')`),
+  check("fdp_payroll_runs_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_payroll_runs_closed_check", sql`(${table.status} = 'closed') = (${table.closedAt} IS NOT NULL AND ${table.closedBy} IS NOT NULL)`),
+  check("fdp_payroll_runs_totals_check", sql`${table.netCents} = ${table.earningsCents} - ${table.deductionsCents} AND ${table.employeesCount} >= 0`),
+]);
+
+/** Resultado de cada colaborador na folha da competência, com as rubricas e as entradas. */
+export const payrollResults = pgTable("fdp_payroll_results", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  runId: text("run_id").notNull(),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  competence: text("competence").notNull(),
+  salaryCents: bigint("salary_cents", { mode: "number" }).notNull(),
+  earningsCents: bigint("earnings_cents", { mode: "number" }).notNull(),
+  deductionsCents: bigint("deductions_cents", { mode: "number" }).notNull(),
+  netCents: bigint("net_cents", { mode: "number" }).notNull(),
+  fgtsCents: bigint("fgts_cents", { mode: "number" }).notNull(),
+  linesJson: jsonb("lines_json").$type<Array<Record<string, unknown>>>().notNull().default([]),
+  inputsJson: jsonb("inputs_json").$type<Record<string, unknown>>().notNull().default({}),
+  notesJson: jsonb("notes_json").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_payroll_results_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_payroll_results_run_employee_uq").on(table.workspaceId, table.runId, table.employeeId),
+  index("fdp_payroll_results_employee_competence_idx").on(table.workspaceId, table.employeeId, table.competence),
+  foreignKey({ name: "fdp_payroll_results_run_fk", columns: [table.workspaceId, table.runId], foreignColumns: [payrollRuns.workspaceId, payrollRuns.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_payroll_results_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }),
+  check("fdp_payroll_results_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_payroll_results_totals_check", sql`${table.netCents} = ${table.earningsCents} - ${table.deductionsCents}`),
+  check("fdp_payroll_results_lines_check", sql`jsonb_typeof(${table.linesJson}) = 'array'`),
 ]);

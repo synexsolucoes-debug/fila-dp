@@ -41,6 +41,10 @@ export type Remuneration = {
   irrfDependents: number;
   unhealthyPercent: 0 | 10 | 20 | 40;
   hazardous: boolean;
+  /** Custo mensal do vale-transporte; a folha desconta até 6% do salário-base. */
+  transportVoucherCents: number;
+  /** Coparticipação mensal do vale-refeição/alimentação. */
+  mealVoucherDiscountCents: number;
   reason: RemunerationReason;
   notes: string;
 };
@@ -78,11 +82,16 @@ export function parseRemunerationInput(body: Record<string, unknown>, admissionD
   if (hazardous && unhealthyPercent > 0) {
     throw invalid("Insalubridade e periculosidade não se acumulam (CLT art. 193, §2º): escolha uma.", "REMUNERATION_ADDITIONALS_EXCLUSIVE");
   }
+  const transportVoucherCents = body.transportVoucher === undefined || body.transportVoucher === "" ? 0 : parseMoney(body.transportVoucher);
+  const mealVoucherDiscountCents = body.mealVoucherDiscount === undefined || body.mealVoucherDiscount === "" ? 0 : parseMoney(body.mealVoucherDiscount);
+  if (transportVoucherCents === null || transportVoucherCents < 0 || mealVoucherDiscountCents === null || mealVoucherDiscountCents < 0) {
+    throw invalid("Valor de vale-transporte ou vale-refeição inválido.", "REMUNERATION_VOUCHER_INVALID");
+  }
   const reason = (remunerationReasons as readonly string[]).includes(String(body.reason)) ? body.reason as RemunerationReason : null;
   if (!reason) throw invalid("Informe o motivo.", "REMUNERATION_REASON_REQUIRED");
   return {
     validFrom, salaryKind, amountCents, monthlyHours, irrfDependents,
-    unhealthyPercent: unhealthyPercent as Remuneration["unhealthyPercent"], hazardous, reason,
+    unhealthyPercent: unhealthyPercent as Remuneration["unhealthyPercent"], hazardous, transportVoucherCents, mealVoucherDiscountCents, reason,
     notes: String(body.notes ?? "").trim().slice(0, 500),
   };
 }
@@ -100,6 +109,8 @@ export function remunerationFromRow(row: Record<string, unknown>): Remuneration 
     irrfDependents: Number(row.irrf_dependents),
     unhealthyPercent: Number(row.unhealthy_percent) as Remuneration["unhealthyPercent"],
     hazardous: row.hazardous === true || row.hazardous === "t",
+    transportVoucherCents: Number(row.transport_voucher_cents ?? 0),
+    mealVoucherDiscountCents: Number(row.meal_voucher_discount_cents ?? 0),
     reason: String(row.reason) as RemunerationReason,
     notes: String(row.notes ?? ""),
   };

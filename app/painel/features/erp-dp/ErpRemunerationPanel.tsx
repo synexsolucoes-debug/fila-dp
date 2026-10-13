@@ -67,6 +67,8 @@ export function ErpRemunerationPanel({ employeeId, canManage }: { employeeId: st
         <span>{salaryKindLabels[current.salaryKind]}{current.salaryKind === "hourly" ? ` · ${brl(current.amountCents)}/h × ${current.monthlyHours} h` : ""}</span></article>
       <article><small>Jornada</small><strong>{current.monthlyHours} h/mês</strong><span>Desde {dateLabel(current.validFrom)}</span></article>
       <article><small>Dependentes IRRF</small><strong>{current.irrfDependents}</strong><span>Dedução por dependente na base</span></article>
+      <article><small>Vale-transporte</small><strong>{current.transportVoucherCents ? brl(current.transportVoucherCents) : "Não usa"}</strong>
+        <span>{current.transportVoucherCents ? "Desconto de até 6% do salário-base" : "—"}</span></article>
       <article><small>Adicional</small><strong>{current.hazardous ? "Periculosidade 30%" : current.unhealthyPercent ? `Insalubridade ${current.unhealthyPercent}%` : "Nenhum"}</strong>
         <span>{current.hazardous ? "Sobre o salário-base" : current.unhealthyPercent ? "Sobre o salário mínimo" : "—"}</span></article>
     </div> : <EmptyState icon={Banknote} size="compact" title="Sem remuneração vigente"
@@ -97,6 +99,8 @@ function RemunerationEditor({ employeeId, admissionDate, current, first, onSaved
   const [monthlyHours, setMonthlyHours] = useState(String(current?.monthlyHours ?? 220));
   const [irrfDependents, setIrrfDependents] = useState(String(current?.irrfDependents ?? 0));
   const [additional, setAdditional] = useState(current?.hazardous ? "hazardous" : String(current?.unhealthyPercent ?? 0));
+  const [transportVoucher, setTransportVoucher] = useState(current?.transportVoucherCents ? centsToInput(current.transportVoucherCents) : "");
+  const [mealVoucherDiscount, setMealVoucherDiscount] = useState(current?.mealVoucherDiscountCents ? centsToInput(current.mealVoucherDiscountCents) : "");
   const [reason, setReason] = useState<RemunerationReason>(first ? "admission" : "raise");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -114,7 +118,8 @@ function RemunerationEditor({ employeeId, admissionDate, current, first, onSaved
         method: "PUT",
         body: JSON.stringify({
           validFrom, salaryKind, amount, monthlyHours: Number(monthlyHours), irrfDependents: Number(irrfDependents),
-          unhealthyPercent: additional === "hazardous" ? 0 : Number(additional), hazardous: additional === "hazardous", reason, notes,
+          unhealthyPercent: additional === "hazardous" ? 0 : Number(additional), hazardous: additional === "hazardous",
+          transportVoucher, mealVoucherDiscount, reason, notes,
         }),
       });
       setError("");
@@ -154,6 +159,10 @@ function RemunerationEditor({ employeeId, admissionDate, current, first, onSaved
           <option value="40">Insalubridade grau máximo (40%)</option>
           <option value="hazardous">Periculosidade (30%)</option>
         </select></label>
+      <label><span>Custo mensal do vale-transporte (R$)</span>
+        <input inputMode="decimal" value={transportVoucher} placeholder="0,00" onChange={(event) => setTransportVoucher(event.target.value)} /></label>
+      <label><span>Coparticipação do vale-refeição (R$)</span>
+        <input inputMode="decimal" value={mealVoucherDiscount} placeholder="0,00" onChange={(event) => setMealVoucherDiscount(event.target.value)} /></label>
       {preview !== null && <p className={styles.infoNote}><Banknote aria-hidden="true" /><span>
         <strong>Salário mensal para o cálculo: {brl(preview)}</strong>
         <small>Mesma data de início de um registro existente corrige aquele registro; data nova abre outra vigência.</small></span></p>}

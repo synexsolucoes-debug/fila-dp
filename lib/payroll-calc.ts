@@ -260,6 +260,18 @@ export type MonthlyInput = {
   otherEarnings?: Cents;
   otherDeductions?: Cents;
   alimony?: Cents;
+  /** Dias do mês com vínculo (admissão no meio do mês), no mês comercial de 30. */
+  workedDays?: number;
+  /** Minutos de relógio entre 22h e 5h, vindos do ponto (CLT art. 73). */
+  nightMinutes?: number;
+  /** Faltas e atrasos em horas, vindos do ponto. */
+  absenceHours?: number;
+  /** Custo mensal do vale-transporte: o desconto é até 6% do salário-base (Lei 7.418/85, art. 4º). */
+  transportVoucherCost?: Cents;
+  /** Coparticipação do vale-refeição/alimentação, descontada como lançada. */
+  mealVoucherDiscount?: Cents;
+  /** Rubricas vindas de outros módulos (diferença retroativa, parcelas de desconto). */
+  extraLines?: PayrollLine[];
 };
 
 export function monthlyPayroll(input: MonthlyInput): PayrollResult {
@@ -268,7 +280,9 @@ export function monthlyPayroll(input: MonthlyInput): PayrollResult {
   const hourly = input.salary / input.monthlyHours;
   const lines: PayrollLine[] = [];
   const all = { inss: true, irrf: true, fgts: true };
-  lines.push({ code: "1000", label: "Salário", kind: "earning", amount: input.salary, reference: "30 dias", incidence: all });
+  const days = Math.max(0, Math.min(30, input.workedDays ?? 30));
+  const baseSalary = days === 30 ? input.salary : round((input.salary / 30) * days);
+  lines.push({ code: "1000", label: "Salário", kind: "earning", amount: baseSalary, reference: `${days} dias`, incidence: all });
 
   const he50 = round(hourly * 1.5 * (input.overtime50Hours ?? 0));
   const he100 = round(hourly * 2 * (input.overtime100Hours ?? 0));
@@ -284,13 +298,28 @@ export function monthlyPayroll(input: MonthlyInput): PayrollResult {
     lines.push({ code: "1030", label: `Adicional de insalubridade ${input.unhealthyPercent}%`, kind: "earning", amount: round(wage * input.unhealthyPercent / 100), reference: "sobre o salário mínimo", incidence: all });
   }
   if (input.hazardous) {
-    lines.push({ code: "1031", label: "Adicional de periculosidade 30%", kind: "earning", amount: round(input.salary * 0.3), reference: "sobre o salário-base", incidence: all });
+    lines.push({ code: "1031", label: "Adicional de periculosidade 30%", kind: "earning", amount: round(baseSalary * 0.3), reference: "sobre o salário-base", incidence: all });
+  }
+  if (input.nightMinutes) {
+    // Hora noturna reduzida de 52min30s (art. 73, §1º) e adicional de 20% sobre a hora diurna.
+    const reducedHours = input.nightMinutes / 52.5;
+    lines.push({ code: "1040", label: "Adicional noturno 20%", kind: "earning", amount: round(hourly * 0.2 * reducedHours), reference: `${reducedHours.toFixed(2).replace(".", ",")} h noturnas`, incidence: all });
   }
   lines.push({ code: "1090", label: "Outros proventos", kind: "earning", amount: input.otherEarnings ?? 0, incidence: all });
+  for (const line of input.extraLines ?? []) lines.push(line);
   const absences = round((input.salary / 30) * (input.absenceDays ?? 0));
   lines.push({ code: "5010", label: "Faltas", kind: "deduction", amount: absences, reference: `${input.absenceDays ?? 0} dias` });
+  const absenceHours = round(hourly * (input.absenceHours ?? 0));
+  lines.push({ code: "5011", label: "Faltas e atrasos em horas", kind: "deduction", amount: absenceHours, reference: `${(input.absenceHours ?? 0).toFixed(2).replace(".", ",")} h` });
+  if (input.transportVoucherCost) {
+    const discount = Math.min(input.transportVoucherCost, round(baseSalary * 0.06));
+    lines.push({ code: "5050", label: "Vale-transporte (até 6%)", kind: "deduction", amount: discount, reference: `custo ${brl(input.transportVoucherCost)}` });
+  }
+  lines.push({ code: "5051", label: "Vale-refeição / alimentação", kind: "deduction", amount: input.mealVoucherDiscount ?? 0 });
 
-  const taxable = total(lines.filter((line) => line.incidence?.inss), "earning") - absences;
+  // Desconto de falta reduz a base; as rubricas extras de desconto (VT, VR,
+  // parcelas) não são salário e não mexem nas incidências.
+  const taxable = total(lines.filter((line) => line.incidence?.inss), "earning") - absences - absenceHours;
   const contribution = inss(taxable, date);
   if (contribution.capped) notes.push(`Salário de contribuição acima do teto: INSS limitado a ${brl(contribution.ceiling)}.`);
   lines.push({ code: "5000", label: "INSS", kind: "deduction", amount: contribution.amount, reference: percent(contribution.amount, taxable) });
@@ -301,7 +330,32 @@ export function monthlyPayroll(input: MonthlyInput): PayrollResult {
   lines.push({ code: "5090", label: "Outros descontos", kind: "deduction", amount: input.otherDeductions ?? 0 });
   lines.push({ code: "9000", label: "Base INSS", kind: "info", amount: taxable });
   lines.push({ code: "9001", label: "Base IRRF", kind: "info", amount: tax.base });
-  return finish(lines, round(taxable * 0.08), notes);
+  const fgtsBase = total(lines.filter((line) => line.incidence?.fgts), "earning") - absences - absenceHours;
+  return finish(lines, round(Math.max(0, fgtsBase) * 0.08), notes);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Médias de variáveis                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** Rubricas variáveis que entram na média de férias, 13º e rescisão. */
+export const variableCodes = ["1010", "1011", "1020", "1040"] as const;
+
+/**
+ * Média das variáveis: soma das rubricas variáveis das folhas fechadas nos
+ * 12 meses anteriores à data, dividida pelos meses com folha. Sem folha
+ * fechada, a média é zero — e o cálculo diz isso.
+ */
+export function variableAverage(results: readonly { competence: string; lines: readonly PayrollLine[] }[], referenceDate: string) {
+  const end = referenceDate.slice(0, 7);
+  const [y, m] = end.split("-").map(Number);
+  const start = new Date(Date.UTC(y, m - 13, 1)).toISOString().slice(0, 7);
+  const window = results.filter((result) => result.competence >= start && result.competence < end);
+  if (!window.length) return { amount: 0, months: 0 };
+  const sum = window.reduce((acc, result) => acc + result.lines
+    .filter((line) => line.kind === "earning" && (variableCodes as readonly string[]).includes(line.code))
+    .reduce((lineSum, line) => lineSum + line.amount, 0), 0);
+  return { amount: round(sum / window.length), months: window.length };
 }
 
 /* -------------------------------------------------------------------------- */

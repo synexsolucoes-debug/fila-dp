@@ -20,7 +20,7 @@ const code = (expected: string) => (error: unknown) => (error as { code?: string
 
 const record = (id: string, validFrom: string, validTo: string, amountCents = 300_000): Remuneration => ({
   id, validFrom, validTo, salaryKind: "monthly", amountCents, monthlyHours: 220, irrfDependents: 0,
-  unhealthyPercent: 0, hazardous: false, reason: "admission", notes: "",
+  unhealthyPercent: 0, hazardous: false, transportVoucherCents: 0, mealVoucherDiscountCents: 0, reason: "admission", notes: "",
 });
 
 test("valor em reais vira centavos, no formato brasileiro ou não", () => {
@@ -110,7 +110,7 @@ test("as rotas exigem a permissão de salário, escopo de empresa e auditam", as
 test("o cálculo mora no ERP: a tela e o motor não puxam código de servidor", async () => {
   const view = await read("app/painel/features/erp-dp/ErpDpView.tsx");
   assert.match(view, /\{ id: "calculations", label: "Cálculos"/u);
-  assert.match(view, /item\.id !== "calculations" \|\| canReadPayroll/u);
+  assert.match(view, /\(item\.id !== "calculations" && item\.id !== "payroll"\) \|\| canReadPayroll/u);
   assert.match(view, /item\.id !== "remuneration" \|\| canReadPayroll/u);
   for (const path of ["lib/payroll-calc.ts", "lib/payroll-tables.ts", "lib/remuneration.ts"]) {
     const source = await read(path);

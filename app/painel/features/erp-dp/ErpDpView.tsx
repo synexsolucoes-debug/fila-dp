@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, BookOpen, Calculator, CalendarClock, CalendarRange, Check, ClipboardCheck, Download, FileClock, FileSignature, History, Upload, Undo2,
-  LayoutDashboard, LoaderCircle, Play, RefreshCw, Search, ShieldCheck, UserRound, Users,
+  LayoutDashboard, LoaderCircle, Play, RefreshCw, Search, ShieldCheck, UserRound, Users, Wallet,
 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { ErpFunctionalHistoryPanel } from "./ErpFunctionalHistoryPanel";
@@ -11,6 +11,7 @@ import { ErpContractPanel } from "./ErpContractPanel";
 import { ErpCorrectionPanel } from "./ErpCorrectionPanel";
 import { ErpRemunerationPanel } from "./ErpRemunerationPanel";
 import { ErpCalculationsPanel } from "./ErpCalculationsPanel";
+import { ErpPayrollRunPanel } from "./ErpPayrollRunPanel";
 import { parseReceiptSheet } from "@/lib/esocial-receipts";
 import styles from "./erp-dp.module.css";
 
@@ -26,14 +27,15 @@ import styles from "./erp-dp.module.css";
  * folha, férias, 13º e rescisão (PY). Não transmite eSocial.
  */
 
-type Section = "overview" | "record" | "actions" | "calculations" | "contracts" | "headcount" | "retro" | "cycles" | "esocial" | "about";
+type Section = "overview" | "record" | "actions" | "payroll" | "calculations" | "contracts" | "headcount" | "retro" | "cycles" | "esocial" | "about";
 type Row = Record<string, unknown>;
 
 const sections: Array<{ id: Section; label: string; sap: string; icon: typeof LayoutDashboard }> = [
   { id: "overview", label: "Painel do DP", sap: "Início", icon: LayoutDashboard },
   { id: "record", label: "Ficha funcional", sap: "PA20 / PA30", icon: UserRound },
   { id: "actions", label: "Medidas", sap: "PA40", icon: Play },
-  { id: "calculations", label: "Cálculos", sap: "PY · PC00", icon: Calculator },
+  { id: "payroll", label: "Folha", sap: "PC00 · folha mensal", icon: Wallet },
+  { id: "calculations", label: "Cálculos", sap: "PY · simulação", icon: Calculator },
   { id: "contracts", label: "Prazos contratuais", sap: "IT0016 / IT0019", icon: FileSignature },
   { id: "headcount", label: "Quadro em data-base", sap: "Dia-chave", icon: Users },
   { id: "retro", label: "Retroativos", sap: "IT0003", icon: FileClock },
@@ -133,7 +135,7 @@ export function ErpDpView({
   const [recordTarget, setRecordTarget] = useState<{ employeeId: string; tab: RecordTab } | null>(null);
   const openRecord = (employeeId: string, tab: RecordTab) => { setRecordTarget({ employeeId, tab }); setSection("record"); };
   const visible = sections.filter((item) => (item.id !== "retro" || canReadMovements) && (item.id !== "cycles" || canReadCycles)
-    && (item.id !== "calculations" || canReadPayroll));
+    && ((item.id !== "calculations" && item.id !== "payroll") || canReadPayroll));
   const current = sections.find((item) => item.id === section) ?? sections[0];
 
   return <div className={styles.shell}>
@@ -156,6 +158,7 @@ export function ErpDpView({
       {section === "record" && <RecordSection key={recordTarget ? `${recordTarget.employeeId}-${recordTarget.tab}` : "search"}
         companyId={companyId} target={recordTarget} canManage={canManageEmployees} canReadPayroll={canReadPayroll} canManagePayroll={canManagePayroll} />}
       {section === "actions" && <ActionsSection companyId={companyId} canManage={canManageMovements} />}
+      {section === "payroll" && canReadPayroll && <ErpPayrollRunPanel companyId={companyId} canManage={canManagePayroll} />}
       {section === "calculations" && canReadPayroll && <ErpCalculationsPanel companyId={companyId} />}
       {section === "contracts" && <ContractsSection companyId={companyId} onOpen={(employeeId) => openRecord(employeeId, "contract")} />}
       {section === "headcount" && <HeadcountSection companyId={companyId} />}
@@ -699,7 +702,8 @@ function AboutSection() {
     ["Elementos do contrato e tarefas monitoradas (0016, 0019)", "Experiência, prazo determinado e aviso prévio, com os prazos a decidir", "Ficha funcional › Contrato e Prazos contratuais"],
     ["eSocial S-2206, S-2230, S-2299", "Conferência do que o histórico exige: transmitido com recibo ou não se aplica", "eSocial esperado"],
     ["Remuneração básica (0008)", "Salário com vigência, tipo, horas, dependentes do IRRF e adicional", "Ficha funcional › Remuneração"],
-    ["Folha (PY, PC00_M37_CALC)", "Folha do mês, férias, 13º e rescisão com INSS e IRRF da data, rubrica a rubrica", "Cálculos"],
+    ["Folha (PY, PC00_M37_CALC)", "Folha da competência da empresa inteira, gravada e fechada, com ponto, parcelas, VT, VR e retroativos", "Folha"],
+    ["Simulação de folha", "Folha do mês, férias, 13º e rescisão de uma pessoa, com média de variáveis automática", "Cálculos"],
   ];
   return <div className={styles.stack}>
     <p className={styles.lead}>O modo ERP foi desenhado a partir da engenharia reversa funcional do SAP HCM

@@ -1672,6 +1672,42 @@ Folha fecha `payroll.manage`.
 | Tabelas 2026, INSS progressivo, IRRF com simplificado e redução, avos, folha do mês, férias, 13º e rescisão (todas as modalidades) com valores feitos à mão | `tests/erp-payroll-calc.test.mts` |
 | Remuneração: vigência, delimitação, correção, adicionais exclusivos, permissões e separação do Vinculato | `tests/erp-remuneration.test.mts` |
 
+### 4.32 Folha da competência — calculada, gravada e fechada no ERP DP
+
+A simulação do §4.31 vira folha. `fdp_payroll_runs` (uma por ciclo de
+`fdp_payroll_cycles`) e `fdp_payroll_results` (um por colaborador, com as
+rubricas, as entradas e as observações), migration 0112.
+
+**Entradas, cada uma registrada em `inputs_json`:**
+
+| Entrada | De onde | Regra |
+| --- | --- | --- |
+| Horas extras 50% e 100%, adicional noturno, faltas e atrasos em horas | `fdp_time_sheet_events` da folha de ponto do ciclo | Só ponto **aprovado, exportado ou fechado**; rascunho e revisão não entram, e a folha avisa |
+| DSR sobre horas extras | Calendário do mês | Domingos como descanso; feriados ainda não estão no calendário da empresa (aviso) |
+| Adicional noturno | Minutos de relógio do ponto | Hora reduzida de 52min30s e 20% sobre a hora diurna (CLT art. 73) |
+| Parcelas de Adiantamentos e Descontos | `fdp_ledger_installments` da competência, lançamento aprovado ou ativo, destino folha | Desconta o que falta (`planejado − descontado`); a confirmação continua no módulo, depois do pagamento |
+| Vale-transporte e vale-refeição | Colunas novas da remuneração | VT até 6% do salário-base (Lei 7.418/85); VR como lançado |
+| Diferença de retroativo | `fdp_erp_retroactive_items` abertos de competências anteriores | Salário vigente hoje para aquela competência − salário pago na folha fechada dela, proporcional aos dias; sem folha fechada no ERP, o item fica aberto |
+
+**Quem fica de fora** (`skipped_json`, com o motivo): admitido depois,
+desligado antes ou no mês (é rescisão), afastado e sem remuneração vigente.
+
+**Ciclo de vida.** Calcular de novo substitui os resultados e soma
+`calculation_count`. Fechar (`POST /api/erp-dp/payroll-runs/[id]/close`) trava
+a folha — o `UPDATE` só acontece com `status = 'calculated'` — e marca como
+lançados os retroativos pagos nela. Competência encerrada em
+`fdp_payroll_cycles` recusa cálculo novo.
+
+**Média de variáveis.** Férias, 13º e rescisão em Cálculos usam, quando a
+média não é informada, as rubricas variáveis (1010, 1011, 1020, 1040) das
+folhas **fechadas** dos 12 meses anteriores.
+
+**Tela.** ERP DP › Folha.
+
+| Verificação | Onde |
+| --- | --- |
+| Entradas do ponto aprovado e em rascunho, parcelas, VT até 6%, VR, diferença retroativa, admissão no mês, quem fica de fora, média de variáveis, migration e permissões | `tests/erp-payroll-run.test.mts` |
+
 ---
 
 ## 5. Agentes
