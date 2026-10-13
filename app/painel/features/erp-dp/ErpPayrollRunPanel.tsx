@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Calculator, ChevronDown, ChevronRight, FileDown, Lock, LoaderCircle, RefreshCw, Wallet } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { brl, type PayrollLine } from "@/lib/payroll-calc";
+import { ErpObligationsPanel, ErpPayrollSettingsForm } from "./ErpObligationsPanel";
 import styles from "./erp-record.module.css";
 
 /**
@@ -61,6 +62,7 @@ export function ErpPayrollRunPanel({ companyId, canManage }: { companyId: string
 
   return <div className={styles.employeePanel}>
     {error && <ErrorBanner title="Não foi possível carregar" message={error} />}
+    {canManage && companyId && <ErpPayrollSettingsForm companyId={companyId} />}
     {!cycles ? <LoadingState size="compact" title="Carregando competências" />
       : cycles.length ? <div className={styles.tableWrap}><table className={styles.table}>
         <caption className="sr-only">Competências e folhas</caption>
@@ -183,6 +185,7 @@ function RunDetail({ cycle, canManage, onBack }: { cycle: CycleRow; canManage: b
           </td></tr>}
         </Fragment>)}</tbody>
       </table></div>}
+      {run?.status === "closed" && <ErpObligationsPanel runId={run.id} canManage={canManage} />}
       {run && run.skipped.length > 0 && <div className={styles.tableWrap}><table className={styles.table}>
         <caption className="sr-only">Fora da folha</caption>
         <thead><tr><th>Matrícula</th><th>Fora da folha</th><th>Motivo</th></tr></thead>

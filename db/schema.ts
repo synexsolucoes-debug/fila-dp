@@ -4642,3 +4642,57 @@ export const vacationSchedules = pgTable("fdp_vacation_schedules", {
   check("fdp_vacation_schedules_total_check", sql`${table.restDays} + ${table.soldDays} <= ${table.entitledDays}`),
 ]);
 
+/** Configuração de folha da empresa (migration 0114): encargos, banco do CNAB e contas contábeis. */
+export const companyPayrollSettings = pgTable("fdp_company_payroll_settings", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employerContribution: text("employer_contribution").notNull().default("standard"),
+  ratPercent: numeric("rat_percent", { precision: 4, scale: 2, mode: "number" }).notNull().default(2),
+  fap: numeric("fap", { precision: 5, scale: 4, mode: "number" }).notNull().default(1),
+  thirdPartiesPercent: numeric("third_parties_percent", { precision: 5, scale: 2, mode: "number" }).notNull().default(5.8),
+  bankCode: text("bank_code").notNull().default(""),
+  bankAgency: text("bank_agency").notNull().default(""),
+  bankAgencyDigit: text("bank_agency_digit").notNull().default(""),
+  bankAccount: text("bank_account").notNull().default(""),
+  bankAccountDigit: text("bank_account_digit").notNull().default(""),
+  bankAgreement: text("bank_agreement").notNull().default(""),
+  accountsJson: jsonb("accounts_json").$type<Record<string, string>>().notNull().default({}),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_company_payroll_settings_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_company_payroll_settings_company_uq").on(table.workspaceId, table.companyId),
+  foreignKey({ name: "fdp_company_payroll_settings_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  check("fdp_company_payroll_settings_contribution_check", sql`${table.employerContribution} IN ('standard', 'simples_exempt')`),
+  check("fdp_company_payroll_settings_rat_check", sql`${table.ratPercent} IN (1, 2, 3)`),
+  check("fdp_company_payroll_settings_fap_check", sql`${table.fap} BETWEEN 0.5 AND 2`),
+  check("fdp_company_payroll_settings_third_check", sql`${table.thirdPartiesPercent} BETWEEN 0 AND 10`),
+  check("fdp_company_payroll_settings_accounts_check", sql`jsonb_typeof(${table.accountsJson}) = 'object'`),
+]);
+
+/** Dados bancários do colaborador (migration 0114) — o infotipo 0009 do SAP, para o CNAB. */
+export const employeeBankAccounts = pgTable("fdp_employee_bank_accounts", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  employeeId: text("employee_id").notNull(),
+  bankCode: text("bank_code").notNull(),
+  agency: text("agency").notNull(),
+  agencyDigit: text("agency_digit").notNull().default(""),
+  account: text("account").notNull(),
+  accountDigit: text("account_digit").notNull().default(""),
+  accountType: text("account_type").notNull().default("checking"),
+  pixKey: text("pix_key").notNull().default(""),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_bank_accounts_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_bank_accounts_employee_uq").on(table.workspaceId, table.employeeId),
+  foreignKey({ name: "fdp_employee_bank_accounts_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  check("fdp_employee_bank_accounts_type_check", sql`${table.accountType} IN ('checking', 'savings', 'salary')`),
+  check("fdp_employee_bank_accounts_bank_check", sql`${table.bankCode} ~ '^[0-9]{3}$'`),
+  check("fdp_employee_bank_accounts_numbers_check", sql`${table.agency} ~ '^[0-9]{1,5}$' AND ${table.account} ~ '^[0-9]{1,12}$'`),
+]);
+

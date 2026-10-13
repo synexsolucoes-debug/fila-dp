@@ -1776,6 +1776,49 @@ documento do §4.33.
 | --- | --- |
 | Períodos, saldo, vencida, vencendo, mais urgente, regras de fração, abono, sexta e sábado, saldo, três frações, coletivas, estados, migration e permissões | `tests/erp-vacations.test.mts` |
 
+### 4.35 Obrigações e pagamento da folha — guias, CNAB 240, S-1200 e contabilização
+
+Da folha **fechada** (§4.32) saem as obrigações (`lib/payroll-obligations.ts`)
+e os arquivos. O Vinculato gera o número e o arquivo; **a transmissão
+(DCTFWeb, FGTS Digital, eSocial) continua com quem tem o certificado digital**.
+
+| Saída | Como | Vencimento |
+| --- | --- | --- |
+| Salários líquidos | Arquivo CNAB 240 FEBRABAN, serviço 30, segmento A por favorecido (`lib/cnab240.ts`) | 5º dia útil, contando o sábado (CLT art. 459, §1º) |
+| FGTS (8%) | Total da folha para a guia do FGTS Digital | Dia 20 do mês seguinte (Lei 14.438/2022) |
+| Contribuição previdenciária | INSS dos empregados + patronal (20% + RAT × FAP + terceiros), para a DCTFWeb | Dia 20 |
+| IRRF | Retido dos empregados, para a DCTFWeb | Dia 20 |
+| Rubricas por trabalhador | CSV com os campos do grupo `itensRemun` do S-1200 | — |
+| Lançamentos contábeis | CSV débito/crédito por competência, com o plano de contas da empresa | — |
+
+Vencimento em fim de semana é antecipado para o dia útil anterior; **feriados
+não estão no calendário** e o resumo avisa. Simples Nacional (anexos I a III e
+V) não tem patronal na folha — a CPP está no DAS.
+
+**Limites honestos, por desenho do produto:** o Vinculato guarda só o hash e
+os 4 últimos dígitos do CPF (minimização da LGPD). Por isso **não gera o XML
+do S-1200** — que exige o CPF — e sim as rubricas no layout dele, chaveadas
+pela matrícula, para o sistema que transmite. Pelo mesmo motivo o CNAB vai sem
+o segmento B (CPF e endereço do favorecido); o banco confirma na homologação do
+convênio se aceita o crédito em conta só com o segmento A.
+
+**Configuração** (migration 0114): `fdp_company_payroll_settings` (forma da
+contribuição patronal, RAT, FAP, terceiros, banco e convênio do CNAB, contas
+contábeis) e `fdp_employee_bank_accounts` (a conta de salário — o infotipo
+0009). As duas com `payroll.manage` e auditoria.
+
+**Rotas**: `GET /api/erp-dp/payroll-runs/[id]/obligations` (resumo,
+`payroll.read`) e `GET /api/erp-dp/payroll-runs/[id]/exports?kind=cnab|s1200|accounting`
+(arquivos, `payroll.manage`, só folha fechada, auditoria
+`payroll.export.*`).
+
+**Telas**: ERP DP › Folha (configuração da empresa; obrigações da folha
+fechada) e Ficha funcional › Remuneração (conta de salário).
+
+| Verificação | Onde |
+| --- | --- |
+| Vencimentos, encargos (padrão e Simples), resumo das guias, CNAB 240 posição a posição, S-1200 em CSV, lançamentos, validação de configuração e conta, permissões | `tests/erp-obligations.test.mts` |
+
 ---
 
 ## 5. Agentes
