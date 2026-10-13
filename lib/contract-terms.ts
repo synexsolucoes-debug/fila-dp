@@ -21,9 +21,8 @@ export * from "./contract-terms-rules.ts";
  * - **quando termina o aviso prévio?** Lei 12.506/2011: 30 dias, mais 3 por
  *   ano completo de serviço, até 90.
  *
- * Só datas. Nenhum valor de verba é calculado aqui (§28 do benchmark): o
- * aviso indenizado tem a mesma projeção de dias, e o quanto ele custa é do
- * sistema de folha.
+ * Só datas. O valor do aviso indenizado é calculado em ERP DP › Cálculos ›
+ * Rescisão (lib/payroll-calc.ts), com a mesma conta de dias.
  *
  * Este arquivo é puro: não acessa banco nem sessão.
  */

@@ -164,7 +164,7 @@ function ContractEditor({ employeeId, admissionDate, terms, onSaved }: { employe
         <input type="date" required value={noticeStart} min={admissionDate} onChange={(event) => setNoticeStart(event.target.value)} /></label>}
       {preview && <p className={`${styles.infoNote} ${styles.spanTwo}`}><CalendarClock aria-hidden="true" /><span>
         <strong>{preview.days} dias de aviso — termina em {dateLabel(preview.end)}</strong>
-        <small>Lei 12.506/2011: 30 dias, mais 3 por ano completo de serviço até o início do aviso, no máximo 90. Só a data — o valor é do sistema de folha.</small></span></p>}
+        <small>Lei 12.506/2011: 30 dias, mais 3 por ano completo de serviço até o início do aviso, no máximo 90. O valor do aviso indenizado sai em Cálculos › Rescisão.</small></span></p>}
       <label className={styles.spanTwo}><span>Observações</span><textarea value={notes} maxLength={1000} onChange={(event) => setNotes(event.target.value)} /></label>
     </div>
     <footer><span /><button className={styles.primaryButton} disabled={busy}>{busy ? <LoaderCircle className={styles.spin} /> : <Check />} Salvar contrato</button></footer>

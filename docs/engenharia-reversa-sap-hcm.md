@@ -19,6 +19,11 @@
 >
 > **Primeiro resultado em código:** o Histórico funcional (§4.27 de
 > `docs/arquitetura-operacional.md`).
+>
+> **Decisão de produto de 13/10/2026:** a regra que proibia o Vinculato de
+> calcular folha (§28 do benchmark) foi **revogada**. O Vinculato passa a ser
+> também o ERP de DP — no **modo ERP DP**, separado das telas do Vinculato.
+> O cálculo está na §18.
 
 ## Sumário
 
@@ -39,6 +44,7 @@
 15. [O que copiar, o que não copiar](#15-o-que-copiar-o-que-não-copiar)
 16. [Roadmap priorizado](#16-roadmap-priorizado)
 17. [Glossário SAP ↔ DP brasileiro](#17-glossário-sap--dp-brasileiro)
+18. [Cálculo de folha no ERP DP](#18-cálculo-de-folha-no-erp-dp)
 
 ---
 
@@ -153,7 +159,7 @@ registro existente sem gerar histórico — é a diferença entre *mudança* e
 | 0003 | Status da folha | Data mais antiga de retroatividade, folha executada até, bloqueios | A | — (ver §7.4) |
 | 0006 | Endereços | Por subtipo (residencial, correspondência, emergência) | 2/3 | Endereço do colaborador (§4.12) |
 | 0007 | Horário de trabalho teórico | Regra de horário, percentual de jornada, horas semanais | 1 | `work_schedule_id` + **histórico `schedule`** |
-| 0008 | Remuneração básica | Salário e rubricas fixas, nível/faixa salarial | 1 | **Não replicado** (fronteira) |
+| 0008 | Remuneração básica | Salário e rubricas fixas, nível/faixa salarial | 1 | ERP DP › Remuneração (`fdp_employee_remuneration`, com vigência) |
 | 0009 | Dados bancários | Conta principal e secundárias | 2 | — |
 | 0014 | Pagamentos/descontos recorrentes | Rubrica, valor, período | 3 | Adiantamentos e Descontos (parcelas) |
 | 0015 | Pagamentos adicionais | Rubrica, valor, data | 3 | Adiantamentos e Descontos (avulsos) |
@@ -392,13 +398,14 @@ Resultados ficam em cluster (`PCL2`), com tabelas internas como `RT`
 (`PC00_M99_CIPE`). Folhas fora de ciclo (off-cycle) cobrem rescisão,
 adiantamento e correção avulsa.
 
-### 7.6 Por que o Vinculato não copia esta parte
+### 7.6 O que o Vinculato copia desta parte
 
-O §28 do benchmark (`docs/evolucao-produto-2026-09/05-benchmark-lacunas-e-ideias.md`)
-proíbe folha própria: tabelas de INSS/IRRF, CCTs, médias, retificações e
-eSocial são custo regulatório infinito, e o cliente não troca o sistema de
-folha. O valor do Vinculato é **antes** (preparar e conferir input) e
-**depois** (conferir resultado, acompanhar pagamento) da folha.
+Até 13/10/2026 o §28 do benchmark proibia folha própria. A regra foi revogada:
+o Vinculato passa a calcular dentro do modo ERP DP (§18). O que se copia do PY
+é o **resultado** — rubricas com referência, bases de INSS, IRRF e FGTS, e
+tabelas legais por vigência —, não a forma: não há esquemas nem PCRs para o
+cliente configurar. As regras são código revisado e testado, e cada tabela
+traz a norma de onde veio.
 
 ---
 
@@ -672,7 +679,8 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ### Não copiar
 
-1. **Motor de folha** (esquemas, PCRs, rubricas): proibido pelo §28.
+1. **Motor de folha configurável** (esquemas, PCRs): o cálculo existe (§18),
+   mas as regras são código do produto, não customização do cliente.
 2. **Customização como produto.** O SAP é configurado em centenas de tabelas
    `T5xx` por consultores; o Vinculato ganha justamente por ser pronto. Regras
    devem nascer como template, não como tabela de customização.
@@ -687,8 +695,8 @@ Legenda: ✅ existe · 🟡 parcial · 🆕 trazido nesta análise · ⛔ fora p
 
 ## 16. Roadmap priorizado
 
-Estado: os itens 1 a 7 estão no produto, no **modo ERP DP** (§4.28 a §4.30 de
-`docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP. Falta o 8.
+Estado: os itens 1 a 7 e 9 estão no produto, no **modo ERP DP** (§4.28 a §4.31
+de `docs/arquitetura-operacional.md`) — só nele: o que é ERP fica no ERP.
 
 | # | Item | Conceito SAP | Valor para o DP | Esforço | Depende de |
 | --- | --- | --- | --- | --- | --- |
@@ -699,9 +707,14 @@ Estado: os itens 1 a 7 estão no produto, no **modo ERP DP** (§4.28 a §4.30 de
 | 5 | ✅ Mudança × correção na edição do cadastro | Copiar × modificar | Corrigir erro de digitação sem criar período falso | Pequeno | — |
 | 6 | ✅ Elementos contratuais | 0016 / 0019 | Fim de experiência e aviso prévio como prazos | Médio | Motor de Prazos ✅ |
 | 7 | ✅ Conferência eSocial × histórico | Mapa da §8.2 | Comparar S-2206/S-2230/S-2299 transmitidos com o histórico | Grande | 2, 3, integração com o sistema de folha |
-| 8 | ⬜ Saldo de férias (conferência) | 2006 | Mostrar período aquisitivo vencendo, sem calcular valor | Médio | 4 |
+| 8 | ⬜ Saldo de férias | 2006 | Período aquisitivo vencendo e saldo por pessoa; o valor sai do item 9 | Médio | 4 |
+| 9 | ✅ Remuneração e cálculo (simulação) | 0008 + PY | Salário com vigência; folha do mês, férias, 13º e rescisão com INSS/IRRF da data | Grande | — |
+| 10 | ⬜ Folha da competência | PC00 + PA03 | Calcular a empresa inteira, gravar o resultado e fechar com a competência | Grande | 9 |
+| 11 | ⬜ Holerite e recibo de férias / TRCT | Formulário | Documento para assinatura a partir do resultado gravado | Médio | 10 |
+| 12 | ⬜ Rubricas recorrentes no cálculo | 0014 / 0015 | Adiantamentos e Descontos entrando como rubrica | Médio | 10 |
+| 13 | ⬜ Arquivos de saída | S-1200, FGTS Digital, DCTFWeb | Gerar o arquivo; a transmissão segue com quem tem o certificado | Grande | 10 |
 
-O próximo é o 8 (saldo de férias como conferência, sem cálculo de valor).
+Próximos: o 10 (folha da competência gravada) e o 8 (saldo de férias).
 
 ---
 
@@ -719,8 +732,8 @@ O próximo é o 8 (saldo de férias como conferência, sem cálculo de valor).
 | Grupo / subgrupo de empregados | PERSG / PERSK | Categoria do trabalhador / mensalista, horista | Tipo de vínculo |
 | Área de processamento de folha | ABKRS | Folha mensal, quinzenal | Competência |
 | Registro de controle | PA03 | Calendário de fechamento | Fechamento de competência |
-| Rubrica | LGART | Verba / evento de folha | — |
-| Classe de acumulação | — | Incidência (INSS, FGTS, IRRF) | — |
+| Rubrica | LGART | Verba / evento de folha | Rubrica do cálculo (código 1000, 5000…) |
+| Classe de acumulação | — | Incidência (INSS, FGTS, IRRF) | `incidence` de cada rubrica |
 | Horário de trabalho teórico | 0007 | Jornada contratual | Jornada |
 | Regra de horário | SCHKZ | Escala (6×1, 12×36) | Jornada (catálogo) |
 | Ausência | 2001 | Afastamento, férias, falta | Movimentação |
@@ -731,3 +744,71 @@ O próximo é o 8 (saldo de férias como conferência, sem cálculo de valor).
 | Cargo | C | Cargo (CBO) | Cargo |
 | Ação dinâmica | T588Z | Rotina automática | Automação por evento |
 | Data-chave | — | Data-base | Data-base da aba Vida funcional |
+
+---
+
+## 18. Cálculo de folha no ERP DP
+
+**Decisão.** Em 13/10/2026 o produto revogou a regra do §28 do benchmark que
+proibia folha própria: o Vinculato passa a ser também o ERP de DP. A separação
+continua (§4.30 de `docs/arquitetura-operacional.md`): o cálculo mora só no
+modo ERP DP.
+
+**O que existe (item 9 do roadmap).**
+
+| Peça | SAP | Vinculato |
+| --- | --- | --- |
+| Remuneração com vigência | 0008 | `fdp_employee_remuneration` (migration 0111): salário em centavos, mensalista ou horista, horas, dependentes do IRRF, insalubridade ou periculosidade; aumento delimita o registro anterior |
+| Tabelas legais | T5BR* | `lib/payroll-tables.ts`, por vigência, com a norma de cada uma |
+| Motor | PC00_M37_CALC | `lib/payroll-calc.ts`, puro: a tela e o servidor fazem a mesma conta |
+| Simulação | Simulação de folha | ERP DP › Cálculos: folha do mês, férias, 13º e rescisão |
+| Permissão | P_ORGIN / P_PERNR | `payroll.read` (ver salário e calcular) e `payroll.manage` (gravar remuneração) |
+
+**Tabelas de 2026.**
+
+- INSS (Portaria Interministerial MPS/MF nº 13/2026): 7,5% até R$ 1.621,00;
+  9% até R$ 2.902,84; 12% até R$ 4.354,27; 14% até o teto de R$ 8.475,55.
+  Progressivo por fatia.
+- IRRF (Lei 15.191/2025): isento até R$ 2.428,80; 7,5%, 15%, 22,5% e 27,5%,
+  com parcelas de R$ 182,16, R$ 394,16, R$ 675,49 e R$ 908,73. Dependente
+  R$ 189,59; desconto simplificado R$ 607,20 (a conta usa o que der menos
+  imposto, exceto no 13º).
+- Redução da Lei 15.270/2025, depois da tabela e pela faixa do **bruto**:
+  zera o imposto até R$ 5.000,00; entre R$ 5.000,01 e R$ 7.350,00 reduz
+  R$ 978,62 − 0,133145 × rendimento. Aplicada também ao 13º e às férias,
+  sobre o bruto de cada um — é o entendimento divulgado em 2026 pelos
+  sistemas de folha; confirmar com a Receita se houver ato novo.
+- Salário mínimo (Decreto 12.797/2025): R$ 1.621,00 — base da insalubridade.
+- 2025 também está cadastrado, para recálculo de meses passados: INSS da
+  Portaria MPS/MF nº 6/2025 (teto R$ 8.157,41), IRRF da Lei 14.848/2024 até
+  abril e da MP 1.294/2025 (Lei 15.191/2025) a partir de maio, sem redução,
+  e salário mínimo de R$ 1.518,00 (Decreto 12.342/2024). Antes de 2025 o
+  cálculo recusa: sem tabela, não há número.
+
+**Regras de cada cálculo.**
+
+- *Folha do mês*: salário, horas extras 50% e 100% sobre o salário-hora
+  (salário ÷ horas do contrato), DSR sobre horas extras (Lei 605/49),
+  insalubridade sobre o mínimo ou periculosidade de 30% sobre o salário-base
+  (não se acumulam — CLT art. 193, §2º), faltas, INSS, IRRF e FGTS de 8%.
+- *Férias*: dias pelo art. 130 (faltas), 1/3 constitucional, abono pecuniário
+  de até 1/3 (art. 143) sem INSS/IRRF/FGTS (art. 144), pagamento até 2 dias
+  antes (art. 145).
+- *13º*: avos pelo mês com 15 dias ou mais (Lei 4.090/62), INSS e IRRF
+  próprios, sem desconto simplificado, com a 1ª parcela descontada.
+- *Rescisão*: saldo de salário; aviso proporcional da Lei 12.506/2011
+  (metade no acordo do art. 484-A) com projeção para 13º e férias (OJ 82 da
+  SDI-1); 13º e férias proporcionais (não na justa causa — Súmula 171; sim no
+  pedido de demissão — Súmula 261); férias vencidas com 1/3; indenização do
+  art. 479 na rescisão antecipada do contrato a prazo; desconto do aviso não
+  cumprido no pedido de demissão (art. 487, §2º); férias e aviso indenizados
+  sem INSS/IRRF (Súmula 386 do STJ); multa do FGTS de 40% ou 20%; prazo de
+  10 dias (art. 477, §6º).
+
+**Limites honestos desta primeira versão.** É simulação: nada é gravado como
+folha, e não há holerite assinado nem arquivo de eSocial. Não calcula ainda:
+médias automáticas (a média de variáveis é informada), férias em dobro
+(o cálculo avisa), salário-família, contribuição sindical, adicional noturno,
+banco de horas, pensão por percentual, CCT específica e aumento no meio do mês
+(usa o salário vigente no último dia da competência). Os próximos passos estão
+nos itens 10 a 13 do roadmap.

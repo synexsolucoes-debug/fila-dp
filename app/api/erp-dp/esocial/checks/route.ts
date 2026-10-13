@@ -12,7 +12,7 @@ import type { WorkspaceRole } from "@/lib/fila-dp-types";
  *
  * Grava o que a pessoa confirmou no sistema de folha sobre cada evento que o
  * histórico funcional exige: **transmitido**, com o número do recibo, ou
- * **não se aplica**, com o motivo. O Vinculato não transmite (§28) — ele
+ * **não se aplica**, com o motivo. O Vinculato ainda não transmite — ele
  * guarda a prova da conferência.
  *
  * Aceita um evento ou um lote (`items`, até 500 — a importação de recibos).

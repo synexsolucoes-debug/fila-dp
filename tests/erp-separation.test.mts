@@ -21,6 +21,7 @@ const FEATURES = new URL("../app/painel/features/", import.meta.url);
 const ERP_ONLY = [
   /Vida funcional/u, /FunctionalHistoryPanel/u, /ContractPanel/u, /CorrectionPanel/u, /historyMode/u,
   /return_to_work/u, /Retorno de afastamento/u, /Prazos contratuais/u, /erp-dp\//u, /fdp_erp_retroactive_items/u,
+  /RemunerationPanel/u, /CalculationsPanel/u, /payroll-calc/u, /\/api\/erp-dp\/calculations/u, /\/remuneration/u,
 ];
 
 test("nenhuma tela do Vinculato importa ou mostra o que é do ERP DP", async () => {
@@ -39,7 +40,8 @@ test("nenhuma tela do Vinculato importa ou mostra o que é do ERP DP", async () 
 
 test("as telas do ERP moram na pasta do ERP", async () => {
   const files = await readdir(new URL("erp-dp/", FEATURES));
-  for (const name of ["ErpDpView.tsx", "ErpFunctionalHistoryPanel.tsx", "ErpContractPanel.tsx", "ErpCorrectionPanel.tsx"]) {
+  for (const name of ["ErpDpView.tsx", "ErpFunctionalHistoryPanel.tsx", "ErpContractPanel.tsx", "ErpCorrectionPanel.tsx",
+    "ErpRemunerationPanel.tsx", "ErpCalculationsPanel.tsx"]) {
     assert.ok(files.includes(name), `${name} fora de features/erp-dp`);
   }
   // E não puxam CSS do Vinculato.

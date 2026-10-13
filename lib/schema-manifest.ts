@@ -118,6 +118,7 @@ export const expectedMigrations = [
   "0108_erp_dp_return_to_work.sql",
   "0109_erp_dp_contract_terms_esocial_checks.sql",
   "0110_erp_dp_separation.sql",
+  "0111_erp_dp_remuneration.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

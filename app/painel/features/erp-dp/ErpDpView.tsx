@@ -2,13 +2,15 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, BookOpen, CalendarClock, CalendarRange, Check, ClipboardCheck, Download, FileClock, FileSignature, History, Upload, Undo2,
+  AlertTriangle, BookOpen, Calculator, CalendarClock, CalendarRange, Check, ClipboardCheck, Download, FileClock, FileSignature, History, Upload, Undo2,
   LayoutDashboard, LoaderCircle, Play, RefreshCw, Search, ShieldCheck, UserRound, Users,
 } from "lucide-react";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import { ErpFunctionalHistoryPanel } from "./ErpFunctionalHistoryPanel";
 import { ErpContractPanel } from "./ErpContractPanel";
 import { ErpCorrectionPanel } from "./ErpCorrectionPanel";
+import { ErpRemunerationPanel } from "./ErpRemunerationPanel";
+import { ErpCalculationsPanel } from "./ErpCalculationsPanel";
 import { parseReceiptSheet } from "@/lib/esocial-receipts";
 import styles from "./erp-dp.module.css";
 
@@ -19,17 +21,19 @@ import styles from "./erp-dp.module.css";
  * mesmas rotas, organizadas pelas perguntas que um DP que vem de ERP faz
  * (docs/engenharia-reversa-sap-hcm.md): a ficha numa data-base (PA20), as
  * medidas esperando execução (PA40), o quadro num dia-chave, os retroativos
- * (0003), o calendário de competências (PA03) e os eventos do eSocial que as
- * mudanças do mês exigem. Nada aqui calcula folha nem transmite eSocial.
+ * (0003), o calendário de competências (PA03), os eventos do eSocial que as
+ * mudanças do mês exigem, a remuneração com vigência (0008) e o cálculo de
+ * folha, férias, 13º e rescisão (PY). Não transmite eSocial.
  */
 
-type Section = "overview" | "record" | "actions" | "contracts" | "headcount" | "retro" | "cycles" | "esocial" | "about";
+type Section = "overview" | "record" | "actions" | "calculations" | "contracts" | "headcount" | "retro" | "cycles" | "esocial" | "about";
 type Row = Record<string, unknown>;
 
 const sections: Array<{ id: Section; label: string; sap: string; icon: typeof LayoutDashboard }> = [
   { id: "overview", label: "Painel do DP", sap: "Início", icon: LayoutDashboard },
   { id: "record", label: "Ficha funcional", sap: "PA20 / PA30", icon: UserRound },
   { id: "actions", label: "Medidas", sap: "PA40", icon: Play },
+  { id: "calculations", label: "Cálculos", sap: "PY · PC00", icon: Calculator },
   { id: "contracts", label: "Prazos contratuais", sap: "IT0016 / IT0019", icon: FileSignature },
   { id: "headcount", label: "Quadro em data-base", sap: "Dia-chave", icon: Users },
   { id: "retro", label: "Retroativos", sap: "IT0003", icon: FileClock },
@@ -104,7 +108,9 @@ function SectionState({ loading, error, reload, title }: { loading: boolean; err
   return null;
 }
 
-export function ErpDpView({ companyId, scopeLabel, canManageMovements, canManageEmployees, canReadMovements, canReadCycles, canCheckEsocial, onExit }: {
+export function ErpDpView({
+  companyId, scopeLabel, canManageMovements, canManageEmployees, canReadMovements, canReadCycles, canCheckEsocial, canReadPayroll, canManagePayroll, onExit,
+}: {
   companyId: string;
   scopeLabel: string;
   canManageMovements: boolean;
@@ -115,6 +121,10 @@ export function ErpDpView({ companyId, scopeLabel, canManageMovements, canManage
   /** Gravar a conferência do eSocial — `obligations.manage`. */
   canCheckEsocial: boolean;
   canReadCycles: boolean;
+  /** Ver salário e calcular — `payroll.read`. */
+  canReadPayroll: boolean;
+  /** Gravar a remuneração — `payroll.manage`. */
+  canManagePayroll: boolean;
   onExit: () => void;
 }) {
   const [section, setSection] = useState<Section>("overview");
@@ -122,7 +132,8 @@ export function ErpDpView({ companyId, scopeLabel, canManageMovements, canManage
      contratuais abre o contrato da pessoa, sem sair do ERP. */
   const [recordTarget, setRecordTarget] = useState<{ employeeId: string; tab: RecordTab } | null>(null);
   const openRecord = (employeeId: string, tab: RecordTab) => { setRecordTarget({ employeeId, tab }); setSection("record"); };
-  const visible = sections.filter((item) => (item.id !== "retro" || canReadMovements) && (item.id !== "cycles" || canReadCycles));
+  const visible = sections.filter((item) => (item.id !== "retro" || canReadMovements) && (item.id !== "cycles" || canReadCycles)
+    && (item.id !== "calculations" || canReadPayroll));
   const current = sections.find((item) => item.id === section) ?? sections[0];
 
   return <div className={styles.shell}>
@@ -143,8 +154,9 @@ export function ErpDpView({ companyId, scopeLabel, canManageMovements, canManage
       </header>
       {section === "overview" && <OverviewSection companyId={companyId} onGo={setSection} />}
       {section === "record" && <RecordSection key={recordTarget ? `${recordTarget.employeeId}-${recordTarget.tab}` : "search"}
-        companyId={companyId} target={recordTarget} canManage={canManageEmployees} />}
+        companyId={companyId} target={recordTarget} canManage={canManageEmployees} canReadPayroll={canReadPayroll} canManagePayroll={canManagePayroll} />}
       {section === "actions" && <ActionsSection companyId={companyId} canManage={canManageMovements} />}
+      {section === "calculations" && canReadPayroll && <ErpCalculationsPanel companyId={companyId} />}
       {section === "contracts" && <ContractsSection companyId={companyId} onOpen={(employeeId) => openRecord(employeeId, "contract")} />}
       {section === "headcount" && <HeadcountSection companyId={companyId} />}
       {section === "retro" && <RetroSection companyId={companyId} canManage={canManageMovements} />}
@@ -175,22 +187,25 @@ function OverviewSection({ companyId, onGo }: { companyId: string; onGo: (sectio
     </button>)}</div>
     <div className={styles.note}><ShieldCheck aria-hidden="true" /><p>
       O modo ERP lê os mesmos dados do Vinculato, com o vocabulário do SAP HCM: cada dado do vínculo tem data de validade,
-      cada mudança é uma medida, e todo relatório pode ser lido numa data-base. Folha e eSocial continuam no seu sistema de folha —
-      aqui você prepara, executa as medidas e confere.
+      cada mudança é uma medida, e todo relatório pode ser lido numa data-base. A remuneração fica na Ficha funcional e a folha, as
+      férias, o 13º e a rescisão são calculados em Cálculos; a transmissão do eSocial continua no sistema que tem o certificado.
     </p></div>
   </div>;
 }
 
 /* -------------------------------------------------------------------------- */
 
-type RecordTab = "functional" | "contract" | "correction";
+type RecordTab = "functional" | "contract" | "remuneration" | "correction";
 const recordTabs: Array<{ id: RecordTab; label: string; sap: string }> = [
   { id: "functional", label: "Vida funcional", sap: "IT0000 · IT0001 · IT0007" },
   { id: "contract", label: "Contrato", sap: "IT0016 · IT0019" },
+  { id: "remuneration", label: "Remuneração", sap: "IT0008" },
   { id: "correction", label: "Corrigir registro", sap: "PA30 · modificar" },
 ];
 
-function RecordSection({ companyId, target, canManage }: { companyId: string; target: { employeeId: string; tab: RecordTab } | null; canManage: boolean }) {
+function RecordSection({ companyId, target, canManage, canReadPayroll, canManagePayroll }: {
+  companyId: string; target: { employeeId: string; tab: RecordTab } | null; canManage: boolean; canReadPayroll: boolean; canManagePayroll: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Row[] | null>(null);
   const [selected, setSelected] = useState<Row | null>(null);
@@ -221,7 +236,7 @@ function RecordSection({ companyId, target, canManage }: { companyId: string; ta
     } finally { setBusy(false); }
   }
 
-  const visibleTabs = recordTabs.filter((item) => item.id !== "correction" || canManage);
+  const visibleTabs = recordTabs.filter((item) => (item.id !== "correction" || canManage) && (item.id !== "remuneration" || canReadPayroll));
 
   return <div className={styles.stack}>
     {!selected && <form className={styles.toolbar} onSubmit={(event) => void search(event)} role="search">
@@ -259,6 +274,7 @@ function RecordSection({ companyId, target, canManage }: { companyId: string; ta
       <div role="tabpanel">
         {tab === "functional" && <ErpFunctionalHistoryPanel key={version} employeeId={text(selected.id)} />}
         {tab === "contract" && <ErpContractPanel employeeId={text(selected.id)} canManage={canManage} />}
+        {tab === "remuneration" && canReadPayroll && <ErpRemunerationPanel employeeId={text(selected.id)} canManage={canManagePayroll} />}
         {tab === "correction" && canManage && <ErpCorrectionPanel employeeId={text(selected.id)} onSaved={() => setVersion((value) => value + 1)} />}
       </div>
     </div>}
@@ -682,12 +698,14 @@ function AboutSection() {
     ["Registro de controle (PA03)", "Competência com gates de fechamento", "Competências"],
     ["Elementos do contrato e tarefas monitoradas (0016, 0019)", "Experiência, prazo determinado e aviso prévio, com os prazos a decidir", "Ficha funcional › Contrato e Prazos contratuais"],
     ["eSocial S-2206, S-2230, S-2299", "Conferência do que o histórico exige: transmitido com recibo ou não se aplica", "eSocial esperado"],
+    ["Remuneração básica (0008)", "Salário com vigência, tipo, horas, dependentes do IRRF e adicional", "Ficha funcional › Remuneração"],
+    ["Folha (PY, PC00_M37_CALC)", "Folha do mês, férias, 13º e rescisão com INSS e IRRF da data, rubrica a rubrica", "Cálculos"],
   ];
   return <div className={styles.stack}>
     <p className={styles.lead}>O modo ERP foi desenhado a partir da engenharia reversa funcional do SAP HCM
-      (documento <code>docs/engenharia-reversa-sap-hcm.md</code> do repositório). Ele reorganiza o Vinculato com a lógica de um ERP de DP,
-      sem trazer o que o produto decidiu não fazer: cálculo de folha, rubricas e transmissão de eSocial. O que é ERP fica no ERP: nada
-      destas telas aparece nas telas do Vinculato, e o Vinculato continua como sempre foi.</p>
+      (documento <code>docs/engenharia-reversa-sap-hcm.md</code> do repositório). Ele reorganiza o Vinculato com a lógica de um ERP de DP
+      e calcula folha, férias, 13º e rescisão com as tabelas legais vigentes; a transmissão do eSocial continua no sistema que tem o
+      certificado. O que é ERP fica no ERP: nada destas telas aparece nas telas do Vinculato, e o Vinculato continua como sempre foi.</p>
     <div className={styles.tableWrap}><table className={styles.table}>
       <thead><tr><th>Conceito do SAP HCM</th><th>Como o Vinculato faz</th><th>Onde ver</th></tr></thead>
       <tbody>{rows.map(([sap, how, where]) => <tr key={sap}><td data-label="SAP HCM">{sap}</td><td data-label="Vinculato">{how}</td><td data-label="Onde">{where}</td></tr>)}</tbody>

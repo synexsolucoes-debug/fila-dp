@@ -1,0 +1,106 @@
+import { apiError, getApiUser } from "@/lib/fila-dp-api";
+import { getWorkspaceContext } from "@/lib/fila-dp-db";
+import { requireCapability } from "@/lib/authorization";
+import { ApiError } from "@/lib/api-errors";
+import { asBadRequest, contractEndOf, payrollEmployee, remunerationRecords } from "@/lib/erp-payroll-service";
+import { monthlySalaryOf, parseMoney, remunerationAt } from "@/lib/remuneration";
+import {
+  monthlyPayroll, terminationKinds, terminationPay, thirteenthSalary, vacationDaysByAbsences, vacationPay,
+  type TerminationKind,
+} from "@/lib/payroll-calc";
+import { lastDayOfCompetence } from "@/lib/erp-dp";
+
+/**
+ * Cálculo de folha do ERP DP (docs/engenharia-reversa-sap-hcm.md §18): folha
+ * do mês, férias, 13º e rescisão de um colaborador, com o salário que estava
+ * vigente na data do cálculo — não o de hoje.
+ *
+ * É simulação: nada é gravado. O resultado traz as rubricas, as bases e as
+ * observações para quem confere refazer a conta.
+ */
+
+const types = ["monthly", "vacation", "thirteenth", "termination"] as const;
+const isDate = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/u.test(value);
+const number = (value: unknown, fallback = 0) => {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed) || parsed < 0) throw ApiError.badRequest("Informe números positivos.", "CALCULATION_NUMBER_INVALID");
+  return parsed;
+};
+const money = (value: unknown) => {
+  if (value === undefined || value === null || value === "") return 0;
+  const cents = parseMoney(value);
+  if (cents === null || cents < 0) throw ApiError.badRequest("Valor inválido.", "CALCULATION_AMOUNT_INVALID");
+  return cents;
+};
+
+export async function POST(request: Request) {
+  const auth = await getApiUser(); if (!auth.user) return auth.response;
+  try {
+    const body = await request.json() as Record<string, unknown>;
+    const type = types.find((item) => item === body.type);
+    if (!type) throw ApiError.badRequest("Escolha o cálculo.", "CALCULATION_TYPE_INVALID");
+    const { d1, workspace, user } = await getWorkspaceContext(auth.user);
+    requireCapability(workspace, "payroll.read");
+    const employee = await payrollEmployee(d1, workspace.id, user.id, workspace.role, String(body.employeeId ?? ""));
+    const records = await remunerationRecords(d1, workspace.id, employee.id);
+
+    // A data que decide o salário vigente de cada cálculo.
+    let referenceDate: string;
+    if (type === "monthly") {
+      if (typeof body.competence !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/u.test(body.competence)) throw ApiError.badRequest("Informe a competência.", "CALCULATION_COMPETENCE_REQUIRED");
+      referenceDate = lastDayOfCompetence(body.competence);
+    } else if (type === "thirteenth") {
+      const year = number(body.year);
+      if (!Number.isInteger(year) || year < 2000) throw ApiError.badRequest("Informe o ano.", "CALCULATION_YEAR_REQUIRED");
+      referenceDate = `${year}-12-20`;
+    } else {
+      const date = type === "vacation" ? body.start : body.terminationDate;
+      if (!isDate(date)) throw ApiError.badRequest("Informe a data.", "CALCULATION_DATE_REQUIRED");
+      referenceDate = date;
+    }
+    const remuneration = remunerationAt(records, referenceDate) ?? remunerationAt(records, employee.admissionDate);
+    if (!remuneration) {
+      throw ApiError.badRequest("Cadastre a remuneração do colaborador na aba Remuneração da Ficha funcional antes de calcular.", "REMUNERATION_MISSING");
+    }
+    const salary = monthlySalaryOf(remuneration);
+    const variableAverage = money(body.variableAverage);
+
+    const result = asBadRequest(() => {
+      switch (type) {
+        case "monthly":
+          return monthlyPayroll({
+            competence: String(body.competence), salary, monthlyHours: remuneration.monthlyHours, dependents: remuneration.irrfDependents,
+            overtime50Hours: number(body.overtime50Hours), overtime100Hours: number(body.overtime100Hours),
+            workingDays: number(body.workingDays), restDays: number(body.restDays), absenceDays: number(body.absenceDays),
+            unhealthyPercent: remuneration.unhealthyPercent, hazardous: remuneration.hazardous,
+            otherEarnings: money(body.otherEarnings), otherDeductions: money(body.otherDeductions), alimony: money(body.alimony),
+          });
+        case "vacation": {
+          const entitledDays = body.entitledDays !== undefined && body.entitledDays !== "" ? number(body.entitledDays) : vacationDaysByAbsences(number(body.absences));
+          return vacationPay({ start: referenceDate, salary, variableAverage, entitledDays, soldDays: number(body.soldDays), dependents: remuneration.irrfDependents });
+        }
+        case "thirteenth":
+          return thirteenthSalary({
+            year: Number(body.year), admissionDate: employee.admissionDate, salary, variableAverage,
+            dependents: remuneration.irrfDependents, firstInstallmentPaid: money(body.firstInstallmentPaid),
+          });
+        default:
+          return null;
+      }
+    });
+    if (type !== "termination") return Response.json({ employee, remuneration, salary, referenceDate, result });
+
+    const kind = terminationKinds.find((item) => item === body.kind) as TerminationKind | undefined;
+    if (!kind) throw ApiError.badRequest("Escolha o tipo de desligamento.", "TERMINATION_KIND_INVALID");
+    const contractEnd = isDate(body.contractEnd) ? body.contractEnd : await contractEndOf(d1, workspace.id, employee.id);
+    const termination = asBadRequest(() => terminationPay({
+      kind, admissionDate: employee.admissionDate, terminationDate: referenceDate, salary, variableAverage,
+      dependents: remuneration.irrfDependents, noticeWorked: body.noticeWorked === true,
+      discountUnworkedNotice: body.discountUnworkedNotice === true,
+      overdueVacationPeriods: number(body.overdueVacationPeriods),
+      fgtsBalance: body.fgtsBalance === undefined || body.fgtsBalance === "" ? undefined : money(body.fgtsBalance),
+      contractEnd: contractEnd ?? undefined, thirteenthAdvance: money(body.thirteenthAdvance),
+    }));
+    return Response.json({ employee, remuneration, salary, referenceDate, result: termination });
+  } catch (error) { return apiError(error); }
+}

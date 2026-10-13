@@ -3340,6 +3340,8 @@ export function WorkspaceApp({
             canReadMovements={hasCapability(snapshot.workspace.role, "movements.read")}
             canReadCycles={hasCapability(snapshot.workspace.role, "competences.read")}
             canCheckEsocial={hasCapability(snapshot.workspace.role, "obligations.manage")}
+            canReadPayroll={hasCapability(snapshot.workspace.role, "payroll.read")}
+            canManagePayroll={hasCapability(snapshot.workspace.role, "payroll.manage")}
             onExit={() => changeAppMode("vinculato")} /> :
           <ProcessTabsProvider>{(tabsTarget) => <>
           {/* O contexto pode ter mudado sozinho porque o grupo anterior saiu do

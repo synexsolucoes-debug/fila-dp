@@ -166,6 +166,12 @@ export const capabilities = [
   "ledger.export",
   "ledger.close",
   "ledger.reopen",
+  /* Cálculo de folha do ERP DP. Ver salário e cálculo é permissão à parte de
+     `employees.read`: quem consulta o cadastro de alguém não passa a ver
+     quanto a pessoa ganha. Alterar a remuneração é outra, porque grava o
+     número que todo cálculo seguinte usa. */
+  "payroll.read",
+  "payroll.manage",
 ] as const;
 
 export type Capability = typeof capabilities[number];
@@ -270,6 +276,9 @@ const roleCapabilities = {
     "ledger.read", "ledger.request", "ledger.manage", "ledger.approve", "ledger.pay",
     "ledger.confirm", "ledger.reverse", "ledger.reschedule", "ledger.import",
     "ledger.export", "ledger.close",
+    // O analista de DP calcula a folha e mantém o salário vigente: é o
+    // trabalho dele no ERP DP. O observador não vê salário.
+    "payroll.read", "payroll.manage",
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",

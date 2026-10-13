@@ -147,6 +147,8 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "ledger.export": { area: "operations", label: "Exportar a competência para lançamento na folha" },
   "ledger.close": { area: "operations", label: "Encerrar a conferência da competência" },
   "ledger.reopen": { area: "operations", label: "Reabrir a conferência já encerrada, com justificativa" },
+  "payroll.read": { area: "operations", label: "Ver salários e calcular folha, férias, 13º e rescisão no ERP DP" },
+  "payroll.manage": { area: "operations", label: "Alterar a remuneração dos colaboradores no ERP DP" },
 
   "integrations.status.read": { area: "platform", label: "Ver o estado das integrações" },
   "integrations.manage": { area: "platform", label: "Configurar conectores e credenciais" },
