@@ -827,6 +827,13 @@
       "when": 1791564000000,
       "tag": "0115_erp_dp_payroll_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1791650400000,
+      "tag": "0116_erp_dp_employee_portal",
+      "breakpoints": true
     }
   ]
 }

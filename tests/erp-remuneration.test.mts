@@ -110,7 +110,7 @@ test("as rotas exigem a permissão de salário, escopo de empresa e auditam", as
 test("o cálculo mora no ERP: a tela e o motor não puxam código de servidor", async () => {
   const view = await read("app/painel/features/erp-dp/ErpDpView.tsx");
   assert.match(view, /\{ id: "calculations", label: "Cálculos"/u);
-  assert.match(view, /\(item\.id !== "calculations" && item\.id !== "payroll"\) \|\| canReadPayroll/u);
+  assert.match(view, /\(item\.id !== "calculations" && item\.id !== "payroll" && item\.id !== "costs"\) \|\| canReadPayroll/u);
   assert.match(view, /item\.id !== "remuneration" \|\| canReadPayroll/u);
   for (const path of ["lib/payroll-calc.ts", "lib/payroll-tables.ts", "lib/remuneration.ts"]) {
     const source = await read(path);

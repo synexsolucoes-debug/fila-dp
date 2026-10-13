@@ -4705,3 +4705,30 @@ export const employeeBankAccounts = pgTable("fdp_employee_bank_accounts", {
   check("fdp_employee_bank_accounts_numbers_check", sql`${table.agency} ~ '^[0-9]{1,5}$' AND ${table.account} ~ '^[0-9]{1,12}$'`),
 ]);
 
+/** Link do portal do colaborador (migration 0116): holerites, férias e pedido de férias, sem conta. */
+export const employeePortalLinks = pgTable("fdp_employee_portal_links", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+  firstOpenedAt: timestamp("first_opened_at", { withTimezone: true, mode: "string" }),
+  lastOpenedAt: timestamp("last_opened_at", { withTimezone: true, mode: "string" }),
+  openedCount: integer("opened_count").notNull().default(0),
+  revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "string" }),
+  revokedBy: text("revoked_by"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_employee_portal_links_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_employee_portal_links_token_uq").on(table.tokenHash),
+  index("fdp_employee_portal_links_employee_idx").on(table.workspaceId, table.employeeId),
+  foreignKey({ name: "fdp_employee_portal_links_employee_fk", columns: [table.workspaceId, table.employeeId], foreignColumns: [employees.workspaceId, employees.id] }).onDelete("cascade"),
+  foreignKey({ name: "fdp_employee_portal_links_creator_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_employee_portal_links_revoker_fk", columns: [table.workspaceId, table.revokedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_employee_portal_links_opened_check", sql`${table.openedCount} >= 0`),
+  check("fdp_employee_portal_links_revoke_check", sql`(${table.revokedAt} IS NULL AND ${table.revokedBy} IS NULL) OR (${table.revokedAt} IS NOT NULL AND ${table.revokedBy} IS NOT NULL)`),
+]);
+

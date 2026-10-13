@@ -821,6 +821,11 @@ o Vinculato não guarda o CPF inteiro.
 **Regras (§4.36).** Estagiário, aprendiz, pró-labore, salário-família,
 pensão por percentual, banco de horas e piso da convenção.
 
+**Gestão e autoatendimento (§4.37).** Custo de pessoal com encargos e
+provisões por centro de custo e departamento (o equivalente ao relatório de
+custos de pessoal do CO-PA/PCP) e portal do colaborador por link — holerite,
+saldo de férias e pedido de férias (o ESS do SAP, sem login).
+
 **Limites honestos.**
 Não calcula ainda: férias em dobro
 (o cálculo avisa), contribuição sindical, regras de CCT além do piso (adicionais

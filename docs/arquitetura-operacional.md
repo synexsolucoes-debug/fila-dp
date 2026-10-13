@@ -1839,6 +1839,44 @@ O cálculo deixa de tratar todo mundo como empregado mensalista
 | --- | --- |
 | Estagiário, aprendiz, pró-labore e patronal, salário-família (limite, proporcional, compensação), pensão nas duas bases, categorias fora da CLT, banco de horas, piso, migration | `tests/erp-payroll-rules.test.mts` |
 
+### 4.37 Custo de pessoal e portal do colaborador
+
+**Custo de pessoal** (ERP DP › Custos, `lib/payroll-costs.ts`,
+`/api/erp-dp/costs`, `payroll.read`). Lê as folhas **fechadas** da competência
+e mostra quanto cada pessoa custa à empresa além do salário:
+
+| Parcela | Como sai |
+| --- | --- |
+| Proventos | Proventos da folha sem o salário-família (compensado na guia, não é despesa) |
+| Patronal | 20% + RAT × FAP + terceiros sobre a base 9000; 20% sobre o pró-labore (9002); zero no Simples sem CPP |
+| FGTS | O depósito do mês da folha |
+| Provisões | Férias (salário/12 × 4/3) e 13º (salário/12), só para quem tem base de empregado — estagiário e sócio não provisionam |
+| Encargos das provisões | Patronal + FGTS sobre as provisões |
+| Vale-transporte | O custo do vale menos o desconto de até 6% do empregado |
+
+Agrupa por centro de custo e por departamento ("Sem centro de custo" aparece,
+não some), mostra a evolução das últimas competências fechadas e exporta CSV.
+
+**Portal do colaborador** (migration 0116, `fdp_employee_portal_links`). Na
+remuneração da ficha, quem tem `payroll.manage` gera um link para a pessoa, com
+validade; o token vai uma vez para a tela e só o hash fica gravado, como nos
+portais de EPI e de notas do PJ. Abrindo `/portal/colaborador/<token>`, sem
+login, a pessoa vê:
+
+- os holerites das folhas **fechadas** e baixa o PDF (só o dela);
+- os períodos de férias com saldo e vencimento e as programações;
+- um pedido de férias, que entra como programação **solicitada** para o DP
+  aprovar em ERP DP › Férias (estagiário não pede: não tem férias da CLT).
+
+O link pode ser revogado; expirado ou revogado, o portal recusa. Toda abertura,
+download e pedido fica na auditoria, e as rotas públicas têm limite de
+tentativas (`employee_portal` em `lib/auth-rate-limit.ts`).
+
+| Verificação | Onde |
+| --- | --- |
+| Custo por pessoa (patronal, pró-labore, provisões, VT, salário-família fora), grupos, totais, status do link, migration e rotas do portal | `tests/erp-costs-portal.test.mts` |
+| Rota pública do portal com hash, escopo e limite de tentativas | `tests/permission-matrix.test.mts` |
+
 ---
 
 ## 5. Agentes
