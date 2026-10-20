@@ -3,6 +3,7 @@ import { getWorkspaceContext, prepareAuditEvent, recordActivity } from "@/lib/fi
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { log } from "@/lib/observability";
+import { preparePortfolioAssignment } from "@/lib/portfolio-assignment";
 import { loadDemandTarget, parseTeamsConfig } from "@/lib/teams-integration";
 import {
   applyCorrections, assertComplete, confirmedTaskDraft, presentSuggestion, type SuggestionRow,
@@ -94,9 +95,14 @@ export async function POST(request: Request, { params }: Params) {
       target.companyId, target.companyName, draft.processType, target.listId, auth.user.email,
     ).run();
 
-    await d1.batch(draft.checklist.map((item, index) => d1.prepare(
-      "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)",
-    ).bind(crypto.randomUUID(), workspace.id, cardId, item, (index + 1) * 1000)));
+    // Confirmar a sugestão não escolhe responsável: quem responde pela empresa na carteira.
+    const portfolio = await preparePortfolioAssignment(d1, { workspaceId: workspace.id, cardId, companyId: target.companyId });
+    await d1.batch([
+      ...draft.checklist.map((item, index) => d1.prepare(
+        "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)",
+      ).bind(crypto.randomUUID(), workspace.id, cardId, item, (index + 1) * 1000)),
+      ...portfolio.statements,
+    ]);
 
     await d1.prepare(
       `UPDATE fdp_movement_suggestions

@@ -5,9 +5,11 @@ import { Check, FileSpreadsheet, LoaderCircle, Upload, X } from "lucide-react";
 import type { Company } from "./registrations.types";
 import styles from "./registrations.module.css";
 
-type Classification = "new" | "changed" | "unchanged" | "conflict";
+type Classification = "new" | "changed" | "unchanged" | "conflict" | "ignored";
 type Preview = {
   summary: Record<Classification, number>;
+  /** Preenchido quando há linhas de empresa "sem funcionários" na carteira do DP. */
+  ignoredReason?: string;
   items: Array<{
     externalId: string;
     registrationNumber: string;
@@ -24,6 +26,7 @@ const labels: Record<Classification, string> = {
   changed: "Atualizados",
   unchanged: "Sem alteração",
   conflict: "Conflitos",
+  ignored: "Ignorados",
 };
 
 async function send(file: File, companyId: string, action: "preview" | "import") {
@@ -80,8 +83,8 @@ export function SankhyaImportDialog({ companies, initialCompanyId, onClose, onIm
         <button className={styles.secondaryButton} disabled={!file || !companyId || Boolean(busy)}>{busy === "preview" ? <LoaderCircle className={styles.spin} /> : <FileSpreadsheet />} Analisar e comparar</button>
       </form>
       {preview && <div className={styles.importPreview}>
-        <div className={styles.importSummary}>{(["new", "changed", "unchanged", "conflict"] as Classification[]).map((item) => <article key={item} data-status={item}><strong>{preview.summary[item]}</strong><span>{labels[item]}</span></article>)}</div>
-        <div className={styles.importGuidance}><Check /><p><strong>Nenhuma alteração foi gravada ainda.</strong><span>Novos serão cadastrados, alterados serão sincronizados e conflitos serão ignorados para revisão.</span></p></div>
+        <div className={styles.importSummary}>{(["new", "changed", "unchanged", "conflict", ...(preview.summary.ignored ? ["ignored"] : [])] as Classification[]).map((item) => <article key={item} data-status={item}><strong>{preview.summary[item]}</strong><span>{labels[item]}</span></article>)}</div>
+        <div className={styles.importGuidance}><Check /><p><strong>Nenhuma alteração foi gravada ainda.</strong><span>Novos serão cadastrados, alterados serão sincronizados e conflitos serão ignorados para revisão.{preview.ignoredReason ? ` ${preview.ignoredReason}` : ""}</span></p></div>
         <div className={styles.importTableWrap}><table className={styles.importTable}><thead><tr><th>Colaborador</th><th>Matrícula</th><th>CPF</th><th>Admissão</th><th>Resultado</th></tr></thead><tbody>{preview.items.map((item) => <tr key={item.externalId}><td><strong>{item.fullName}</strong><small>Sankhya {item.externalId}</small></td><td>{item.registrationNumber}</td><td>{item.cpfLast4 ? `•••-${item.cpfLast4}` : "Não informado"}</td><td>{item.admissionDate}</td><td><span className={styles.importStatus} data-status={item.classification}>{labels[item.classification]}</span></td></tr>)}</tbody></table></div>
       </div>}
       <footer><span>{preview ? `${preview.items.length} registro(s) exibido(s) na prévia` : "A importação não apaga colaboradores existentes."}</span><button type="button" className={styles.secondaryButton} onClick={onClose} disabled={Boolean(busy)}>Cancelar</button><button type="button" className={styles.primaryButton} onClick={() => void importFile()} disabled={!preview || Boolean(busy) || (preview.summary.new + preview.summary.changed === 0)}>{busy === "import" ? <LoaderCircle className={styles.spin} /> : <Upload />} Importar selecionados</button></footer>

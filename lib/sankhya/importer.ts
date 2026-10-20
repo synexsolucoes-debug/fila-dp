@@ -7,6 +7,7 @@ import { prepareHistoryChange } from "../employee-history-service.ts";
 import { CHANGE_PROPOSAL_CONFIDENCE, decideSankhyaChange, proposedActionFor, type EmployeeChangeProposal } from "./change-policy.ts";
 import { normalizeSankhyaEmployee, normalizedEmployeeHash, persistedSankhyaEmployee } from "./normalization.ts";
 import type { SankhyaRawData, VinculatoNormalizedEmployee } from "./types.ts";
+import { SANKHYA_SKIPPED_NO_EMPLOYEES, skipsSankhyaSync } from "../portfolio.ts";
 
 type Database = ReturnType<typeof getD1>;
 type Row = Record<string, unknown>;
@@ -75,6 +76,23 @@ export async function importSankhyaEmployees(d1: Database, input: {
      colaborador incerto, e nenhuma escrita no domínio. */
   const propostas: EmployeeChangeProposal[] = [];
   const totals = { found: input.records.length, imported: 0, created: 0, updated: 0, unchanged: 0, ignored: 0, failed: 0, proposed: 0 };
+  const company = await d1.prepare("SELECT dp_status FROM fdp_companies WHERE workspace_id = ? AND id = ?")
+    .bind(input.workspaceId, input.companyId).first<{ dp_status: string }>();
+  if (skipsSankhyaSync(company?.dp_status)) {
+    /* Nada é gravado no domínio: cada registro vira item ignorado, com o
+       motivo, para a execução mostrar por que não importou nada. */
+    for (let index = 0; index < input.records.length; index += 1) {
+      const { normalized } = normalizeSankhyaEmployee(input.records[index]);
+      await d1.prepare(`INSERT INTO fdp_integration_sync_items
+        (id, workspace_id, integration_id, run_id, item_key, external_id, status, payload_hash, target_type, metadata_json, processed_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'skipped', ?, 'employee', ?::jsonb, CURRENT_TIMESTAMP)`)
+        .bind(crypto.randomUUID(), input.workspaceId, input.integrationId, input.runId,
+          `${String(index + 1).padStart(6, "0")}:${normalized.externalEmployeeId || "invalid"}`, normalized.externalEmployeeId,
+          normalizedEmployeeHash(normalized), JSON.stringify({ reason: SANKHYA_SKIPPED_NO_EMPLOYEES })).run();
+    }
+    totals.ignored = input.records.length;
+    return totals;
+  }
   for (let index = 0; index < input.records.length; index += 1) {
     const { normalized, errors } = normalizeSankhyaEmployee(input.records[index]);
     const itemId = crypto.randomUUID();

@@ -1,0 +1,74 @@
+/* Carteira do DP. Só tokens: a catraca de cor crua (tests/design-tokens) começa em zero aqui. */
+.portfolio { display: grid; gap: 16px; }
+
+.notice {
+  margin: 0; padding: 10px 14px; border-radius: var(--ui-radius-md);
+  background: var(--ui-state-ok-bg); color: var(--ui-state-ok-text); font-size: 14px;
+}
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.metrics article {
+  display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md); background: var(--ui-surface);
+}
+.metrics article span { color: var(--ui-text-muted); font-size: 13px; }
+.metrics article strong { font-size: 24px; color: var(--ui-text); }
+.metrics article[data-tone="warn"] { background: var(--ui-state-warn-bg); border-color: transparent; }
+.metrics article[data-tone="warn"] strong, .metrics article[data-tone="warn"] span { color: var(--ui-state-warn-text); }
+
+.card { border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-surface); overflow: hidden; }
+.cardHeader {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 16px; border-bottom: 1px solid var(--ui-border);
+}
+.cardHeader h3 { margin: 0; font-size: 16px; color: var(--ui-text); }
+.cardHeader p { margin: 2px 0 0; font-size: 13px; color: var(--ui-text-muted); }
+
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th {
+  text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 600;
+  color: var(--ui-text-muted); background: var(--ui-surface-muted); white-space: nowrap;
+}
+.table td { padding: 10px 12px; border-top: 1px solid var(--ui-border); vertical-align: top; color: var(--ui-text); }
+.table td small { display: block; margin-top: 2px; font-size: 12px; color: var(--ui-text-muted); }
+.table select { min-width: 140px; max-width: 220px; }
+.number { text-align: right; font-variant-numeric: tabular-nums; }
+.table td.number small.warn, .warn { color: var(--ui-state-warn-text); }
+
+.absenceForm {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--ui-border);
+}
+.absenceForm label { display: grid; gap: 4px; font-size: 13px; color: var(--ui-text-muted); }
+.absenceForm .grow { flex: 1 1 200px; }
+
+.absences { list-style: none; margin: 0; padding: 0; }
+.absences li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 16px; border-top: 1px solid var(--ui-border);
+}
+.absences li:first-child { border-top: 0; }
+.absences li > div:first-child { display: grid; gap: 2px; }
+.absences li span { font-size: 13px; color: var(--ui-text-muted); }
+.absenceActions { display: flex; gap: 8px; align-items: center; }
+
+.badge {
+  justify-self: start; padding: 2px 8px; border-radius: 999px; font-size: 12px;
+  background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text);
+}
+
+.primaryButton, .ghostButton, .linkButton {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px;
+  border-radius: var(--ui-radius-sm); font-size: 14px; cursor: pointer;
+}
+.primaryButton { border: 0; background: var(--ui-accent); color: var(--ui-on-accent); }
+.ghostButton { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text); }
+.linkButton { border: 0; background: transparent; color: var(--ui-accent-text); }
+.primaryButton:disabled, .ghostButton:disabled, .linkButton:disabled { opacity: 0.6; cursor: not-allowed; }
+.ghostButton svg { width: 16px; height: 16px; }
+
+@media (max-width: 640px) {
+  .cardHeader { flex-direction: column; align-items: flex-start; }
+  .absenceForm label, .absenceForm button { flex: 1 1 100%; }
+}

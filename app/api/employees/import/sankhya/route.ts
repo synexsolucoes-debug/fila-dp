@@ -6,6 +6,7 @@ import { prepareHistoryChange } from "@/lib/employee-history-service";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText, protectCpf } from "@/lib/registrations";
 import { readSankhyaEmployeeWorkbook } from "@/lib/sankhya-xlsx";
+import { SANKHYA_SKIPPED_NO_EMPLOYEES } from "@/lib/portfolio";
 
 type Existing = Record<string, unknown>;
 
@@ -23,6 +24,13 @@ export async function POST(request: Request) {
     requireCapability(workspace, "employees.manage");
     await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const records = await readSankhyaEmployeeWorkbook(await file.arrayBuffer());
+    /* Carteira do DP: linha de empresa `sem_funcionarios` não entra — nem a da
+       empresa escolhida, nem a de outro CODEMP que venha na mesma planilha. */
+    const skippedCompanies = await d1.prepare(`SELECT id, external_code FROM fdp_companies
+      WHERE workspace_id = ? AND dp_status = 'sem_funcionarios'`).bind(workspace.id).all<{ id: string; external_code: string }>();
+    const skippedCodes = new Set(skippedCompanies.results.map((row) => String(row.external_code)).filter(Boolean));
+    const selectedSkipped = skippedCompanies.results.some((row) => String(row.id) === companyId);
+    const skipsRecord = (companyCode: string) => selectedSkipped || skippedCodes.has(companyCode);
     const existing = await d1.prepare(`SELECT id, company_id, registration_number, full_name, cpf_hash, cpf_last4, email, phone,
       birth_date, admission_date, termination_date, employment_status, external_id FROM fdp_employees WHERE workspace_id = ?`)
       .bind(workspace.id).all<Existing>();
@@ -31,6 +39,7 @@ export async function POST(request: Request) {
     const byExternalId = new Map(existing.results.filter((row) => row.company_id === companyId && row.external_id).map((row) => [String(row.external_id), row]));
     const items = records.map((record) => {
       const cpf = protectCpf(record.cpf);
+      if (skipsRecord(record.companyCode)) return { record, cpf, match: null, classification: "ignored" as const };
       const registrationMatch = byRegistration.get(record.registrationNumber);
       const cpfMatch = cpf.cpfHash ? byCpf.get(cpf.cpfHash) : undefined;
       const externalMatch = byExternalId.get(record.externalId);
@@ -51,14 +60,16 @@ export async function POST(request: Request) {
       return { record, cpf, match, classification: changed ? "changed" as const : "unchanged" as const };
     });
     if (action === "preview") return Response.json({
-      summary: Object.fromEntries(["new", "changed", "unchanged", "conflict"].map((key) => [key, items.filter((item) => item.classification === key).length])),
+      summary: Object.fromEntries(["new", "changed", "unchanged", "conflict", "ignored"].map((key) => [key, items.filter((item) => item.classification === key).length])),
+      ignoredReason: items.some((item) => item.classification === "ignored") ? SANKHYA_SKIPPED_NO_EMPLOYEES : "",
       items: items.slice(0, 500).map(({ record, classification }) => ({ externalId: record.externalId, registrationNumber: record.registrationNumber,
         fullName: record.fullName, cpfLast4: record.cpf.slice(-4), admissionDate: record.admissionDate, terminationDate: record.terminationDate, classification })),
     });
 
     const statements: D1PreparedStatement[] = [];
-    let created = 0; let updated = 0; let unchanged = 0; let conflicts = 0;
+    let created = 0; let updated = 0; let unchanged = 0; let conflicts = 0; let ignored = 0;
     for (const item of items) {
+      if (item.classification === "ignored") { ignored += 1; continue; }
       if (item.classification === "conflict") { conflicts += 1; continue; }
       if (item.classification === "unchanged") { unchanged += 1; continue; }
       const status = item.record.terminationDate ? "terminated" : "active";
@@ -91,10 +102,10 @@ export async function POST(request: Request) {
     }
     statements.push(prepareAuditEvent({ workspaceId: workspace.id, actorUserId: user.id, actorEmail: auth.user.email,
       action: "employees.sankhya_imported", entityType: "employee_import", entityId: crypto.randomUUID(),
-      after: { companyId, fileName: file.name, total: records.length, created, updated, unchanged, conflicts },
+      after: { companyId, fileName: file.name, total: records.length, created, updated, unchanged, conflicts, ignored },
       requestId: request.headers.get("x-fila-dp-request-id") }));
     await d1.batch(statements);
-    return Response.json({ created, updated, unchanged, conflicts });
+    return Response.json({ created, updated, unchanged, conflicts, ignored });
   } catch (error) {
     return apiError(error instanceof Error && !(error instanceof ApiError) ? ApiError.badRequest(error.message, "SANKHYA_IMPORT_INVALID") : error);
   }

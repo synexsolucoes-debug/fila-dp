@@ -92,7 +92,12 @@ export type WorkItemSource =
   | "cat_pending"
   | "position_risk_exam_missing";
 
-export type WorkItemScope = "mine" | "team";
+/**
+ * `unassigned` é a fila "Sem responsável" da carteira do DP: demanda que
+ * nasceu sem titular na carteira (empresa sem carteira, ou titular e backup
+ * ausentes). Só fontes com `unassignedCondition` entram nela.
+ */
+export type WorkItemScope = "mine" | "team" | "unassigned";
 
 /**
  * Fonte de trabalho.
@@ -120,6 +125,8 @@ export type WorkItemSourceDefinition = {
   mineCondition: string;
   /** Quantos parâmetros `?` a condição pessoal consome. */
   mineParameters: number;
+  /** Condição de "sem responsável"; ausente = a fonte não aparece nesse recorte. */
+  unassignedCondition?: string;
   sql: string;
 };
 
@@ -138,6 +145,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
     companyColumn: "c.company_id",
     mineCondition: "EXISTS (SELECT 1 FROM fdp_card_assignees ca WHERE ca.card_id = c.id AND ca.user_id = ?)",
     mineParameters: 1,
+    unassignedCondition: "NOT EXISTS (SELECT 1 FROM fdp_card_assignees ca WHERE ca.card_id = c.id)",
     sql: `SELECT 'card' AS source_type, c.id AS source_id, c.title, c.description,
         c.priority, c.company_id, COALESCE(NULLIF(co.trade_name, ''), co.legal_name, c.company) AS company_name,
         NULL::text AS employee_id, c.due_at, c.created_at, c.updated_at,
@@ -880,6 +888,8 @@ export function buildWorkItemQuery(input: {
   if (input.scope === "mine" && input.source.mineCondition) {
     sql = sql.replace("{{mine}}", `AND ${input.source.mineCondition}`);
     for (let index = 0; index < input.source.mineParameters; index += 1) parameters.push(input.userId);
+  } else if (input.scope === "unassigned") {
+    sql = sql.replace("{{mine}}", `AND ${input.source.unassignedCondition ?? "false"}`);
   } else {
     sql = sql.replace("{{mine}}", "");
   }

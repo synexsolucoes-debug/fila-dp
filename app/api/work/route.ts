@@ -48,7 +48,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const parameter = (name: string) => (url.searchParams.get(name) ?? "").trim().slice(0, 120);
 
-    const scope: WorkItemScope = parameter("escopo") === "equipe" ? "team" : "mine";
+    const scopeParameter = parameter("escopo");
+    const scope: WorkItemScope = scopeParameter === "equipe" ? "team" : scopeParameter === "sem-responsavel" ? "unassigned" : "mine";
     const limit = Math.max(1, Math.min(WORK_ITEM_MAX_PAGE, Number(url.searchParams.get("limite")) || WORK_ITEM_DEFAULT_PAGE));
     const sort = (workItemSorts.find((item) => item.key === parameter("ordem"))?.key ?? "urgency") as WorkItemSort;
     const group = (workItemGroups.find((item) => item.key === parameter("agrupar"))?.key ?? "") as WorkItemGroup;
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     await recordAdoption(d1, workspace.id, "work_center_opened");
 
     return Response.json({
-      scope: scope === "mine" ? "meu" : "equipe",
+      scope: scope === "mine" ? "meu" : scope === "team" ? "equipe" : "sem-responsavel",
       sort,
       group,
       items,

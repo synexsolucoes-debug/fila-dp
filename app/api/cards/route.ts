@@ -5,6 +5,7 @@ import { addBusinessDays, replaceCardRelations } from "@/lib/fila-dp-relations";
 import { workingDayMinutes } from "@/lib/fila-dp-sla";
 import { validCompetence } from "@/lib/operations";
 import { validateActiveAreaIds } from "@/lib/areas";
+import { preparePortfolioAssignment } from "@/lib/portfolio-assignment";
 
 /** Página leve de demandas para telas que não podem carregar o snapshot inteiro. */
 export async function GET(request: Request) {
@@ -136,6 +137,10 @@ export async function POST(request: Request) {
     const requesterAreaId = text(body.requesterAreaId, 120) || null;
     const responsibleAreaId = text(body.responsibleAreaId, 120) || null;
     await validateActiveAreaIds(d1, workspace.id, [requesterAreaId, responsibleAreaId]);
+    // Escolha explícita vence; sem ela, quem responde pela empresa na carteira.
+    const portfolio = hasAssignees
+      ? { statements: [], resolution: null }
+      : await preparePortfolioAssignment(d1, { workspaceId: workspace.id, cardId, companyId });
 
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
@@ -169,13 +174,16 @@ export async function POST(request: Request) {
         .bind(crypto.randomUUID(), workspace.id, cardId, item, (index + 1) * 1000)),
       d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?")
         .bind(targetBoard.id, user.id, workspace.id),
+      ...portfolio.statements,
     ]);
 
-    await replaceCardRelations(d1, workspace.id, cardId, body);
+    // Uma lista vazia de responsáveis no corpo não apaga a atribuição da carteira.
+    const relations = portfolio.statements.length ? { ...body, assigneeIds: undefined } : body;
+    await replaceCardRelations(d1, workspace.id, cardId, relations);
     await runAutomations(workspace.id, targetBoard.id, cardId, "card.created", auth.user.email, { processType, priority });
-    if (hasAssignees) await runAutomations(workspace.id, targetBoard.id, cardId, "assignee.added", auth.user.email, { assignee: "present" });
+    if (hasAssignees || portfolio.resolution?.userId) await runAutomations(workspace.id, targetBoard.id, cardId, "assignee.added", auth.user.email, { assignee: "present" });
 
-    await recordActivity(workspace.id, cardId, auth.user.email, "card.created", { title, boardId: targetBoard.id, listKind: list.kind, templateId: template?.id ?? null, competence, legalDueAt, requesterAreaId, responsibleAreaId });
+    await recordActivity(workspace.id, cardId, auth.user.email, "card.created", { title, boardId: targetBoard.id, listKind: list.kind, templateId: template?.id ?? null, competence, legalDueAt, requesterAreaId, responsibleAreaId, assignedBy: hasAssignees ? "explicit" : portfolio.resolution?.via ?? "none" });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
     return apiError(error);

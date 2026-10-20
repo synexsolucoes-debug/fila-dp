@@ -23,6 +23,7 @@ import { ApiError } from "./api-errors.ts";
 import { openCredentials } from "./integrations.ts";
 import { parseWorkspaceWebhookSecrets } from "./integration-security.ts";
 import { log } from "./observability.ts";
+import { preparePortfolioAssignment } from "./portfolio-assignment.ts";
 import {
   interpretTeamsMessage, movementTaskDraft, MOVEMENT_PROCESS_TYPE, plainTextFromTeams,
   type MovementKind, type TeamsInterpretation, type TeamsMessageOrigin,
@@ -459,9 +460,14 @@ async function createMovementCard(d1: TeamsDatabase, input: {
     draft.processType, target.listId, "integracao:teams",
   ).run();
 
-  await d1.batch(draft.checklist.map((item, index) => d1.prepare(
-    "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)",
-  ).bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)));
+  // A mensagem do Teams não escolhe responsável: quem responde pela empresa na carteira.
+  const portfolio = await preparePortfolioAssignment(d1, { workspaceId: input.workspaceId, cardId, companyId: target.companyId });
+  await d1.batch([
+    ...draft.checklist.map((item, index) => d1.prepare(
+      "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)",
+    ).bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)),
+    ...portfolio.statements,
+  ]);
 
   return cardId;
 }
