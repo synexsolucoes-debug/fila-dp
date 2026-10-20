@@ -1715,7 +1715,7 @@ formal. A divisão de empresas morava numa planilha, e demanda nova nascia sem
 dono até alguém lembrar de quem era aquela empresa. A carteira transforma essa
 divisão em dado.
 
-**Modelo (migration 0113).** `fdp_company_portfolio` guarda titular e backup de
+**Modelo (migration 0114).** `fdp_company_portfolio` guarda titular e backup de
 cada empresa com vigência; uma vigência aberta por empresa (índice único
 parcial) e um trigger que só aceita encerrar a vigência aberta — trocar o
 titular encerra a linha e abre outra, nunca reescreve. `fdp_member_absences`

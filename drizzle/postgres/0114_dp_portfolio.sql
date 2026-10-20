@@ -9,7 +9,7 @@
 -- A vigência só cresce. Trocar o titular encerra a linha anterior e abre outra
 -- — "quem era o responsável em março?" continua tendo resposta. O trigger
 -- abaixo recusa reescrever uma vigência, e a aplicação não apaga nenhuma.
-SELECT pg_advisory_xact_lock(hashtext('0113_dp_portfolio'));
+SELECT pg_advisory_xact_lock(hashtext('0114_dp_portfolio'));
 --> statement-breakpoint
 
 -- Situação da empresa para o DP. `sem_funcionarios` existe por um caso real:

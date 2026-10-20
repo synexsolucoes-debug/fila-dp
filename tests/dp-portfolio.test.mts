@@ -128,7 +128,7 @@ test("situação do DP e a regra da sincronização", () => {
 });
 
 test("migração: carteira e ausência com RLS forçada, vigência aberta única e histórico que só cresce", async () => {
-  const sql = await read("drizzle/postgres/0113_dp_portfolio.sql");
+  const sql = await read("drizzle/postgres/0114_dp_portfolio.sql");
   for (const table of ["fdp_company_portfolio", "fdp_member_absences"]) {
     assert.match(sql, new RegExp(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`, "u"));
     assert.match(sql, new RegExp(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`, "u"));
@@ -140,7 +140,7 @@ test("migração: carteira e ausência com RLS forçada, vigência aberta única
   assert.match(sql, /"cnpj_root" text\s+GENERATED ALWAYS AS/u);
   assert.match(sql, /'interno', 'a_internalizar', 'sem_funcionarios', 'terceirizado'/u);
   const journal = JSON.parse(await read("drizzle/postgres/meta/_journal.json")) as { entries: Array<{ tag: string }> };
-  assert.ok(journal.entries.some((entry) => entry.tag === "0113_dp_portfolio"));
+  assert.ok(journal.entries.some((entry) => entry.tag === "0114_dp_portfolio"));
 });
 
 test("toda criação de demanda do DP passa pela carteira quando ninguém escolheu o responsável", async () => {

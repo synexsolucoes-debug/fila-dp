@@ -120,7 +120,8 @@ export const expectedMigrations = [
   "0110_erp_dp_separation.sql",
   "0111_erp_dp_remuneration.sql",
   "0112_erp_dp_payroll_runs.sql",
-  "0113_dp_portfolio.sql",
+  "0113_payroll_movements.sql",
+  "0114_dp_portfolio.sql",
 ] as const;
 
 /** Última migration conhecida por esta versão. */

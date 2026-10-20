@@ -102,6 +102,7 @@ import { ErpDpView } from "./features/erp-dp";
 import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
+import { PayrollMovementsPanel } from "./features/payroll/PayrollMovementsPanel";
 import { DemandDeadlineView } from "./features/work/DemandViews";
 import {
   BoardIndicators, BoardToolbar, BulkBar, QueueBoard, TeamBoard,
@@ -4754,6 +4755,9 @@ function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric, onImport
       <section className="payroll-company-breakdown"><header><div><strong>Folha por empresa</strong><span>{selectedMetrics.length} lançamento(s) em {selectedPeriod}</span></div></header>{selectedMetrics.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Sem lançamentos nesta competência</strong><p>Registre os dados da folha para gerar os indicadores automaticamente.</p></div>}{selectedMetrics.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.headcount} colaboradores · {metric.admissions} admissões · {metric.terminations} desligamentos · líquido {money(metric.netPay)}</small></div><span>{money(metric.payrollCost)}</span><b>{metric.source === "sankhya" ? "Sankhya" : metric.source === "pdf_import" ? "PDF" : "Manual"}</b></article>)}</section>
     </div>
     {importOpen && <PayrollImportDialog companies={companies} importing={busy} onClose={() => setImportOpen(false)} onImport={onImportPayroll} onImported={(period) => { setImportOpen(false); setSelectedPeriod(period); }} />}
+    {/* Movimentos para o Sankhya: lança os eventos variáveis por colaborador e
+        gera a planilha do Importador de Movimentos (docs/movimentos-para-o-sankhya.md). */}
+    <PayrollMovementsPanel companies={companies} canEdit={canEdit} />
     {canEdit && <section className="payroll-entry-panel"><header><div><span>NOVO LANÇAMENTO</span><h2>Registrar dados da folha</h2><p>Informe os valores já apurados na folha ou ERP. O sistema consolida custos e indicadores, sem aplicar alíquotas legais por conta própria.</p></div><b>Total calculado: {money(formTotal)}</b></header><form onSubmit={(event) => void submit(event)}>
       <label>Empresa<select value={form.companyId} required disabled={busy} onChange={(event) => setForm({ ...form, companyId: event.target.value })}><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.tradeName || company.legalName}</option>)}</select></label>
       <label>Competência<input type="month" value={form.period} required disabled={busy} onChange={(event) => setForm({ ...form, period: event.target.value })} /></label>
