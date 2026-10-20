@@ -42,6 +42,11 @@
 }
 .absenceForm label { display: grid; gap: 4px; font-size: 13px; color: var(--ui-text-muted); }
 .absenceForm .grow { flex: 1 1 200px; }
+/* Alvo de toque (WCAG 2.2 AA, 2.5.8): o input nativo tem 20px de altura. */
+.absenceForm input, .absenceForm select {
+  min-height: 36px; padding: 6px 10px; font: inherit; color: var(--ui-text);
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface);
+}
 
 .absences { list-style: none; margin: 0; padding: 0; }
 .absences li {
