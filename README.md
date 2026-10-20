@@ -79,6 +79,15 @@ Dois módulos dedicados respondem às perguntas financeiras da operação. Docum
 - O complemento em cartão de benefício é controle assistido com exportação: **não há integração oficial implementada** com a plataforma.
 - Ensaio contra PostgreSQL real: `FDP_PAYMENTS_TEST_DATABASE_URL=... FDP_ALLOW_EPHEMERAL_SCHEMA_TEST=true npm run db:rehearse-payments`.
 
+## Movimentos para o Sankhya
+
+A tela **Folha** lança os eventos variáveis da competência (horas extras, comissões, descontos) por colaborador e gera a planilha do Importador de Movimentos do Sankhya. Documentação completa em `docs/movimentos-para-o-sankhya.md`.
+
+- O catálogo de eventos vem da query da TFPEVE do Sankhya; TIPEVENTO e UNIDADE saem do catálogo, nunca de escolha na tela.
+- Evento de valor vai em VLRMOV; horas, dias e quantidade vão em INDICE. Trocar um pelo outro é bloqueio.
+- SEQUENCIA é calculada: 0 no primeiro lançamento do colaborador no evento, 1, 2… nos seguintes.
+- Qualquer problema bloqueia a planilha inteira e volta nomeado. Exportar marca os lançamentos e fica na auditoria; não grava nada no Sankhya.
+
 ## Conferência de ponto
 
 O módulo de Ponto confere marcações e prepara o envio dos eventos de hora para a folha. Documentação completa em `docs/conferencia-de-ponto.md`.

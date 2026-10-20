@@ -4593,3 +4593,64 @@ export const payrollResults = pgTable("fdp_payroll_results", {
   check("fdp_payroll_results_totals_check", sql`${table.netCents} = ${table.earningsCents} - ${table.deductionsCents}`),
   check("fdp_payroll_results_lines_check", sql`jsonb_typeof(${table.linesJson}) = 'array'`),
 ]);
+
+/**
+ * Catálogo de eventos da folha (TFPEVE do Sankhya), importado da query.
+ * O lançamento de movimentos só aceita evento que está aqui: código, unidade e
+ * tipo vão para a planilha exatamente como o Sankhya os define.
+ */
+export const payrollEventCatalog = pgTable("fdp_payroll_event_catalog", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  code: integer("code").notNull(),
+  description: text("description").notNull(),
+  unit: text("unit").notNull(),
+  eventType: integer("event_type").notNull(),
+  status: text("status").notNull().default("active"),
+  importedBy: text("imported_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_payroll_event_catalog_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_payroll_event_catalog_code_uq").on(table.workspaceId, table.code),
+  foreignKey({ name: "fdp_payroll_event_catalog_importer_fk", columns: [table.workspaceId, table.importedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_payroll_event_catalog_code_check", sql`${table.code} > 0`),
+  check("fdp_payroll_event_catalog_unit_check", sql`${table.unit} IN ('V', 'H', 'D', 'Q')`),
+  check("fdp_payroll_event_catalog_type_check", sql`${table.eventType} IN (-1, 0, 1)`),
+  check("fdp_payroll_event_catalog_status_check", sql`${table.status} IN ('active', 'inactive')`),
+  check("fdp_payroll_event_catalog_description_check", sql`length(${table.description}) > 0`),
+]);
+
+/**
+ * Movimento variável da folha lançado no Vinculato para exportar ao Sankhya.
+ * Valor em centavos; índice (horas, dias, quantidade) em numeric. Exportar só
+ * marca quando e por quem — a folha continua sendo calculada no Sankhya.
+ */
+export const payrollMovementEntries = pgTable("fdp_payroll_movement_entries", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  competence: text("competence").notNull(),
+  eventCode: integer("event_code").notNull(),
+  indexValue: numeric("index_value", { precision: 14, scale: 4, mode: "number" }).notNull().default(0),
+  amountCents: bigint("amount_cents", { mode: "number" }).notNull().default(0),
+  note: text("note").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  exportedAt: timestamp("exported_at", { withTimezone: true, mode: "string" }),
+  exportedBy: text("exported_by"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_payroll_movement_entries_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_payroll_movement_entries_company_competence_idx").on(table.workspaceId, table.companyId, table.competence),
+  index("fdp_payroll_movement_entries_employee_idx").on(table.workspaceId, table.employeeId, table.competence),
+  foreignKey({ name: "fdp_payroll_movement_entries_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_payroll_movement_entries_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
+  foreignKey({ name: "fdp_payroll_movement_entries_author_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_payroll_movement_entries_exporter_fk", columns: [table.workspaceId, table.exportedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_payroll_movement_entries_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_payroll_movement_entries_event_check", sql`${table.eventCode} > 0`),
+  check("fdp_payroll_movement_entries_values_check", sql`${table.indexValue} >= 0 AND ${table.amountCents} >= 0 AND (${table.indexValue} > 0 OR ${table.amountCents} > 0)`),
+  check("fdp_payroll_movement_entries_exported_check", sql`(${table.exportedAt} IS NULL) = (${table.exportedBy} IS NULL)`),
+]);
