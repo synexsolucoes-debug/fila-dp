@@ -349,7 +349,9 @@ test("a demanda do DP nasce no mesmo lote da devolução que a motivou", async (
   // quadro sem caso por trás — alguém do DP analisando um desconto inexistente.
   assert.match(servico, /export async function prepareDiscountDemand/u);
   assert.doesNotMatch(servico, /INSERT INTO fdp_cards[\s\S]{0,600}\.run\(\)/u);
-  assert.match(servico, /statements: \[demand\.statement, statement, movement\]/u);
+  // O responsável (analista escolhido ou carteira do DP) entra logo depois do
+  // cartão, no mesmo lote.
+  assert.match(servico, /statements: \[demand\.statement, \.\.\.assignment, statement, movement\]/u);
 
   const devolucao = await readFile(new URL("../app/api/epi/returns/route.ts", import.meta.url), "utf8");
   assert.match(devolucao, /statements\.push\(\.\.\.analysis\.statements\)/u);

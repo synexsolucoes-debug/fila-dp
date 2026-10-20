@@ -12,6 +12,7 @@ import { ArrowLeftRight,
   Bell,
   Blocks,
   Bot,
+  Briefcase,
   Building2,
   Cable,
   HandCoins,
@@ -68,6 +69,7 @@ import { ArrowLeftRight,
 } from "lucide-react";
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { HistoryView } from "./features/history/HistoryView";
+import { PortfolioView } from "./features/portfolio";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
@@ -116,7 +118,7 @@ import {
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "payrollLedger" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "payroll" | "indicators" | "history";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "payrollLedger" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "portfolio" | "payroll" | "indicators" | "history";
 /* Os eixos do quadro. `team` e `queue` chegaram com a Operação DP: o primeiro
    é o quadro por responsável — o modo principal —, o segundo é a fila de uma
    pessoa separada por urgência. Os quatro antigos continuam porque cada um
@@ -442,6 +444,11 @@ const viewCatalog: Record<View, ViewEntry> = {
     label: "Triagem", icon: ShieldQuestion, module: "integrations", hiddenFor: ["guest"], ownHeader: true,
     eyebrow: "CENTRAL DE TRIAGEM", title: "O que o sistema não teve certeza",
     description: "Entradas que a automação não conseguiu classificar sozinha e aguardam decisão humana.",
+  },
+  portfolio: {
+    label: "Carteira", icon: Briefcase, module: "registrations", hiddenFor: ["guest"],
+    eyebrow: "OPERAÇÃO DO DP", title: "Carteira",
+    description: "Quem responde por cada empresa: titular, backup, ausências da equipe e demandas sem responsável.",
   },
   registrations: {
     label: "Cadastros", icon: Users, module: "registrations", hiddenFor: ["guest"],
@@ -3450,6 +3457,8 @@ export function WorkspaceApp({
           {view === "timeTracking" && <TimeTrackingView role={snapshot.workspace.role} />}
 
           {view === "epi" && <EpiControlView role={snapshot.workspace.role} />}
+
+          {view === "portfolio" && <PortfolioView canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")} />}
 
           {view === "safety" && <WorkAccidentDashboardView />}
           {view === "payrollLedger" && (

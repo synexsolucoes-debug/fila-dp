@@ -38,7 +38,7 @@ import styles from "./work.module.css";
  */
 
 type Filters = {
-  scope: "meu" | "equipe";
+  scope: "meu" | "equipe" | "sem-responsavel";
   sort: string;
   group: string;
   due: string;
@@ -64,7 +64,7 @@ const PRIORITIES = [
 
 function buildQuery(filters: Filters, cursor: string) {
   const search = new URLSearchParams();
-  search.set("escopo", filters.scope === "equipe" ? "equipe" : "meu");
+  search.set("escopo", filters.scope);
   if (filters.sort) search.set("ordem", filters.sort);
   if (filters.group) search.set("agrupar", filters.group);
   if (filters.due) search.set("prazo", filters.due);
@@ -200,6 +200,7 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
       <div className={styles.scopeToggle} role="group" aria-label="Escopo">
         <button type="button" aria-pressed={filters.scope === "meu"} onClick={() => update("scope", "meu")}>Meus itens</button>
         <button type="button" aria-pressed={filters.scope === "equipe"} onClick={() => update("scope", "equipe")}>Equipe</button>
+        <button type="button" aria-pressed={filters.scope === "sem-responsavel"} onClick={() => update("scope", "sem-responsavel")}>Sem responsável</button>
       </div>
 
       <label>
@@ -266,7 +267,9 @@ export function WorkCenterView({ onOpenCompanyFilter, onNavigate, companyId }: {
         title="Nenhum item exige sua ação agora"
         text={filters.scope === "meu"
           ? "Nada está esperando por você. Troque para Equipe para ver o que está com o time."
-          : "A equipe está sem itens em aberto com os filtros escolhidos."}
+          : filters.scope === "sem-responsavel"
+            ? "Toda demanda em aberto tem responsável. As que nascem sem titular na carteira aparecem aqui."
+            : "A equipe está sem itens em aberto com os filtros escolhidos."}
       />
       : grouped
         ? grouped.map((group) => <div key={group.key}>

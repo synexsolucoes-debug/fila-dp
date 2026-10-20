@@ -1,10 +1,12 @@
 import { ApiError, apiError, getApiUser } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
+import { cleanText } from "@/lib/clean-text";
+import { preparePortfolioAssignment } from "@/lib/portfolio-assignment";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
   try {
@@ -20,11 +22,23 @@ export async function POST(_request: Request, context: RouteContext) {
     if (!list) throw ApiError.notFound("Coluna inicial não encontrada.", "LIST_NOT_FOUND");
     const position = await d1.prepare("SELECT COALESCE(MAX(position), 0) AS max_position FROM fdp_cards WHERE list_id = ? AND archived = 0").bind(list.id).first<{ max_position: number }>();
     const cardId = crypto.randomUUID();
+    // Empresa opcional na conversão: com ela, a demanda nasce com quem responde
+    // pela empresa na carteira; sem ela, fica em "Sem responsável".
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const companyId = cleanText(body.companyId, 120) || null;
+    const company = companyId
+      ? await d1.prepare("SELECT id, legal_name, trade_name FROM fdp_companies WHERE workspace_id = ? AND id = ? AND status = 'active'")
+        .bind(workspace.id, companyId).first<{ id: string; legal_name: string; trade_name: string }>()
+      : null;
+    if (companyId && !company) throw ApiError.badRequest("Empresa selecionada não encontrada.", "INBOX_COMPANY_NOT_FOUND");
+    const portfolio = await preparePortfolioAssignment(d1, { workspaceId: workspace.id, cardId, companyId });
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
-        (id, workspace_id, board_id, list_id, title, description, company, process_type, priority, assignee_name, sla_status, position, source_type, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'OUTROS', 'normal', '', 'safe', ?, ?, ?)`)
-        .bind(cardId, workspace.id, board.id, list.id, String(item.subject), String(item.body ?? ""), String(item.sender_name), Number(position?.max_position ?? 0) + 1000, String(item.channel), auth.user.email),
+        (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type, priority, assignee_name, sla_status, position, source_type, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'OUTROS', 'normal', '', 'safe', ?, ?, ?)`)
+        .bind(cardId, workspace.id, board.id, list.id, String(item.subject), String(item.body ?? ""), company?.id ?? null,
+          company ? company.trade_name || company.legal_name : String(item.sender_name), Number(position?.max_position ?? 0) + 1000, String(item.channel), auth.user.email),
+      ...portfolio.statements,
       d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, 'Analisar solicitação', 0, 1000)").bind(crypto.randomUUID(), workspace.id, cardId),
       d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, 'Executar atividade', 0, 2000)").bind(crypto.randomUUID(), workspace.id, cardId),
       d1.prepare("UPDATE fdp_workspace_inbox_items SET status = 'converted', converted_card_id = ? WHERE id = ? AND workspace_id = ?").bind(cardId, id, workspace.id),

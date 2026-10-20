@@ -1708,6 +1708,62 @@ folhas **fechadas** dos 12 meses anteriores.
 | --- | --- |
 | Entradas do ponto aprovado e em rascunho, parcelas, VT até 6%, VR, diferença retroativa, admissão no mês, quem fica de fora, média de variáveis, migration e permissões | `tests/erp-payroll-run.test.mts` |
 
+### 4.33 DP Operacional, Fase 1 — carteira e atribuição automática
+
+O DP opera dezenas de CNPJs com dois ou três analistas e nenhuma coordenação
+formal. A divisão de empresas morava numa planilha, e demanda nova nascia sem
+dono até alguém lembrar de quem era aquela empresa. A carteira transforma essa
+divisão em dado.
+
+**Modelo (migration 0114).** `fdp_company_portfolio` guarda titular e backup de
+cada empresa com vigência; uma vigência aberta por empresa (índice único
+parcial) e um trigger que só aceita encerrar a vigência aberta — trocar o
+titular encerra a linha e abre outra, nunca reescreve. `fdp_member_absences`
+guarda férias e folgas da equipe. `fdp_companies` ganha `dp_status`
+(`interno`, `a_internalizar`, `sem_funcionarios`, `terceirizado`) e as colunas
+geradas `cnpj_root` e `is_headquarters`, derivadas do CNPJ.
+
+**A regra (`lib/portfolio.ts`).** `responsavelPara(empresa, data)`: titular da
+vigência que cobre a data; se ausente, o backup; se os dois ausentes, ou sem
+carteira, ninguém — e a demanda aparece em Central de Trabalho › Sem
+responsável. Quem deixou de ser membro do grupo conta como ausente.
+
+**Escolha explícita vence.** Quem abre a demanda e escolhe o responsável, a
+etapa inicial do processo que nomeia um usuário (`USER`) e o analista escolhido
+no desconto de EPI não consultam a carteira. A carteira preenche o que ficou sem
+dono.
+
+**Onde entra.** Os nove caminhos que criam demanda do DP passam por
+`preparePortfolioAssignment` (`lib/portfolio-assignment.ts`), no mesmo lote da
+criação: formulário, instância de processo (manual e por evento), admissões
+Sólides/Tangerino, Teams, sugestão de movimentação, inbox (com empresa) e
+desconto de EPI. A investigação de acidente fica de fora de propósito: é do
+SESMT, e a carteira diz qual analista de DP responde pela empresa.
+
+**Troca de carteira.** Encerra a vigência e passa ao novo titular as demandas em
+aberto que estavam com o titular que sai; concluídas continuam com quem as
+concluiu. Ausência desvia só as demandas novas; o botão "Passar abertas para o
+backup" move as que já estavam com a pessoa. Tudo vai para a auditoria.
+
+**Sankhya.** O cadastro é único por CPF no grupo, e a 40 (Goianésia, matriz da
+raiz da 33) aparece no Sankhya com os mesmos funcionários da 33. Registro de
+empresa `sem_funcionarios` é ignorado pela sincronização e pela planilha, com o
+motivo no item.
+
+**Permissões.** `portfolio.read` (todos menos convidado) e `portfolio.manage`
+(administrador e analista), governadas pelo módulo Cadastros.
+
+**Semente.** `scripts/seed-dp-carteira.mjs --workspace <id> --seed opyt
+--pessoa Odete=<e-mail> --pessoa Rian=<e-mail>` aplica a carteira inicial
+(`scripts/seeds/opyt-carteira.mjs`). Idempotente: não reescreve carteira já
+existente. `--dry-run` simula.
+
+**Tela.** Operação DP › Carteira (`/painel/carteira`).
+
+| Verificação | Onde |
+| --- | --- |
+| `responsavelPara` (titular, backup, ambos ausentes, vigência, troca no mesmo dia), aceite 33 → Rian / Odete, migration, os nove caminhos de criação, Sankhya e o recorte Sem responsável | `tests/dp-portfolio.test.mts` |
+
 ---
 
 ## 5. Agentes

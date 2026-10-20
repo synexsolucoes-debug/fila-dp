@@ -9,6 +9,7 @@ import { workingDayMinutes } from "./fila-dp-sla";
 import { admissionIsComplete } from "./admissions";
 import { completeIntegrationEvent, recordIntegrationEvent } from "./integration-events";
 import { log } from "./observability";
+import { preparePortfolioAssignment } from "./portfolio-assignment";
 import { admissionTaskDraft as solidesTaskDraft, normalizeSolidesAdmission, solidesAdmissionsUrl, solidesAuthorization } from "./solides";
 import { admissionTaskDraft as tangerinoTaskDraft, normalizeTangerinoAdmission, tangerinoAuthorization, tangerinoEmployeesUrl, tangerinoErpReadiness, tangerinoRecords, tangerinoSkipReason } from "./tangerino";
 import {
@@ -449,9 +450,12 @@ async function insertAdmissionItem(d1: Database, input: ItemInput) {
     source: input.channel, eventId: event.event.id, cardId, processType: admissionProcessType,
   });
 
+  const portfolio = await preparePortfolioAssignment(d1, { workspaceId: input.workspaceId, cardId, companyId: context.companyId });
   await d1.batch([
     ...draft.checklist.map((item, index) => d1.prepare("INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)")
       .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)),
+    // Ninguém escolheu o responsável: quem responde pela empresa na carteira.
+    ...portfolio.statements,
     /* A demanda nasceu de uma leitura automática, e a linha do tempo dela
        precisa dizer isso (§45). Sem este registro, o histórico começava com a
        primeira ação humana e ninguém conseguia responder "de onde veio esta

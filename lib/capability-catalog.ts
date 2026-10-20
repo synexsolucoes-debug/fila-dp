@@ -149,6 +149,8 @@ export const capabilityCatalog: Record<Capability, CapabilityDescription> = {
   "ledger.reopen": { area: "operations", label: "Reabrir a conferência já encerrada, com justificativa" },
   "payroll.read": { area: "operations", label: "Ver salários e calcular folha, férias, 13º e rescisão no ERP DP" },
   "payroll.manage": { area: "operations", label: "Alterar a remuneração dos colaboradores no ERP DP" },
+  "portfolio.read": { area: "operations", label: "Ver a carteira do DP: titular e backup de cada empresa" },
+  "portfolio.manage": { area: "operations", label: "Trocar titular e backup das empresas e registrar ausências da equipe" },
 
   "integrations.status.read": { area: "platform", label: "Ver o estado das integrações" },
   "integrations.manage": { area: "platform", label: "Configurar conectores e credenciais" },

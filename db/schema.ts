@@ -69,9 +69,16 @@ export const companies = pgTable("fdp_companies", {
   state: text("state").notNull().default(""),
   country: text("country").notNull().default("Brasil"),
   status: text("status").notNull().default("active"),
+  /** Carteira do DP (0114): se a folha da empresa é operada aqui. */
+  dpStatus: text("dp_status").notNull().default("interno"),
+  /** Derivados do CNPJ, gerados pelo banco: raiz (8 dígitos) e matriz (ordem 0001). */
+  cnpjRoot: text("cnpj_root").generatedAlwaysAs(sql`CASE WHEN length(regexp_replace("tax_id", '[^0-9]', '', 'g')) = 14 THEN substr(regexp_replace("tax_id", '[^0-9]', '', 'g'), 1, 8) ELSE '' END`),
+  isHeadquarters: boolean("is_headquarters").generatedAlwaysAs(sql`length(regexp_replace("tax_id", '[^0-9]', '', 'g')) = 14 AND substr(regexp_replace("tax_id", '[^0-9]', '', 'g'), 9, 4) = '0001'`),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  check("fdp_companies_dp_status_check", sql`${table.dpStatus} IN ('interno', 'a_internalizar', 'sem_funcionarios', 'terceirizado')`),
+  index("fdp_companies_workspace_cnpj_root_idx").on(table.workspaceId, table.cnpjRoot),
   index("fdp_companies_workspace_name_idx").on(table.workspaceId, table.legalName),
   index("fdp_companies_workspace_tax_idx").on(table.workspaceId, table.taxId),
   index("fdp_companies_workspace_parent_idx").on(table.workspaceId, table.parentCompanyId),
@@ -4592,6 +4599,53 @@ export const payrollResults = pgTable("fdp_payroll_results", {
   check("fdp_payroll_results_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
   check("fdp_payroll_results_totals_check", sql`${table.netCents} = ${table.earningsCents} - ${table.deductionsCents}`),
   check("fdp_payroll_results_lines_check", sql`jsonb_typeof(${table.linesJson}) = 'array'`),
+]);
+
+/**
+ * Carteira do DP (0114): titular e backup de cada empresa, com vigência.
+ *
+ * Só cresce — trocar o titular encerra a linha e abre outra, e o trigger
+ * `fdp_company_portfolio_close_only` recusa reescrever uma vigência.
+ */
+export const companyPortfolio = pgTable("fdp_company_portfolio", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  holderUserId: text("holder_user_id").notNull().references(() => users.id),
+  backupUserId: text("backup_user_id").references(() => users.id),
+  validFrom: date("valid_from", { mode: "string" }).notNull(),
+  validTo: date("valid_to", { mode: "string" }),
+  createdBy: text("created_by").notNull(),
+  endedBy: text("ended_by"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true, mode: "string" }),
+}, (table) => [
+  uniqueIndex("fdp_company_portfolio_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_company_portfolio_open_uq").on(table.workspaceId, table.companyId).where(sql`${table.validTo} IS NULL`),
+  index("fdp_company_portfolio_company_period_idx").on(table.workspaceId, table.companyId, table.validFrom),
+  index("fdp_company_portfolio_holder_idx").on(table.workspaceId, table.holderUserId).where(sql`${table.validTo} IS NULL`),
+  foreignKey({ name: "fdp_company_portfolio_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  check("fdp_company_portfolio_backup_check", sql`${table.backupUserId} IS NULL OR ${table.backupUserId} <> ${table.holderUserId}`),
+  check("fdp_company_portfolio_period_check", sql`${table.validTo} IS NULL OR ${table.validTo} >= ${table.validFrom}`),
+  check("fdp_company_portfolio_ended_check", sql`(${table.validTo} IS NULL) = (${table.endedAt} IS NULL)`),
+]);
+
+/** Férias e folgas do analista (0114): na data, a demanda nova vai para o backup. */
+export const memberAbsences = pgTable("fdp_member_absences", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  startsOn: date("starts_on", { mode: "string" }).notNull(),
+  endsOn: date("ends_on", { mode: "string" }).notNull(),
+  reason: text("reason").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_member_absences_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_member_absences_user_period_idx").on(table.workspaceId, table.userId, table.startsOn, table.endsOn),
+  foreignKey({ name: "fdp_member_absences_member_fk", columns: [table.workspaceId, table.userId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }).onDelete("cascade"),
+  check("fdp_member_absences_period_check", sql`${table.endsOn} >= ${table.startsOn}`),
+  check("fdp_member_absences_reason_check", sql`length(${table.reason}) <= 200`),
 ]);
 
 /**

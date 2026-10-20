@@ -42,6 +42,7 @@ import {
   type BpmnGraph,
 } from "./bpmn-graph.ts";
 import { addBusinessDays } from "./fila-dp-relations.ts";
+import { prepareAssigneeStatements, preparePortfolioAssignment } from "./portfolio-assignment.ts";
 import { cleanText } from "./registrations.ts";
 import {
   describeCondition, parseConditionList, parseTransitionConditions, unmetConditions,
@@ -1158,6 +1159,16 @@ export async function prepareProcessInstance(d1: Database, input: StartInstanceI
       active: stage.bpmnElementId === initial.stepId,
     })),
   ];
+
+  /* Responsável da demanda: a etapa inicial que nomeia um usuário é escolha
+     explícita e vence; sem ela, quem responde pela empresa na carteira. */
+  const explicitUserId = initial.config?.responsibilityMode === "USER" ? initial.config.responsibleUserId : "";
+  if (explicitUserId) {
+    statements.push(...prepareAssigneeStatements(d1, input.workspaceId, cardId, explicitUserId));
+  } else {
+    const portfolio = await preparePortfolioAssignment(d1, { workspaceId: input.workspaceId, cardId, companyId: input.companyId });
+    statements.push(...portfolio.statements);
+  }
 
   const result: StartedInstance = {
     cardId, stepId: initial.stepId, stepLabel: initial.label,

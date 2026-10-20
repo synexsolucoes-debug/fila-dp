@@ -160,6 +160,11 @@ export type AccidentInvestigationDemandInput = {
  * (DP) —, aqui as duas pontas são a mesma área: quem apura o acidente é quem
  * investiga. Por isso `safety.investigation` resolve as duas.
  *
+ * Fora da carteira do DP de propósito: a carteira diz qual analista de DP
+ * responde por cada empresa, e a investigação é do SESMT. Atribuí-la pela
+ * carteira poria um acidente na fila de quem não investiga acidente; a área
+ * `safety.investigation` é a resposta de "quem faz".
+ *
  * Quem chama decide quando: não há gatilho automático por gravidade. É o
  * SESMT, no momento em que apura, que decide se este acidente precisa de
  * investigação — uma regra automática estaria adivinhando o que só uma pessoa
