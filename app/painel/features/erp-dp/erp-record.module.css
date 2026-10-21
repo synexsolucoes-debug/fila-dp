@@ -64,6 +64,12 @@
 .historySnapshot span { color: var(--rec-soft); font-size: .7rem; }
 
 /* Cálculos: tipo de cálculo como botões alternados e rubricas com valor alinhado. */
+/* Evolução da folha: barras horizontais simples, sem biblioteca de gráfico. */
+.bars { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.bars li { display: grid; grid-template-columns: 70px minmax(0, 1fr) 110px; align-items: center; gap: 10px; font-size: .76rem; }
+.bars strong { text-align: right; font-variant-numeric: tabular-nums; }
+.barTrack { height: 10px; border-radius: 5px; background: var(--rec-muted); overflow: hidden; }
+.barFill { display: block; height: 100%; border-radius: 5px; background: var(--rec-accent); }
 .stackPrint { display: grid; gap: 14px; min-width: 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .secondaryButton[aria-pressed="true"] { border-color: var(--rec-accent); background: var(--rec-accent-soft); color: var(--rec-accent-text); }

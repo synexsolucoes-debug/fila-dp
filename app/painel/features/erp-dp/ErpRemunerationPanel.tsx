@@ -8,6 +8,8 @@ import {
   type Remuneration, type RemunerationReason, type SalaryKind,
 } from "@/lib/remuneration";
 import { brl } from "@/lib/payroll-calc";
+import { ErpBankAccountForm } from "./ErpObligationsPanel";
+import { ErpPortalLinks } from "./ErpPortalLinks";
 import styles from "./erp-record.module.css";
 
 type Payload = { admissionDate: string; records: Remuneration[]; current: Remuneration | null; currentMonthlySalary: number | null; gaps: string[] };
@@ -67,6 +69,8 @@ export function ErpRemunerationPanel({ employeeId, canManage }: { employeeId: st
         <span>{salaryKindLabels[current.salaryKind]}{current.salaryKind === "hourly" ? ` · ${brl(current.amountCents)}/h × ${current.monthlyHours} h` : ""}</span></article>
       <article><small>Jornada</small><strong>{current.monthlyHours} h/mês</strong><span>Desde {dateLabel(current.validFrom)}</span></article>
       <article><small>Dependentes IRRF</small><strong>{current.irrfDependents}</strong><span>Dedução por dependente na base</span></article>
+      <article><small>Natureza</small><strong>{current.proLabore ? "Pró-labore" : "Salário"}</strong>
+        <span>{current.familyAllowanceChildren ? `${current.familyAllowanceChildren} filho(s) no salário-família` : "Sem salário-família"}{current.alimonyPercent ? ` · pensão ${String(current.alimonyPercent).replace(".", ",")}%` : ""}</span></article>
       <article><small>Vale-transporte</small><strong>{current.transportVoucherCents ? brl(current.transportVoucherCents) : "Não usa"}</strong>
         <span>{current.transportVoucherCents ? "Desconto de até 6% do salário-base" : "—"}</span></article>
       <article><small>Adicional</small><strong>{current.hazardous ? "Periculosidade 30%" : current.unhealthyPercent ? `Insalubridade ${current.unhealthyPercent}%` : "Nenhum"}</strong>
@@ -87,6 +91,8 @@ export function ErpRemunerationPanel({ employeeId, canManage }: { employeeId: st
       </tr>)}</tbody>
     </table></div>}
     {canManage && <RemunerationEditor employeeId={employeeId} admissionDate={data.admissionDate} current={current} first={data.records.length === 0} onSaved={load} />}
+    <ErpBankAccountForm employeeId={employeeId} canManage={canManage} />
+    <ErpPortalLinks employeeId={employeeId} canManage={canManage} />
   </div>;
 }
 
@@ -101,6 +107,10 @@ function RemunerationEditor({ employeeId, admissionDate, current, first, onSaved
   const [additional, setAdditional] = useState(current?.hazardous ? "hazardous" : String(current?.unhealthyPercent ?? 0));
   const [transportVoucher, setTransportVoucher] = useState(current?.transportVoucherCents ? centsToInput(current.transportVoucherCents) : "");
   const [mealVoucherDiscount, setMealVoucherDiscount] = useState(current?.mealVoucherDiscountCents ? centsToInput(current.mealVoucherDiscountCents) : "");
+  const [proLabore, setProLabore] = useState(current?.proLabore ?? false);
+  const [familyAllowanceChildren, setFamilyAllowanceChildren] = useState(String(current?.familyAllowanceChildren ?? 0));
+  const [alimonyPercent, setAlimonyPercent] = useState(current?.alimonyPercent ? String(current.alimonyPercent).replace(".", ",") : "");
+  const [alimonyBase, setAlimonyBase] = useState<"gross" | "gross_minus_inss">(current?.alimonyBase ?? "gross_minus_inss");
   const [reason, setReason] = useState<RemunerationReason>(first ? "admission" : "raise");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -119,7 +129,8 @@ function RemunerationEditor({ employeeId, admissionDate, current, first, onSaved
         body: JSON.stringify({
           validFrom, salaryKind, amount, monthlyHours: Number(monthlyHours), irrfDependents: Number(irrfDependents),
           unhealthyPercent: additional === "hazardous" ? 0 : Number(additional), hazardous: additional === "hazardous",
-          transportVoucher, mealVoucherDiscount, reason, notes,
+          transportVoucher, mealVoucherDiscount, proLabore, familyAllowanceChildren: Number(familyAllowanceChildren),
+          alimonyPercent: alimonyPercent || 0, alimonyBase, reason, notes,
         }),
       });
       setError("");
@@ -158,6 +169,19 @@ function RemunerationEditor({ employeeId, admissionDate, current, first, onSaved
           <option value="20">Insalubridade grau médio (20%)</option>
           <option value="40">Insalubridade grau máximo (40%)</option>
           <option value="hazardous">Periculosidade (30%)</option>
+        </select></label>
+      <label><span>Natureza</span>
+        <select value={proLabore ? "yes" : "no"} onChange={(event) => setProLabore(event.target.value === "yes")}>
+          <option value="no">Salário (vínculo do cadastro: CLT, aprendiz, estagiário)</option>
+          <option value="yes">Pró-labore de sócio</option>
+        </select></label>
+      <label><span>Filhos até 14 anos (salário-família)</span>
+        <input type="number" min={0} max={20} value={familyAllowanceChildren} onChange={(event) => setFamilyAllowanceChildren(event.target.value)} /></label>
+      <label><span>Pensão alimentícia (%)</span>
+        <input inputMode="decimal" value={alimonyPercent} placeholder="0" onChange={(event) => setAlimonyPercent(event.target.value)} /></label>
+      <label><span>Base da pensão</span>
+        <select value={alimonyBase} onChange={(event) => setAlimonyBase(event.target.value as "gross" | "gross_minus_inss")}>
+          <option value="gross_minus_inss">Bruto menos INSS</option><option value="gross">Bruto</option>
         </select></label>
       <label><span>Custo mensal do vale-transporte (R$)</span>
         <input inputMode="decimal" value={transportVoucher} placeholder="0,00" onChange={(event) => setTransportVoucher(event.target.value)} /></label>

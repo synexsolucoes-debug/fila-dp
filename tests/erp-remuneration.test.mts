@@ -20,7 +20,7 @@ const code = (expected: string) => (error: unknown) => (error as { code?: string
 
 const record = (id: string, validFrom: string, validTo: string, amountCents = 300_000): Remuneration => ({
   id, validFrom, validTo, salaryKind: "monthly", amountCents, monthlyHours: 220, irrfDependents: 0,
-  unhealthyPercent: 0, hazardous: false, transportVoucherCents: 0, mealVoucherDiscountCents: 0, reason: "admission", notes: "",
+  unhealthyPercent: 0, hazardous: false, transportVoucherCents: 0, mealVoucherDiscountCents: 0, proLabore: false, familyAllowanceChildren: 0, alimonyPercent: 0, alimonyBase: "gross_minus_inss", reason: "admission", notes: "",
 });
 
 test("valor em reais vira centavos, no formato brasileiro ou não", () => {
@@ -94,14 +94,14 @@ test("a tabela nasce isolada por tenant, com vigência e as guardas da CLT", asy
 
 test("as rotas exigem a permissão de salário, escopo de empresa e auditam", async () => {
   const route = await read("app/api/employees/[id]/remuneration/route.ts");
-  const calc = await read("app/api/erp-dp/calculations/route.ts");
+  const calc = await read("lib/erp-calculation-service.ts");
   const service = await read("lib/erp-payroll-service.ts");
   assert.match(route, /requireCapability\(workspace, "payroll\.read"\)/u);
   assert.match(route, /requireCapability\(workspace, "payroll\.manage"\)/u);
   assert.match(route, /employee\.remuneration\.created/u);
   assert.match(route, /employee\.remuneration\.corrected/u);
   assert.match(route, /await d1\.batch\(statements\)/u);
-  assert.match(calc, /requireCapability\(workspace, "payroll\.read"\)/u);
+  assert.match(await read("app/api/erp-dp/calculations/route.ts"), /requireCapability\(workspace, "payroll\.read"\)/u);
   assert.match(service, /requireCompanyAccess\(/u);
   // O cálculo usa o salário da data, não o de hoje.
   assert.match(calc, /remunerationAt\(records, referenceDate\)/u);
@@ -110,7 +110,7 @@ test("as rotas exigem a permissão de salário, escopo de empresa e auditam", as
 test("o cálculo mora no ERP: a tela e o motor não puxam código de servidor", async () => {
   const view = await read("app/painel/features/erp-dp/ErpDpView.tsx");
   assert.match(view, /\{ id: "calculations", label: "Cálculos"/u);
-  assert.match(view, /\(item\.id !== "calculations" && item\.id !== "payroll"\) \|\| canReadPayroll/u);
+  assert.match(view, /\(item\.id !== "calculations" && item\.id !== "payroll" && item\.id !== "costs"\) \|\| canReadPayroll/u);
   assert.match(view, /item\.id !== "remuneration" \|\| canReadPayroll/u);
   for (const path of ["lib/payroll-calc.ts", "lib/payroll-tables.ts", "lib/remuneration.ts"]) {
     const source = await read(path);

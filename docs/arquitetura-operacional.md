@@ -1708,6 +1708,175 @@ folhas **fechadas** dos 12 meses anteriores.
 | --- | --- |
 | Entradas do ponto aprovado e em rascunho, parcelas, VT até 6%, VR, diferença retroativa, admissão no mês, quem fica de fora, média de variáveis, migration e permissões | `tests/erp-payroll-run.test.mts` |
 
+### 4.38 Documentos da folha — holerite, férias e rescisão em PDF
+
+Gerados pelo PDF mínimo de `lib/pdf-document.ts` (`lib/payroll-documents-pdf.ts`),
+sempre a partir do número calculado — nunca de um valor digitado à parte:
+
+| Documento | Rota | De onde vem |
+| --- | --- | --- |
+| Recibo de pagamento (holerite), duas vias por página | `GET /api/erp-dp/payroll-runs/[id]/payslips[?employeeId=]` | Resultado gravado da folha (§4.32) |
+| Aviso de férias (art. 135) e recibo de férias (art. 145) | `POST /api/erp-dp/calculations/document` com `type: "vacation"` | O mesmo cálculo da tela, refeito no servidor |
+| Demonstrativo de verbas rescisórias e termo de quitação (art. 477, §2º) | idem, `type: "termination"` | idem |
+
+O cálculo da tela e o do documento passam pelo mesmo serviço
+(`lib/erp-calculation-service.ts`), por isso não divergem. Valor de dinheiro sai
+com asteriscos à esquerda, como na folha impressa. O período aquisitivo do aviso
+é o último completo antes do início; sem 12 meses de vínculo, a rota recusa
+(`VACATION_NOT_ACQUIRED`). O CPF aparece só com os 4 últimos dígitos — é o que o
+Vinculato guarda. Baixar holerite ou documento fica na auditoria
+(`payroll.payslips.downloaded`, `payroll.document.*`).
+
+O demonstrativo rescisório não é o formulário oficial do TRCT: é o
+documento de conferência e quitação cujos valores alimentam o TRCT no sistema
+oficial.
+
+| Verificação | Onde |
+| --- | --- |
+| Duas vias, rubricas, valor protegido, declaração, CNPJ, aviso e recibo de férias, termo de quitação, permissões e auditoria | `tests/erp-payroll-documents.test.mts` |
+
+### 4.39 Férias — saldo por período, vencimento, programação e coletivas
+
+A cota de ausência (infotipo 2006) do SAP. Os **períodos aquisitivos** são
+derivados da admissão (`lib/vacation-balance.ts`): 12 meses dão 30 dias (ou 24,
+18, 12 pelas faltas — art. 130), a gozar nos 12 meses seguintes (concessivo,
+art. 134). O que é gravado (migration 0113) é a programação de cada período
+(`fdp_vacation_schedules`) e as férias coletivas que a geraram
+(`fdp_collective_vacations`).
+
+| Situação do período | Quando |
+| --- | --- |
+| Em aquisição | Os 12 meses ainda não terminaram |
+| Disponível | Completo, com saldo, longe do fim do concessivo |
+| Vence em breve | Saldo e até 60 dias para o fim do concessivo |
+| Vencida (em dobro) | Passou do concessivo com saldo (art. 137) |
+| Quitada | Sem saldo nem programação aberta |
+
+**Regras da programação**, conferidas na tela enquanto se digita e de novo no
+servidor: até três frações, uma com 14 dias ou mais e as outras com 5 ou mais
+(art. 134, §1º); abono de até 1/3 (art. 143); não começar na sexta nem no
+sábado (art. 134, §3º, com o domingo como repouso); não passar do saldo;
+período em aquisição só em coletivas (art. 140). Aviso com menos de 30 dias
+(art. 135) e início depois do concessivo geram aviso, não bloqueio.
+
+**Estados**: programada → aprovada → gozada; cancelar só antes de gozar. A
+transição é um `UPDATE … AND status = ?`, e tudo vai para a auditoria.
+
+**Férias coletivas** (arts. 139 a 141): mínimo de 10 dias; a decisão vira a
+programação de cada pessoa ativa da empresa (ou do departamento), no período
+mais urgente dela; quem não cabe nas regras fica de fora com o motivo.
+
+**Permissões**: ler com `employees.read`, programar com `employees.manage` —
+férias é cadastro de DP, não salário. O valor sai em Cálculos › Férias, com o
+documento do §4.38.
+
+**Tela**: ERP DP › Férias.
+
+| Verificação | Onde |
+| --- | --- |
+| Períodos, saldo, vencida, vencendo, mais urgente, regras de fração, abono, sexta e sábado, saldo, três frações, coletivas, estados, migration e permissões | `tests/erp-vacations.test.mts` |
+
+### 4.40 Obrigações e pagamento da folha — guias, CNAB 240, S-1200 e contabilização
+
+Da folha **fechada** (§4.32) saem as obrigações (`lib/payroll-obligations.ts`)
+e os arquivos. O Vinculato gera o número e o arquivo; **a transmissão
+(DCTFWeb, FGTS Digital, eSocial) continua com quem tem o certificado digital**.
+
+| Saída | Como | Vencimento |
+| --- | --- | --- |
+| Salários líquidos | Arquivo CNAB 240 FEBRABAN, serviço 30, segmento A por favorecido (`lib/cnab240.ts`) | 5º dia útil, contando o sábado (CLT art. 459, §1º) |
+| FGTS (8%) | Total da folha para a guia do FGTS Digital | Dia 20 do mês seguinte (Lei 14.438/2022) |
+| Contribuição previdenciária | INSS dos empregados + patronal (20% + RAT × FAP + terceiros), para a DCTFWeb | Dia 20 |
+| IRRF | Retido dos empregados, para a DCTFWeb | Dia 20 |
+| Rubricas por trabalhador | CSV com os campos do grupo `itensRemun` do S-1200 | — |
+| Lançamentos contábeis | CSV débito/crédito por competência, com o plano de contas da empresa | — |
+
+Vencimento em fim de semana é antecipado para o dia útil anterior; **feriados
+não estão no calendário** e o resumo avisa. Simples Nacional (anexos I a III e
+V) não tem patronal na folha — a CPP está no DAS.
+
+**Limites honestos, por desenho do produto:** o Vinculato guarda só o hash e
+os 4 últimos dígitos do CPF (minimização da LGPD). Por isso **não gera o XML
+do S-1200** — que exige o CPF — e sim as rubricas no layout dele, chaveadas
+pela matrícula, para o sistema que transmite. Pelo mesmo motivo o CNAB vai sem
+o segmento B (CPF e endereço do favorecido); o banco confirma na homologação do
+convênio se aceita o crédito em conta só com o segmento A.
+
+**Configuração** (migration 0114): `fdp_company_payroll_settings` (forma da
+contribuição patronal, RAT, FAP, terceiros, banco e convênio do CNAB, contas
+contábeis) e `fdp_employee_bank_accounts` (a conta de salário — o infotipo
+0009). As duas com `payroll.manage` e auditoria.
+
+**Rotas**: `GET /api/erp-dp/payroll-runs/[id]/obligations` (resumo,
+`payroll.read`) e `GET /api/erp-dp/payroll-runs/[id]/exports?kind=cnab|s1200|accounting`
+(arquivos, `payroll.manage`, só folha fechada, auditoria
+`payroll.export.*`).
+
+**Telas**: ERP DP › Folha (configuração da empresa; obrigações da folha
+fechada) e Ficha funcional › Remuneração (conta de salário).
+
+| Verificação | Onde |
+| --- | --- |
+| Vencimentos, encargos (padrão e Simples), resumo das guias, CNAB 240 posição a posição, S-1200 em CSV, lançamentos, validação de configuração e conta, permissões | `tests/erp-obligations.test.mts` |
+
+### 4.41 Regras do cálculo — categorias, salário-família, pensão, banco de horas e piso
+
+O cálculo deixa de tratar todo mundo como empregado mensalista
+(`lib/payroll-calc.ts`, migration 0115).
+
+| Regra | Como entra |
+| --- | --- |
+| **Categoria** | Vem do tipo de vínculo do cadastro (`clt`, `intern`, `apprentice`, `temporary`) e, para sócio, da remuneração marcada como **pró-labore** — sem mexer no cadastro do Vinculato |
+| Estagiário | Bolsa-estágio sem INSS e sem FGTS, com IRRF (Lei 11.788/2008); não tem férias, 13º nem rescisão da CLT — o cálculo recusa (`CATEGORY_NOT_CLT`) e lembra do recesso |
+| Aprendiz | FGTS de 2% na folha, nas férias, no 13º e na rescisão (Lei 10.097/2000) |
+| Pró-labore | INSS de 11% até o teto (contribuinte individual), sem FGTS; patronal de 20% sem RAT nem terceiros (base em 9002) |
+| **Salário-família** | Cota por filho até o limite (2025 e 2026 em `lib/payroll-tables.ts`), proporcional aos dias na admissão, olhando a remuneração do mês inteiro; não entra em base nenhuma e é **abatido da guia de contribuição previdenciária** e contabilizado como compensação, não despesa |
+| **Pensão por percentual** | Sobre o bruto ou o bruto menos INSS, somada à pensão em valor; deduz da base do IRRF |
+| **Banco de horas** | Crédito e débito do ponto aprovado viram linha informativa do saldo do mês — ficam no banco, não são pagos |
+| **Piso da convenção** | Configuração da empresa; quem ganha abaixo recebe aviso na folha |
+
+| Verificação | Onde |
+| --- | --- |
+| Estagiário, aprendiz, pró-labore e patronal, salário-família (limite, proporcional, compensação), pensão nas duas bases, categorias fora da CLT, banco de horas, piso, migration | `tests/erp-payroll-rules.test.mts` |
+
+### 4.42 Custo de pessoal e portal do colaborador
+
+**Custo de pessoal** (ERP DP › Custos, `lib/payroll-costs.ts`,
+`/api/erp-dp/costs`, `payroll.read`). Lê as folhas **fechadas** da competência
+e mostra quanto cada pessoa custa à empresa além do salário:
+
+| Parcela | Como sai |
+| --- | --- |
+| Proventos | Proventos da folha sem o salário-família (compensado na guia, não é despesa) |
+| Patronal | 20% + RAT × FAP + terceiros sobre a base 9000; 20% sobre o pró-labore (9002); zero no Simples sem CPP |
+| FGTS | O depósito do mês da folha |
+| Provisões | Férias (salário/12 × 4/3) e 13º (salário/12), só para quem tem base de empregado — estagiário e sócio não provisionam |
+| Encargos das provisões | Patronal + FGTS sobre as provisões |
+| Vale-transporte | O custo do vale menos o desconto de até 6% do empregado |
+
+Agrupa por centro de custo e por departamento ("Sem centro de custo" aparece,
+não some), mostra a evolução das últimas competências fechadas e exporta CSV.
+
+**Portal do colaborador** (migration 0116, `fdp_employee_portal_links`). Na
+remuneração da ficha, quem tem `payroll.manage` gera um link para a pessoa, com
+validade; o token vai uma vez para a tela e só o hash fica gravado, como nos
+portais de EPI e de notas do PJ. Abrindo `/portal/colaborador/<token>`, sem
+login, a pessoa vê:
+
+- os holerites das folhas **fechadas** e baixa o PDF (só o dela);
+- os períodos de férias com saldo e vencimento e as programações;
+- um pedido de férias, que entra como programação **solicitada** para o DP
+  aprovar em ERP DP › Férias (estagiário não pede: não tem férias da CLT).
+
+O link pode ser revogado; expirado ou revogado, o portal recusa. Toda abertura,
+download e pedido fica na auditoria, e as rotas públicas têm limite de
+tentativas (`employee_portal` em `lib/auth-rate-limit.ts`).
+
+| Verificação | Onde |
+| --- | --- |
+| Custo por pessoa (patronal, pró-labore, provisões, VT, salário-família fora), grupos, totais, status do link, migration e rotas do portal | `tests/erp-costs-portal.test.mts` |
+| Rota pública do portal com hash, escopo e limite de tentativas | `tests/permission-matrix.test.mts` |
+
 ### 4.33 DP Operacional, Fase 1 — carteira e atribuição automática
 
 O DP opera dezenas de CNPJs com dois ou três analistas e nenhuma coordenação

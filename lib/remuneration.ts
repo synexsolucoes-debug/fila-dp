@@ -45,6 +45,13 @@ export type Remuneration = {
   transportVoucherCents: number;
   /** Coparticipação mensal do vale-refeição/alimentação. */
   mealVoucherDiscountCents: number;
+  /** Pró-labore de sócio: INSS de 11% como contribuinte individual, sem FGTS. */
+  proLabore: boolean;
+  /** Filhos até 14 anos (ou inválidos), para o salário-família. */
+  familyAllowanceChildren: number;
+  /** Pensão alimentícia em percentual (0 = sem pensão por percentual). */
+  alimonyPercent: number;
+  alimonyBase: "gross" | "gross_minus_inss";
   reason: RemunerationReason;
   notes: string;
 };
@@ -87,11 +94,17 @@ export function parseRemunerationInput(body: Record<string, unknown>, admissionD
   if (transportVoucherCents === null || transportVoucherCents < 0 || mealVoucherDiscountCents === null || mealVoucherDiscountCents < 0) {
     throw invalid("Valor de vale-transporte ou vale-refeição inválido.", "REMUNERATION_VOUCHER_INVALID");
   }
+  const familyAllowanceChildren = Number(body.familyAllowanceChildren ?? 0);
+  if (!Number.isInteger(familyAllowanceChildren) || familyAllowanceChildren < 0 || familyAllowanceChildren > 20) throw invalid("Número de filhos inválido.", "REMUNERATION_CHILDREN_INVALID");
+  const alimonyPercent = Number(String(body.alimonyPercent ?? 0).replace(",", "."));
+  if (!Number.isFinite(alimonyPercent) || alimonyPercent < 0 || alimonyPercent > 100) throw invalid("Percentual de pensão entre 0 e 100.", "REMUNERATION_ALIMONY_INVALID");
+  const alimonyBase = body.alimonyBase === "gross" ? "gross" : "gross_minus_inss";
   const reason = (remunerationReasons as readonly string[]).includes(String(body.reason)) ? body.reason as RemunerationReason : null;
   if (!reason) throw invalid("Informe o motivo.", "REMUNERATION_REASON_REQUIRED");
   return {
     validFrom, salaryKind, amountCents, monthlyHours, irrfDependents,
-    unhealthyPercent: unhealthyPercent as Remuneration["unhealthyPercent"], hazardous, transportVoucherCents, mealVoucherDiscountCents, reason,
+    unhealthyPercent: unhealthyPercent as Remuneration["unhealthyPercent"], hazardous, transportVoucherCents, mealVoucherDiscountCents,
+    proLabore: body.proLabore === true, familyAllowanceChildren, alimonyPercent: Math.round(alimonyPercent * 100) / 100, alimonyBase, reason,
     notes: String(body.notes ?? "").trim().slice(0, 500),
   };
 }
@@ -111,6 +124,10 @@ export function remunerationFromRow(row: Record<string, unknown>): Remuneration 
     hazardous: row.hazardous === true || row.hazardous === "t",
     transportVoucherCents: Number(row.transport_voucher_cents ?? 0),
     mealVoucherDiscountCents: Number(row.meal_voucher_discount_cents ?? 0),
+    proLabore: row.pro_labore === true || row.pro_labore === "t",
+    familyAllowanceChildren: Number(row.family_allowance_children ?? 0),
+    alimonyPercent: Number(row.alimony_percent ?? 0),
+    alimonyBase: row.alimony_base === "gross" ? "gross" : "gross_minus_inss",
     reason: String(row.reason) as RemunerationReason,
     notes: String(row.notes ?? ""),
   };
