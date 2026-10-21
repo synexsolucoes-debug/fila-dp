@@ -74,7 +74,7 @@ export function SettingsTab({ canManage }: { canManage: boolean }) {
           <td>{template.companyIds ? `${template.companyIds.length} selecionada(s)` : "Todas internas"}</td>
           <td>{template.processType}</td>
           <td>{canManage
-            ? <input type="checkbox" aria-label={`Rotina ${template.name} ativa`} checked={template.active} disabled={busy}
+            ? <input type="checkbox" className={styles.checkbox} aria-label={`Rotina ${template.name} ativa`} checked={template.active} disabled={busy}
               onChange={(event) => void run(() => dpRequest(`/api/dp/templates/${encodeURIComponent(template.id)}`, { method: "PATCH", body: JSON.stringify({ active: event.target.checked }) }),
                 event.target.checked ? "Rotina ativada." : "Rotina desativada.")} />
             : template.active ? "Sim" : "Não"}</td>

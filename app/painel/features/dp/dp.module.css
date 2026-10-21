@@ -92,3 +92,10 @@
   width: 72px;
   min-height: 32px;
 }
+
+.checkbox {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--ui-primary);
+}
