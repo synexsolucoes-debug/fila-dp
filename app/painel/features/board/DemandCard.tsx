@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Clock3, ListChecks, MessageSquarePlus, Paperclip, UserPlus } from "lucide-react";
+import { CalendarClock, Clock3, MessageSquarePlus, Paperclip, UserPlus } from "lucide-react";
 import type { DragEvent } from "react";
 import type { Card } from "@/lib/fila-dp-types";
 import { DEMAND_NEXT_ACTION_FALLBACK, demandNextAction } from "@/lib/demand-dashboard";
@@ -36,8 +36,8 @@ export type DemandCardProps = {
 /**
  * O cartão da demanda.
  *
- * A hierarquia é fixa e curta — protocolo, processo, título, colaborador e
- * empresa, prazo, etapa, checklist — porque o quadro é lido de relance, linha
+ * A hierarquia é fixa e curta — título, colaborador e empresa, protocolo e
+ * processo, checklist, prazo e etapa — porque o quadro é lido de relance, linha
  * após linha, e um cartão que às vezes mostra uma coisa e às vezes outra obriga
  * a reler cada um deles. O que não cabe nessa lista não entra no cartão: entra
  * na gaveta, que abre em um clique e não custa a saída da tela.
@@ -89,16 +89,6 @@ export function DemandCard(props: DemandCardProps) {
         </label>
       )}
 
-      <div className={styles.cardTop}>
-        {demandReference(card) && <span className={styles.reference}>{demandReference(card)}</span>}
-        <span className={styles.process}>{card.processType}</span>
-        {(card.priority === "urgent" || card.priority === "high") && (
-          <span className={styles.priority} data-level={card.priority}>
-            {card.priority === "urgent" ? "Urgente" : "Alta"}
-          </span>
-        )}
-      </div>
-
       {/* O botão é o título, e não o cartão inteiro. Com o cartão inteiro sendo
           botão, a caixa de seleção e as ações rápidas ficariam dentro dele —
           controle dentro de controle, que o leitor de tela anuncia como um
@@ -112,6 +102,23 @@ export function DemandCard(props: DemandCardProps) {
         <span className={styles.company}>{card.company || "Sem empresa informada"}</span>
       </p>
 
+      <div className={styles.cardTop}>
+        {demandReference(card) && <span className={styles.reference}>{demandReference(card)}</span>}
+        <span className={styles.process}>{card.processType}</span>
+        {(card.priority === "urgent" || card.priority === "high") && (
+          <span className={styles.priority} data-level={card.priority}>
+            {card.priority === "urgent" ? "Urgente" : "Alta"}
+          </span>
+        )}
+      </div>
+
+      {card.checklist.length > 0 && (
+        <div className={styles.progress}>
+          <progress value={feitas} max={card.checklist.length} aria-label={`${feitas} de ${card.checklist.length} itens do checklist concluídos`} />
+          <span>{feitas} de {card.checklist.length} tarefas</span>
+        </div>
+      )}
+
       <div className={styles.cardBottom}>
         <span
           className={styles.due}
@@ -122,11 +129,6 @@ export function DemandCard(props: DemandCardProps) {
           {dueBadge(card, now)}
         </span>
         <span className={styles.stage}>{props.stageName}</span>
-        {card.checklist.length > 0 && (
-          <span className={styles.checklist} title="Itens do checklist concluídos">
-            <ListChecks aria-hidden="true" />{feitas}/{card.checklist.length}
-          </span>
-        )}
         {card.attachments.length > 0 && (
           <span className={styles.meta} title="Anexos"><Paperclip aria-hidden="true" />{card.attachments.length}</span>
         )}
