@@ -10,7 +10,7 @@ import { costTotals, employeeCost, groupCosts, type EmployeeCost } from "@/lib/p
 import { toCsv } from "@/lib/payroll-obligations";
 
 /**
- * Custo de pessoal do ERP DP (§4.37): por pessoa, centro de custo e
+ * Custo de pessoal do ERP DP (§4.42): por pessoa, centro de custo e
  * departamento, com encargos, FGTS, provisões de férias e 13º e o
  * vale-transporte que a empresa banca; e a evolução das folhas fechadas.
  * `format=csv` devolve a planilha por pessoa.

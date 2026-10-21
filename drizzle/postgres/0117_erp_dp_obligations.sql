@@ -1,4 +1,4 @@
--- ERP DP: obrigações e pagamento da folha (item 13 do roadmap, §4.35 de
+-- ERP DP: obrigações e pagamento da folha (item 13 do roadmap, §4.40 de
 -- docs/arquitetura-operacional.md).
 --
 -- 1. Configuração de folha da empresa: forma da contribuição patronal, RAT,
@@ -6,7 +6,7 @@
 --    CNAB) e as contas contábeis dos lançamentos.
 -- 2. Dados bancários do colaborador (o infotipo 0009 do SAP): para onde vai o
 --    salário no arquivo CNAB.
-SELECT pg_advisory_xact_lock(hashtext('0114_erp_dp_obligations'));
+SELECT pg_advisory_xact_lock(hashtext('0117_erp_dp_obligations'));
 --> statement-breakpoint
 
 CREATE TABLE "fdp_company_payroll_settings" (

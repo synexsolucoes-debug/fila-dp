@@ -5,7 +5,7 @@ import { payrollEmployee } from "@/lib/erp-payroll-service";
 import { createPortalToken, employeePortalLinkStatus, employeePortalUrl, portalExpiryFromDays, portalInstant } from "@/lib/employee-portal";
 
 /**
- * Links do portal do colaborador (§4.37). O link mostra holerites e férias,
+ * Links do portal do colaborador (§4.42). O link mostra holerites e férias,
  * então gerar e revogar exigem `payroll.manage`. O token só existe na resposta
  * de criação: o banco guarda o hash.
  */

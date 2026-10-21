@@ -1,0 +1,38 @@
+name: Rotinas, alertas e relatório do DP Operacional
+
+# Uma vez por dia, às 6h de Brasília (9h UTC): gera as rotinas recorrentes,
+# recalcula os alertas e, no começo do mês, envia o relatório do mês anterior.
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dp-operations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Disparar o job diário do DP Operacional
+        env:
+          SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SECRET}" ]; then
+            echo "Defina o segredo CRON_SECRET no repositório." >&2
+            exit 1
+          fi
+          executor_url="https://vinculato.vercel.app/api/cron/dp-operations"
+          codigo=$(curl -sS -o resposta.json -w "%{http_code}" \
+            --max-time 120 \
+            -H "Authorization: Bearer ${SECRET}" \
+            "${executor_url}")
+          echo "HTTP ${codigo}"
+          cat resposta.json
+          echo
+          if [ "${codigo}" != "200" ]; then
+            echo "O executor respondeu ${codigo}." >&2
+            exit 1
+          fi

@@ -6,7 +6,7 @@ import { runForObligations } from "@/lib/payroll-exports-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** Encargos e guias da folha com vencimento (§4.35): salários, FGTS Digital e DCTFWeb. */
+/** Encargos e guias da folha com vencimento (§4.40): salários, FGTS Digital e DCTFWeb. */
 export async function GET(_request: Request, context: RouteContext) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {

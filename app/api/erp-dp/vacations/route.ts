@@ -8,7 +8,7 @@ import { mostUrgentPeriod, vacationPeriods } from "@/lib/vacation-balance";
 import { schedulesOf } from "@/lib/vacation-service";
 
 /**
- * Painel de férias do ERP DP (§4.34): para cada pessoa com vínculo, o período
+ * Painel de férias do ERP DP (§4.39): para cada pessoa com vínculo, o período
  * que mais aperta (vencido, vencendo ou disponível), o saldo e o fim do
  * concessivo; e as férias programadas que começam nos próximos dias.
  */

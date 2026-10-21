@@ -90,9 +90,15 @@ export type WorkItemSource =
   | "occupational_exam_due"
   | "training_due"
   | "cat_pending"
-  | "position_risk_exam_missing";
+  | "position_risk_exam_missing"
+  | "dp_alert";
 
-export type WorkItemScope = "mine" | "team";
+/**
+ * `unassigned` é a fila "Sem responsável" da carteira do DP: demanda que
+ * nasceu sem titular na carteira (empresa sem carteira, ou titular e backup
+ * ausentes). Só fontes com `unassignedCondition` entram nela.
+ */
+export type WorkItemScope = "mine" | "team" | "unassigned";
 
 /**
  * Fonte de trabalho.
@@ -120,6 +126,8 @@ export type WorkItemSourceDefinition = {
   mineCondition: string;
   /** Quantos parâmetros `?` a condição pessoal consome. */
   mineParameters: number;
+  /** Condição de "sem responsável"; ausente = a fonte não aparece nesse recorte. */
+  unassignedCondition?: string;
   sql: string;
 };
 
@@ -138,6 +146,7 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
     companyColumn: "c.company_id",
     mineCondition: "EXISTS (SELECT 1 FROM fdp_card_assignees ca WHERE ca.card_id = c.id AND ca.user_id = ?)",
     mineParameters: 1,
+    unassignedCondition: "NOT EXISTS (SELECT 1 FROM fdp_card_assignees ca WHERE ca.card_id = c.id)",
     sql: `SELECT 'card' AS source_type, c.id AS source_id, c.title, c.description,
         c.priority, c.company_id, COALESCE(NULLIF(co.trade_name, ''), co.legal_name, c.company) AS company_name,
         NULL::text AS employee_id, c.due_at, c.created_at, c.updated_at,
@@ -373,6 +382,28 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
       WHERE e.workspace_id = ? AND e.next_due_date IS NOT NULL AND e.next_due_date <= CURRENT_DATE + 60 {{company}} {{mine}}`,
   },
   {
+    /* DP Operacional, Fase 4: experiência, férias e cadastro. O alerta é
+       materializado pelo job diário (`lib/dp-alerts-service.ts`) e já nasce
+       com o responsável da carteira — "está comigo" é ser esse responsável. */
+    key: "dp_alert",
+    label: "Alertas do DP",
+    capability: "portfolio.read",
+    companyColumn: "a.company_id",
+    mineCondition: "a.assigned_user_id = ?",
+    mineParameters: 1,
+    unassignedCondition: "a.assigned_user_id IS NULL",
+    sql: `SELECT 'dp_alert' AS source_type, a.id AS source_id, a.title, a.detail AS description,
+        CASE a.severity WHEN 'overdue' THEN 'urgent' WHEN 'urgent' THEN 'high' ELSE 'normal' END AS priority,
+        a.company_id, COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        a.employee_id, a.due_date::timestamptz AS due_at, a.created_at, a.updated_at,
+        CASE a.severity WHEN 'overdue' THEN 'overdue' WHEN 'urgent' THEN 'warning' ELSE 'safe' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_dp_alerts a
+      LEFT JOIN fdp_companies co ON co.workspace_id = a.workspace_id AND co.id = a.company_id
+      WHERE a.workspace_id = ? AND a.status = 'open' {{company}} {{mine}}`,
+  },
+  {
     key: "training_due",
     label: "Treinamento vencendo",
     capability: "trainings.view",
@@ -559,6 +590,7 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
   training_due: "Agendar a reciclagem do treinamento",
   cat_pending: "Emitir a CAT",
   position_risk_exam_missing: "Agendar o exame admissional com o colaborador",
+  dp_alert: "Tratar o alerta na ficha do colaborador",
 };
 
 /**
@@ -593,6 +625,8 @@ export function workItemHref(source: WorkItemSource, id: string, employeeId?: st
     // Sem FK de colaborador (§83) — o link vai para a tela do módulo.
     case "cat_pending": return "/painel/acidentes";
     case "position_risk_exam_missing": return employeeId ? employeePath(employeeId, "exams") : "/painel/cadastros";
+    // Alerta de colaborador abre a ficha; o de empresa, a aba de alertas.
+    case "dp_alert": return employeeId ? employeePath(employeeId) : "/painel/dp?aba=alertas";
     default: return "/painel";
   }
 }
@@ -880,6 +914,8 @@ export function buildWorkItemQuery(input: {
   if (input.scope === "mine" && input.source.mineCondition) {
     sql = sql.replace("{{mine}}", `AND ${input.source.mineCondition}`);
     for (let index = 0; index < input.source.mineParameters; index += 1) parameters.push(input.userId);
+  } else if (input.scope === "unassigned") {
+    sql = sql.replace("{{mine}}", `AND ${input.source.unassignedCondition ?? "false"}`);
   } else {
     sql = sql.replace("{{mine}}", "");
   }

@@ -8,7 +8,7 @@ import type { CostGroup, EmployeeCost } from "@/lib/payroll-costs";
 import styles from "./erp-record.module.css";
 
 /**
- * Custo de pessoal do ERP DP (§4.37): o que a folha custa à empresa além do
+ * Custo de pessoal do ERP DP (§4.42): o que a folha custa à empresa além do
  * salário, por pessoa, centro de custo e departamento, e a evolução das folhas
  * fechadas.
  */

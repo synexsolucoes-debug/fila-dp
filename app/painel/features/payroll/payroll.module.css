@@ -1,0 +1,91 @@
+/* Movimentos para o Sankhya, dentro da tela Folha.
+   Só tokens de app/dashboard-modern.css — zero cor crua. */
+.movements {
+  display: grid; gap: 14px; min-width: 0; margin-top: 18px; padding: 18px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg, 14px);
+  background: var(--ui-surface); color: var(--ui-text);
+}
+.header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; }
+.header > div:first-child { display: grid; gap: 4px; max-width: 62ch; }
+.eyebrow { color: var(--ui-text-soft); font-size: .62rem; font-weight: 800; letter-spacing: .09em; }
+.title { margin: 0; font-size: 1rem; }
+.lead { margin: 0; color: var(--ui-text-soft); font-size: .8rem; line-height: 1.45; }
+
+.scope { display: flex; flex-wrap: wrap; gap: 10px; }
+.scope label, .entryForm label { display: grid; gap: 5px; min-width: 0; color: var(--ui-text-soft); font-size: .72rem; font-weight: 700; }
+.scope select, .scope input, .entryForm input, .paste textarea {
+  min-height: 38px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm, 8px);
+  background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: .82rem;
+}
+.scope select { min-width: 220px; max-width: 100%; }
+.narrow input { width: 70px; text-transform: uppercase; font-variant-numeric: tabular-nums; }
+
+.catalogBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: var(--ui-radius-md, 10px); background: var(--ui-surface-muted); font-size: .78rem; }
+.catalogBar > span { display: inline-flex; align-items: center; gap: 7px; }
+.catalogBar svg { width: 16px; height: 16px; }
+
+.note { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm, 8px); background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
+.note > svg { flex: 0 0 auto; width: 17px; height: 17px; }
+.note span { display: grid; gap: 3px; }
+.note strong { font-size: .76rem; }
+.note small { color: var(--ui-text); font-size: .74rem; line-height: 1.45; }
+
+.entryForm { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.entryForm label { flex: 0 1 130px; }
+.entryForm .grow { flex: 1 1 240px; }
+.entryForm input { width: 100%; }
+.expected { border-color: var(--ui-accent) !important; box-shadow: inset 0 0 0 1px var(--ui-accent); }
+.hint { flex-basis: 100%; margin: 0; color: var(--ui-text-soft); font-size: .74rem; }
+
+.paste { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm, 8px); }
+.paste summary { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-size: .8rem; font-weight: 700; }
+.paste summary svg { width: 15px; height: 15px; }
+.paste textarea { min-height: 110px; padding: 9px 10px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; resize: vertical; }
+.paste > button { justify-self: start; }
+
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.summary article { display: grid; gap: 3px; min-width: 0; padding: 11px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md, 10px); }
+.summary small { color: var(--ui-text-soft); font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.summary strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
+.summary span { color: var(--ui-text-soft); font-size: .7rem; }
+
+.problems { display: grid; gap: 4px; margin: 0; padding: 10px 12px 10px 28px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm, 8px); background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); font-size: .76rem; }
+.feedback { margin: 0; padding: 10px 12px; border-radius: var(--ui-radius-sm, 8px); background: var(--ui-state-ok-bg); color: var(--ui-state-ok-text); font-size: .78rem; font-weight: 700; }
+
+.tableWrap { overflow-x: auto; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md, 12px); }
+.table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: .8rem; }
+.table th { padding: 9px 11px; border-bottom: 1px solid var(--ui-border); background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: .68rem; text-align: left; white-space: nowrap; }
+.table td { padding: 9px 11px; border-bottom: 1px solid var(--ui-border); vertical-align: top; }
+.table tr:last-child td { border-bottom: 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+.unit { color: var(--ui-text-soft); }
+.checks { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.primaryButton, .secondaryButton, .iconButton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 0 13px;
+  border-radius: var(--ui-radius-sm, 8px); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.primaryButton { border: 1px solid var(--ui-accent); background: var(--ui-accent); color: var(--ui-on-accent); }
+.secondaryButton { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text); }
+.secondaryButton:hover { background: var(--ui-accent-soft); color: var(--ui-accent-text); }
+.iconButton { min-height: 32px; padding: 0 8px; border: 1px solid transparent; background: transparent; color: var(--ui-text-soft); }
+.iconButton:hover { border-color: var(--ui-border); color: var(--ui-danger); }
+.primaryButton:disabled, .secondaryButton:disabled, .iconButton:disabled { opacity: .55; cursor: not-allowed; }
+.primaryButton svg, .secondaryButton svg, .iconButton svg { width: 15px; height: 15px; }
+.primaryButton:focus-visible, .secondaryButton:focus-visible, .iconButton:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+.spin { animation: payroll-spin .8s linear infinite; }
+@keyframes payroll-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+@media (max-width: 640px) {
+  .movements { padding: 14px; }
+  .scope { width: 100%; }
+  .scope label { flex: 1 1 140px; }
+  .scope select { min-width: 0; width: 100%; }
+}
+
+/* Quem responde pela empresa na carteira do DP. */
+.responsible { margin: 0; font-size: 13px; color: var(--ui-text-muted); }
+.responsible strong { color: var(--ui-text); }

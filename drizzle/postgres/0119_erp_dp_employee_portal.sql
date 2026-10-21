@@ -1,10 +1,10 @@
--- ERP DP: portal do colaborador (§4.37 de docs/arquitetura-operacional.md).
+-- ERP DP: portal do colaborador (§4.42 de docs/arquitetura-operacional.md).
 --
 -- Um link com segredo, como o portal do prestador e a ciência de EPI: o
 -- colaborador abre sem conta, vê os holerites das folhas fechadas e as
 -- férias, baixa o holerite e pede férias — o pedido entra como programação
 -- para o DP aprovar. Só o hash do segredo é guardado.
-SELECT pg_advisory_xact_lock(hashtext('0116_erp_dp_employee_portal'));
+SELECT pg_advisory_xact_lock(hashtext('0119_erp_dp_employee_portal'));
 --> statement-breakpoint
 CREATE TABLE "fdp_employee_portal_links" (
 	"id" text PRIMARY KEY NOT NULL,

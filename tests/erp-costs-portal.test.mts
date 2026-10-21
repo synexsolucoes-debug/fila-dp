@@ -7,7 +7,7 @@ import { defaultSettings } from "../lib/payroll-obligations.ts";
 import { assertEmployeePortalLinkUsable, employeePortalLinkStatus, portalInstant } from "../lib/employee-portal-status.ts";
 
 /**
- * Custo de pessoal e portal do colaborador do ERP DP (§4.37 de
+ * Custo de pessoal e portal do colaborador do ERP DP (§4.42 de
  * docs/arquitetura-operacional.md).
  */
 
@@ -79,7 +79,7 @@ test("portal: só hash, inquilino do token, limite de tentativas e só a própri
   // Pedido de férias passa pelas regras da CLT e vai para o DP aprovar.
   assert.match(route, /prepareSchedule\(d1,/u);
   assert.match(route, /employee\.vacation\.requested/u);
-  const migration = await read("drizzle/postgres/0116_erp_dp_employee_portal.sql");
+  const migration = await read("drizzle/postgres/0119_erp_dp_employee_portal.sql");
   assert.match(migration, /"token_hash" text NOT NULL/u);
   assert.match(migration, /fdp_employee_portal_links_token_uq/u);
   assert.match(migration, /FORCE ROW LEVEL SECURITY/u);

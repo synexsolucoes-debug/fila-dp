@@ -5,7 +5,7 @@ import { formatTaxId, payslipPdf, terminationPdf, vacationPdf, wrap } from "../l
 import { monthlyPayroll, terminationPay, vacationPay } from "../lib/payroll-calc.ts";
 
 /**
- * Documentos da folha do ERP DP (§4.33 de docs/arquitetura-operacional.md):
+ * Documentos da folha do ERP DP (§4.38 de docs/arquitetura-operacional.md):
  * holerite, aviso e recibo de férias e demonstrativo rescisório com termo de
  * quitação, gerados do resultado calculado.
  */

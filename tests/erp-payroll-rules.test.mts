@@ -7,7 +7,7 @@ import { defaultSettings, employerCharges, obligationsSummary, type ResultForObl
 import type { Remuneration } from "../lib/remuneration.ts";
 
 /**
- * Regras que faltavam no cálculo do ERP DP (§4.36 de
+ * Regras que faltavam no cálculo do ERP DP (§4.41 de
  * docs/arquitetura-operacional.md): estagiário, aprendiz, pró-labore,
  * salário-família, pensão por percentual, banco de horas e piso salarial.
  */
@@ -103,7 +103,7 @@ test("categoria vem do cadastro e da remuneração; banco de horas e piso aparec
 });
 
 test("migration das regras e a configuração do piso", async () => {
-  const migration = await read("drizzle/postgres/0115_erp_dp_payroll_rules.sql");
+  const migration = await read("drizzle/postgres/0118_erp_dp_payroll_rules.sql");
   assert.match(migration, /"pro_labore" boolean DEFAULT false NOT NULL/u);
   assert.match(migration, /"alimony_percent" BETWEEN 0 AND 100/u);
   assert.match(migration, /"salary_floor_cents" bigint DEFAULT 0 NOT NULL/u);

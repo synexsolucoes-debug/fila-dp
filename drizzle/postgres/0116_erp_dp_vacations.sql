@@ -1,11 +1,11 @@
 -- ERP DP: controle de férias — a cota de ausência (infotipo 2006) do SAP
--- (item 8 do roadmap, §4.34 de docs/arquitetura-operacional.md).
+-- (item 8 do roadmap, §4.39 de docs/arquitetura-operacional.md).
 --
 -- Os períodos aquisitivos são derivados da admissão; aqui fica o que foi
 -- programado, aprovado e gozado em cada um, e as férias coletivas que
 -- geraram programações para um grupo de uma vez. Nada é apagado: cancelar é
 -- mudar o estado.
-SELECT pg_advisory_xact_lock(hashtext('0113_erp_dp_vacations'));
+SELECT pg_advisory_xact_lock(hashtext('0116_erp_dp_vacations'));
 --> statement-breakpoint
 
 CREATE TABLE "fdp_collective_vacations" (

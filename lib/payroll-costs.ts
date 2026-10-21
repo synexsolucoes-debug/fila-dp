@@ -2,7 +2,7 @@ import type { PayrollLine } from "./payroll-calc.ts";
 import type { CompanyPayrollSettings } from "./payroll-obligations.ts";
 
 /**
- * Custo de pessoal do ERP DP (§4.37 da arquitetura): quanto cada pessoa custa
+ * Custo de pessoal do ERP DP (§4.42 da arquitetura): quanto cada pessoa custa
  * à empresa no mês, além do salário — encargos, FGTS, provisões de férias e
  * 13º com os encargos delas e o vale-transporte que a empresa banca — e o
  * agrupamento por centro de custo e departamento.

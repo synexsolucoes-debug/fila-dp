@@ -4,6 +4,7 @@ import { cleanText } from "./clean-text.ts";
 import { optionalDate } from "./registrations.ts";
 import { getTenantContext } from "./tenant-context.ts";
 import { resolveAreaModule } from "./areas.ts";
+import { prepareAssigneeStatements, preparePortfolioAssignment } from "./portfolio-assignment.ts";
 import {
   discountTitle, epiAttachmentEntities, epiDamageDecisions, epiDamageReasons, epiDeliveryStatuses,
   epiDisposalReasons, epiDiscountDecisions, epiDiscountTriggers, epiProductStatuses,
@@ -399,7 +400,11 @@ export async function createDiscountRequest(d1: Database, input: DiscountRequest
   });
   // A ordem é obrigatória: o cartão antes da análise, porque a análise aponta
   // para ele; a análise antes do razão, porque o razão aponta para os dois.
-  return { id, cardId: demand.cardId, title: demand.title, totalValue, statements: [demand.statement, statement, movement] };
+  // Analista escolhido vence; sem ele, quem responde pela empresa na carteira.
+  const assignment = input.analystUserId
+    ? prepareAssigneeStatements(d1, input.workspaceId, demand.cardId, input.analystUserId)
+    : (await preparePortfolioAssignment(d1, { workspaceId: input.workspaceId, cardId: demand.cardId, companyId: input.companyId })).statements;
+  return { id, cardId: demand.cardId, title: demand.title, totalValue, statements: [demand.statement, ...assignment, statement, movement] };
 }
 
 /** Resumo que vai no corpo da demanda: quem, qual EPI, quanto e por quê. */

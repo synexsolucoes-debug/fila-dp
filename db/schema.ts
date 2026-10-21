@@ -69,9 +69,16 @@ export const companies = pgTable("fdp_companies", {
   state: text("state").notNull().default(""),
   country: text("country").notNull().default("Brasil"),
   status: text("status").notNull().default("active"),
+  /** Carteira do DP (0114): se a folha da empresa é operada aqui. */
+  dpStatus: text("dp_status").notNull().default("interno"),
+  /** Derivados do CNPJ, gerados pelo banco: raiz (8 dígitos) e matriz (ordem 0001). */
+  cnpjRoot: text("cnpj_root").generatedAlwaysAs(sql`CASE WHEN length(regexp_replace("tax_id", '[^0-9]', '', 'g')) = 14 THEN substr(regexp_replace("tax_id", '[^0-9]', '', 'g'), 1, 8) ELSE '' END`),
+  isHeadquarters: boolean("is_headquarters").generatedAlwaysAs(sql`length(regexp_replace("tax_id", '[^0-9]', '', 'g')) = 14 AND substr(regexp_replace("tax_id", '[^0-9]', '', 'g'), 9, 4) = '0001'`),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
 }, (table) => [
+  check("fdp_companies_dp_status_check", sql`${table.dpStatus} IN ('interno', 'a_internalizar', 'sem_funcionarios', 'terceirizado')`),
+  index("fdp_companies_workspace_cnpj_root_idx").on(table.workspaceId, table.cnpjRoot),
   index("fdp_companies_workspace_name_idx").on(table.workspaceId, table.legalName),
   index("fdp_companies_workspace_tax_idx").on(table.workspaceId, table.taxId),
   index("fdp_companies_workspace_parent_idx").on(table.workspaceId, table.parentCompanyId),
@@ -344,6 +351,11 @@ export const cards = pgTable("fdp_cards", {
    * e uma frase inventada seria pior do que a ausência.
    */
   nextStep: text("next_step").notNull().default(""),
+  /* Regra de corte (0115): decidida na criação e imutável por trigger. */
+  withinCutoff: boolean("within_cutoff"),
+  requestedFor: date("requested_for", { mode: "string" }),
+  requesterAreaLabel: text("requester_area_label").notNull().default(""),
+  cutoffRuleCode: text("cutoff_rule_code").notNull().default(""),
 }, (table) => [
   /* Chave composta que impede a combinação entre grupos (§87). A simples
      continua existindo; é esta que dá a garantia estrutural. */
@@ -4510,7 +4522,7 @@ export const employeeRemuneration = pgTable("fdp_employee_remuneration", {
   /** Custo mensal do vale-transporte (migration 0112): a folha desconta até 6%. */
   transportVoucherCents: bigint("transport_voucher_cents", { mode: "number" }).notNull().default(0),
   mealVoucherDiscountCents: bigint("meal_voucher_discount_cents", { mode: "number" }).notNull().default(0),
-  /** Regras do cálculo (migration 0115): pró-labore, salário-família e pensão por percentual. */
+  /** Regras do cálculo (migration 0118): pró-labore, salário-família e pensão por percentual. */
   proLabore: boolean("pro_labore").notNull().default(false),
   familyAllowanceChildren: integer("family_allowance_children").notNull().default(0),
   alimonyPercent: numeric("alimony_percent", { precision: 5, scale: 2, mode: "number" }).notNull().default(0),
@@ -4600,7 +4612,7 @@ export const payrollResults = pgTable("fdp_payroll_results", {
   check("fdp_payroll_results_lines_check", sql`jsonb_typeof(${table.linesJson}) = 'array'`),
 ]);
 
-/** Férias coletivas (migration 0113): uma decisão que gera a programação de um grupo inteiro. */
+/** Férias coletivas (migration 0116): uma decisão que gera a programação de um grupo inteiro. */
 export const collectiveVacations = pgTable("fdp_collective_vacations", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
@@ -4618,7 +4630,7 @@ export const collectiveVacations = pgTable("fdp_collective_vacations", {
   check("fdp_collective_vacations_days_check", sql`${table.restDays} BETWEEN 10 AND 30`),
 ]);
 
-/** Programação de férias por período aquisitivo (migration 0113) — a cota 2006 do SAP. */
+/** Programação de férias por período aquisitivo (migration 0116) — a cota 2006 do SAP. */
 export const vacationSchedules = pgTable("fdp_vacation_schedules", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
@@ -4648,7 +4660,7 @@ export const vacationSchedules = pgTable("fdp_vacation_schedules", {
   check("fdp_vacation_schedules_total_check", sql`${table.restDays} + ${table.soldDays} <= ${table.entitledDays}`),
 ]);
 
-/** Configuração de folha da empresa (migration 0114): encargos, banco do CNAB e contas contábeis. */
+/** Configuração de folha da empresa (migration 0117): encargos, banco do CNAB e contas contábeis. */
 export const companyPayrollSettings = pgTable("fdp_company_payroll_settings", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
@@ -4664,7 +4676,7 @@ export const companyPayrollSettings = pgTable("fdp_company_payroll_settings", {
   bankAccountDigit: text("bank_account_digit").notNull().default(""),
   bankAgreement: text("bank_agreement").notNull().default(""),
   accountsJson: jsonb("accounts_json").$type<Record<string, string>>().notNull().default({}),
-  /** Piso salarial da convenção coletiva (migration 0115): a folha avisa quem ganha abaixo. */
+  /** Piso salarial da convenção coletiva (migration 0118): a folha avisa quem ganha abaixo. */
   salaryFloorCents: bigint("salary_floor_cents", { mode: "number" }).notNull().default(0),
   updatedBy: text("updated_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
@@ -4681,7 +4693,7 @@ export const companyPayrollSettings = pgTable("fdp_company_payroll_settings", {
   check("fdp_company_payroll_settings_accounts_check", sql`jsonb_typeof(${table.accountsJson}) = 'object'`),
 ]);
 
-/** Dados bancários do colaborador (migration 0114) — o infotipo 0009 do SAP, para o CNAB. */
+/** Dados bancários do colaborador (migration 0117) — o infotipo 0009 do SAP, para o CNAB. */
 export const employeeBankAccounts = pgTable("fdp_employee_bank_accounts", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
@@ -4705,7 +4717,7 @@ export const employeeBankAccounts = pgTable("fdp_employee_bank_accounts", {
   check("fdp_employee_bank_accounts_numbers_check", sql`${table.agency} ~ '^[0-9]{1,5}$' AND ${table.account} ~ '^[0-9]{1,12}$'`),
 ]);
 
-/** Link do portal do colaborador (migration 0116): holerites, férias e pedido de férias, sem conta. */
+/** Link do portal do colaborador (migration 0119): holerites, férias e pedido de férias, sem conta. */
 export const employeePortalLinks = pgTable("fdp_employee_portal_links", {
   id: text("id").primaryKey(),
   workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
@@ -4732,3 +4744,244 @@ export const employeePortalLinks = pgTable("fdp_employee_portal_links", {
   check("fdp_employee_portal_links_revoke_check", sql`(${table.revokedAt} IS NULL AND ${table.revokedBy} IS NULL) OR (${table.revokedAt} IS NOT NULL AND ${table.revokedBy} IS NOT NULL)`),
 ]);
 
+
+/**
+ * Carteira do DP (0114): titular e backup de cada empresa, com vigência.
+ *
+ * Só cresce — trocar o titular encerra a linha e abre outra, e o trigger
+ * `fdp_company_portfolio_close_only` recusa reescrever uma vigência.
+ */
+export const companyPortfolio = pgTable("fdp_company_portfolio", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  holderUserId: text("holder_user_id").notNull().references(() => users.id),
+  backupUserId: text("backup_user_id").references(() => users.id),
+  validFrom: date("valid_from", { mode: "string" }).notNull(),
+  validTo: date("valid_to", { mode: "string" }),
+  createdBy: text("created_by").notNull(),
+  endedBy: text("ended_by"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true, mode: "string" }),
+}, (table) => [
+  uniqueIndex("fdp_company_portfolio_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_company_portfolio_open_uq").on(table.workspaceId, table.companyId).where(sql`${table.validTo} IS NULL`),
+  index("fdp_company_portfolio_company_period_idx").on(table.workspaceId, table.companyId, table.validFrom),
+  index("fdp_company_portfolio_holder_idx").on(table.workspaceId, table.holderUserId).where(sql`${table.validTo} IS NULL`),
+  foreignKey({ name: "fdp_company_portfolio_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }).onDelete("cascade"),
+  check("fdp_company_portfolio_backup_check", sql`${table.backupUserId} IS NULL OR ${table.backupUserId} <> ${table.holderUserId}`),
+  check("fdp_company_portfolio_period_check", sql`${table.validTo} IS NULL OR ${table.validTo} >= ${table.validFrom}`),
+  check("fdp_company_portfolio_ended_check", sql`(${table.validTo} IS NULL) = (${table.endedAt} IS NULL)`),
+]);
+
+/** Férias e folgas do analista (0114): na data, a demanda nova vai para o backup. */
+export const memberAbsences = pgTable("fdp_member_absences", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  startsOn: date("starts_on", { mode: "string" }).notNull(),
+  endsOn: date("ends_on", { mode: "string" }).notNull(),
+  reason: text("reason").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_member_absences_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_member_absences_user_period_idx").on(table.workspaceId, table.userId, table.startsOn, table.endsOn),
+  foreignKey({ name: "fdp_member_absences_member_fk", columns: [table.workspaceId, table.userId], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }).onDelete("cascade"),
+  check("fdp_member_absences_period_check", sql`${table.endsOn} >= ${table.startsOn}`),
+  check("fdp_member_absences_reason_check", sql`length(${table.reason}) <= 200`),
+]);
+
+/**
+ * Catálogo de eventos da folha (TFPEVE do Sankhya), importado da query.
+ * O lançamento de movimentos só aceita evento que está aqui: código, unidade e
+ * tipo vão para a planilha exatamente como o Sankhya os define.
+ */
+export const payrollEventCatalog = pgTable("fdp_payroll_event_catalog", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  code: integer("code").notNull(),
+  description: text("description").notNull(),
+  unit: text("unit").notNull(),
+  eventType: integer("event_type").notNull(),
+  status: text("status").notNull().default("active"),
+  importedBy: text("imported_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_payroll_event_catalog_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_payroll_event_catalog_code_uq").on(table.workspaceId, table.code),
+  foreignKey({ name: "fdp_payroll_event_catalog_importer_fk", columns: [table.workspaceId, table.importedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_payroll_event_catalog_code_check", sql`${table.code} > 0`),
+  check("fdp_payroll_event_catalog_unit_check", sql`${table.unit} IN ('V', 'H', 'D', 'Q')`),
+  check("fdp_payroll_event_catalog_type_check", sql`${table.eventType} IN (-1, 0, 1)`),
+  check("fdp_payroll_event_catalog_status_check", sql`${table.status} IN ('active', 'inactive')`),
+  check("fdp_payroll_event_catalog_description_check", sql`length(${table.description}) > 0`),
+]);
+
+/**
+ * Movimento variável da folha lançado no Vinculato para exportar ao Sankhya.
+ * Valor em centavos; índice (horas, dias, quantidade) em numeric. Exportar só
+ * marca quando e por quem — a folha continua sendo calculada no Sankhya.
+ */
+export const payrollMovementEntries = pgTable("fdp_payroll_movement_entries", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  companyId: text("company_id").notNull(),
+  employeeId: text("employee_id").notNull(),
+  competence: text("competence").notNull(),
+  eventCode: integer("event_code").notNull(),
+  indexValue: numeric("index_value", { precision: 14, scale: 4, mode: "number" }).notNull().default(0),
+  amountCents: bigint("amount_cents", { mode: "number" }).notNull().default(0),
+  note: text("note").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  exportedAt: timestamp("exported_at", { withTimezone: true, mode: "string" }),
+  exportedBy: text("exported_by"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_payroll_movement_entries_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_payroll_movement_entries_company_competence_idx").on(table.workspaceId, table.companyId, table.competence),
+  index("fdp_payroll_movement_entries_employee_idx").on(table.workspaceId, table.employeeId, table.competence),
+  foreignKey({ name: "fdp_payroll_movement_entries_company_fk", columns: [table.workspaceId, table.companyId], foreignColumns: [companies.workspaceId, companies.id] }),
+  foreignKey({ name: "fdp_payroll_movement_entries_employee_fk", columns: [table.workspaceId, table.companyId, table.employeeId], foreignColumns: [employees.workspaceId, employees.companyId, employees.id] }),
+  foreignKey({ name: "fdp_payroll_movement_entries_author_fk", columns: [table.workspaceId, table.createdBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  foreignKey({ name: "fdp_payroll_movement_entries_exporter_fk", columns: [table.workspaceId, table.exportedBy], foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId] }),
+  check("fdp_payroll_movement_entries_competence_check", sql`${table.competence} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+  check("fdp_payroll_movement_entries_event_check", sql`${table.eventCode} > 0`),
+  check("fdp_payroll_movement_entries_values_check", sql`${table.indexValue} >= 0 AND ${table.amountCents} >= 0 AND (${table.indexValue} > 0 OR ${table.amountCents} > 0)`),
+  check("fdp_payroll_movement_entries_exported_check", sql`(${table.exportedAt} IS NULL) = (${table.exportedBy} IS NULL)`),
+]);
+
+/** DP Operacional (0115): configuração por workspace. */
+export const dpSettings = pgTable("fdp_dp_settings", {
+  workspaceId: text("workspace_id").primaryKey().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  tenantTaskOwnerUserId: text("tenant_task_owner_user_id").references(() => users.id),
+  reportRecipients: text("report_recipients").notNull().default(""),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+});
+
+/** Fase 2 (0115): rotinas fixas do mês e da semana. */
+export const recurringTemplates = pgTable("fdp_recurring_templates", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  frequency: text("frequency").notNull(),
+  dayStart: integer("day_start").notNull().default(1),
+  dayEnd: integer("day_end").notNull().default(1),
+  weekday: integer("weekday"),
+  scope: text("scope").notNull(),
+  companyIds: jsonb("company_ids").$type<string[] | null>(),
+  processType: text("process_type").notNull().default("ROTINA DP"),
+  listWeekMovements: boolean("list_week_movements").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_recurring_templates_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_recurring_templates_code_uq").on(table.workspaceId, table.code),
+]);
+
+/** Fase 2 (0115): uma demanda por modelo, período e escopo. */
+export const recurringOccurrences = pgTable("fdp_recurring_occurrences", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  templateId: text("template_id").notNull(),
+  periodKey: text("period_key").notNull(),
+  scopeKey: text("scope_key").notNull(),
+  companyId: text("company_id"),
+  cardId: text("card_id").notNull(),
+  dueDate: date("due_date", { mode: "string" }).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_recurring_occurrences_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_recurring_occurrences_once_uq").on(table.workspaceId, table.templateId, table.periodKey, table.scopeKey),
+  index("fdp_recurring_occurrences_due_idx").on(table.workspaceId, table.dueDate),
+]);
+
+/** Fase 3 (0115): regra de corte por tipo de processo. */
+export const cutoffRules = pgTable("fdp_cutoff_rules", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  processTypes: jsonb("process_types").$type<string[]>().notNull().default([]),
+  kind: text("kind").notNull(),
+  value: integer("value").notNull(),
+  monthDayLimit: integer("month_day_limit"),
+  description: text("description").notNull().default(""),
+  status: text("status").notNull().default("proposta"),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_cutoff_rules_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_cutoff_rules_code_uq").on(table.workspaceId, table.code),
+]);
+
+/** Fase 3 (0115): o que chegou fora do prazo, e de qual área. */
+export const dpOccurrences = pgTable("fdp_dp_occurrences", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  occurredOn: date("occurred_on", { mode: "string" }).notNull(),
+  area: text("area").notNull().default(""),
+  companyId: text("company_id"),
+  cardId: text("card_id"),
+  fact: text("fact").notNull(),
+  impact: text("impact").notNull().default(""),
+  origin: text("origin").notNull(),
+  daysLate: integer("days_late"),
+  registeredBy: text("registered_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_dp_occurrences_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_dp_occurrences_period_idx").on(table.workspaceId, table.occurredOn),
+]);
+
+/** Fase 4 (0115): alertas de experiência, férias e cadastro. */
+export const dpAlerts = pgTable("fdp_dp_alerts", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  alertKey: text("alert_key").notNull(),
+  alertType: text("alert_type").notNull(),
+  companyId: text("company_id"),
+  employeeId: text("employee_id"),
+  dueDate: date("due_date", { mode: "string" }),
+  severity: text("severity").notNull(),
+  title: text("title").notNull(),
+  detail: text("detail").notNull().default(""),
+  assignedUserId: text("assigned_user_id"),
+  status: text("status").notNull().default("open"),
+  managerEmail: text("manager_email").notNull().default(""),
+  decision: text("decision"),
+  decisionNote: text("decision_note").notNull().default(""),
+  decisionSource: text("decision_source"),
+  decidedBy: text("decided_by"),
+  decidedAt: timestamp("decided_at", { withTimezone: true, mode: "string" }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_dp_alerts_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_dp_alerts_key_uq").on(table.workspaceId, table.alertKey),
+  index("fdp_dp_alerts_open_idx").on(table.workspaceId, table.status, table.dueDate),
+]);
+
+/** Fase 5 (0115): um relatório mensal por competência. */
+export const dpReportRuns = pgTable("fdp_dp_report_runs", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  period: text("period").notNull(),
+  recipientsCount: integer("recipients_count").notNull().default(0),
+  sentBy: text("sent_by").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_dp_report_runs_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_dp_report_runs_period_uq").on(table.workspaceId, table.period),
+]);

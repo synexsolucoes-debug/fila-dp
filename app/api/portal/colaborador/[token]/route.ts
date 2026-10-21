@@ -12,7 +12,7 @@ import { prepareSchedule, schedulesOf } from "@/lib/vacation-service";
 type Params = { params: Promise<{ token: string }> };
 
 /**
- * Portal do colaborador (§4.37): os holerites das folhas fechadas, as férias
+ * Portal do colaborador (§4.42): os holerites das folhas fechadas, as férias
  * e o pedido de férias, sem conta e sem senha. Mesmo desenho dos portais do
  * prestador e de EPI — o inquilino vem do token, a conexão nasce presa a ele,
  * toda recusa é o mesmo 404, e a resposta carrega só o que é da própria pessoa.

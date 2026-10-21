@@ -8,7 +8,7 @@ import { prepareSchedule, schedulesOf } from "@/lib/vacation-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/** Períodos aquisitivos, saldo e programações de férias do colaborador (ERP DP, §4.34). */
+/** Períodos aquisitivos, saldo e programações de férias do colaborador (ERP DP, §4.39). */
 export async function GET(_request: Request, context: RouteContext) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {

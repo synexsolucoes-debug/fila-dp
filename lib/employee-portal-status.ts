@@ -1,6 +1,6 @@
 import { ApiError } from "./api-errors.ts";
 
-/** Situação do link do portal do colaborador (§4.37). Puro, para os testes e as rotas. */
+/** Situação do link do portal do colaborador (§4.42). Puro, para os testes e as rotas. */
 
 export type EmployeePortalLinkStatus = "active" | "revoked" | "expired";
 export type EmployeePortalLinkRow = { revoked_at?: string | Date | null; expires_at: string | Date };

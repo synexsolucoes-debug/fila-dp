@@ -5,7 +5,7 @@ import { mostUrgentPeriod, validateSchedule, vacationPeriods, type VacationSched
 import { scheduleTransitions } from "../lib/vacation-service.ts";
 
 /**
- * Controle de férias do ERP DP (§4.34 de docs/arquitetura-operacional.md):
+ * Controle de férias do ERP DP (§4.39 de docs/arquitetura-operacional.md):
  * períodos aquisitivo e concessivo, saldo, vencimento em dobro e as regras
  * da programação (CLT arts. 130, 134, 135, 137, 139 e 143).
  */
@@ -85,7 +85,7 @@ test("estados: gozada e cancelada não voltam", () => {
 });
 
 test("tabelas isoladas por tenant, com as guardas da CLT, e rotas com permissão e auditoria", async () => {
-  const migration = await read("drizzle/postgres/0113_erp_dp_vacations.sql");
+  const migration = await read("drizzle/postgres/0116_erp_dp_vacations.sql");
   for (const table of ["fdp_vacation_schedules", "fdp_collective_vacations"]) {
     assert.match(migration, new RegExp(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`, "u"));
   }

@@ -1,5 +1,5 @@
 /**
- * Arquivo de pagamento de salários no layout CNAB 240 da FEBRABAN (§4.35 da
+ * Arquivo de pagamento de salários no layout CNAB 240 da FEBRABAN (§4.40 da
  * arquitetura): header de arquivo, header de lote do serviço 30 (pagamento de
  * salários), um segmento A por favorecido com crédito em conta, trailer de
  * lote e trailer de arquivo. Toda linha tem exatamente 240 posições.

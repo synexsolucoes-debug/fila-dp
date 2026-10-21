@@ -6,7 +6,7 @@ import { hashPortalToken, parsePortalToken, samePortalHash } from "./contractor-
 export { createPortalToken, hashPortalToken, parsePortalToken, portalExpiryFromDays } from "./contractor-invoice-portal.ts";
 
 /**
- * Portal do colaborador do ERP DP (§4.37): o mesmo desenho do portal do
+ * Portal do colaborador do ERP DP (§4.42): o mesmo desenho do portal do
  * prestador e da ciência de EPI — segredo no link, só o hash no banco, o
  * inquilino tirado do próprio token, limite de tentativas e toda recusa com a
  * mesma resposta.

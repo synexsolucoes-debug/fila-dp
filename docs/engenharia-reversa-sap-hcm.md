@@ -812,16 +812,16 @@ resultado e fecha (§4.32 de `docs/arquitetura-operacional.md`). A média de
 variáveis de férias, 13º e rescisão passa a sair das folhas fechadas.
 
 **Documentos (item 11).** Holerite em duas vias, aviso e recibo de férias e
-demonstrativo rescisório com termo de quitação, em PDF (§4.33).
+demonstrativo rescisório com termo de quitação, em PDF (§4.38).
 
 **Obrigações (item 13).** Guias com vencimento, CNAB 240, rubricas do
-S-1200 em CSV e lançamentos contábeis (§4.35). O XML do eSocial não é gerado:
+S-1200 em CSV e lançamentos contábeis (§4.40). O XML do eSocial não é gerado:
 o Vinculato não guarda o CPF inteiro.
 
-**Regras (§4.36).** Estagiário, aprendiz, pró-labore, salário-família,
+**Regras (§4.41).** Estagiário, aprendiz, pró-labore, salário-família,
 pensão por percentual, banco de horas e piso da convenção.
 
-**Gestão e autoatendimento (§4.37).** Custo de pessoal com encargos e
+**Gestão e autoatendimento (§4.42).** Custo de pessoal com encargos e
 provisões por centro de custo e departamento (o equivalente ao relatório de
 custos de pessoal do CO-PA/PCP) e portal do colaborador por link — holerite,
 saldo de férias e pedido de férias (o ESS do SAP, sem login).

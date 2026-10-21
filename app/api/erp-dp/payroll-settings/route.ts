@@ -4,7 +4,7 @@ import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { companySettings, parseSettings } from "@/lib/payroll-settings-service";
 
-/** Configuração de folha da empresa (§4.35): encargos, banco do CNAB e contas contábeis. */
+/** Configuração de folha da empresa (§4.40): encargos, banco do CNAB e contas contábeis. */
 export async function GET(request: Request) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {

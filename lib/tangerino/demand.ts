@@ -1,6 +1,8 @@
 import type { getD1 } from "../../db/index.ts";
 import { addBusinessDays } from "../fila-dp-relations.ts";
 import { workingDayMinutes } from "../fila-dp-sla.ts";
+import { preparePortfolioAssignment } from "../portfolio-assignment.ts";
+import { prepareCutoffEvaluation } from "../dp-cutoff-service.ts";
 import { prepareAuditEvent } from "../fila-dp-db.ts";
 import { recordIntegrationEvent } from "../integration-events.ts";
 import { prepareDomainEvent } from "../outbox.ts";
@@ -209,6 +211,12 @@ export async function ensureTangerinoErpDemand(d1: Database, input: {
   const cardId = crypto.randomUUID();
   const title = `Admissão ERP — ${target.full_name}`.slice(0, 160);
 
+  const portfolio = await preparePortfolioAssignment(d1, { workspaceId: input.workspaceId, cardId, companyId: target.company_id });
+  const cutoff = await prepareCutoffEvaluation(d1, {
+    workspaceId: input.workspaceId, cardId, processType: PROCESS_TYPE, companyId: target.company_id ?? null, competence: null,
+    requestedFor: /^\d{4}-\d{2}-\d{2}$/u.test(String(admissionDate ?? "")) ? String(admissionDate) : null,
+    areaLabel: "Admissão via Tangerino", actor: "SYSTEM", title,
+  });
   await d1.batch([
     d1.prepare(`INSERT INTO fdp_cards
         (id, workspace_id, board_id, list_id, title, description, company_id, company, process_type,
@@ -224,6 +232,9 @@ export async function ensureTangerinoErpDemand(d1: Database, input: {
     ...checklist.map((item, index) => d1.prepare(`INSERT INTO fdp_checklist_items
         (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)`)
       .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)),
+    // Admissão vinda do ERP: quem responde pela empresa na carteira.
+    ...portfolio.statements,
+    ...cutoff.statements,
     d1.prepare(`INSERT INTO fdp_activity_events
         (id, workspace_id, card_id, actor_email, event_type, payload_json)
       VALUES (?, ?, ?, 'SYSTEM', 'tangerino.erp_demand_created', ?::jsonb)`)

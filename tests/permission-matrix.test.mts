@@ -82,7 +82,7 @@ test("toda rota de escrita passa por alguma autorização", () => {
   /* Rotas cuja autorização é um token portador, e não uma sessão: o portal em
      que o prestador envia a nota fiscal, e o portal em que o colaborador dá
      ciência da entrega de EPI (§4.9), e o portal do colaborador do ERP DP
-     (§4.37). Quem chega ali não é membro do grupo e
+     (§4.42). Quem chega ali não é membro do grupo e
      nunca vai ser — exigir capacidade seria exigir uma conta, que é exatamente
      o que o portal existe para não pedir.
      Elas também não ficam sem conferência: a regra delas é mais estreita que
@@ -94,9 +94,20 @@ test("toda rota de escrita passa por alguma autorização", () => {
     ["portal/epi/[token]/route.ts", { usableFn: "assertEpiAckLinkUsable", rateLimitAction: "epi_ack_portal" }],
     ["portal/colaborador/[token]/route.ts", { usableFn: "assertEmployeePortalLinkUsable", rateLimitAction: "employee_portal" }],
   ]);
+  /* Formulários do Teams (DP Operacional): quem posta é o fluxo do Power
+     Automate do próprio grupo, com o segredo do webhook do Teams já
+     configurado. O inquilino só vale depois do segredo conferido, e nunca vem
+     do corpo. */
+  const POR_SEGREDO_TEAMS = new Set(["integrations/teams/demand/route.ts", "integrations/teams/experience/route.ts"]);
+  for (const caminho of POR_SEGREDO_TEAMS) {
+    const fonte = routes.find(([nome]) => nome === caminho)?.[1];
+    assert.ok(fonte, `${caminho} não existe mais — tire da lista do Teams`);
+    assert.match(fonte, /await authenticateTeamsForm\(request\)/u, `${caminho} precisa conferir o segredo do Teams`);
+    assert.doesNotMatch(fonte, /body\.workspaceId/u, `${caminho} aceita inquilino vindo do corpo`);
+  }
   for (const [caminho, fonte] of routes) {
     if (!/export async function (POST|PATCH|PUT|DELETE)/u.test(fonte)) continue;
-    if (PUBLICAS.has(caminho) || PESSOAIS.has(caminho) || POR_TOKEN.has(caminho)) continue;
+    if (PUBLICAS.has(caminho) || PESSOAIS.has(caminho) || POR_TOKEN.has(caminho) || POR_SEGREDO_TEAMS.has(caminho)) continue;
     // Rotas internas do worker usam assinatura HMAC curta no lugar de sessão
     // humana; ela também é uma verificação de autorização e prende workspace,
     // job, ação, conteúdo e validade temporal.

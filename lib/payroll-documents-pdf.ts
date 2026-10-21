@@ -2,7 +2,7 @@ import { A4, buildPdf, PdfPage } from "./pdf-document.ts";
 import type { PayrollLine } from "./payroll-calc.ts";
 
 /**
- * Documentos da folha do ERP DP (item 11 do roadmap, §4.33 da arquitetura):
+ * Documentos da folha do ERP DP (item 11 do roadmap, §4.38 da arquitetura):
  * recibo de pagamento (holerite), aviso e recibo de férias e demonstrativo de
  * verbas rescisórias com termo de quitação — a partir do resultado gravado ou
  * calculado, nunca de um número digitado à parte.

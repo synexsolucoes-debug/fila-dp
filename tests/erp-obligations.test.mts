@@ -10,7 +10,7 @@ import { monthlyPayroll } from "../lib/payroll-calc.ts";
 import { parseBankAccount, parseSettings } from "../lib/payroll-settings-service.ts";
 
 /**
- * Obrigações e pagamento da folha do ERP DP (§4.35 de
+ * Obrigações e pagamento da folha do ERP DP (§4.40 de
  * docs/arquitetura-operacional.md): encargos, guias com vencimento, CNAB 240,
  * rubricas do S-1200 e contabilização.
  */
@@ -118,7 +118,7 @@ test("arquivos só de folha fechada, com permissão de gestão e auditoria", asy
   const obligations = await read("app/api/erp-dp/payroll-runs/[id]/obligations/route.ts");
   assert.match(obligations, /requireCapability\(workspace, "payroll\.read"\)/u);
   assert.match(await read("lib/payroll-exports-service.ts"), /requireCompanyAccess\(/u);
-  const migration = await read("drizzle/postgres/0114_erp_dp_obligations.sql");
+  const migration = await read("drizzle/postgres/0117_erp_dp_obligations.sql");
   for (const table of ["fdp_company_payroll_settings", "fdp_employee_bank_accounts"]) {
     assert.match(migration, new RegExp(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`, "u"));
   }

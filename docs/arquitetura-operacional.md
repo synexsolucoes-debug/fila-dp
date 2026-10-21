@@ -1708,7 +1708,7 @@ folhas **fechadas** dos 12 meses anteriores.
 | --- | --- |
 | Entradas do ponto aprovado e em rascunho, parcelas, VT até 6%, VR, diferença retroativa, admissão no mês, quem fica de fora, média de variáveis, migration e permissões | `tests/erp-payroll-run.test.mts` |
 
-### 4.33 Documentos da folha — holerite, férias e rescisão em PDF
+### 4.38 Documentos da folha — holerite, férias e rescisão em PDF
 
 Gerados pelo PDF mínimo de `lib/pdf-document.ts` (`lib/payroll-documents-pdf.ts`),
 sempre a partir do número calculado — nunca de um valor digitado à parte:
@@ -1735,7 +1735,7 @@ oficial.
 | --- | --- |
 | Duas vias, rubricas, valor protegido, declaração, CNPJ, aviso e recibo de férias, termo de quitação, permissões e auditoria | `tests/erp-payroll-documents.test.mts` |
 
-### 4.34 Férias — saldo por período, vencimento, programação e coletivas
+### 4.39 Férias — saldo por período, vencimento, programação e coletivas
 
 A cota de ausência (infotipo 2006) do SAP. Os **períodos aquisitivos** são
 derivados da admissão (`lib/vacation-balance.ts`): 12 meses dão 30 dias (ou 24,
@@ -1768,7 +1768,7 @@ mais urgente dela; quem não cabe nas regras fica de fora com o motivo.
 
 **Permissões**: ler com `employees.read`, programar com `employees.manage` —
 férias é cadastro de DP, não salário. O valor sai em Cálculos › Férias, com o
-documento do §4.33.
+documento do §4.38.
 
 **Tela**: ERP DP › Férias.
 
@@ -1776,7 +1776,7 @@ documento do §4.33.
 | --- | --- |
 | Períodos, saldo, vencida, vencendo, mais urgente, regras de fração, abono, sexta e sábado, saldo, três frações, coletivas, estados, migration e permissões | `tests/erp-vacations.test.mts` |
 
-### 4.35 Obrigações e pagamento da folha — guias, CNAB 240, S-1200 e contabilização
+### 4.40 Obrigações e pagamento da folha — guias, CNAB 240, S-1200 e contabilização
 
 Da folha **fechada** (§4.32) saem as obrigações (`lib/payroll-obligations.ts`)
 e os arquivos. O Vinculato gera o número e o arquivo; **a transmissão
@@ -1819,7 +1819,7 @@ fechada) e Ficha funcional › Remuneração (conta de salário).
 | --- | --- |
 | Vencimentos, encargos (padrão e Simples), resumo das guias, CNAB 240 posição a posição, S-1200 em CSV, lançamentos, validação de configuração e conta, permissões | `tests/erp-obligations.test.mts` |
 
-### 4.36 Regras do cálculo — categorias, salário-família, pensão, banco de horas e piso
+### 4.41 Regras do cálculo — categorias, salário-família, pensão, banco de horas e piso
 
 O cálculo deixa de tratar todo mundo como empregado mensalista
 (`lib/payroll-calc.ts`, migration 0115).
@@ -1839,7 +1839,7 @@ O cálculo deixa de tratar todo mundo como empregado mensalista
 | --- | --- |
 | Estagiário, aprendiz, pró-labore e patronal, salário-família (limite, proporcional, compensação), pensão nas duas bases, categorias fora da CLT, banco de horas, piso, migration | `tests/erp-payroll-rules.test.mts` |
 
-### 4.37 Custo de pessoal e portal do colaborador
+### 4.42 Custo de pessoal e portal do colaborador
 
 **Custo de pessoal** (ERP DP › Custos, `lib/payroll-costs.ts`,
 `/api/erp-dp/costs`, `payroll.read`). Lê as folhas **fechadas** da competência
@@ -1876,6 +1876,156 @@ tentativas (`employee_portal` em `lib/auth-rate-limit.ts`).
 | --- | --- |
 | Custo por pessoa (patronal, pró-labore, provisões, VT, salário-família fora), grupos, totais, status do link, migration e rotas do portal | `tests/erp-costs-portal.test.mts` |
 | Rota pública do portal com hash, escopo e limite de tentativas | `tests/permission-matrix.test.mts` |
+
+### 4.33 DP Operacional, Fase 1 — carteira e atribuição automática
+
+O DP opera dezenas de CNPJs com dois ou três analistas e nenhuma coordenação
+formal. A divisão de empresas morava numa planilha, e demanda nova nascia sem
+dono até alguém lembrar de quem era aquela empresa. A carteira transforma essa
+divisão em dado.
+
+**Modelo (migration 0114).** `fdp_company_portfolio` guarda titular e backup de
+cada empresa com vigência; uma vigência aberta por empresa (índice único
+parcial) e um trigger que só aceita encerrar a vigência aberta — trocar o
+titular encerra a linha e abre outra, nunca reescreve. `fdp_member_absences`
+guarda férias e folgas da equipe. `fdp_companies` ganha `dp_status`
+(`interno`, `a_internalizar`, `sem_funcionarios`, `terceirizado`) e as colunas
+geradas `cnpj_root` e `is_headquarters`, derivadas do CNPJ.
+
+**A regra (`lib/portfolio.ts`).** `responsavelPara(empresa, data)`: titular da
+vigência que cobre a data; se ausente, o backup; se os dois ausentes, ou sem
+carteira, ninguém — e a demanda aparece em Central de Trabalho › Sem
+responsável. Quem deixou de ser membro do grupo conta como ausente.
+
+**Escolha explícita vence.** Quem abre a demanda e escolhe o responsável, a
+etapa inicial do processo que nomeia um usuário (`USER`) e o analista escolhido
+no desconto de EPI não consultam a carteira. A carteira preenche o que ficou sem
+dono.
+
+**Onde entra.** Os nove caminhos que criam demanda do DP passam por
+`preparePortfolioAssignment` (`lib/portfolio-assignment.ts`), no mesmo lote da
+criação: formulário, instância de processo (manual e por evento), admissões
+Sólides/Tangerino, Teams, sugestão de movimentação, inbox (com empresa) e
+desconto de EPI. A investigação de acidente fica de fora de propósito: é do
+SESMT, e a carteira diz qual analista de DP responde pela empresa.
+
+**Troca de carteira.** Encerra a vigência e passa ao novo titular as demandas em
+aberto que estavam com o titular que sai; concluídas continuam com quem as
+concluiu. Ausência desvia só as demandas novas; o botão "Passar abertas para o
+backup" move as que já estavam com a pessoa. Tudo vai para a auditoria.
+
+**Sankhya.** O cadastro é único por CPF no grupo, e a 40 (Goianésia, matriz da
+raiz da 33) aparece no Sankhya com os mesmos funcionários da 33. Registro de
+empresa `sem_funcionarios` é ignorado pela sincronização e pela planilha, com o
+motivo no item.
+
+**Permissões.** `portfolio.read` (todos menos convidado) e `portfolio.manage`
+(administrador e analista), governadas pelo módulo Cadastros.
+
+**Semente.** `scripts/seed-dp-carteira.mjs --workspace <id> --seed opyt
+--pessoa Odete=<e-mail> --pessoa Rian=<e-mail>` aplica a carteira inicial
+(`scripts/seeds/opyt-carteira.mjs`). Idempotente: não reescreve carteira já
+existente. `--dry-run` simula.
+
+**Tela.** Operação DP › Carteira (`/painel/carteira`).
+
+| Verificação | Onde |
+| --- | --- |
+| `responsavelPara` (titular, backup, ambos ausentes, vigência, troca no mesmo dia), aceite 33 → Rian / Odete, migration, os nove caminhos de criação, Sankhya e o recorte Sem responsável | `tests/dp-portfolio.test.mts` |
+
+### 4.34 DP Operacional, Fase 2 — rotinas recorrentes, Minha semana e Calendário
+
+As rotinas do mês (boletos do ponto, impostos, planos de saúde, ponto,
+eventos à parte, Caju, Wellhub) moravam numa planilha de calendário. Agora são
+modelos (`fdp_recurring_templates`, migration 0115) que geram **demandas
+comuns**: aparecem na Central, no quadro e na carteira sem tela paralela.
+
+**Modelo.** Frequência mensal (janela `dia_inicio`–`dia_fim`) ou semanal (dia da
+semana); escopo por empresa (internas, ou a lista do modelo), por raiz de CNPJ
+(uma demanda por raiz, com a matriz como empresa — a carteira da matriz
+responde) ou uma para o grupo (responsável em DP Operacional › Rotinas).
+
+**Prazo (`lib/dp-recurring.ts`).** Dia final da janela, limitado ao último dia
+do mês (31 em abril → 30; 30 em fevereiro → 28/29), antecipado para o dia útil
+anterior pelo calendário do grupo (dias úteis e feriados de Configurações).
+Janela de um dia só em dia não útil antecipa junto.
+
+**Geração.** `generateRecurringTasks` cria demanda, checklist, atribuição
+(carteira) e uma linha em `fdp_recurring_occurrences`, única por modelo,
+período e escopo — rodar duas vezes não duplica. O job diário gera a
+competência corrente, a seguinte a partir do dia 25 e a semana corrente; o
+botão "Gerar demandas da competência" faz o mesmo sob demanda.
+
+**Telas.** DP Operacional (`/painel/dp`): Minha semana (demandas e alertas da
+pessoa na semana, atrasados primeiro) e Calendário (linha do tempo do mês por
+rotina, frentes por dia, pico com 5 ou mais).
+
+### 4.35 DP Operacional, Fase 3 — regra de corte, ocorrências e Teams
+
+**Regras (`fdp_cutoff_rules`).** Por tipo de processo: antecedência em dias
+úteis ou corridos, dia do mês, mesmo dia, até N dias depois. Só regra
+`aprovada` ou `divulgada` vale; `proposta` fica visível sem efeito.
+
+**Veredito (`lib/dp-cutoff.ts`).** `evaluateCutoff` decide `within_cutoff` na
+criação da demanda, a partir da data pedida (`requested_for`). Fora do corte,
+grava ocorrência automática (`fdp_dp_occurrences`) com área solicitante e dias
+de atraso, e devolve o aviso "entra no próximo ciclo ou depende de aprovação da
+gestão". O veredito é imutável (trigger `fdp_cards_cutoff_immutable`): ninguém
+"conserta" o histórico depois.
+
+**Onde entra.** Formulário de demanda (campo "Data pedida"), admissões
+Sólides/Tangerino, movimentação do Teams, formulário do Teams e importação de
+movimentações (variáveis depois do dia de corte). Ocorrência manual pela tela.
+
+**Teams.** Continua só origem. O fluxo do Power Automate posta o formulário em
+`POST /api/integrations/teams/demand?workspaceId=<id>` com o segredo do webhook
+do Teams em `x-fila-dp-secret`; a resposta traz `withinCutoff`, prazo, aviso e
+responsável para o card de retorno. Idempotente pelo `submissionId` do envio.
+
+### 4.36 DP Operacional, Fase 4 — alertas do Sankhya
+
+`computeAlerts` (`lib/dp-alerts.ts`, puro) olha os dados que a sincronização
+já traz: experiência 45/90 dias (abre 10 dias antes, fica 15 depois como
+vencido), limite do período concessivo de férias (60 dias, urgente com 30 —
+aproximação por admissão + férias registradas como movimentação, dita na
+tela), cadastro incompleto (CPF, CODFUNC, ativo em empresa `sem_funcionarios`,
+empresa interna sem CNPJ/CODEMP). `refreshDpAlerts` materializa em
+`fdp_dp_alerts` (chave única por alerta; respondido não é sobrescrito; o que
+sumiu é encerrado). Responsável: carteira da empresa. Aparecem na Central
+(fonte `dp_alert`) e em DP Operacional › Alertas.
+
+**Pergunta ao gestor.** `GET /api/integrations/teams/experience?workspaceId=`
+lista as experiências pendentes com e-mail do gestor; o fluxo pergunta no Teams
+e responde em `POST` (efetivar, prorrogar, desligar). A mesma decisão pode ser
+registrada no painel; a origem fica gravada.
+
+### 4.37 DP Operacional, Fase 5 — painel da gestão e relatório mensal
+
+**Painel** (DP Operacional › Painel): por titular, empresas, ativos CLT, PJ,
+demandas abertas e atrasadas e alertas; demandas fora do corte por área e por
+tipo; totais do grupo.
+
+**Relatório** (`lib/dp-report.ts`): PDF com volume entregue, fora do prazo de
+corte por área, ocorrências, riscos dos próximos 30 dias e carga por titular —
+sem CPF nem salário. O job envia o do mês anterior até o dia 5, uma vez por
+competência (`fdp_dp_report_runs`), pelo Resend, aos destinatários de DP
+Operacional › Painel. "Baixar PDF" e "Enviar agora" ficam na tela.
+
+**Job diário.** `GET /api/cron/dp-operations` (segredo `CRON_SECRET` ou
+`FDP_DP_OPERATIONS_CRON_SECRET`, workflow `dp-operations-cron.yml`, 9h UTC):
+por workspace, gera rotinas, recalcula alertas e tenta o relatório.
+
+**Semente.** `scripts/seed-dp-carteira.mjs` aplica também as rotinas e as
+regras de corte da semente (`recurringTemplates`, `cutoffRules`), sem
+reescrever o que já existe.
+
+**Permissões.** Leitura com `portfolio.read`; criar e mudar rotinas, regras,
+destinatários e decidir alertas com `portfolio.manage`. Todas as tabelas novas
+com `workspace_id` e RLS forçada.
+
+| Verificação | Onde |
+| --- | --- |
+| Calendário de dias úteis, prazo com dia não útil e meses de 28/30 dias, escopos por empresa/raiz/grupo, `dentroDoCorte` (aceite: admissão com 1 dia útil → fora, 2 dias de atraso), demais regras, alertas, PDF, RLS da migration, caminhos de corte, job | `tests/dp-operations.test.mts` |
 
 ---
 

@@ -68,6 +68,7 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
       initialLocation={location}
       initialThemePreference={themePreference}
       initialTheme={resolveTheme(themePreference, systemTheme)}
+      initialViewTab={aba}
     />
   );
 }

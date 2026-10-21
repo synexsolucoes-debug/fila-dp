@@ -1,7 +1,7 @@
 import type { PayrollLine } from "./payroll-calc.ts";
 
 /**
- * Obrigações da folha fechada do ERP DP (item 13 do roadmap, §4.35 da
+ * Obrigações da folha fechada do ERP DP (item 13 do roadmap, §4.40 da
  * arquitetura): encargos do empregador, guias com vencimento, rubricas no
  * formato do S-1200 e lançamentos contábeis.
  *

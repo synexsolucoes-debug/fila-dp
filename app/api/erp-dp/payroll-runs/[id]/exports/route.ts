@@ -12,7 +12,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const kinds = ["cnab", "s1200", "accounting"] as const;
 
 /**
- * Arquivos da folha fechada (§4.35): pagamento em CNAB 240, rubricas no
+ * Arquivos da folha fechada (§4.40): pagamento em CNAB 240, rubricas no
  * formato do S-1200 e lançamentos contábeis. Só folha fechada: arquivo de
  * pagamento de folha que ainda pode mudar é pagamento errado.
  */

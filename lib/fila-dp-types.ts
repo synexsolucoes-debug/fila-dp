@@ -230,6 +230,9 @@ export type Card = {
    * descrição, os comentários e o checklist. Vazio é estado legítimo.
    */
   nextStep: string;
+  /** Regra de corte (Fase 3): `null` sem regra para o tipo ou sem a data pedida. */
+  withinCutoff?: boolean | null;
+  requestedFor?: string | null;
 };
 
 export type OperationalArea = {

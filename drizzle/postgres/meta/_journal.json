@@ -811,28 +811,49 @@
       "idx": 115,
       "version": "7",
       "when": 1791391200000,
-      "tag": "0113_erp_dp_vacations",
+      "tag": "0113_payroll_movements",
       "breakpoints": true
     },
     {
       "idx": 116,
       "version": "7",
       "when": 1791477600000,
-      "tag": "0114_erp_dp_obligations",
+      "tag": "0114_dp_portfolio",
       "breakpoints": true
     },
     {
       "idx": 117,
       "version": "7",
       "when": 1791564000000,
-      "tag": "0115_erp_dp_payroll_rules",
+      "tag": "0115_dp_operations",
       "breakpoints": true
     },
     {
       "idx": 118,
       "version": "7",
       "when": 1791650400000,
-      "tag": "0116_erp_dp_employee_portal",
+      "tag": "0116_erp_dp_vacations",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1791736800000,
+      "tag": "0117_erp_dp_obligations",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1791823200000,
+      "tag": "0118_erp_dp_payroll_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1791909600000,
+      "tag": "0119_erp_dp_employee_portal",
       "breakpoints": true
     }
   ]

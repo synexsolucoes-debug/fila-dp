@@ -11,7 +11,7 @@ import {
 import styles from "./erp-record.module.css";
 
 /**
- * Obrigações e pagamento da folha fechada (§4.35): guias com vencimento,
+ * Obrigações e pagamento da folha fechada (§4.40): guias com vencimento,
  * encargos do empregador e os arquivos — CNAB 240, rubricas no formato do
  * S-1200 e lançamentos contábeis. A transmissão continua com quem tem o
  * certificado digital.

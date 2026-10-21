@@ -172,6 +172,11 @@ export const capabilities = [
      número que todo cálculo seguinte usa. */
   "payroll.read",
   "payroll.manage",
+  /* Carteira do DP: quem responde por cada empresa. O analista administra a
+     própria divisão de empresas — é a equipe que se organiza, não uma
+     coordenação que não existe. */
+  "portfolio.read",
+  "portfolio.manage",
 ] as const;
 
 export type Capability = typeof capabilities[number];
@@ -279,6 +284,9 @@ const roleCapabilities = {
     // O analista de DP calcula a folha e mantém o salário vigente: é o
     // trabalho dele no ERP DP. O observador não vê salário.
     "payroll.read", "payroll.manage",
+    // A equipe de DP divide as empresas entre si e cadastra as próprias
+    // ausências; a troca fica na auditoria.
+    "portfolio.read", "portfolio.manage",
   ]),
   observer: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "attachments.read", "reports.read",
@@ -287,6 +295,7 @@ const roleCapabilities = {
     "processes.read", "competences.read", "obligations.read", "pending_items.read",
     "benefits.read", "contractors.read", "contractors.payments.read", "invoice.read", "time.read",
     "epi.view", "safety.view", "exams.view", "trainings.view", "ledger.read",
+    "portfolio.read",
   ]),
   guest: new Set<Capability>([
     "workspace.read", "members.directory.read", "cards.read", "comments.write",

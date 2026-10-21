@@ -1,7 +1,7 @@
 import { ApiError } from "./api-errors.ts";
 import { defaultAccounts, defaultSettings, type AccountingAccounts, type CompanyPayrollSettings, type EmployerContribution } from "./payroll-obligations.ts";
 
-/** Configuração de folha da empresa e conta bancária do colaborador (§4.35). */
+/** Configuração de folha da empresa e conta bancária do colaborador (§4.40). */
 
 export async function companySettings(d1: SqlDatabase, workspaceId: string, companyId: string): Promise<CompanyPayrollSettings> {
   const row = await d1.prepare("SELECT * FROM fdp_company_payroll_settings WHERE workspace_id = ? AND company_id = ?")

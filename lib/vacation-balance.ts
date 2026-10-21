@@ -2,7 +2,7 @@ import { addDays, addMonths } from "./payroll-calc.ts";
 
 /**
  * Controle de férias do ERP DP — a cota de ausência (infotipo 2006) do SAP
- * (item 8 do roadmap, §4.34 da arquitetura).
+ * (item 8 do roadmap, §4.39 da arquitetura).
  *
  * O período aquisitivo nasce da admissão: 12 meses de vínculo dão direito a
  * 30 dias (CLT art. 130), a gozar nos 12 meses seguintes — o período

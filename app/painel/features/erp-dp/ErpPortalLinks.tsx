@@ -6,7 +6,7 @@ import { ErrorBanner, StatusPill } from "../shared";
 import styles from "./erp-record.module.css";
 
 /**
- * Links do portal do colaborador (§4.37): gerar um link com prazo para a
+ * Links do portal do colaborador (§4.42): gerar um link com prazo para a
  * pessoa ver os holerites e as férias e pedir férias, e revogar quando
  * precisar. O endereço completo só aparece na hora de gerar.
  */

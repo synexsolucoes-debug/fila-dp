@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { EmployeePortal } from "./EmployeePortal";
 
 /**
- * O portal do colaborador (§4.37): holerites, férias e pedido de férias, sem
+ * O portal do colaborador (§4.42): holerites, férias e pedido de férias, sem
  * conta. Mesmo raciocínio dos portais de nota fiscal e de EPI.
  */
 

@@ -95,7 +95,11 @@ export function SignaturePad({ onChange, disabled }: {
     drawing.current = false;
     const canvas = canvasRef.current;
     if (!canvas || !touched.current) return;
-    canvas.toBlob((blob) => onChange(blob), "image/png");
+    // Síncrono de propósito: com `toBlob` o "Assinatura capturada" já aparecia
+    // e o arquivo só chegava depois — tocar em Confirmar nesse intervalo
+    // gravava a entrega sem assinatura.
+    const bytes = atob(canvas.toDataURL("image/png").split(",")[1] ?? "");
+    onChange(new Blob([Uint8Array.from(bytes, (char) => char.charCodeAt(0))], { type: "image/png" }));
   }
 
   function clear() {

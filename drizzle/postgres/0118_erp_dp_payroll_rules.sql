@@ -1,9 +1,9 @@
--- ERP DP: regras que faltavam no cálculo (§4.36 de docs/arquitetura-operacional.md).
+-- ERP DP: regras que faltavam no cálculo (§4.41 de docs/arquitetura-operacional.md).
 --
 -- Na remuneração: pró-labore do sócio, filhos para o salário-família e
 -- pensão alimentícia por percentual. Na configuração da empresa: o piso
 -- salarial da convenção coletiva, que a folha confere.
-SELECT pg_advisory_xact_lock(hashtext('0115_erp_dp_payroll_rules'));
+SELECT pg_advisory_xact_lock(hashtext('0118_erp_dp_payroll_rules'));
 --> statement-breakpoint
 ALTER TABLE "fdp_employee_remuneration" ADD COLUMN "pro_labore" boolean DEFAULT false NOT NULL;
 --> statement-breakpoint
