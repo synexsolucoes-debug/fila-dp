@@ -1740,7 +1740,7 @@ oficial.
 A cota de ausência (infotipo 2006) do SAP. Os **períodos aquisitivos** são
 derivados da admissão (`lib/vacation-balance.ts`): 12 meses dão 30 dias (ou 24,
 18, 12 pelas faltas — art. 130), a gozar nos 12 meses seguintes (concessivo,
-art. 134). O que é gravado (migration 0113) é a programação de cada período
+art. 134). O que é gravado (migration 0116) é a programação de cada período
 (`fdp_vacation_schedules`) e as férias coletivas que a geraram
 (`fdp_collective_vacations`).
 
@@ -1802,7 +1802,7 @@ pela matrícula, para o sistema que transmite. Pelo mesmo motivo o CNAB vai sem
 o segmento B (CPF e endereço do favorecido); o banco confirma na homologação do
 convênio se aceita o crédito em conta só com o segmento A.
 
-**Configuração** (migration 0114): `fdp_company_payroll_settings` (forma da
+**Configuração** (migration 0117): `fdp_company_payroll_settings` (forma da
 contribuição patronal, RAT, FAP, terceiros, banco e convênio do CNAB, contas
 contábeis) e `fdp_employee_bank_accounts` (a conta de salário — o infotipo
 0009). As duas com `payroll.manage` e auditoria.
@@ -1822,7 +1822,7 @@ fechada) e Ficha funcional › Remuneração (conta de salário).
 ### 4.41 Regras do cálculo — categorias, salário-família, pensão, banco de horas e piso
 
 O cálculo deixa de tratar todo mundo como empregado mensalista
-(`lib/payroll-calc.ts`, migration 0115).
+(`lib/payroll-calc.ts`, migration 0118).
 
 | Regra | Como entra |
 | --- | --- |
@@ -1857,7 +1857,7 @@ e mostra quanto cada pessoa custa à empresa além do salário:
 Agrupa por centro de custo e por departamento ("Sem centro de custo" aparece,
 não some), mostra a evolução das últimas competências fechadas e exporta CSV.
 
-**Portal do colaborador** (migration 0116, `fdp_employee_portal_links`). Na
+**Portal do colaborador** (migration 0119, `fdp_employee_portal_links`). Na
 remuneração da ficha, quem tem `payroll.manage` gera um link para a pessoa, com
 validade; o token vai uma vez para a tela e só o hash fica gravado, como nos
 portais de EPI e de notas do PJ. Abrindo `/portal/colaborador/<token>`, sem
