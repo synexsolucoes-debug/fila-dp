@@ -95,7 +95,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   flex: 1 1 260px;
   min-width: 0;
   padding: 0 12px;
-  height: 36px;
+  height: 40px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface-elevated);
@@ -115,63 +115,92 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   background: transparent;
   color: var(--ui-text);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 .search input:focus { outline: none; }
 
-.modes { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface-muted); }
+/* Controle segmentado (visual aprovado de Demandas): uma peça só, com os modos
+   separados por fio, e o ligado marcado por fundo e sublinhado — não só pela cor. */
+.modes { display: flex; flex-wrap: wrap; overflow: hidden; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface-elevated); }
 .mode {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 10px;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--ui-radius-sm);
+  border-right: 1px solid var(--ui-border);
+  border-radius: 0;
   background: transparent;
   color: var(--ui-text-soft);
-  font: 650 12px inherit;
+  /* `font: 650 12px inherit` era inválido — `inherit` não entra no atalho — e o
+     navegador descartava a linha inteira: o modo saía no tamanho padrão do
+     botão. As três propriedades separadas valem. */
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
-.mode svg { width: 14px; height: 14px; }
-.mode:hover { background: var(--ui-surface-elevated); color: var(--ui-text); }
-.mode:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 1px; }
-.mode[data-active] { background: var(--ui-surface-elevated); color: var(--ui-accent-text, var(--ui-primary)); box-shadow: var(--ui-shadow-card); }
+.mode:last-child { border-right: 0; }
+.mode svg { width: 16px; height: 16px; }
+.mode:hover { background: var(--ui-surface-muted); color: var(--ui-text); }
+.mode:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; }
+.mode[data-active] { background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); box-shadow: inset 0 -2px var(--ui-primary); }
 
 .focusToggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: 40px;
   padding: 0 12px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface-elevated);
   color: var(--ui-text-soft);
-  font: 650 12px inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
 }
-.focusToggle svg { width: 14px; height: 14px; }
+.focusToggle svg { width: 16px; height: 16px; }
 .focusToggle:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
 .focusToggle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
 .focusToggle[data-active] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 
-.presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
-.preset, .saveView, .savedView > button {
-  height: 28px;
+.presets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; flex: 1 1 auto; min-width: 0; }
+/* Os recortes rápidos são abas de texto com sublinhado, como no visual
+   aprovado: lidos em linha, sem uma fileira de pílulas competindo com o quadro. */
+.preset {
+  height: 40px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--ui-text-soft);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.preset:hover { color: var(--ui-text); }
+.preset[data-active] { border-bottom-color: var(--ui-primary); color: var(--ui-accent-text, var(--ui-primary)); font-weight: 650; }
+.saveView, .savedView > button {
+  height: 32px;
   padding: 0 10px;
   border: 1px solid var(--ui-border);
   border-radius: 999px;
   background: var(--ui-surface-elevated);
   color: var(--ui-text-soft);
-  font: 650 11.5px inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
-.preset:hover, .saveView:hover, .savedView > button:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
+.saveView:hover, .savedView > button:hover { border-color: var(--ui-border-strong); color: var(--ui-text); }
 .preset:focus-visible, .saveView:focus-visible, .savedView > button:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
-.preset[data-active] { border-color: var(--ui-accent-text, var(--ui-primary)); background: var(--ui-primary-soft); color: var(--ui-accent-text, var(--ui-primary)); }
 .saveView { display: inline-flex; align-items: center; gap: 5px; }
 .saveView svg { width: 13px; height: 13px; }
 
@@ -183,8 +212,8 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 28px;
+  width: 28px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--ui-border);
   border-top-left-radius: 0;
@@ -203,13 +232,15 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 11px;
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface-elevated);
   color: var(--ui-text-soft);
-  font: 650 12px inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   list-style: none;
 }
@@ -253,24 +284,26 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
    de 32px aqui seria exatamente isso — e o quadro não ganha densidade nenhuma
    com 4px a menos num controle que aparece uma vez. */
 .filterFields select, .sort select {
-  height: 36px;
-  padding: 0 8px;
+  height: 40px;
+  padding: 0 10px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-sm);
-  background: var(--ui-surface);
+  background: var(--ui-surface-elevated);
   color: var(--ui-text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 14px;
 }
 .sort { grid-template-columns: auto auto; align-items: center; gap: 6px; }
 .clear {
-  height: 30px;
-  padding: 0 11px;
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: transparent;
   color: var(--ui-text-soft);
-  font: 650 12px inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
 }
 .clear:hover { color: var(--ui-danger); border-color: var(--ui-danger); }
@@ -296,11 +329,13 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   max-height: 100%;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface);
+  /* Coluna em fundo neutro e cartão em superfície: o cartão se destaca da
+     coluna sem sombra, como no visual aprovado. */
+  background: var(--ui-surface-muted);
   scroll-snap-align: start;
   transition: border-color .14s ease, background .14s ease;
 }
-.column[data-unassigned] { background: var(--ui-surface-muted); border-color: var(--ui-border-strong); }
+.column[data-unassigned] { border-color: var(--ui-border-strong); border-style: dashed; }
 /* Durante o arrasto toda coluna se anuncia como alvo possível; a que está sob o
    cursor se anuncia como o alvo. Sem o primeiro estado, quem arrasta não sabe
    onde pode soltar; sem o segundo, não sabe onde vai soltar. */
@@ -324,36 +359,36 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .avatar[data-empty] { background: var(--ui-state-neutral-bg); color: var(--ui-state-neutral-text); }
 .avatar svg { width: 15px; height: 15px; }
 .columnWho { display: grid; gap: 1px; min-width: 0; flex: 1; }
-.columnWho strong { font-size: 13px; font-weight: 700; color: var(--ui-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.columnWho small { font-size: 10.5px; color: var(--ui-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.columnWho strong { font-size: 15px; font-weight: 700; color: var(--ui-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.columnWho small { font-size: 12px; color: var(--ui-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .columnCount {
   flex: 0 0 auto;
   min-width: 22px;
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--ui-surface-muted);
+  background: var(--ui-surface-elevated);
   color: var(--ui-text-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   line-height: 20px;
   text-align: center;
 }
 
-.columnHint { margin: 0; padding: 0 11px 9px; font-size: 11px; color: var(--ui-text-soft); }
+.columnHint { margin: 0; padding: 0 11px 9px; font-size: 12px; color: var(--ui-text-soft); }
 .columnHint em { font-style: normal; color: var(--ui-danger); font-weight: 700; }
 
 .columnLoad { display: grid; gap: 4px; padding: 0 11px 9px; }
-.columnLoad small { font-size: 10.5px; color: var(--ui-text-muted); }
+.columnLoad small { font-size: 12px; color: var(--ui-text-muted); }
 .columnLoad em { font-style: normal; color: var(--ui-danger); font-weight: 700; }
-.loadBar { display: block; height: 4px; border-radius: 999px; background: var(--ui-surface-muted); overflow: hidden; }
+.loadBar { display: block; height: 4px; border-radius: 999px; background: var(--ui-border); overflow: hidden; }
 .loadBar i { display: block; height: 100%; border-radius: 999px; background: var(--ui-primary); transition: width .2s ease; }
 .loadBar[data-tone="busy"] i { background: var(--ui-warning); }
 .loadBar[data-tone="heavy"] i { background: var(--ui-danger); }
 
 .columnCards {
   display: grid;
-  gap: 7px;
+  gap: 10px;
   align-content: start;
   padding: 0 8px 10px;
   overflow-y: auto;
@@ -366,7 +401,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   border: 1px dashed var(--ui-border);
   border-radius: var(--ui-radius-md);
   color: var(--ui-text-muted);
-  font-size: 11.5px;
+  font-size: 13px;
   text-align: center;
 }
 .boardEmpty { padding: 40px 16px; background: var(--ui-surface); }
@@ -395,17 +430,17 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .card {
   position: relative;
   display: grid;
-  gap: 5px;
-  padding: 9px 10px;
+  gap: 8px;
+  padding: 12px 14px;
   border: 1px solid var(--ui-border);
   border-left: 3px solid var(--ui-border-strong);
   border-radius: var(--ui-radius-md);
   background: var(--ui-surface-elevated);
-  box-shadow: var(--ui-shadow-card);
+  box-shadow: none;
   cursor: grab;
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
 }
-.card:hover { transform: translateY(-1px); box-shadow: var(--ui-shadow-modal); }
+.card:hover { border-color: var(--ui-border-strong); box-shadow: var(--ui-shadow-card); }
 .card:active { cursor: grabbing; }
 .card[data-selected] { border-color: var(--ui-primary); background: var(--ui-primary-soft); }
 /* A faixa da esquerda é a leitura de prazo do cartão inteiro, visível mesmo
@@ -425,8 +460,8 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
    do cartão; errar a demanda selecionada pesa mais. */
 .cardSelect input { width: 24px; height: 24px; margin: 0; accent-color: var(--ui-primary); cursor: pointer; }
 
-.cardTop { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding-right: 28px; }
-.reference { font-size: 10px; font-weight: 800; letter-spacing: .03em; color: var(--ui-text-muted); }
+.cardTop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.reference { font-size: 12px; font-weight: 600; color: var(--ui-text-muted); }
 .process {
   padding: 1px 6px;
   border-radius: 999px;
@@ -437,17 +472,18 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
      texto que existe e não se lê. O token de texto clareia o bastante para o
      par medir 9,4:1, e no tema claro os dois coincidem. */
   color: var(--ui-accent-text, var(--ui-primary));
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: .04em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
   text-transform: uppercase;
 }
-.priority { padding: 1px 6px; border-radius: 999px; font-size: 9.5px; font-weight: 800; text-transform: uppercase; }
+.priority { padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .priority[data-level="urgent"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
 .priority[data-level="high"] { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
 
 .cardTitle {
-  padding: 0;
+  /* Título primeiro, à esquerda da caixa de seleção que aparece no canto. */
+  padding: 0 28px 0 0;
   /* Título de uma linha só media 17px de altura, e ele é o alvo principal do
      cartão — o que abre a demanda. O mínimo da WCAG 2.5.8 vale para ele antes
      de valer para qualquer outro controle desta tela. */
@@ -455,8 +491,10 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   border: 0;
   background: transparent;
   color: var(--ui-text);
-  font: 700 13px inherit;
-  line-height: 1.32;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
   text-align: left;
   cursor: pointer;
   /* Duas linhas e corta. Um título de quatro linhas empurra prazo e etapa para
@@ -469,13 +507,13 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 .cardTitle:hover { color: var(--ui-accent-text, var(--ui-primary)); }
 .cardTitle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; border-radius: var(--ui-radius-sm); }
 
-.cardWho { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ui-text-soft); }
+.cardWho { margin: -4px 0 0; display: flex; flex-wrap: wrap; gap: 4px; font-size: 14px; color: var(--ui-text-soft); }
 .employee { font-weight: 700; color: var(--ui-text); }
 .employee::after { content: " ·"; color: var(--ui-text-muted); font-weight: 400; }
 .company { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.cardBottom { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 10.5px; color: var(--ui-text-muted); }
-.due, .stage, .checklist, .meta, .orphan {
+.cardBottom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ui-text-muted); }
+.due, .stage, .meta, .orphan {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -484,7 +522,25 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   background: var(--ui-surface-muted);
   font-weight: 650;
 }
-.due svg, .checklist svg, .meta svg { width: 11px; height: 11px; }
+.due svg, .meta svg { width: 13px; height: 13px; }
+
+/* Progresso do checklist como barra, com o número escrito ao lado — a barra
+   sozinha não diria quanto falta, e o número sozinho não se lê de relance. */
+.progress { display: flex; align-items: center; gap: 8px; }
+.progress progress {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--ui-border);
+}
+.progress progress::-webkit-progress-bar { background: var(--ui-border); }
+.progress progress::-webkit-progress-value { background: var(--ui-primary); border-radius: 999px; }
+.progress progress::-moz-progress-bar { background: var(--ui-primary); }
+.progress span { font-size: 13px; color: var(--ui-text-soft); white-space: nowrap; }
 .due[data-sla="overdue"] { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
 .due[data-sla="warning"] { background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); }
 .due[data-sla="completed"] { background: var(--ui-state-ok-bg); color: var(--ui-state-ok-text); }
@@ -498,8 +554,8 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   border-radius: var(--ui-radius-sm);
   background: var(--ui-primary-soft);
   color: var(--ui-text-soft);
-  font-size: 10.5px;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -621,7 +677,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 
 @media (prefers-reduced-motion: reduce) {
   .card, .indicator, .quickActions, .loadBar i { transition: none; }
-  .card:hover, .indicator:hover { transform: none; }
+  .indicator:hover { transform: none; }
 }
 
 /* O arquivo não é um formato do quadro: é outro conjunto de demandas, e por
@@ -630,13 +686,15 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 11px;
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   background: transparent;
   color: var(--ui-text-soft);
-  font: 650 12px inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
 }
 .archive svg { width: 14px; height: 14px; }
