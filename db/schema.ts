@@ -351,6 +351,11 @@ export const cards = pgTable("fdp_cards", {
    * e uma frase inventada seria pior do que a ausência.
    */
   nextStep: text("next_step").notNull().default(""),
+  /* Regra de corte (0115): decidida na criação e imutável por trigger. */
+  withinCutoff: boolean("within_cutoff"),
+  requestedFor: date("requested_for", { mode: "string" }),
+  requesterAreaLabel: text("requester_area_label").notNull().default(""),
+  cutoffRuleCode: text("cutoff_rule_code").notNull().default(""),
 }, (table) => [
   /* Chave composta que impede a combinação entre grupos (§87). A simples
      continua existindo; é esta que dá a garantia estrutural. */
@@ -4707,4 +4712,137 @@ export const payrollMovementEntries = pgTable("fdp_payroll_movement_entries", {
   check("fdp_payroll_movement_entries_event_check", sql`${table.eventCode} > 0`),
   check("fdp_payroll_movement_entries_values_check", sql`${table.indexValue} >= 0 AND ${table.amountCents} >= 0 AND (${table.indexValue} > 0 OR ${table.amountCents} > 0)`),
   check("fdp_payroll_movement_entries_exported_check", sql`(${table.exportedAt} IS NULL) = (${table.exportedBy} IS NULL)`),
+]);
+
+/** DP Operacional (0115): configuração por workspace. */
+export const dpSettings = pgTable("fdp_dp_settings", {
+  workspaceId: text("workspace_id").primaryKey().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  tenantTaskOwnerUserId: text("tenant_task_owner_user_id").references(() => users.id),
+  reportRecipients: text("report_recipients").notNull().default(""),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+});
+
+/** Fase 2 (0115): rotinas fixas do mês e da semana. */
+export const recurringTemplates = pgTable("fdp_recurring_templates", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  frequency: text("frequency").notNull(),
+  dayStart: integer("day_start").notNull().default(1),
+  dayEnd: integer("day_end").notNull().default(1),
+  weekday: integer("weekday"),
+  scope: text("scope").notNull(),
+  companyIds: jsonb("company_ids").$type<string[] | null>(),
+  processType: text("process_type").notNull().default("ROTINA DP"),
+  listWeekMovements: boolean("list_week_movements").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_recurring_templates_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_recurring_templates_code_uq").on(table.workspaceId, table.code),
+]);
+
+/** Fase 2 (0115): uma demanda por modelo, período e escopo. */
+export const recurringOccurrences = pgTable("fdp_recurring_occurrences", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  templateId: text("template_id").notNull(),
+  periodKey: text("period_key").notNull(),
+  scopeKey: text("scope_key").notNull(),
+  companyId: text("company_id"),
+  cardId: text("card_id").notNull(),
+  dueDate: date("due_date", { mode: "string" }).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_recurring_occurrences_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_recurring_occurrences_once_uq").on(table.workspaceId, table.templateId, table.periodKey, table.scopeKey),
+  index("fdp_recurring_occurrences_due_idx").on(table.workspaceId, table.dueDate),
+]);
+
+/** Fase 3 (0115): regra de corte por tipo de processo. */
+export const cutoffRules = pgTable("fdp_cutoff_rules", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  processTypes: jsonb("process_types").$type<string[]>().notNull().default([]),
+  kind: text("kind").notNull(),
+  value: integer("value").notNull(),
+  monthDayLimit: integer("month_day_limit"),
+  description: text("description").notNull().default(""),
+  status: text("status").notNull().default("proposta"),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_cutoff_rules_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_cutoff_rules_code_uq").on(table.workspaceId, table.code),
+]);
+
+/** Fase 3 (0115): o que chegou fora do prazo, e de qual área. */
+export const dpOccurrences = pgTable("fdp_dp_occurrences", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  occurredOn: date("occurred_on", { mode: "string" }).notNull(),
+  area: text("area").notNull().default(""),
+  companyId: text("company_id"),
+  cardId: text("card_id"),
+  fact: text("fact").notNull(),
+  impact: text("impact").notNull().default(""),
+  origin: text("origin").notNull(),
+  daysLate: integer("days_late"),
+  registeredBy: text("registered_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_dp_occurrences_workspace_id_uq").on(table.workspaceId, table.id),
+  index("fdp_dp_occurrences_period_idx").on(table.workspaceId, table.occurredOn),
+]);
+
+/** Fase 4 (0115): alertas de experiência, férias e cadastro. */
+export const dpAlerts = pgTable("fdp_dp_alerts", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  alertKey: text("alert_key").notNull(),
+  alertType: text("alert_type").notNull(),
+  companyId: text("company_id"),
+  employeeId: text("employee_id"),
+  dueDate: date("due_date", { mode: "string" }),
+  severity: text("severity").notNull(),
+  title: text("title").notNull(),
+  detail: text("detail").notNull().default(""),
+  assignedUserId: text("assigned_user_id"),
+  status: text("status").notNull().default("open"),
+  managerEmail: text("manager_email").notNull().default(""),
+  decision: text("decision"),
+  decisionNote: text("decision_note").notNull().default(""),
+  decisionSource: text("decision_source"),
+  decidedBy: text("decided_by"),
+  decidedAt: timestamp("decided_at", { withTimezone: true, mode: "string" }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "string" }),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_dp_alerts_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_dp_alerts_key_uq").on(table.workspaceId, table.alertKey),
+  index("fdp_dp_alerts_open_idx").on(table.workspaceId, table.status, table.dueDate),
+]);
+
+/** Fase 5 (0115): um relatório mensal por competência. */
+export const dpReportRuns = pgTable("fdp_dp_report_runs", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().default(tenantWorkspaceDefault).references(() => workspaces.id, { onDelete: "cascade" }),
+  period: text("period").notNull(),
+  recipientsCount: integer("recipients_count").notNull().default(0),
+  sentBy: text("sent_by").notNull(),
+  sentAt: timestamp("sent_at", { withTimezone: true, mode: "string" }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("fdp_dp_report_runs_workspace_id_uq").on(table.workspaceId, table.id),
+  uniqueIndex("fdp_dp_report_runs_period_uq").on(table.workspaceId, table.period),
 ]);

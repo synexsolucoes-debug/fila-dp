@@ -82,6 +82,8 @@ export type MovementView = {
   sequence: number;
   checks: MovementCheck[];
   exportedAt: string | null;
+  /** Quem gerou a planilha que levou este lançamento. */
+  exportedByName: string | null;
   createdAt: string;
 };
 
@@ -93,10 +95,11 @@ export async function listCompanyMovements(d1: SqlDatabase, input: {
   workspaceId: string; companyId: string; competence: string; events: Map<number, PayrollCatalogEvent>;
 }) {
   const result = await d1.prepare(`SELECT mv.id, mv.employee_id, mv.event_code, mv.index_value, mv.amount_cents, mv.note,
-      mv.exported_at, mv.created_at, emp.full_name, emp.registration_number, emp.external_id,
-      emp.employment_status, emp.termination_date
+      mv.exported_at, to_char(mv.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at, emp.full_name, emp.registration_number, emp.external_id,
+      emp.employment_status, emp.termination_date, exporter.name AS exported_by_name
     FROM fdp_payroll_movement_entries mv
     JOIN fdp_employees emp ON emp.workspace_id = mv.workspace_id AND emp.id = mv.employee_id
+    LEFT JOIN fdp_users exporter ON exporter.id = mv.exported_by
     WHERE mv.workspace_id = ? AND mv.company_id = ? AND mv.competence = ?
     ORDER BY emp.full_name, mv.event_code, mv.created_at, mv.id`)
     .bind(input.workspaceId, input.companyId, input.competence).all<Record<string, unknown>>();
@@ -137,6 +140,7 @@ export async function listCompanyMovements(d1: SqlDatabase, input: {
         employee: { employmentStatus: String(row.employment_status ?? "active"), terminationDate: day(row.termination_date) },
       }),
       exportedAt: stamp(row.exported_at),
+      exportedByName: row.exported_by_name ? String(row.exported_by_name) : null,
       createdAt: String(stamp(row.created_at) ?? ""),
     };
   });

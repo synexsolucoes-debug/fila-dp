@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ClipboardPaste, Download, FileSpreadsheet, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
 import type { Company } from "@/lib/fila-dp-types";
+import { pastedMovementCells } from "@/lib/payroll-movements";
 import { EmptyState, ErrorBanner, LoadingState, StatusPill } from "../shared";
 import styles from "./payroll.module.css";
 
@@ -22,10 +23,12 @@ type Check = { level: "block" | "warn"; message: string };
 type Movement = {
   id: string; employeeId: string; employeeName: string; employeeCode: string; eventCode: number; eventDescription: string;
   unit: Unit | null; eventType: -1 | 0 | 1 | null; indexValue: number; amountCents: number; note: string; sequence: number;
-  checks: Check[]; exportedAt: string | null; createdAt: string;
+  checks: Check[]; exportedAt: string | null; exportedByName: string | null; createdAt: string;
 };
 type Payload = {
   company: { id: string; name: string; code: string };
+  /** Quem responde pela empresa na carteira do DP: confere e exporta. */
+  responsible: { userId: string; name: string; via: "holder" | "backup" | null } | null;
   competence: string;
   catalog: { count: number; updatedAt: string | null };
   events: CatalogEvent[];
@@ -104,6 +107,8 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
       blocked: movements.filter((movement) => movement.checks.some((check) => check.level === "block")).length,
       warned: movements.filter((movement) => movement.checks.some((check) => check.level === "warn")).length,
       exported: movements.filter((movement) => movement.exportedAt).length,
+      lastExport: movements.reduce<Movement | null>((last, movement) =>
+        movement.exportedAt && (!last?.exportedAt || movement.exportedAt > last.exportedAt) ? movement : last, null),
     };
   }, [data]);
 
@@ -139,11 +144,10 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
   async function addPasted() {
     const entries: Array<Record<string, unknown>> = [];
     paste.split(/\r?\n/u).forEach((raw, position) => {
-      const cells = raw.trim().split(/\t|;/u).map((cell) => cell.trim());
-      if (!raw.trim() || /^cod/iu.test(cells[0] ?? "")) return;
-      entries.push({ line: position + 1, employeeCode: cells[0] ?? "", eventCode: cells[1] ?? "", index: cells[2] ?? "", amount: cells[3] ?? "" });
+      const cells = pastedMovementCells(raw);
+      if (cells) entries.push({ line: position + 1, ...cells });
     });
-    if (!entries.length) { setError("Cole ao menos uma linha: CODFUNC, CODEVENTO, ÍNDICE, VALOR."); setProblems([]); return; }
+    if (!entries.length) { setError("Cole ao menos uma linha: CODFUNC, CODEVENTO, ÍNDICE, VALOR (ou CODEMP na frente)."); setProblems([]); return; }
     if (await save(entries, "lançamento(s) importado(s) da colagem.")) setPaste("");
   }
 
@@ -226,6 +230,9 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
     {feedback && <p className={styles.feedback} role="status">{feedback}</p>}
 
     {!data && !error ? <LoadingState size="compact" title="Carregando lançamentos" /> : data && <>
+      <p className={styles.responsible}>{data.responsible
+        ? <>Conferência e exportação: <strong>{data.responsible.name}</strong>{data.responsible.via === "backup" ? " (backup — titular ausente hoje)" : " (titular na carteira)"}</>
+        : <>Sem responsável na carteira do DP para {data.company.name}. Defina o titular em Operação DP › Carteira.</>}</p>
       <div className={styles.catalogBar}>
         <span><FileSpreadsheet aria-hidden="true" /> Catálogo de eventos: <strong>{data.catalog.count}</strong>{data.catalog.updatedAt ? ` · atualizado em ${dateLabel(data.catalog.updatedAt)}` : ""}</span>
         {canEdit && <>
@@ -258,13 +265,15 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
 
       {canEdit && data.catalog.count > 0 && <details className={styles.paste}>
         <summary><ClipboardPaste aria-hidden="true" /> Colar vários lançamentos do Excel</summary>
-        <p className={styles.hint}>Uma linha por lançamento: CODFUNC, CODEVENTO, ÍNDICE, VALOR — separados por tabulação ou ponto e vírgula. Se alguma linha tiver problema, nada é gravado e a lista mostra o que corrigir.</p>
+        <p className={styles.hint}>Uma linha por lançamento: CODFUNC, CODEVENTO, ÍNDICE, VALOR — ou com o CODEMP na frente (cinco colunas), que precisa ser o da empresa selecionada. Separados por tabulação ou ponto e vírgula. Se alguma linha tiver problema, nada é gravado e a lista mostra o que corrigir.</p>
         <textarea id="payroll-movements-paste" rows={5} value={paste} disabled={busy} onChange={(event) => setPaste(event.target.value)} placeholder={"17\t9\t12:30\t0\n23\t37\t0\t312,50"} />
         <button type="button" className={styles.secondaryButton} disabled={busy || !paste.trim()} onClick={() => void addPasted()}>Importar linhas</button>
       </details>}
 
       <div className={styles.summary} aria-label="Resumo da competência">
-        <article><small>Lançamentos</small><strong>{totals.count}</strong><span>{totals.exported} já exportado(s)</span></article>
+        <article><small>Lançamentos</small><strong>{totals.count}</strong><span>{totals.lastExport?.exportedAt
+          ? `${totals.exported} exportado(s) · última em ${dateLabel(totals.lastExport.exportedAt)}${totals.lastExport.exportedByName ? ` por ${totals.lastExport.exportedByName}` : ""}`
+          : "nenhum exportado"}</span></article>
         <article><small>Colaboradores</small><strong>{totals.people}</strong><span>com movimento na competência</span></article>
         <article><small>Proventos em R$</small><strong>{money(totals.earnings)}</strong><span>eventos de valor</span></article>
         <article><small>Descontos em R$</small><strong>{money(totals.deductions)}</strong><span>eventos de valor</span></article>
@@ -284,7 +293,7 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
           <td data-label="Seq." className={styles.num}>{movement.sequence}</td>
           <td data-label="Conferência"><span className={styles.checks}>
             {movement.checks.map((check) => <StatusPill key={check.message} status={check.level === "block" ? "blocked" : "warning"} label={check.message} />)}
-            {movement.exportedAt && <StatusPill status="applied" label={`Exportado em ${dateLabel(movement.exportedAt)}`} />}
+            {movement.exportedAt && <StatusPill status="applied" label={`Exportado em ${dateLabel(movement.exportedAt)}${movement.exportedByName ? ` por ${movement.exportedByName}` : ""}`} />}
             {!movement.checks.length && !movement.exportedAt && <StatusPill status="active" label="OK" />}
           </span></td>
           {canEdit && <td><button type="button" className={styles.iconButton} disabled={busy} aria-label={`Remover lançamento de ${movement.employeeName}`} onClick={() => void remove(movement.id)}><Trash2 aria-hidden="true" /></button></td>}

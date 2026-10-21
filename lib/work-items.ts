@@ -90,7 +90,8 @@ export type WorkItemSource =
   | "occupational_exam_due"
   | "training_due"
   | "cat_pending"
-  | "position_risk_exam_missing";
+  | "position_risk_exam_missing"
+  | "dp_alert";
 
 /**
  * `unassigned` é a fila "Sem responsável" da carteira do DP: demanda que
@@ -381,6 +382,28 @@ export const workItemSources: readonly WorkItemSourceDefinition[] = [
       WHERE e.workspace_id = ? AND e.next_due_date IS NOT NULL AND e.next_due_date <= CURRENT_DATE + 60 {{company}} {{mine}}`,
   },
   {
+    /* DP Operacional, Fase 4: experiência, férias e cadastro. O alerta é
+       materializado pelo job diário (`lib/dp-alerts-service.ts`) e já nasce
+       com o responsável da carteira — "está comigo" é ser esse responsável. */
+    key: "dp_alert",
+    label: "Alertas do DP",
+    capability: "portfolio.read",
+    companyColumn: "a.company_id",
+    mineCondition: "a.assigned_user_id = ?",
+    mineParameters: 1,
+    unassignedCondition: "a.assigned_user_id IS NULL",
+    sql: `SELECT 'dp_alert' AS source_type, a.id AS source_id, a.title, a.detail AS description,
+        CASE a.severity WHEN 'overdue' THEN 'urgent' WHEN 'urgent' THEN 'high' ELSE 'normal' END AS priority,
+        a.company_id, COALESCE(NULLIF(co.trade_name, ''), co.legal_name) AS company_name,
+        a.employee_id, a.due_date::timestamptz AS due_at, a.created_at, a.updated_at,
+        CASE a.severity WHEN 'overdue' THEN 'overdue' WHEN 'urgent' THEN 'warning' ELSE 'safe' END AS status,
+        NULL::text AS process_id, NULL::text AS process_step, '' AS process_version,
+        'operacao' AS origin
+      FROM fdp_dp_alerts a
+      LEFT JOIN fdp_companies co ON co.workspace_id = a.workspace_id AND co.id = a.company_id
+      WHERE a.workspace_id = ? AND a.status = 'open' {{company}} {{mine}}`,
+  },
+  {
     key: "training_due",
     label: "Treinamento vencendo",
     capability: "trainings.view",
@@ -567,6 +590,7 @@ const NEXT_ACTIONS: Record<WorkItemSource, string> = {
   training_due: "Agendar a reciclagem do treinamento",
   cat_pending: "Emitir a CAT",
   position_risk_exam_missing: "Agendar o exame admissional com o colaborador",
+  dp_alert: "Tratar o alerta na ficha do colaborador",
 };
 
 /**
@@ -601,6 +625,8 @@ export function workItemHref(source: WorkItemSource, id: string, employeeId?: st
     // Sem FK de colaborador (§83) — o link vai para a tela do módulo.
     case "cat_pending": return "/painel/acidentes";
     case "position_risk_exam_missing": return employeeId ? employeePath(employeeId, "exams") : "/painel/cadastros";
+    // Alerta de colaborador abre a ficha; o de empresa, a aba de alertas.
+    case "dp_alert": return employeeId ? employeePath(employeeId) : "/painel/dp?aba=alertas";
     default: return "/painel";
   }
 }

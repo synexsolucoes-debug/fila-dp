@@ -1764,6 +1764,100 @@ existente. `--dry-run` simula.
 | --- | --- |
 | `responsavelPara` (titular, backup, ambos ausentes, vigência, troca no mesmo dia), aceite 33 → Rian / Odete, migration, os nove caminhos de criação, Sankhya e o recorte Sem responsável | `tests/dp-portfolio.test.mts` |
 
+### 4.34 DP Operacional, Fase 2 — rotinas recorrentes, Minha semana e Calendário
+
+As rotinas do mês (boletos do ponto, impostos, planos de saúde, ponto,
+eventos à parte, Caju, Wellhub) moravam numa planilha de calendário. Agora são
+modelos (`fdp_recurring_templates`, migration 0115) que geram **demandas
+comuns**: aparecem na Central, no quadro e na carteira sem tela paralela.
+
+**Modelo.** Frequência mensal (janela `dia_inicio`–`dia_fim`) ou semanal (dia da
+semana); escopo por empresa (internas, ou a lista do modelo), por raiz de CNPJ
+(uma demanda por raiz, com a matriz como empresa — a carteira da matriz
+responde) ou uma para o grupo (responsável em DP Operacional › Rotinas).
+
+**Prazo (`lib/dp-recurring.ts`).** Dia final da janela, limitado ao último dia
+do mês (31 em abril → 30; 30 em fevereiro → 28/29), antecipado para o dia útil
+anterior pelo calendário do grupo (dias úteis e feriados de Configurações).
+Janela de um dia só em dia não útil antecipa junto.
+
+**Geração.** `generateRecurringTasks` cria demanda, checklist, atribuição
+(carteira) e uma linha em `fdp_recurring_occurrences`, única por modelo,
+período e escopo — rodar duas vezes não duplica. O job diário gera a
+competência corrente, a seguinte a partir do dia 25 e a semana corrente; o
+botão "Gerar demandas da competência" faz o mesmo sob demanda.
+
+**Telas.** DP Operacional (`/painel/dp`): Minha semana (demandas e alertas da
+pessoa na semana, atrasados primeiro) e Calendário (linha do tempo do mês por
+rotina, frentes por dia, pico com 5 ou mais).
+
+### 4.35 DP Operacional, Fase 3 — regra de corte, ocorrências e Teams
+
+**Regras (`fdp_cutoff_rules`).** Por tipo de processo: antecedência em dias
+úteis ou corridos, dia do mês, mesmo dia, até N dias depois. Só regra
+`aprovada` ou `divulgada` vale; `proposta` fica visível sem efeito.
+
+**Veredito (`lib/dp-cutoff.ts`).** `evaluateCutoff` decide `within_cutoff` na
+criação da demanda, a partir da data pedida (`requested_for`). Fora do corte,
+grava ocorrência automática (`fdp_dp_occurrences`) com área solicitante e dias
+de atraso, e devolve o aviso "entra no próximo ciclo ou depende de aprovação da
+gestão". O veredito é imutável (trigger `fdp_cards_cutoff_immutable`): ninguém
+"conserta" o histórico depois.
+
+**Onde entra.** Formulário de demanda (campo "Data pedida"), admissões
+Sólides/Tangerino, movimentação do Teams, formulário do Teams e importação de
+movimentações (variáveis depois do dia de corte). Ocorrência manual pela tela.
+
+**Teams.** Continua só origem. O fluxo do Power Automate posta o formulário em
+`POST /api/integrations/teams/demand?workspaceId=<id>` com o segredo do webhook
+do Teams em `x-fila-dp-secret`; a resposta traz `withinCutoff`, prazo, aviso e
+responsável para o card de retorno. Idempotente pelo `submissionId` do envio.
+
+### 4.36 DP Operacional, Fase 4 — alertas do Sankhya
+
+`computeAlerts` (`lib/dp-alerts.ts`, puro) olha os dados que a sincronização
+já traz: experiência 45/90 dias (abre 10 dias antes, fica 15 depois como
+vencido), limite do período concessivo de férias (60 dias, urgente com 30 —
+aproximação por admissão + férias registradas como movimentação, dita na
+tela), cadastro incompleto (CPF, CODFUNC, ativo em empresa `sem_funcionarios`,
+empresa interna sem CNPJ/CODEMP). `refreshDpAlerts` materializa em
+`fdp_dp_alerts` (chave única por alerta; respondido não é sobrescrito; o que
+sumiu é encerrado). Responsável: carteira da empresa. Aparecem na Central
+(fonte `dp_alert`) e em DP Operacional › Alertas.
+
+**Pergunta ao gestor.** `GET /api/integrations/teams/experience?workspaceId=`
+lista as experiências pendentes com e-mail do gestor; o fluxo pergunta no Teams
+e responde em `POST` (efetivar, prorrogar, desligar). A mesma decisão pode ser
+registrada no painel; a origem fica gravada.
+
+### 4.37 DP Operacional, Fase 5 — painel da gestão e relatório mensal
+
+**Painel** (DP Operacional › Painel): por titular, empresas, ativos CLT, PJ,
+demandas abertas e atrasadas e alertas; demandas fora do corte por área e por
+tipo; totais do grupo.
+
+**Relatório** (`lib/dp-report.ts`): PDF com volume entregue, fora do prazo de
+corte por área, ocorrências, riscos dos próximos 30 dias e carga por titular —
+sem CPF nem salário. O job envia o do mês anterior até o dia 5, uma vez por
+competência (`fdp_dp_report_runs`), pelo Resend, aos destinatários de DP
+Operacional › Painel. "Baixar PDF" e "Enviar agora" ficam na tela.
+
+**Job diário.** `GET /api/cron/dp-operations` (segredo `CRON_SECRET` ou
+`FDP_DP_OPERATIONS_CRON_SECRET`, workflow `dp-operations-cron.yml`, 9h UTC):
+por workspace, gera rotinas, recalcula alertas e tenta o relatório.
+
+**Semente.** `scripts/seed-dp-carteira.mjs` aplica também as rotinas e as
+regras de corte da semente (`recurringTemplates`, `cutoffRules`), sem
+reescrever o que já existe.
+
+**Permissões.** Leitura com `portfolio.read`; criar e mudar rotinas, regras,
+destinatários e decidir alertas com `portfolio.manage`. Todas as tabelas novas
+com `workspace_id` e RLS forçada.
+
+| Verificação | Onde |
+| --- | --- |
+| Calendário de dias úteis, prazo com dia não útil e meses de 28/30 dias, escopos por empresa/raiz/grupo, `dentroDoCorte` (aceite: admissão com 1 dia útil → fora, 2 dias de atraso), demais regras, alertas, PDF, RLS da migration, caminhos de corte, job | `tests/dp-operations.test.mts` |
+
 ---
 
 ## 5. Agentes

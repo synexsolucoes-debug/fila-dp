@@ -349,27 +349,63 @@ export function buildMovementExport(input: {
 /* Colar do Excel                                                      */
 /* ------------------------------------------------------------------ */
 
-export type PastedMovement = { line: number; employeeCode: string; eventCode: number; indexValue: number; amountCents: number };
+export type PastedMovement = { line: number; companyCode: string; employeeCode: string; eventCode: number; indexValue: number; amountCents: number };
+
+/** As células de uma linha colada, ainda como texto. */
+export type PastedMovementCells = { companyCode: string; employeeCode: string; eventCode: string; index: string; amount: string };
 
 /**
- * Linhas coladas do Excel: CODFUNC, CODEVENTO, ÍNDICE, VALOR — separadas por
- * tabulação ou ponto e vírgula. Linha de cabeçalho é pulada. Devolve as linhas
- * entendidas e o número das que não foram.
+ * Uma linha colada do Excel, separada em células.
+ *
+ * Quatro colunas — CODFUNC, CODEVENTO, ÍNDICE, VALOR — ou cinco, com o CODEMP
+ * na frente, que é como a planilha de controle do DP já vinha montada. A
+ * contagem é pela linha crua, sem descartar célula vazia no fim: na linha de
+ * cinco colunas com VALOR vazio ("33\t17\t9\t2\t"), tirar a última célula
+ * transformaria o CODEMP em CODFUNC sem ninguém perceber. Linha vazia ou de
+ * cabeçalho devolve `null`.
+ */
+export function pastedMovementCells(raw: string): PastedMovementCells | null {
+  const line = String(raw ?? "").trim();
+  if (!line) return null;
+  const cells = String(raw).replace(/\r$/u, "").split(/\t|;/u).map((cell) => cell.trim());
+  if (/^cod/iu.test(cells[0] ?? "")) return null;
+  const [companyCode, rest] = cells.length >= 5 ? [cells[0], cells.slice(1)] : ["", cells];
+  return { companyCode, employeeCode: rest[0] ?? "", eventCode: rest[1] ?? "", index: rest[2] ?? "", amount: rest[3] ?? "" };
+}
+
+/**
+ * Linhas coladas do Excel (quatro ou cinco colunas, ver `pastedMovementCells`),
+ * separadas por tabulação ou ponto e vírgula. Linha de cabeçalho é pulada.
+ * Devolve as linhas entendidas e o número das que não foram.
  */
 export function parsePastedMovements(text: string): { rows: PastedMovement[]; invalidLines: number[] } {
   const rows: PastedMovement[] = [];
   const invalidLines: number[] = [];
   String(text ?? "").split(/\r?\n/u).forEach((raw, index) => {
-    const line = raw.trim();
-    if (!line) return;
-    const cells = line.split(/\t|;/u).map((cell) => cell.trim());
-    if (/^cod/iu.test(cells[0] ?? "")) return;
-    const employeeCode = /^\d+$/u.test(cells[0] ?? "") ? String(Number(cells[0])) : "";
-    const eventCode = /^\d+$/u.test(cells[1] ?? "") ? Number(cells[1]) : 0;
-    const indexValue = parseDecimalInput(cells[2] ?? "");
-    const amount = parseDecimalInput(cells[3] ?? "");
-    if (!employeeCode || !eventCode || indexValue === null || amount === null) { invalidLines.push(index + 1); return; }
-    rows.push({ line: index + 1, employeeCode, eventCode, indexValue: roundIndex(indexValue), amountCents: toCents(amount) });
+    const cells = pastedMovementCells(raw);
+    if (!cells) return;
+    const companyCode = cells.companyCode ? sankhyaCompanyCode(cells.companyCode) : "";
+    const employeeCode = /^\d+$/u.test(cells.employeeCode) ? String(Number(cells.employeeCode)) : "";
+    const eventCode = /^\d+$/u.test(cells.eventCode) ? Number(cells.eventCode) : 0;
+    const indexValue = parseDecimalInput(cells.index);
+    const amount = parseDecimalInput(cells.amount);
+    if ((cells.companyCode && !companyCode) || !employeeCode || !eventCode || indexValue === null || amount === null) { invalidLines.push(index + 1); return; }
+    rows.push({ line: index + 1, companyCode, employeeCode, eventCode, indexValue: roundIndex(indexValue), amountCents: toCents(amount) });
   });
   return { rows, invalidLines };
+}
+
+/**
+ * A linha colada é da empresa selecionada? Linha de quatro colunas não diz a
+ * empresa e vale para a selecionada; a de cinco precisa bater com o CODEMP do
+ * cadastro. Lançar na empresa errada é pior que recusar: o Importador aceita,
+ * com o CODEMP da tela, um movimento que era de outra folha.
+ */
+export function pastedCompanyMismatch(pastedCompanyCode: string, company: { code: string; name: string }): string | null {
+  const pasted = sankhyaCompanyCode(pastedCompanyCode);
+  if (!String(pastedCompanyCode ?? "").trim()) return null;
+  if (!pasted) return `CODEMP "${pastedCompanyCode}" inválido.`;
+  if (!company.code) return `${company.name} está sem Código Sankhya: não dá para conferir o CODEMP ${pasted} da linha.`;
+  if (pasted !== company.code) return `Linha da empresa ${pasted}, mas a empresa selecionada é ${company.name} (${company.code}). Selecione a empresa ${pasted} para lançar essa linha.`;
+  return null;
 }

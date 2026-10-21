@@ -154,6 +154,8 @@ test("toda criação de demanda do DP passa pela carteira quando ninguém escolh
     "lib/epi-service.ts",
     "app/api/integrations/movements/[id]/route.ts",
     "app/api/inbox/[id]/convert/route.ts",
+    "app/api/integrations/teams/demand/route.ts",
+    "lib/dp-recurring-service.ts",
   ];
   for (const caminho of caminhos) {
     const codigo = await read(caminho);
@@ -188,6 +190,8 @@ test("nenhum outro arquivo cria demanda sem estar na lista acima", async () => {
     "app/api/cards/route.ts",
     "app/api/inbox/[id]/convert/route.ts",
     "app/api/integrations/movements/[id]/route.ts",
+    "app/api/integrations/teams/demand/route.ts",
+    "lib/dp-recurring-service.ts",
     "lib/epi-service.ts",
     "lib/integration-engine.ts",
     "lib/process-instances.ts",

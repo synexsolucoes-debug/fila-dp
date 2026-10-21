@@ -3,8 +3,10 @@ import { getWorkspaceContext, prepareAuditEvent, requireCompanyAccess } from "@/
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import {
-  MAX_MOVEMENTS_PER_REQUEST, checkMovement, hasBlock, parseCompetence, parseDecimalInput, roundIndex, toCents,
+  MAX_MOVEMENTS_PER_REQUEST, checkMovement, hasBlock, parseCompetence, parseDecimalInput, pastedCompanyMismatch, roundIndex, toCents,
 } from "@/lib/payroll-movements";
+import { responsavelPara } from "@/lib/portfolio-assignment";
+import { prepareLateMovementOccurrence } from "@/lib/dp-cutoff-service";
 import { listCompanyMovements, loadCompany, loadCompanyEmployees, loadEventCatalog } from "@/lib/payroll-movements-service";
 
 /**
@@ -33,8 +35,15 @@ export async function GET(request: Request) {
     const catalog = await loadEventCatalog(d1, workspace.id);
     const employees = await loadCompanyEmployees(d1, workspace.id, companyId);
     const movements = await listCompanyMovements(d1, { workspaceId: workspace.id, companyId, competence, events: catalog.events });
+    /* Quem confere e exporta: o responsável pela empresa na carteira do DP
+       (titular, ou o backup quando o titular está ausente hoje). */
+    const resolution = await responsavelPara(d1, workspace.id, companyId);
+    const responsibleName = resolution.userId
+      ? (await d1.prepare("SELECT name FROM fdp_users WHERE id = ?").bind(resolution.userId).first<{ name: string }>())?.name ?? ""
+      : "";
     return Response.json({
       company,
+      responsible: resolution.userId ? { userId: resolution.userId, name: responsibleName, via: resolution.via } : null,
       competence,
       catalog: { count: catalog.events.size, updatedAt: catalog.updatedAt },
       events: [...catalog.events.values()],
@@ -46,7 +55,7 @@ export async function GET(request: Request) {
   }
 }
 
-type IncomingEntry = { employeeId?: unknown; employeeCode?: unknown; eventCode?: unknown; index?: unknown; amount?: unknown; note?: unknown; line?: unknown };
+type IncomingEntry = { companyCode?: unknown; employeeId?: unknown; employeeCode?: unknown; eventCode?: unknown; index?: unknown; amount?: unknown; note?: unknown; line?: unknown };
 
 export async function POST(request: Request) {
   const auth = await getApiUser();
@@ -80,6 +89,8 @@ export async function POST(request: Request) {
     const rows: Array<{ employeeId: string; eventCode: number; indexValue: number; amountCents: number; note: string }> = [];
     entries.forEach((entry, position) => {
       const line = Number(entry.line) > 0 ? Number(entry.line) : position + 1;
+      const otherCompany = pastedCompanyMismatch(text(String(entry.companyCode ?? ""), 20), company);
+      if (otherCompany) { problems.push({ line, message: otherCompany }); return; }
       const employeeId = text(entry.employeeId, 120);
       const employeeCode = text(String(entry.employeeCode ?? ""), 20).replace(/^0+(?=\d)/u, "");
       const employee = employeeId ? byId.get(employeeId) : byCode.get(employeeCode);
@@ -104,11 +115,24 @@ export async function POST(request: Request) {
         { problems: problems.slice(0, 50) });
     }
 
+    /* `clock_timestamp()`, e não o default `now()`: dentro do lote, `now()` é o
+       mesmo instante para todas as linhas, e a SEQUENCIA de duas linhas do
+       mesmo colaborador e evento caía no desempate pelo id aleatório — a
+       segunda linha colada podia sair com SEQUENCIA 0. O relógio avança a cada
+       comando, então a ordem da colagem é a ordem do lançamento. */
     await d1.batch(rows.map((row) => d1.prepare(`INSERT INTO fdp_payroll_movement_entries
-      (id, workspace_id, company_id, employee_id, competence, event_code, index_value, amount_cents, note, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      (id, workspace_id, company_id, employee_id, competence, event_code, index_value, amount_cents, note, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp())`)
       .bind(crypto.randomUUID(), workspace.id, companyId, row.employeeId, competence, row.eventCode,
         row.indexValue, row.amountCents, row.note, user.id)));
+
+    /* Corte das variáveis (Fase 3): lançamento depois do dia do corte da
+       competência (26, ou o da regra "VARIÁVEIS") vira ocorrência automática. */
+    const late = await prepareLateMovementOccurrence(d1, {
+      workspaceId: workspace.id, companyId, competence, rows: rows.length, actor: user.id,
+      areaLabel: text(body.areaLabel, 120) || "Lançamento de variáveis",
+    });
+    if (late.length) await d1.batch(late);
 
     /* A trilha registra quem lançou, onde e quantos. Nome e valor ficam no
        módulo, onde a permissão vale. */
@@ -119,7 +143,7 @@ export async function POST(request: Request) {
       metadata: { companyId },
     }).run();
 
-    return Response.json({ created: rows.length }, { status: 201, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ created: rows.length, afterCutoff: late.length > 0 }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return apiError(error);
   }

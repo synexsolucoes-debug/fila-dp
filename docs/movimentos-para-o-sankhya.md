@@ -65,9 +65,25 @@ Uma linha por lançamento — CODFUNC, CODEVENTO, ÍNDICE, VALOR —, separadas 
 tabulação ou ponto e vírgula. Horas aceitam `2:30`. O lote entra inteiro ou não
 entra, com a lista das linhas que impediram.
 
+Também aceita cinco colunas, com o CODEMP na frente (CODEMP, CODFUNC,
+CODEVENTO, ÍNDICE, VALOR), que é como a planilha de controle do DP já vinha. O
+CODEMP da linha precisa ser o da empresa selecionada: linha de outra empresa é
+recusada nomeando o código, porque lançá-la na selecionada levaria o movimento
+para a folha errada. A contagem de colunas é pela linha crua, então uma linha
+de cinco colunas com VALOR vazio continua sendo de cinco colunas.
+
+## Responsável pela conferência
+
+A tela mostra quem responde pela empresa na carteira do DP (Operação DP ›
+Carteira): o titular, ou o backup quando o titular está ausente hoje. É essa
+pessoa que confere e exporta. Empresa sem carteira aparece com o aviso para
+definir o titular.
+
 ## Exportação e auditoria
 
-Exportar marca os lançamentos com data e autor (`exported_at`, `exported_by`) e
+Exportar marca os lançamentos com data e autor (`exported_at`, `exported_by`) —
+a tabela mostra "Exportado em … por …" em cada linha e o resumo traz a última
+exportação — e
 registra `payroll_movements.exported` na auditoria, com competência e número de
 linhas. Nome e valor não vão para a trilha. Lançamento exportado continua
 removível: a folha é do Sankhya, e a trilha guarda que ele tinha saído.

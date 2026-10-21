@@ -13,6 +13,7 @@ import { ArrowLeftRight,
   Blocks,
   Bot,
   Briefcase,
+  CalendarCheck2,
   Building2,
   Cable,
   HandCoins,
@@ -70,6 +71,7 @@ import { ArrowLeftRight,
 import { VinculatoLogo } from "@/app/components/VinculatoLogo";
 import { HistoryView } from "./features/history/HistoryView";
 import { PortfolioView } from "./features/portfolio";
+import { DpOperationsView } from "./features/dp";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
@@ -118,7 +120,7 @@ import {
    como `ContractorSectionId`: esta união é a lista de telas do painel, e é ela
    que se lê para conferir que toda tela tem porta no menu. Um apelido de tipo
    esconderia oito telas de quem confere. */
-type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "payrollLedger" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "portfolio" | "payroll" | "indicators" | "history";
+type View = "overview" | "work" | "board" | "inbox" | "planner" | "processManagement" | "processes" | "auxiliary" | "psychologistPayments" | "contractorPayments" | "contractorProviders" | "contractorCycles" | "contractorClosings" | "contractorInvoices" | "contractorAdjustments" | "contractorLimits" | "contractorCaju" | "contractorArchive" | "payrollLedger" | "timeTracking" | "epi" | "safety" | "integrations" | "agents" | "triage" | "registrations" | "portfolio" | "dpOperations" | "payroll" | "indicators" | "history";
 /* Os eixos do quadro. `team` e `queue` chegaram com a Operação DP: o primeiro
    é o quadro por responsável — o modo principal —, o segundo é a fila de uma
    pessoa separada por urgência. Os quatro antigos continuam porque cada um
@@ -237,10 +239,13 @@ type CardForm = {
   customValues: Record<string, string>;
   /** A próxima ação, em uma frase. Vazio é estado legítimo (§14). */
   nextStep: string;
+  /** Data que o pedido mira (início, saída de férias, decisão): a regra de corte compara com ela. */
+  requestedFor: string;
 };
 
 const emptyCardForm: CardForm = {
   nextStep: "",
+  requestedFor: "",
   boardId: "",
   employeeId: "",
   requesterUserId: "",
@@ -449,6 +454,11 @@ const viewCatalog: Record<View, ViewEntry> = {
     label: "Carteira", icon: Briefcase, module: "registrations", hiddenFor: ["guest"],
     eyebrow: "OPERAÇÃO DO DP", title: "Carteira",
     description: "Quem responde por cada empresa: titular, backup, ausências da equipe e demandas sem responsável.",
+  },
+  dpOperations: {
+    label: "DP Operacional", icon: CalendarCheck2, module: "registrations", hiddenFor: ["guest"],
+    eyebrow: "OPERAÇÃO DO DP", title: "DP Operacional",
+    description: "Minha semana, calendário do mês, ocorrências fora do prazo de corte, alertas do Sankhya e o painel da gestão.",
   },
   registrations: {
     label: "Cadastros", icon: Users, module: "registrations", hiddenFor: ["guest"],
@@ -975,7 +985,7 @@ function canPreviewAttachment(attachment: CardAttachment) {
 
 export function WorkspaceApp({
   user, signOutPath, initialLocation = defaultPanelLocation,
-  initialThemePreference = "system", initialTheme = "light",
+  initialThemePreference = "system", initialTheme = "light", initialViewTab = "",
 }: {
   user: User;
   signOutPath: string;
@@ -990,6 +1000,11 @@ export function WorkspaceApp({
   initialThemePreference?: ThemePreference;
   /** A escala que o servidor já resolveu — pelo mesmo motivo de `initialLocation`. */
   initialTheme?: ResolvedTheme;
+  /**
+   * `?aba=` de uma visão com abas próprias (DP Operacional). O painel reescreve
+   * o endereço ao montar, então a visão não pode lê-lo depois.
+   */
+  initialViewTab?: string;
 }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [view, setViewState] = useState<View>(initialLocation.view as View);
@@ -2029,6 +2044,7 @@ export function WorkspaceApp({
       labelIds: card.labels.map((label) => label.id),
       customValues: card.customValues,
       nextStep: card.nextStep,
+      requestedFor: card.requestedFor ?? "",
     });
     setNewChecklistItem("");
     setNewComment("");
@@ -3460,6 +3476,9 @@ export function WorkspaceApp({
 
           {view === "portfolio" && <PortfolioView canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")} />}
 
+          {view === "dpOperations" && <DpOperationsView canManage={hasCapability(snapshot.workspace.role, "portfolio.manage")}
+            initialTab={initialLocation.view === "dpOperations" ? initialViewTab : ""} />}
+
           {view === "safety" && <WorkAccidentDashboardView />}
           {view === "payrollLedger" && (
             <LedgerView
@@ -3686,7 +3705,7 @@ export function WorkspaceApp({
            dentro e Esc fecha. O que muda é a posição na tela. */
         <div className="workspace-modal-backdrop demand-drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCardModalOpen(false); }}>
           <section className="workspace-modal card-modal demand-detail-modal demand-drawer" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
-            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}{selectedCard?.cancelledAt && <b className="demand-cancelled" title={selectedCard.cancellationReason}>CANCELADA</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Nova demanda"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
+            <header><div><span>{selectedCard ? `Demanda • ${selectedCard.processType}` : "Nova demanda"}{selectedCard && referenceLabel(selectedCard) && <b className="demand-reference">{referenceLabel(selectedCard)}</b>}{selectedCard?.cancelledAt && <b className="demand-cancelled" title={selectedCard.cancellationReason}>CANCELADA</b>}{selectedCard?.withinCutoff === false && <b className="demand-cancelled" title="Chegou fora do prazo de corte: entra no próximo ciclo ou depende de aprovação da gestão.">FORA DO CORTE</b>}</span><h2 id="card-modal-title">{selectedCard ? selectedCard.title : "Nova demanda"}</h2>{selectedCard && <p className="demand-detail-meta">{snapshot.lists.find((list) => list.id === selectedCard.listId)?.name ?? "Sem status"} • {selectedCard.company || "Sem empresa vinculada"} • {snapshot.areas.find((area) => area.id === selectedCard.requesterAreaId)?.name || "Sem área solicitante"} → {snapshot.areas.find((area) => area.id === selectedCard.responsibleAreaId)?.name || "Sem área responsável"}</p>}</div><button onClick={() => setCardModalOpen(false)} aria-label="Fechar">×</button></header>
             {selectedCard && <nav className="card-dialog-tabs" aria-label="Seções da demanda"><button className={cardTab === "details" ? "active" : ""} onClick={() => setCardTab("details")}>Detalhes</button><button className={cardTab === "process" ? "active" : ""} onClick={() => setCardTab("process")}>Processo</button><button className={cardTab === "checklist" ? "active" : ""} onClick={() => setCardTab("checklist")}>Checklist <b>{selectedCard.checklist.filter((item) => item.completed).length}/{selectedCard.checklist.length}</b></button><button className={cardTab === "attachments" ? "active" : ""} onClick={() => setCardTab("attachments")}>Anexos <b>{selectedCard.attachments.length}</b></button>{registrationFormAttachment(selectedCard) && <button className={cardTab === "sheet" ? "active" : ""} onClick={() => setCardTab("sheet")}>Ficha</button>}<button className={cardTab === "activity" ? "active" : ""} onClick={() => setCardTab("activity")}>Atividade <b>{selectedCard.comments.length + selectedCard.activities.length}</b></button></nav>}
             <div className="card-modal-body single">
               {selectedCard && (() => {
@@ -3854,6 +3873,8 @@ export function WorkspaceApp({
                 <fieldset className="card-form-section full"><legend>Prazo e responsáveis</legend>
                 <label>Área solicitante<select value={cardForm.requesterAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, requesterAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.requesterAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
                 <label>Área responsável<select value={cardForm.responsibleAreaId} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, responsibleAreaId: event.target.value })}><option value="">Não informada</option>{snapshot.areas.filter((area) => area.status === "active" || area.id === cardForm.responsibleAreaId).map((area) => <option value={area.id} key={area.id}>{area.name} · {area.code}</option>)}</select></label>
+                {!selectedCard && !cardForm.processVersionId && <label>Data pedida<input id="card-requested-for" type="date" value={cardForm.requestedFor} disabled={!canEdit} title="Início da admissão, saída de férias, data da decisão ou do atestado: a regra de corte compara com ela." onChange={(event) => setCardForm({ ...cardForm, requestedFor: event.target.value })} /></label>}
+                {selectedCard?.requestedFor && <p className="card-sla-target full">Data pedida: <strong>{selectedCard.requestedFor.split("-").reverse().join("/")}</strong>{selectedCard.withinCutoff === false ? " · chegou fora do prazo de corte: entra no próximo ciclo ou depende de aprovação da gestão." : selectedCard.withinCutoff ? " · dentro do prazo de corte." : ""}</p>}
                 {!cardForm.processVersionId && <label>Prazo<input id="card-due-at" type="datetime-local" value={dueInputValue(cardForm.dueAt, snapshot.settings.dayEnd)} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, dueAt: event.target.value })} /></label>}
                 {selectedCard?.slaTargetMinutes ? <p className="card-sla-target full">SLA configurado: <strong>{formatWorkingMinutes(selectedCard.slaTargetMinutes)}</strong> de expediente. Pausas justificadas não entram na contagem.</p> : null}
                 <label>Prioridade<select value={cardForm.priority} disabled={!canEdit} onChange={(event) => setCardForm({ ...cardForm, priority: event.target.value })}>{["low", "normal", "high", "urgent"].map((nivel) => <option key={nivel} value={nivel}>{PRIORITY_LABELS[nivel]}</option>)}</select></label>
@@ -4099,7 +4120,9 @@ function ConnectionMap({ integrations, onNavigate }: {
  * escrita dentro do JSX, onde não dava para perguntar se um valor pertence a
  * ela.
  */
-const processTypeOptions = ["CONCILIAÇÃO CADASTRAL", "RESCISÃO", "FÉRIAS", "BENEFÍCIOS", "FOLHA", "CADASTRO", "OUTROS"];
+/* PONTO, VARIÁVEIS, ALTERAÇÃO SALARIAL, AFASTAMENTO e ROTINA DP entram com o
+   DP Operacional: são os tipos que as regras de corte e as rotinas usam. */
+const processTypeOptions = ["CONCILIAÇÃO CADASTRAL", "RESCISÃO", "FÉRIAS", "PONTO", "VARIÁVEIS", "ALTERAÇÃO SALARIAL", "AFASTAMENTO", "BENEFÍCIOS", "FOLHA", "CADASTRO", "ROTINA DP", "OUTROS"];
 
 const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
 

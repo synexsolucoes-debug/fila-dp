@@ -3312,7 +3312,7 @@
 /* Cor sozinha não carrega o dado: a etiqueta traz a palavra, e a cor só
    reforça. */
 .overview-sla-tag { padding: 2px 7px; display: inline-block; border-radius: 99px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 9px; font-weight: 700; white-space: nowrap; }
-.overview-sla-tag.sla-warning { background: color-mix(in srgb, var(--ui-warning) 16%, var(--ui-surface)); color: var(--ui-warning); }
+.overview-sla-tag.sla-warning { background: color-mix(in srgb, var(--ui-warning) 8%, var(--ui-surface)); color: var(--ui-warning); }
 .overview-sla-tag.sla-overdue { background: color-mix(in srgb, var(--ui-danger) 16%, var(--ui-surface)); color: var(--ui-danger); }
 .overview-sla-tag.sla-paused { background: var(--ui-surface-muted); color: var(--ui-text-soft); }
 
