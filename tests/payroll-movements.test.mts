@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   MOVEMENT_EXPORT_HEADER, assignSequences, buildMovementExport, checkMovement, competenceEnd, competenceReference,
-  hasBlock, normalizeTipmov, parseCompetence, parseDecimalInput, parseEventCatalogRows, parsePastedMovements,
+  hasBlock, normalizeTipmov, parseCompetence, parseDecimalInput, parseEventCatalogRows, parsePastedMovements, pastedCompanyMismatch, pastedMovementCells,
   sankhyaCompanyCode, sankhyaEmployeeCode, toCents, type PayrollCatalogEvent,
 } from "../lib/payroll-movements.ts";
 
@@ -141,11 +141,33 @@ test("a exportação monta a linha do modelo e bloqueia o arquivo inteiro diante
 test("colar do Excel entende tabulação, ponto e vírgula, horas e pula o cabeçalho", () => {
   const { rows, invalidLines } = parsePastedMovements("CODFUNC\tCODEVENTO\tINDICE\tVALOR\n17\t9\t12:30\t0\n23;37;0;312,50\nxx;9;1;0\n\n41\t120\t\t850");
   assert.deepEqual(rows, [
-    { line: 2, employeeCode: "17", eventCode: 9, indexValue: 12.5, amountCents: 0 },
-    { line: 3, employeeCode: "23", eventCode: 37, indexValue: 0, amountCents: 31250 },
-    { line: 6, employeeCode: "41", eventCode: 120, indexValue: 0, amountCents: 85000 },
+    { line: 2, companyCode: "", employeeCode: "17", eventCode: 9, indexValue: 12.5, amountCents: 0 },
+    { line: 3, companyCode: "", employeeCode: "23", eventCode: 37, indexValue: 0, amountCents: 31250 },
+    { line: 6, companyCode: "", employeeCode: "41", eventCode: 120, indexValue: 0, amountCents: 85000 },
   ]);
   assert.deepEqual(invalidLines, [4]);
+});
+
+test("colar do Excel com cinco colunas: CODEMP na frente", () => {
+  const { rows, invalidLines } = parsePastedMovements("CODEMP\tCODFUNC\tCODEVENTO\tINDICE\tVALOR\n33\t17\t9\t2:30\t0\n033;23;37;0;312,50\nAB;23;37;0;1");
+  assert.deepEqual(rows, [
+    { line: 2, companyCode: "33", employeeCode: "17", eventCode: 9, indexValue: 2.5, amountCents: 0 },
+    { line: 3, companyCode: "33", employeeCode: "23", eventCode: 37, indexValue: 0, amountCents: 31250 },
+  ]);
+  assert.deepEqual(invalidLines, [4]);
+  // VALOR vazio no fim não faz o CODEMP virar CODFUNC.
+  assert.deepEqual(pastedMovementCells("33\t17\t9\t2\t"), { companyCode: "33", employeeCode: "17", eventCode: "9", index: "2", amount: "" });
+  assert.deepEqual(pastedMovementCells("17\t9\t2\t0"), { companyCode: "", employeeCode: "17", eventCode: "9", index: "2", amount: "0" });
+  assert.equal(pastedMovementCells("CODFUNC;CODEVENTO"), null);
+});
+
+test("linha colada de outra empresa é recusada, não lançada na selecionada", () => {
+  const goiania = { code: "33", name: "OPYT GOIANIA" };
+  assert.equal(pastedCompanyMismatch("", goiania), null);
+  assert.equal(pastedCompanyMismatch("033", goiania), null);
+  assert.match(String(pastedCompanyMismatch("10", goiania)), /empresa 10, mas a empresa selecionada é OPYT GOIANIA \(33\)/u);
+  assert.match(String(pastedCompanyMismatch("33", { code: "", name: "EVVIVA" })), /sem Código Sankhya/u);
+  assert.match(String(pastedCompanyMismatch("x", goiania)), /inválido/u);
 });
 
 test("a migration cria as duas tabelas com RLS forçada e está no journal e no manifesto", async () => {
@@ -177,4 +199,17 @@ test("as rotas exigem capacidade e escopo de empresa, e a exportação fica na a
 test("a tela Folha mostra o lançador", async () => {
   const app = await read("app/painel/WorkspaceApp.tsx");
   assert.match(app, /<PayrollMovementsPanel /u);
+});
+
+test("o lote colado guarda a ordem das linhas, e a SEQUENCIA segue essa ordem", async () => {
+  // Com o default now(), todas as linhas do lote tinham o mesmo created_at e a
+  // SEQUENCIA de duas linhas iguais caía no desempate pelo id aleatório.
+  const lista = await read("app/api/payroll-movements/route.ts");
+  assert.match(lista, /created_by, created_at\)\s+VALUES \(\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, clock_timestamp\(\)\)/u);
+  assert.match(lista, /pastedCompanyMismatch\(/u);
+  const ordered = assignSequences([
+    { id: "b", companyCode: "33", employeeCode: "12", eventCode: 37, createdAt: "2026-10-21T10:00:00.000001Z" },
+    { id: "a", companyCode: "33", employeeCode: "12", eventCode: 37, createdAt: "2026-10-21T10:00:00.000002Z" },
+  ]);
+  assert.deepEqual(ordered.map((row) => [row.id, row.sequence]), [["b", 0], ["a", 1]]);
 });

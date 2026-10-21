@@ -35,7 +35,8 @@ export async function POST(request: Request) {
     if (companyId) await requireCompanyAccess(d1, workspace.id, user.id, workspace.role, companyId);
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
 
-    const result = await d1.prepare(`SELECT mv.id, mv.company_id, mv.event_code, mv.index_value, mv.amount_cents, mv.created_at,
+    const result = await d1.prepare(`SELECT mv.id, mv.company_id, mv.event_code, mv.index_value, mv.amount_cents,
+        to_char(mv.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at,
         emp.full_name, emp.registration_number, emp.external_id, co.external_code
       FROM fdp_payroll_movement_entries mv
       JOIN fdp_employees emp ON emp.workspace_id = mv.workspace_id AND emp.id = mv.employee_id
