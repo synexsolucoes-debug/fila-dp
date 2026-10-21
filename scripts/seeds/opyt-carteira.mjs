@@ -22,3 +22,42 @@ export const companies = [
   // Sem CODEMP e sem CNPJ ainda: entra pelo nome, para aparecer na carteira.
   { code: "", name: "EVVIVA", taxId: "", dpStatus: "a_internalizar", holder: null, backup: null },
 ];
+
+/**
+ * Rotinas fixas do mês (aba Calendário mensal da planilha). `companies: null`
+ * = todas as empresas internas; a lista usa CODEMP e é resolvida para id.
+ * Admissões (1–26) e rescisões (1–30) não são rotina: são janela de prazo nas
+ * regras de corte abaixo.
+ */
+export const recurringTemplates = [
+  { code: "fechamento-impostos", name: "Fechamento de impostos (eSocial periódicos, DCTFWeb)", frequency: "monthly", dayStart: 1, dayEnd: 15, scope: "cnpj_root", companies: null, processType: "ROTINA DP" },
+  { code: "boletos-ponto", name: "Emissão de boletos do ponto", frequency: "monthly", dayStart: 1, dayEnd: 15, scope: "company", companies: null, processType: "ROTINA DP" },
+  { code: "planos-saude", name: "Planos de saúde ao financeiro + coparticipação", frequency: "monthly", dayStart: 1, dayEnd: 19, scope: "company", companies: null, processType: "BENEFÍCIOS" },
+  { code: "fechamento-ponto", name: "Fechamento de ponto", frequency: "monthly", dayStart: 26, dayEnd: 28, scope: "company", companies: null, processType: "PONTO" },
+  { code: "eventos-a-parte", name: "Lançamento de eventos à parte", frequency: "monthly", dayStart: 26, dayEnd: 30, scope: "company", companies: null, processType: "VARIÁVEIS" },
+  { code: "caju", name: "Caju", frequency: "monthly", dayStart: 30, dayEnd: 30, scope: "company", companies: ["30", "20", "33", "31", "34"], processType: "BENEFÍCIOS" },
+  { code: "wellhub", name: "Wellhub: inclusões e exclusões", frequency: "weekly", weekday: 5, scope: "company", companies: null, processType: "BENEFÍCIOS", listWeekMovements: true },
+];
+
+/**
+ * Regras de corte (aba Prazos de corte). `processTypes` são os tipos de
+ * processo das demandas a que a regra se aplica — inclusive os que o Teams e
+ * as integrações usam. Alteração salarial fica em `proposta` até o dia do mês
+ * ser definido com as áreas: regra em proposta não marca ninguém como atrasado.
+ */
+export const cutoffRules = [
+  { code: "admissao", name: "Admissão", processTypes: ["CONCILIAÇÃO CADASTRAL", "ADMISSÃO"], kind: "antecedencia_dias_uteis", value: 3, monthDayLimit: 26, status: "aprovada",
+    description: "Antecedência mínima de 3 dias úteis antes do início; janela do mês até o dia 26." },
+  { code: "rescisao", name: "Rescisão", processTypes: ["RESCISÃO", "DESLIGAMENTO"], kind: "mesmo_dia", value: 0, monthDayLimit: null, status: "aprovada",
+    description: "Comunicar no mesmo dia da decisão (pagamento em até 10 dias do término — CLT art. 477 §6º)." },
+  { code: "ferias", name: "Férias", processTypes: ["FÉRIAS"], kind: "antecedencia_dias_corridos", value: 40, monthDayLimit: null, status: "aprovada",
+    description: "Solicitar com 40 dias de antecedência (aviso de 30 dias — art. 135; pagamento 2 dias antes — art. 145)." },
+  { code: "ponto", name: "Ponto aprovado pelo gestor", processTypes: ["PONTO"], kind: "dia_do_mes", value: 25, monthDayLimit: null, status: "aprovada",
+    description: "Ponto aprovado pelo gestor até o dia 25." },
+  { code: "variaveis", name: "Variáveis (comissões, HE, descontos)", processTypes: ["VARIÁVEIS"], kind: "dia_do_mes", value: 26, monthDayLimit: null, status: "aprovada",
+    description: "Variáveis lançadas até o dia 26 da competência." },
+  { code: "alteracao", name: "Alteração salarial / cargo / transferência", processTypes: ["ALTERAÇÃO SALARIAL", "ALTERAÇÃO DE CARGO/FUNÇÃO", "TRANSFERÊNCIA"], kind: "dia_do_mes", value: 20, monthDayLimit: null, status: "proposta",
+    description: "Até o dia definido no mês de vigência (dia 20 como proposta, a confirmar com as áreas)." },
+  { code: "atestados", name: "Atestados e afastamentos", processTypes: ["AFASTAMENTO", "ATESTADO"], kind: "ate_dias_apos", value: 2, monthDayLimit: null, status: "aprovada",
+    description: "Até 48 horas do fato." },
+];

@@ -6,6 +6,9 @@
  *     --workspace <id> --seed opyt \
  *     --pessoa Odete=odete@empresa.com.br --pessoa Rian=rian@empresa.com.br
  *
+ * Aplica também as rotinas recorrentes (Fase 2) e as regras de corte (Fase 3)
+ * do mesmo arquivo de semente.
+ *
  * Idempotente: empresa existente (pelo CODEMP, ou pelo CNPJ, ou pelo nome
  * quando não há nenhum dos dois) recebe só a situação do DP; a carteira só é
  * criada para empresa que ainda não tem vigência aberta — nunca reescreve uma
@@ -27,7 +30,7 @@ if (!/^[a-z0-9-]+$/u.test(seedName)) throw new Error("--seed inválido.");
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 if (!databaseUrl?.startsWith("postgres")) throw new Error("Defina DATABASE_URL.");
 
-const { companies } = await import(`./seeds/${seedName}-carteira.mjs`);
+const { companies, recurringTemplates = [], cutoffRules = [] } = await import(`./seeds/${seedName}-carteira.mjs`);
 const digits = (value) => String(value ?? "").replace(/\D/gu, "");
 const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
@@ -91,6 +94,31 @@ try {
     report.push({ CODEMP: company.code || "—", empresa: company.name, situacao: company.dpStatus, origem: match ? "existente" : "criada", carteira: portfolio });
   }
   console.table(report);
+
+  // Rotinas e regras de corte (Fases 2 e 3): criadas se o código ainda não
+  // existe; o que foi ajustado pela tela fica como está.
+  const codeToId = new Map((await client.query("SELECT id, external_code FROM fdp_companies WHERE workspace_id = $1", [workspaceId])).rows
+    .filter((row) => row.external_code).map((row) => [String(row.external_code), String(row.id)]));
+  let templatesCreated = 0;
+  for (const template of recurringTemplates) {
+    const companyIds = template.companies ? template.companies.map((code) => codeToId.get(code)).filter(Boolean) : null;
+    const inserted = await client.query(`INSERT INTO fdp_recurring_templates
+      (id, workspace_id, code, name, description, frequency, day_start, day_end, weekday, scope, company_ids, process_type, list_week_movements, created_by)
+      VALUES ($1, $2, $3, $4, '', $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13) ON CONFLICT (workspace_id, code) DO NOTHING`,
+      [randomUUID(), workspaceId, template.code, template.name, template.frequency, template.dayStart ?? 1, template.dayEnd ?? template.dayStart ?? 1,
+        template.frequency === "weekly" ? template.weekday : null, template.scope, companyIds ? JSON.stringify(companyIds) : null,
+        template.processType, Boolean(template.listWeekMovements), actor]);
+    templatesCreated += inserted.rowCount ?? 0;
+  }
+  let rulesCreated = 0;
+  for (const rule of cutoffRules) {
+    const inserted = await client.query(`INSERT INTO fdp_cutoff_rules
+      (id, workspace_id, code, name, process_types, kind, value, month_day_limit, description, status, created_by, updated_by)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $11) ON CONFLICT (workspace_id, code) DO NOTHING`,
+      [randomUUID(), workspaceId, rule.code, rule.name, JSON.stringify(rule.processTypes), rule.kind, rule.value, rule.monthDayLimit, rule.description, rule.status, actor]);
+    rulesCreated += inserted.rowCount ?? 0;
+  }
+  console.log(`Rotinas criadas: ${templatesCreated} de ${recurringTemplates.length}. Regras de corte criadas: ${rulesCreated} de ${cutoffRules.length}.`);
   await client.query(dryRun ? "ROLLBACK" : "COMMIT");
   console.log(dryRun ? "Simulação: nada foi gravado." : "Carteira aplicada.");
 } catch (error) {

@@ -27,6 +27,7 @@ import type { getD1 } from "../../db/index.ts";
 import { addBusinessDays } from "../fila-dp-relations.ts";
 import { workingDayMinutes } from "../fila-dp-sla.ts";
 import { preparePortfolioAssignment } from "../portfolio-assignment.ts";
+import { prepareCutoffEvaluation } from "../dp-cutoff-service.ts";
 import { prepareAuditEvent, recordActivity } from "../fila-dp-db.ts";
 import { recordIntegrationEvent } from "../integration-events.ts";
 import { prepareDomainEvent } from "../outbox.ts";
@@ -308,6 +309,11 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
   });
 
   const portfolio = await preparePortfolioAssignment(d1, { workspaceId: input.workspaceId, cardId, companyId });
+  const cutoff = await prepareCutoffEvaluation(d1, {
+    workspaceId: input.workspaceId, cardId, processType: PROCESS_TYPE, companyId: companyId ?? null, competence: null,
+    requestedFor: /^\d{4}-\d{2}-\d{2}$/u.test(String(admissionDate ?? "")) ? String(admissionDate) : null,
+    areaLabel: "Admissão via Tangerino", actor: "SYSTEM", title,
+  });
   await d1.batch([
     /* `employee_id` e `company_id` ficam nulos de propósito: a pessoa ainda não
        é colaborador em lugar nenhum, e inventar um vínculo aqui seria escrever
@@ -328,6 +334,7 @@ export async function ensureOpenAdmissionDemand(d1: Database, input: {
       .bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)),
     // Admissão vinda do ERP: quem responde pela empresa na carteira.
     ...portfolio.statements,
+    ...cutoff.statements,
     d1.prepare(`UPDATE fdp_tangerino_open_admissions SET card_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE workspace_id = ? AND id = ? AND card_id IS NULL`)
       .bind(cardId, input.workspaceId, input.openAdmissionId),

@@ -1,4 +1,4 @@
-import { ApiError, apiError, computeSlaStatus, getApiUser, text, validDueAt, validProcessType } from "@/lib/fila-dp-api";
+import { ApiError, apiError, computeSlaStatus, getApiUser, text, validDate, validDueAt, validProcessType } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCompanyAccess, requireWorkspaceRole, runAutomations } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { addBusinessDays, replaceCardRelations } from "@/lib/fila-dp-relations";
@@ -6,6 +6,7 @@ import { workingDayMinutes } from "@/lib/fila-dp-sla";
 import { validCompetence } from "@/lib/operations";
 import { validateActiveAreaIds } from "@/lib/areas";
 import { preparePortfolioAssignment } from "@/lib/portfolio-assignment";
+import { prepareCutoffEvaluation, requesterAreaLabel } from "@/lib/dp-cutoff-service";
 
 /** Página leve de demandas para telas que não podem carregar o snapshot inteiro. */
 export async function GET(request: Request) {
@@ -141,6 +142,13 @@ export async function POST(request: Request) {
     const portfolio = hasAssignees
       ? { statements: [], resolution: null }
       : await preparePortfolioAssignment(d1, { workspaceId: workspace.id, cardId, companyId });
+    // Corte (Fase 3): decidido agora, contra a regra do tipo de processo, e
+    // imutável depois. Fora do corte, a ocorrência nasce no mesmo lote.
+    const cutoff = await prepareCutoffEvaluation(d1, {
+      workspaceId: workspace.id, cardId, processType, companyId, competence: competence || null,
+      requestedFor: validDate(body.requestedFor ?? null), title, actor: user.id,
+      areaLabel: await requesterAreaLabel(d1, workspace.id, requesterAreaId, text(body.requesterAreaLabel, 120)),
+    });
 
     await d1.batch([
       d1.prepare(`INSERT INTO fdp_cards
@@ -175,6 +183,7 @@ export async function POST(request: Request) {
       d1.prepare("UPDATE fdp_user_workspace_preferences SET active_board_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND active_workspace_id = ?")
         .bind(targetBoard.id, user.id, workspace.id),
       ...portfolio.statements,
+      ...cutoff.statements,
     ]);
 
     // Uma lista vazia de responsáveis no corpo não apaga a atribuição da carteira.
@@ -183,7 +192,7 @@ export async function POST(request: Request) {
     await runAutomations(workspace.id, targetBoard.id, cardId, "card.created", auth.user.email, { processType, priority });
     if (hasAssignees || portfolio.resolution?.userId) await runAutomations(workspace.id, targetBoard.id, cardId, "assignee.added", auth.user.email, { assignee: "present" });
 
-    await recordActivity(workspace.id, cardId, auth.user.email, "card.created", { title, boardId: targetBoard.id, listKind: list.kind, templateId: template?.id ?? null, competence, legalDueAt, requesterAreaId, responsibleAreaId, assignedBy: hasAssignees ? "explicit" : portfolio.resolution?.via ?? "none" });
+    await recordActivity(workspace.id, cardId, auth.user.email, "card.created", { title, boardId: targetBoard.id, listKind: list.kind, templateId: template?.id ?? null, competence, legalDueAt, requesterAreaId, responsibleAreaId, assignedBy: hasAssignees ? "explicit" : portfolio.resolution?.via ?? "none", withinCutoff: cutoff.verdict?.within ?? null });
     return Response.json(await getWorkspaceSnapshot(auth.user), { status: 201 });
   } catch (error) {
     return apiError(error);

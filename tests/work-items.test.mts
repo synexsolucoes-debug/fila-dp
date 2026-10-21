@@ -448,7 +448,7 @@ test("o item traz um destino real no painel, e não um link para lugar nenhum", 
   for (const source of [
     "card", "approval", "movement", "auxiliary", "pending_item", "triage", "integration_failure",
     "compliance_obligation", "epi_ca_expiry", "occupational_exam_due", "training_due", "cat_pending",
-    "position_risk_exam_missing",
+    "position_risk_exam_missing", "dp_alert",
   ] as const) {
     const href = workItemHref(source, "x");
     const [path] = href.split("?");

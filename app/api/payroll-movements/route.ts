@@ -6,6 +6,7 @@ import {
   MAX_MOVEMENTS_PER_REQUEST, checkMovement, hasBlock, parseCompetence, parseDecimalInput, pastedCompanyMismatch, roundIndex, toCents,
 } from "@/lib/payroll-movements";
 import { responsavelPara } from "@/lib/portfolio-assignment";
+import { prepareLateMovementOccurrence } from "@/lib/dp-cutoff-service";
 import { listCompanyMovements, loadCompany, loadCompanyEmployees, loadEventCatalog } from "@/lib/payroll-movements-service";
 
 /**
@@ -125,6 +126,14 @@ export async function POST(request: Request) {
       .bind(crypto.randomUUID(), workspace.id, companyId, row.employeeId, competence, row.eventCode,
         row.indexValue, row.amountCents, row.note, user.id)));
 
+    /* Corte das variáveis (Fase 3): lançamento depois do dia do corte da
+       competência (26, ou o da regra "VARIÁVEIS") vira ocorrência automática. */
+    const late = await prepareLateMovementOccurrence(d1, {
+      workspaceId: workspace.id, companyId, competence, rows: rows.length, actor: user.id,
+      areaLabel: text(body.areaLabel, 120) || "Lançamento de variáveis",
+    });
+    if (late.length) await d1.batch(late);
+
     /* A trilha registra quem lançou, onde e quantos. Nome e valor ficam no
        módulo, onde a permissão vale. */
     await prepareAuditEvent({
@@ -134,7 +143,7 @@ export async function POST(request: Request) {
       metadata: { companyId },
     }).run();
 
-    return Response.json({ created: rows.length }, { status: 201, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ created: rows.length, afterCutoff: late.length > 0 }, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return apiError(error);
   }

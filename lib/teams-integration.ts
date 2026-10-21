@@ -24,6 +24,7 @@ import { openCredentials } from "./integrations.ts";
 import { parseWorkspaceWebhookSecrets } from "./integration-security.ts";
 import { log } from "./observability.ts";
 import { preparePortfolioAssignment } from "./portfolio-assignment.ts";
+import { prepareCutoffEvaluation } from "./dp-cutoff-service.ts";
 import {
   interpretTeamsMessage, movementTaskDraft, MOVEMENT_PROCESS_TYPE, plainTextFromTeams,
   type MovementKind, type TeamsInterpretation, type TeamsMessageOrigin,
@@ -462,11 +463,19 @@ async function createMovementCard(d1: TeamsDatabase, input: {
 
   // A mensagem do Teams não escolhe responsável: quem responde pela empresa na carteira.
   const portfolio = await preparePortfolioAssignment(d1, { workspaceId: input.workspaceId, cardId, companyId: target.companyId });
+  // Corte (Fase 3): a data da movimentação citada na mensagem é a data pedida.
+  const effective = input.interpretation.effectiveDate;
+  const cutoff = await prepareCutoffEvaluation(d1, {
+    workspaceId: input.workspaceId, cardId, processType: draft.processType, companyId: target.companyId, competence: null,
+    requestedFor: /^\d{4}-\d{2}-\d{2}$/u.test(effective) ? effective : null,
+    areaLabel: `Teams — ${input.origin.senderName || input.origin.channelName || "canal"}`.slice(0, 120), actor: "SYSTEM", title: draft.title,
+  });
   await d1.batch([
     ...draft.checklist.map((item, index) => d1.prepare(
       "INSERT INTO fdp_checklist_items (id, workspace_id, card_id, title, completed, position) VALUES (?, ?, ?, ?, 0, ?)",
     ).bind(crypto.randomUUID(), input.workspaceId, cardId, item, (index + 1) * 1000)),
     ...portfolio.statements,
+    ...cutoff.statements,
   ]);
 
   return cardId;

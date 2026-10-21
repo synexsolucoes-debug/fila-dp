@@ -30,6 +30,8 @@ export type TransactionalEmail = {
   html: string;
   /** A mesma ocorrência não pode virar duas mensagens por retentativa. */
   idempotencyKey: string;
+  /** Anexos em base64 (relatório mensal do DP em PDF). */
+  attachments?: Array<{ filename: string; content: string }>;
 };
 
 export type TransactionalEmailResult = { provider: "resend" | "development"; id: string };
@@ -87,7 +89,10 @@ export async function dispatchTransactionalEmail(input: TransactionalEmail): Pro
       "Content-Type": "application/json",
       "Idempotency-Key": input.idempotencyKey,
     },
-    body: JSON.stringify({ from: config.from, to: [input.to], subject: input.subject, html: input.html }),
+    body: JSON.stringify({
+      from: config.from, to: [input.to], subject: input.subject, html: input.html,
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+    }),
   });
   if (!response.ok) {
     throw new ApiError(503, "EMAIL_DELIVERY_FAILED", "Não foi possível enviar o e-mail agora. Tente novamente em alguns minutos.");

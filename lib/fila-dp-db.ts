@@ -662,6 +662,9 @@ export async function getWorkspaceSnapshot(user: ChatGPTUser): Promise<Workspace
     cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
     cancellationReason: String(row.cancellation_reason ?? ""),
     nextStep: String(row.next_step ?? ""),
+    /* Corte (DP Operacional, Fase 3): decidido na criação. */
+    withinCutoff: row.within_cutoff === null || row.within_cutoff === undefined ? null : row.within_cutoff === true,
+    requestedFor: row.requested_for ? String(row.requested_for instanceof Date ? row.requested_for.toISOString() : row.requested_for).slice(0, 10) : null,
     title: String(row.title),
     description: String(row.description ?? ""),
     companyId: row.company_id ? String(row.company_id) : null,

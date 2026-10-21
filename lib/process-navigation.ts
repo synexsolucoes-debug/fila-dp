@@ -80,7 +80,7 @@ export const processGroups: readonly ProcessGroup[] = [
     /* "Meu trabalho" entra primeiro e vira a porta do processo (§46, §48): a
        primeira pergunta de quem abre o Vinculato é "o que eu preciso fazer
        agora?", e a resposta estava espalhada por quatro telas. */
-    views: ["work", "processes", "board", "portfolio", "inbox", "planner"],
+    views: ["work", "dpOperations", "processes", "board", "portfolio", "inbox", "planner"],
   },
   {
     id: "pagamentos",
