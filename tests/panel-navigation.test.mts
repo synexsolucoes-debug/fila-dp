@@ -44,7 +44,7 @@ test("a estrutura por processo é decidida num módulo puro, não no componente"
   // Sem React nem ícone: um módulo puro é o que permite testar a estrutura sem
   // montar a árvore, e o que impede o menu de virar a quinta lista paralela.
   assert.doesNotMatch(nav, /from "react"|lucide-react/u);
-  assert.match(source, /import \{ hasSubNavigation, visibleProcessGroups \} from "@\/lib\/process-navigation"/u);
+  assert.match(source, /import \{ hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups \} from "@\/lib\/process-navigation"/u);
   // O componente não pode ter uma segunda cópia da estrutura.
   assert.doesNotMatch(source, /const navSections/u, "a lista por departamento não pode voltar");
   assert.doesNotMatch(catalog, /section: "/u, "a seção por departamento saiu do catálogo");
@@ -79,10 +79,12 @@ test("a Operação DP e os Pagamentos agrupam o que a §26 pede junto", async ()
   for (const view of ["board", "inbox", "planner", "processes"]) {
     assert.equal(groupOfView(view)?.id, "operacao-dp", `${view} deveria estar na Operação DP`);
   }
-  // E a competência de PJ deixa de atravessar três seções.
-  for (const view of ["contractorPayments", "psychologistPayments", "auxiliary", "payroll"]) {
+  // E a competência de PJ deixa de atravessar três seções: é um processo só,
+  // separado dos outros pagamentos.
+  for (const view of ["psychologistPayments", "auxiliary", "payroll"]) {
     assert.equal(groupOfView(view)?.id, "pagamentos", `${view} deveria estar em Pagamentos`);
   }
+  assert.equal(groupOfView("contractorPayments")?.id, "pagamento-pj");
   assert.equal(groupOfView("epi")?.id, "epi");
   // A home não mora em processo nenhum: ela é a porta para todos.
   assert.equal(groupOfView("overview"), null);
@@ -190,7 +192,8 @@ test("o cabeçalho do processo não pisca ao trocar de aba dentro dele (§69, §
   // Agora o cabeçalho é um só: mostra os módulos quando há mais de um, e
   // empresta o lugar ao módulo quando há um — o módulo é quem tem os
   // contadores das próprias abas.
-  assert.match(source, /\{activeGroup && \(/u);
+  // No Sistema PJ o menu lateral já é a subnavegação, e as abas saem.
+  assert.match(source, /\{activeGroup && !pjMode && \(/u);
   assert.match(source, /hasSubNavigation\(activeGroup\) \? \(/u);
   assert.match(source, /<div className="process-context-slot" ref=\{tabsTarget\} \/>/u);
 });
@@ -381,4 +384,43 @@ test("a verificação de navegador prova a exportação, não só a tela", async
   assert.match(check, /acceptDownloads: true/u);
   assert.match(check, /a exportação segue o recorte, e não o grupo/u);
   assert.match(check, /daFilial && daFilial\.length === 1/u, "o arquivo da filial vazia só pode ter cabeçalho");
+});
+
+test("o Sistema PJ agrupa os nove destinos pela etapa do mês, sem perder nenhum", async () => {
+  const { contractorProcessSections, processGroups, visibleContractorSections } = await import("../lib/process-navigation.ts");
+  const grupo = processGroups.find((group) => group.id === "pagamento-pj");
+  assert.ok(grupo, "o Pagamento PJ precisa ser um processo próprio");
+  // As seções e o grupo listam os mesmos destinos, na mesma ordem.
+  assert.deepEqual(contractorProcessSections.flatMap((section) => section.views), [...grupo.views]);
+  // Seção sem tela alcançável não aparece (§30).
+  const recorte = visibleContractorSections(["contractorPayments", "contractorInvoices"]);
+  assert.deepEqual(recorte.map((section) => section.id), ["painel", "notas"]);
+  assert.deepEqual(recorte[1].views, ["contractorInvoices"]);
+});
+
+test("quem só opera o PJ abre direto no Sistema PJ", async () => {
+  const { isContractorOnly } = await import("../lib/process-navigation.ts");
+  assert.equal(isContractorOnly(["contractorPayments", "contractorInvoices"]), true);
+  assert.equal(isContractorOnly(["contractorPayments", "epi"]), false, "com outro módulo, o PJ é escolha");
+  assert.equal(isContractorOnly([]), false, "sem módulo nenhum não há sistema a abrir");
+
+  const shell = await readFile(new URL("../app/painel/WorkspaceApp.tsx", import.meta.url), "utf8");
+  assert.match(shell, /const pjMode = hasContractorModule && \(contractorOnly \|\| appMode === "pj"\);/u);
+  assert.match(shell, /if \(pjMode && !isContractorSection\(view\)\) setViewState\("contractorPayments"\);/u,
+    "no Sistema PJ nenhuma tela de fora pode abrir");
+  assert.match(shell, /\{pjMode \? contractorNavSections\.map/u, "o menu do Sistema PJ mostra só as seções do módulo");
+});
+
+test("quem só tem o Pagamento PJ recebe a lista de empresas, sem o cadastro completo", async () => {
+  const rota = await readFile(new URL("../app/api/companies/route.ts", import.meta.url), "utf8");
+  // Sem isto o módulo abria sem empresa nenhuma para escolher: o seletor lê
+  // `/api/companies`, que exigia o módulo Cadastros.
+  assert.match(rota, /hasCapability\(workspace, "contractors\.payments\.read"\)/u);
+  // Mas só a identificação: endereço e contato continuam sendo do Cadastros.
+  const identidade = rota.match(/const companyIdentityColumns = "([^"]+)"/u)?.[1] ?? "";
+  assert.ok(identidade.includes("legal_name") && identidade.includes("status"));
+  for (const coluna of ["email", "phone", "street", "postal_code"]) {
+    assert.ok(!identidade.includes(coluna), `${coluna} não pode sair para quem não tem Cadastros`);
+  }
+  assert.match(rota, /const columns = fullRecord \? companyColumns : companyIdentityColumns;/u);
 });

@@ -514,6 +514,28 @@
   display: none !important;
 }
 
+/* Sistema PJ: os nove destinos ficam à mostra, em cinco seções. Numa tela
+   baixa eles não cabem com o rodapé da barra, e sem rolagem própria o seletor
+   de grupo passava por cima dos últimos itens. O menu rola; o rodapé fica. */
+@media (min-width: 781px) {
+  .operational-ui.pj-mode .dashboard-sidebar nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    gap: 12px;
+  }
+  .operational-ui.pj-mode .dashboard-sidebar nav .sidebar-nav-group { flex: 0 0 auto; gap: 2px; }
+  .operational-ui.pj-mode .dashboard-sidebar nav .sidebar-pj-section button { min-height: 36px; }
+  .operational-ui.pj-mode .sidebar-workspace { margin-top: 12px; }
+}
+
+/* Na barra inferior as seções não podem ocupar célula da grade: sem isto uma
+   seção cujos itens estão todos em "Mais" virava um alvo vazio e empurrava a
+   Administração para uma segunda linha, fora da tela. */
+@media (max-width: 780px) {
+  .operational-ui.pj-mode .dashboard-sidebar nav .sidebar-pj-section { display: contents; }
+}
+
 .theme-dark .dashboard-header-actions .new-demand {
   border-color: var(--ui-primary);
   background: var(--ui-primary);
