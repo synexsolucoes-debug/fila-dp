@@ -1,19 +1,31 @@
 import { apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getCompanyAccessScope, getWorkspaceContext } from "@/lib/fila-dp-db";
-import { requireCapability } from "@/lib/authorization";
+import { hasCapability, requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 
 const companyColumns = `id, parent_company_id, is_principal, legal_name, trade_name, tax_id, external_code, email, phone, status,
   tax_regime, state_registration, municipal_registration, postal_code, street, street_number, address_complement, district, city, state, country`;
+
+/** Identificação da empresa, sem endereço nem contato — ver o GET. */
+const companyIdentityColumns = "id, parent_company_id, is_principal, legal_name, trade_name, tax_id, external_code, status";
 
 export async function GET() {
   const auth = await getApiUser();
   if (!auth.user) return auth.response;
   try {
     const { d1, workspace, user } = await getWorkspaceContext(auth.user);
-    requireCapability(workspace, "companies.read");
+    /* Os controles de pagamento escolhem a empresa por esta lista. Quem só tem
+       o Pagamento PJ (ou o de Psicólogos), sem Cadastros, recebia 403 aqui e
+       abria um módulo sem empresa nenhuma para escolher. Essa pessoa recebe a
+       identificação da empresa — o mesmo recorte que o snapshot do painel já
+       entrega a todo membro —, e não o cadastro com endereço e contato. */
+    const fullRecord = hasCapability(workspace, "companies.read");
+    if (!fullRecord && !hasCapability(workspace, "contractors.payments.read") && !hasCapability(workspace, "psychology.payments.read")) {
+      requireCapability(workspace, "companies.read");
+    }
+    const columns = fullRecord ? companyColumns : companyIdentityColumns;
     const access = await getCompanyAccessScope(d1, workspace.id, user.id, workspace.role);
-    const result = await d1.prepare(`SELECT ${companyColumns} FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name`).bind(workspace.id).all();
+    const result = await d1.prepare(`SELECT ${columns} FROM fdp_companies WHERE workspace_id = ? ORDER BY is_principal DESC, legal_name`).bind(workspace.id).all();
     return Response.json({ companies: result.results.filter((company) => access.unrestricted || access.companyIds.has(String(company.id))) });
   } catch (error) { return apiError(error); }
 }

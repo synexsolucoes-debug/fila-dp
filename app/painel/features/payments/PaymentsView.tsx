@@ -752,7 +752,7 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
 
       {!loading && companies.length > 0 && !cycle && (
         <p className={styles.noteLine}>
-          A competência {competenceLabel(competence)} ainda não foi aberta para esta empresa. Abra-a em Operação DP para lançar pagamentos.
+          A competência {competenceLabel(competence)} ainda não foi aberta para esta empresa. A abertura é feita na Operação DP — se você não tem acesso a ela, peça a quem responde pelo fechamento do DP.
         </p>
       )}
 

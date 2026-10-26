@@ -83,24 +83,33 @@ export const processGroups: readonly ProcessGroup[] = [
     views: ["work", "dpOperations", "processes", "board", "portfolio", "inbox", "planner"],
   },
   {
+    id: "pagamento-pj",
+    label: "Pagamento PJ",
+    description: "Prestadores, competência, notas fiscais, complemento e encerramento do pagamento de PJ.",
+    kind: "process",
+    /* O Pagamento PJ é um processo próprio, com nove destinos (§74).
+     *
+     * Ele morava dentro de "Pagamentos e competências", ao lado de psicólogos,
+     * benefícios e folha: treze itens numa subnavegação só, e quem trabalha
+     * só com PJ precisava achar os seus nove no meio dos outros quatro. Cada
+     * destino tem dados próprios vindos do servidor — nenhum é página vazia
+     * esperando conteúdo (§75). "Contratos" não está aqui justamente por
+     * isso: não existe a entidade.
+     *
+     * A ordem é a do mês: o retrato, a base, a apuração, as notas, a saída do
+     * dinheiro e o encerramento. `processSections` abaixo agrupa estes mesmos
+     * destinos para o Sistema PJ. */
+    views: [
+      "contractorPayments", "contractorProviders", "contractorLimits", "contractorCycles",
+      "contractorAdjustments", "contractorClosings", "contractorInvoices", "contractorCaju", "contractorArchive",
+    ],
+  },
+  {
     id: "pagamentos",
     label: "Pagamentos e competências",
-    description: "Prestadores, psicólogos, benefícios e folha: da apuração ao encerramento.",
+    description: "Psicólogos, benefícios, folha, adiantamentos e descontos: da apuração ao encerramento.",
     kind: "process",
-    /* O Pagamento PJ ocupa nove destas entradas (§74).
-     *
-     * Era uma tela só, rolando: totais, lançamentos fixos, exportação Caju e a
-     * tabela de fechamentos com treze colunas, um embaixo do outro. Quem
-     * precisava conferir um limite de nota rolava por tudo; quem só queria
-     * saber quanto sair rolava por tudo. Cada um destes oito destinos tem
-     * dados próprios vindos do servidor — nenhum é página vazia esperando
-     * conteúdo (§75). "Contratos" não está aqui justamente por isso: não
-     * existe a entidade. */
-    views: [
-      "contractorPayments", "contractorProviders", "contractorCycles", "contractorClosings",
-      "contractorInvoices", "contractorAdjustments", "contractorLimits", "contractorCaju", "contractorArchive",
-      "psychologistPayments", "auxiliary", "payroll", "payrollLedger",
-    ],
+    views: ["psychologistPayments", "auxiliary", "payroll", "payrollLedger"],
   },
   {
     id: "epi",
@@ -159,6 +168,59 @@ export const processGroups: readonly ProcessGroup[] = [
     views: ["indicators", "integrations", "triage", "agents", "history"],
   },
 ] as const;
+
+/** Um bloco de destinos dentro de um processo, com o próprio rótulo. */
+export type ProcessSection = {
+  id: string;
+  /** Rótulo da seção no menu, em caixa alta pelo CSS. */
+  label: string;
+  views: readonly ProcessNavView[];
+};
+
+/**
+ * As etapas do Pagamento PJ, na ordem em que o mês acontece.
+ *
+ * O Sistema PJ — o painel de quem só trabalha com prestador — mostra os nove
+ * destinos de uma vez, sem a pasta do processo por cima. Nove itens soltos
+ * numa coluna voltariam a ser a lista sem forma que a §64 pede para acabar;
+ * agrupados pela etapa, o menu responde "em que ponto do mês estou".
+ *
+ * Os destinos são exatamente os do grupo `pagamento-pj`, na mesma ordem — o
+ * teste confere, para a seção e o grupo não divergirem.
+ */
+export const contractorProcessSections: readonly ProcessSection[] = [
+  { id: "painel", label: "Painel", views: ["contractorPayments"] },
+  { id: "cadastro", label: "Cadastro", views: ["contractorProviders", "contractorLimits"] },
+  { id: "apuracao", label: "Apuração do mês", views: ["contractorCycles", "contractorAdjustments", "contractorClosings"] },
+  { id: "notas", label: "Notas e pagamento", views: ["contractorInvoices", "contractorCaju"] },
+  { id: "encerramento", label: "Encerramento", views: ["contractorArchive"] },
+];
+
+/**
+ * Seções de PJ recortadas pelas telas que esta pessoa alcança. Uma seção cujas
+ * telas estejam todas fora do alcance não aparece — o mesmo princípio de
+ * `visibleProcessGroups` (§30).
+ */
+export function visibleContractorSections(visibleViews: readonly ProcessNavView[]) {
+  const allowed = new Set(visibleViews);
+  return contractorProcessSections
+    .map((section) => ({ ...section, views: section.views.filter((view) => allowed.has(view)) }))
+    .filter((section) => section.views.length > 0);
+}
+
+/**
+ * Se o Pagamento PJ é tudo o que esta pessoa opera.
+ *
+ * `moduleViews` são as telas que dependem de módulo contratado — as que não
+ * dependem (início, demandas, histórico) existem para todo mundo e não contam
+ * como "outro módulo". Quando todas as telas de módulo que sobram são do PJ, o
+ * painel abre direto como Sistema PJ: mostrar a operação do DP inteira para
+ * quem só paga prestador é oferecer um sistema que não é o dela.
+ */
+export function isContractorOnly(moduleViews: readonly ProcessNavView[]) {
+  const pj = new Set(contractorProcessSections.flatMap((section) => section.views));
+  return moduleViews.length > 0 && moduleViews.every((view) => pj.has(view));
+}
 
 /** A tela que não pertence a processo nenhum: é a porta de entrada para todos. */
 export const workspaceHomeView: ProcessNavView = "overview";

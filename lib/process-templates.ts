@@ -271,7 +271,7 @@ export const processTemplates: readonly ProcessTemplate[] = [
     code: "PJ_COMPETENCIA",
     name: "Pagamento de prestadores PJ",
     category: "pagamentos",
-    processGroup: "pagamentos",
+    processGroup: "pagamento-pj",
     description: "Abertura da competência, apuração dos valores, ajustes, Caju, revisão e encerramento com aprovação.",
     objective: "Fechar a competência de PJ sem pendência aberta e com o valor aprovado antes do pagamento.",
     tags: ["pagamentos", "prestadores", "competencia"],

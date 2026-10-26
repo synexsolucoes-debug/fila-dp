@@ -44,6 +44,7 @@ import { ArrowLeftRight,
   PanelLeftOpen,
   Paperclip,
   Plus,
+  ReceiptText,
   RefreshCw,
   Search,
   Settings,
@@ -75,7 +76,7 @@ import { DpOperationsView } from "./features/dp";
 import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary, WorkspaceRole, WorkspaceSnapshot } from "@/lib/fila-dp-types";
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
-import { hasSubNavigation, visibleProcessGroups } from "@/lib/process-navigation";
+import { hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups } from "@/lib/process-navigation";
 import { PRIORITY_LABELS } from "@/lib/work-items";
 import { demandNextAction } from "@/lib/demand-dashboard";
 import {
@@ -148,7 +149,7 @@ type SettingsSection = "general" | "companies" | "columns" | "team" | "security"
  * acessos" no título. Com o mapa, acrescentar uma seção sem lhe dar um nome
  * passa a ser um erro de tipo, e não uma tela mal rotulada em produção.
  */
-/** Preferência local do modo ERP DP — ver `appMode`. */
+/** Preferência local do modo do painel (Vinculato, ERP DP ou Sistema PJ) — ver `appMode`. */
 const APP_MODE_KEY = "vinculato.app-mode";
 
 const settingsSectionMeta: Record<SettingsSection, { group: string; title: string; description: string }> = {
@@ -320,6 +321,7 @@ const processColors: Record<string, string> = {
  */
 const processGroupIcons: Record<string, LucideIcon> = {
   "operacao-dp": ClipboardCheck,
+  "pagamento-pj": ReceiptText,
   pagamentos: WalletCards,
   epi: HardHat,
   "seguranca-do-trabalho": Siren,
@@ -535,6 +537,10 @@ const navOrder = Object.keys(viewCatalog) as View[];
  * "Mais", agrupados com os mesmos contextos do menu lateral.
  */
 const mobilePrimaryViews = new Set<View>(["overview", "work", "board", "inbox"]);
+/** A mesma barra inferior no Sistema PJ. Três destinos, e não quatro: a
+ *  Administração ocupa um dos cinco alvos e "Mais" outro — o resto do módulo
+ *  fica em "Mais". */
+const contractorMobilePrimaryViews = new Set<View>(["contractorPayments", "contractorClosings", "contractorInvoices"]);
 
 /** Estados do ciclo de vida do workspace, para o seletor dizer por que um grupo
     não pode ser aberto em vez de apenas desabilitar o botão. */
@@ -1180,14 +1186,20 @@ export function WorkspaceApp({
      conveniência, não dado: se o armazenamento falhar, o painel abre no modo
      Vinculato, que é o padrão. Lido depois da montagem para o HTML do
      servidor e o do navegador coincidirem. */
-  const [appMode, setAppMode] = useState<"vinculato" | "erp">("vinculato");
+  /* O Sistema PJ ("pj") é o mesmo painel recortado ao Pagamento PJ: o menu
+     mostra só os destinos do módulo, organizados pela etapa do mês. Para quem
+     só tem o PJ ele não é escolha — ver `contractorOnly`. */
+  const [appMode, setAppMode] = useState<"vinculato" | "erp" | "pj">("vinculato");
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      try { if (window.localStorage.getItem(APP_MODE_KEY) === "erp") setAppMode("erp"); } catch { /* sem armazenamento: fica o padrão */ }
+      try {
+        const stored = window.localStorage.getItem(APP_MODE_KEY);
+        if (stored === "erp" || stored === "pj") setAppMode(stored);
+      } catch { /* sem armazenamento: fica o padrão */ }
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
-  const changeAppMode = useCallback((next: "vinculato" | "erp") => {
+  const changeAppMode = useCallback((next: "vinculato" | "erp" | "pj") => {
     setAppMode(next);
     try { window.localStorage.setItem(APP_MODE_KEY, next); } catch { /* conveniência; o modo vale para esta sessão */ }
   }, []);
@@ -1839,7 +1851,6 @@ export function WorkspaceApp({
   const canComment = snapshot ? ["admin", "member", "guest"].includes(snapshot.workspace.role) : false;
   const isAdmin = snapshot?.workspace.role === "admin";
   const canUseErp = snapshot ? hasCapability(snapshot.workspace.role, "employees.read") : false;
-  const erpMode = appMode === "erp" && canUseErp;
   const activeDepartments = useMemo(
     () => (snapshot?.areas ?? []).filter((area) => area.status === "active"),
     [snapshot?.areas],
@@ -1878,6 +1889,21 @@ export function WorkspaceApp({
     if (entry.module && !hasModule(entry.module)) return false;
     return !(role && entry.hiddenFor?.includes(role));
   }), [hasModule, role]);
+
+  /* Sistema PJ. Quem só opera o Pagamento PJ entra direto nele, sem a
+     operação do DP em volta; quem tem outros módulos alterna pelo botão do
+     topo, como faz com o ERP DP. Os dois modos não se sobrepõem. */
+  const hasContractorModule = visibleViews.includes("contractorPayments");
+  const contractorOnly = useMemo(
+    () => isContractorOnly(visibleViews.filter((id) => viewCatalog[id].module)),
+    [visibleViews],
+  );
+  const pjMode = hasContractorModule && (contractorOnly || appMode === "pj");
+  const erpMode = appMode === "erp" && canUseErp && !contractorOnly;
+  const contractorNavSections = useMemo(() => visibleContractorSections(visibleViews), [visibleViews]);
+  /* No Sistema PJ toda tela é do PJ. Ajustado durante a renderização, e não
+     num efeito, para a tela de fora nunca chegar a piscar. */
+  if (pjMode && !isContractorSection(view)) setViewState("contractorPayments");
 
   const navBadges = useMemo<Partial<Record<View, number>>>(() => ({
     inbox: snapshot?.inbox.filter((item) => item.status === "new").length || undefined,
@@ -3093,22 +3119,42 @@ export function WorkspaceApp({
     /* `data-focus` no invólucro, e não no quadro: o que o modo foco esconde —
        barra lateral, contexto do topo — está fora do quadro, e é justamente
        isso que devolve a largura para as colunas. */
-    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}`} data-view={view} data-theme={theme} data-focus={focusMode && view === "board" ? "on" : undefined}>
+    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}${pjMode ? " pj-mode" : ""}`} data-view={view} data-theme={theme} data-focus={focusMode && view === "board" ? "on" : undefined}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
         </button>
-        <button className="brand dashboard-brand" onClick={() => setView("overview")} aria-label="Vinculato — visão geral">
+        <button className="brand dashboard-brand" onClick={() => setView(pjMode ? "contractorPayments" : "overview")}
+          aria-label={pjMode ? "Vinculato — Pagamento PJ" : "Vinculato — visão geral"}>
           {/* Variante clara do logotipo: a barra lateral é superfície escura. */}
           <span className="dashboard-brand-logo dashboard-brand-logo-full"><VinculatoLogo size={28} tone="light" /></span>
           <span className="dashboard-brand-logo dashboard-brand-logo-mark"><VinculatoLogo size={28} compact tone="light" /></span>
         </button>
         <div className="sidebar-group-context">
-          <span>GRUPO OPERACIONAL</span>
+          <span>{pjMode ? "SISTEMA PJ" : "GRUPO OPERACIONAL"}</span>
           <strong>{snapshot.workspace.name}</strong>
-          <small>{principalCompany ? `Principal: ${principalCompany.tradeName || principalCompany.legalName}` : "Defina a empresa principal"}</small>
+          <small>{pjMode ? "Pagamento de prestadores PJ"
+            : principalCompany ? `Principal: ${principalCompany.tradeName || principalCompany.legalName}` : "Defina a empresa principal"}</small>
         </div>
-        <nav aria-label="Navegação do painel">
+        <nav aria-label={pjMode ? "Navegação do Sistema PJ" : "Navegação do painel"}>
+          {/* Sistema PJ: só o módulo, com os destinos à mostra e agrupados pela
+              etapa do mês. Sem pasta de processo por cima — aqui o processo é
+              o sistema inteiro, e esconder os destinos atrás de um clique a
+              mais seria pagar o preço do menu geral sem ter o menu geral. */}
+          {pjMode ? contractorNavSections.map((section) => (
+            <div key={section.id} className="sidebar-nav-group sidebar-pj-section">
+              <span className="sidebar-nav-section">{section.label.toUpperCase()}</span>
+              {section.views.map((id) => {
+                const entry = viewCatalog[id as View];
+                const ItemIcon = entry.icon;
+                return <button key={id} type="button" title={entry.label}
+                  className={`${view === id && !administrationOpen ? "active " : ""}sidebar-nav-item ${contractorMobilePrimaryViews.has(id as View) ? "mobile-primary" : "mobile-secondary"}`}
+                  onClick={() => setView(id as View)} aria-current={view === id && !administrationOpen ? "page" : undefined}>
+                  <span aria-hidden="true"><ItemIcon /></span> {entry.label}
+                </button>;
+              })}
+            </div>
+          )) : <>
           {/* A home fica fora de qualquer processo: ela é a porta para todos.
               Pô-la dentro de um deles diria que a visão da operação pertence a
               um processo específico, e ela é justamente o contrário. */}
@@ -3197,6 +3243,7 @@ export function WorkspaceApp({
               })}
             </div>;
           })}
+          </>}
 
           {/* A Administração ganhou lugar no menu.
               Ela só era alcançável pela engrenagem do rodapé, que abre o que
@@ -3214,12 +3261,12 @@ export function WorkspaceApp({
           </div>
 
           <details ref={mobileNavigationRef} className="sidebar-mobile-more">
-            <summary className={mobilePrimaryViews.has(view) ? "" : "active"} aria-label="Abrir todos os módulos">
+            <summary className={(pjMode ? contractorMobilePrimaryViews : mobilePrimaryViews).has(view) ? "" : "active"} aria-label="Abrir todos os módulos">
               <span aria-hidden="true"><MoreHorizontal /></span><span>Mais</span>
             </summary>
             <div className="sidebar-mobile-more-panel">
-              {navGroups.map((group) => {
-                const items = group.views.filter((id) => !mobilePrimaryViews.has(id as View));
+              {(pjMode ? contractorNavSections : navGroups).map((group) => {
+                const items = group.views.filter((id) => !(pjMode ? contractorMobilePrimaryViews : mobilePrimaryViews).has(id as View));
                 if (!items.length) return null;
                 return <section key={group.id} aria-labelledby={`mobile-nav-${group.id}`}>
                   <span id={`mobile-nav-${group.id}`}>{group.label.toUpperCase()}</span>
@@ -3269,10 +3316,12 @@ export function WorkspaceApp({
             </details>
           </div>
         )}
-        <div className="sidebar-workspace">
+        {/* A estrutura do grupo é contexto da operação do DP; no Sistema PJ
+            a empresa é escolhida na própria tela, e o espaço é do menu. */}
+        {!pjMode && <div className="sidebar-workspace">
           <span>ESTRUTURA EMPRESARIAL</span>
           <div className="sidebar-structure-summary"><i>{workspaceInitials}</i><span><strong>{principalCompany?.tradeName || principalCompany?.legalName || "Sem principal"}</strong><small>{plural(snapshot.companies.length, "empresa no grupo", "empresas no grupo")}</small></span></div>
-        </div>
+        </div>}
         <div className="sidebar-account">
           <span className="user-avatar">{userInitials}</span>
           <span><strong>{user.displayName}</strong><small>{user.email}</small></span>
@@ -3311,14 +3360,14 @@ export function WorkspaceApp({
 
       <section className="dashboard-main">
         <header className="dashboard-header">
-          <div className="dashboard-location"><span>{snapshot.workspace.name} /</span><strong> {erpMode ? "ERP DP" : header.title}</strong></div>
+          <div className="dashboard-location"><span>{snapshot.workspace.name} /</span><strong> {erpMode ? "ERP DP" : pjMode ? `Pagamento PJ · ${header.title}` : header.title}</strong></div>
           <div className="dashboard-header-actions">
             <label className="header-company-select"><Building2 aria-hidden="true" /><select aria-label="Selecionar empresa" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}><option value="all">{companyScopeLabel}</option>{snapshot.companies.filter((company) => company.status === "active").map((company) => <option value={company.id} key={company.id}>{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</option>)}</select></label>
             {/* Período (§13). Só aparece na Visão geral porque é só lá que ele
                 manda: exibi-lo no quadro sugeriria um recorte que o quadro não
                 aplica, e filtro que não filtra é pior que filtro nenhum. */}
             {view === "overview" && !erpMode && <label className="header-period-select"><CalendarClock aria-hidden="true" /><select aria-label="Selecionar período" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value as OverviewPeriod)}>{overviewPeriods.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}
-            {activeGroup && <button type="button" className="process-context-pin"
+            {activeGroup && !pjMode && <button type="button" className="process-context-pin"
               onClick={() => shortcuts.toggleFavorite(view)} aria-pressed={shortcuts.isFavorite(view)}
               title={shortcuts.isFavorite(view) ? "Remover dos atalhos" : "Fixar nos atalhos"}>
               <Star aria-hidden="true" />
@@ -3348,7 +3397,16 @@ export function WorkspaceApp({
             {/* A troca de modo fica no canto superior direito, a última porta
                 da faixa: é a mesma em todas as telas e nunca some no celular.
                 Só aparece para quem lê cadastro — o ERP DP inteiro é sobre ele. */}
-            {canUseErp && <button type="button" className="erp-mode-toggle" aria-pressed={erpMode}
+            {/* Sistema PJ: entra por aqui quem tem outros módulos além do PJ.
+                Quem só tem o PJ já está nele e não ganha botão — não há outro
+                sistema para onde voltar. */}
+            {hasContractorModule && !contractorOnly && !erpMode && <button type="button" className="erp-mode-toggle" aria-pressed={pjMode}
+              onClick={() => changeAppMode(pjMode ? "vinculato" : "pj")}
+              aria-label={pjMode ? "Sistema PJ ativo. Voltar ao Vinculato" : "Trocar para o Sistema PJ"}
+              title={pjMode ? "Voltar ao Vinculato" : "Trocar para o Sistema PJ"}>
+              <ArrowLeftRight aria-hidden="true" /><span>{pjMode ? "Vinculato" : "Sistema PJ"}</span>
+            </button>}
+            {canUseErp && !pjMode && !contractorOnly && <button type="button" className="erp-mode-toggle" aria-pressed={erpMode}
               onClick={() => changeAppMode(erpMode ? "vinculato" : "erp")}
               aria-label={erpMode ? "Modo ERP DP ativo. Voltar ao Vinculato" : "Trocar para o ERP DP"}
               title={erpMode ? "Voltar ao Vinculato" : "Trocar para o ERP DP"}>
@@ -3380,7 +3438,9 @@ export function WorkspaceApp({
             </p>
           )}
           {/* Keep module navigation outside the remounted view. Single modules may supply their own tabs. */}
-          {activeGroup && (
+          {/* No Sistema PJ o menu lateral já é a subnavegação do módulo: as
+              abas repetiriam os mesmos nove destinos logo acima da tela. */}
+          {activeGroup && !pjMode && (
             <section className="process-context process-context-compact" aria-label={`Processo ${activeGroup.label}`}>
               {hasSubNavigation(activeGroup) ? (
                 <AnimatedTabs
