@@ -34,7 +34,10 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       { src: "/icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/apple-icon.png", sizes: "180x180", type: "image/png", purpose: "any" },
-      { src: "/icon.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+      /* Maskable com o símbolo inteiro dentro do círculo seguro de 80%: o
+         sistema recorta o ícone em círculo ou gota, e o de 192px, mais
+         apertado, perderia as pontas das hastes. */
+      { src: "/brand/vinculato-icon-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
     shortcuts: [
       { name: "Entregar EPI", short_name: "Entregar", url: "/campo?acao=entrega" },

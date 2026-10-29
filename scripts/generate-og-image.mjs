@@ -1,5 +1,5 @@
 /**
- * Gera a imagem de compartilhamento (`public/og-vinculato.jpg`).
+ * Gera a imagem de compartilhamento (`public/og-vinculato-marca.jpg`).
  *
  * Por que existe um gerador em vez de um arquivo desenhado à mão:
  *
