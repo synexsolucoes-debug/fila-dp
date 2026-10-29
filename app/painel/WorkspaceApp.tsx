@@ -7,6 +7,8 @@ import {
   type PanelLocation, type PanelSettingsSection, type PanelView,
 } from "@/lib/panel-routes";
 import { ArrowLeftRight,
+  Rows2,
+  Rows4,
   LayoutGrid,
   ArrowRight,
   BarChart3,
@@ -85,6 +87,7 @@ import {
   nextThemePreference, themeLabels, THEME_COOKIE, THEME_COOKIE_MAX_AGE, THEME_SYSTEM_COOKIE,
   type ResolvedTheme, type ThemePreference,
 } from "@/lib/theme";
+import { DENSITY_KEY, densityLabels, nextDensity, parseDensity, type Density } from "@/lib/density";
 import { RegistrationSheetPanel } from "./features/admission";
 import { chooseRegistrationFormAttachment } from "@/lib/registration-form-file";
 import { capabilitiesForRole, hasCapability, workspaceRoles } from "@/lib/authorization";
@@ -1190,6 +1193,19 @@ export function WorkspaceApp({
   const [themePreference, setThemePreference] = useState<ThemePreference>(initialThemePreference);
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(initialTheme);
   const theme: ResolvedTheme = themePreference === "system" ? systemTheme : themePreference;
+  /* Densidade (lib/density.ts): o "cozy/compact" do Fiori. Lida depois da
+     montagem, como o modo, para o HTML do servidor e o do navegador baterem. */
+  const [density, setDensity] = useState<Density>("comfortable");
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try { setDensity(parseDensity(window.localStorage.getItem(DENSITY_KEY))); } catch { /* conveniência */ }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+  const escolherDensidade = useCallback((escolha: Density) => {
+    setDensity(escolha);
+    try { window.localStorage.setItem(DENSITY_KEY, escolha); } catch { /* vale para esta sessão */ }
+  }, []);
 
   /* Modo ERP DP (docs/engenharia-reversa-sap-hcm.md): o mesmo Vinculato lido
      com a gramática do SAP HCM. A escolha é de cada pessoa neste navegador —
@@ -2773,6 +2789,7 @@ export function WorkspaceApp({
   const header = viewCatalog[view];
   const primaryAction = header.primaryAction;
   const today = new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "short", year: "numeric" }).format(new Date());
+  const todayShort = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date());
   /* O departamento por onde a pessoa responde, e a competência em curso.
      A competência sai dos ciclos de folha quando existe um aberto — é o que o
      DP chama de "o mês que está rodando" — e cai no mês corrente quando não
@@ -3158,7 +3175,7 @@ export function WorkspaceApp({
     /* `data-focus` no invólucro, e não no quadro: o que o modo foco esconde —
        barra lateral, contexto do topo — está fora do quadro, e é justamente
        isso que devolve a largura para as colunas. */
-    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}${pjMode ? " pj-mode" : ""}`} data-view={view} data-theme={theme} data-focus={focusMode && view === "board" ? "on" : undefined}>
+    <main className={`dashboard-shell operational-ui${theme === "dark" ? " theme-dark" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${erpMode ? " erp-mode" : ""}${pjMode ? " pj-mode" : ""}`} data-view={view} data-theme={theme} data-density={density} data-focus={focusMode && view === "board" ? "on" : undefined}>
       <aside className="dashboard-sidebar">
         <button className="sidebar-toggle" type="button" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Abrir menu lateral" : "Recolher menu lateral"} aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? "Abrir menu" : "Recolher menu"}>
           {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
@@ -3381,6 +3398,13 @@ export function WorkspaceApp({
               {themePreference === "system" ? <MonitorCog aria-hidden="true" />
                 : themePreference === "dark" ? <Moon aria-hidden="true" />
                 : <Sun aria-hidden="true" />}
+            </button>
+            <button type="button" className="switch-account-button density-toggle"
+              onClick={() => escolherDensidade(nextDensity(density))}
+              aria-label={`Densidade: ${densityLabels[density].toLowerCase()}. Trocar para ${densityLabels[nextDensity(density)].toLowerCase()}.`}
+              aria-pressed={density === "compact"}
+              title={`Densidade: ${densityLabels[density]}`}>
+              {density === "compact" ? <Rows4 aria-hidden="true" /> : <Rows2 aria-hidden="true" />}
             </button>
             <button type="button" className="switch-account-button"
               onClick={openWorkspaceSettings}
@@ -3743,6 +3767,21 @@ export function WorkspaceApp({
           </PageTransition>}
           </>}</ProcessTabsProvider>}
         </div>
+        {/* Barra de status (docs/engenharia-reversa-design-centi-sap.md §3.4).
+            O que os ERPs de gestão pública deixam fixo no rodapé de toda tela:
+            em que entidade, em que exercício e competência, com que usuário e
+            em que data se está operando. Nenhum número acima dela se lê certo
+            sem essas cinco coisas, e o topo só tem lugar para uma. */}
+        <footer className="dashboard-statusbar" aria-label="Contexto da operação">
+          <span><small>Sistema</small><strong>{erpMode ? "ERP DP" : pjMode ? "Sistema PJ" : "Vinculato"}</strong></span>
+          <span className="statusbar-shrink"><small>Entidade</small><strong>{snapshot.workspace.name}</strong></span>
+          <span className="statusbar-shrink"><small>Empresa</small><strong>{erpScopeLabel}</strong></span>
+          <span><small>Exercício</small><strong className="statusbar-data">{currentCompetence.slice(0, 4)}</strong></span>
+          <span><small>Competência</small><strong className="statusbar-data">{competenceLabel(currentCompetence)}</strong></span>
+          <span className="statusbar-shrink"><small>Usuário</small><strong>{user.displayName} · {roleLabels[snapshot.workspace.role]}</strong></span>
+          <span className="statusbar-end"><small>Data</small><strong className="statusbar-data">{todayShort}</strong></span>
+          <span className={`statusbar-sync ${realtimeStatus}`} aria-live="off"><i aria-hidden="true" />{formatSyncStatus(lastUpdatedAt, realtimeStatus)}</span>
+        </footer>
       </section>
 
       {error && <div className="workspace-toast error" role="alert"><span>!</span>{error}<button onClick={() => setError("")}>×</button></div>}

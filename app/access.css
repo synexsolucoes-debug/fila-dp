@@ -1603,9 +1603,9 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
    188px de tela contra 223px de origem, ou seja, ele nunca é esticado além do
    que o arquivo tem para dar. */
 @keyframes vin-intro-reveal {
-  0% { opacity: 0; transform: translate3d(38.4375%, 0, 0) scale(1.43); clip-path: inset(0 74.01% 0 0); }
-  16% { opacity: 1; transform: translate3d(38.4375%, 0, 0) scale(1.55); clip-path: inset(0 74.01% 0 0); }
-  34% { opacity: 1; transform: translate3d(38.4375%, 0, 0) scale(1.55); clip-path: inset(0 74.01% 0 0); }
+  0% { opacity: 0; transform: translate3d(39.84%, 0, 0) scale(1.43); clip-path: inset(0 76.61% 0 0); }
+  16% { opacity: 1; transform: translate3d(39.84%, 0, 0) scale(1.55); clip-path: inset(0 76.61% 0 0); }
+  34% { opacity: 1; transform: translate3d(39.84%, 0, 0) scale(1.55); clip-path: inset(0 76.61% 0 0); }
   76% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); clip-path: inset(0 0 0 0); }
   100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); clip-path: inset(0 0 0 0); }
 }
