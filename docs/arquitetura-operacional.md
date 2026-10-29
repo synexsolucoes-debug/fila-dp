@@ -2319,3 +2319,6 @@ O objetivo é impedir que o próximo módulo seja o quinto objeto paralelo.
 - `docs/conferencia-de-ponto.md` — a fronteira do ponto.
 - `docs/controle-de-epi.md` — a fronteira do EPI.
 - `docs/operacao-de-agentes.md` — como operar os agentes no dia a dia.
+- `docs/engenharia-reversa-sap-hcm.md` — o SAP HCM lido com os olhos do DP.
+- `docs/engenharia-reversa-trello.md` — o Trello comparado ao quadro de
+  Demandas, com o roadmap do importador de quadros.
