@@ -22,6 +22,7 @@ const {
 const ICON = path.join(__dirname, "icon.png");
 let serverUrl = "";
 let setupWindow = null;
+let splashWindow = null;
 
 if (!app.requestSingleInstanceLock()) {
   // Duplo clique no ícone com o app aberto traz a janela para frente, em vez
@@ -66,7 +67,10 @@ function createMainWindow(startPath = "/painel") {
   });
 
   if (isFirst && settings.maximized !== false) win.maximize();
-  win.once("ready-to-show", () => win.show());
+  win.once("ready-to-show", () => {
+    win.show();
+    closeSplash();
+  });
 
   if (isFirst) {
     const persist = () => {
@@ -115,6 +119,40 @@ function guardNavigation(win) {
     event.preventDefault();
     if (/^https?:|^mailto:/u.test(url)) shell.openExternal(url);
   });
+}
+
+/**
+ * Tela de abertura enquanto o servidor responde.
+ *
+ * Sem ela, o duplo clique no ícone não dá sinal nenhum por alguns segundos —
+ * e quem está acostumado com programa instalado clica de novo.
+ */
+function showSplash() {
+  splashWindow = new BrowserWindow({
+    width: 420,
+    height: 300,
+    frame: false,
+    resizable: false,
+    movable: true,
+    center: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    icon: ICON,
+    backgroundColor: "#07111f",
+    show: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  splashWindow.once("ready-to-show", () => splashWindow?.show());
+  splashWindow.on("closed", () => {
+    splashWindow = null;
+  });
+  splashWindow.loadFile(path.join(__dirname, "splash.html"), {
+    query: { versao: app.getVersion(), servidor: new URL(serverUrl).host },
+  });
+}
+
+function closeSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
 }
 
 function navigate(win, pathname) {
@@ -242,6 +280,7 @@ app.whenReady().then(() => {
   });
 
   buildMenu();
+  showSplash();
   createMainWindow();
 
   app.on("activate", () => {
