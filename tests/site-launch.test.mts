@@ -40,7 +40,7 @@ async function walk(dir: URL, extensions: string[]): Promise<URL[]> {
 const existe = async (url: URL) => Boolean(await stat(url).catch(() => null));
 
 /** Rotas que o Next serve sem `page.tsx`: arquivos de metadados e a API. */
-const ROTAS_SEM_PAGINA = new Set(["/sitemap.xml", "/robots.txt", "/og-vinculato.jpg"]);
+const ROTAS_SEM_PAGINA = new Set(["/sitemap.xml", "/robots.txt", "/og-vinculato-marca.jpg"]);
 
 test("todo destino do site público existe como rota", async () => {
   // Só as superfícies públicas: o painel resolve destino por estado, não por

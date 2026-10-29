@@ -7,6 +7,10 @@ import "./dashboard-modern.css";
 // Carregada por último de propósito: é a camada que corrige e refina o que as
 // três folhas anteriores acumularam. Ver o cabeçalho do arquivo.
 import "./interface-refresh.css";
+// Camada ERP: densidade compacta, barra de status e cabeçalho dinâmico,
+// herdados do SAP Fiori e dos ERPs de gestão pública. Ver
+// docs/engenharia-reversa-design-centi-sap.md.
+import "./design-centi-sap.css";
 
 /**
  * Tipografia do produto (§89).
@@ -82,13 +86,16 @@ export async function generateMetadata(): Promise<Metadata> {
       // Endereço novo de propósito: plataformas guardam o cartão em cache pela
       // URL, então manter `/og.png` continuaria servindo "Fila DP" dos caches
       // delas mesmo com o arquivo trocado.
-      images: [{ url: `${origin}/og-vinculato.jpg`, width: 1200, height: 630, alt: "Vinculato — Sua operação, conectada." }],
+      //
+      // Pelo mesmo motivo, `-marca` no nome: o símbolo mudou para o check com o
+      // ponto de conexão, e o endereço anterior continuaria mostrando o antigo.
+      images: [{ url: `${origin}/og-vinculato-marca.jpg`, width: 1200, height: 630, alt: "Vinculato — Sua operação, conectada." }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Vinculato — Sua operação, conectada.",
       description: "Processos, demandas, documentos e integrações do DP em uma plataforma só.",
-      images: [`${origin}/og-vinculato.jpg`],
+      images: [`${origin}/og-vinculato-marca.jpg`],
     },
   };
 }

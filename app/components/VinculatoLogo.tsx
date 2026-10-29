@@ -3,27 +3,34 @@ import Image from "next/image";
 /**
  * Marca do Vinculato — arquivos oficiais.
  *
- * As duas composições vêm dos arquivos entregues pela marca, recortados sem
- * margem branca em `public/brand/`. Não há redesenho: o que aparece na tela é o
- * arquivo original.
+ * O símbolo é o "V" de check com o ponto de conexão: haste azul, haste
+ * azul-marinho e o ponto turquesa. Os dois arquivos do símbolo (colorido e
+ * claro) são os entregues pela marca, recortados sem margem em
+ * `public/brand/`. Não há redesenho: o que aparece na tela é o arquivo
+ * original. O logotipo horizontal é esse símbolo ao lado da palavra
+ * "Vinculato", com o pé do texto alinhado ao pé das hastes.
  *
  * - `VinculatoMark`: só o símbolo, para favicon, sidebar recolhida e áreas compactas;
  * - `VinculatoLogo`: símbolo + logotipo, para login, cadastro, sidebar expandida,
  *   site público e áreas institucionais.
  *
- * As cores da identidade vivem em tokens (`--vin-*`) e foram extraídas dos
- * próprios pixels do símbolo, não estimadas.
+ * As três cores do símbolo são exatamente os tokens `--vin-navy-deep`,
+ * `--vin-blue` e `--vin-teal` de `app/globals.css` — medidas nos pixels do
+ * arquivo, não estimadas.
  */
 export const VINCULATO_BRAND = {
-  navy: "#062B60",
-  blue: "#168CFD",
+  navy: "#18223A",
+  blue: "#365CF5",
+  teal: "#16A394",
   markSource: "/brand/vinculato-mark.png",
+  /** Sobre fundo escuro a haste azul-marinho some: a versão clara a pinta de branco. */
+  markLightSource: "/brand/vinculato-mark-light.png",
   logoSource: "/brand/vinculato-logo.png",
   /** Sobre fundo escuro o logotipo azul-marinho fica ilegível. */
   logoLightSource: "/brand/vinculato-logo-light.png",
   /** Proporções reais dos arquivos recortados. */
-  markRatio: 512 / 459,
-  logoRatio: 960 / 178,
+  markRatio: 540 / 505,
+  logoRatio: 960 / 183,
 } as const;
 
 /**
@@ -36,13 +43,17 @@ export const VINCULATO_BRAND = {
  */
 const BRAND_IMAGE_QUALITY = 100;
 
-type MarkProps ={ size?: number; title?: string; className?: string; priority?: boolean };
+type MarkProps = {
+  size?: number; title?: string; className?: string; priority?: boolean;
+  /** `light` usa a haste branca, para superfícies escuras. */
+  tone?: "color" | "light";
+};
 
-export function VinculatoMark({ size = 32, title = "Vinculato", className, priority }: MarkProps) {
+export function VinculatoMark({ size = 32, title = "Vinculato", className, priority, tone = "color" }: MarkProps) {
   return (
     <Image
       className={className}
-      src={VINCULATO_BRAND.markSource}
+      src={tone === "light" ? VINCULATO_BRAND.markLightSource : VINCULATO_BRAND.markSource}
       alt={title}
       width={Math.round(size * VINCULATO_BRAND.markRatio)}
       height={size}
@@ -55,13 +66,11 @@ export function VinculatoMark({ size = 32, title = "Vinculato", className, prior
 
 type LogoProps = MarkProps & {
   compact?: boolean;
-  /** `light` usa o logotipo em branco, para superfícies escuras. */
-  tone?: "color" | "light";
 };
 
 /** Versão horizontal. `compact` devolve só o símbolo, para sidebar recolhida. */
 export function VinculatoLogo({ size = 34, compact = false, className, title = "Vinculato", priority, tone = "color" }: LogoProps) {
-  if (compact) return <VinculatoMark size={size} title={title} className={className} priority={priority} />;
+  if (compact) return <VinculatoMark size={size} title={title} className={className} priority={priority} tone={tone} />;
   return (
     <Image
       className={className}

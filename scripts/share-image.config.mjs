@@ -12,7 +12,7 @@
  */
 
 /** Onde o cartão é gravado. O layout aponta para cá; o teste confere os dois. */
-export const SAIDA = "public/og-vinculato.jpg";
+export const SAIDA = "public/og-vinculato-marca.jpg";
 
 /**
  * Teto de peso. O cartão anterior tinha 1,4 MB — acima do que aplicativo de
