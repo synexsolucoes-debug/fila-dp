@@ -7,6 +7,10 @@ import "./dashboard-modern.css";
 // Carregada por último de propósito: é a camada que corrige e refina o que as
 // três folhas anteriores acumularam. Ver o cabeçalho do arquivo.
 import "./interface-refresh.css";
+// Camada ERP: densidade compacta, barra de status e cabeçalho dinâmico,
+// herdados do SAP Fiori e dos ERPs de gestão pública. Ver
+// docs/engenharia-reversa-design-centi-sap.md.
+import "./design-centi-sap.css";
 
 /**
  * Tipografia do produto (§89).

@@ -1,0 +1,216 @@
+/*
+ * Camada "ERP": o que o Vinculato herda do desenho do SAP Fiori e dos ERPs de
+ * gestão pública (Centi e parentes).
+ *
+ * A análise inteira, com o que foi copiado, o que não foi e por quê, está em
+ * docs/engenharia-reversa-design-centi-sap.md. Esta folha é carregada depois de
+ * interface-refresh.css e só acrescenta três coisas, cada uma reversível
+ * apagando o próprio bloco:
+ *
+ *   1. densidade compacta (Fiori "compact"), ligada por `data-density`;
+ *   2. barra de status no rodapé (Centi: entidade, exercício, competência,
+ *      usuário e data sempre à vista);
+ *   3. cabeçalho dinâmico (Fiori "dynamic page"): o título da tela fica preso
+ *      no topo da coluna e recolhe a descrição quando o conteúdo rola.
+ *
+ * Nenhuma cor nova: tudo sai dos tokens `--ui-*` da casca, que o tema escuro já
+ * redefine e a auditoria de contraste já mede.
+ */
+
+/* ========================================================================== */
+/* 1. Densidade compacta                                                      */
+/* ========================================================================== */
+
+/*
+ * O Fiori define as duas densidades pela altura do controle: 2,75rem (44px) na
+ * confortável, 2rem (32px) na compacta. A compacta daqui fica em 32px — abaixo
+ * disso a WCAG 2.5.8 (alvo mínimo de 24px) continua atendida, mas o texto de
+ * 13px passa a encostar na borda.
+ *
+ * Só espaço muda. Fonte, cor e desenho continuam os mesmos, para que trocar a
+ * densidade nunca pareça trocar de sistema.
+ */
+.dashboard-shell[data-density="compact"] {
+  --density-control: 32px;
+  --density-cell-y: 5px;
+  --density-cell-x: 10px;
+}
+
+@media (min-width: 761px) {
+  .dashboard-shell[data-density="compact"] .dashboard-header { height: 52px; }
+  .dashboard-shell[data-density="compact"] { --content-pad-top: 12px; }
+  .dashboard-shell[data-density="compact"] .dashboard-content { padding-bottom: 24px; }
+  .dashboard-shell[data-density="compact"] .dashboard-heading { margin-bottom: 14px; }
+  .dashboard-shell[data-density="compact"] .dashboard-heading h1 { font-size: clamp(20px, 1.6vw, 24px); }
+}
+
+.dashboard-shell[data-density="compact"] .dashboard-content table th,
+.dashboard-shell[data-density="compact"] .dashboard-content table td {
+  padding-block: var(--density-cell-y);
+  padding-inline: var(--density-cell-x);
+}
+
+.dashboard-shell[data-density="compact"] .dashboard-content :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, button) {
+  min-height: var(--density-control);
+}
+
+.dashboard-shell[data-density="compact"] .dashboard-content :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select) {
+  padding-block: 4px;
+}
+
+.dashboard-shell[data-density="compact"] .dashboard-sidebar .sidebar-nav-item {
+  min-height: 32px;
+  padding-block: 4px;
+}
+
+.dashboard-shell[data-density="compact"] .dashboard-task { padding: 9px 10px; }
+.dashboard-shell[data-density="compact"] .dashboard-card-list { gap: 6px; }
+
+/* ========================================================================== */
+/* 2. Barra de status                                                         */
+/* ========================================================================== */
+
+/*
+ * A coluna principal vira três faixas a partir de 761px: topo, conteúdo que
+ * rola, rodapé fixo. Abaixo disso a barra some — no celular o rodapé já é a
+ * navegação inferior, e duas faixas fixas comeriam a tela.
+ */
+.dashboard-statusbar { display: none; }
+
+@media (min-width: 761px) {
+  .dashboard-main { grid-template-rows: auto minmax(0, 1fr) auto; }
+
+  .dashboard-statusbar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-height: 28px;
+    padding-inline: clamp(12px, 1.4vw, 24px);
+    overflow: hidden;
+    border-top: 1px solid var(--ui-border);
+    background: var(--ui-surface);
+    color: var(--ui-text-soft);
+    font-size: 11.5px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .dashboard-statusbar > span {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    padding: 7px 12px;
+    border-right: 1px solid var(--ui-border);
+  }
+
+  .dashboard-statusbar > span:first-child { padding-left: 0; }
+
+  /* Só nome encolhe — entidade, empresa e usuário. Exercício, competência e
+     data cortados ("2…", "out /…") não dizem nada. */
+  .dashboard-statusbar > .statusbar-shrink { flex: 0 1 auto; }
+
+  .dashboard-statusbar small {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-statusbar strong {
+    overflow: hidden;
+    color: var(--ui-text);
+    font-weight: 600;
+    text-overflow: ellipsis;
+  }
+
+  /* Exercício, competência e data são dados: monoespaçados como o resto (§89). */
+  .dashboard-statusbar .statusbar-data { font-family: var(--font-data), var(--font-geist-mono); font-variant-numeric: tabular-nums; }
+
+  .dashboard-statusbar .statusbar-end { margin-left: auto; border-left: 1px solid var(--ui-border); }
+
+  .dashboard-statusbar .statusbar-sync { border-right: 0; padding-right: 0; align-items: center; }
+
+  .dashboard-statusbar .statusbar-sync i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ui-success);
+  }
+
+  /* Os três estados de `RealtimeStatus` em WorkspaceApp.tsx. */
+  .dashboard-statusbar .statusbar-sync.syncing i { background: var(--ui-slate, var(--ui-text-soft)); }
+  .dashboard-statusbar .statusbar-sync.delayed i { background: var(--ui-warning); }
+
+  /* Em janela estreita, sai primeiro o que menos muda no dia: o sistema (o
+     topo já diz) e o exercício (a competência já traz o ano). */
+  @media (max-width: 1440px) {
+    .dashboard-statusbar > span:nth-child(1),
+    .dashboard-statusbar > span:nth-child(4) { display: none; }
+  }
+
+  /* Modo foco do quadro: devolve a altura às colunas, como já faz com o resto. */
+  .dashboard-shell[data-focus="on"] .dashboard-statusbar { display: none; }
+}
+
+/* ========================================================================== */
+/* 3. Cabeçalho dinâmico                                                      */
+/* ========================================================================== */
+
+/*
+ * Fiori "dynamic page": o título nunca sai da tela; o que é contexto — a
+ * descrição — recolhe quando a pessoa começa a ler o conteúdo, e volta quando
+ * ela sobe de novo. Sem JavaScript: a linha do tempo de rolagem da coluna de
+ * conteúdo dirige o recolhimento. Navegador sem `animation-timeline` recebe só
+ * o título preso, que já é a metade útil do padrão.
+ *
+ * Só a partir de 761px, onde a coluna de conteúdo é o contêiner de rolagem.
+ */
+@media (min-width: 761px) {
+  /* O recuo do topo vira variável porque o cabeçalho preso precisa descontá-lo:
+     o sticky para na borda interna do recuo, e sem o desconto a primeira faixa
+     de conteúdo aparece rolando por cima do título. 20px é o valor que
+     interface-refresh.css já dava à coluna. */
+  .operational-ui { --content-pad-top: 20px; }
+  .operational-ui .dashboard-content { padding-top: var(--content-pad-top); }
+
+  .dashboard-content > .view-transition > .dashboard-heading {
+    position: sticky;
+    top: calc(-1 * var(--content-pad-top, 0px));
+    z-index: 6;
+    padding-block: var(--content-pad-top, 10px) 10px;
+    margin-top: calc(-1 * var(--content-pad-top, 0px));
+    background: var(--ui-bg);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    .dashboard-content > .view-transition > .dashboard-heading {
+      animation: vin-heading-snap linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0 96px;
+    }
+
+    .dashboard-content > .view-transition > .dashboard-heading p {
+      animation: vin-heading-collapse linear both;
+      animation-timeline: scroll(nearest block);
+      animation-range: 0 64px;
+      overflow: hidden;
+    }
+  }
+}
+
+@keyframes vin-heading-snap {
+  to { box-shadow: 0 1px 0 var(--ui-border), var(--elevation-1); }
+}
+
+@keyframes vin-heading-collapse {
+  from { max-height: 4.5em; opacity: 1; }
+  to { max-height: 0; opacity: 0; margin-block: 0; }
+}
+
+/* Quem pediu menos movimento recebe o título preso sem o recolhimento animado. */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-content > .view-transition > .dashboard-heading,
+  .dashboard-content > .view-transition > .dashboard-heading p { animation: none; }
+}
