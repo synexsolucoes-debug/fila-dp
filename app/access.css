@@ -1652,3 +1652,25 @@ html, body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 .auth-tag.blue { color: #c8d5ff; background: #1a3262; }
 .auth-tag.green { color: #aef2d4; background: #123a35; }
 .auth-tag.gray { color: #c4cfdd; background: #23344a; }
+
+/* Login sozinho: só a marca e o acesso, centralizados. As telas de cadastro e
+   de recuperação continuam no layout em duas colunas. */
+.auth-page.auth-page-solo {
+  min-height: 100vh;
+  padding: 40px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgb(22 140 253 / 16%), transparent 46%),
+    linear-gradient(180deg, #07111f 0%, #0a1a2e 100%);
+  color: #f4f7fb;
+}
+.auth-solo-card { width: 100%; max-width: 440px; display: grid; gap: 36px; }
+.auth-solo-logo { display: flex; justify-content: center; }
+.auth-solo-logo img { max-width: 100%; height: auto; }
+.auth-page-solo .auth-form-card { max-width: none; margin: 0; }
+.auth-page-solo .auth-form-card h2 { margin-top: 0; font-size: clamp(30px, 6vw, 38px); text-align: center; }
+.auth-page-solo .auth-form-card > p { text-align: center; font-size: 14px; }
+.auth-page-solo .auth-status { display: flex; justify-content: center; margin-bottom: 16px; }
+.auth-page-solo .auth-recovery-hint { text-align: center; }

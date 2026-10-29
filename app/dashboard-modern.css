@@ -5082,7 +5082,60 @@
   50% { opacity: .62; }
 }
 
+/* Janela de módulos: entrada depois do login e troca de módulo pelo topo. */
+.module-launcher {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow-y: auto;
+  padding: 48px 16px;
+  display: grid;
+  place-items: start center;
+  background: color-mix(in srgb, var(--ui-bg) 94%, transparent);
+  backdrop-filter: blur(6px);
+}
+.module-launcher-panel { width: 100%; max-width: 980px; display: grid; gap: 28px; }
+.module-launcher-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.module-launcher-head img { max-width: 70vw; height: auto; }
+.module-launcher-close { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text-soft); cursor: pointer; }
+.module-launcher-close:hover, .module-launcher-close:focus-visible { border-color: var(--ui-primary); color: var(--ui-primary); outline: none; }
+.module-launcher-close svg { width: 18px; height: 18px; }
+.module-launcher-intro span { color: var(--ui-text-muted); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.module-launcher-intro h1 { margin: 8px 0 6px; color: var(--ui-text); font-size: clamp(24px, 4vw, 34px); line-height: 1.1; letter-spacing: -.03em; }
+.module-launcher-intro p, .module-launcher-empty { margin: 0; color: var(--ui-text-soft); font-size: 14px; }
+.module-launcher-grid { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.module-launcher-grid button {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 150px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-card);
+  color: var(--ui-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.module-launcher-grid button:hover, .module-launcher-grid button:focus-visible { border-color: var(--ui-primary); transform: translateY(-2px); outline: none; }
+.module-launcher-grid button:active { transform: scale(.98); }
+.module-launcher-icon { width: 40px; height: 40px; margin-bottom: 4px; display: grid; place-items: center; border-radius: var(--ui-radius-md); background: var(--ui-primary-soft); color: var(--ui-primary); }
+.module-launcher-icon svg { width: 20px; height: 20px; }
+.module-launcher-grid strong { font-size: 16px; }
+.module-launcher-grid small { padding-right: 22px; color: var(--ui-text-soft); font-size: 12px; line-height: 1.5; }
+.module-launcher-arrow { position: absolute; right: 18px; bottom: 18px; width: 18px; height: 18px; color: var(--ui-text-muted); }
+.module-launcher-grid button:hover .module-launcher-arrow { color: var(--ui-primary); }
+
 @media (prefers-reduced-motion: reduce) {
+  .module-launcher-grid button { transition: none; }
+  .module-launcher-grid button:hover, .module-launcher-grid button:active { transform: none; }
   .view-transition,
   .dashboard-sidebar nav button.active::before,
   .workspace-modal-backdrop,

@@ -47,6 +47,9 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
      de Prazos para "ASO", "Treinamento" ou "Contrato" abria a ficha na
      primeira aba, e a pessoa precisava achar sozinha o que o link prometia. */
   const aba = typeof query.aba === "string" ? query.aba : "";
+  /* Quem acabou de entrar chega com `?modulos=1` e escolhe o módulo antes de
+     ver qualquer tela. */
+  const modulos = query.modulos === "1";
   const consulta = new URLSearchParams();
   if (empresa) consulta.set("empresa", empresa);
   if (aba) consulta.set("aba", aba);
@@ -69,6 +72,7 @@ export default async function DashboardPage({ params, searchParams }: PanelPageP
       initialThemePreference={themePreference}
       initialTheme={resolveTheme(themePreference, systemTheme)}
       initialViewTab={aba}
+      initialModuleLauncher={modulos}
     />
   );
 }

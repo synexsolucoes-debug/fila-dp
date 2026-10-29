@@ -7,8 +7,13 @@ import { recordAuthEvent } from "@/lib/auth-events";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** Sem destino específico, a entrada é a janela de módulos do painel. Um link
+ *  para uma tela ou demanda continua indo direto para ela. */
+const ENTRY_PATH = "/painel?modulos=1";
+
 function cleanReturnTo(value: unknown) {
-  return typeof value === "string" ? safeRelativeReturnPath(value) || "/painel" : "/painel";
+  const path = typeof value === "string" ? safeRelativeReturnPath(value) : "";
+  return !path || path === "/painel" ? ENTRY_PATH : path;
 }
 
 type LoginBody = { email?: string; password?: string; mode?: string; returnTo?: string };
