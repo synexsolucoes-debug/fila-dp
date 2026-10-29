@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // App de mesa: pacote próprio (Electron, CommonJS), com testes próprios.
+    "desktop/**",
   ]),
   {
     /* Linha gigante (§48).

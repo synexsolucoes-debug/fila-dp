@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Configurar servidor — Vinculato</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; }
+    body { margin: 0; padding: 28px; background: #07111f; color: #e6edf7; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    p { margin: 0 0 18px; color: #9fb0c8; font-size: 13px; line-height: 1.5; }
+    label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 6px; border: 1px solid #2a3a55; background: #0d1a2d; color: inherit; font-size: 14px; }
+    input:focus { outline: 2px solid #1e90ff; outline-offset: 1px; }
+    .error { color: #ff8a8a; font-size: 12px; min-height: 18px; margin-top: 6px; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+    button { padding: 9px 16px; border-radius: 6px; border: 1px solid #2a3a55; background: #13233b; color: inherit; font-size: 13px; cursor: pointer; }
+    button.primary { background: #1e90ff; border-color: #1e90ff; color: #fff; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Servidor do Vinculato</h1>
+  <p>Endereço que o aplicativo abre. Use o mesmo que você acessa no navegador. Na dúvida, fale com o administrador do sistema.</p>
+  <form id="form">
+    <label for="url">Endereço</label>
+    <input id="url" name="url" placeholder="https://vinculato.suaempresa.com.br" autocomplete="off" autofocus>
+    <div class="error" id="error" role="alert"></div>
+    <div class="actions">
+      <button type="button" id="reset">Usar padrão</button>
+      <button type="button" id="cancel">Cancelar</button>
+      <button type="submit" class="primary">Salvar e abrir</button>
+    </div>
+  </form>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const input = document.getElementById("url");
+    const error = document.getElementById("error");
+    input.value = params.get("atual") || "";
+    document.getElementById("form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const result = await window.vinculatoSetup.save(input.value);
+      if (!result.ok) error.textContent = result.error;
+    });
+    document.getElementById("reset").addEventListener("click", async () => {
+      const result = await window.vinculatoSetup.reset();
+      input.value = result.serverUrl;
+      error.textContent = "";
+    });
+    document.getElementById("cancel").addEventListener("click", () => window.close());
+  </script>
+</body>
+</html>
