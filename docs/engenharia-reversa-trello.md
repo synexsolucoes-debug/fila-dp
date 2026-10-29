@@ -719,7 +719,7 @@ Vinculato · **×** não copiar.
 | Espelho de cartão | Área solicitante × responsável na mesma demanda | + |
 | Cartão-modelo / modelo de quadro | Modelo e versão de processo (BPMN) | + |
 | Comentário com Markdown, reação | Comentário em texto, por tarefa | − (Markdown e reação, baixa prioridade) |
-| Menção por `username` com autocompletar | Menção por trecho do nome | − (**defeito**, §18) |
+| Menção por `username` com autocompletar | Menção por nome inteiro; ambígua não avisa ninguém | = (corrigido, §18; falta o autocompletar) |
 | Seguir cartão/lista/quadro | — | − |
 | Log de ações | Feed de atividade + auditoria estruturada separada | + |
 | Notificações + e-mail por frequência | Notificações + resumo diário | = |
@@ -747,7 +747,7 @@ Vinculato · **×** não copiar.
 | Webhooks assinados | Webhooks com outbox e anti-SSRF | = |
 | WebSocket em tempo real, *last write wins* | Consulta periódica + concorrência otimista | = / + |
 | Exportar JSON | Exportação do workspace | = |
-| **Importar do Trello** | — | − (**primeiro do roadmap**) |
+| **Importar do Trello** | Importador de JSON com prévia (Configurações → Quadros) | = (feito, §4.43 da arquitetura operacional) |
 
 ---
 
@@ -781,8 +781,8 @@ Vinculato · **×** não copiar.
 
 | # | Item | Por quê | Tamanho |
 | --- | --- | --- | --- |
-| 0 | Corrigir a menção por trecho do nome (§18) | Avisa a pessoa errada hoje, em produção | P |
-| 1 | **Importador de quadro do Trello (JSON)** — prévia antes de gravar: lista → coluna (com `kind`/`sla_behavior` escolhidos), etiqueta → etiqueta do workspace, membro → membro (confirmado à mão), checklist → itens, campo → campo, comentários das ações, anexos como link; tipo de processo e empresa por regra (etiqueta → empresa, lista → processo) ou em lote na prévia | É o que tira o cliente do Trello; sem ele a migração é digitação | G |
+| 0 | ~~Corrigir a menção por trecho do nome (§18)~~ — **feito** (§4.43 de `docs/arquitetura-operacional.md`) | Avisava a pessoa errada | P |
+| 1 | ~~**Importador de quadro do Trello (JSON)**~~ — **feito** (§4.43 de `docs/arquitetura-operacional.md`). — prévia antes de gravar: lista → coluna (com `kind`/`sla_behavior` escolhidos), etiqueta → etiqueta do workspace, membro → membro (confirmado à mão), checklist → itens, campo → campo, comentários das ações, anexos como link; tipo de processo e empresa por regra (etiqueta → empresa, lista → processo) ou em lote na prévia | É o que tira o cliente do Trello; sem ele a migração é digitação | G |
 | 2 | Botões de demanda (sequência nomeada de ações, por quadro) | A automação que o DP usa de fato no Butler | M |
 | 3 | Seguir demanda + notificação a quem segue | Solicitante acompanha sem menção a cada passo | P |
 | 4 | Filtro por etiqueta e por inatividade | Achar a demanda esquecida dentro do prazo | P |
@@ -798,6 +798,10 @@ Vinculato · **×** não copiar.
 ---
 
 ## 18. Defeito encontrado durante a análise
+
+> **Corrigido** em `lib/comment-mentions.ts` (§4.43 de
+> `docs/arquitetura-operacional.md`). O texto abaixo descreve o defeito como
+> estava.
 
 **Menção por trecho do nome notifica pessoas erradas.**
 `app/api/cards/[id]/comments/route.ts` extrai `@palavra` do comentário e

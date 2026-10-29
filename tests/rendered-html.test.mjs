@@ -140,7 +140,9 @@ test("comentário suporta menção, anexo e histórico contextualizado (§44)", 
     source("lib/fila-dp-db.ts"),
     source("db/schema.ts"),
   ]);
-  assert.match(comments, /matchAll\(\/@\(/u, "menções continuam extraídas no servidor");
+  // A extração mudou para lib/comment-mentions.ts (§18 da engenharia reversa do
+  // Trello): continua no servidor, agora por nome inteiro e sem LIKE.
+  assert.match(comments, /resolveMentions\(comment,/u, "menções continuam resolvidas no servidor");
   assert.match(comments, /createdCommentId: commentId/u);
   assert.match(attachments, /FROM fdp_card_comments WHERE workspace_id = \? AND id = \? AND card_id = \?/u,
     "um id de comentário de outra demanda ou workspace não pode receber o arquivo");
