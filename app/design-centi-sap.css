@@ -50,6 +50,13 @@
   padding-inline: var(--density-cell-x);
 }
 
+/* Linha realçada sob o ponteiro: na tabela apertada, é o que mantém o olho na
+   mesma linha ao atravessar da matrícula até o valor. Tinta do azul da casca,
+   não cor nova — e a linha continua legível porque o texto não muda. */
+.dashboard-shell[data-density="compact"] .dashboard-content tbody tr:hover > td {
+  background: color-mix(in srgb, var(--ui-primary, var(--brand)) 6%, transparent);
+}
+
 .dashboard-shell[data-density="compact"] .dashboard-content :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, button) {
   min-height: var(--density-control);
 }
@@ -109,7 +116,7 @@
 
   /* Só nome encolhe — entidade, empresa e usuário. Exercício, competência e
      data cortados ("2…", "out /…") não dizem nada. */
-  .dashboard-statusbar > .statusbar-shrink { flex: 0 1 auto; }
+  .dashboard-statusbar > .statusbar-shrink { flex: 0 1 auto; min-width: 9ch; }
 
   .dashboard-statusbar small {
     font-size: 10.5px;
@@ -148,6 +155,14 @@
   @media (max-width: 1440px) {
     .dashboard-statusbar > span:nth-child(1),
     .dashboard-statusbar > span:nth-child(4) { display: none; }
+  }
+
+  /* Abaixo de 1100px o nome encolhido some inteiro ("ENTIDADE" sem valor).
+     Ficam empresa, competência e data — o recorte que muda a leitura dos
+     números —; entidade e usuário já estão na barra lateral. */
+  @media (max-width: 1100px) {
+    .dashboard-statusbar > span:nth-child(2),
+    .dashboard-statusbar > span:nth-child(6) { display: none; }
   }
 
   /* Modo foco do quadro: devolve a altura às colunas, como já faz com o resto. */

@@ -225,6 +225,8 @@ apagando-o.
 - `data-density="compact"` na casca aperta altura de faixa superior, recuo da
   coluna, células de tabela (5px × 10px), controles (32px), itens do menu e
   cartões do quadro. Fonte, cor e desenho não mudam.
+- Na compacta, a linha da tabela sob o ponteiro ganha um realce leve (tinta do
+  azul da casca), para o olho não trocar de linha numa grade apertada.
 - 32px fica acima dos 24px da WCAG 2.5.8 (alvo mínimo).
 - Preferência por navegador em `localStorage` (`vinculato-densidade`), lida
   sem confiar no valor guardado (`lib/density.ts`). Não vai a cookie como o
@@ -241,8 +243,11 @@ Data · sincronização**
   *Competência* é a primeira competência não fechada (a mesma que o quadro já
   usa); *Exercício* é o ano dela.
 - Exercício, competência e data em fonte de dados (monoespaçada, tabular).
-- Até 1440px saem Sistema e Exercício; abaixo de 761px a barra some (o rodapé
+- Até 1440px saem Sistema e Exercício; até 1100px saem também Entidade e
+  Usuário (já estão na barra lateral); abaixo de 761px a barra some (o rodapé
   ali é a navegação inferior). No modo foco do quadro ela também some.
+- Contraste medido: rótulo 6,15:1 no claro e 8,96:1 no escuro; valor
+  16,27:1 e 14,22:1.
 
 ### 5.3 Cabeçalho dinâmico (Fiori *dynamic page*)
 
