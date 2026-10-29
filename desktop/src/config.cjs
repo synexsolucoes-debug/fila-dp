@@ -14,7 +14,23 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DEFAULT_SERVER_URL = "https://fila-dp.synexsolucoes.chatgpt.site";
+/** Produção na Vercel — entra pelo login do próprio Vinculato. */
+const DEFAULT_SERVER_URL = "https://vinculato.vercel.app";
+
+/**
+ * Hospedagens que não servem ao app de mesa.
+ *
+ * A cópia em `*.chatgpt.site` exige login do ChatGPT antes de chegar ao
+ * Vinculato (responde 401). Um endereço desses salvo no perfil é ignorado e o
+ * app volta para a produção.
+ */
+function isUnsupportedHost(origin) {
+  try {
+    return new URL(origin).hostname.endsWith(".chatgpt.site");
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Normaliza o endereço digitado.
@@ -36,6 +52,7 @@ function normalizeServerUrl(input) {
   const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
   if (url.protocol !== "https:" && !(isLocal && url.protocol === "http:")) return null;
   if (url.username || url.password) return null;
+  if (isUnsupportedHost(url.origin)) return null;
   return url.origin;
 }
 

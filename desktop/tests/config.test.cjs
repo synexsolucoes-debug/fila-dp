@@ -26,6 +26,15 @@ test("http só é aceito para localhost", () => {
   assert.equal(normalizeServerUrl("javascript:alert(1)"), null);
 });
 
+test("produção é a Vercel, com login do próprio Vinculato", () => {
+  assert.equal(DEFAULT_SERVER_URL, "https://vinculato.vercel.app");
+});
+
+test("cópia hospedada no ChatGPT é recusada e cai na produção", () => {
+  assert.equal(normalizeServerUrl("https://fila-dp.synexsolucoes.chatgpt.site"), null);
+  assert.equal(resolveServerUrl({ serverUrl: "https://fila-dp.synexsolucoes.chatgpt.site" }, {}), DEFAULT_SERVER_URL);
+});
+
 test("endereço com credencial embutida é recusado", () => {
   assert.equal(normalizeServerUrl("https://user:senha@app.exemplo.com"), null);
 });

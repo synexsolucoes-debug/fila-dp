@@ -14,6 +14,7 @@ abre; toda atualização publicada na Vercel chega aqui sem reinstalar.
 | Menu **Módulos** | Visão geral, Meu trabalho, Demandas, Cadastros, Operação DP, Folha, Ponto, Pagamento PJ, Indicadores (`Ctrl+1` … `Ctrl+9`), além de Processos, EPI, Acidentes, Adiantamentos, Integrações e Histórico |
 | Várias janelas | `Ctrl+N`, ou "abrir em nova aba" em qualquer link do sistema — útil para comparar competências lado a lado |
 | Atalhos | `F5` atualiza, `F11` tela cheia, `Alt+←/→` voltar/avançar, `Ctrl+P` imprime, `Ctrl+K` continua abrindo a busca do painel |
+| Tela de abertura | Logo e "Conectando ao servidor…" enquanto o sistema carrega |
 | Sem conexão | Mostra uma tela explicando o problema, com "Tentar novamente" (e tenta sozinho quando a rede volta) |
 | Links externos | eSocial, gov.br, PDFs de terceiros etc. abrem no navegador padrão, nunca dentro do app |
 | Lembra a janela | Tamanho, posição e se estava maximizada |
@@ -46,7 +47,10 @@ Para apontar para outro servidor sem mexer na configuração do usuário:
 
 1. O que foi salvo em **Configurar servidor** (fica no perfil do Windows);
 2. a variável `VINCULATO_URL`;
-3. o padrão de produção definido em `src/config.cjs`.
+3. o padrão de produção, `https://vinculato.vercel.app` (em `src/config.cjs`).
+
+Endereços `*.chatgpt.site` são ignorados: essa cópia exige login do ChatGPT
+antes de chegar ao Vinculato.
 
 Só `https` é aceito (exceto `localhost`, para desenvolvimento).
 
