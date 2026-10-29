@@ -7,6 +7,7 @@ import {
   type PanelLocation, type PanelSettingsSection, type PanelView,
 } from "@/lib/panel-routes";
 import { ArrowLeftRight,
+  LayoutGrid,
   ArrowRight,
   BarChart3,
   Bell,
@@ -77,6 +78,7 @@ import type { ActivityEvent, Card, CardAttachment, InboxItem, ProcessFlowSummary
 import type { ActionTarget } from "@/lib/action-center";
 import { RULE_TRIGGERS, RULE_TRIGGER_LABELS } from "@/lib/automation-rules";
 import { hasSubNavigation, isContractorOnly, visibleContractorSections, visibleProcessGroups } from "@/lib/process-navigation";
+import { ModuleLauncher, type LauncherModule } from "./features/shared/ModuleLauncher";
 import { PRIORITY_LABELS } from "@/lib/work-items";
 import { demandNextAction } from "@/lib/demand-dashboard";
 import {
@@ -992,6 +994,7 @@ function canPreviewAttachment(attachment: CardAttachment) {
 export function WorkspaceApp({
   user, signOutPath, initialLocation = defaultPanelLocation,
   initialThemePreference = "system", initialTheme = "light", initialViewTab = "",
+  initialModuleLauncher = false,
 }: {
   user: User;
   signOutPath: string;
@@ -1011,8 +1014,15 @@ export function WorkspaceApp({
    * o endereço ao montar, então a visão não pode lê-lo depois.
    */
   initialViewTab?: string;
+  /** Abre a janela de módulos — é assim que o painel recebe quem acabou de
+   *  entrar (`/painel?modulos=1`). */
+  initialModuleLauncher?: boolean;
 }) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
+  /* Janela de módulos. Na entrada depois do login ela é o primeiro passo e
+     não fecha sem escolha; aberta pelo botão do topo, fecha e devolve à tela
+     onde a pessoa estava. */
+  const [moduleLauncher, setModuleLauncher] = useState<"entry" | "switch" | null>(initialModuleLauncher ? "entry" : null);
   const [view, setViewState] = useState<View>(initialLocation.view as View);
   const [contractorPaymentFocus, setContractorPaymentFocus] = useState<{
     companyId: string; competence: string; closingId: string;
@@ -1915,6 +1925,35 @@ export function WorkspaceApp({
      Um processo cujas telas estejam todas fora do alcance não aparece em lugar
      nenhum, que é o que a §30 exige. */
   const navGroups = useMemo(() => visibleProcessGroups(visibleViews), [visibleViews]);
+
+  /* Os cartões da janela de módulos: os mesmos processos do menu, já
+     recortados por plano e papel, mais o ERP DP para quem lê cadastro. O
+     Pagamento PJ abre o Sistema PJ; os demais abrem o Vinculato na primeira
+     tela do processo. */
+  const launcherModules = useMemo<LauncherModule[]>(() => {
+    const modules: LauncherModule[] = navGroups.map((group) => ({
+      id: group.id, label: group.label, description: group.description,
+      icon: viewCatalog[group.views[0] as View].icon,
+    }));
+    if (canUseErp && !contractorOnly) {
+      modules.push({
+        id: "erp-dp", label: "ERP DP", icon: Building2,
+        description: "Cadastro, movimentações, folha, férias e obrigações na gramática do ERP de departamento pessoal.",
+      });
+    }
+    return modules;
+  }, [navGroups, canUseErp, contractorOnly]);
+  const openLauncherModule = useCallback((id: string) => {
+    setModuleLauncher(null);
+    if (id === "erp-dp") {
+      changeAppMode("erp");
+      return;
+    }
+    const group = navGroups.find((entry) => entry.id === id);
+    if (!group) return;
+    changeAppMode(id === "pagamento-pj" ? "pj" : "vinculato");
+    setView(group.views[0] as View);
+  }, [changeAppMode, navGroups, setView]);
   const activeGroup = useMemo(
     () => navGroups.find((group) => group.views.includes(view)) ?? null,
     [navGroups, view],
@@ -3400,6 +3439,10 @@ export function WorkspaceApp({
             {/* Sistema PJ: entra por aqui quem tem outros módulos além do PJ.
                 Quem só tem o PJ já está nele e não ganha botão — não há outro
                 sistema para onde voltar. */}
+            {launcherModules.length > 1 && <button type="button" className="erp-mode-toggle" onClick={() => setModuleLauncher("switch")}
+              aria-label="Abrir janela de módulos" title="Trocar de módulo">
+              <LayoutGrid aria-hidden="true" /><span>Módulos</span>
+            </button>}
             {hasContractorModule && !contractorOnly && !erpMode && <button type="button" className="erp-mode-toggle" aria-pressed={pjMode}
               onClick={() => changeAppMode(pjMode ? "vinculato" : "pj")}
               aria-label={pjMode ? "Sistema PJ ativo. Voltar ao Vinculato" : "Trocar para o Sistema PJ"}
@@ -4091,6 +4134,10 @@ export function WorkspaceApp({
       {/* Recolhido por padrão: um copiloto que ocupa espaço sem ter sido pedido
           atrapalha justamente quem já sabe o que fazer. */}
       <AssistantPanel screen={viewCatalog[view].label} openSignal={assistantSignal} />
+
+      {moduleLauncher && <ModuleLauncher userName={user.displayName} workspaceName={snapshot.workspace.name}
+        modules={launcherModules} theme={theme} onOpen={openLauncherModule}
+        onClose={moduleLauncher === "switch" || launcherModules.length === 0 ? () => setModuleLauncher(null) : undefined} />}
     </main>
   );
 }

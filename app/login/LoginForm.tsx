@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { LoginIntroMotion } from "@/app/components/LoginIntroMotion";
 
 export function LoginForm() {
@@ -17,7 +17,7 @@ export function LoginForm() {
     setBusy(true);
     setError("");
     try {
-      const returnTo = new URLSearchParams(window.location.search).get("return_to") || "/painel";
+      const returnTo = new URLSearchParams(window.location.search).get("return_to") || "/painel?modulos=1";
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -25,7 +25,7 @@ export function LoginForm() {
       });
       const payload = await response.json() as { error?: string; redirectTo?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível concluir o acesso.");
-      const destination = payload.redirectTo || "/painel";
+      const destination = payload.redirectTo || "/painel?modulos=1";
 
       const reducedMotion = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
@@ -49,8 +49,7 @@ export function LoginForm() {
 
   return (
     <>
-      <span className="auth-status neutral"><ShieldCheck aria-hidden="true" /> Acesso administrado</span>
-      <h2>Entrar no Vinculato</h2>
+      <h2>Entrar</h2>
       <p>Use o e-mail e a senha liberados pelo administrador do seu grupo.</p>
       <form className="auth-login-form" onSubmit={submit}>
         <label>E-mail<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required /></label>
@@ -63,7 +62,6 @@ export function LoginForm() {
         Esqueceu a senha? <Link href="/recuperar">Recuperar acesso</Link>. No primeiro acesso, o link de ativação é
         enviado pelo administrador do grupo.
       </p>
-      <div className="auth-security-note"><CheckCircle2 aria-hidden="true" /><p>O administrador define o papel, as empresas permitidas e pode revogar o acesso a qualquer momento.</p></div>
     </>
   );
 }
