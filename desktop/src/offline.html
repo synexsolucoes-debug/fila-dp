@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Sem conexão — Vinculato</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #07111f; color: #e6edf7; }
+    main { max-width: 460px; padding: 32px; text-align: center; }
+    h1 { font-size: 20px; margin: 0 0 10px; }
+    p { color: #9fb0c8; font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
+    code { color: #6fb6ff; word-break: break-all; }
+    button { margin-top: 18px; padding: 10px 20px; border-radius: 6px; border: 0; background: #1e90ff; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+    small { display: block; margin-top: 16px; color: #6b7d97; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Não foi possível conectar ao Vinculato</h1>
+    <p>Verifique a internet ou a VPN da empresa. Nada do que já foi salvo se perdeu — os dados ficam no servidor.</p>
+    <p>Servidor: <code id="url"></code></p>
+    <button id="retry" type="button">Tentar novamente</button>
+    <small id="reason"></small>
+    <small>Se o endereço mudou, use Arquivo → Configurar servidor.</small>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const target = params.get("url") || "";
+    document.getElementById("url").textContent = target;
+    document.getElementById("reason").textContent = params.get("motivo") ? "Detalhe técnico: " + params.get("motivo") : "";
+    document.getElementById("retry").addEventListener("click", () => {
+      if (/^https?:\/\//.test(target)) location.href = target;
+    });
+    window.addEventListener("online", () => document.getElementById("retry").click());
+  </script>
+</body>
+</html>

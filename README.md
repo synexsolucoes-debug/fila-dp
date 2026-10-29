@@ -16,6 +16,12 @@ npm run dev
 npm run build
 ```
 
+## App de mesa (Windows)
+
+`desktop/` contém o Vinculato como programa instalável (Electron): instalador
+`.exe`, ícone na área de trabalho, menu de módulos e atalhos. Os dados continuam
+no servidor. Veja `desktop/README.md`.
+
 ## Arquitetura operacional
 
 **Comece por `docs/arquitetura-operacional.md`.** Ele descreve como o trabalho

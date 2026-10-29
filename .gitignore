@@ -52,3 +52,7 @@ next-env.d.ts
 # Ambiente local (nao versionar)
 .env.local
 
+
+# App de mesa (Electron)
+/desktop/node_modules/
+/desktop/dist/
