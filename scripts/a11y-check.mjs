@@ -496,6 +496,9 @@ async function auditPanelViews(theme = "") {
 async function setTheme(target) {
   // O tema é escolhido por nome no menu da conta (avatar da faixa superior).
   const nomes = { light: "Claro", dark: "Escuro" };
+  // O painel carrega o grupo antes de desenhar a faixa: espera de verdade, e
+  // só então conclui que o menu sumiu.
+  await page.waitForSelector(".account-menu-trigger", { timeout: 25000 }).catch(() => undefined);
   const trigger = page.locator(".account-menu-trigger");
   if (await trigger.count() === 0) throw new Error("o menu da conta sumiu da interface");
   for (let tentativa = 0; tentativa < 3; tentativa += 1) {
