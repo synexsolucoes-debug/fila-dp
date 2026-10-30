@@ -379,7 +379,7 @@ export function ProcessModeler({version,stepConfigs,areas,members,processes,read
       </div></>}
     </aside></div>
     <AnimatedModal open={preview!==null} onClose={()=>setPreview(null)} label={`Prévia de ${version.processName}`} width={960} className={styles.processPortal}>
-      <div className={styles.dialogHeader}><div><span className={styles.eyebrow}>Diagrama BPMN</span><strong>Prévia do processo</strong></div><button type="button" onClick={()=>setPreview(null)}>Fechar</button></div>
+      <div className={styles.dialogHeader}><div><strong>Prévia do processo</strong></div><button type="button" onClick={()=>setPreview(null)}>Fechar</button></div>
       <div className={styles.previewBody}>{preview?<img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview)}`} alt={`Prévia de ${version.processName}`}/>:<p>Nenhuma prévia disponível.</p>}</div>
     </AnimatedModal>
   </div>;

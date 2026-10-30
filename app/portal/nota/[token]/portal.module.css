@@ -99,7 +99,7 @@
   border-radius: 999px;
   background: var(--p-teal-soft);
   color: var(--p-soft);
-  font-size: .72rem;
+  font-size: .78rem;
   line-height: 1.3;
 }
 .service strong { color: var(--p-text); font-weight: 700; letter-spacing: .01em; overflow-wrap: anywhere; }
@@ -107,7 +107,7 @@
 .header { display: grid; gap: 10px; }
 .eyebrow {
   color: var(--p-accent-strong);
-  font-size: .7rem;
+  font-size: .78rem;
   font-weight: 750;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -142,7 +142,7 @@
   align-content: center;
 }
 .summary > div + div { border-left: 1px solid rgb(255 255 255 / 12%); }
-.summary span { color: var(--p-panel-soft); font-size: .7rem; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.summary span { color: var(--p-panel-soft); font-size: .78rem; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
 .summary strong { font-size: 1.05rem; font-weight: 700; text-transform: capitalize; }
 .summary .amount { font-size: 1.3rem; text-transform: none; }
 .amount { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
@@ -159,7 +159,7 @@
   border-radius: 12px;
   background: var(--p-field);
 }
-.issuer dt { color: var(--p-soft); font-size: .68rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.issuer dt { color: var(--p-soft); font-size: .75rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
 .issuer dd { margin: 3px 0 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
 .issuerHead dd { font-size: 1.02rem; font-weight: 700; line-height: 1.35; }
 .issuerRow { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
@@ -191,7 +191,7 @@
 
 .grid label { display: grid; gap: 7px; min-width: 0; align-content: start; }
 .grid label > span:first-child { font-size: .8rem; font-weight: 700; }
-.grid label em { margin-left: 4px; color: var(--p-soft); font-size: .7rem; font-style: normal; font-weight: 500; }
+.grid label em { margin-left: 4px; color: var(--p-soft); font-size: .78rem; font-style: normal; font-weight: 500; }
 
 .grid input:not([type="file"]) {
   /* 44px de alto e 16px de fonte: alvo de toque e sem zoom do iOS ao focar. */
@@ -237,7 +237,7 @@
 .dropArea > svg { flex: 0 0 auto; width: 30px; height: 30px; padding: 6px; box-sizing: content-box; border-radius: 10px; background: color-mix(in srgb, var(--p-accent) 14%, transparent); color: var(--p-accent-strong); }
 .dropText { display: grid; gap: 2px; min-width: 0; }
 .dropText strong { font-size: .92rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dropText small { color: var(--p-soft); font-size: .74rem; }
+.dropText small { color: var(--p-soft); font-size: .78rem; }
 .dropArea[data-filled="true"] { border-style: solid; border-color: var(--p-teal); background: var(--p-teal-soft); }
 .dropArea[data-filled="true"] > svg { background: color-mix(in srgb, var(--p-teal) 22%, transparent); color: var(--p-teal); }
 .fileInput:focus-visible + .dropArea { outline: 3px solid color-mix(in srgb, var(--p-accent) 35%, transparent); outline-offset: 2px; }
@@ -311,7 +311,7 @@
 }
 .privacy svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; color: var(--p-teal); }
 
-.powered { margin: 0; color: var(--p-soft); font-size: .72rem; letter-spacing: .02em; }
+.powered { margin: 0; color: var(--p-soft); font-size: .78rem; letter-spacing: .02em; }
 
 .spin { animation: portal-spin 1s linear infinite; }
 @keyframes portal-spin { to { transform: rotate(360deg); } }

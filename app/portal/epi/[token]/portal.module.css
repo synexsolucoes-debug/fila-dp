@@ -36,7 +36,7 @@
 .header { display: grid; gap: 8px; }
 .eyebrow {
   color: var(--ui-text-soft, #55607A);
-  font-size: .64rem;
+  font-size: .75rem;
   font-weight: 780;
   letter-spacing: .1em;
 }
@@ -57,7 +57,7 @@
   background: var(--ui-surface-muted, #EEF2F8);
 }
 .issuer > div { display: grid; gap: 3px; }
-.issuer dt { color: var(--ui-text-soft, #55607A); font-size: .7rem; font-weight: 700; letter-spacing: .04em; }
+.issuer dt { color: var(--ui-text-soft, #55607A); font-size: .78rem; font-weight: 700; letter-spacing: .04em; }
 .issuer dd { margin: 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
 .mono { font-family: var(--font-data), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 
@@ -67,7 +67,7 @@
 
 .grid label { display: grid; gap: 6px; min-width: 0; }
 .grid label > span { font-size: .78rem; font-weight: 650; }
-.grid label > small { color: var(--ui-text-soft, #55607A); font-size: .72rem; }
+.grid label > small { color: var(--ui-text-soft, #55607A); font-size: .78rem; }
 .grid input {
   /* 44px é o alvo de toque confortável, e 16px no campo é o que impede o iOS de
      dar zoom ao focar — um zoom que desalinha a página inteira no meio do

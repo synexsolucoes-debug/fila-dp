@@ -3,7 +3,7 @@
 .sectionHead, .calendarHead { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 18px; border-bottom: 1px solid var(--ui-border); }
 .sectionHead h2, .calendarHead h2, .workload h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--ui-text); font-size: .9375rem; font-weight: 650; }
 .sectionHead > div > span, .calendarHead > div > span, .workload > p { display: block; margin: 5px 0 0; color: var(--ui-text-muted); font-size: .75rem; }
-.hint { color: var(--tone-danger-text); background: var(--tone-danger-surface); padding: 5px 8px; border-radius: 5px; font-size: .6875rem; }
+.hint { color: var(--tone-danger-text); background: var(--tone-danger-surface); padding: 5px 8px; border-radius: 5px; font-size: .75rem; }
 .rows { margin: 0; padding: 0; list-style: none; }
 .rows > li + li { border-top: 1px solid var(--ui-border); }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) 135px 115px 16px; gap: 16px; align-items: center; width: 100%; padding: 16px 18px; border: 0; background: var(--ui-surface); color: var(--ui-text); text-align: left; cursor: pointer; }
@@ -11,10 +11,10 @@
 .rowContent, .rowOwner, .rowState { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 .rowContent strong { font-size: .875rem; font-weight: 600; line-height: 1.5; }
 .rowContent > span:not(.cardMeta), .rowContent small, .rowOwner, .rowState { color: var(--ui-text-soft); font-size: .75rem; }
-.rowContent small, .rowOwner small { color: var(--ui-text-muted); font-size: .6875rem; line-height: 1.5; }
+.rowContent small, .rowOwner small { color: var(--ui-text-muted); font-size: .75rem; line-height: 1.5; }
 .rowState > span:last-child { display: flex; gap: 5px; align-items: center; }
 .rowState svg, .openArrow { width: 14px; height: 14px; }
-.status { justify-self: start; max-width: 100%; background: var(--ui-surface-muted); color: var(--ui-text-soft); border-radius: 5px; padding: 4px 6px; font-size: .6875rem; }
+.status { justify-self: start; max-width: 100%; background: var(--ui-surface-muted); color: var(--ui-text-soft); border-radius: 5px; padding: 4px 6px; font-size: .75rem; }
 .status[data-status=overdue] { color: var(--tone-danger-text); background: var(--tone-danger-surface); }
 .status[data-status=paused], .status[data-status=warning] { color: var(--tone-warn-text); background: var(--tone-warn-surface); }
 .status[data-status=completed] { color: var(--tone-safe-text); background: var(--tone-safe-surface); }
@@ -23,7 +23,7 @@
 .person { padding: 17px 0; border-bottom: 1px solid var(--ui-border); }
 .person > div:first-child { display: flex; gap: 12px; justify-content: space-between; font-size: .8125rem; color: var(--ui-text); }
 .person strong { font-weight: 550; }
-.person small, .sharedNote { font-size: .6875rem; color: var(--ui-text-muted); line-height: 1.6; }
+.person small, .sharedNote { font-size: .75rem; color: var(--ui-text-muted); line-height: 1.6; }
 .track { height: 5px; background: var(--ui-border); margin: 10px 0 7px; border-radius: 3px; overflow: hidden; }
 .track span { display: block; height: 100%; background: var(--ui-primary); }
 .waiting { margin-top: 22px; padding: 16px; background: var(--tone-warn-surface); color: var(--tone-warn-text); border-radius: 9px; }
@@ -47,18 +47,18 @@
 .day:nth-child(7n) { border-right: 0; }
 .day[data-today=true] { background: color-mix(in srgb, var(--ui-primary) 7%, var(--ui-surface)); }
 .day[data-outside=true] { background: var(--ui-surface-muted); }
-.day > header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 15px; font-size: .6875rem; color: var(--ui-text-muted); }
+.day > header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 15px; font-size: .75rem; color: var(--ui-text-muted); }
 .day > header strong { color: var(--ui-text); font-size: 1.2rem; font-weight: 600; }
-.day > header small { font-size: .6875rem; color: var(--ui-text-soft); }
+.day > header small { font-size: .75rem; color: var(--ui-text-soft); }
 .dayCount { margin-left: auto; }
 .calendarCard { display: grid; gap: 7px; padding: 11px; margin-bottom: 10px; width: 100%; text-align: left; border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface); color: var(--ui-text); cursor: pointer; overflow-wrap: anywhere; }
 .calendarCard[data-status=overdue] { border-left: 3px solid var(--tone-danger-text); }
 .calendarCard strong { font-size: .8125rem; font-weight: 600; line-height: 1.5; }
-.calendarCard > span:not(.cardMeta), .cardFooter { color: var(--ui-text-soft); font-size: .6875rem; line-height: 1.5; }
-.cardMeta { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 5px; color: var(--ui-text-muted); font-size: .6875rem; line-height: 1.5; }
+.calendarCard > span:not(.cardMeta), .cardFooter { color: var(--ui-text-soft); font-size: .75rem; line-height: 1.5; }
+.cardMeta { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 5px; color: var(--ui-text-muted); font-size: .75rem; line-height: 1.5; }
 .cardMeta small { font-size: inherit; }
 .cardFooter { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; border-top: 1px solid var(--ui-border); padding-top: 7px; }
-.dayEmpty { color: var(--ui-text-muted); font-size: .6875rem; padding: 12px 0; }
+.dayEmpty { color: var(--ui-text-muted); font-size: .75rem; padding: 12px 0; }
 .undated { padding: 16px; border-top: 1px solid var(--ui-border); }
 .undated summary { color: var(--ui-text-soft); font-size: .8125rem; cursor: pointer; min-height: 28px; }
 .undated summary b { margin-left: 6px; }

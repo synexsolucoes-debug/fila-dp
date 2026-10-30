@@ -208,7 +208,6 @@ export function PayrollMovementsPanel({ companies, canEdit }: { companies: Compa
   return <section className={styles.movements} aria-labelledby="payroll-movements-title">
     <header className={styles.header}>
       <div>
-        <span className={styles.eyebrow}>Movimentos para o Sankhya</span>
         <h2 id="payroll-movements-title" className={styles.title}>Lançamentos variáveis da competência</h2>
         <p className={styles.lead}>Horas extras, comissões, descontos e outros eventos por colaborador. A planilha sai no layout do Importador de Movimentos, com TIPEVENTO e UNIDADE do catálogo.</p>
       </div>

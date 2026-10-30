@@ -177,7 +177,6 @@ export function CajuExportPanel({ competenceId, canExport }: { competenceId: str
   return (
     <section className={styles.cajuPanel} aria-label="Exportação para a Caju">
       <header>
-        <span className={styles.eyebrow}>Exportação Caju</span>
         {template ? (
           <p className={styles.hint}>
             Modelo oficial v{template.version} — <b>{template.categoryLabel}</b>. Colunas: {template.columns.join(" · ")}.

@@ -664,20 +664,17 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
   const headline = destination
     ? { eyebrow: "Pagamento PJ", title: destination.label, description: destination.description }
     : config;
-  const Icon = destination?.icon ?? config.icon;
 
   return (
     <section className={styles.workspace} data-module={module} aria-busy={loading}>
       <header className={styles.commandBar}>
         <div className={styles.commandSelectors}>
           <label>
-            <span className={styles.eyebrow}>Empresa</span>
             <select value={companyId} onChange={(event) => setCompanyId(event.target.value)} disabled={!companies.length}>
               {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label>
-            <span className={styles.eyebrow}>Competência</span>
             <select value={competence} onChange={(event) => setCompetence(event.target.value)}>
               {competenceOptions.map((item) => <option key={item.competence} value={item.competence}>{competenceLabel(item.competence)}{item.open ? "" : " · não aberta"}</option>)}
             </select>
@@ -725,11 +722,8 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
       </header>
 
       <div className={styles.moduleHeadline}>
-        <span className={styles.moduleIcon} aria-hidden="true"><Icon /></span>
         <div>
-          <span className={styles.eyebrow}>{headline.eyebrow}</span>
           <h2>{headline.title}</h2>
-          <p>{headline.description}</p>
         </div>
         {cycle && (
           <span className={styles.cycleBadge} data-locked={cycle.status === "closed" ? "true" : "false"}>
@@ -902,7 +896,6 @@ export function PaymentsView({ role, module, section = "contractorPayments", foc
           <div className={styles.modalForm}>
             <header className={styles.dialogHeader}>
               <div>
-                <span className={styles.eyebrow}>Pagamento PJ</span>
                 <h2>Gerar avisos de NF</h2>
                 <p className={styles.dialogSummary}>
                   Sai um arquivo de texto com uma mensagem por prestador do grupo, com o valor que cada um tem

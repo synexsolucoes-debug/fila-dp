@@ -188,7 +188,6 @@ export function PortalInvoiceForm({ token }: { token: string }) {
         <Brand company={company} />
 
         <header className={styles.header}>
-          <span className={styles.eyebrow}>Envio de nota fiscal</span>
           <h1>Olá, {portal.contractorName}</h1>
           <p>Envie a nota da competência abaixo. Leva menos de um minuto.</p>
           <div className={styles.summary}>

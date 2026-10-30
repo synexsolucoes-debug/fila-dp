@@ -115,7 +115,7 @@ function SectionState({ loading, error, reload, title }: { loading: boolean; err
 }
 
 export function ErpDpView({
-  companyId, scopeLabel, canManageMovements, canManageEmployees, canReadMovements, canReadCycles, canCheckEsocial, canReadPayroll, canManagePayroll, onExit,
+  companyId, scopeLabel, canManageMovements, canManageEmployees, canReadMovements, canReadCycles, canCheckEsocial, canReadPayroll, canManagePayroll,
 }: {
   companyId: string;
   scopeLabel: string;
@@ -131,7 +131,6 @@ export function ErpDpView({
   canReadPayroll: boolean;
   /** Gravar a remuneração — `payroll.manage`. */
   canManagePayroll: boolean;
-  onExit: () => void;
 }) {
   const [section, setSection] = useState<Section>("overview");
   /* A ficha pode ser aberta de outra tela do ERP já na aba certa — Prazos
@@ -152,7 +151,6 @@ export function ErpDpView({
           <Icon aria-hidden="true" /><span><strong>{item.label}</strong><small>{item.sap}</small></span>
         </button></li>;
       })}</ul>
-      <button type="button" className={styles.exit} onClick={onExit}>Voltar ao Vinculato</button>
     </nav>
     <section className={styles.work} aria-labelledby="erp-section-title">
       <header className={styles.workHeader}>

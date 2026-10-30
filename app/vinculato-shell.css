@@ -395,3 +395,123 @@
 /* Link de título na tabela da visão geral: título de uma letra ("X") virava
    alvo de 8px. Largura mínima de alvo, sem mudar o desenho do texto. */
 .dashboard-shell.operational-ui .overview-table-link { min-width: 24px; min-height: 24px; text-align: left; }
+
+/* Um acento só. Cada módulo auxiliar tinha a própria cor — violeta em
+   Psicologia, marrom no PJ — e trocar de aba parecia trocar de produto. O
+   contexto agora é dito pela aba e pelo título, não pela cor do botão. */
+.dashboard-shell.operational-ui {
+  --module-psychology: var(--ui-accent);
+  --module-psychology-text: var(--ui-accent-text);
+  --module-psychology-soft: var(--ui-accent-soft);
+  --module-contractors: var(--ui-accent);
+  --module-contractors-text: var(--ui-accent-text);
+  --module-contractors-soft: var(--ui-accent-soft);
+  --module-on-accent: var(--ui-on-accent);
+}
+
+/* Caixa de entrada: a lista ocupa a largura (o painel ilustrativo saiu). */
+.dashboard-shell.operational-ui .inbox-layout { grid-template-columns: minmax(0, 1fr); }
+
+/* Planner: o bloco de foco deixa de ser um cartaz azul-marinho com número de
+   68px e passa a ser um painel como os outros. */
+.dashboard-shell.operational-ui .planner-focus { padding: 16px; border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text); }
+.dashboard-shell.operational-ui .planner-focus > span { color: var(--ui-text-muted); font-family: inherit; font-size: 12px; font-weight: 600; }
+.dashboard-shell.operational-ui .planner-focus h2 { margin: 6px 0 0; color: var(--ui-text); font-size: 28px; line-height: 1.1; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.dashboard-shell.operational-ui .planner-focus > p { margin: 2px 0 14px; color: var(--ui-text-soft); font-size: 13px; }
+.dashboard-shell.operational-ui .planner-focus > div { padding-top: 12px; border-top: 1px solid var(--ui-border); }
+.dashboard-shell.operational-ui .planner-focus strong { color: var(--ui-text); font-size: 13px; }
+.dashboard-shell.operational-ui .planner-focus small { color: var(--ui-text-soft); font-size: 12px; }
+
+/* --- Administração ---------------------------------------------------------- */
+/* Menu de seções em texto, uma linha por item, sem ícone nem segunda linha. */
+.dashboard-shell.operational-ui .workspace-settings-layout {
+  grid-template-columns: 200px minmax(0, 1fr);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  overflow: hidden;
+}
+.dashboard-shell.operational-ui .settings-nav { padding: 10px 8px; background: var(--ui-surface); }
+.dashboard-shell.operational-ui .settings-nav-label { margin: 14px 8px 4px; color: var(--ui-text-muted); font-size: 12px; font-weight: 600; }
+.dashboard-shell.operational-ui .settings-nav-label:first-child { margin-top: 2px; }
+.dashboard-shell.operational-ui .settings-nav button {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--ui-radius-md);
+  color: var(--ui-text-soft);
+  font-size: 13px;
+  font-weight: 500;
+}
+.dashboard-shell.operational-ui .settings-nav button.active { background: var(--ui-primary-soft); color: var(--ui-text); font-weight: 600; }
+.dashboard-shell.operational-ui .workspace-settings-content { padding: 20px 24px; border-left: 1px solid var(--ui-border); }
+/* Rótulos que eram escritos pelo CSS em caixa alta, por cima do formulário. */
+.dashboard-shell.operational-ui .workspace-name-form label::before { content: none; }
+.dashboard-shell.operational-ui .workspace-name-form { padding: 0; border: 0; background: transparent; }
+.dashboard-shell.operational-ui .admin-indicators { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.dashboard-shell.operational-ui .admin-indicator { padding: 12px 14px; border: 1px solid var(--ui-border); background: var(--ui-surface); }
+@media (max-width: 760px) {
+  .dashboard-shell.operational-ui .workspace-settings-layout { grid-template-columns: 1fr; }
+  .dashboard-shell.operational-ui .workspace-settings-content { padding: 14px; border-left: 0; }
+}
+
+/* Linha de usuário: identidade, papel, departamento e ações em cima; as três
+   configurações que abrem (empresas, colaborador, módulos) numa segunda linha.
+   Antes as nove peças disputavam uma linha só e saíam pela borda. */
+.dashboard-shell.operational-ui .workspace-member-list > article {
+  display: grid;
+  grid-template-columns: 32px minmax(180px, 1fr) 150px 210px auto 32px;
+  align-items: center;
+  gap: 10px 12px;
+  min-height: 0;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: transparent;
+}
+.dashboard-shell.operational-ui .workspace-member-list > article > i { width: 32px; height: 32px; border-radius: 50%; background: var(--ui-primary-soft); color: var(--ui-text); font-size: 12px; }
+.dashboard-shell.operational-ui .workspace-member-list > article > :is(select, b) { min-width: 0; height: 32px; font-size: 13px; }
+.dashboard-shell.operational-ui .workspace-member-list > article > :is(.member-company-access, .member-company-summary) { grid-row: 2; grid-column: 2 / 3; }
+.dashboard-shell.operational-ui .workspace-member-list > article > .member-employee-link { grid-row: 2; grid-column: 3 / 5; }
+.dashboard-shell.operational-ui .workspace-member-list > article > .member-modules-details { grid-row: 2; grid-column: 5 / 7; }
+.dashboard-shell.operational-ui .workspace-member-list > article > details { min-width: 0; }
+.dashboard-shell.operational-ui .workspace-member-list > article > details > summary {
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-primary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.dashboard-shell.operational-ui .workspace-member-list > article > details[open] { grid-column: 2 / -1; }
+.dashboard-shell.operational-ui .workspace-member-list > article > details[open] ~ details { grid-row: 3; }
+.dashboard-shell.operational-ui .member-company-access label em { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: 11px; font-style: normal; }
+.dashboard-shell.operational-ui .member-recovery-button { height: 32px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); color: var(--ui-text); font-size: 12px; font-weight: 500; white-space: nowrap; }
+@media (max-width: 1100px) {
+  .dashboard-shell.operational-ui .workspace-member-list > article { grid-template-columns: 32px minmax(0, 1fr) auto; }
+  .dashboard-shell.operational-ui .workspace-member-list > article > * { grid-column: 2 / -1 !important; grid-row: auto !important; }
+  .dashboard-shell.operational-ui .workspace-member-list > article > i { grid-column: 1 !important; }
+}
+
+/* Menu da Administração: o rótulo ocupa a linha (havia `display: grid` herdado
+   do desenho com subtítulo, que quebrava uma palavra por linha). */
+.dashboard-shell.operational-ui .workspace-settings-layout .settings-nav button { display: flex; align-items: center; width: 100%; min-height: 32px; font-size: 13px; }
+.dashboard-shell.operational-ui .workspace-settings-layout .settings-nav button > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
+@media (max-width: 760px) {
+  /* No celular o menu de seções vira faixa rolável com o nome de cada seção —
+     ele era só de ícones, e os ícones saíram. */
+  .dashboard-shell.operational-ui .workspace-settings-layout .settings-nav { display: flex; gap: 2px; overflow-x: auto; padding: 6px; border-bottom: 1px solid var(--ui-border); }
+  .dashboard-shell.operational-ui .workspace-settings-layout .settings-nav-label { display: none; }
+  .dashboard-shell.operational-ui .workspace-settings-layout .settings-nav button { flex: 0 0 auto; width: auto; padding: 0 12px; }
+  .dashboard-shell.operational-ui .workspace-settings-layout .settings-nav button > span { display: block; }
+}
+@media (max-width: 760px) {
+  /* Duas linhas no celular, e não três: a ajuda já tem o botão flutuante do
+     assistente, e o seletor de empresa encolhe para caber ao lado. */
+  .shell-actions { gap: 2px; }
+  .shell-actions .help-button { display: none; }
+  .company-picker-trigger { max-width: 128px; }
+}

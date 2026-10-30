@@ -20,12 +20,12 @@
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .header h2 { margin: 3px 0 4px; font-size: 1.02rem; }
 .header p { margin: 0; color: var(--ac-soft); font-size: .78rem; }
-.eyebrow { color: var(--ac-soft); font-size: .58rem; font-weight: 820; letter-spacing: .11em; }
+.eyebrow { color: var(--ac-soft); font-size: .75rem; font-weight: 820; letter-spacing: .11em; }
 
 .refresh {
   display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 13px;
   border: 1px solid var(--ac-border); border-radius: 7px; background: var(--ac-surface);
-  color: inherit; font: inherit; font-size: .72rem; font-weight: 720; cursor: pointer;
+  color: inherit; font: inherit; font-size: .78rem; font-weight: 720; cursor: pointer;
 }
 .refresh:hover:not(:disabled) { border-color: var(--ac-neutral); }
 .refresh:disabled { opacity: .55; cursor: not-allowed; }
@@ -103,7 +103,7 @@
 .openWork {
   display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px;
   border: 1px solid var(--ui-border, #d8e0e7); border-radius: 8px;
-  color: var(--ui-accent-text, #087a63); font-size: .74rem; font-weight: 720; text-decoration: none;
+  color: var(--ui-accent-text, #087a63); font-size: .78rem; font-weight: 720; text-decoration: none;
 }
 .openWork:hover { border-color: var(--ui-accent, #087a63); }
 .openWork svg { width: 15px; height: 15px; }

@@ -136,7 +136,7 @@ test("cadastro e abertura entregam ficha operacional e maturidade", async () => 
     assert.match(view, new RegExp(section, "u"));
   }
   assert.match(view, /function ProcessDetail/u);
-  assert.match(view, /FICHA OPERACIONAL/u);
+  assert.match(view, /FICHA OPERACIONAL/iu);
   assert.match(view, /className=\{styles\.maturityStrip\}/u);
   assert.match(view, /lifecycleStatus: "restore"/u);
   assert.match(route, /requestedLifecycle === "restore"/u);

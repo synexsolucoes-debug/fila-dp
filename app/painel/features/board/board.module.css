@@ -255,7 +255,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
      dá 2,3:1. O par suave lê nos dois temas sem precisar de uma exceção. */
   background: var(--ui-accent-soft, var(--ui-primary-soft));
   color: var(--ui-accent-text, var(--ui-primary));
-  font-size: 10px;
+  font-size: 12px;
   line-height: 16px;
   text-align: center;
 }
@@ -277,7 +277,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   box-shadow: var(--ui-shadow-modal);
 }
 .filterFields label, .sort { display: grid; gap: 4px; }
-.filterFields span, .sort > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+.filterFields span, .sort > span { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
 /* 36px, a mesma altura da caixa de busca ao lado.
    A régua de consistência do produto julga altura por repetição: um valor usado
    por um único controle no produto inteiro é acidente, não decisão. Um campo
@@ -620,7 +620,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
   line-height: 20px;
   text-align: center;
 }
-.queueSection > header small { grid-column: 1 / -1; font-size: 10.5px; color: var(--ui-text-muted); }
+.queueSection > header small { grid-column: 1 / -1; font-size: 12px; color: var(--ui-text-muted); }
 .queueSection[data-section="overdue"] > header strong { color: var(--ui-danger); }
 .queueSection[data-section="overdue"] > header b { background: var(--ui-state-danger-bg); color: var(--ui-state-danger-text); }
 .queueSection[data-section="today"] > header strong { color: var(--ui-warning); }
@@ -644,7 +644,7 @@ button.alert:focus-visible { outline: 2px solid var(--ui-primary); outline-offse
 }
 .bulkBar > strong { font-size: 12.5px; color: var(--ui-text); }
 .bulkBar label { display: inline-flex; align-items: center; gap: 5px; }
-.bulkBar label > span { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+.bulkBar label > span { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
 .bulkBar select, .bulkBar input, .bulkBar label button {
   height: 36px;
   padding: 0 8px;

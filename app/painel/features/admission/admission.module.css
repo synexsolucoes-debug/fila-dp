@@ -22,7 +22,7 @@
 .header { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: space-between; }
 .header h3 { margin: 2px 0 4px; font-size: 1.05rem; }
 .header p { margin: 0; color: var(--ui-text-soft); font-size: .86rem; max-width: 52ch; }
-.eyebrow { font-size: .68rem; letter-spacing: .08em; color: var(--ui-text-muted); font-weight: 600; }
+.eyebrow { font-size: .75rem; letter-spacing: .08em; color: var(--ui-text-muted); font-weight: 600; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
@@ -66,7 +66,7 @@
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0; margin: 0; }
 
 .field { padding: 10px 14px; border-bottom: 1px solid var(--ui-border); border-right: 1px solid var(--ui-border); min-width: 0; }
-.field dt { font-size: .72rem; letter-spacing: .04em; color: var(--ui-text-muted); font-weight: 600; text-transform: uppercase; }
+.field dt { font-size: .78rem; letter-spacing: .04em; color: var(--ui-text-muted); font-weight: 600; text-transform: uppercase; }
 .field dd { margin: 3px 0 0; display: flex; gap: 8px; align-items: center; justify-content: space-between; min-width: 0; }
 .field p { margin: 4px 0 0; font-size: .76rem; color: var(--ui-text-soft); }
 
@@ -81,7 +81,7 @@
 .copyField {
   display: inline-flex; align-items: center; gap: 4px; flex: none;
   border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface-elevated);
-  padding: 4px 8px; font-size: .74rem; font-weight: 600; color: var(--ui-text); cursor: pointer;
+  padding: 4px 8px; font-size: .78rem; font-weight: 600; color: var(--ui-text); cursor: pointer;
 }
 .copyField:hover { background: var(--ui-surface-muted); }
 .copyField svg { width: 12px; height: 12px; }
@@ -106,7 +106,7 @@
 
 /* Origem do campo, junto do rótulo: muda a confiança de quem vai copiar. */
 .sourceTag {
-  margin-left: 6px; font-size: .64rem; font-weight: 500; letter-spacing: 0;
+  margin-left: 6px; font-size: .75rem; font-weight: 500; letter-spacing: 0;
   text-transform: none; color: var(--ui-text-muted);
 }
 .field[data-source="manual"] .sourceTag { color: var(--ui-info); }
@@ -173,7 +173,7 @@
 /* Etapas do trabalho dentro da demanda. */
 .steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .steps li {
-  display: flex; align-items: center; gap: 5px; font-size: .74rem;
+  display: flex; align-items: center; gap: 5px; font-size: .78rem;
   border: 1px solid var(--ui-border); border-radius: 999px; padding: 4px 10px;
   color: var(--ui-text-muted); background: var(--ui-surface);
 }
@@ -186,7 +186,7 @@
 .checkField {
   display: inline-flex; align-items: center; gap: 4px; flex: none;
   border: 1px solid var(--ui-border); border-radius: 7px; background: var(--ui-surface-elevated);
-  padding: 4px 8px; font-size: .74rem; font-weight: 600; color: var(--ui-text); cursor: pointer;
+  padding: 4px 8px; font-size: .78rem; font-weight: 600; color: var(--ui-text); cursor: pointer;
 }
 .checkField[aria-pressed="true"] { color: var(--ui-success); border-color: var(--ui-success); }
 .checkField svg { width: 12px; height: 12px; }

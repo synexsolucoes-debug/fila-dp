@@ -83,8 +83,9 @@ test("o cabeçalho da tela nomeia a seção aberta, e não duas dentre nove", ()
      havia o painel por baixo. A exigência é a mesma: o nome vem do catálogo, e
      não de um texto escrito à mão para cada ramo. */
   assert.match(source, /<h1 id="admin-page-title">\{settingsSectionMeta\[settingsSection\]\.title\}<\/h1>/u);
-  assert.match(source, /<span className="dashboard-eyebrow">\{settingsSectionMeta\[settingsSection\]\.group\}<\/span>/u);
-  assert.match(source, /\{settingsSectionMeta\[settingsSection\]\.description\}/u);
+  // Só o título: a aba já diz "Administração", e grupo, caminho e descrição
+  // repetiam o que o menu de seções ao lado mostra.
+  assert.doesNotMatch(source, /className="admin-breadcrumb"/u);
   const meta = source.slice(source.indexOf("const settingsSectionMeta"), source.indexOf("\n};", source.indexOf("const settingsSectionMeta")));
   const titulos = [...meta.matchAll(/title: "([^"]+)"/gu)].map((match) => match[1]);
   assert.equal(titulos.length, declaradas.length, "há seção sem nome no cabeçalho");

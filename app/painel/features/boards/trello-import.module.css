@@ -5,12 +5,12 @@
   background: var(--ui-surface); color: var(--ui-text);
 }
 .header > div { display: grid; gap: 4px; max-width: 70ch; }
-.eyebrow { color: var(--ui-text-soft); font-size: .62rem; font-weight: 800; letter-spacing: .09em; }
+.eyebrow { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; }
 .title { margin: 0; font-size: 1rem; }
 .lead, .hint, .found { margin: 0; color: var(--ui-text-soft); font-size: .8rem; line-height: 1.45; }
 .subtitle { margin: 6px 0 0; font-size: .86rem; }
 
-.file { position: relative; display: grid; gap: 6px; color: var(--ui-text-soft); font-size: .72rem; font-weight: 700; }
+.file { position: relative; display: grid; gap: 6px; color: var(--ui-text-soft); font-size: .78rem; font-weight: 700; }
 .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .file input:focus-visible + div { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
 .file > div {
@@ -21,7 +21,7 @@
 .file svg { flex: 0 0 auto; width: 18px; height: 18px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end; }
-.grid label { display: grid; gap: 5px; min-width: 0; color: var(--ui-text-soft); font-size: .72rem; font-weight: 700; }
+.grid label { display: grid; gap: 5px; min-width: 0; color: var(--ui-text-soft); font-size: .78rem; font-weight: 700; }
 .grid input:not([type="checkbox"]), .grid select, .table select {
   width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm, 8px);
   background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: .82rem;
@@ -32,7 +32,7 @@
 .tableWrap { overflow-x: auto; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md, 12px); }
 .table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: .8rem; }
 .table th, .table td { padding: 8px 11px; border-bottom: 1px solid var(--ui-border); text-align: left; vertical-align: middle; }
-.table thead th { background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: .68rem; white-space: nowrap; }
+.table thead th { background: var(--ui-surface-muted); color: var(--ui-text-soft); font-size: .75rem; white-space: nowrap; }
 .table tbody th { font-weight: 600; }
 .table small { color: var(--ui-text-soft); font-weight: 500; }
 .table tr:last-child th, .table tr:last-child td { border-bottom: 0; }
@@ -43,9 +43,9 @@
 .plan { display: grid; gap: 10px; }
 .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .summary article { display: grid; gap: 3px; min-width: 0; padding: 11px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md, 10px); }
-.summary small { color: var(--ui-text-soft); font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.summary small { color: var(--ui-text-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .summary strong { font-size: .95rem; font-variant-numeric: tabular-nums; }
-.summary span { overflow-wrap: anywhere; color: var(--ui-text-soft); font-size: .7rem; }
+.summary span { overflow-wrap: anywhere; color: var(--ui-text-soft); font-size: .78rem; }
 
 .warnings { display: grid; gap: 4px; margin: 0; padding: 10px 12px 10px 28px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm, 8px); background: var(--ui-state-warn-bg); color: var(--ui-state-warn-text); font-size: .76rem; }
 .error, .done { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border-radius: var(--ui-radius-sm, 8px); font-size: .78rem; font-weight: 700; }

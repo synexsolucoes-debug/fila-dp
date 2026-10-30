@@ -14,7 +14,7 @@
 }
 .sectionTitle { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sectionTitle h3 { margin: 0; font-size: .84rem; }
-.sectionTitle span { color: var(--rec-soft); font-size: .7rem; }
+.sectionTitle span { color: var(--rec-soft); font-size: .78rem; }
 
 .primaryButton, .secondaryButton {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 13px;
@@ -38,12 +38,12 @@
 }
 .formGrid textarea { min-height: 80px; padding: 9px 11px; resize: vertical; }
 .spanTwo { grid-column: 1 / -1; }
-.fieldHint { color: var(--rec-soft); font-size: .72rem; font-weight: 700; }
+.fieldHint { color: var(--rec-soft); font-size: .78rem; font-weight: 700; }
 
 .requirementEditor { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--rec-border); border-radius: 12px; background: var(--rec-muted); }
 .requirementEditor > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .requirementEditor > header > div { display: grid; gap: 2px; }
-.requirementEditor > header span { color: var(--rec-soft); font-size: .58rem; font-weight: 800; letter-spacing: .09em; }
+.requirementEditor > header span { color: var(--rec-soft); font-size: .75rem; font-weight: 800; letter-spacing: .09em; }
 .requirementEditor > header h3 { margin: 0; font-size: .86rem; }
 .requirementEditor > footer { display: flex; align-items: center; gap: 9px; }
 .requirementEditor > footer > span { flex: 1; }
@@ -51,7 +51,7 @@
 .infoNote { display: flex; align-items: flex-start; gap: 11px; margin: 0; padding: 13px; border: 1px solid var(--rec-border); border-radius: 8px; background: var(--rec-accent-soft); color: var(--rec-accent-text); }
 .infoNote > svg { flex: 0 0 auto; width: 17px; height: 17px; }
 .infoNote span { display: grid; gap: 3px; }
-.infoNote strong { font-size: .74rem; }
+.infoNote strong { font-size: .78rem; }
 .infoNote small { color: var(--rec-text); font-size: .75rem; line-height: 1.45; }
 
 .historyDate { display: grid; gap: 6px; max-width: 220px; }
@@ -59,9 +59,9 @@
 .historyDate input { min-height: 38px; border: 1px solid var(--rec-border); border-radius: 8px; background: var(--rec-surface); color: var(--rec-text); padding: 0 10px; font: inherit; }
 .historySnapshot { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .historySnapshot article { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px; border: 1px solid var(--rec-border); border-radius: 10px; background: var(--rec-surface); }
-.historySnapshot small { color: var(--rec-soft); font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.historySnapshot small { color: var(--rec-soft); font-size: .75rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .historySnapshot strong { font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
-.historySnapshot span { color: var(--rec-soft); font-size: .7rem; }
+.historySnapshot span { color: var(--rec-soft); font-size: .78rem; }
 
 /* Cálculos: tipo de cálculo como botões alternados e rubricas com valor alinhado. */
 /* Cálculos redesenhados como object page (docs/engenharia-reversa-design-centi-sap.md):
@@ -86,21 +86,21 @@
 /* Separador por sombra, não borda: a legenda de um fieldset corta a borda de cima. */
 .calcFieldset + .calcFieldset { padding-top: 14px; box-shadow: inset 0 1px 0 var(--rec-border); }
 .calcFieldset legend { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding: 0; color: var(--rec-text); font-size: .82rem; font-weight: 800; }
-.calcFieldset legend small { color: var(--rec-soft); font-size: .72rem; font-weight: 500; }
+.calcFieldset legend small { color: var(--rec-soft); font-size: .78rem; font-weight: 500; }
 .actionBar { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 -14px; padding: 10px 14px; border-top: 1px solid var(--rec-border); border-radius: 0 0 12px 12px; background: color-mix(in srgb, var(--rec-surface) 92%, transparent); backdrop-filter: blur(6px); }
-.actionBar > span { color: var(--rec-soft); font-size: .74rem; }
+.actionBar > span { color: var(--rec-soft); font-size: .78rem; }
 
 .netSummary { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0; overflow: hidden; border: 1px solid var(--rec-border); border-radius: 12px; background: var(--rec-surface); }
 .netHero { display: grid; gap: 4px; align-content: center; padding: 18px; background: var(--rec-accent-soft); }
-.netHero small { color: var(--rec-accent-text); font-size: .7rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+.netHero small { color: var(--rec-accent-text); font-size: .78rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .netHero strong { color: var(--rec-text); font-size: clamp(1.6rem, 3.2vw, 2.1rem); line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.netHero span { color: var(--rec-soft); font-size: .74rem; }
+.netHero span { color: var(--rec-soft); font-size: .78rem; }
 .netBreakdown { display: grid; align-content: center; gap: 0; margin: 0; padding: 6px 18px; }
 .netBreakdown > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; padding: 9px 0; }
 .netBreakdown > div + div { border-top: 1px solid var(--rec-border); }
 .netBreakdown dt { color: var(--rec-soft); font-size: .76rem; }
 .netBreakdown dd { margin: 0; font-size: .86rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.netBreakdown small { grid-column: 1 / -1; color: var(--rec-soft); font-size: .7rem; }
+.netBreakdown small { grid-column: 1 / -1; color: var(--rec-soft); font-size: .78rem; }
 /* Evolução da folha: barras horizontais simples, sem biblioteca de gráfico. */
 .bars { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .bars li { display: grid; grid-template-columns: 70px minmax(0, 1fr) 110px; align-items: center; gap: 10px; font-size: .76rem; }
@@ -116,7 +116,7 @@
 
 .tableWrap { overflow-x: auto; border: 1px solid var(--rec-border); border-radius: 12px; background: var(--rec-surface); }
 .table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-.table th { padding: 10px 12px; border-bottom: 1px solid var(--rec-border); background: var(--rec-muted); color: var(--rec-soft); font-size: .7rem; text-align: left; white-space: nowrap; }
+.table th { padding: 10px 12px; border-bottom: 1px solid var(--rec-border); background: var(--rec-muted); color: var(--rec-soft); font-size: .78rem; text-align: left; white-space: nowrap; }
 .table td { padding: 10px 12px; border-bottom: 1px solid var(--rec-border); vertical-align: middle; }
 .table tr:last-child td { border-bottom: 0; }
 
@@ -133,7 +133,7 @@
   .table thead { display: none; }
   .table tr { display: grid; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--rec-border); }
   .table td { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 0; border: 0; }
-  .table td[data-label]::before { content: attr(data-label); color: var(--rec-soft); font-size: .7rem; font-weight: 700; }
+  .table td[data-label]::before { content: attr(data-label); color: var(--rec-soft); font-size: .78rem; font-weight: 700; }
   /* Rubricas: no celular, só a coluna que tem valor aparece, alinhada como as outras. */
   .table td.num { text-align: left; }
   .table td.num:empty, .table td:empty { display: none; }

@@ -391,7 +391,6 @@ export function ProcessManagementView({ role }: { role: WorkspaceRole }) {
 
     <header className={styles.pageHeader}>
       <div>
-        <span className={styles.eyebrow}>Gestão e modelagem</span>
         <h2>Processos</h2>
         <p>Processo → versão → BPMN → configuração das etapas → demandas, evidências, movimentações e auditoria.</p>
       </div>
@@ -688,7 +687,6 @@ function ProcessDetail({ process, permissions, busy, versions, openVersion, clos
   return <div className={styles.detailSheet}>
     <header className={styles.detailHeader}>
       <div>
-        <span className={styles.eyebrow}>FICHA OPERACIONAL · {process.code}</span>
         <h3>{process.name}</h3>
         <div className={styles.detailStatus}>
           <StatusPill status={process.lifecycleStatus} label={processStatusLabel[process.lifecycleStatus]} />

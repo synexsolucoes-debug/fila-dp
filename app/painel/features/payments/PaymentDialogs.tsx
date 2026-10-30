@@ -64,7 +64,6 @@ export function PaymentDialog({ dialog, busy, onClose, onSubmit }: Props) {
       <div className={styles.dialog} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="payment-dialog-title" tabIndex={-1}>
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>Controle de pagamento</span>
             <h2 id="payment-dialog-title">{titles[dialog.kind]}</h2>
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar janela"><X aria-hidden="true" /></button>

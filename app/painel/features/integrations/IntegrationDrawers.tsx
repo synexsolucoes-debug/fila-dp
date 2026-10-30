@@ -84,7 +84,7 @@ export function IntegrationDrawer({ editor, connectors, mappings, detail, detail
     <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <div className={`${styles.drawer} ${editor.kind === "mapping" || editor.kind === "detail" ? styles.drawerWide : ""}`} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="integration-drawer-title" aria-describedby="integration-drawer-description" tabIndex={-1}>
         <header className={styles.drawerHeader}>
-          <div><span className={styles.eyebrow}>Central · controle seguro</span><h2 id="integration-drawer-title">{titles[editor.kind]}</h2><p id="integration-drawer-description">{description}</p></div>
+          <div><h2 id="integration-drawer-title">{titles[editor.kind]}</h2><p id="integration-drawer-description">{description}</p></div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar painel"><X aria-hidden="true" /></button>
         </header>
         {editor.kind === "detail" ? <RunDetailPanel detail={detail} loading={detailLoading} error={detailError} /> : (

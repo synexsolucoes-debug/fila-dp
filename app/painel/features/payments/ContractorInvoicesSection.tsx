@@ -296,7 +296,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
 
       <section className={styles.invoiceProgress} aria-labelledby="invoice-progress-title">
         <div>
-          <span className={styles.eyebrow}>Andamento da conferência</span>
           <h3 id="invoice-progress-title">
             Notas Fiscais: {summary.approvedCount}/{summary.requiredCount} aprovadas
           </h3>
@@ -539,7 +538,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
       {permissions?.export && (
         <footer className={styles.invoiceReportBar} aria-labelledby="invoice-report-title">
           <div className={styles.invoiceReportIntro}>
-            <span className={styles.eyebrow}>Exportação</span>
             <strong id="invoice-report-title">Relatório de notas fiscais</strong>
             <small>Exporte os dados ou reúna os documentos de {competenceLabel(competence)}.</small>
           </div>
@@ -602,7 +600,6 @@ export function ContractorInvoicesSection({ companyId, competence, competenceLab
             onSubmit={(event) => { event.preventDefault(); void submitBatch(); }}>
             <header className={styles.dialogHeader}>
               <div>
-                <span className={styles.eyebrow}>Ação em lote</span>
                 <h2>Solicitar correção de {selectedRows.length} nota(s)</h2>
               </div>
             </header>

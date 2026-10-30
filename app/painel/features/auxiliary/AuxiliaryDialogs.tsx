@@ -14,7 +14,6 @@ const titles: Record<NonNullable<AuxiliaryEditor>["kind"], string> = {
   execution: "Entrega da competência", revision: "Nova revisão", submit: "Enviar para aprovação",
   decision: "Decidir aprovação", close: "Fechar entrega", provider: "Cadastro de fornecedor",
 };
-const moduleLabels: Record<AuxiliaryModule, string> = { benefits: "Benefícios", psychology: "Psicologia", contractors: "Prestadores PJ" };
 const get = (record: Record<string, unknown>, key: string) => String(record[key] ?? "");
 
 export function AuxiliaryDialog({ editor, module, providers, approvers, busy, onClose, onSubmit }: Props) {
@@ -50,7 +49,7 @@ export function AuxiliaryDialog({ editor, module, providers, approvers, busy, on
     <div className={styles.overlay} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <div className={`${styles.dialog} ${isWide ? styles.dialogWide : styles.dialogCompact}`} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="auxiliary-dialog-title" tabIndex={-1}>
         <header className={styles.dialogHeader}>
-          <div><span className={styles.eyebrow}>{moduleLabels[module]}</span><h2 id="auxiliary-dialog-title">{dialogTitle(editor)}</h2></div>
+          <div><h2 id="auxiliary-dialog-title">{dialogTitle(editor)}</h2></div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar janela"><X aria-hidden="true" /></button>
         </header>
         <form onSubmit={submit}>

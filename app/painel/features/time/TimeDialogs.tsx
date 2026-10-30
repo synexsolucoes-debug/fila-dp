@@ -78,7 +78,6 @@ export function TimeDialog({ dialog, busy, hourEvents, onClose, onSubmit }: Prop
       <div className={styles.dialog} ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="time-dialog-title" tabIndex={-1}>
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>Conferência de ponto</span>
             <h2 id="time-dialog-title">{titles[dialog.kind]}</h2>
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fechar janela"><X aria-hidden="true" /></button>

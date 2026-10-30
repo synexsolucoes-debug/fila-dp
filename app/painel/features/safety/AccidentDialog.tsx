@@ -47,7 +47,6 @@ export function AccidentDialog({ draft: initial, companies, busy, error, onClose
       <form onSubmit={handleSubmit}>
         <header className={styles.drawerHeader}>
           <div>
-            <span className={styles.eyebrow}>{draft.id ? "CORRIGIR LANÇAMENTO" : "NOVO LANÇAMENTO"}</span>
             <h2 id="accident-dialog-title">{draft.id ? "Corrigir acidente" : "Registrar acidente"}</h2>
             <p>O período do dashboard é a data do fato, não a data em que o lançamento foi feito.</p>
           </div>

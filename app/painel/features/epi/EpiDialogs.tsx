@@ -61,7 +61,6 @@ export function EpiDialog({ editor, products, employees, deliveries, companyId, 
       <form onSubmit={handleSubmit}>
         <header className={styles.drawerHeader}>
           <div>
-            <span className={styles.eyebrow}>{meta.eyebrow}</span>
             <h2 id="epi-dialog-title">{meta.title}</h2>
             <p>{meta.description}</p>
           </div>

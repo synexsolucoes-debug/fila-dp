@@ -123,7 +123,6 @@ export function EpiAckForm({ token }: { token: string }) {
     <main className={styles.page}>
       <section className={styles.card}>
         <header className={styles.header}>
-          <span className={styles.eyebrow}>Confirmação de recebimento de EPI</span>
           <h1>Olá, {portal.employeeName}</h1>
           <p>Confirme abaixo o recebimento do equipamento de proteção entregue pela empresa.</p>
         </header>

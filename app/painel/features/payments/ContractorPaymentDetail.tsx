@@ -296,7 +296,6 @@ export function ContractorPaymentDetail({
       >
         <header className={styles.dialogHeader}>
           <div>
-            <span className={styles.eyebrow}>Extrato analítico de pagamento PJ</span>
             <h2 id="contractor-payment-detail-title">{detail.provider.legalName}</h2>
             <p className={styles.detailMeta}>
               {detail.provider.roleTitle || detail.provider.contractReference || detail.provider.code} · competência {detail.closing.competence}

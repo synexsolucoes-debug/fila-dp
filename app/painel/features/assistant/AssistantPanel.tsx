@@ -123,7 +123,6 @@ export function AssistantPanel({ screen, openSignal = 0 }: { screen: string; ope
     <aside className={styles.panel} aria-label="Assistente do Vinculato">
       <header>
         <div>
-          <span className={styles.eyebrow}>Assistente</span>
           <strong>{screen}</strong>
         </div>
         <button type="button" onClick={() => setOpen(false)} aria-label="Fechar o assistente">

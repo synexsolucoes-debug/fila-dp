@@ -97,7 +97,6 @@ export function EmployeePortal({ token }: { token: string }) {
   return <main className={styles.page}>
     <section className={styles.card}>
       <header className={styles.header}>
-        <span className={styles.eyebrow}>PORTAL DO COLABORADOR · {portal.companyName}</span>
         <h1>Olá, {portal.employeeName}</h1>
         <p>Seus holerites e suas férias. Este link vale até {br(portal.expiresAt)}.</p>
       </header>

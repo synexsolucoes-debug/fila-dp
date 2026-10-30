@@ -58,7 +58,7 @@
 }
 .headerTitle { display: grid; min-width: 0; flex: 1; }
 .headerTitle strong { font-size: .95rem; line-height: 1.2; }
-.headerTitle small { color: var(--f-soft); font-size: .7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.headerTitle small { color: var(--f-soft); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .headerIcon {
   display: grid; place-items: center; width: 36px; height: 36px; flex: none;
   border-radius: 10px; background: var(--f-accent-soft); color: var(--f-accent-text);
@@ -82,7 +82,7 @@
 
 .contextPickers { display: grid; gap: 10px; }
 .contextPickers label { display: grid; gap: 5px; }
-.contextPickers span { color: var(--f-soft); font-size: .64rem; font-weight: 820; letter-spacing: .08em; }
+.contextPickers span { color: var(--f-soft); font-size: .75rem; font-weight: 820; letter-spacing: .08em; }
 .contextPickers select {
   min-height: var(--f-target); padding: 0 12px;
   border: 1px solid var(--f-border); border-radius: 12px;
@@ -98,7 +98,7 @@
 }
 .actionCard:disabled { opacity: .5; cursor: not-allowed; }
 .actionCard strong { font-size: .9rem; }
-.actionCard small { color: var(--f-soft); font-size: .72rem; line-height: 1.3; }
+.actionCard small { color: var(--f-soft); font-size: .78rem; line-height: 1.3; }
 .actionIcon {
   display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px;
   border-radius: 12px; background: var(--f-accent-soft); color: var(--f-accent-text);
@@ -111,7 +111,7 @@
   background: color-mix(in srgb, var(--f-warning) 10%, transparent); cursor: pointer;
 }
 .queueCallout strong { display: block; font-size: .82rem; }
-.queueCallout small { color: var(--f-soft); font-size: .72rem; }
+.queueCallout small { color: var(--f-soft); font-size: .78rem; }
 
 .step { display: grid; gap: 10px; }
 .step h2 { margin: 0; font-size: .86rem; }
@@ -133,7 +133,7 @@
 .pickList button:disabled { opacity: .5; cursor: not-allowed; }
 .pickList button:hover:not(:disabled) { border-color: var(--f-accent); }
 .pickList strong, .plainList strong { display: block; font-size: .86rem; }
-.pickList small, .plainList small { display: block; color: var(--f-soft); font-size: .73rem; }
+.pickList small, .plainList small { display: block; color: var(--f-soft); font-size: .78rem; }
 .plainList li {
   display: grid; gap: 3px; padding: 11px 13px;
   border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-surface);
@@ -145,7 +145,7 @@
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 10px 13px; border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-muted);
 }
-.chosen small { display: block; color: var(--f-soft); font-size: .64rem; font-weight: 800; letter-spacing: .07em; }
+.chosen small { display: block; color: var(--f-soft); font-size: .75rem; font-weight: 800; letter-spacing: .07em; }
 .chosen strong { font-size: .85rem; }
 
 .stepper { display: flex; align-items: center; gap: 12px; }
@@ -171,7 +171,7 @@
 }
 
 .field { display: grid; gap: 5px; }
-.field > span { color: var(--f-soft); font-size: .64rem; font-weight: 820; letter-spacing: .08em; }
+.field > span { color: var(--f-soft); font-size: .75rem; font-weight: 820; letter-spacing: .08em; }
 .field input, .field textarea {
   min-height: var(--f-target); padding: 11px 12px;
   border: 1px solid var(--f-border); border-radius: 12px; background: var(--f-surface); color: inherit;
@@ -184,7 +184,7 @@
   background: color-mix(in srgb, var(--f-accent) 8%, transparent);
   font-size: .79rem;
 }
-.consequence > strong { font-size: .68rem; letter-spacing: .05em; text-transform: uppercase; color: var(--f-accent-text); }
+.consequence > strong { font-size: .75rem; letter-spacing: .05em; text-transform: uppercase; color: var(--f-accent-text); }
 .consequence ul { margin: 0; padding-left: 17px; display: grid; gap: 4px; }
 .consequence li[data-alert="true"] { color: var(--f-warning); font-weight: 700; }
 
@@ -197,7 +197,7 @@
   touch-action: none;
 }
 .signatureFooter { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.signatureFooter span { color: var(--f-soft); font-size: .74rem; }
+.signatureFooter span { color: var(--f-soft); font-size: .78rem; }
 
 .photoPicker {
   display: flex; align-items: center; gap: 11px; min-height: 64px; padding: 12px 14px;
@@ -212,7 +212,7 @@
   display: grid; gap: 2px; padding: 11px 12px;
   border: 1px solid var(--f-border); border-radius: 13px; background: var(--f-surface);
 }
-.summaryRow small { color: var(--f-soft); font-size: .68rem; }
+.summaryRow small { color: var(--f-soft); font-size: .75rem; }
 .summaryRow strong { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
 
 .actionBar {
@@ -318,7 +318,7 @@
 .scannerProblem { margin: 10px 12px 0; color: var(--f-danger); font-size: .79rem; }
 .scannerManual { display: grid; gap: 9px; padding: 13px 12px; border-top: 1px solid var(--f-border); }
 .scannerManual label { display: grid; gap: 5px; }
-.scannerManual span { display: inline-flex; align-items: center; gap: 6px; color: var(--f-soft); font-size: .64rem; font-weight: 820; letter-spacing: .08em; }
+.scannerManual span { display: inline-flex; align-items: center; gap: 6px; color: var(--f-soft); font-size: .75rem; font-weight: 820; letter-spacing: .08em; }
 .scannerManual svg { width: 14px; height: 14px; }
 .scannerManual input {
   min-height: var(--f-target); padding: 0 12px;

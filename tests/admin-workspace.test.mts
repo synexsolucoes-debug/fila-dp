@@ -104,14 +104,15 @@ test("nenhum número da administração é fixo no código", () => {
   const faixa = bloco("const indicadores = [", "  ];");
   const fixos = [...faixa.matchAll(/value: "([^"$]*\d[^"]*)"/gu)].map((match) => match[1]);
   assert.deepEqual(fixos, [], `número fixo na faixa: ${fixos.join(", ")}`);
-  for (const fonte of ["snapshot.members.length", "snapshot.companies.length",
-    "snapshot.availableWorkspaces.length", "snapshot.boards.length"]) {
+  // "Workspaces acessíveis" saiu da faixa: a troca de grupo mora no menu da
+  // conta, e o número repetia o que a lista logo abaixo já mostra.
+  for (const fonte of ["snapshot.members.length", "snapshot.companies.length", "snapshot.boards.length"]) {
     assert.ok(faixa.includes(fonte), `a faixa deixou de ler ${fonte}`);
   }
   /* E o alerta também é comparação de número, nunca um `true` escrito: um
      cartão âmbar fixo acusaria problema onde não há. */
   const alertas = [...faixa.matchAll(/alert: ([^,\n]+)/gu)].map((match) => match[1].trim());
-  assert.equal(alertas.length, 5);
+  assert.equal(alertas.length, 4);
   assert.ok(alertas.includes("semAtivar > 0"));
   assert.ok(alertas.includes("comErro > 0"));
 });

@@ -43,7 +43,6 @@ import { LayoutGrid, Settings,
   Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
   ShieldQuestion,
   Siren,
   AlertTriangle,
@@ -2032,6 +2031,11 @@ export function WorkspaceApp({
     if (neighbor) openShellTab(neighbor);
     else { openShellTab("inicio"); setModuleLauncher("switch"); }
   };
+  /* A aba ativa sempre à vista: com várias abertas, a recém-aberta nascia
+     escondida atrás do seletor de empresa. */
+  useEffect(() => {
+    document.querySelector(".shell-tab[data-active]")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeTabId, openTabs.length]);
   const keepAlive = (target: View, node: ReactNode) => aliveViews.has(target)
     ? <div className="view-pane view-transition" hidden={target !== view}>{node}</div>
     : null;
@@ -2850,21 +2854,10 @@ export function WorkspaceApp({
    * caminho que diz onde a pessoa está.
    */
   const administrationPage = snapshot ? <>
+    {/* Só o título da seção: a aba já diz "Administração", e caminho, grupo,
+        descrição e data repetiam o que está na tela. */}
     <div className="dashboard-heading admin-page-heading">
-      <div>
-        <nav className="admin-breadcrumb" aria-label="Você está em">
-          <button type="button" onClick={() => setView("overview")}>Início</button>
-          <ChevronRight aria-hidden="true" />
-          <span aria-current="page">Administração</span>
-        </nav>
-        {/* O grupo da seção continua dito, agora como sobrescrito do título —
-            "WORKSPACE" no caminho não dizia onde a pessoa estava, dizia o nome
-            interno do agrupamento. */}
-        <span className="dashboard-eyebrow">{settingsSectionMeta[settingsSection].group}</span>
-        <h1 id="admin-page-title">{settingsSectionMeta[settingsSection].title}</h1>
-        <p className="admin-page-description">{settingsSectionMeta[settingsSection].description}</p>
-      </div>
-      <div className="dashboard-date"><span>Hoje</span><strong>{today}</strong></div>
+      <div><h1 id="admin-page-title">{settingsSectionMeta[settingsSection].title}</h1></div>
     </div>
         <div className="workspace-settings-layout">
           <nav className="settings-nav" aria-label="Seções das configurações">
@@ -2883,7 +2876,7 @@ export function WorkspaceApp({
                  adivinhar o desenho. */
               ...group.sections.map((item) => (
                 <button key={item.section} aria-label={settingsSectionMeta[item.section].title} className={settingsSection === item.section ? "active" : ""} onClick={() => { setSettingsSection(item.section); if (item.section === "security") void loadAuthSessions(); }}>
-                  <item.icon aria-hidden="true" /><span>{settingsSectionMeta[item.section].title}<small>{item.hint}</small></span>
+                  <span>{settingsSectionMeta[item.section].title}</span>
                 </button>
               )),
             ])}
@@ -2895,7 +2888,6 @@ export function WorkspaceApp({
                   alterar antes de alterar. */}
               <AdminIndicators snapshot={snapshot} />
               <form className="workspace-name-form" onSubmit={saveWorkspace}><label>Nome do workspace<input autoFocus value={workspaceName} disabled={!isAdmin} onChange={(event) => setWorkspaceNameEdit(event.target.value)} maxLength={60} required /></label>{isAdmin && <button className="primary-button" disabled={busy}>Salvar nome</button>}</form>
-              <div className="workspace-account-summary"><span className="user-avatar">{userInitials}</span><div><strong>{user.displayName}</strong><small>{user.email}</small><em>{roleLabels[snapshot.workspace.role]}</em></div></div>
 
               {/* Workspaces e quadros viraram tabela (maquete 3).
                   Eram duas listas de botões onde o estado só aparecia no
@@ -2962,14 +2954,6 @@ export function WorkspaceApp({
             {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}
             {settingsSection === "companies" && isAdmin && <CompanySettings companies={snapshot.companies} members={snapshot.members} busy={busy} onCreateCompany={createCompany} onUpdateCompany={updateCompany} onDeleteCompany={deleteCompany} onOpenAccess={() => setSettingsSection("team")} />}
             {settingsSection === "team" && <>
-              <section className="access-admin-hero">
-                <span><Users aria-hidden="true" /></span>
-                <div>
-                  <strong>Workspace → Departamento → Módulos</strong>
-                  <p>O departamento principal define os módulos que a pessoa recebe por padrão. Em “Usuários e acessos” você abre exceção para alguém, inclusive em módulo que a área dela não tem.</p>
-                </div>
-                <b>{isAdmin ? "Você é administrador" : "Acesso limitado"}</b>
-              </section>
               <section className="workspace-team">
                 <header>
                   <div><strong>Usuários liberados</strong><span>{plural(snapshot.members.length, "pessoa com acesso ao grupo", "pessoas com acesso ao grupo")}</span></div>
@@ -3036,7 +3020,7 @@ export function WorkspaceApp({
                       </label>;
                     })}</div>
                   </fieldset>
-                  <fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div></fieldset>
+                  <fieldset className="invite-company-scope" disabled={busy || memberRole === "admin"}><legend>{memberRole === "admin" ? "Administrador acessa todas as empresas" : "Empresas autorizadas"}</legend><div>{snapshot.companies.map((company) => <label key={company.id}><input type="checkbox" checked={memberCompanyIds.includes(company.id)} onChange={(event) => setMemberCompanyIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.tradeName || company.legalName}{company.isPrincipal && <em>Matriz</em>}</label>)}</div></fieldset>
                   <button className="primary-button" disabled={busy || !memberEmail.trim() || !memberDepartmentId || memberModuleKeys.length === 0}>Criar usuário e gerar link</button>
                 </div>
               </form>}
@@ -3267,8 +3251,7 @@ export function WorkspaceApp({
             canReadCycles={hasCapability(snapshot.workspace.role, "competences.read")}
             canCheckEsocial={hasCapability(snapshot.workspace.role, "obligations.manage")}
             canReadPayroll={hasCapability(snapshot.workspace.role, "payroll.read")}
-            canManagePayroll={hasCapability(snapshot.workspace.role, "payroll.manage")}
-            onExit={() => changeAppMode("vinculato")} /></div>}
+            canManagePayroll={hasCapability(snapshot.workspace.role, "payroll.manage")} /></div>}
           <div className="view-stack" hidden={erpMode}>
           <ProcessTabsProvider>{(tabsTarget) => <>
           {/* O contexto pode ter mudado sozinho porque o grupo anterior saiu do
@@ -4515,7 +4498,7 @@ function OverviewView({ onNavigate, cards, lists, activities, stats, onOpen, onO
 function MemberCompanyAccess({ member, companies, busy, onSave }: { member: WorkspaceSnapshot["members"][number]; companies: WorkspaceSnapshot["companies"]; busy: boolean; onSave: (userId: string, companyIds: string[]) => Promise<void> }) {
   const [selectedIds, setSelectedIds] = useState<string[]>(member.companyIds);
   if (member.role === "admin") return <span className="member-company-summary">Todas as empresas</span>;
-  return <details className="member-company-access"><summary>{selectedIds.length ? `${selectedIds.length} empresa(s) liberada(s)` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.isPrincipal ? "★ " : "↳ "}{company.tradeName || company.legalName}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
+  return <details className="member-company-access"><summary>{selectedIds.length ? `${selectedIds.length} empresa(s) liberada(s)` : "Nenhuma empresa liberada"}</summary><div>{companies.map((company) => <label key={company.id}><input type="checkbox" checked={selectedIds.includes(company.id)} disabled={busy} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, company.id] : current.filter((id) => id !== company.id))} />{company.tradeName || company.legalName}{company.isPrincipal && <em>Matriz</em>}</label>)}</div><button type="button" disabled={busy} onClick={() => void onSave(member.userId, selectedIds)}>Salvar empresas</button></details>;
 }
 
 /**
@@ -4694,7 +4677,7 @@ function PayrollView({ companies, metrics, busy, canEdit, onSaveMetric, onImport
 
   return <div className="payroll-view">
     <section className="payroll-toolbar"><div><span>Competência</span><h2>Painel consolidado da folha</h2><p>Os indicadores são recalculados automaticamente a cada lançamento, importação ou sincronização.</p></div><div className="payroll-toolbar-actions">{canEdit && <button className="secondary-button" onClick={() => setImportOpen(true)}><Upload aria-hidden="true" /> Importar extrato PDF</button>}<label>Período<select value={selectedPeriod} onChange={(event) => setSelectedPeriod(event.target.value)}>{periods.map((period) => <option key={period}>{period}</option>)}</select></label></div></section>
-    <section className="payroll-kpi-grid"><article><WalletCards aria-hidden="true" /><span>Custo total da folha</span><strong>{money(totalCost)}</strong><small>{selectedMetrics.length} empresa(s) com competência</small></article><article><Users aria-hidden="true" /><span>Headcount médio</span><strong>{totalHeadcount}</strong><small>{totalAdmissions} admissões · {totalTerminations} desligamentos</small></article><article><BarChart3 aria-hidden="true" /><span>Turnover</span><strong>{turnover.toFixed(2)}%</strong><small>Movimentação ÷ headcount médio</small></article><article><Building2 aria-hidden="true" /><span>Custo por colaborador</span><strong>{money(costPerEmployee)}</strong><small>Baseado no headcount médio</small></article></section>
+    <section className="payroll-kpi-grid"><article><span>Custo total da folha</span><strong>{money(totalCost)}</strong><small>{selectedMetrics.length} empresa(s) com competência</small></article><article><span>Headcount médio</span><strong>{totalHeadcount}</strong><small>{totalAdmissions} admissões · {totalTerminations} desligamentos</small></article><article><span>Turnover</span><strong>{turnover.toFixed(2)}%</strong><small>Movimentação ÷ headcount médio</small></article><article><span>Custo por colaborador</span><strong>{money(costPerEmployee)}</strong><small>Baseado no headcount médio</small></article></section>
     <div className="payroll-layout">
       <section className="payroll-composition"><header><div><strong>Composição do custo</strong><span>Distribuição da competência selecionada</span></div><b>{money(totalCost)}</b></header><div className="payroll-bars">{componentTotals.map((item) => <div key={item.label}><span><strong>{item.label}</strong><small>{money(item.value)}</small></span><i><b style={{ width: `${totalCost ? Math.min(100, (item.value / totalCost) * 100) : 0}%`, backgroundColor: item.color }} /></i></div>)}</div></section>
       <section className="payroll-company-breakdown"><header><div><strong>Folha por empresa</strong><span>{selectedMetrics.length} lançamento(s) em {selectedPeriod}</span></div></header>{selectedMetrics.length === 0 && <div className="empty-view"><span><WalletCards aria-hidden="true" /></span><strong>Sem lançamentos nesta competência</strong><p>Registre os dados da folha para gerar os indicadores automaticamente.</p></div>}{selectedMetrics.map((metric) => <article key={metric.id}><div><strong>{companyName.get(metric.companyId) ?? "Empresa removida"}</strong><small>{metric.headcount} colaboradores · {metric.admissions} admissões · {metric.terminations} desligamentos · líquido {money(metric.netPay)}</small></div><span>{money(metric.payrollCost)}</span><b>{metric.source === "sankhya" ? "Sankhya" : metric.source === "pdf_import" ? "PDF" : "Manual"}</b></article>)}</section>
@@ -4746,7 +4729,7 @@ export function LegacyCompaniesView({ companies, metrics, cards, busy, canEdit, 
   const companyMetrics = selectedCompany ? metrics.filter((metric) => metric.companyId === selectedCompany.id).sort((a, b) => b.period.localeCompare(a.period)) : [];
   return <div className="companies-view">
     <div className="companies-toolbar"><div><strong>Grupo empresarial</strong><span>Defina a empresa principal e cadastre os CNPJs do grupo para demandas, folha e indicadores.</span></div><div className="companies-actions">{canEdit && <><button className="primary-button" onClick={() => setShowCompanyForm((value) => !value)}><Plus aria-hidden="true" /> Cadastrar empresa</button><button className="secondary-button" onClick={() => setShowMetricForm((value) => !value)}><WalletCards aria-hidden="true" /> Registrar folha</button></>}</div></div>
-    <div className="companies-overview"><article><Building2 aria-hidden="true" /><div><strong>{activeCompanies}</strong><span>Empresas ativas</span></div></article><article><CalendarClock aria-hidden="true" /><div><strong>{metrics.length}</strong><span>Competências registradas</span></div></article><article><WalletCards aria-hidden="true" /><div><strong>{payrollTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Folha nos registros recentes</span></div></article></div>
+    <div className="companies-overview"><article><div><strong>{activeCompanies}</strong><span>Empresas ativas</span></div></article><article><div><strong>{metrics.length}</strong><span>Competências registradas</span></div></article><article><div><strong>{payrollTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Folha nos registros recentes</span></div></article></div>
     {selectedCompany && <section className="company-profile-card"><header><div><span>{selectedCompany.isPrincipal ? "EMPRESA PRINCIPAL DO GRUPO" : "EMPRESA DO GRUPO"}</span><h2>{selectedCompany.tradeName || selectedCompany.legalName}</h2><p>{selectedCompany.legalName}</p></div><em className={selectedCompany.status}>{selectedCompany.status === "active" ? "Ativa" : "Inativa"}</em></header><div className="company-profile-data"><div><span>Estrutura</span><strong>{selectedCompany.isPrincipal ? "Empresa principal" : companyName.get(selectedCompany.parentCompanyId ?? "") || "Grupo principal"}</strong></div><div><span>CNPJ</span><strong>{selectedCompany.taxId || "Não informado"}</strong></div><div><span>Contato</span><strong>{selectedCompany.email || selectedCompany.phone || "Não informado"}</strong></div><div><span>Código Sankhya</span><strong>{selectedCompany.externalCode || "Não vinculado"}</strong></div><div><span>Demandas abertas</span><strong>{companyCards.filter((card) => card.slaStatus !== "completed").length}</strong></div><div><span>Documentos pendentes</span><strong>{companyDocumentPending}</strong></div><div><span>Última folha</span><strong>{companyMetrics[0] ? companyMetrics[0].payrollCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "Sem registro"}</strong></div></div><div className="company-profile-demands"><strong>Demandas relacionadas</strong>{companyCards.slice(0, 4).map((card) => <button key={card.id} onClick={() => onOpenCard(card)}><i className={card.slaStatus} /><span>{card.title}<small>{card.processType} • {slaLabel(card)}</small></span><ArrowRight aria-hidden="true" /></button>)}{companyCards.length === 0 && <p>Não há demandas vinculadas a esta empresa.</p>}</div></section>}
     {showCompanyForm && <form className="company-form catalog-card" onSubmit={submitCompany}><header><div><strong>Cadastro no grupo empresarial</strong><span>A primeira empresa será definida como principal. As demais podem ser vinculadas a ela.</span></div></header><div className="catalog-form"><label>Tipo<select name="companyType" defaultValue={companies.some((company) => company.isPrincipal) ? "subsidiary" : "principal"}><option value="principal">Empresa principal do grupo</option><option value="subsidiary">Empresa / CNPJ do grupo</option></select></label><label>Empresa principal<select name="parentCompanyId" defaultValue=""><option value="">Vincular à principal automaticamente</option>{principalCompanies.map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Razão social<input name="legalName" required placeholder="Empresa Exemplo Ltda." /></label><label>Nome fantasia<input name="tradeName" placeholder="Empresa Exemplo" /></label><label>CNPJ<input name="taxId" placeholder="00.000.000/0001-00" /></label><label>Código Sankhya<input name="externalCode" placeholder="COD_EMPRESA" /></label><label>E-mail<input type="email" name="email" /></label><label>Telefone<input name="phone" /></label><button className="primary-button" disabled={busy}>Salvar empresa</button></div></form>}
     {showMetricForm && <form className="metric-form catalog-card" onSubmit={submitMetric}><header><div><strong>Registrar custo e movimentação da folha</strong><span>Turnover = (admissões + desligamentos) ÷ 2 ÷ headcount médio.</span></div></header><div className="catalog-form"><label>Empresa<select name="companyId" required defaultValue=""><option value="" disabled>Selecione</option>{companies.filter((company) => company.status === "active").map((company) => <option key={company.id} value={company.id}>{company.tradeName || company.legalName}</option>)}</select></label><label>Competência<input type="month" name="period" required defaultValue={new Date().toISOString().slice(0, 7)} /></label><label>Headcount<input type="number" name="headcount" min="0" defaultValue="0" /></label><label>Admissões<input type="number" name="admissions" min="0" defaultValue="0" /></label><label>Desligamentos<input type="number" name="terminations" min="0" defaultValue="0" /></label><label>Custo da folha<input type="number" name="payrollCost" min="0" step="0.01" defaultValue="0" /></label><button className="primary-button" disabled={busy || companies.length === 0}>Salvar competência</button></div></form>}
@@ -4807,14 +4790,6 @@ function AdminIndicators({ snapshot }: { snapshot: WorkspaceSnapshot }) {
       alert: false,
     },
     {
-      key: "workspaces", icon: LayoutDashboard, label: "Workspaces acessíveis",
-      value: String(snapshot.availableWorkspaces.length),
-      support: snapshot.workspace.companyScope === "restricted"
-        ? "Seu acesso é restrito a algumas empresas"
-        : "Seu acesso alcança todas as empresas",
-      alert: false,
-    },
-    {
       key: "boards", icon: ClipboardList, label: "Quadros da operação",
       value: String(snapshot.boards.length),
       support: plural(etapas, "etapa configurada", "etapas configuradas"),
@@ -4830,12 +4805,8 @@ function AdminIndicators({ snapshot }: { snapshot: WorkspaceSnapshot }) {
 
   return <section className="admin-indicators" aria-label={`Indicadores da administração — ${snapshot.workspace.name}`}>
     {indicadores.map((item) => {
-      const ItemIcon = item.icon;
       return <article key={item.key} className={`admin-indicator${item.alert ? " requires-attention" : ""}`}>
-        <span className="admin-indicator-top">
-          <span>{item.label}</span>
-          <i aria-hidden="true"><ItemIcon /></i>
-        </span>
+        <span className="admin-indicator-top"><span>{item.label}</span></span>
         <strong>{item.value}</strong>
         <small>{item.support}</small>
       </article>;
@@ -5128,9 +5099,6 @@ function InboxView({ items, busy, canEdit, onConvert, onNew }: { items: InboxIte
           {pending.map((item) => <article className="inbox-item" key={item.id}><span className={`channel-icon ${item.channel}`}>{channelIcon(item.channel)}</span><div><div><strong>{item.subject}</strong><time>{formatReceived(item.receivedAt)}</time></div><span>{item.senderName} • {item.channel}</span><p>{item.body}</p>{canEdit && <button disabled={busy} onClick={() => void onConvert(item)}>Transformar em demanda <ArrowRight aria-hidden="true" /></button>}</div></article>)}
         </div>
       </section>
-      <aside className="inbox-summary">
-        <span>Fluxo da inbox</span><h2>Da mensagem à fila certa.</h2><ol><li><b>1</b><div><strong>Capture</strong><p>Registre solicitações de qualquer canal.</p></div></li><li><b>2</b><div><strong>Faça a triagem</strong><p>Revise contexto e prioridade.</p></div></li><li><b>3</b><div><strong>Converta</strong><p>Crie o cartão com histórico de origem.</p></div></li></ol><div className="inbox-converted"><strong>{converted.length}</strong><span>convertida(s) nesta fila</span></div>
-      </aside>
     </div>
   );
 }
@@ -5216,13 +5184,13 @@ function IndicatorsView({ cards, companyId, scopeLabel, rules, busy, canManageRu
   cards.forEach((card) => { statusCounts[card.slaStatus] += 1; });
   return (
     <div className="indicators-layout">
-      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência · {scopeLabel}</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><Users aria-hidden="true" /><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><Plus aria-hidden="true" /><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><ArrowRight aria-hidden="true" /><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><WalletCards aria-hidden="true" /><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
+      <section className="hr-indicators-panel"><header><div><strong>Indicadores do Departamento Pessoal</strong><span>Turnover e custo da folha por competência · {scopeLabel}</span></div><b>{(report?.hrMetrics?.turnoverRate ?? 0).toFixed(2)}%</b></header><div className="hr-indicator-grid"><article><strong>{report?.hrMetrics?.turnoverRate?.toFixed(2) ?? "0,00"}%</strong><span>Turnover</span></article><article><strong>{report?.hrMetrics?.averageHeadcount ?? 0}</strong><span>Headcount médio</span></article><article><strong>{report?.hrMetrics?.admissions ?? 0}</strong><span>Admissões</span></article><article><strong>{report?.hrMetrics?.terminations ?? 0}</strong><span>Desligamentos</span></article><article><strong>{(report?.hrMetrics?.payrollCostTotal ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong><span>Custo da folha</span></article></div><div className="hr-indicator-note">{hrMetrics.length ? `${hrMetrics.length} competência(s) cadastrada(s) em ${companies.length} empresa(s).` : "Cadastre empresas e competências para calcular os indicadores."}</div></section>
       {/* Command Center, passo 1 (§4.19): a diretoria não abre EPI, ASO ou o
           painel de acidentes todo dia — este é o resumo que ela vê sem entrar
           em nenhum dos três. Não substitui os módulos: cada número aqui já
           existe em algum deles, apenas juntos num lugar que não exige saber
           onde procurar. */}
-      <section className="safety-indicators-panel"><header><div><strong>Saúde e conformidade</strong><span>SST, ASO e obrigações legais no grupo · {scopeLabel}</span></div><HardHat aria-hidden="true" /></header><div className="hr-indicator-grid"><article><CircleAlert aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueExams ?? 0}</strong><span>Exames (ASO) vencidos</span></article><article><ClipboardList aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueTrainings ?? 0}</strong><span>Treinamentos vencidos</span></article><article><AlertTriangle aria-hidden="true" /><strong>{report?.safetyMetrics?.accidentsInPeriod ?? 0}</strong><span>Acidentes no período</span></article><article><HardHat aria-hidden="true" /><strong>{report?.safetyMetrics?.catPending ?? 0}</strong><span>CAT pendente</span></article><article><CalendarClock aria-hidden="true" /><strong>{report?.safetyMetrics?.overdueObligations ?? 0}</strong><span>Obrigações legais vencidas</span></article><article><ShieldCheck aria-hidden="true" /><strong>{report?.safetyMetrics?.epiComplianceRate == null ? "—" : `${report.safetyMetrics.epiComplianceRate}%`}</strong><span>Conformidade de EPI</span></article></div></section>
+      <section className="safety-indicators-panel"><header><div><strong>Saúde e conformidade</strong><span>SST, ASO e obrigações legais no grupo · {scopeLabel}</span></div><HardHat aria-hidden="true" /></header><div className="hr-indicator-grid"><article><strong>{report?.safetyMetrics?.overdueExams ?? 0}</strong><span>Exames (ASO) vencidos</span></article><article><strong>{report?.safetyMetrics?.overdueTrainings ?? 0}</strong><span>Treinamentos vencidos</span></article><article><strong>{report?.safetyMetrics?.accidentsInPeriod ?? 0}</strong><span>Acidentes no período</span></article><article><strong>{report?.safetyMetrics?.catPending ?? 0}</strong><span>CAT pendente</span></article><article><strong>{report?.safetyMetrics?.overdueObligations ?? 0}</strong><span>Obrigações legais vencidas</span></article><article><strong>{report?.safetyMetrics?.epiComplianceRate == null ? "—" : `${report.safetyMetrics.epiComplianceRate}%`}</strong><span>Conformidade de EPI</span></article></div></section>
       <section className="metrics-panel"><header><div><strong>Volume por processo</strong><span>{cards.length} demanda(s) · {scopeLabel}</span></div><div className="export-actions">
         <button className="export-button" onClick={onExport}><Download aria-hidden="true" /> Exportar CSV</button>
         {/* A exportação completa do grupo (§50) mora aqui porque esta é a tela

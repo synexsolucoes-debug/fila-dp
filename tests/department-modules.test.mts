@@ -198,7 +198,9 @@ test("criação e alteração persistem departamento e módulos no mesmo fluxo",
   assert.match(helper, /is_primary = 0/u);
   assert.match(helper, /fdp_member_module_grants/u);
   assert.match(screen, /departmentId: memberDepartmentId/u);
-  assert.match(screen, /Workspace → Departamento → Módulos/u);
+  // A regra de herança é dita no cabeçalho da lista de usuários, numa linha —
+  // o painel ilustrativo azul que a repetia saiu.
+  assert.match(screen, /o departamento dá os módulos padrão; a exceção individual vence o departamento/u);
   // A porta de "Usuários e acessos" agora nasce de `settingsNavGroups`; o
   // desenho do botão é conferido em `settings-scope.test.mts`, aqui basta que a
   // seção exista e continue exigindo administrador.
