@@ -110,6 +110,7 @@ import { ErpDpView } from "./features/erp-dp";
 import { WorkAccidentDashboardView } from "./features/safety";
 import { AgentsView, CardProcessPanel, TriageView, WorkCenterView } from "./features/work";
 import { PayrollImportDialog } from "./features/payroll/PayrollImportDialog";
+import { TrelloImportPanel } from "./features/boards/TrelloImportPanel";
 import { PayrollMovementsPanel } from "./features/payroll/PayrollMovementsPanel";
 import { DemandDeadlineView } from "./features/work/DemandViews";
 import {
@@ -2396,7 +2397,7 @@ export function WorkspaceApp({
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: newComment }),
       });
-      const payload = await response.json() as WorkspaceSnapshot & { error?: string; createdCommentId?: string };
+      const payload = await response.json() as WorkspaceSnapshot & { error?: string; createdCommentId?: string; mentionWarning?: string };
       if (!response.ok || !payload.createdCommentId) {
         throw new Error(payload.error || "Não foi possível publicar o comentário.");
       }
@@ -2412,7 +2413,7 @@ export function WorkspaceApp({
       }
       setNewComment("");
       setCommentAttachment(null);
-      setToast(commentAttachment ? "Comentário e anexo publicados." : "Comentário publicado.");
+      setToast(payload.mentionWarning || (commentAttachment ? "Comentário e anexo publicados." : "Comentário publicado."));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível publicar o comentário.");
     } finally {
@@ -2917,6 +2918,7 @@ export function WorkspaceApp({
                   </table>
                 </div>
                 {isAdmin && <form className="board-create-form" onSubmit={createBoard}><input value={newBoardName} onChange={(event) => setNewBoardName(event.target.value)} placeholder="Nome do novo quadro" required /><input value={newBoardDescription} onChange={(event) => setNewBoardDescription(event.target.value)} placeholder="Descrição opcional" /><button className="primary-button" disabled={busy}>Criar quadro</button></form>}
+                {isAdmin && <TrelloImportPanel busy={busy} processTypes={processTypeOptions} onImport={(body) => mutate("/api/boards/import/trello", { method: "POST", body }, "Quadro importado do Trello.")} />}
               </section>
             </>}
             {settingsSection === "columns" && <ListsSettings snapshot={snapshot} busy={busy} isAdmin={isAdmin} onMutate={mutate} onConfirm={requestConfirmation} />}

@@ -1877,6 +1877,46 @@ tentativas (`employee_portal` em `lib/auth-rate-limit.ts`).
 | Custo por pessoa (patronal, pró-labore, provisões, VT, salário-família fora), grupos, totais, status do link, migration e rotas do portal | `tests/erp-costs-portal.test.mts` |
 | Rota pública do portal com hash, escopo e limite de tentativas | `tests/permission-matrix.test.mts` |
 
+### 4.43 Importador de quadro do Trello e menção por nome inteiro
+
+Os dois primeiros itens do roadmap de `docs/engenharia-reversa-trello.md`.
+
+**Menção (§18 daquele documento).** A rota de comentários casava `@texto` com
+`lower(name) LIKE '%texto%'`: `@ana` avisava Mariana, Juliana e Luciana, e `_`
+era curinga. A regra mora agora em `lib/comment-mentions.ts`: a menção casa com
+o primeiro nome ou com as primeiras palavras do nome (`@ana.paula`,
+`@ana_paula`, `@anapaula`), sem acento e sem caixa, **por igualdade**. Se mais
+de uma pessoa casar, ninguém é avisado; quem não tem acesso à empresa da
+demanda também não. A tela recebe `mentionWarning` e diz por que ninguém foi
+avisado.
+
+**Importador** (Configurações → Quadros → Importar quadro do Trello;
+`lib/trello-import.ts`, `app/api/boards/import/trello/route.ts`):
+
+- O JSON é lido no navegador e só o recorte usado vai ao servidor, que lê o
+  recorte de novo com a mesma função (a leitura é idempotente). O arquivo cru
+  de um quadro grande passa do limite de corpo da função.
+- `mode: "preview"` devolve listas, etiquetas, membros, sugestões e o plano;
+  `mode: "commit"` grava o mesmo plano numa transação, com uma inserção em lote
+  (`jsonb_to_recordset`) por tabela.
+- Empresa e tipo de processo nunca são inventados: vêm de etiqueta ligada na
+  prévia ou do padrão escolhido. Admissão continua recusada (é da Sólides).
+- Membro do Trello só vira responsável se alguém casou os dois na prévia, e só
+  se a pessoa for administradora ou membro com acesso à empresa da demanda.
+- Demanda aberta que ficar sem responsável recebe o titular da carteira do DP
+  da empresa (uma consulta por empresa). Concluída e arquivada são histórico.
+- Nenhuma automação ou notificação dispara: são demandas antigas, não trabalho
+  novo chegando.
+- Comentários entram com autor e data do Trello no texto e `created_at`
+  original; anexos entram como link; conclusão usa `dateLastActivity`.
+- A prévia avisa quando o mesmo quadro do Trello já foi importado
+  (`board.imported_trello` em `fdp_activity_events`).
+
+**Pendência registrada, anterior a este trabalho:** a criação manual de
+demanda (`replaceCardRelations`) aceita como responsável um membro sem acesso
+à empresa da demanda, e a notificação de responsável leva o título. O
+importador já filtra; a criação manual ainda não.
+
 ### 4.33 DP Operacional, Fase 1 — carteira e atribuição automática
 
 O DP opera dezenas de CNPJs com dois ou três analistas e nenhuma coordenação
@@ -2319,3 +2359,6 @@ O objetivo é impedir que o próximo módulo seja o quinto objeto paralelo.
 - `docs/conferencia-de-ponto.md` — a fronteira do ponto.
 - `docs/controle-de-epi.md` — a fronteira do EPI.
 - `docs/operacao-de-agentes.md` — como operar os agentes no dia a dia.
+- `docs/engenharia-reversa-sap-hcm.md` — o SAP HCM lido com os olhos do DP.
+- `docs/engenharia-reversa-trello.md` — o Trello comparado ao quadro de
+  Demandas, com o roadmap do importador de quadros.

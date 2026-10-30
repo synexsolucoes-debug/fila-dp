@@ -162,6 +162,11 @@ test("toda criação de demanda do DP passa pela carteira quando ninguém escolh
     assert.match(codigo, /INSERT INTO fdp_cards/u, `${caminho} não cria demanda`);
     assert.match(codigo, /preparePortfolioAssignment\(/u, `${caminho} cria demanda sem consultar a carteira`);
   }
+  // O importador do Trello grava em lote: a carteira é resolvida uma vez por
+  // empresa, só para demanda aberta sem responsável — histórico fica como veio.
+  const trello = await read("app/api/boards/import/trello/route.ts");
+  assert.match(trello, /responsavelPara\(d1, workspace\.id, companyId\)/u);
+  assert.match(trello, /!card\.archived && lists\[card\.listIndex\]\.slaBehavior !== "completed" && !card\.assigneeUserIds\.length/u);
   // A investigação de acidente é do SESMT, não de um analista de DP: fica de
   // fora por escrito, e não por esquecimento.
   const acidente = await read("lib/work-accidents-service.ts");
@@ -187,6 +192,7 @@ test("nenhum outro arquivo cria demanda sem estar na lista acima", async () => {
   await walk(new URL("../lib/", import.meta.url), "lib/");
   await walk(new URL("../app/", import.meta.url), "app/");
   assert.deepEqual(encontrados.sort(), [
+    "app/api/boards/import/trello/route.ts",
     "app/api/cards/route.ts",
     "app/api/inbox/[id]/convert/route.ts",
     "app/api/integrations/movements/[id]/route.ts",

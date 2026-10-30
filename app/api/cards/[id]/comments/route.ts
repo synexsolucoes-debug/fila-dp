@@ -1,6 +1,7 @@
 import { ApiError, apiError, getApiUser, text } from "@/lib/fila-dp-api";
 import { getWorkspaceContext, getWorkspaceSnapshot, recordActivity, requireCardCompanyAccess, requireWorkspaceRole } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
+import { extractMentions, mentionWarning, resolveMentions } from "@/lib/comment-mentions";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -31,27 +32,27 @@ export async function POST(request: Request, context: RouteContext) {
       .bind(commentId, workspace.id, id, taskInstanceId, user.id, comment)
       .run();
     const recipients = await d1.prepare("SELECT user_id FROM fdp_card_assignees WHERE card_id = ? AND user_id <> ?").bind(id, user.id).all<{ user_id: string }>();
-    const mentionNames = Array.from(new Set(
-      Array.from(comment.matchAll(/@([\p{L}0-9._-]{2,80})/gu))
-        .map((match) => match[1].toLowerCase()),
-    )).slice(0, 10);
-    const mentionRecipients = mentionNames.length
-      ? await d1.prepare(`SELECT DISTINCT u.id AS user_id
+    const cardCompany = await d1.prepare("SELECT company_id FROM fdp_cards WHERE id = ?").bind(id).first<{ company_id: string | null }>();
+    const companyId = cardCompany?.company_id ? String(cardCompany.company_id) : null;
+    const mentions = extractMentions(comment).length
+      ? resolveMentions(comment, (await d1.prepare(`SELECT u.id AS user_id, u.name, wm.role,
+            EXISTS (SELECT 1 FROM fdp_member_company_access mca
+              WHERE mca.workspace_id = wm.workspace_id AND mca.user_id = u.id AND mca.company_id = ?) AS has_company
           FROM fdp_users u
           JOIN fdp_workspace_members wm ON wm.user_id = u.id
-          WHERE wm.workspace_id = ? AND u.id <> ?
-            AND (${mentionNames.map(() => "lower(u.name) LIKE ?").join(" OR ")})
-          LIMIT 20`)
-        .bind(workspace.id, user.id, ...mentionNames.map((name) => `%${name}%`))
-        .all<{ user_id: string }>()
-      : { results: [] as Array<{ user_id: string }> };
+          WHERE wm.workspace_id = ?`)
+        .bind(companyId, workspace.id)
+        .all<{ user_id: string; name: string; role: string; has_company: boolean | number }>()).results
+        .map((row) => ({ userId: row.user_id, name: String(row.name ?? ""), canSeeCard: row.role === "admin" || Boolean(Number(row.has_company)) })), user.id)
+      : { userIds: [] as string[], ambiguous: [] as string[], unknown: [] as string[], withoutAccess: [] as string[] };
+    const mentionRecipients = { results: mentions.userIds.map((userId) => ({ user_id: userId })) };
     const recipientIds = Array.from(new Set([...recipients.results.map((recipient) => recipient.user_id), ...mentionRecipients.results.map((recipient) => recipient.user_id)]));
     if (recipientIds.length) await d1.batch(recipientIds.map((recipientId) => d1.prepare(`INSERT INTO fdp_notifications
       (id, workspace_id, user_id, event_key, notification_type, title, body, card_id)
       VALUES (?, ?, ?, ?, 'comment', 'Novo comentário', ?, ?) ON CONFLICT DO NOTHING`)
       .bind(crypto.randomUUID(), workspace.id, recipientId, `comment:${commentId}:${recipientId}`, `${auth.user.displayName} comentou em ${card.title}`, id)));
     await recordActivity(workspace.id, id, auth.user.email, "card.commented");
-    return Response.json({ ...await getWorkspaceSnapshot(auth.user), createdCommentId: commentId }, { status: 201 });
+    return Response.json({ ...await getWorkspaceSnapshot(auth.user), createdCommentId: commentId, mentionWarning: mentionWarning(mentions) }, { status: 201 });
   } catch (error) {
     return apiError(error);
   }
