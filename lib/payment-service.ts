@@ -575,7 +575,14 @@ export async function createContractorComponent(d1: Database, input: {
   const closing = await d1.prepare("SELECT id, status FROM fdp_contractor_closings WHERE workspace_id = ? AND provider_id = ? AND payroll_cycle_id = ?")
     .bind(input.workspaceId, input.profile.provider_id, input.cycle.id).first<{ id: string; status: string }>();
   if (closing && (closing.status === "closed" || closing.status === "paid")) {
-    throw ApiError.badRequest("O fechamento desta competência está concluído. Reabra com justificativa para lançar componentes.", "PAYMENT_CLOSING_LOCKED");
+    /* A competência pode estar aberta e o pagamento do prestador não: o
+       fechamento de cada um trava sozinho. A mensagem diz qual dos dois está
+       fechado, e de quem — no lote, sem o nome não dá para saber quem tirar. */
+    const nome = input.profile.legal_name || input.profile.trade_name || "deste prestador";
+    throw ApiError.badRequest(
+      `A competência ${input.cycle.competence} está aberta, mas o pagamento de ${nome} nela já foi ${closing.status === "paid" ? "pago" : "fechado"}. Reabra o pagamento, com justificativa, para lançar.`,
+      "PAYMENT_CLOSING_LOCKED",
+    );
   }
 
   // Reenvio do mesmo identificador externo devolve o lançamento já criado.

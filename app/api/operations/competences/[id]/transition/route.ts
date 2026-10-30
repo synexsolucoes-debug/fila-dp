@@ -3,12 +3,14 @@ import { getWorkspaceContext, requireCompanyAccess } from "@/lib/fila-dp-db";
 import { requireCapability } from "@/lib/authorization";
 import { ApiError } from "@/lib/api-errors";
 import { cleanText } from "@/lib/registrations";
-import { forceCloseContractorClosings } from "@/lib/contractor-force-close";
+import { forceCloseContractorClosings, reopenForcedContractorClosings } from "@/lib/contractor-force-close";
 
 // Abrir e fechar a competência é um controle simples: sem etapas e sem gates.
 // Ciclos antigos em pré-fechamento/processamento/pós-fechamento também podem ser
 // fechados direto; fechar nunca altera lançamentos. Os fechamentos PJ da
-// competência são fechados junto (quem não pode fechar PJ não fecha por aqui).
+// competência são fechados junto (quem não pode fechar PJ não fecha por aqui) e,
+// ao reabrir, os que ela fechou à força voltam — senão a competência aparecia
+// aberta e todo lançamento PJ era recusado como "fechamento concluído".
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getApiUser(); if (!auth.user) return auth.response;
   try {
@@ -38,6 +40,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const contractorsClosed = target === "closed"
       ? await forceCloseContractorClosings(d1, { workspaceId: workspace.id, cycleId: id, actorUserId: user.id, actorEmail: auth.user.email, requestId: request.headers.get("x-fila-dp-request-id") })
       : 0;
-    return Response.json({ competence: result, contractorsClosed });
+    const contractorsReopened = target === "open"
+      ? await reopenForcedContractorClosings(d1, { workspaceId: workspace.id, cycleId: id, actorUserId: user.id, actorEmail: auth.user.email, requestId: request.headers.get("x-fila-dp-request-id"), reason })
+      : 0;
+    return Response.json({ competence: result, contractorsClosed, contractorsReopened });
   } catch (error) { return apiError(error); }
 }
